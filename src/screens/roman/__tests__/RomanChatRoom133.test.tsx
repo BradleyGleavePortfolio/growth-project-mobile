@@ -124,6 +124,8 @@ describe('QA evidence: the room at 360x800 and 390x844', () => {
     [390, 844],
   ])('%sx%s launch state', async (width, height) => {
     mockWindow = { width, height };
+    // The snapshot holds the morning greeting: pin the hour so the CI clock never changes it.
+    jest.spyOn(Date.prototype, 'getHours').mockReturnValue(9);
     const r = await render(<RomanChatScreen surface="client" />);
     expect(r.getByTestId('roman-empty-greeting')).toBeTruthy();
     expect(r.toJSON()).toMatchSnapshot();
