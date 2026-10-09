@@ -28,7 +28,6 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -38,6 +37,8 @@ import HapticPressable from '../../components/HapticPressable';
 import EmptyState from '../../components/EmptyState';
 import BloodworkDisclaimerModal from '../../components/BloodworkDisclaimerModal';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { isFeatureEnabled } from '../../config/featureFlags';
 import { hasAcknowledgedDisclaimer } from '../../lib/bloodworkDisclaimerHelper';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -143,7 +144,7 @@ export default function BloodworkEntryScreen() {
   // Feature off — fail-closed.
   if (!enabled) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
         <EmptyState
           icon="flask-outline"
           title={BLOODWORK_FEATURE_OFF_TITLE}
@@ -156,7 +157,7 @@ export default function BloodworkEntryScreen() {
   // Loading SecureStore check — show neutral loader, not data.
   if (disclaimerState === 'loading') {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
         <View style={styles.loadingCenter}>
           <ActivityIndicator color={colors.primary} />
           <Text style={styles.loadingText}>{BLOODWORK_LOADING_DISCLAIMER_CHECK}</Text>
@@ -168,7 +169,7 @@ export default function BloodworkEntryScreen() {
   // Disclaimer required — modal is shown; render nothing behind it.
   if (disclaimerState === 'required') {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
         <BloodworkDisclaimerModal
           visible
           userId={currentUser?.id ?? 'anonymous'}
@@ -218,7 +219,7 @@ export default function BloodworkEntryScreen() {
     markers.some((m) => m.name.trim() || m.value.trim());
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.disclaimerCard}>
           <Ionicons name="information-circle-outline" size={20} color={colors.textSecondary} />
@@ -407,7 +408,7 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       gap: 8,
       padding: 12,
-      borderRadius: 10,
+      borderRadius: radius.card,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       backgroundColor: colors.surface,
@@ -434,7 +435,7 @@ function makeStyles(colors: ThemeColors) {
     section: {
       marginTop: 16,
       padding: 14,
-      borderRadius: 10,
+      borderRadius: radius.card,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       backgroundColor: colors.surface,
@@ -464,7 +465,7 @@ function makeStyles(colors: ThemeColors) {
     input: {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      borderRadius: 8,
+      borderRadius: radius.input,
       paddingHorizontal: 10,
       paddingVertical: 8,
       fontSize: 14,
@@ -477,7 +478,7 @@ function makeStyles(colors: ThemeColors) {
     markerCard: {
       padding: 10,
       marginBottom: 10,
-      borderRadius: 8,
+      borderRadius: radius.card,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.divider,
       backgroundColor: colors.background,
@@ -505,7 +506,7 @@ function makeStyles(colors: ThemeColors) {
     submitBtn: {
       marginTop: 24,
       backgroundColor: colors.primary,
-      borderRadius: 10,
+      borderRadius: radius.button,
       paddingVertical: 14,
       alignItems: 'center',
     },

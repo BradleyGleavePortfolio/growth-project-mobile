@@ -9,7 +9,6 @@ import {
   Text,
   Pressable,
   ScrollView,
-  SafeAreaView,
   RefreshControl,
   StyleSheet,
 } from 'react-native';
@@ -21,7 +20,8 @@ import { useSettings } from '../../hooks/useSettings';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { useClientStore } from '../../store/clientStore';
 import { track } from '../../lib/analytics';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeProvider';
 // Sprint B-2 — cross-pillar holistic insights tile (component shipped
 // in PR #130; this PR places it on HomeScreen).
@@ -395,7 +395,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
       <ScrollView
         testID="home-scroll"
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48 }}
@@ -442,7 +442,7 @@ export default function HomeScreen() {
             style={{
               height: 60,
               backgroundColor: sc.bgSurface,
-              borderRadius: 2,
+              borderRadius: radius.button,
             }}
             testID="cta-skeleton"
           />
@@ -451,7 +451,7 @@ export default function HomeScreen() {
             style={({ pressed }) => ({
               backgroundColor: sc.accent,
               minHeight: 44,
-              borderRadius: 4,
+              borderRadius: radius.button,
               paddingVertical: 16,
               paddingHorizontal: 16,
               alignItems: 'center',
@@ -475,7 +475,7 @@ export default function HomeScreen() {
             accessibilityLabel={needsAccess ? 'View access' : 'Log a meal'}
             testID={needsAccess ? 'home-access-cta' : 'home-explore-cta'}
             style={({ pressed }) => ({
-              backgroundColor: sc.accent, minHeight: 44, borderRadius: 4,
+              backgroundColor: sc.accent, minHeight: 44, borderRadius: radius.button,
               paddingVertical: 16, paddingHorizontal: 16, alignItems: 'center', opacity: pressed ? 0.85 : 1,
             })}
           >
