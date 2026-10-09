@@ -163,6 +163,43 @@ describe('TutorialOverlay', () => {
     expect(screen.queryByTestId('tutorial-ack')).toBeNull();
   });
 
+  it.each([
+    [360, 800],
+    [390, 844],
+  ])('B-606-1: tab beats draw the card just above the tab bar, never at the top (47, 51, 55) at %sx%s', async (w, h) => {
+    mockWindow = { width: w, height: h };
+    await begin();
+    await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
+    // Welcome (46) is centred.
+    expect(StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style).top).toBe(0);
+    await fireEvent.press(screen.getByLabelText('Begin'));
+    // 47: Train tab lit; bottom inset 34 + tab bar 64 + 12 pt gap.
+    let wrap = StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style);
+    expect(wrap.bottom).toBe(34 + 64 + 12);
+    expect(wrap.top).toBeUndefined();
+    await act(async () => {
+      setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
+      setTutorialRoute(['MoreTab', 'WorkoutAssignmentDetail']);
+      dispatchTutorial({ type: 'ACK' });
+      useTutorialStore.setState({ celebration: null });
+    });
+    // 51: Food (Log) tab lit, same slot.
+    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 4 of 7');
+    wrap = StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style);
+    expect(wrap.bottom).toBe(34 + 64 + 12);
+    expect(wrap.top).toBeUndefined();
+    await act(async () => {
+      setTutorialRoute(['Log']);
+      dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
+      useTutorialStore.setState({ celebration: null });
+    });
+    // 55: "Tap Home" with the Home tab lit, same slot.
+    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 5 of 7');
+    wrap = StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style);
+    expect(wrap.bottom).toBe(34 + 64 + 12);
+    expect(wrap.top).toBeUndefined();
+  });
+
   it('the spotlight path is a full-screen rect with a rounded hole', () => {
     const d = spotlightPath(390, 844, 10, 20, 100, 60, radius.card);
     expect(d.startsWith('M0 0H390V844H0Z')).toBe(true);
