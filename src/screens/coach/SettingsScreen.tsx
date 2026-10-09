@@ -384,9 +384,9 @@ export default function SettingsScreen() {
 
   const handleSignOut = () => {
     warningTap();
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      { text: 'Sign out', style: 'destructive', onPress: signOut },
     ]);
   };
 

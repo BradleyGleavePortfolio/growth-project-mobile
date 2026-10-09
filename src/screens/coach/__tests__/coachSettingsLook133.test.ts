@@ -49,6 +49,8 @@ describe('coach Settings look', () => {
     expect(block('signOutButton')).not.toMatch(/colors\.error/);
     expect(block('signOutText')).not.toMatch(/colors\.error/);
     expect(read('settings/DangerZone.tsx')).toMatch(/>Sign out</);
+    expect(SCREEN).toContain("Alert.alert('Sign out'");
+    expect(SCREEN).not.toContain("'Sign Out'");
   });
 
   it('visible labels are sentence case', () => {
