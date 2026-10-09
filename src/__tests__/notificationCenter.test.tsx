@@ -340,12 +340,12 @@ describe('NotificationCenterScreen', () => {
     await waitFor(() => expect(ui.getByText('Update')).toBeTruthy());
     expect(ui.queryByRole('button', { name: 'Update. Details' })).toBeNull();
     await fireEvent(ui.getByTestId('notification-list'), 'endReached');
-    expect(ui.getByText('Could not load more notifications. Pull down to try again.')).toBeTruthy();
+    expect(ui.getByText('Could not load more notifications.')).toBeTruthy();
     expect(ui.getByText('Update')).toBeTruthy();
     expect(ui.queryByLabelText('Loading more notifications')).toBeNull();
     (notificationsApi.fetchNotifications as jest.Mock).mockResolvedValueOnce({ items: [], nextCursor: null });
     await fireEvent(ui.getByTestId('notification-list'), 'endReached');
-    expect(ui.queryByText('Could not load more notifications. Pull down to try again.')).toBeNull();
+    expect(ui.queryByText('Could not load more notifications.')).toBeNull();
   });
 
   it('keeps the role-aware router authoritative and read targets navigable', async () => {
