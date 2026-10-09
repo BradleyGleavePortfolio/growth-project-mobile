@@ -54,6 +54,31 @@ describe('reveals and states', () => {
     expect(r.getByText(/Shall I prepare your numbers and your plan\?/)).toBeTruthy();
   });
 
+  it('summary offline: the first reconnect prepares the plan by itself, once (43, B-581-1)', async () => {
+    mockNet.isOnline = false;
+    const onPrepare = jest.fn();
+    const props = { answers: fullAnswers(), ctx, now: NOW, onEdit: noop, onBack: noop, onPrepare };
+    const r = await render(<SummaryScreen {...props} />);
+    expect(onPrepare).not.toHaveBeenCalled();
+    mockNet.isOnline = true;
+    await r.rerender(<SummaryScreen {...props} />);
+    expect(onPrepare).toHaveBeenCalledTimes(1);
+    // A flap (offline, online again) on the same visit does not prepare twice.
+    mockNet.isOnline = false;
+    await r.rerender(<SummaryScreen {...props} />);
+    mockNet.isOnline = true;
+    await r.rerender(<SummaryScreen {...props} />);
+    expect(onPrepare).toHaveBeenCalledTimes(1);
+  });
+
+  it('summary online from the start never prepares by itself', async () => {
+    const onPrepare = jest.fn();
+    const props = { answers: fullAnswers(), ctx, now: NOW, onEdit: noop, onBack: noop, onPrepare };
+    const r = await render(<SummaryScreen {...props} />);
+    await r.rerender(<SummaryScreen {...props} />);
+    expect(onPrepare).not.toHaveBeenCalled();
+  });
+
   it('server error is calm: Roman\'s face above the serif sentence (44)', async () => {
     const r = await render(<CompleteProblemScreen problem="network" onAction={noop} onBack={noop} />);
     expect(r.getByTestId('consult-problem-roman')).toBeTruthy();

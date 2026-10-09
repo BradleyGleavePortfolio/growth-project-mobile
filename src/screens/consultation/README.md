@@ -119,7 +119,7 @@ Every failure says what happened and offers a next step that works; known status
 
 ## Reveals and states (CONSULT-PARITY-133, prototype screens 37-45)
 
-- 43 Summary offline: every chapter works offline; only Prepare needs the network. While `useNetworkStatus` reports no connection the summary's action reads "Prepare when I'm back online" (disabled) and Roman says "I'll prepare your numbers the moment you're connected. Nothing you've told me is lost."; the app-wide `OfflineBanner` shows above the flow. Back online, "Prepare my plan" returns.
+- 43 Summary offline: every chapter works offline; only Prepare needs the network. While `useNetworkStatus` reports no connection the summary's action reads "Prepare when I'm back online" (disabled) and Roman says "I'll prepare your numbers the moment you're connected. Nothing you've told me is lost."; the app-wide `OfflineBanner` shows above the flow. Back online, the plan is prepared by itself on the first reconnect (once per visit, only if the phone was offline on this screen).
 - 44 Calm error: every problem screen shows Roman's face above the serif sentence; no red, no error haptic.
 - 39 Macro reveal: one success haptic when the numbers appear (no count-up); the 64 pt calorie number has a 77 pt line height (never clipped).
 - 40 Plan reveal: training days carry an accent dot and the C1 first-session day is ring-highlighted; the week line adds the session length from T4 ("About 30 to 45 minutes each."). Program content (A Foundations, B Build, C Gentle Start) comes from the server.

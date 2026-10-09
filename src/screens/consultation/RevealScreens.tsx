@@ -4,7 +4,7 @@
  * come only from the server (POST /me/onboarding/complete); nothing here
  * computes macros on the device.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -75,6 +75,21 @@ export function SummaryScreen({
   // The app-wide OfflineBanner already shows above the flow.
   const net = useNetworkStatus();
   const offline = !net.isOnline || net.isInternetReachable === false;
+  // Prototype 43: "retries on reconnect and moves on by itself". Once the
+  // phone was offline on this screen, the first reconnect prepares the plan
+  // (once per visit), as Roman's offline line promises.
+  const wasOffline = useRef(false);
+  const autoPrepared = useRef(false);
+  useEffect(() => {
+    if (offline) {
+      wasOffline.current = true;
+      return;
+    }
+    if (wasOffline.current && !preparing && !autoPrepared.current) {
+      autoPrepared.current = true;
+      onPrepare();
+    }
+  }, [offline, preparing, onPrepare]);
   const sections = buildSummary(answers, now);
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const forName = ctx.firstName?.trim() ? `Prepared for ${ctx.firstName.trim()} · ` : '';
