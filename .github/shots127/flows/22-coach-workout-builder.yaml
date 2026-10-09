@@ -1,0 +1,17 @@
+appId: com.growthproject.app
+---
+- runFlow: coach-root.yaml
+- tapOn: "Programs"
+- tapOn: "Saved workouts"
+- extendedWaitUntil:
+    visible: ".*, .* exercises?.*"
+    timeout: 60000
+- tapOn:
+    text: ".*, .* exercises?.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Edit workout plan"
+    timeout: 60000
+- assertNotVisible:
+    id: "mwb-plan-loading"
+# Opens an existing seeded plan. No typing/autosave or Create plan.

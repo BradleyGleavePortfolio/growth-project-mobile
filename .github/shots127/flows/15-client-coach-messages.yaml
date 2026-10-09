@@ -1,0 +1,14 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- scrollUntilVisible:
+    element:
+      id: "home-message-coach"
+    direction: DOWN
+- tapOn:
+    id: "home-message-coach"
+    index: 0
+- extendedWaitUntil:
+    visible: "Message text"
+    timeout: 60000
+# Read existing synthetic conversation; never send a message.

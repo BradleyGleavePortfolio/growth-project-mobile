@@ -1,0 +1,19 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- tapOn: "Community"
+- extendedWaitUntil:
+    visible:
+      id: "community-tab-screen"
+    timeout: 60000
+- assertVisible:
+    id: "community-space-tabbar"
+- tapOn: "Hall"
+- extendedWaitUntil:
+    visible:
+      id: "community-space-screen"
+    timeout: 60000
+- assertNotVisible:
+    id: "community-space-posts-error"
+- assertNotVisible: "Loading.*"
+# Existing feed only; no posting, reacting, joining or messages.

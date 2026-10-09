@@ -1,0 +1,12 @@
+appId: com.growthproject.app
+---
+- runFlow: 22-coach-workout-builder.yaml
+- extendedWaitUntil:
+    visible:
+      id: "ai-header-button"
+    timeout: 60000
+- tapOn:
+    id: "ai-header-button"
+- assertVisible:
+    id: "ai-builder-sheet"
+# Open sheet only; no Send/Apply and no AI charge.

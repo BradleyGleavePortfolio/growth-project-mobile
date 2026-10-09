@@ -1,0 +1,14 @@
+appId: com.growthproject.app
+---
+- runFlow: coach-root.yaml
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      id: "settings-money"
+    direction: DOWN
+- tapOn:
+    id: "settings-money"
+- extendedWaitUntil:
+    visible: "Money"
+    timeout: 60000
+# Read-only dashboard. No payout onboarding, withdrawal or purchase.
