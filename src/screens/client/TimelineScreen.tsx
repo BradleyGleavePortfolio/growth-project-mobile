@@ -29,8 +29,7 @@ import {
   AccessibilityInfo,
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { typography, spacing, type SemanticTokens } from '../../theme/tokens';
+import { typography, spacing, radius, type SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { timelineApi, fetchTimeline, TimelineEvent, TimelineLane } from '../../services/timelineApi';
 
@@ -255,7 +254,9 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 export default function TimelineScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
-  const insets = useSafeAreaInsets();
+  // Opened from More under a native back-only header (ClientNavigator
+  // backOnlyHeader) inside the tab bar: the header owns the top inset and the
+  // tab bar the bottom one, so this screen adds neither (it used to add both).
   const [activeLanes, setActiveLanes] = useState<TimelineLane[]>(ALL_LANES);
   const { state, refresh, loadMore } = useTimeline(activeLanes);
 
@@ -295,7 +296,7 @@ export default function TimelineScreen() {
 
   if (state.isLoading) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.root}>
         <Text style={styles.screenTitle}>Timeline</Text>
         <SkeletonScreen count={8} />
       </View>
@@ -303,7 +304,7 @@ export default function TimelineScreen() {
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={styles.root}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.screenTitle} accessibilityRole="header">
@@ -358,7 +359,7 @@ export default function TimelineScreen() {
           }
           contentContainerStyle={[
             styles.listContent,
-            { paddingBottom: insets.bottom + spacing.xl },
+            { paddingBottom: spacing.xl },
           ]}
           accessibilityLabel="Transformation timeline"
         />
@@ -428,7 +429,7 @@ const makeStyles = (sc: SemanticTokens) => {
   laneDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: radius.chip,
     marginTop: 4,
   },
   cardConnector: {
@@ -483,7 +484,8 @@ const makeStyles = (sc: SemanticTokens) => {
     paddingHorizontal: spacing['2xl'],
     paddingVertical: spacing.md,
     minHeight: 44,
-    borderRadius: 4,
+    justifyContent: 'center',
+    borderRadius: radius.button,
     backgroundColor: sc.accent,
   },
   retryButtonText: {
