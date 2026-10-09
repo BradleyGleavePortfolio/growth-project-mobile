@@ -1,11 +1,13 @@
 /**
- * S-REVENUE-124 (B-REV-1), caller level: with the consultation flag on (the
- * clinic build), a new client the server cannot finish the consultation for
- * (GET /me/onboarding consultation_available: false: no coach yet, or a coach
- * without a clinic program set) gets the standard onboarding, with no second
- * Day-1 setup flow after completion, instead of a consultation that
- * ends on "not_attached" / "clinic_not_configured" forever. A missing field,
- * a 404 or a failed read keeps the consultation. Harness copied from
+ * B14 (CONSULT-ALL-M-133, owner decisions 27-28), caller level: every new
+ * client gets the consultation, coached or coachless, whatever GET
+ * /me/onboarding says about `consultation_available` (an older server says
+ * false when it cannot finish it; the consultation then shows its calm server
+ * state at POST /complete, see ConsultationFlow.test.tsx). The lean flow is
+ * never mounted, in any build. A lean marker left by an earlier build is
+ * cleared for a client who never finished it; a client who did finish keeps
+ * the first-win step and never sees a second onboarding. History: S-REVENUE-124
+ * (B-REV-1) sent these clients to the lean flow. Harness copied from
  * rootNavigatorConsultationComplete.test.tsx (real RootNavigator).
  */
 const mockSecure: Record<string, string | null> = {};
@@ -194,16 +196,67 @@ const mount = () =>
     </QueryClientProvider>,
   );
 
-describe('B-REV-1: the consultation only where the server can finish it (flag on)', () => {
-  it('no coach or a coach without a program set: the standard onboarding, never the consultation', async () => {
+describe('B14: every new client gets the consultation, never the lean flow', () => {
+  it('a coachless client on an older server (consultation_available: false): the consultation, not the lean flow', async () => {
     mockOnboarding.body = { completed: false, answers: null, consultation_available: false };
     const r = await mount();
-    await r.findByTestId('nav-lean');
-    expect(r.queryByTestId('nav-consultation')).toBeNull();
-    expect(await AsyncStorage.getItem(MARKER)).toBe('true');
+    await r.findByTestId('nav-consultation');
+    expect(r.queryByTestId('nav-lean')).toBeNull();
+    // Routing no longer asks the server; no lean marker is written.
+    expect(onboardingReads()).toBe(0);
+    expect(await AsyncStorage.getItem(MARKER)).toBeNull();
   });
 
-  it.each([true, false])('after lean completion, never starts another Day-1 flow (profile synced: %s)', async (synced) => {
+  it('a coached client (server: available): the consultation', async () => {
+    mockOnboarding.body = { completed: false, answers: null, consultation_available: true };
+    const r = await mount();
+    await r.findByTestId('nav-consultation');
+    expect(r.queryByTestId('nav-lean')).toBeNull();
+  });
+
+  it.each([
+    ['an older server without the field', () => { mockOnboarding.body = { completed: false, answers: null }; }],
+    ['a failed read', () => { mockOnboarding.fail = true; }],
+    ['the consultation flag off (a development build)', () => { mockConsultFlag = false; }],
+  ])('%s: the consultation', async (_label, arrange) => {
+    arrange();
+    const r = await mount();
+    await r.findByTestId('nav-consultation');
+    expect(r.queryByTestId('nav-lean')).toBeNull();
+  });
+
+  it('a lean marker from an earlier build, onboarding never finished: the consultation, and the marker is cleared', async () => {
+    await AsyncStorage.setItem(MARKER, 'true');
+    const r = await mount();
+    await r.findByTestId('nav-consultation');
+    expect(r.queryByTestId('nav-lean')).toBeNull();
+    expect(await AsyncStorage.getItem(MARKER)).toBeNull();
+  });
+
+  it.each([true, false])('a returning client who finished the consultation goes straight to the app (profile synced: %s)', async (synced) => {
+    await AsyncStorage.setItem('onboarding_complete', 'true');
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
+      ...NEW_CLIENT, profile: { ...NEW_CLIENT.profile, onboardingCompleted: synced },
+    }));
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('nav-consultation')).toBeNull();
+    expect(r.queryByTestId('day1-win')).toBeNull();
+    expect(r.queryByTestId('nav-day1')).toBeNull();
+    expect(onboardingReads()).toBe(0);
+  });
+
+  it('a returning client who finished on the server only (fresh install): the app, and the local flag is repaired', async () => {
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
+      ...NEW_CLIENT, profile: { ...NEW_CLIENT.profile, onboarding_completed: true },
+    }));
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('nav-consultation')).toBeNull();
+    expect(await AsyncStorage.getItem('onboarding_complete')).toBe('true');
+  });
+
+  it.each([true, false])('after lean completion in an earlier build, never starts another onboarding (profile synced: %s)', async (synced) => {
     await AsyncStorage.setItem(MARKER, 'true');
     await AsyncStorage.setItem('onboarding_complete', 'true');
     await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
@@ -212,6 +265,7 @@ describe('B-REV-1: the consultation only where the server can finish it (flag on
     const r = await mount();
     await r.findByTestId('day1-win');
     expect(r.queryByTestId('nav-day1')).toBeNull();
+    expect(r.queryByTestId('nav-consultation')).toBeNull();
     expect(onboardingReads()).toBe(0);
   });
 
@@ -222,32 +276,5 @@ describe('B-REV-1: the consultation only where the server can finish it (flag on
     const r = await mount();
     await r.findByTestId('day1-win');
     expect(r.queryByTestId('nav-day1')).toBeNull();
-  });
-
-  it('a clinic client (server: available): the consultation, unchanged', async () => {
-    mockOnboarding.body = { completed: false, answers: null, consultation_available: true };
-    const r = await mount();
-    await r.findByTestId('nav-consultation');
-    expect(r.queryByTestId('nav-lean')).toBeNull();
-    expect(await AsyncStorage.getItem(MARKER)).toBeNull();
-  });
-
-  it('an older server without the field: the consultation, as before', async () => {
-    mockOnboarding.body = { completed: false, answers: null };
-    const r = await mount();
-    await r.findByTestId('nav-consultation');
-  });
-
-  it('a failed read: the consultation, as before', async () => {
-    mockOnboarding.fail = true;
-    const r = await mount();
-    await r.findByTestId('nav-consultation');
-  });
-
-  it('flag off: no read, the standard onboarding (unchanged)', async () => {
-    mockConsultFlag = false;
-    const r = await mount();
-    await r.findByTestId('nav-lean');
-    expect(onboardingReads()).toBe(0);
   });
 });

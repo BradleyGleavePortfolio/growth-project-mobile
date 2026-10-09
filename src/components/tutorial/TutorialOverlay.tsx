@@ -12,8 +12,8 @@
  *     whether the action counts;
  *   - a per-step done moment: one success haptic (fired by the store), a
  *     check glyph and Roman's done line. No confetti, no exclamation points;
- *   - "Skip the tour" with a confirm (progress kept, resumable), "Later" on
- *     the wearable connect gate, and "Take me there" for screens that sit
+ *   - "Skip the tour" with a confirm (progress kept, resumable), "Later" where
+ *     a step offers it, and "Take me there" for screens that sit
  *     behind a menu;
  *   - one 280ms fade with an 8pt rise per gate, removed under Reduce Motion.
  */
@@ -267,6 +267,11 @@ export default function TutorialOverlay({ tabs, onNavigate }: Props): React.Reac
               >
                 {line}
               </Text>
+              {gate.sub ? (
+                <Text style={[styles.body, styles.sub, { color: sc.textMuted }]} testID="tutorial-sub">
+                  {gate.sub(copy)}
+                </Text>
+              ) : null}
 
               <View style={styles.actions}>
                 {gate.kind === 'ack' ? (
@@ -291,23 +296,12 @@ export default function TutorialOverlay({ tabs, onNavigate }: Props): React.Reac
                     <Text style={[styles.secondaryText, { color: sc.textPrimary }]}>Take me there</Text>
                   </Pressable>
                 ) : null}
-                {gate.kind === 'signal' && gate.action ? (
-                  <Pressable
-                    onPress={() => gate.action && onNavigate(gate.action.target)}
-                    accessibilityRole="button"
-                    accessibilityLabel={gate.action.label(copy)}
-                    style={[styles.primary, styles.actionWide]}
-                    testID="tutorial-action"
-                  >
-                    <Text style={styles.primaryText}>{gate.action.label(copy)}</Text>
-                  </Pressable>
-                ) : null}
                 {gate.kind === 'signal' && gate.allowDefer ? (
                   <Pressable
                     onPress={() => dispatchTutorial({ type: 'DEFER' })}
                     accessibilityRole="button"
                     accessibilityLabel="Later"
-                    accessibilityHint={gate.deferHint ?? 'Connect a device another time'}
+                    accessibilityHint={gate.deferHint}
                     style={[styles.secondary, { borderColor: sc.textPrimary }]}
                     testID="tutorial-defer"
                   >
@@ -366,7 +360,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   primaryText: { ...typography.bodyMd, color: colors.bone, textAlign: 'center' },
-  actionWide: { flex: 2, paddingVertical: 8 },
+  sub: { marginTop: 10 },
   secondary: {
     flex: 1,
     minHeight: 48,

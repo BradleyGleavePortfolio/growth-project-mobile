@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Colors, Spacing } from '../../theme/index';
+import { layout, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import QuietBar, { QuietText as Text } from '../../ui/progress/QuietBar';
+import { QuietOverline } from '../../ui/sections/QuietSection';
 import type { MacroDisplayMode } from '../../macros/macroDisplay';
 
 interface DailyTotals {
@@ -23,6 +24,11 @@ interface Props {
   mode?: MacroDisplayMode;
 }
 
+/**
+ * The day's one hero number (calories left, over, or eaten) in serif
+ * display, with the macro bars quieter underneath. Same values and labels
+ * as before; only the hierarchy changed.
+ */
 export default function DailySummaryBar({
   dailyTotals,
   remaining,
@@ -38,49 +44,51 @@ export default function DailySummaryBar({
       testID={simple ? 'daily-summary-simple' : 'daily-summary-full'}
     >
       <View style={styles.summaryItem}>
-        <Text style={styles.summaryValue}>
+        <QuietOverline>{remaining == null ? 'Calories eaten' : remaining < 0 ? 'Calories over target' : 'Calories left'}</QuietOverline>
+        <Text style={styles.summaryValue} maxFontSizeMultiplier={1.3}>
           {Math.round(remaining == null ? dailyTotals.calories : Math.abs(remaining))}
         </Text>
-        <Text style={styles.summaryLabel}>{remaining == null ? 'Calories eaten' : remaining < 0 ? 'Calories over target' : 'Calories left'}</Text>
         {remaining != null || targets ? <Text style={styles.summaryLabel}>
           {targets ? `of ${targets.calories} · ` : ''}{Math.round(dailyTotals.calories)} eaten
         </Text> : <Text style={styles.summaryLabel}>No target</Text>}
       </View>
-      {(simple ? ['protein'] as const : ['protein', 'carbs', 'fat'] as const).map((key) => {
-        const eaten = Math.round(dailyTotals[key]);
-        const target = targets?.[key];
-        const over = target != null && eaten > target ? ` · ${Math.round(eaten - target)} g over` : '';
-        return <QuietBar key={key} label={key[0].toUpperCase() + key.slice(1)} current={dailyTotals[key]} target={target}
-          value={`${eaten}g${target != null ? ` / ${target}g goal` : ''}${over}`} />;
-      })}
+      <View style={styles.macros}>
+        {(simple ? ['protein'] as const : ['protein', 'carbs', 'fat'] as const).map((key) => {
+          const eaten = Math.round(dailyTotals[key]);
+          const target = targets?.[key];
+          const over = target != null && eaten > target ? ` · ${Math.round(eaten - target)} g over` : '';
+          return <QuietBar key={key} label={key[0].toUpperCase() + key.slice(1)} current={dailyTotals[key]} target={target}
+            value={`${eaten}g${target != null ? ` / ${target}g goal` : ''}${over}`} />;
+        })}
+      </View>
     </View>
   );
 }
 
 const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   summaryBar: {
-    gap: 16,
-    marginHorizontal: Spacing.lg,
-    paddingVertical: 14,
-    marginBottom: 20,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
+    paddingTop: layout.sectionPadY,
+    marginBottom: layout.sectionGap,
+    gap: layout.sectionPadY,
   },
   summaryItem: {
     alignItems: 'flex-start',
   },
   summaryValue: {
-    fontSize: 44,
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontVariant: ['tabular-nums'],
+    ...typography.display,
+    // Cormorant defaults to old-style figures; the hero number reads as lining.
+    fontVariant: ['lining-nums', 'tabular-nums'],
     color: sc.textPrimary,
   },
   summaryLabel: {
     fontSize: 13,
+    lineHeight: 19,
     color: sc.textMuted,
-    marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
-  summaryDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: Colors.border,
+  macros: {
+    gap: 14,
   },
 });

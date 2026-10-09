@@ -15,7 +15,6 @@ import type { TutorialState } from '../types';
 const baseEnv = (over: Partial<MachineEnv> = {}): MachineEnv => ({
   hasProgram: true,
   hasMacros: true,
-  communityAvailable: true,
   coachLinked: true,
   currentPath: ['Home', 'HomeMain'],
   now: '2026-10-01T00:00:00.000Z',
@@ -50,14 +49,6 @@ const HAPPY: Array<TutorialAction | { route: string[] }> = [
   { type: 'SIGNAL', signal: 'plan_card_opened' },
   { route: ['Home', 'HomeMain'] },
   { type: 'SIGNAL', signal: 'macro_card_opened' },
-  { route: ['CommunityTab', 'CommunityTab'] },
-  { type: 'ACK' },
-  { route: ['Home', 'Messages'] },
-  { type: 'ACK' },
-  { route: ['MoreTab', 'Connections'] },
-  { type: 'SIGNAL', signal: 'wearable_connected' },
-  { route: ['MoreTab', 'Health'] },
-  { type: 'ACK' },
   { route: ['Log'] },
   { type: 'SIGNAL', signal: 'meal_logged' },
   { route: ['Home', 'Messages'] },
@@ -71,9 +62,6 @@ describe('tutorial steps', () => {
       'welcome',
       'plan',
       'macros',
-      'community',
-      'coach_messages',
-      'wearables',
       'first_meal',
       'first_message',
       'complete',
@@ -152,7 +140,7 @@ describe('tutorialReducer — gating', () => {
     expect(state.status).toBe('completed');
     expect(state.completedAt).toBe('2026-10-01T00:00:00.000Z');
     for (const s of TUTORIAL_STEPS) expect(state.outcomes[s.id]).toBe('done');
-    expect(progressOf(state)).toEqual({ position: 8, total: 8 });
+    expect(progressOf(state)).toEqual({ position: 5, total: 5 });
   });
 
   it('cannot complete without logging a meal and sending a message', () => {
@@ -172,29 +160,9 @@ describe('tutorialReducer — gating', () => {
   });
 });
 
-describe('tutorialReducer — wearables', () => {
-  const toWearable: Array<TutorialAction | { route: string[] }> = HAPPY.slice(0, 11);
-
-  it('reaches the connect gate and accepts a real connection', () => {
-    let { state } = run(toWearable);
-    expect(id(state)).toBe('wearables');
-    expect(currentGate(state)).toMatchObject({ kind: 'signal', signal: 'wearable_connected' });
-    state = tutorialReducer(state, { type: 'SIGNAL', signal: 'wearable_connected' }, baseEnv());
-    expect(currentGate(state)).toMatchObject({ kind: 'route', routes: ['Health'] });
-  });
-
-  it('accepts an explicit deferral, records it, and still shows where health data lives', () => {
-    let { state } = run(toWearable);
-    state = tutorialReducer(state, { type: 'DEFER' }, baseEnv());
-    expect(state.outcomes.wearables).toBe('deferred');
-    expect(currentGate(state)).toMatchObject({ kind: 'route', routes: ['Health'] });
-    ({ state } = run([{ route: ['MoreTab', 'Health'] }, { type: 'ACK' }], {}, state));
-    expect(id(state)).toBe('first_meal');
-    expect(state.outcomes.wearables).toBe('deferred');
-  });
-
-  it('refuses DEFER anywhere it is not offered', () => {
-    const { state } = run([...HAPPY.slice(0, 15), { type: 'DEFER' }]);
+describe('tutorialReducer — no defer', () => {
+  it('refuses DEFER where it is not offered', () => {
+    const { state } = run([...HAPPY.slice(0, 7), { type: 'DEFER' }]);
     expect(id(state)).toBe('first_meal');
     expect(state.outcomes.first_meal).toBeUndefined();
   });
@@ -213,13 +181,13 @@ describe('tutorialReducer — missing data and availability', () => {
       { hasMacros: false },
     );
     expect(state.outcomes.macros).toBe('pending');
-    expect(id(state)).toBe('community');
+    expect(id(state)).toBe('first_meal');
   });
 
-  it('marks community unavailable when the tab is not in the build', () => {
-    const { state } = run(HAPPY.slice(0, 6), { communityAvailable: false });
-    expect(state.outcomes.community).toBe('unavailable');
-    expect(id(state)).toBe('coach_messages');
+  it('marks the message step unavailable without a coach', () => {
+    const { state } = run(HAPPY.slice(0, 8), { coachLinked: false });
+    expect(state.outcomes.first_message).toBe('unavailable');
+    expect(id(state)).toBe('complete');
   });
 });
 
@@ -259,22 +227,31 @@ describe('helpers', () => {
     const a = run(HAPPY.slice(0, 3)).state;
     const b = tutorialReducer(a, { type: 'SIGNAL', signal: 'plan_card_opened' }, baseEnv());
     expect(newlyFinishedSteps(a, b)).toEqual(['plan']);
-    const c = run(HAPPY.slice(0, 6), { communityAvailable: false }).state;
-    const d = run(HAPPY.slice(0, 5), { communityAvailable: false }).state;
-    expect(newlyFinishedSteps(d, c)).toEqual(['macros']);
+    const c = run(HAPPY.slice(0, 8), { coachLinked: false }).state;
+    const d = run(HAPPY.slice(0, 7), { coachLinked: false }).state;
+    expect(newlyFinishedSteps(d, c)).toEqual(['first_meal']);
   });
 
-  it('progressOf counts eight steps', () => {
-    expect(progressOf(run([{ type: 'START' }]).state)).toEqual({ position: 1, total: 8 });
+  it('progressOf counts five steps', () => {
+    expect(progressOf(run([{ type: 'START' }]).state)).toEqual({ position: 1, total: 5 });
   });
 
   it('parseTutorialState round-trips and rejects garbage', () => {
     const s = run(HAPPY.slice(0, 5)).state;
     expect(parseTutorialState(JSON.parse(JSON.stringify(s)))).toEqual(s);
     expect(parseTutorialState(null)).toBeNull();
-    expect(parseTutorialState({ version: 2 })).toBeNull();
+    expect(parseTutorialState({ version: 3 })).toBeNull();
     expect(parseTutorialState({ ...s, stepIndex: 99 })).toBeNull();
     expect(parseTutorialState({ ...s, status: 'weird' })).toBeNull();
     expect(parseTutorialState({ ...s, gateIndex: 42 })?.gateIndex).toBe(0);
+  });
+
+  it('the retired eleven-step version keeps what the client chose, at the welcome', () => {
+    const old = { version: 1, status: 'completed', stepIndex: 10, gateIndex: 2, outcomes: { wearables: 'done' }, completedAt: 'x' };
+    expect(parseTutorialState(old)).toMatchObject({ version: 2, status: 'completed', completedAt: 'x', outcomes: {} });
+    // Skipped stays skipped (never restarts by itself, B-310-4).
+    expect(parseTutorialState({ ...old, status: 'paused', stepIndex: 5 })).toMatchObject({ status: 'paused', stepIndex: 0, gateIndex: 0, completedAt: null });
+    expect(parseTutorialState({ ...old, status: 'active', stepIndex: 5 })).toMatchObject({ status: 'active', stepIndex: 0 });
+    expect(parseTutorialState({ ...old, status: 'not_started' })).toBeNull();
   });
 });

@@ -10,7 +10,7 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Alert, Linking, StyleSheet } from 'react-native';
-import { lightTokens } from '../../../../theme/tokens';
+import { lightTokens, radius } from '../../../../theme/tokens';
 import type { CoachingSession, SessionType } from '../../../../api/schedulingApi';
 
 jest.mock('../../../../services/sentry', () => ({ captureError: jest.fn() }));
@@ -49,6 +49,7 @@ jest.mock('react-native-safe-area-context', () => {
       R.createElement(View, { style }, children),
     SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
     useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaInsetsContext: R.createContext(null),
   };
 });
 jest.mock('../../../../tutorial/tutorialEvents', () => ({ emitTutorialSignal: jest.fn() }));
@@ -491,9 +492,9 @@ describe('CalendarSessionScreen', () => {
     // @ts-expect-error R0 deliberately exercise missing runtime notification params despite the typed navigation contract.
     malformed.route.params = undefined;
     const r = await renderQ(<CalendarSessionScreen {...malformed} />);
-    expect(r.getByText(/This session link is incomplete/)).toBeTruthy();
+    expect(r.getByText('This link is incomplete')).toBeTruthy();
     expect(api.getSession).not.toHaveBeenCalled();
-    await fireEvent.press(r.getByText('See Calendar'));
+    await fireEvent.press(r.getByText('Open calendar'));
     expect(n.navigate).toHaveBeenCalledWith('CalendarHome');
   });
 
@@ -868,5 +869,41 @@ describe('CalendarBookScreen open times beyond two weeks (U-04-2)', () => {
     await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
     expect(r.queryByTestId('calendar-later-times')).toBeNull();
     expect(r.queryByTestId('calendar-times-range')).toBeNull();
+  });
+});
+
+// ─── REDO-HABITS-CAL-COMM-133: session detail on the shared primitives ──────
+
+describe('REDO-HABITS-CAL-COMM-133 session detail look', () => {
+  const flat = (n: { props: { style?: unknown } }) => (StyleSheet.flatten(n.props.style as never) ?? {}) as Record<string, unknown>;
+  const forestButtons = (r: Awaited<ReturnType<typeof renderQ>>) =>
+    (r.queryAllByRole('button') as { props: { style?: unknown } }[]).filter((b) => flat(b).backgroundColor === lightTokens.accent);
+
+  it('pins one rounded forest Join in the footer; every other action is a hairline row; serif title never clips', async () => {
+    const now = Date.now();
+    api.getSession.mockResolvedValue(sess({
+      start_at: new Date(now + 5 * 60_000).toISOString(), end_at: new Date(now + 25 * 60_000).toISOString(),
+      video_url: 'https://meet.example/room', cancellable: true, reschedulable: true,
+    }));
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-join')).toBeTruthy());
+    expect(within(r.getByTestId('calendar-session-footer')).getByTestId('calendar-join')).toBeTruthy();
+    const filled = forestButtons(r);
+    expect(filled).toHaveLength(1);
+    expect(flat(filled[0]).borderRadius).toBe(radius.button);
+    for (const id of ['calendar-add-phone', 'calendar-reschedule', 'calendar-session-message', 'calendar-cancel']) {
+      expect(flat(r.getByTestId(id))).toMatchObject({ borderBottomWidth: StyleSheet.hairlineWidth });
+    }
+    const title = flat(r.getByText(sess().title));
+    expect(title.fontFamily).toBe('CormorantGaramond_400Regular');
+    expect(Number(title.lineHeight)).toBeGreaterThanOrEqual(1.2 * Number(title.fontSize));
+    expect(flat(r.getByTestId('calendar-session')).paddingTop).toBe(0);
+  });
+
+  it('an unreadable session shows the calm text retry, not a filled button', async () => {
+    api.getSession.mockRejectedValue(new Error('Network Error'));
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-session-missing-retry')).toBeTruthy());
+    expect(forestButtons(r)).toHaveLength(0);
   });
 });
