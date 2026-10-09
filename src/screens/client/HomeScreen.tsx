@@ -55,33 +55,9 @@ import {
   summarizeMissing,
 } from '../../lib/profileCompletion';
 import { getTodayString } from '../../utils/date';
+import { homeDateLine } from './homeDate';
 import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/workoutDoneToday';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
-
-// ─── Date-as-poetry helpers ──────────────────────────────────────────────────
-
-const ORDINAL_WORDS: Record<number, string> = {
-  1:  'the first',   2:  'the second', 3:  'the third',   4:  'the fourth',
-  5:  'the fifth',   6:  'the sixth',  7:  'the seventh',  8:  'the eighth',
-  9:  'the ninth',  10:  'the tenth', 11:  'the eleventh', 12: 'the twelfth',
-  13: 'the thirteenth', 14: 'the fourteenth', 15: 'the fifteenth',
-  16: 'the sixteenth',  17: 'the seventeenth', 18: 'the eighteenth',
-  19: 'the nineteenth', 20: 'the twentieth',   21: 'the twenty-first',
-  22: 'the twenty-second', 23: 'the twenty-third', 24: 'the twenty-fourth',
-  25: 'the twenty-fifth',  26: 'the twenty-sixth', 27: 'the twenty-seventh',
-  28: 'the twenty-eighth', 29: 'the twenty-ninth', 30: 'the thirtieth',
-  31: 'the thirty-first',
-};
-
-function numberToOrdinalWords(day: number): string {
-  return ORDINAL_WORDS[day] ?? `the ${day}th`;
-}
-
-function buildDateAsPoetry(date: Date): string {
-  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date);
-  const day = date.getDate();
-  return `${weekday}, ${numberToOrdinalWords(day)}.`;
-}
 
 // ─── Progress line ────────────────────────────────────────────────────────────
 
@@ -238,7 +214,7 @@ export default function HomeScreen() {
   }, [currentUser?.id, refreshing, canLoadDay]));
 
   const workoutInProgress = !!activeWorkout;
-  const datePoetry = buildDateAsPoetry(today);
+  const dateLine = homeDateLine(today); // B34: "Thursday, 8 October", locale order
   const progressLine = buildProgressLine(mealsLogged, canLoadDay && workoutDone,
     canLoadDay ? pendingPlanName : null, canLoadDay && workoutInProgress);
   const workoutLabel = workoutInProgress ? 'Resume workout' : !workoutDone && pendingPlanName ? `Start ${pendingPlanName}` : 'Open Train';
@@ -420,7 +396,7 @@ export default function HomeScreen() {
         ) : null}
         {/* Hero */}
         <Text testID="home-date" style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 16 }}>
-          {datePoetry}
+          {dateLine}
         </Text>
         {progressLine ? (
           <Text style={{ ...typography.h1, color: sc.textPrimary, marginBottom: 24 }}>

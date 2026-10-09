@@ -32,10 +32,12 @@ import HomeHeaderActions, { messageCoachLabel } from '../HomeHeaderActions';
 describe('HomeHeaderActions', () => {
   beforeEach(() => { jest.clearAllMocks(); mockRomanChat.mockReturnValue(false); });
 
-  it.each([false, true])('adds the Roman shortcut only when chat is enabled: %s', async (enabled) => {
+  it.each([false, true])('adds the Roman shortcut beside the coach entry only when chat is enabled: %s', async (enabled) => {
     mockRomanChat.mockReturnValue(enabled);
-    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    mockGet.mockResolvedValue({ data: { name: 'Bradley Gleave' } });
     const view = await render(<HomeHeaderActions />);
+    expect(await view.findByText('Message Bradley')).toBeTruthy();
     if (!enabled) {
       expect(view.queryByTestId('home-roman-chat')).toBeNull();
       return;
@@ -52,11 +54,41 @@ describe('HomeHeaderActions', () => {
   });
 
   it('keeps both outline header actions at 24 pt', async () => {
-    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    mockGet.mockResolvedValue({ data: {} });
     const view = await render(<HomeHeaderActions />);
     for (const icon of ['chatbubble-ellipses-outline', 'notifications-outline']) {
       expect(view.getByTestId(`icon-${icon}`).props.style.fontSize).toBe(24);
     }
+  });
+
+  // B25: a coachless client is never offered a coach action on Home.
+  it('offers a coachless client Roman instead of a coach, with one Roman entry', async () => {
+    mockRomanChat.mockReturnValue(true);
+    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    const view = await render(<HomeHeaderActions />);
+    expect(view.queryByText(/coach/i)).toBeNull();
+    expect(view.queryByLabelText(/coach/i)).toBeNull();
+    expect(view.queryByTestId('home-message-coach')).toBeNull();
+    expect(view.queryByTestId('icon-chatbubble-ellipses-outline')).toBeNull();
+    expect(view.getAllByTestId('home-roman-chat')).toHaveLength(1);
+    expect(view.getByText('Ask Roman')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Chat with Roman'));
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'RomanChat', initial: false });
+    await fireEvent.press(view.getByTestId('home-notification-bell'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('NotificationCenter');
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('shows a coachless client only the bell when Roman chat is off', async () => {
+    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    const view = await render(<HomeHeaderActions />);
+    expect(view.queryByText(/coach/i)).toBeNull();
+    expect(view.queryByTestId('home-message-coach')).toBeNull();
+    expect(view.queryByTestId('home-roman-chat')).toBeNull();
+    expect(view.getByTestId('home-leading-empty')).toBeTruthy();
+    expect(view.getByTestId('home-notification-bell')).toBeTruthy();
+    expect(mockGet).not.toHaveBeenCalled();
   });
 
   it('labels the message entry with the coach first name', async () => {
@@ -67,16 +99,17 @@ describe('HomeHeaderActions', () => {
     expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach');
   });
 
-  it('falls back to "Message your coach" without a coach or on error', async () => {
-    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+  it('falls back to "Message your coach" when the coach name cannot be read', async () => {
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    mockGet.mockRejectedValue(new Error('404'));
     const { getByText } = await render(<HomeHeaderActions />);
     expect(getByText('Message your coach')).toBeTruthy();
-    expect(mockGet).not.toHaveBeenCalled();
     expect(messageCoachLabel('  ')).toBe('Message your coach');
   });
 
   it('lets the message action label wrap at larger text sizes', async () => {
-    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    mockGet.mockRejectedValue(new Error('404'));
     const view = await render(<HomeHeaderActions />);
     const label = view.getByText('Message your coach');
     expect(label.props.numberOfLines).toBeUndefined();

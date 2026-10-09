@@ -1,13 +1,19 @@
 /**
- * HomeHeaderActions — top-of-Home row with the two things a client
- * must always be able to reach in one tap:
+ * HomeHeaderActions — top-of-Home row with the things a client must always
+ * be able to reach in one tap:
  *
- *   - "Message <coach first name>" (falls back to "Message your coach")
- *     → HomeStack `Messages` (previously only reachable via More → Membership).
+ *   - With a coach: "Message <coach first name>" (falls back to "Message
+ *     your coach") → HomeStack `Messages`, with the unread count.
  *   - A notification bell with the unread badge → HomeStack `NotificationCenter`
  *     (the old headerRight bell never rendered because the Home stack is
  *     headerShown:false).
  *   - When Roman chat is enabled, a compact avatar → MoreTab / RomanChat.
+ *
+ * B25 (owner, 10-08): a client with no coach was told "Message your coach".
+ * Coachless clients get everything except direct coaching, so there is no
+ * coach action at all: the leading slot becomes "Ask Roman" (avatar and
+ * label, same RomanChat destination, no second avatar) when Roman chat is
+ * on, and stays empty otherwise.
  *
  * The coach name comes from `GET /v1/clients/me/coach` (same endpoint as
  * CoachIntroductionBanner); any failure keeps the generic label.
@@ -93,27 +99,45 @@ export default function HomeHeaderActions() {
       ? `Notifications, ${unreadCount > 99 ? '99+' : unreadCount} unread`
       : 'Notifications';
 
+  const openRoman = () => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false });
+  const hasCoach = !!coachId;
+
   return (
     <View style={styles.row}>
-      <Pressable
-        onPress={() => navigation.navigate('Messages')}
-        accessibilityRole="button"
-        accessibilityLabel={messageLabel}
-        testID="home-message-coach"
-        style={({ pressed }) => [
-          styles.message,
-          { opacity: pressed ? 0.85 : 1 },
-        ]}
-      >
-        <Ionicons name="chatbubble-ellipses-outline" size={24} color={sc.textPrimary} />
-        <Text style={[typography.bodySmall, styles.messageText, { color: sc.textPrimary }]}>
-          {label}
-        </Text>
-        <NotificationBadge count={unreadMessages} />
-      </Pressable>
-      {featureFlags.romanChat ? (
+      {hasCoach ? (
         <Pressable
-          onPress={() => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false })}
+          onPress={() => navigation.navigate('Messages')}
+          accessibilityRole="button"
+          accessibilityLabel={messageLabel}
+          testID="home-message-coach"
+          style={({ pressed }) => [
+            styles.message,
+            { opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={24} color={sc.textPrimary} />
+          <Text style={[typography.bodySmall, styles.messageText, { color: sc.textPrimary }]}>
+            {label}
+          </Text>
+          <NotificationBadge count={unreadMessages} />
+        </Pressable>
+      ) : featureFlags.romanChat ? (
+        <Pressable
+          onPress={openRoman}
+          accessibilityRole="button"
+          accessibilityLabel="Chat with Roman"
+          testID="home-roman-chat"
+          style={({ pressed }) => [styles.message, { opacity: pressed ? 0.85 : 1 }]}
+        >
+          <RomanAvatar crop="neutral" size={32} testID="home-roman-avatar" />
+          <Text style={[typography.bodySmall, styles.messageText, { color: sc.textPrimary }]}>Ask Roman</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.message} testID="home-leading-empty" />
+      )}
+      {hasCoach && featureFlags.romanChat ? (
+        <Pressable
+          onPress={openRoman}
           accessibilityRole="button"
           accessibilityLabel="Chat with Roman"
           testID="home-roman-chat"

@@ -58,6 +58,7 @@ jest.mock('../../../components/tutorial/TutorialHomeSlot', () => () => null);
 jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 jest.mock('../../../components/PendingInviteBanner', () => () => null);
 import HomeScreen from '../HomeScreen';
+import { homeDateLine } from '../homeDate';
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockMacroMode = 'full';
@@ -100,6 +101,8 @@ it.each([
       ? 'Opens your saved workout' : label === 'Open Train' ? 'Opens Train' : 'Opens the assigned workout');
   }
   expect(screen.queryByText(/One workout to go|Explore the app/)).toBeNull();
+  // B25: Home never offers a coach action to a client without a coach.
+  if (state === 'coachless') expect(screen.queryByText(/coach/i)).toBeNull();
 });
 it('opens the first unfinished assignment, not a completed workout or a different plan', async () => {
   mockAssignments.mockResolvedValue([
@@ -159,6 +162,9 @@ it.each(['simple', 'full'] as const)('keeps every %s metric in one hairline row 
     });
   }
   expect(StyleSheet.flatten(screen.getByTestId('home-date').props.style).fontFamily).toBe(typography.eyebrow.fontFamily);
+  // B34: weekday, day and month in the phone's locale; no "the eighth." ordinal words.
+  expect(screen.getByTestId('home-date').props.children).toBe(homeDateLine(new Date()));
+  expect(screen.getByTestId('home-date').props.children).not.toMatch(/\bthe\b|\.$/);
   expect(StyleSheet.flatten(screen.getByText('One meal logged.').props.style).fontFamily).toBe(typography.h1.fontFamily);
   expect(StyleSheet.flatten(screen.getByTestId('home-explore-cta').props.style)).toMatchObject({
     backgroundColor: lightTokens.accent, minHeight: 44,
