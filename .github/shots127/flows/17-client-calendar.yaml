@@ -1,0 +1,16 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible:
+      id: "calendar-type-.*"
+    timeout: 60000
+- tapOn:
+    id: "calendar-type-.*"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "calendar-slot-.*"
+    timeout: 60000
+# Shows available booking times only; never submits a booking or request.
