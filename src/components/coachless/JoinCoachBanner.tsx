@@ -3,13 +3,14 @@
  * banner on homepage"). CoachlessHomeSlot part "join" decides who sees it and opens its coach-code sheet.
  * "Not now" hides it for this app session only, in memory, never on disk. A new session shows it again:
  * a cold start, any sign-in or sign-out (authEvents), or a return after more than five minutes in the
- * background (the biometric gate's BACKGROUND_TIMEOUT_MS line).
+ * background (the biometric gate's BACKGROUND_TIMEOUT_MS line). The button is forest outlined, not filled:
+ * Home's hero already holds the screen's one filled forest action (Log a meal or Continue).
  */
 import React, { useSyncExternalStore } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
-import { radius, typography } from '../../theme/tokens';
-import { PrimaryButton, TextLink } from '../../ui';
+import { layout, radius, typography } from '../../theme/tokens';
+import { TextLink } from '../../ui';
 import { authEvents } from '../../utils/authEvents';
 
 export const JOIN_COACH_TITLE = 'Join a coach';
@@ -60,12 +61,16 @@ export default function JoinCoachBanner({ offer, onJoin }: { offer?: React.React
       <Text accessibilityRole="header" style={[styles.title, { color: sc.textPrimary }]}>{JOIN_COACH_TITLE}</Text>
       <Text style={[styles.body, { color: sc.textMuted }]}>{JOIN_COACH_BODY}</Text>
       {offer}
-      <PrimaryButton
-        label={JOIN_COACH_TITLE}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={JOIN_COACH_TITLE}
         accessibilityHint="Opens the coach code sheet"
         testID="coachless-join"
         onPress={onJoin}
-      />
+        style={({ pressed }) => [styles.join, { borderColor: sc.accent, opacity: pressed ? 0.7 : 1 }]}
+      >
+        <Text style={[styles.joinLabel, { color: sc.accentText }]} maxFontSizeMultiplier={1.6}>{JOIN_COACH_TITLE}</Text>
+      </Pressable>
       <TextLink
         label="Not now"
         underline={false}
@@ -82,5 +87,7 @@ const styles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: 20, paddingBottom: 8, marginTop: 24 },
   title: { ...typography.h3, marginBottom: 6 },
   body: { ...typography.body, marginBottom: 16 },
+  join: { minHeight: layout.buttonHeight, borderWidth: 1, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  joinLabel: { ...typography.bodyMd, lineHeight: 22 },
   notNow: { marginTop: 4 },
 });

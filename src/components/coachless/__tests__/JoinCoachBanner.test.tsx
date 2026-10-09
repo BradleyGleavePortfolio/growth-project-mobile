@@ -2,7 +2,7 @@
 import React from 'react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, StyleSheet, type AppStateStatus } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -73,9 +73,12 @@ it('a coached client never sees it (server user, or the cache mirror after a joi
   expect(banner()).toBeNull();
 });
 
-it('the forest button opens the coach-code sheet, the coachless join path', async () => {
+it('the forest outlined button (Home keeps one filled forest action) opens the coach-code sheet', async () => {
   await renderPart();
-  await fireEvent.press(await screen.findByTestId('coachless-join'));
+  const button = await screen.findByTestId('coachless-join');
+  const style = StyleSheet.flatten(button.props.style);
+  expect([style.borderColor, style.borderRadius, style.backgroundColor]).toEqual(['#2C4A36', 12, undefined]);
+  await fireEvent.press(button);
   expect(screen.getByTestId('coach-code-sheet')).toBeTruthy();
   expect(screen.getByTestId('coach-code-input').props.value).toBe('');
 });
