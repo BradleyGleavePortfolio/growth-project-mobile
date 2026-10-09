@@ -159,8 +159,8 @@ import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScr
 import type { CalendarStackParamList } from './calendarRoutes';
 
 // B22/B24 (b#888) and B1 (owner ruling 10-08 23:5x, m#650): logging,
-// workouts, plans, fasting, macros and Roman guidance call routes marked
-// @OpenToCoachlessClient() server-side. They are the client's own basic
+// workouts, routines, habits, plans, fasting, macros and Roman guidance call
+// routes marked @OpenToCoachlessClient() server-side. They are the client's own basic
 // functions, so these screens are open to every client, coachless or coached,
 // with a free package, no package or a lapsed plan (OWN). Roman itself is
 // locked for a client with no coach inside the screen (owner 2026-10-09).
@@ -175,6 +175,8 @@ const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPl
 const ProtectedFastingScreen = withProtectedScreen(FastingScreen, OWN);
 const ProtectedLogScreen = withProtectedScreen(LogScreen, OWN);
 const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen, OWN);
+const ProtectedHabitsScreen = withProtectedScreen(HabitsScreen, OWN);
+const ProtectedRoutineBuilderScreen = withProtectedScreen(RoutineBuilderScreen, OWN);
 // Apple 1.2 (B-IOSREV-2): the wins feed is community content, so it sits
 // behind the one-time community terms agreement too. Not OWN: community
 // feed, wins and leaderboard still need a package server-side.
@@ -431,7 +433,7 @@ function HomeStackNavigator() {
       }}
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
-      <HomeStackNav.Screen name="Habits"                component={HabitsScreen} options={backOnlyHeader()} />
+      <HomeStackNav.Screen name="Habits"                component={ProtectedHabitsScreen} options={backOnlyHeader()} />
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
       <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
       {/* The Messages header opens the coach contact card (Mute, Block User). */}
@@ -465,7 +467,7 @@ function WorkoutStackNavigator() {
           chevron, Android back or a tab press, which all ask first. */}
       <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} options={{ gestureEnabled: false }} />
       <WorkoutStackNav.Screen name="WorkoutHistoryEdit" component={ProtectedWorkoutHistoryEditScreen} />
-      <WorkoutStackNav.Screen name="RoutineBuilder"  component={RoutineBuilderScreen} />
+      <WorkoutStackNav.Screen name="RoutineBuilder"  component={ProtectedRoutineBuilderScreen} />
       <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
       {/* Mux video + exercise library v1. */}
       <WorkoutStackNav.Screen

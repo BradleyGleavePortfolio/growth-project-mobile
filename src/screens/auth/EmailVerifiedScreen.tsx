@@ -118,12 +118,10 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 16,
       marginBottom: 40,
     },
+    // The theme's title role (32/40): the old 35 sat under Cormorant's 1.211 em
+    // line box and could clip descenders on Android (B-SMALLFIX-135).
     title: {
-      fontFamily: 'CormorantGaramond_400Regular',
-      fontSize: 32,
-      lineHeight: 35,
-      letterSpacing: 0.6,
-      fontWeight: '400',
+      ...typography.h1,
       color: colors.textPrimary,
       textAlign: 'center',
     },

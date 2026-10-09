@@ -45,7 +45,12 @@ for (const match of navSource.matchAll(/^import (?!type\b)[^;]*? from '(\.\.\/sc
   } else if (modulePath.endsWith('/WorkoutScreen')) {
     Stub = ({ navigation }) => {
       React.useEffect(() => void (trainMounts += 1), []);
-      return <TouchableOpacity onPress={() => navigation.navigate('RoutineBuilder')} testID="stub-new-routine"><Text>New routine</Text></TouchableOpacity>;
+      return (
+        <>
+          <TouchableOpacity onPress={() => navigation.navigate('RoutineBuilder')} testID="stub-new-routine"><Text>New routine</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('ExerciseLibrary')} testID="stub-exercise-library"><Text>Exercise library</Text></TouchableOpacity>
+        </>
+      );
     };
   }
   jest.doMock(`../../${modulePath}`, () => ({ __esModule: true, default: Stub }));
@@ -123,12 +128,12 @@ describe('Day 10+ lockout keeps the client own logging (owner ruling 23:5x)', ()
     await press(view, 'dunning-lockout-train');
     expect(view.getByTestId('dunning-banner')).toBeTruthy();
 
-    await press(view, 'stub-new-routine');
-    expect(routeName()).toBe('RoutineBuilder');
+    await press(view, 'stub-exercise-library');
+    expect(routeName()).toBe('ExerciseLibrary');
     expect(view.getByTestId('dunning-lockout-screen')).toBeTruthy();
     await press(view, 'dunning-lockout-back');
     expect(routeName()).toBe('WorkoutMain');
-    await press(view, 'stub-new-routine');
+    await press(view, 'stub-exercise-library');
     await act(async () => void backs[backs.length - 1]());
     expect(routeName()).toBe('WorkoutMain');
     expect(view.queryByTestId('dunning-lockout-overlay')).toBeNull();
@@ -138,6 +143,19 @@ describe('Day 10+ lockout keeps the client own logging (owner ruling 23:5x)', ()
       await go('MoreTab', { screen });
       expect(view.getByTestId('dunning-lockout-screen')).toBeTruthy();
     }
+  });
+
+  it('Habits and New routine are basic self logging: open, with the notice (B-SMALL2-135)', async () => {
+    const view = await openApp(LOCKED);
+    await press(view, 'dunning-lockout-train');
+    await press(view, 'stub-new-routine');
+    expect(routeName()).toBe('RoutineBuilder');
+    expect(view.queryByTestId('dunning-lockout-overlay')).toBeNull();
+    expect(view.getByTestId('dunning-banner')).toBeTruthy();
+    await go('Home', { screen: 'Habits' });
+    expect(routeName()).toBe('Habits');
+    expect(view.queryByTestId('dunning-lockout-overlay')).toBeNull();
+    expect(view.getByTestId('dunning-banner')).toBeTruthy();
   });
 
   it('a disputed cycle keeps logging too: the paused-plan title, Message coach, no card path', async () => {
@@ -182,7 +200,7 @@ describe('Day 10+ lockout keeps the client own logging (owner ruling 23:5x)', ()
   it('the open set is every ClientNavigator OWN route but AIGuide, plus the Train tab', () => {
     const own = new Set([...navSource.matchAll(/const (\w+) = withProtectedScreen\(\w+, OWN\)/g)].map((m) => m[1]));
     const ownRoutes = [...navSource.matchAll(/name="(\w+)"\s+component=\{(\w+)\}/g)].filter((m) => own.has(m[2])).map((m) => m[1]);
-    expect(ownRoutes).toEqual(expect.arrayContaining(['Log', 'AIGuide', 'WorkoutMain', 'Fast']));
+    expect(ownRoutes).toEqual(expect.arrayContaining(['Log', 'AIGuide', 'WorkoutMain', 'Fast', 'Habits', 'RoutineBuilder']));
     expect([...OPEN_FOR_OWN_LOGGING].sort()).toEqual([...ownRoutes.filter((r) => r !== 'AIGuide'), 'WorkoutTab'].sort());
     const train = (names: string[]) => ({ type: 'tab', index: 1, routes: [{ name: 'Home' }, { name: 'WorkoutTab', state: { type: 'stack', index: names.length - 1, routes: names.map((name) => ({ name })) } }] });
     expect(backReachesOpenScreen(train(['WorkoutMain', 'ActiveWorkout', 'ExerciseDetail']))).toBe(true);
