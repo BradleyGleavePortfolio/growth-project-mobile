@@ -3,7 +3,7 @@
  * photo upload exists, so every face is a MonogramBadge. Theme colours and radius tokens only; serif lineHeight >= 1.25 x.
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography } from '../../../theme/tokens';
@@ -12,7 +12,7 @@ import MonogramBadge from '../../../components/community/coach/MonogramBadge';
 import LoadFailedNotice from '../../../components/coach/LoadFailedNotice';
 import type { MoneySummary } from '../../../api/coachMoneyApi';
 import type { AtRiskEntry } from '../../../services/commandCenterApi';
-import { changeVsLastMonth, dateOverline, greetingOverline, heroAmount, lastActiveWords, monthOverline, paceLine } from './coachHomeCopy';
+import { changeVsLastMonth, heroAmount, lastActiveWords, monthOverline, overlinePair, paceLine } from './coachHomeCopy';
 
 export type EarningsState = { kind: 'loading' | 'blocked' | 'error' } | { kind: 'ok'; summary: MoneySummary };
 // B-633-SOL-D-134-1: head-coach split income and refunds of earlier sales move net with no own charge.
@@ -21,10 +21,12 @@ export interface StatCell { key: string; label: string; value: string; sub?: str
 
 export function HomeOverline({ firstName, now }: { firstName?: string | null; now: Date }) {
   const { semanticColors: sc } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
+  const [date, greeting] = overlinePair(now, firstName, width - 2 * layout.gutter, Math.min(fontScale || 1, 1.3));
   return (
     <View style={[styles.overlineRow, { borderBottomColor: sc.border }]} testID="coach-home-overline">
-      <QuietOverline style={styles.flat}>{dateOverline(now)}</QuietOverline>
-      <QuietOverline style={styles.flat}>{greetingOverline(firstName)}</QuietOverline>
+      <QuietOverline style={styles.flat} maxFontSizeMultiplier={1.3}>{date}</QuietOverline>
+      <QuietOverline style={styles.flat} maxFontSizeMultiplier={1.3}>{greeting}</QuietOverline>
     </View>
   );
 }
@@ -106,6 +108,9 @@ export function ClientCard({ entry, now, urgent, onOpen, onMessage }: {
     <Pressable
       onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${urgent ? 'Most urgent: ' : ''}${name}. ${entry.top_factor}. Open their file.`}
       testID={urgent ? 'coach-home-urgent' : `coach-home-client-${entry.user_id}`}
+      // The card is one accessible element, so "Send a message" is offered to VoiceOver / TalkBack as an action on it.
+      accessibilityActions={urgent && onMessage ? [{ name: 'message', label: 'Send a message' }] : undefined}
+      onAccessibilityAction={(e) => e.nativeEvent.actionName === 'message' && onMessage?.()}
       style={({ pressed }) => [
         urgent ? [styles.urgent, { backgroundColor: sc.bgSurface, borderColor: sc.border }] : [styles.row, { borderBottomColor: sc.border }],
         pressed && styles.pressed,
@@ -145,12 +150,15 @@ export function CountRow({ label, value, words, onPress, accessibilityLabel, tes
   );
 }
 
+// Cormorant's default figures are old-style (a serif "1" reads like "I"); its lnum + tnum give lining, even figures.
+export const FIGURES: TextStyle['fontVariant'] = ['lining-nums', 'tabular-nums'];
+
 const styles = StyleSheet.create({
   overlineRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 12, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 28 },
   flat: { marginBottom: 0 },
   hero: { marginBottom: 28 },
   // Cormorant at 64 / 80 (1.25 x, B15): the one hero number on the screen.
-  heroNumber: { ...typography.display, fontSize: 64, lineHeight: 80, letterSpacing: 0, fontVariant: ['tabular-nums'] },
+  heroNumber: { ...typography.display, fontSize: 64, lineHeight: 80, letterSpacing: 0, fontVariant: FIGURES },
   heroPlaceholder: { height: 80 },
   change: { ...typography.bodyMd, marginTop: 2 },
   small: { ...typography.bodySmall },
@@ -159,7 +167,7 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 20 },
   statCell: { flex: 1, alignItems: 'center', paddingHorizontal: 6 },
   center: { textAlign: 'center' },
-  statValue: { ...typography.h1, fontVariant: ['tabular-nums'], marginTop: 4 },
+  statValue: { ...typography.h1, fontVariant: FIGURES, marginTop: 4 },
   urgent: { flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 6, marginBottom: 4 },
   urgentName: { ...typography.h1, marginTop: 2 },
   factor: { fontFamily: typography.display.fontFamily, fontStyle: 'italic', fontSize: 17, lineHeight: 22 },
@@ -167,6 +175,6 @@ const styles = StyleSheet.create({
   row: { minHeight: layout.rowMinHeight, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   grow: { flex: 1 },
   rowName: { ...typography.bodyMd },
-  rowValue: { ...typography.h2, fontVariant: ['tabular-nums'] },
+  rowValue: { ...typography.h2, fontVariant: FIGURES },
   pressed: { opacity: 0.6 },
 });

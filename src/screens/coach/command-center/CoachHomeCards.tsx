@@ -1,5 +1,5 @@
 /**
- * S-COACH — cards at the top of the coach Home (Command Center Overview):
+ * S-COACH — cards on the coach Home (Command Center Overview, below today's clients; COACH-HOME-134):
  * the setup checklist (each item opens the matching wizard step, which stays
  * reachable after setup), today's brief (flag coachBrief) and the Money card,
  * which expands into the Money page.

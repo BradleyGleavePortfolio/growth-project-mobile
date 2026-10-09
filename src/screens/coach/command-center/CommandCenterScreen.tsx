@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { spacing, typography } from '../../../theme/tokens';
+import { layout, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui';
 import { useTheme } from '../../../theme/useTheme';
 import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
@@ -141,6 +141,8 @@ export default function CommandCenterScreen({
               >
                 <Text
                   style={[styles.tabLabel, { color: isActive ? sc.accentText : sc.textMuted }]}
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={1.2}
                 >
                   {tab.label}
                 </Text>
@@ -160,15 +162,19 @@ const styles = StyleSheet.create({
   tabBarWrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  // SHOTS-134B f: the five tabs share the content width (gutter to gutter) instead of
+  // running off the right edge; it still scrolls at the largest text sizes.
   tabBar: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
+    paddingHorizontal: layout.gutter,
+    flexGrow: 1,
+    justifyContent: 'space-between',
     flexDirection: 'row',
   },
   tab: {
     minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
     marginBottom: -1,  // overlap the hairline divider when active

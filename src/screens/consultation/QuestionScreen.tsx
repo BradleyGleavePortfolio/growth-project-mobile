@@ -502,6 +502,9 @@ function GoalWeightBody(props: BodyProps) {
 
 // Opus C-3: no "Nothing has been sent" here; chapter saves may already have
 // landed when the server moves to a newer agreement.
+/** Shown next to a disabled P0 Continue (box 1 may be below the fold). */
+export const CONSENT_TICK_HINT = 'Tick the first box above to continue.';
+
 const CONSENT_ERROR_COPY = {
   version_mismatch:
     'The agreement has been updated since this version of the app. Please update the app to read the current agreement before you continue.',
@@ -563,6 +566,13 @@ function ConsentBody(props: BodyProps) {
             style={[s.mutedSmall, { marginBottom: 12 }]}
             testID="consent-coach-sharing"
           />
+          {/* SHOTS-134B 6: on a 360x800 phone box 1 sits below the fold, so a
+              disabled Continue says why. Not part of the consent text or its hash. */}
+          {!checked && !blocked ? (
+            <Text style={[s.mutedSmall, { marginBottom: 12 }]} accessibilityLiveRegion="polite" testID="consent-tick-hint">
+              {CONSENT_TICK_HINT}
+            </Text>
+          ) : null}
           <PrimaryButton
             label={props.screen.cta ?? 'Continue'}
             disabled={!checked || blocked}

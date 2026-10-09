@@ -36,9 +36,9 @@ test.each([undefined, '', '0', 'false', 'true', 'unexpected'])(
     expect(result.ios).toEqual(app.ios);
     expect(pluginNames(result)).toContain('react-native-health');
     // The switch never changes the build number; the value itself is pinned in
-    // scripts/__tests__/validateAppConfigUpdates.test.js (bumped to 6 by CLINIC-APK-132).
+    // scripts/__tests__/validateAppConfigUpdates.test.js (bumped to 7 for build 8 by agent 134).
     expect(result.android.versionCode).toBe(app.android.versionCode);
-    expect(result.android.versionCode).toBe(6);
+    expect(result.android.versionCode).toBe(7);
     expect(result.android.package).toBe('com.growthproject.app');
     expect(result.extra.eas).toEqual(app.extra.eas);
   },

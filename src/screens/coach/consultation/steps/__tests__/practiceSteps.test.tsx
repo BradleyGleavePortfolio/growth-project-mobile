@@ -165,7 +165,7 @@ describe('K8 Practice ready', () => {
     expect(ui.getByText('Jordan Reyes, Reyes Strength.')).toBeTruthy();
     expect(ui.getByText('Strength, fat loss and beginners.')).toBeTruthy();
     expect(ui.getByText('Your link is ready to share.')).toBeTruthy();
-    expect(ui.getByText("Next, I'll show you around and help you create your first package.")).toBeTruthy();
+    expect(ui.getByText('Next is your Clients page. Share your link there to bring in your first client.')).toBeTruthy();
     expect(ui.queryByText('Finish later')).toBeNull();
     await fireEvent.press(ui.getByTestId('k8-show-me-around'));
     expect(p.onNext).toHaveBeenCalledTimes(1);

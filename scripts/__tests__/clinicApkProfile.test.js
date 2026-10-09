@@ -42,9 +42,9 @@ describe('eas.json clinic-apk: the Android test APK with the iPhone feature set'
     expect(EAS.submit['clinic-apk']).toBeUndefined();
   });
 
-  it('installs over the versionCode 5 test app; iOS build 7 and the store profiles keep the Android link off', () => {
-    expect(APP.android.versionCode).toBe(6);
-    expect(APP.ios.buildNumber).toBe('7');
+  it('installs over the versionCode 6 build 7 app; iOS build 8 and the store profiles keep the Android link off', () => {
+    expect(APP.android.versionCode).toBe(7);
+    expect(APP.ios.buildNumber).toBe('8');
     for (const name of ['production', 'clinic']) {
       const store = resolveProfile(EAS, name);
       expect(store.distribution).toBe('store');

@@ -7,6 +7,7 @@ import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
+import { radius, typography } from "../../../theme/tokens";
 
 interface Props {
   onOpen: () => void;
@@ -41,16 +42,17 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: "center",
       gap: 12,
       minHeight: 64,
-      borderWidth: 1,
+      // COACH-HOME-134: rounded hairline card (Q10b) with a serif title.
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
+      borderRadius: radius.card,
       backgroundColor: colors.surface,
-      padding: 16,
+      padding: 20,
       marginBottom: 16,
     },
     text: { flex: 1, gap: 2 },
     title: {
-      fontFamily: "Inter_600SemiBold",
-      fontSize: 17,
+      ...typography.h3,
       color: colors.textPrimary,
     },
     sub: {

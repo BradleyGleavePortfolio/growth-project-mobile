@@ -131,8 +131,8 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     }
     await fireEvent.press(view.getByLabelText('Exercise library'));
     expect(mockNavigate).toHaveBeenLastCalledWith('ExerciseLibrary');
-    await fireEvent.press(view.getByLabelText('Coach guidelines'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('CoachGuidelines');
+    // B22/B29: no coach, no Coach guidelines (WorkoutScreen.coachless135).
+    expect(view.queryByLabelText('Coach guidelines')).toBeNull();
     expect(view.queryByLabelText('All coach workouts')).toBeNull();
   });
 

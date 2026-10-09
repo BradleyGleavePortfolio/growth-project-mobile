@@ -44,12 +44,26 @@ export const monthOverline = (now: Date) => `${fmt(now, { month: 'long' })} so f
 export const dateOverline = (now: Date) => fmt(now, { weekday: 'long', month: 'long', day: 'numeric' });
 export const greetingOverline = (name?: string | null) => [getGreeting(), name?.trim().split(/\s+/)[0]].filter(Boolean).join(', ');
 
-/** "Up $620 on this point in September"; null when there is nothing to compare. */
+// Caps advance widths (1/1000 em) from Inter_500Medium.ttf (hmtx), for the 11 pt overline tracked 1.98 pt.
+const CAPS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const CAPS_EM = [709, 657, 733, 722, 603, 589, 748, 745, 272, 575, 688, 565, 913, 756, 767, 642, 769, 648, 646, 653, 740, 709, 1003, 701, 696, 641, 646, 415, 616, 627, 656, 603, 630, 571, 629, 630];
+export const overlineWidth = (s: string, scale = 1) =>
+  [...s.toUpperCase()].reduce((w, c) => w + (11 * (CAPS_EM[CAPS.indexOf(c)] ?? 300)) / 1000 + 1.98, 0) * scale;
+
+/** Date and greeting on one line (SHOTS-134B f): the long date if both fit, else the short date, else the greeting alone. */
+export function overlinePair(now: Date, name: string | null | undefined, room: number, scale = 1): [string, string] {
+  const short = fmt(now, { weekday: 'short', month: 'short', day: 'numeric' });
+  const fits = (a: string, b: string) => overlineWidth(a, scale) + overlineWidth(b, scale) + 12 <= room;
+  if (fits(dateOverline(now), greetingOverline(name))) return [dateOverline(now), greetingOverline(name)];
+  return [short, fits(short, greetingOverline(name)) ? greetingOverline(name) : greetingOverline(null)];
+}
+
+/** "Up $620 on the same days in September"; null when there is nothing to compare. */
 export function changeVsLastMonth(changeCents: number | null, currency: string, now: Date): string | null {
   if (changeCents === null) return null;
   const last = fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1), { month: 'long' });
-  if (changeCents === 0) return `Level with this point in ${last}`;
-  return `${changeCents > 0 ? 'Up' : 'Down'} ${heroAmount(Math.abs(changeCents), currency)} on this point in ${last}`;
+  if (changeCents === 0) return `Level with the same days in ${last}`;
+  return `${changeCents > 0 ? 'Up' : 'Down'} ${heroAmount(Math.abs(changeCents), currency)} on the same days in ${last}`;
 }
 
 /** "10 days in, on pace for $18,400" (the pace from day 7, when it means something). */

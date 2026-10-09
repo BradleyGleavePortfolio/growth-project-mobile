@@ -42,6 +42,8 @@ it('keeps editable inputs, password visibility and update validation', async () 
     backgroundColor: lightTokens.bgPrimary, borderBottomWidth: StyleSheet.hairlineWidth,
     fontFamily: 'Inter_400Regular',
   });
+  // SHOTS-134B 5: an underline input has no corner radius.
+  expect(StyleSheet.flatten(view.getByLabelText('New password').props.style).borderRadius).toBeUndefined();
   await fireEvent.press(view.getByLabelText('Show password'));
   expect(view.getByLabelText('New password').props.secureTextEntry).toBe(false);
   await fireEvent.press(view.getByLabelText('Hide password'));

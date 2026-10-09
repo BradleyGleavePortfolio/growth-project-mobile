@@ -12,7 +12,7 @@ import type { CoachHomeSources } from '../screens/coach/command-center/coachHome
 import { commandCenterApi } from '../services/commandCenterApi';
 import OverviewScreen from '../screens/coach/command-center/OverviewScreen';
 import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
-import { clientsNarrative, heroAmount, paceLine, retentionPct } from '../screens/coach/command-center/coachHomeCopy';
+import { clientsNarrative, dateOverline, heroAmount, overlinePair, overlineWidth, paceLine, retentionPct } from '../screens/coach/command-center/coachHomeCopy';
 
 jest.mock('@react-navigation/native', () => ({ ...jest.requireActual('@react-navigation/native'), useNavigation: () => ({ navigate: jest.fn() }) }));
 jest.mock('../services/commandCenterApi', () => ({
@@ -48,13 +48,28 @@ it('copy: clients in a sentence, a whole-unit hero, pace from day 7, retention o
   expect([retentionPct(null), retentionPct(ltv(0, 0)), retentionPct(ltv(0, 50000, 0)), retentionPct(ltv(6.2, 50000))]).toEqual([null, null, null, '94%']);
 });
 
+it('keeps date and greeting on one line at 360 and 390 (SHOTS-134B f): long date, else short, else no name', () => {
+  const fri = new Date(2026, 9, 9, 9);
+  for (const room of [360 - 48, 390 - 48]) {
+    for (const name of ['Jordan', 'Alexandra-Marie', null]) {
+      const [date, greeting] = overlinePair(fri, name, room);
+      expect(overlineWidth(date) + overlineWidth(greeting) + 12).toBeLessThanOrEqual(room);
+    }
+  }
+  expect(overlinePair(fri, 'Jordan', 312)[0]).toBe('Fri, Oct 9');
+  expect(overlinePair(fri, 'Jo', 342)[0]).toBe(dateOverline(fri));
+  // Never under the TTF measure (142.9 pt), at most 2 pt over it.
+  expect(overlineWidth('FRIDAY, OCTOBER 9')).toBeGreaterThanOrEqual(142.9);
+  expect(overlineWidth('FRIDAY, OCTOBER 9')).toBeLessThan(145);
+});
+
 describe('the hero: a real month-so-far figure, or one calm line', () => {
   it('shows the serif hero, the change and the pace when the month has sales', async () => {
     const screen = await render(<OverviewScreen sources={sources()} />);
     const hero = await screen.findByTestId('coach-home-hero-amount');
     expect(screen.getByText('$14,280')).toBe(hero);
-    expect(StyleSheet.flatten(hero.props.style).fontFamily).toBe('CormorantGaramond_400Regular');
-    expect(screen.getByText(/^Up \$620 on this point in /)).toBeTruthy();
+    expect(StyleSheet.flatten(hero.props.style)).toMatchObject({ fontFamily: 'CormorantGaramond_400Regular', fontVariant: ['lining-nums', 'tabular-nums'] });
+    expect(screen.getByText(/^Up \$620 on the same days in /)).toBeTruthy();
     expect(screen.getByText(/^\d+ days? in/)).toBeTruthy();
   });
   it('a real net with no own charge (split income, a refund) is the hero; only a truly empty month says "No earnings yet"', async () => {
@@ -94,6 +109,10 @@ describe("the stat row and today's clients", () => {
     expect(within(card).getByText('JM')).toBeTruthy();
     await fireEvent.press(within(card).getByTestId('coach-home-urgent-message'));
     expect(onOpenThread).toHaveBeenCalledWith('c-1', 'Jessica Miller');
+    // A screen reader reaches "Send a message" as an action on the card (C from LN-OPUS-D-134 on m#633).
+    expect(card.props.accessibilityActions).toEqual([{ name: 'message', label: 'Send a message' }]);
+    await fireEvent(card, 'accessibilityAction', { nativeEvent: { actionName: 'message' } });
+    expect(onOpenThread).toHaveBeenCalledTimes(2);
     await fireEvent.press(screen.getByTestId('coach-home-client-c-2'));
     expect(onSelectClient).toHaveBeenCalledWith('c-2', 'Caleb Anderson');
     expect(screen.getByTestId('coach-home-client-c-3')).toBeTruthy();
@@ -125,6 +144,7 @@ it.each([
 
 it.each([
   'screens/coach/command-center/OverviewScreen.tsx', 'screens/coach/command-center/CommandCenterScreen.tsx', 'screens/coach/command-center/CoachHomeSections.tsx',
+  'components/coach/money/MoneyHomeCard.tsx', 'components/coach/setup/CoachSetupChecklist.tsx', 'components/coach/brief/BriefHomeCard.tsx',
 ])('%s has no literal radius and no SafeAreaView from react-native (source)', (f) => {
   const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   expect(src.match(/border(?:Top|Bottom)?(?:Left|Right)?Radius:\s*\d+/g)).toBeNull();
