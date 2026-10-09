@@ -142,6 +142,4 @@ export default function JoinPackageScreen({ join, onClose }: JoinPackageScreenPr
   );
 }
 
-const styles = StyleSheet.create({
-  gap: { marginTop: spacing.md },
-});
+const styles = StyleSheet.create({ gap: { marginTop: spacing.md } });
