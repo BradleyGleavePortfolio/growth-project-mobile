@@ -31,4 +31,9 @@ describe('repository hygiene (B-321-6)', () => {
     expect(lines).toContain('node_modules');
     expect(git(['check-ignore', '--no-index', '-q', 'node_modules']).trim()).toBe('');
   });
+
+  it('never tracks .mcp.json, which carries agent connection tokens', () => {
+    expect(git(['ls-files', '--', ':(glob)**/.mcp.json']).trim()).toBe('');
+    expect(git(['check-ignore', '--no-index', '-q', '.mcp.json']).trim()).toBe('');
+  });
 });
