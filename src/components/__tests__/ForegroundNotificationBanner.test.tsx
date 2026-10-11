@@ -12,7 +12,7 @@ import { Animated } from 'react-native';
 
 const mockNavigate = jest.fn();
 const mockFlags = { romanChat: false };
-jest.mock('../../config/featureFlags', () => ({ featureFlags: mockFlags }));
+jest.mock('../../config/featureFlags', () => ({ get featureFlags() { return mockFlags; } }));
 
 const COLORS = {
   textPrimary: '#1A1A18',
