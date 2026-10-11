@@ -4,7 +4,7 @@
  * the Vendor-name guard on CI and leaves every clone a dangling link. No
  * tracked path may be a symlink, and `node_modules` must never be tracked.
  */
-import { execFileSync, spawnSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -34,10 +34,11 @@ describe('repository hygiene (B-321-6)', () => {
 
   it('never tracks an agent connection config, which carries bearer tokens', () => {
     expect(git(['ls-files', '--', ':(glob,icase)**/*mcp.json']).trim()).toBe('');
-    // git grep exits 1 when nothing matches; this file is excluded because it names the key.
-    const grep = (...args: string[]) => spawnSync('git', ['grep', '-l', ...args], { cwd: root, encoding: 'utf8' });
-    expect(grep('"mcpServers"', '--', ':!src/__tests__/repoHygiene.test.ts')).toMatchObject({ status: 1, stdout: '' });
-    expect(grep('-E', '"servers"[[:space:]]*:[[:space:]]*\\{', '--', '*.json', '*.jsonc')).toMatchObject({ status: 1, stdout: '' });
+    // Whole-file match, so a line break inside the map still counts; this file names both keys.
+    const tracked = git(['ls-files', '-z']).split('\0').filter((f) => f && f !== 'src/__tests__/repoHygiene.test.ts');
+    const holding = (key: RegExp, files: string[]) => files.filter((f) => key.test(readFileSync(join(root, f), 'utf8')));
+    expect(holding(/"mcpServers"/, tracked)).toEqual([]);
+    expect(holding(/"servers"\s*:\s*\{/, tracked.filter((f) => /\.jsonc?$/.test(f)))).toEqual([]);
   });
 
   it.each(['.mcp.json', 'src/.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json'])(
