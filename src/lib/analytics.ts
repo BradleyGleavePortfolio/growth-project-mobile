@@ -13,6 +13,10 @@
  *   PostHog. identify() (sign-in, or a signed-in cold start) is the consent
  *   point; reset() (sign-out) withdraws it. Until then no client is built and
  *   events wait in memory (at most MAX_HELD); sign-out drops them.
+ * - Sign-out makes no PostHog request. The SDK's reset() always reloads
+ *   feature flags (a /flags/ request with the device id; posthog-react-native
+ *   4.45.14 and @posthog/core 1.29.9 have no option to skip it), so the SDK
+ *   reset waits for the next sign-in and runs just before its identify().
  * - PII stripping: blocks `email`, `password`, `name`, `phone`, `address` keys.
  * - Never throws — all public methods are guarded.
  */
@@ -125,11 +129,15 @@ export function identify(
   userId: string,
   props?: Record<string, unknown>,
 ): void {
+  // A new sign-in (first in this process, or after a sign-out) starts from a
+  // fresh SDK identity, so it never inherits the previous account's ids.
+  const newSignIn = _consent !== true;
   _consent = true;
   const held = _held;
   _held = [];
   try {
     const client = getClient();
+    if (newSignIn) client?.reset();
     client?.identify(userId, stripPII(props) as never);
     held.forEach(([event, p]) => client?.capture(event, p as never));
   } catch {
@@ -138,17 +146,12 @@ export function identify(
 }
 
 /**
- * Reset PostHog state on sign-out so the next user gets a fresh anonymous ID.
+ * Sign-out: nothing more is sent until the next sign-in, which resets the
+ * SDK identity before identifying (see identify).
  */
 export function reset(): void {
-  // Sign-out: nothing more is sent until the next sign-in.
   _consent = false;
   _held = [];
-  try {
-    _client?.reset();
-  } catch {
-    // no-op
-  }
 }
 
 /**

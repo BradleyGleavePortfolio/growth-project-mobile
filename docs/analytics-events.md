@@ -9,7 +9,7 @@ Phase 11 / PostHog event taxonomy for The Growth Project mobile app.
 - Typed constants: `src/analytics/events.ts` (`AnalyticsEvents`)
 - Service wrapper: `src/analytics/posthog.service.ts` (`track`, `identify`, `useFeatureFlag`)
 - Low-level client: `src/lib/analytics.ts` (PII stripper, lazy init, consent gate)
-- Consent (LEGAL-03, PRIV-06): nothing is sent before a person signs in. `identify()` on sign-in (and `RootNavigator` for a signed-in cold start) starts analytics and sends the events held since launch (at most 20); `reset()` on sign-out stops them until the next sign-in.
+- Consent (LEGAL-03, PRIV-06): nothing is sent before a person signs in. `identify()` on sign-in (and `RootNavigator` for a signed-in cold start) starts analytics and sends the events held since launch (at most 20); `reset()` on sign-out stops them until the next sign-in and makes no request itself; the SDK's own `reset()` (which always reloads feature flags) runs at the next sign-in, just before `identify()`.
 
 ## Environment variable
 

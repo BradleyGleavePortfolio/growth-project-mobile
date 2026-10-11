@@ -67,12 +67,18 @@ describe('analytics consent', () => {
   it('after sign-out, sends nothing until the next sign-in', () => {
     const a = freshAnalytics();
     a.identify('user-1');
+    const client = mockClients[0];
+    expect(client.reset).toHaveBeenCalledTimes(1); // fresh SDK identity at sign-in
+    a.identify('user-1'); // same session (cold start + sign-in screen): no reset
     a.reset();
+    expect(client.reset).toHaveBeenCalledTimes(1); // sign-out itself touches no SDK call
     a.track('after_sign_out');
     a.identify('user-2');
 
-    const client = mockClients[0];
-    expect(client.reset).toHaveBeenCalledTimes(1);
+    expect(client.reset).toHaveBeenCalledTimes(2);
+    expect(client.reset.mock.invocationCallOrder[1]).toBeLessThan(
+      client.identify.mock.invocationCallOrder[2],
+    );
     expect(client.capture).not.toHaveBeenCalledWith('after_sign_out', expect.anything());
     expect(client.identify).toHaveBeenLastCalledWith('user-2', {});
   });
