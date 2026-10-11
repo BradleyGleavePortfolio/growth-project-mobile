@@ -18,7 +18,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useForegroundBanner } from '../store/foregroundBannerStore';
@@ -33,7 +33,7 @@ export default function ForegroundNotificationBanner() {
   const insets = useSafeAreaInsets();
   const banner = useForegroundBanner((s) => s.banner);
   const dismiss = useForegroundBanner((s) => s.dismissBanner);
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const translateY = useRef(new Animated.Value(-100)).current;
   const autoDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,9 +98,9 @@ export default function ForegroundNotificationBanner() {
     const actionParams = banner?.actionParams;
     animateOut(() => {
       if (actionScreen === 'AIGuide') {
-        navigation.navigate('MoreTab' as never, {
+        navigation.navigate('MoreTab', {
           screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
-        } as never);
+        });
       } else if (actionScreen) {
         (navigation.navigate as (screen: string, params?: Record<string, string>) => void)(
           actionScreen,
