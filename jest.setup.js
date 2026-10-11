@@ -82,9 +82,14 @@ jest.mock('expo-crypto', () => {
       const iv = this.raw.subarray(0, 12);
       return encoding === 'base64' ? iv.toString('base64') : new Uint8Array(iv);
     }
-    async ciphertext({ includeTag, encoding } = {}) {
+    // Same option names as the installed native code (expo-crypto 56.0.4
+    // CiphertextOptions: includeTag, outputFormat; default bytes). The typed
+    // `encoding` is ignored on a phone, so it is refused here.
+    async ciphertext(options = {}) {
+      if ('encoding' in options) throw new Error('ciphertext(): native code reads outputFormat, not encoding');
+      const { includeTag, outputFormat } = options;
       const body = this.raw.subarray(12, includeTag ? this.raw.length : this.raw.length - 16);
-      return encoding === 'base64' ? body.toString('base64') : new Uint8Array(body);
+      return outputFormat === 'base64' ? body.toString('base64') : new Uint8Array(body);
     }
   }
   let counter = 0;
@@ -107,6 +112,8 @@ jest.mock('expo-crypto', () => {
       return new AESSealedData(Buffer.concat([iv, body, cipher.getAuthTag()]));
     },
     aesDecryptAsync: async (sealed, key, options) => {
+      // Native DecryptOptions reads `output` (expo-crypto 56.0.4).
+      if (options && 'encoding' in options) throw new Error('aesDecryptAsync(): native code reads output');
       const all = sealed.raw;
       const decipher = nodeCrypto.createDecipheriv('aes-256-gcm', key.raw, all.subarray(0, 12));
       decipher.setAuthTag(all.subarray(all.length - 16));

@@ -76,11 +76,19 @@ function bytesToString(bytes: Uint8Array): string {
  * (Parts, not `combined`: Android's native fromCombined takes bytes only,
  * while fromParts takes base64 on every platform.) Throws if the key or
  * cipher is unavailable.
+ *
+ * The ciphertext option is `outputFormat`, not the typed `encoding`: the
+ * installed native code (expo-crypto 56.0.4, iOS AesCryptoModule.swift
+ * CiphertextOptions, Android records/CiphertextOptions.kt) ignores
+ * `encoding` and returns bytes. Anything but a string is refused, so a
+ * write fails closed instead of storing a blob that can never open.
  */
 export async function sealCacheValue(json: string): Promise<string> {
   const sealed = await aesEncryptAsync(jsonToBytes(json), await getKey());
   const iv = await sealed.iv('base64');
-  const body = await sealed.ciphertext({ includeTag: true, encoding: 'base64' });
+  const nativeOptions = { includeTag: true, outputFormat: 'base64' };
+  const body: unknown = await sealed.ciphertext(nativeOptions as never);
+  if (typeof body !== 'string') throw new Error('query cache cipher did not return base64');
   return `${SEALED_PREFIX}${iv}.${body}`;
 }
 
