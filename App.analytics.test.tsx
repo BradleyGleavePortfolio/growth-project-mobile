@@ -40,6 +40,22 @@ async function appProviderProps(): Promise<ProviderProps> {
   return mockProviderProps[0];
 }
 
+/** Tap a health value inside the real SDK provider; return what reached the SDK. */
+async function tapWeight({ autocapture, options }: ProviderProps) {
+  const client = { autocapture: jest.fn(), screen: jest.fn(), capture: jest.fn(), debug: jest.fn() };
+  const r = await render(
+    <RealPostHogProvider client={client} autocapture={autocapture} options={options}>
+      <Text testID="weight">Weight 82.4 kg</Text>
+    </RealPostHogProvider>,
+  );
+  const weight = r.getByTestId('weight');
+  await fireEvent(weight, 'touchEndCapture', {
+    _targetInst: (weight as unknown as { unstable_fiber: unknown }).unstable_fiber,
+    nativeEvent: { pageX: 10, pageY: 10 },
+  });
+  return client;
+}
+
 describe('analytics capture (App.tsx)', () => {
   it('turns off all SDK autocapture and session replay', async () => {
     const { autocapture, options } = await appProviderProps();
@@ -48,21 +64,15 @@ describe('analytics capture (App.tsx)', () => {
   });
 
   it('sends no event and no on-screen text when the user taps', async () => {
-    const { autocapture, options } = await appProviderProps();
-    const client = { autocapture: jest.fn(), screen: jest.fn(), capture: jest.fn(), debug: jest.fn() };
-    const r = await render(
-      <RealPostHogProvider client={client} autocapture={autocapture} options={options}>
-        <Text testID="weight">Weight 82.4 kg</Text>
-      </RealPostHogProvider>,
-    );
-    const weight = r.getByTestId('weight');
-    await fireEvent(weight, 'touchEndCapture', {
-      _targetInst: (weight as unknown as { unstable_fiber: unknown }).unstable_fiber,
-      nativeEvent: { pageX: 10, pageY: 10 },
-    });
+    const client = await tapWeight(await appProviderProps());
     expect(client.autocapture).not.toHaveBeenCalled();
     expect(client.screen).not.toHaveBeenCalled();
     expect(client.capture).not.toHaveBeenCalled();
+  });
+
+  it('control: the same tap with autocapture on sends the on-screen text', async () => {
+    const client = await tapWeight({ autocapture: true });
+    expect(JSON.stringify(client.autocapture.mock.calls)).toContain('Weight 82.4 kg');
   });
 
   it('still sends explicit events, from a client with no lifecycle events or replay', () => {
