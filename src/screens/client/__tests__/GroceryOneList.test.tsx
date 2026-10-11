@@ -3,6 +3,7 @@
  * Rows a client saved on the retired Shopping list show here and keep every Grocery action.
  */
 import React from 'react';
+import { AxiosHeaders, type AxiosResponse } from 'axios';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -59,8 +60,15 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   serve({ grocery, shopping });
+  const mutationResponse = {
+    data: {},
+    status: 200,
+    statusText: 'OK',
+    headers: new AxiosHeaders(),
+    config: { headers: new AxiosHeaders() },
+  } satisfies AxiosResponse<Record<string, never>>;
   for (const method of [listsApi.addItem, listsApi.updateItem, listsApi.deleteItem, listsApi.clearChecked]) {
-    jest.mocked(method).mockResolvedValue({ data: {} } as Awaited<ReturnType<typeof method>>);
+    jest.mocked(method).mockResolvedValue(mutationResponse);
   }
 });
 

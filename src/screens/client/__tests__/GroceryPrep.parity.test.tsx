@@ -1,4 +1,5 @@
 import React from 'react';
+import { AxiosHeaders, type AxiosResponse } from 'axios';
 import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -55,7 +56,14 @@ beforeEach(() => {
   jest.mocked(listsApi.getList).mockResolvedValue({ data: items } as Awaited<ReturnType<typeof listsApi.getList>>);
   jest.mocked(prepGuideApi.getWeeklyGuide).mockResolvedValue({ data: guide } as Awaited<ReturnType<typeof prepGuideApi.getWeeklyGuide>>);
   jest.mocked(listsApi.bulkAdd).mockResolvedValue({ data: { added: 1 } } as Awaited<ReturnType<typeof listsApi.bulkAdd>>);
-  for (const method of [listsApi.addItem, listsApi.updateItem, listsApi.deleteItem, listsApi.clearChecked]) jest.mocked(method).mockResolvedValue({ data: {} } as Awaited<ReturnType<typeof method>>);
+  const mutationResponse = {
+    data: {},
+    status: 200,
+    statusText: 'OK',
+    headers: new AxiosHeaders(),
+    config: { headers: new AxiosHeaders() },
+  } satisfies AxiosResponse<Record<string, never>>;
+  for (const method of [listsApi.addItem, listsApi.updateItem, listsApi.deleteItem, listsApi.clearChecked]) jest.mocked(method).mockResolvedValue(mutationResponse);
 });
 describe.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]] as const)('%s action parity', (type, Screen) => {
   it('preserves back, add with quantity/unit, check, uncheck, remove, clear confirmation and refresh', async () => {
