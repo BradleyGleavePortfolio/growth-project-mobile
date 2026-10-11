@@ -158,7 +158,6 @@ export default function LeanQ6Screen({ navigation }: Props) {
 
       track(skipped ? 'onboarding_skipped' : 'onboarding_step_completed', {
         step: 6,
-        restrictions_count: restrictions.length,
         synced: result.ok,
         computed_macros: result.computedMacros,
       });

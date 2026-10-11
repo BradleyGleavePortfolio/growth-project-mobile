@@ -45,7 +45,7 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
     setSelected(level);
     await saveOnboardingData({ fitnessLevel: level });
     // Psych Report #4: step 2 completed
-    track('onboarding_step_completed', { step: 2, experience_level: level });
+    track('onboarding_step_completed', { step: 2 });
     navigation.navigate('LeanQ3');
   };
 

@@ -862,12 +862,8 @@ export default function ActiveWorkoutScreen() {
             });
           }
 
-          // Analytics — unchanged from before.
-          track('workout_logged', {
-            duration_minutes: durationMinutes,
-            sets_completed: completedSets,
-            exercise_count: completedExercises.length,
-          });
+          // Analytics gets the event name only, never workout values.
+          track('workout_logged');
 
           // Attempt the server save now. Without signal the queued row is
           // sent by the sync engine on the next reconnect / foreground.
@@ -909,11 +905,7 @@ export default function ActiveWorkoutScreen() {
                 // DES-R-127: the finish moment is one success haptic.
                 HapticService.success();
                 // Psych Report #4: Analytics — workout_logged
-                track(AnalyticsEvents.WORKOUT_COMPLETED, {
-                  duration_minutes: Math.round(timer / 60),
-                  sets_completed: completedSets,
-                  exercise_count: sessionExercises.filter((e) => e.sets.some((s) => s.completed)).length,
-                });
+                track(AnalyticsEvents.WORKOUT_COMPLETED);
                 // The queued copy of this workout is now on the server: mark it
                 // sent so the background sync never posts it a second time.
                 if (queued) {

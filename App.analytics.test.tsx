@@ -61,6 +61,7 @@ describe('analytics capture (App.tsx)', () => {
     const { autocapture, options } = await appProviderProps();
     expect(autocapture).toBe(false);
     expect(options?.enableSessionReplay).toBe(false);
+    expect(options?.captureAppLifecycleEvents).toBe(false);
   });
 
   it('sends no event and no on-screen text when the user taps', async () => {

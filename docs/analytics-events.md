@@ -70,7 +70,7 @@ The following keys are **automatically stripped** from all event properties befo
 | Event | Constant | Properties |
 |---|---|---|
 | `workout_started` | `WORKOUT_STARTED` | `routine_id?: string` |
-| `workout_completed` | `WORKOUT_COMPLETED` | `session_id, sets_completed, exercise_count, duration_minutes?` |
+| `workout_completed` | `WORKOUT_COMPLETED` | — |
 | `workout_abandoned` | `WORKOUT_ABANDONED` | `sets_completed: number` |
 | `exercise_set_logged` | `EXERCISE_SET_LOGGED` | `exercise: string, reps: number, weight: number` |
 | `routine_created` | `ROUTINE_CREATED` | — |

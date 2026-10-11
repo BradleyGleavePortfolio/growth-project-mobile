@@ -35,6 +35,9 @@ jest.mock('../../services/api', () => {
   };
 });
 
+const mockTrack = jest.fn();
+jest.mock('../analytics', () => ({ track: (...a: unknown[]) => mockTrack(...a) }));
+
 import {
   finalizeLeanOnboarding,
   mapLeanGoalToLegacy,
@@ -116,6 +119,8 @@ describe('finalizeLeanOnboarding — calls profileApi.update', () => {
     expect(payload.calorie_target).toEqual(expect.any(Number));
     expect(payload.protein_target).toBeGreaterThan(0);
     expect(result.computedMacros).toBe(true);
+    // Analytics gets no goal or fitness answer.
+    expect(mockTrack).toHaveBeenCalledWith('onboarding_completed', { computed_macros: true });
   });
 
   it('marks lean_onboarding_synced=true on success', async () => {

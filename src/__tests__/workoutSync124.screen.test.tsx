@@ -95,6 +95,9 @@ jest.mock('../offline', () => ({
   workoutSyncEvents: { on: jest.fn(), off: jest.fn() },
 }));
 
+const mockTrack = jest.fn();
+jest.mock('../lib/analytics', () => ({ track: (...a: unknown[]) => mockTrack(...a) }));
+
 import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
 import WorkoutSyncCards from '../components/workout/WorkoutSyncCards';
 
@@ -245,6 +248,9 @@ describe('Finish with no signal', () => {
       await Promise.resolve();
     });
     expect(mockSettle).toHaveBeenCalledWith(`c1:${STARTED_AT}`, 'srv-9');
+    // Analytics gets the event names only: no duration, set or exercise counts.
+    expect(mockTrack).toHaveBeenCalledWith('workout_logged');
+    expect(mockTrack).toHaveBeenCalledWith('workout_completed');
   });
 
   it('a server refusal parks the copy; Finish again re-queues the same workout', async () => {

@@ -94,7 +94,7 @@ export const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   ) : (
     <PostHogProvider
       apiKey={POSTHOG_KEY}
-      options={{ host: POSTHOG_HOST, enableSessionReplay: false }}
+      options={{ host: POSTHOG_HOST, enableSessionReplay: false, captureAppLifecycleEvents: false }}
       autocapture={false}
     >
       {children}

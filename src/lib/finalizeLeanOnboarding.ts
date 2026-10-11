@@ -237,11 +237,7 @@ export async function finalizeLeanOnboarding(): Promise<FinalizeResult> {
   try {
     const fired = await AsyncStorage.getItem('analytics_onboarding_completed_fired');
     if (fired !== 'true') {
-      track(AnalyticsEvents.ONBOARDING_COMPLETED, {
-        computed_macros: !!macros,
-        primary_goal: primary_goal ?? null,
-        fitness_level: fitness_level ?? null,
-      });
+      track(AnalyticsEvents.ONBOARDING_COMPLETED, { computed_macros: !!macros });
       await AsyncStorage.setItem('analytics_onboarding_completed_fired', 'true');
     }
   } catch {
