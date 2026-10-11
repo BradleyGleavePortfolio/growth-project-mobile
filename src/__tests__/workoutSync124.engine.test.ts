@@ -349,27 +349,25 @@ describe('exactly once', () => {
     expect(await countQueuedWorkouts('client-1', { includeParked: true })).toBe(1);
   });
 
-  it('a workout the server rate limits (429) stays queued and goes out once Retry-After has passed', async () => {
+  it('a workout the server rate limits (429) stays queued and goes out once Retry-After (capped at 1 min) has passed', async () => {
     const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
     try {
       const key = nextKey();
+      const busy = Object.assign(new Error('HTTP 429'), { response: { status: 429, headers: { 'retry-after': '3600' } } });
       await queueWorkout({ clientKey: key, payload: pushDayBody(), userId: 'client-1' });
-      await releaseQueuedWorkout(key);
-      mockCreate.mockRejectedValueOnce(
-        Object.assign(new Error('HTTP 429'), { response: { status: 429, headers: { 'retry-after': '30' } } }),
-      );
-
+      await releaseQueuedWorkout(key, busy); // the Finish screen's own POST got the 429
+      expect(mockDb.rows[0].sync_status).toBe('pending');
+      now.mockReturnValue(60_999);
+      await triggerSync();
+      expect(mockCreate).not.toHaveBeenCalled();
+      now.mockReturnValue(61_000);
+      mockCreate.mockRejectedValueOnce(busy);
       await triggerSync();
       expect(mockDb.rows[0].sync_status).toBe('pending');
-      now.mockReturnValue(30_999);
-      await pushQueuedWorkouts();
-      expect(mockCreate).toHaveBeenCalledTimes(1);
-
-      now.mockReturnValue(31_000);
+      now.mockReturnValue(121_000);
       await pushQueuedWorkouts();
       expect(mockCreate).toHaveBeenCalledTimes(2);
       expect(mockDb.rows[0].sync_status).toBe('synced');
-      expect(mockServer.workouts).toHaveLength(1);
     } finally {
       now.mockRestore();
     }

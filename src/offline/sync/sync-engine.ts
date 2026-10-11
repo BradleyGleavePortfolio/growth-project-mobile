@@ -10,12 +10,10 @@
  *   2. Push: iterate every `pending` workout_log and POST it to the backend.
  *      On success → mark `synced` + store server ID.
  *      On conflict (409) → server-wins: mark `conflict`, surface a toast.
- *      On "try again later" (network error, 401, 408, 425, 429, 5xx; see
- *        retryLater.ts) → leave `pending`, retry next time, after any
- *        Retry-After the server sent.
- *      On any other 4xx → permanent: mark `dead_letter` (kept on the phone,
- *        counted by the sign-out warning) so we stop hammering the server on
- *        every triggerSync (Hunt P1-1).
+ *      On other 4xx (not 401/408/425/429) → permanent: mark `dead_letter` so we stop
+ *        hammering the server on every triggerSync (Hunt P1-1).
+ *      On 401/408/425/429/5xx/network error (retryLater.ts) → leave `pending`,
+ *        retry next time, after any Retry-After the server sent.
  *
  * Conflict policy (server wins):
  *   When the server returns HTTP 409 for a record, the local copy is marked
@@ -45,7 +43,7 @@ import { workoutBuilderApi } from '../../api/workoutBuilderApi';
 import type { CompleteAssignmentInput } from '../../api/workoutBuilderApi';
 import { generateId } from '../../utils/date';
 import { readUserCache, readUserCacheSync } from '../../lib/userCache';
-import { isRetryLater, retryAfterMs } from './retryLater';
+import { isHeld, isRetryLater, retryAfterMs } from './retryLater';
 
 // ---------------------------------------------------------------------------
 // Conflict toast event bus
@@ -76,7 +74,7 @@ let syncInProgress = false;
 
 // The server asked for a pause (Retry-After): no send before this time.
 let retryNotBefore = 0;
-const waitingOutRetryAfter = () => Date.now() < retryNotBefore;
+const waitingOutRetryAfter = () => isHeld(retryNotBefore);
 
 // Client keys whose POST is in flight right now (from the Finish screen or
 // from this engine). A held row is never sent a second time in parallel.
@@ -266,17 +264,14 @@ export async function settleQueuedWorkout(
 }
 
 /**
- * The Finish screen's POST failed. With no answer from the server (no signal,
- * timeout, 5xx) the row stays queued for the background sync. When the server
- * refused the body (`rejected`), the row is parked so it is not retried; a
- * later Finish for the same session re-queues it.
+ * The Finish screen's POST failed with `error`. When it should be tried again
+ * later (retryLater.ts) the row stays queued for the background sync, after any
+ * Retry-After. When the server refused the body, the row is parked so it is not
+ * retried; a later Finish for the same session re-queues it.
  */
-export async function releaseQueuedWorkout(
-  clientKey: string,
-  opts: { rejected?: boolean } = {},
-): Promise<void> {
+export async function releaseQueuedWorkout(clientKey: string, error?: unknown): Promise<void> {
   try {
-    if (opts.rejected) {
+    if (classifyPushError(error) !== 'transient') {
       const db = await getDatabase();
       await db.runAsync(
         `UPDATE workout_logs SET sync_status = 'dead_letter' WHERE client_key = ? AND sync_status = 'pending'`,
@@ -768,3 +763,6 @@ export async function triggerSync(): Promise<void> {
 export function __isSyncInProgress(): boolean {
   return syncInProgress;
 }
+
+/** Exposed for tests so they can drive the classifier directly. */
+export const __classifyPushErrorForTests = classifyPushError;

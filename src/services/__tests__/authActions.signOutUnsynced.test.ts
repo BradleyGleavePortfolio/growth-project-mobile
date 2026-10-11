@@ -128,6 +128,17 @@ it('a food and a workout the server refused stay on the phone and are named in t
   expect(JSON.parse((await AsyncStorage.getItem('pending_food_logs_user-A'))!)).toHaveLength(1);
 });
 
+it("signing out one account keeps another account's foods on the phone", async () => {
+  const otherFoods = JSON.stringify([{ id: 'pfl_b', parkedAt: 1 }]);
+  await AsyncStorage.setItem('pending_food_logs_user-B', otherFoods);
+  await logFoodOffline();
+
+  await signOut();
+
+  expect(await AsyncStorage.getItem('pending_food_logs_user-A')).toBeNull();
+  expect(await AsyncStorage.getItem('pending_food_logs_user-B')).toBe(otherFoods);
+});
+
 it('nothing waiting: no send is attempted and the confirm is the usual question', async () => {
   await expect(prepareSignOutConfirm('user-A')).resolves.toBe('Are you sure you want to sign out?');
   expect(foodApi.create).not.toHaveBeenCalled();

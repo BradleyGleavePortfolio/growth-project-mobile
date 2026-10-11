@@ -17,7 +17,6 @@
 //     createdAt: number; // Date.now() when enqueued
 //     kind: 'search' | 'manual';
 //     payload: Record<string, unknown>;
-//     parkedAt?: number; // set when the server refused it: kept, not resent
 //   }
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,7 +25,7 @@ import { foodApi, logApi } from './api';
 import { readUserCacheSync } from '../lib/userCache';
 import { logger } from '../utils/logger';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
-import { isRetryLater, retryAfterMs } from '../offline/sync/retryLater';
+import { isHeld, isRetryLater, retryAfterMs } from '../offline/sync/retryLater';
 
 const ANONYMOUS_QUEUE_KEY = 'pending_food_logs_anonymous';
 
@@ -137,11 +136,24 @@ async function writeQueueFenced(
   await writeQueueForKey(getQueueKey(owner), queue);
 }
 
+// Queue changes run one at a time, each on the latest stored queue, so a food
+// logged while a send is in flight is never overwritten by an older copy.
+let lastChange: Promise<unknown> = Promise.resolve();
+
+/** Apply `change` to the stored queue of `owner` (fenced) and return the result. */
+function changeQueue(owner: string | undefined, change: (q: PendingFoodLog[]) => PendingFoodLog[]) {
+  const run = lastChange.then(async () => {
+    const next = change(await readQueueForKey(getQueueKey(owner)));
+    await writeQueueFenced(owner, next);
+    return next;
+  });
+  lastChange = run.catch(() => undefined);
+  return run;
+}
+
 export async function enqueue(
   entry: PendingSearchLog | PendingManualLog,
 ): Promise<void> {
-  const owner = currentOwnerId();
-  const queue = await readQueueForKey(getQueueKey(owner));
   const item: PendingFoodLog = {
     ...entry,
     // Crypto UUID instead of Math.random so two parallel enqueues on a fast
@@ -149,8 +161,7 @@ export async function enqueue(
     id: `pfl_${randomUUID()}`,
     createdAt: Date.now(),
   };
-  queue.push(item);
-  await writeQueueFenced(owner, queue);
+  await changeQueue(currentOwnerId(), (queue) => [...queue, item]);
   // Clinic tutorial: an entry accepted by the offline queue counts as the
   // client's first logged meal (it is saved and will sync).
   emitTutorialSignal('meal_logged');
@@ -200,11 +211,9 @@ export async function mergeAnonymousQueueIntoUser(userId: string): Promise<{
 let retryNotBefore = 0;
 
 // Flush the queue to the backend. Returns the number of successfully flushed
-// entries. When the send should be tried again later (no signal, 401, 408,
-// 425, 429, 5xx; see retryLater.ts) we stop flushing, leave the remaining
-// items in the queue and wait out any Retry-After. An item the server refuses
-// (any other 4xx) is parked: it stays on the phone, so sign-out warns about
-// it, and is never resent, so a single broken payload can't freeze the queue.
+// entries. On "try again later" (retryLater.ts) we stop flushing, leave the
+// rest queued and wait out any Retry-After. A refused item is parked (kept for
+// the sign-out warning, never resent) so one broken payload can't freeze the queue.
 export async function flush(): Promise<{ flushed: number; remaining: number; parked: number }> {
   // P2-1: capture the userId once at the top of flush so a sign-out mid-flush
   // cannot cause us to read from user A's key and write back into user B's.
@@ -218,23 +227,22 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
   let flushed = 0;
   let parked = 0;
   // Nothing is sent while the server's Retry-After runs.
-  let stopped = Date.now() < retryNotBefore;
+  let stopped = isHeld(retryNotBefore);
 
   /**
-   * Write `next` as the on-disk queue for the captured owner. Returns false
+   * Apply `change` to the captured owner's latest stored queue. Returns false
    * (and leaves memory + disk untouched) when the owner changed: the item stays
    * queued for its real owner and the flush stops.
    */
-  const commit = async (next: PendingFoodLog[]): Promise<boolean> => {
+  const commit = async (change: (q: PendingFoodLog[]) => PendingFoodLog[]): Promise<boolean> => {
     try {
-      await writeQueueFenced(userId, next);
+      queue = await changeQueue(userId, change);
     } catch (err) {
       if (!(err instanceof FoodLogQueueOwnerChangedError)) throw err;
       logger.warn('FoodLogQueue', 'flush stopped: queue owner changed');
       stopped = true;
       return false;
     }
-    queue = next;
     return true;
   };
 
@@ -271,15 +279,15 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
       // The server accepted the item. If the owner changed before the local
       // write-back, the item stays queued for its owner (idempotent by
       // `client_uuid` on retry) rather than touching another account's key.
-      if (await commit(queue.filter((q) => q.id !== item.id))) flushed++;
+      if (await commit((q) => q.filter((x) => x.id !== item.id))) flushed++;
     } catch (err) {
       if (!isRetryLater(err)) {
         logger.warn('FoodLogQueue', 'flush: parking item the server refused', {
           id: item.id,
           err,
         });
-        const next = queue.map((q) => (q.id === item.id ? { ...q, parkedAt: Date.now() } : q));
-        if (await commit(next)) parked++;
+        const park = (q: PendingFoodLog[]) => q.map((x) => (x.id === item.id ? { ...x, parkedAt: Date.now() } : x));
+        if (await commit(park)) parked++;
         continue;
       }
       const wait = retryAfterMs(err);

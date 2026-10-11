@@ -225,12 +225,13 @@ describe('Finish with no signal', () => {
     expect(mockMutate.mock.calls[0][0]).toEqual(queued.payload);
 
     // No signal: the request never got an answer.
+    const noAnswer = new Error('Network Error');
     await act(async () => {
-      capturedMutateOptions!.onError!(new Error('Network Error'));
+      capturedMutateOptions!.onError!(noAnswer);
       await Promise.resolve();
     });
 
-    expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`);
+    expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`, noAnswer);
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(alertTitles).toContain('Saved on this phone');
     expect(alertTitles).not.toContain('Workout not saved yet');
@@ -247,15 +248,16 @@ describe('Finish with no signal', () => {
     expect(mockSettle).toHaveBeenCalledWith(`c1:${STARTED_AT}`, 'srv-9');
   });
 
-  it('a server refusal parks the copy; Finish again re-queues the same workout', async () => {
+  it.each([400, 429])('a %i keeps the not-saved alert and hands the error to the engine; Finish again re-queues', async (status) => {
     const view = await render(<ActiveWorkoutScreen />);
     await waitFor(() => expect(view.getByText('Bench Press')).toBeTruthy());
     await finishOnce(view);
+    const err = Object.assign(new Error('HTTP error'), { response: { status, data: {} } });
     await act(async () => {
-      capturedMutateOptions!.onError!(Object.assign(new Error('Bad Request'), { response: { status: 400, data: {} } }));
+      capturedMutateOptions!.onError!(err);
       await Promise.resolve();
     });
-    expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`, { rejected: true });
+    expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`, err);
     expect(mockGoBack).not.toHaveBeenCalled();
     expect(alertTitles).toContain('Workout not saved yet');
 

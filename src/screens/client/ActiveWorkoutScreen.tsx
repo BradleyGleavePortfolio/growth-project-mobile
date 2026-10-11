@@ -1004,7 +1004,7 @@ export default function ActiveWorkoutScreen() {
                   // engine sends it, with the coach assignment, once the
                   // phone is back online. Nothing for the client to redo.
                   Promise.resolve()
-                    .then(() => releaseQueuedWorkout(queueKey))
+                    .then(() => releaseQueuedWorkout(queueKey, err))
                     .catch(() => undefined);
                   HapticService.success();
                   navigation.goBack();
@@ -1015,10 +1015,10 @@ export default function ActiveWorkoutScreen() {
                   return;
                 }
                 if (queued) {
-                  // The server refused this body; park the queued copy so it is
-                  // not retried. Tapping Finish again re-queues the same row.
+                  // The engine parks a refused body and keeps one to try later
+                  // queued. Tapping Finish again re-queues the same row.
                   Promise.resolve()
-                    .then(() => releaseQueuedWorkout(queueKey, { rejected: true }))
+                    .then(() => releaseQueuedWorkout(queueKey, err))
                     .catch(() => undefined);
                 }
                 // Phase 11 / Track 3: error haptic on failed API action
