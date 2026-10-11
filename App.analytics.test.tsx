@@ -7,7 +7,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
-type ProviderProps = { autocapture?: unknown; options?: Record<string, unknown> };
+type ProviderProps = { apiKey?: string; autocapture?: unknown; options?: Record<string, unknown> };
 const mockProviderProps: ProviderProps[] = [];
 jest.mock('posthog-react-native', () => ({
   __esModule: true,
@@ -27,7 +27,7 @@ jest.mock('./src/screenshots', () => ({
 
 import PostHog from 'posthog-react-native';
 import { AnalyticsProvider } from './App';
-import { track } from './src/lib/analytics';
+import { identify, track } from './src/lib/analytics';
 
 // Loaded by path: the package does not export the subpath.
 const { PostHogProvider: RealPostHogProvider } = jest.requireActual(
@@ -64,6 +64,11 @@ describe('analytics capture (App.tsx)', () => {
     expect(options?.captureAppLifecycleEvents).toBe(false);
   });
 
+  it('gives the provider no project key, so its client sends nothing before sign-in', async () => {
+    const { apiKey } = await appProviderProps();
+    expect(apiKey).toBe('');
+  });
+
   it('sends no event and no on-screen text when the user taps', async () => {
     const client = await tapWeight(await appProviderProps());
     expect(client.autocapture).not.toHaveBeenCalled();
@@ -78,6 +83,7 @@ describe('analytics capture (App.tsx)', () => {
 
   it('still sends explicit events, from a client with no lifecycle events or replay', () => {
     process.env.EXPO_PUBLIC_POSTHOG_KEY = 'phc_test_key';
+    identify('user-1'); // signed in: analytics may start
     track('app_opened', { cold_start: true });
     expect(PostHog).toHaveBeenCalledWith(
       'phc_test_key',

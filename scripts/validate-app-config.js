@@ -105,7 +105,7 @@ const FORBIDDEN_ENV_KEYS = [
 // In --release mode they become release blockers in RELEASE_BLOCKER.md.
 //
 // PostHog is satisfied by either the canonical EXPO_PUBLIC_POSTHOG_API_KEY
-// or the legacy alias EXPO_PUBLIC_POSTHOG_KEY (App.tsx reads both).
+// or the legacy alias EXPO_PUBLIC_POSTHOG_KEY (src/lib/analytics.ts reads both).
 const RELEASE_RECOMMENDED_ENV = [
   {
     key: 'EXPO_PUBLIC_SENTRY_DSN',

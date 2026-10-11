@@ -68,18 +68,6 @@ installAxiosMockAdapter();
 // We hide it manually once fonts + app init are both complete.
 SplashScreen.preventAutoHideAsync();
 
-// PostHog credentials — loaded from Expo public env vars.
-// EXPO_PUBLIC_POSTHOG_API_KEY is the canonical Phase 11 var name.
-// EXPO_PUBLIC_POSTHOG_KEY is the legacy alias; both are accepted so existing
-// dev setups without the rename continue to work.
-// When both are absent (CI, local dev without secrets) the SDK no-ops.
-const POSTHOG_KEY =
-  process.env.EXPO_PUBLIC_POSTHOG_API_KEY ??
-  process.env.EXPO_PUBLIC_POSTHOG_KEY ??
-  '';
-const POSTHOG_HOST =
-  process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://app.posthog.com';
-
 // In screenshot mode the PostHog provider is bypassed: posthog-react-native's
 // web shim throws on construct in some envs, and analytics has no place in a
 // capture run anyway. Production path is unchanged.
@@ -88,13 +76,18 @@ const POSTHOG_HOST =
 // tapped element's text (health values, names, contact details), and the
 // SDK's app-open event carries the link that opened the app, which can hold
 // sign-in tokens. Only events the app sends on purpose reach PostHog.
+//
+// LEGAL-03 / PRIV-06: the provider gets no project key, so its client is
+// disabled and sends nothing (no feature-flag request at launch, before the
+// person has signed in). Every event, identify and reset goes through
+// src/lib/analytics.ts, which sends nothing before sign-in.
 export const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   isScreenshotMode() ? (
     <>{children}</>
   ) : (
     <PostHogProvider
-      apiKey={POSTHOG_KEY}
-      options={{ host: POSTHOG_HOST, enableSessionReplay: false, captureAppLifecycleEvents: false }}
+      apiKey=""
+      options={{ enableSessionReplay: false, captureAppLifecycleEvents: false }}
       autocapture={false}
     >
       {children}
@@ -253,9 +246,8 @@ function App() {
     <SafeAreaProvider>
       <ErrorBoundary>
       {/*
-        PostHogProvider captures nothing on its own (see AnalyticsProvider).
-        It no-ops when POSTHOG_KEY is an empty string, so no secrets are
-        needed in dev.
+        PostHogProvider captures nothing on its own and has no project key
+        (see AnalyticsProvider).
       */}
       <AnalyticsProvider>
         {/*

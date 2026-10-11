@@ -5,19 +5,20 @@ Phase 11 / PostHog event taxonomy for The Growth Project mobile app.
 ## Implementation
 
 - SDK: `posthog-react-native`
-- Provider: `<PostHogProvider>` in `App.tsx` with `autocapture={false}` and session replay off (no taps, screen text, screen views or lifecycle events are captured automatically)
+- Provider: `<PostHogProvider>` in `App.tsx` with `autocapture={false}`, session replay off and no project key (its client is disabled; no taps, screen text, screen views, lifecycle events or feature-flag requests)
 - Typed constants: `src/analytics/events.ts` (`AnalyticsEvents`)
 - Service wrapper: `src/analytics/posthog.service.ts` (`track`, `identify`, `useFeatureFlag`)
-- Low-level client: `src/lib/analytics.ts` (PII stripper, lazy init)
+- Low-level client: `src/lib/analytics.ts` (PII stripper, lazy init, consent gate)
+- Consent (LEGAL-03, PRIV-06): nothing is sent before a person signs in. `identify()` on sign-in (and `RootNavigator` for a signed-in cold start) starts analytics and sends the events held since launch (at most 20); `reset()` on sign-out stops them until the next sign-in.
 
 ## Environment variable
 
 | Variable | Description |
 |---|---|
 | `EXPO_PUBLIC_POSTHOG_API_KEY` | PostHog project API key (public — ships in bundle). |
-| `EXPO_PUBLIC_POSTHOG_HOST` | PostHog host (default: `https://app.posthog.com`). |
+| `EXPO_PUBLIC_POSTHOG_HOST` | PostHog host (default: `https://us.i.posthog.com`). |
 
-The SDK is a no-op when `EXPO_PUBLIC_POSTHOG_API_KEY` is absent (CI, dev without secrets).
+The SDK is a no-op when `EXPO_PUBLIC_POSTHOG_API_KEY` (or the legacy `EXPO_PUBLIC_POSTHOG_KEY`) is absent (CI, dev without secrets).
 
 ## PII policy
 
