@@ -4,7 +4,7 @@
  * the Vendor-name guard on CI and leaves every clone a dangling link. No
  * tracked path may be a symlink, and `node_modules` must never be tracked.
  */
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -35,8 +35,9 @@ describe('repository hygiene (B-321-6)', () => {
   it('never tracks an agent connection config, which carries bearer tokens', () => {
     expect(git(['ls-files', '--', ':(glob,icase)**/*mcp.json']).trim()).toBe('');
     // git grep exits 1 when nothing matches; this file is excluded because it names the key.
-    const grep = () => git(['grep', '-l', '"mcpServers"', '--', ':!src/__tests__/repoHygiene.test.ts']);
-    expect(grep).toThrow(expect.objectContaining({ status: 1 }));
+    const grep = (...args: string[]) => spawnSync('git', ['grep', '-l', ...args], { cwd: root, encoding: 'utf8' });
+    expect(grep('"mcpServers"', '--', ':!src/__tests__/repoHygiene.test.ts')).toMatchObject({ status: 1, stdout: '' });
+    expect(grep('-E', '"servers"[[:space:]]*:[[:space:]]*\\{', '--', '*.json', '*.jsonc')).toMatchObject({ status: 1, stdout: '' });
   });
 
   it.each(['.mcp.json', 'src/.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json'])(
