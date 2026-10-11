@@ -652,7 +652,7 @@ theming rules, performance notes, and the Skia upgrade path.
 
 ### PostHog Analytics
 
-`posthog-react-native` is installed and the `<PostHogProvider>` wraps `App.tsx` with `autocapture` enabled.
+`posthog-react-native` is installed and the `<PostHogProvider>` wraps `App.tsx` with `autocapture={false}` and `enableSessionReplay: false`: no taps, on-screen text, screen views or app lifecycle events are sent automatically, only the events the app sends on purpose.
 
 **Env vars (both accepted; canonical name is the first):**
 

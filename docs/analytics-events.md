@@ -5,7 +5,7 @@ Phase 11 / PostHog event taxonomy for The Growth Project mobile app.
 ## Implementation
 
 - SDK: `posthog-react-native`
-- Provider: `<PostHogProvider>` in `App.tsx` with `autocapture` enabled
+- Provider: `<PostHogProvider>` in `App.tsx` with `autocapture={false}` and session replay off (no taps, screen text, screen views or lifecycle events are captured automatically)
 - Typed constants: `src/analytics/events.ts` (`AnalyticsEvents`)
 - Service wrapper: `src/analytics/posthog.service.ts` (`track`, `identify`, `useFeatureFlag`)
 - Low-level client: `src/lib/analytics.ts` (PII stripper, lazy init)

@@ -10,8 +10,8 @@
  *
  * Analytics exclusion (Sol A-335-1): the card line and its accessibility
  * label say how many readiness questions were answered yes, so the whole
- * card carries `ph-no-capture` and PostHog touch autocapture drops any
- * touch on it.
+ * card carries `ph-no-capture`: PostHog touch autocapture (off in App.tsx)
+ * would drop any touch on it.
  */
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';

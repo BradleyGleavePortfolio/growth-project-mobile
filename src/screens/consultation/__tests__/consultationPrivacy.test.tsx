@@ -63,7 +63,7 @@ jest.mock('../../../services/queryClient', () => ({
 }));
 
 // The installed SDK's own touch extractor (what PostHogProvider calls with
-// `autocapture` on, as App.tsx configures it). Loaded by path because the
+// `autocapture` on; App.tsx keeps it off). Loaded by path because the
 // package does not export the subpath.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { autocaptureFromTouchEvent } = require(

@@ -1,6 +1,6 @@
 /**
  * Sol A-335-1: no client consultation content reaches PostHog touch
- * autocapture. App.tsx mounts PostHogProvider with `autocapture` on, so a
+ * autocapture. App.tsx keeps it off; this is the second guard. With it on, a
  * touch anywhere sends the touched element's text, accessibility label and
  * testID, plus its ancestors', unless an ancestor carries `ph-no-capture`.
  *

@@ -62,8 +62,8 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 - Analytics: every state of the screen and the Summary card render inside a
   `ph-no-capture` boundary, repeated on each card, row and button, so PostHog
   touch autocapture never sends a client name, answer, note, measurement or
-  the card's yes count. Session replay is off (App.tsx sets no
-  `enableSessionReplay`; the SDK default is off). Tested with the installed
+  the card's yes count. App.tsx keeps autocapture and session replay off;
+  the boundary is the second guard. Tested with the installed
   SDK's own extractor over every rendered element
   (`ClientConsultationPrivacy.test.tsx`).
 - Summary card on Client detail shows the status line ("Completed Oct 1, 2026",

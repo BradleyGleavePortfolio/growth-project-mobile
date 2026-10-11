@@ -83,14 +83,19 @@ const POSTHOG_HOST =
 // In screenshot mode the PostHog provider is bypassed: posthog-react-native's
 // web shim throws on construct in some envs, and analytics has no place in a
 // capture run anyway. Production path is unchanged.
-const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+//
+// All SDK autocapture and session replay stay off. A tap event carries the
+// tapped element's text (health values, names, contact details), and the
+// SDK's app-open event carries the link that opened the app, which can hold
+// sign-in tokens. Only events the app sends on purpose reach PostHog.
+export const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   isScreenshotMode() ? (
     <>{children}</>
   ) : (
     <PostHogProvider
       apiKey={POSTHOG_KEY}
-      options={{ host: POSTHOG_HOST }}
-      autocapture
+      options={{ host: POSTHOG_HOST, enableSessionReplay: false }}
+      autocapture={false}
     >
       {children}
     </PostHogProvider>
@@ -248,10 +253,9 @@ function App() {
     <SafeAreaProvider>
       <ErrorBoundary>
       {/*
-        PostHogProvider wraps the whole app so the SDK can auto-capture
-        screen views and session recording (when enabled). autocapture is
-        enabled so screen transitions are tracked automatically. It no-ops
-        when POSTHOG_KEY is an empty string, so no secrets are needed in dev.
+        PostHogProvider captures nothing on its own (see AnalyticsProvider).
+        It no-ops when POSTHOG_KEY is an empty string, so no secrets are
+        needed in dev.
       */}
       <AnalyticsProvider>
         {/*

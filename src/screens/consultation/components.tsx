@@ -176,8 +176,8 @@ export interface FrameProps {
 }
 
 /**
- * Analytics exclusion boundary (Sol A-01). The app's PostHog provider has
- * touch autocapture on; it walks up from the touched element and drops the
+ * Analytics exclusion boundary (Sol A-01). App.tsx keeps PostHog touch
+ * autocapture off; as a second guard, if it is ever turned on it drops the
  * whole event when any ancestor carries `ph-no-capture`. The consultation
  * renders every phase (questions, summary, reveals, problem and paused
  * states) inside this boundary, and the Frame, its scroll body and footer
