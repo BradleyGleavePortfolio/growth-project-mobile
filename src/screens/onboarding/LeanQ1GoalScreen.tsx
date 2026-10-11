@@ -53,7 +53,7 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
     coachSharing.accept();
     await saveOnboardingData({ primaryGoal: goal });
     // Psych Report #4: step 1 completed
-    track('onboarding_step_completed', { step: 1, goal });
+    track('onboarding_step_completed', { step: 1 });
     navigation.navigate('LeanQ2');
   };
 

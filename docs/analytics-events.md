@@ -5,7 +5,7 @@ Phase 11 / PostHog event taxonomy for The Growth Project mobile app.
 ## Implementation
 
 - SDK: `posthog-react-native`
-- Provider: `<PostHogProvider>` in `App.tsx` with `autocapture` enabled
+- Provider: `<PostHogProvider>` in `App.tsx` with `autocapture={false}` and session replay off (no taps, screen text, screen views or lifecycle events are captured automatically)
 - Typed constants: `src/analytics/events.ts` (`AnalyticsEvents`)
 - Service wrapper: `src/analytics/posthog.service.ts` (`track`, `identify`, `useFeatureFlag`)
 - Low-level client: `src/lib/analytics.ts` (PII stripper, lazy init)
@@ -70,7 +70,7 @@ The following keys are **automatically stripped** from all event properties befo
 | Event | Constant | Properties |
 |---|---|---|
 | `workout_started` | `WORKOUT_STARTED` | `routine_id?: string` |
-| `workout_completed` | `WORKOUT_COMPLETED` | `session_id, sets_completed, exercise_count, duration_minutes?` |
+| `workout_completed` | `WORKOUT_COMPLETED` | — |
 | `workout_abandoned` | `WORKOUT_ABANDONED` | `sets_completed: number` |
 | `exercise_set_logged` | `EXERCISE_SET_LOGGED` | `exercise: string, reps: number, weight: number` |
 | `routine_created` | `ROUTINE_CREATED` | — |

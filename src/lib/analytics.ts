@@ -66,7 +66,12 @@ function getClient(): PostHog | null {
   }
 
   try {
-    _client = new PostHog(key, { host });
+    // No automatic events or replay; see AnalyticsProvider in App.tsx.
+    _client = new PostHog(key, {
+      host,
+      captureAppLifecycleEvents: false,
+      enableSessionReplay: false,
+    });
   } catch (err) {
     if (__DEV__) console.warn('[analytics] PostHog init failed:', err);
   }

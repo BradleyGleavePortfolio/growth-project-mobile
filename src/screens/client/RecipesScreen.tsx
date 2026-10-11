@@ -183,7 +183,7 @@ export default function RecipesScreen() {
         } catch {
           // Cache refresh is best-effort.
         }
-        track('allergy_prompt_answered', { count: restrictions.length });
+        track('allergy_prompt_answered');
       } catch {
         // Backend save failed — still mark prompt seen so we don't loop;
         // user can fix from Edit Profile.

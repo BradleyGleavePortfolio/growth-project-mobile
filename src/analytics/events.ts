@@ -137,13 +137,6 @@ export interface LoginCompletedProps {
   method: 'email' | 'google' | 'apple';
 }
 
-export interface WorkoutCompletedProps {
-  session_id: string;
-  sets_completed: number;
-  exercise_count: number;
-  duration_minutes?: number;
-}
-
 export interface CheckinSubmittedProps {
   checkin_type: 'weight' | 'meal' | 'custom';
 }

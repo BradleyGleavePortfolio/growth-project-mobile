@@ -17,14 +17,12 @@
  * query opts out of the persisted cache (`meta.persist: false`), so answers
  * are never written to device storage.
  *
- * Analytics exclusion (Sol A-335-1): the app's PostHog provider has touch
- * autocapture on; it walks up from the touched element and drops the event
- * when any ancestor carries `ph-no-capture`. Every state of this screen
- * renders inside that boundary, and each card, answer row and button repeats
- * the marker, so it is always well within the SDK's 20-element ancestor
- * walk. No client name, answer, note or measurement can reach the SDK.
- * Session replay is not enabled in this app (App.tsx sets no
- * enableSessionReplay; the SDK default is off).
+ * Analytics exclusion (Sol A-335-1): App.tsx keeps PostHog autocapture and
+ * session replay off. As a second guard, touch autocapture (if ever turned
+ * on) drops the event when any ancestor carries `ph-no-capture`. Every state
+ * of this screen renders inside that boundary, and each card, answer row and
+ * button repeats the marker, so it is always well within the SDK's
+ * 20-element ancestor walk.
  *
  * Readiness (Sol B-335-2): every readiness question is shown. Yes answers
  * come first and are highlighted, because that is what the coach acts on;
