@@ -10,9 +10,12 @@
  *   2. Push: iterate every `pending` workout_log and POST it to the backend.
  *      On success → mark `synced` + store server ID.
  *      On conflict (409) → server-wins: mark `conflict`, surface a toast.
- *      On other 4xx (non-401) → permanent: mark `dead_letter` so we stop
- *        hammering the server on every triggerSync (Hunt P1-1).
- *      On 401 / 5xx / network error → leave `pending`, retry next time.
+ *      On "try again later" (network error, 401, 408, 425, 429, 5xx; see
+ *        retryLater.ts) → leave `pending`, retry next time, after any
+ *        Retry-After the server sent.
+ *      On any other 4xx → permanent: mark `dead_letter` (kept on the phone,
+ *        counted by the sign-out warning) so we stop hammering the server on
+ *        every triggerSync (Hunt P1-1).
  *
  * Conflict policy (server wins):
  *   When the server returns HTTP 409 for a record, the local copy is marked
@@ -42,6 +45,7 @@ import { workoutBuilderApi } from '../../api/workoutBuilderApi';
 import type { CompleteAssignmentInput } from '../../api/workoutBuilderApi';
 import { generateId } from '../../utils/date';
 import { readUserCache, readUserCacheSync } from '../../lib/userCache';
+import { isRetryLater, retryAfterMs } from './retryLater';
 
 // ---------------------------------------------------------------------------
 // Conflict toast event bus
@@ -55,7 +59,7 @@ export const conflictToastEvents = new EventEmitter();
   .setMaxListeners?.(20);
 
 // Dead-letter toast: emitted when a row is permanently rejected by the server
-// (4xx other than 401/409). UI can subscribe to surface a "we couldn't sync"
+// (a 4xx refusal other than 409). UI can subscribe to surface a "we couldn't sync"
 // banner; the existing conflict-toast subscriber is the documented anchor for
 // any future UI work in this area. Until a dedicated UI lands, the count is
 // visible via Sentry breadcrumbs (logged in pushPending below).
@@ -69,6 +73,10 @@ export const workoutSyncEvents = new EventEmitter();
 // Internal state
 // ---------------------------------------------------------------------------
 let syncInProgress = false;
+
+// The server asked for a pause (Retry-After): no send before this time.
+let retryNotBefore = 0;
+const waitingOutRetryAfter = () => Date.now() < retryNotBefore;
 
 // Client keys whose POST is in flight right now (from the Finish screen or
 // from this engine). A held row is never sent a second time in parallel.
@@ -280,12 +288,20 @@ export async function releaseQueuedWorkout(
   }
 }
 
-/** Number of finished workouts on this phone still waiting to be sent. */
-export async function countQueuedWorkouts(userId: string): Promise<number> {
+/**
+ * Number of finished workouts on this phone still waiting to be sent.
+ * `includeParked` also counts the ones the server refused (kept, never resent):
+ * sign-out removes both, so its warning counts both.
+ */
+export async function countQueuedWorkouts(
+  userId: string,
+  opts: { includeParked?: boolean } = {},
+): Promise<number> {
   if (!userId) return 0;
   const db = await getDatabase();
+  const status = opts.includeParked ? `IN ('pending', 'dead_letter')` : `= 'pending'`;
   const row = await db.getFirstAsync<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM workout_logs WHERE payload IS NOT NULL AND sync_status = 'pending' AND user_id = ?`,
+    `SELECT COUNT(*) AS n FROM workout_logs WHERE payload IS NOT NULL AND sync_status ${status} AND user_id = ?`,
     [userId],
   );
   return Number(row?.n ?? 0);
@@ -380,20 +396,13 @@ export async function deleteWorkoutLogsForUser(userId: string): Promise<number> 
 
 type PushErrorClass = 'conflict' | 'permanent' | 'transient';
 
+/** Also starts the server's Retry-After wait when the answer is "try again later". */
 function classifyPushError(err: unknown): PushErrorClass {
   const status = (err as { response?: { status?: number } })?.response?.status;
   if (status === 409) return 'conflict';
-  if (typeof status === 'number') {
-    // 401 → bubble back as transient; the request layer will refresh the
-    // session and the next triggerSync cycle re-pushes.
-    if (status === 401) return 'transient';
-    // 5xx → transient by definition.
-    if (status >= 500) return 'transient';
-    // Any other 4xx (400/403/404/422/etc.) means the server has rejected
-    // this payload permanently. Don't loop on it.
-    if (status >= 400) return 'permanent';
-  }
-  // No status (network / timeout) → transient.
+  if (!isRetryLater(err)) return 'permanent';
+  const wait = retryAfterMs(err);
+  if (wait > 0) retryNotBefore = Date.now() + wait;
   return 'transient';
 }
 
@@ -428,6 +437,7 @@ async function pushPending(): Promise<void> {
   let sent = 0;
 
   for (const row of rows) {
+    if (waitingOutRetryAfter()) break;
     if (typeof row.payload === 'string' && row.payload) {
       const outcome = await pushQueuedRow(row);
       if (outcome === 'sent') sent++;
@@ -463,7 +473,7 @@ async function pushPending(): Promise<void> {
           );
         }
       }
-      // transient errors (401/5xx/network): leave `pending` for the next cycle.
+      // transient errors: leave `pending` for the next cycle.
       if (__DEV__) {
         console.warn('[SyncEngine] push failed for record', log.id, err);
       }
@@ -579,6 +589,7 @@ async function retryAssignmentCompletions(userId: string): Promise<number> {
       [userId],
     );
     for (const row of rows) {
+      if (waitingOutRetryAfter()) break;
       if (row.client_key && heldKeys.has(row.client_key)) continue;
       if (await sendAssignmentCompletion(row.id, row.assignment_json)) sent++;
     }
@@ -757,6 +768,3 @@ export async function triggerSync(): Promise<void> {
 export function __isSyncInProgress(): boolean {
   return syncInProgress;
 }
-
-/** Exposed for tests so they can drive the classifier directly. */
-export const __classifyPushErrorForTests = classifyPushError;

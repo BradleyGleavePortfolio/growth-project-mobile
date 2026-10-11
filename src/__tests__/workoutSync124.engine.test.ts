@@ -119,6 +119,10 @@ function mockFakeDatabase() {
       if (/^SELECT COUNT\(\*\) AS n FROM workout_logs WHERE payload IS NOT NULL AND sync_status = 'pending' AND user_id = \?$/.test(sql)) {
         return { n: rows.filter((r) => r.payload != null && r.sync_status === 'pending' && r.user_id === params[0]).length };
       }
+      if (/^SELECT COUNT\(\*\) AS n FROM workout_logs WHERE payload IS NOT NULL AND sync_status IN \('pending', 'dead_letter'\) AND user_id = \?$/.test(sql)) {
+        const kept = ['pending', 'dead_letter'];
+        return { n: rows.filter((r) => r.payload != null && kept.includes(r.sync_status) && r.user_id === params[0]).length };
+      }
       if (/WHERE server_id = \? LIMIT 1$/.test(sql)) {
         const r = rows.find((x) => x.server_id === params[0]);
         return r ? { id: r.id } : null;
@@ -340,5 +344,34 @@ describe('exactly once', () => {
     await triggerSync();
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(mockDb.rows[0].sync_status).toBe('dead_letter');
+    // Not waiting to be sent, but still on the phone: the sign-out warning counts it.
+    expect(await countQueuedWorkouts('client-1')).toBe(0);
+    expect(await countQueuedWorkouts('client-1', { includeParked: true })).toBe(1);
+  });
+
+  it('a workout the server rate limits (429) stays queued and goes out once Retry-After has passed', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      const key = nextKey();
+      await queueWorkout({ clientKey: key, payload: pushDayBody(), userId: 'client-1' });
+      await releaseQueuedWorkout(key);
+      mockCreate.mockRejectedValueOnce(
+        Object.assign(new Error('HTTP 429'), { response: { status: 429, headers: { 'retry-after': '30' } } }),
+      );
+
+      await triggerSync();
+      expect(mockDb.rows[0].sync_status).toBe('pending');
+      now.mockReturnValue(30_999);
+      await pushQueuedWorkouts();
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+
+      now.mockReturnValue(31_000);
+      await pushQueuedWorkouts();
+      expect(mockCreate).toHaveBeenCalledTimes(2);
+      expect(mockDb.rows[0].sync_status).toBe('synced');
+      expect(mockServer.workouts).toHaveLength(1);
+    } finally {
+      now.mockRestore();
+    }
   });
 });

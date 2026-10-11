@@ -114,6 +114,20 @@ it('still no signal: the confirm says what will be removed from this phone', asy
   expect(JSON.parse((await AsyncStorage.getItem('pending_food_logs_user-A'))!)).toHaveLength(1);
 });
 
+it('a food and a workout the server refused stay on the phone and are named in the confirm', async () => {
+  await logFoodOffline();
+  foodApi.create.mockRejectedValue(Object.assign(new Error('bad payload'), { response: { status: 400 } }));
+  engine.countQueuedWorkouts.mockImplementation(async (_id: string, opts?: { includeParked?: boolean }) =>
+    opts?.includeParked ? 1 : 0,
+  );
+
+  await expect(prepareSignOutConfirm('user-A')).resolves.toBe(
+    '1 workout and 1 food have not synced yet and will be removed from this phone.',
+  );
+  expect(foodApi.create).toHaveBeenCalledTimes(1);
+  expect(JSON.parse((await AsyncStorage.getItem('pending_food_logs_user-A'))!)).toHaveLength(1);
+});
+
 it('nothing waiting: no send is attempted and the confirm is the usual question', async () => {
   await expect(prepareSignOutConfirm('user-A')).resolves.toBe('Are you sure you want to sign out?');
   expect(foodApi.create).not.toHaveBeenCalled();

@@ -17,6 +17,7 @@
 //     createdAt: number; // Date.now() when enqueued
 //     kind: 'search' | 'manual';
 //     payload: Record<string, unknown>;
+//     parkedAt?: number; // set when the server refused it: kept, not resent
 //   }
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,6 +26,7 @@ import { foodApi, logApi } from './api';
 import { readUserCacheSync } from '../lib/userCache';
 import { logger } from '../utils/logger';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
+import { isRetryLater, retryAfterMs } from '../offline/sync/retryLater';
 
 const ANONYMOUS_QUEUE_KEY = 'pending_food_logs_anonymous';
 
@@ -75,7 +77,11 @@ export interface PendingManualLog {
 export type PendingFoodLog = (PendingSearchLog | PendingManualLog) & {
   id: string;
   createdAt: number;
+  /** Set when the server refused this entry: it stays on the phone, never resent. */
+  parkedAt?: number;
 };
+
+const waiting = (queue: PendingFoodLog[]) => queue.filter((q) => !q.parkedAt);
 
 // ─── Low-level helpers (always take an explicit key) ──────────────────────
 
@@ -150,8 +156,10 @@ export async function enqueue(
   emitTutorialSignal('meal_logged');
 }
 
-export async function getQueueLength(): Promise<number> {
-  return (await readQueueForKey(getQueueKey(currentOwnerId()))).length;
+/** Foods waiting to be sent; `includeParked` also counts the ones the server refused. */
+export async function getQueueLength(opts: { includeParked?: boolean } = {}): Promise<number> {
+  const queue = await readQueueForKey(getQueueKey(currentOwnerId()));
+  return (opts.includeParked ? queue : waiting(queue)).length;
 }
 
 export async function clearQueue(): Promise<void> {
@@ -186,34 +194,18 @@ export async function mergeAnonymousQueueIntoUser(userId: string): Promise<{
   return { merged: anonymous.length };
 }
 
-// ─── Error classification ─────────────────────────────────────────────────
-
-type FlushErrorClass = 'drop' | 'stop';
-
-function classifyFlushError(err: unknown): FlushErrorClass {
-  const status = (err as { response?: { status?: number } })?.response?.status;
-  if (typeof status === 'number') {
-    // 401 → keep the item, refresh-and-retry next cycle.
-    if (status === 401) return 'stop';
-    // 5xx → backend hiccup, retry next cycle.
-    if (status >= 500) return 'stop';
-    // Any other 4xx is a permanent rejection of this payload; drop the item
-    // so a single bad row can't freeze the entire queue.
-    if (status >= 400) return 'drop';
-  }
-  // Network / timeout / unknown shape → stop so we don't drop on a flaky
-  // connection.
-  return 'stop';
-}
-
 // ─── Flush ────────────────────────────────────────────────────────────────
 
+// The server asked for a pause (Retry-After): no send before this time.
+let retryNotBefore = 0;
+
 // Flush the queue to the backend. Returns the number of successfully flushed
-// entries. On transient failure (401, 5xx, network) we stop flushing and
-// leave the remaining items in the queue. On permanent failure (4xx other
-// than 401) we drop the offending item and continue with the next one so a
-// single broken payload can't freeze the queue indefinitely.
-export async function flush(): Promise<{ flushed: number; remaining: number; dropped: number }> {
+// entries. When the send should be tried again later (no signal, 401, 408,
+// 425, 429, 5xx; see retryLater.ts) we stop flushing, leave the remaining
+// items in the queue and wait out any Retry-After. An item the server refuses
+// (any other 4xx) is parked: it stays on the phone, so sign-out warns about
+// it, and is never resent, so a single broken payload can't freeze the queue.
+export async function flush(): Promise<{ flushed: number; remaining: number; parked: number }> {
   // P2-1: capture the userId once at the top of flush so a sign-out mid-flush
   // cannot cause us to read from user A's key and write back into user B's.
   // S6 R3: additionally, every write-back below is fenced on that captured
@@ -223,19 +215,17 @@ export async function flush(): Promise<{ flushed: number; remaining: number; dro
   const key = getQueueKey(userId);
 
   let queue = await readQueueForKey(key);
-  if (queue.length === 0) return { flushed: 0, remaining: 0, dropped: 0 };
-
   let flushed = 0;
-  let dropped = 0;
-  let stopped = false;
+  let parked = 0;
+  // Nothing is sent while the server's Retry-After runs.
+  let stopped = Date.now() < retryNotBefore;
 
   /**
-   * Remove `item` from the on-disk queue for the captured owner. Returns false
+   * Write `next` as the on-disk queue for the captured owner. Returns false
    * (and leaves memory + disk untouched) when the owner changed: the item stays
    * queued for its real owner and the flush stops.
    */
-  const commitRemoval = async (item: PendingFoodLog): Promise<boolean> => {
-    const next = queue.filter((q) => q.id !== item.id);
+  const commit = async (next: PendingFoodLog[]): Promise<boolean> => {
     try {
       await writeQueueFenced(userId, next);
     } catch (err) {
@@ -250,6 +240,7 @@ export async function flush(): Promise<{ flushed: number; remaining: number; dro
 
   for (const item of [...queue]) {
     if (stopped) break;
+    if (item.parkedAt) continue;
     // Owner changed since capture (sign-out / account switch): the item must
     // not be POSTed under another account's JWT, and nothing is written back.
     if (currentOwnerId() !== userId) {
@@ -280,20 +271,22 @@ export async function flush(): Promise<{ flushed: number; remaining: number; dro
       // The server accepted the item. If the owner changed before the local
       // write-back, the item stays queued for its owner (idempotent by
       // `client_uuid` on retry) rather than touching another account's key.
-      if (await commitRemoval(item)) flushed++;
+      if (await commit(queue.filter((q) => q.id !== item.id))) flushed++;
     } catch (err) {
-      const cls = classifyFlushError(err);
-      if (cls === 'drop') {
-        logger.warn('FoodLogQueue', 'flush: dropping item on permanent error', {
+      if (!isRetryLater(err)) {
+        logger.warn('FoodLogQueue', 'flush: parking item the server refused', {
           id: item.id,
           err,
         });
-        if (await commitRemoval(item)) dropped++;
+        const next = queue.map((q) => (q.id === item.id ? { ...q, parkedAt: Date.now() } : q));
+        if (await commit(next)) parked++;
         continue;
       }
+      const wait = retryAfterMs(err);
+      if (wait > 0) retryNotBefore = Date.now() + wait;
       logger.warn('FoodLogQueue', 'flush stopped on transient error', err);
       stopped = true;
     }
   }
-  return { flushed, remaining: queue.length, dropped };
+  return { flushed, remaining: waiting(queue).length, parked };
 }

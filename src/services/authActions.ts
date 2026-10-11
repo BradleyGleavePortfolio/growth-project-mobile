@@ -309,9 +309,9 @@ async function resolveSigningOutUserId(explicit?: string | null): Promise<string
 
 /** What is still only on this phone for one account (SESSION-KEEP-130). */
 export interface UnsyncedLogs {
-  /** Finished workouts waiting to be sent, plus a workout still open. */
+  /** Finished workouts waiting to be sent or refused by the server, plus a workout still open. */
   workouts: number;
-  /** Foods saved offline. */
+  /** Foods saved offline, including any the server refused. */
   foods: number;
 }
 
@@ -320,9 +320,9 @@ const SIGN_OUT_SEND_TIMEOUT_MS = 4000;
 
 async function readUnsynced(userId: string): Promise<{ queued: number; open: number; foods: number }> {
   const [queued, open, foods] = await Promise.all([
-    countQueuedWorkouts(userId),
+    countQueuedWorkouts(userId, { includeParked: true }),
     AsyncStorage.getItem(activeWorkoutSessionKey(userId)),
-    foodQueueLength(),
+    foodQueueLength({ includeParked: true }),
   ]);
   return { queued, open: open ? 1 : 0, foods };
 }
