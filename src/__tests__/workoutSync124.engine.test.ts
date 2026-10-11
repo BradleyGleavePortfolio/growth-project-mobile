@@ -114,7 +114,7 @@ function mockFakeDatabase() {
       const sql = norm(raw);
       if (/WHERE client_key = \? LIMIT 1$/.test(sql)) {
         const r = rows.find((x) => x.client_key === params[0]);
-        return r ? { id: r.id, sync_status: r.sync_status, server_id: r.server_id } : null;
+        return r ? { id: r.id, sync_status: r.sync_status, server_id: r.server_id, payload: r.payload } : null;
       }
       if (/^SELECT COUNT\(\*\) AS n FROM workout_logs WHERE payload IS NOT NULL AND sync_status = 'pending' AND user_id = \?$/.test(sql)) {
         return { n: rows.filter((r) => r.payload != null && r.sync_status === 'pending' && r.user_id === params[0]).length };
@@ -165,9 +165,15 @@ const mockCreate = jest.fn(async (body: Record<string, unknown>) => {
   mockServer.workouts.push({ id, ...body });
   return { data: { id } };
 });
+const mockUpdate = jest.fn(async (id: string, body: Record<string, unknown>) => {
+  mockValidateWorkout(body);
+  mockServer.workouts = mockServer.workouts.map((w) => (w.id === id ? { id, ...body } : w));
+  return { data: { id } };
+});
 jest.mock('../services/api', () => ({
   workoutApi: {
     create: (body: Record<string, unknown>) => mockCreate(body),
+    update: (id: string, body: Record<string, unknown>) => mockUpdate(id, body),
     getAll: jest.fn(async () => ({ data: [] })),
   },
 }));
@@ -227,6 +233,7 @@ beforeEach(async () => {
   mockServer.workouts = [];
   mockServer.offline = false;
   mockCreate.mockClear();
+  mockUpdate.mockClear();
   mockCompleteAssignment.mockClear();
   await __resetDatabaseForTests();
 });
@@ -368,6 +375,38 @@ describe('exactly once', () => {
       await pushQueuedWorkouts();
       expect(mockCreate).toHaveBeenCalledTimes(2);
       expect(mockDb.rows[0].sync_status).toBe('synced');
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('sets corrected after a busy Finish win even when the sync sent the first copy before Finish again (B-662-1)', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      const key = nextKey();
+      const busy = Object.assign(new Error('HTTP 429'), { response: { status: 429, headers: { 'retry-after': '60' } } });
+      await queueWorkout({ clientKey: key, payload: pushDayBody(), userId: 'client-1' });
+      await releaseQueuedWorkout(key, busy);
+      // Back from a phone call: the foreground sync sends the first copy.
+      now.mockReturnValue(121_000);
+      await triggerSync();
+      expect(mockServer.workouts).toHaveLength(1);
+
+      // The client fixed the first set (135 -> 155) and taps Finish again.
+      const corrected = pushDayBody();
+      corrected.exercises[0].weight_per_set = [155, 145];
+      expect(await queueWorkout({ clientKey: key, payload: corrected, userId: 'client-1' })).toMatchObject({ alreadySynced: true });
+      await triggerSync();
+
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      expect(mockUpdate).toHaveBeenCalledWith('srv-1', corrected);
+      expect(mockServer.workouts).toEqual([{ id: 'srv-1', ...corrected }]);
+      expect(mockDb.rows[0]).toMatchObject({ sync_status: 'synced', server_id: 'srv-1' });
+
+      // Finish again with nothing changed sends nothing more.
+      await queueWorkout({ clientKey: key, payload: corrected, userId: 'client-1' });
+      await triggerSync();
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
     } finally {
       now.mockRestore();
     }

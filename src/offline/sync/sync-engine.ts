@@ -175,9 +175,22 @@ export interface QueueWorkoutInput {
 
 export interface QueueWorkoutResult {
   id: string;
-  /** True when this session already reached the server (nothing to send). */
+  /**
+   * True when this session already reached the server: nothing for the caller
+   * to POST. Changed sets or notes are queued as an update to that workout.
+   */
   alreadySynced: boolean;
   serverId: string | null;
+}
+
+/** True when two bodies carry the same sets and notes (what the client edits). */
+function sameEdits(storedJson: string | null, next: Record<string, unknown>): boolean {
+  try {
+    const prev = JSON.parse(storedJson ?? '{}') as Record<string, unknown>;
+    return JSON.stringify([prev.exercises, prev.notes]) === JSON.stringify([next.exercises, next.notes]);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -186,6 +199,8 @@ export interface QueueWorkoutResult {
  * the one queued row instead of adding a copy. The row is held until the
  * caller reports the outcome with `settleQueuedWorkout` or
  * `releaseQueuedWorkout`, so the background sync never sends it in parallel.
+ * If the background sync already sent an earlier copy, changed sets or notes
+ * are queued as an update (PUT) to that server workout, so the latest wins.
  */
 export async function queueWorkout(
   input: QueueWorkoutInput,
@@ -203,16 +218,20 @@ export async function queueWorkout(
     id: string;
     sync_status: string;
     server_id: string | null;
+    payload: string | null;
   }>(
-    `SELECT id, sync_status, server_id FROM workout_logs WHERE client_key = ? LIMIT 1`,
+    `SELECT id, sync_status, server_id, payload FROM workout_logs WHERE client_key = ? LIMIT 1`,
     [clientKey],
   );
-  if (existing && existing.sync_status === 'synced') {
+  const sent = existing?.sync_status === 'synced';
+  if (existing && sent && (!existing.server_id || sameEdits(existing.payload, input.payload))) {
     return { id: existing.id, alreadySynced: true, serverId: existing.server_id };
   }
 
-  heldKeys.add(clientKey);
+  // An update to a sent workout is not held: the caller does not POST it.
+  if (!sent) heldKeys.add(clientKey);
   if (existing) {
+    // A sent row keeps its server_id, so pushQueuedRow sends a PUT.
     await db.runAsync(
       `UPDATE workout_logs
           SET payload = ?, assignment_json = ?, sync_status = 'pending',
@@ -220,7 +239,7 @@ export async function queueWorkout(
         WHERE id = ?`,
       [payloadJson, assignmentJson, input.durationMinutes ?? null, userId, existing.id],
     );
-    return { id: existing.id, alreadySynced: false, serverId: null };
+    return { id: existing.id, alreadySynced: sent, serverId: sent ? existing.server_id : null };
   }
 
   const id = generateId();
@@ -518,9 +537,12 @@ async function pushQueuedRow(
       return 'dead_letter';
     }
     try {
-      const response = await workoutApi.create(body);
+      // server_id is set when an earlier copy is on the server: update it.
+      const response = row.server_id
+        ? await workoutApi.update(row.server_id, body)
+        : await workoutApi.create(body);
       const data = response.data as { id?: string; workout?: { id?: string } };
-      await markSynced(row.id, data?.id ?? data?.workout?.id ?? '');
+      await markSynced(row.id, row.server_id || (data?.id ?? data?.workout?.id ?? ''));
     } catch (err: unknown) {
       const errorClass = classifyPushError(err);
       if (errorClass === 'transient') return 'kept';
