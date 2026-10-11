@@ -46,6 +46,7 @@ import { PersistedQueryCacheGate } from '../services/PersistedQueryCacheGate';
 import api from '../services/api';
 // Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
 import { initCrisp, syncCrispIdentity } from '../services/support/crisp.service';
+import { identify as analyticsIdentify } from '../lib/analytics';
 // Reconcile: if the lean onboarding completed but we never confirmed a 200
 // from PUT /profile (offline at finish, etc.), retry once on app open.
 import { useLeanOnboardingReconcile } from '../hooks/useLeanOnboardingReconcile';
@@ -386,6 +387,13 @@ export default function RootNavigator() {
     const t = setTimeout(() => flushPendingPushTap(), 0);
     return () => clearTimeout(t);
   }, [authState, sessionUserId]);
+  // LEGAL-03 / PRIV-06: analytics start only for a committed signed-in
+  // session (sign-in needs the Terms and Privacy Policy agreement). This
+  // covers a cold start of a signed-in user; the sign-in screens identify on
+  // sign-in, and sign-out stops analytics (src/lib/analytics.ts).
+  useEffect(() => {
+    if (sessionUserId) analyticsIdentify(sessionUserId);
+  }, [sessionUserId]);
   const pendingDay1Target = useRef<WinType | null>(null);
   // Deep-link replay state for the public accept-invite path. When a
   // signed-in user clicks an accept-invite URL we sign them out and then

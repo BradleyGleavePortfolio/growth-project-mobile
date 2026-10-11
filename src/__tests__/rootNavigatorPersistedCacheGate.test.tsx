@@ -94,6 +94,8 @@ jest.mock('../utils/authEvents', () => ({
 }));
 jest.mock('../screenshots', () => ({ isScreenshotMode: () => false }));
 jest.mock('../offline', () => ({ triggerSync: jest.fn(async () => undefined) }));
+const mockIdentify = jest.fn();
+jest.mock('../lib/analytics', () => ({ identify: (...a: unknown[]) => mockIdentify(...a), track: jest.fn() }));
 jest.mock('../entitlements/EntitlementProvider', () => ({
   EntitlementProvider: ({ children }: { children: unknown }) => children,
 }));
@@ -227,3 +229,24 @@ describe('RootNavigator × role-selection gate after a Login recovery notice', (
   });
 });
 
+
+// LEGAL-03 / PRIV-06: analytics start (identify) only for a committed
+// signed-in session; a signed-out launch sends nothing (src/lib/analytics.ts).
+describe('RootNavigator × analytics consent', () => {
+  beforeEach(() => mockIdentify.mockClear());
+
+  it('signed-in cold start: identifies the committed user', async () => {
+    mockSecure['supabase_token'] = 'jwt-B';
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify(COACH_B));
+    const { findByTestId } = await mount();
+    await findByTestId('nav-coach');
+    expect(mockIdentify).toHaveBeenCalledWith('user-B');
+  });
+
+  it('signed-out launch (cached user, no token): analytics never start', async () => {
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify(COACH_B));
+    const { findByTestId } = await mount();
+    await findByTestId('nav-auth');
+    expect(mockIdentify).not.toHaveBeenCalled();
+  });
+});
