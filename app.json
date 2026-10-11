@@ -28,7 +28,6 @@
         "NSFaceIDUsageDescription": "The Growth Project uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings.",
         "NSHealthShareUsageDescription": "The Growth Project reads your Apple Health data for training, recovery, and check-ins. Your coach can use data you share, and Roman can use daily summaries when you allow AI access.",
         "NSHealthUpdateUsageDescription": "The Growth Project does not write data to Apple Health.",
-        "NSMotionUsageDescription": "The Growth Project reads motion and step activity so your coach can track daily movement and progress.",
         "NSCameraUsageDescription": "The Growth Project uses the camera only when you choose to take a photo to send in a support chat.",
         "NSPhotoLibraryUsageDescription": "The Growth Project opens your photo library only when you choose a photo to send in a support chat.",
         "NSPhotoLibraryAddUsageDescription": "The Growth Project saves an image to your photo library only when you choose Save Image, for example a progress card or an invite QR code."

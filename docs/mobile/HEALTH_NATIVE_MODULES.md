@@ -58,8 +58,9 @@ This document covers the on-device native module configuration serialized by **P
 | Key | Purpose | What QA should see |
 | --- | --- | --- |
 | `NSHealthShareUsageDescription` | Read access to Apple Health (sleep, heart rate, workouts, etc.). | Shown on the HealthKit read-consent sheet when the HealthKit connector requests access. |
-| `NSHealthUpdateUsageDescription` | Write access — lets the app save logged workouts back to Apple Health. | Shown on the HealthKit write-consent sheet. |
-| `NSMotionUsageDescription` | Motion & step-count access used by HealthKit step queries. | Shown when step/motion data is first requested. |
+| `NSHealthUpdateUsageDescription` | Required by the `react-native-health` plugin; says the app does not write to Apple Health (it requests no write types). | Never shown: no write type is requested. |
+
+No `NSMotionUsageDescription`: steps come from Apple Health, and nothing reads Core Motion (M5, STORE-06).
 
 > HealthKit consent in iOS is per-data-type and is requested by the **2.a** connector, not by config alone. The HealthKit capability/entitlement is added automatically by the config plugin during the native build.
 
