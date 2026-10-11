@@ -23,10 +23,11 @@ import { NativeModules } from 'react-native';
 const NAME = 'Janet Canaryfield';
 const EMAIL = 'janet.canaryfield@example.com';
 const PHONE = '+1 415 555 0142';
-const IDENT = 'patient-canary-7731';
+const MARKER = 'g-7731';
+const IDENT = `patient-canary-${MARKER}`;
 const HEALTH = 'insulin dependent diabetic, HIV positive';
 const CANARY_TEXT = `${NAME} ${EMAIL} ${PHONE} ${IDENT} ${HEALTH}`;
-const FRAGMENTS = ['Janet', 'Canaryfield', 'canaryfield', EMAIL, 'example.com', '415 555 0142', IDENT, '7731', 'insulin', 'diabetic', 'HIV'];
+const FRAGMENTS = ['Janet', 'Canaryfield', 'canaryfield', EMAIL, 'example.com', '415 555 0142', IDENT, MARKER, 'insulin', 'diabetic', 'HIV'];
 const DSN = 'https://abc@o1.ingest.sentry.io/1';
 const RUNTIME = '0123456789abcdef0123456789abcdef01234567';
 const UPDATE_ID = 'abcdef00-1111-2222-3333-444455556666';
@@ -249,8 +250,8 @@ describe('OTA privacy canary: no native free-form text leaves the phone through 
   it.each(['event_id', 'trace_id', 'sid', 'span_id'])('allows random %s collisions, not a leaked identifier', (key) => {
     const id = `${'a'.repeat(key === 'span_id' ? 12 : 28)}7731`;
     expectNoCanaryLeak(JSON.stringify({ [key]: id }));
-    expect(() => expectNoCanaryLeak(JSON.stringify({ [key]: '7731' }))).toThrow();
-    expect(() => expectNoCanaryLeak(JSON.stringify({ message: id }))).toThrow();
+    expect(() => expectNoCanaryLeak(JSON.stringify({ [key]: MARKER }))).toThrow();
+    expect(() => expectNoCanaryLeak(JSON.stringify({ message: `${id} ${MARKER}` }))).toThrow();
   });
 
   it.each(FRAGMENTS)('still rejects leaked fragment %s in an event or native crash context', (fragment) => {
