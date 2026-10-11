@@ -51,3 +51,7 @@ RELEASE_BLOCKER.md
 # AI audit working notes — never commit to repo
 audit-*.md
 /tmp-audit-*.md
+
+# Local agent connection configs carry bearer tokens — keep them on your machine
+.mcp.json
+mcp.json

@@ -31,4 +31,21 @@ describe('repository hygiene (B-321-6)', () => {
     expect(lines).toContain('node_modules');
     expect(git(['check-ignore', '--no-index', '-q', 'node_modules']).trim()).toBe('');
   });
+
+  it('never tracks an agent connection config, which carries bearer tokens', () => {
+    expect(git(['ls-files', '--', ':(glob,icase)**/*mcp.json']).trim()).toBe('');
+    // Whole-file match, so a line break inside the map still counts; this file names both keys.
+    const tracked = git(['ls-files', '-z']).split('\0').filter((f) => f && f !== 'src/__tests__/repoHygiene.test.ts');
+    const holding = (key: RegExp, files: string[]) => files.filter((f) => key.test(readFileSync(join(root, f), 'utf8')));
+    expect(holding(/"mcpServers"/, tracked)).toEqual([]);
+    expect(holding(/"servers"\s*:\s*\{/, tracked.filter((f) => /\.jsonc?$/.test(f)))).toEqual([]);
+  });
+
+  it.each(['.mcp.json', 'src/.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json'])(
+    'ignores %s through the repo .gitignore',
+    (file) => {
+      // -v names the matching rule, so a global ignore or a `!` re-include does not pass.
+      expect(git(['check-ignore', '--no-index', '-v', file])).toMatch(/^\.gitignore:\d+:[^!]/);
+    },
+  );
 });
