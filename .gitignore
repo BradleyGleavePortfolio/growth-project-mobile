@@ -52,5 +52,6 @@ RELEASE_BLOCKER.md
 audit-*.md
 /tmp-audit-*.md
 
-# Local agent connection config carries bearer tokens — keep it on your machine
+# Local agent connection configs carry bearer tokens — keep them on your machine
 .mcp.json
+mcp.json
