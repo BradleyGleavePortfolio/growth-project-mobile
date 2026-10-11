@@ -34,6 +34,7 @@ import {
   PERSISTED_CACHE_DRAIN_TIMEOUT_MS,
   PERSISTED_CACHE_PURGE_TIMEOUT_MS,
 } from '../PersistedQueryCacheGate';
+import { isSealedCacheValue, openCacheValue } from '../queryCacheCrypto';
 import { logger } from '../../utils/logger';
 
 const ME = ['me'] as const;
@@ -52,7 +53,8 @@ function blobWith(key: readonly unknown[], data: unknown, extra: Record<string, 
 async function blobQueries(storageKey: string): Promise<Array<{ queryKey: unknown; data: unknown }>> {
   const raw = await AsyncStorage.getItem(storageKey);
   if (!raw) return [];
-  const parsed = JSON.parse(raw) as { clientState: { queries: Array<{ queryKey: unknown; state: { data: unknown } }> } };
+  // M3: blobs are sealed at rest; open them to inspect what was persisted.
+  const parsed = JSON.parse(isSealedCacheValue(raw) ? await openCacheValue(raw) : raw) as { clientState: { queries: Array<{ queryKey: unknown; state: { data: unknown } }> } };
   return parsed.clientState.queries.map((q) => ({ queryKey: q.queryKey, data: q.state.data }));
 }
 
