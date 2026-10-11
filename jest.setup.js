@@ -55,6 +55,38 @@ jest.mock('expo-calendar/legacy', () => ({
 // in the native module. Format matches the v4-UUID shape we use for the
 // food-log idempotency keys.
 jest.mock('expo-crypto', () => {
+  const nodeCrypto = require('crypto');
+  class AESEncryptionKey {
+    constructor(raw) {
+      this.raw = Buffer.from(raw);
+    }
+    static async generate() {
+      return new AESEncryptionKey(nodeCrypto.randomBytes(32));
+    }
+    static async import(input, encoding) {
+      return new AESEncryptionKey(typeof input === 'string' ? Buffer.from(input, encoding) : input);
+    }
+    async encoded(encoding) {
+      return this.raw.toString(encoding);
+    }
+  }
+  class AESSealedData {
+    constructor(raw) {
+      this.raw = Buffer.from(raw);
+    }
+    static fromParts(iv, ciphertextWithTag) {
+      const bytes = (v) => (typeof v === 'string' ? Buffer.from(v, 'base64') : Buffer.from(v));
+      return new AESSealedData(Buffer.concat([bytes(iv), bytes(ciphertextWithTag)]));
+    }
+    async iv(encoding) {
+      const iv = this.raw.subarray(0, 12);
+      return encoding === 'base64' ? iv.toString('base64') : new Uint8Array(iv);
+    }
+    async ciphertext({ includeTag, encoding } = {}) {
+      const body = this.raw.subarray(12, includeTag ? this.raw.length : this.raw.length - 16);
+      return encoding === 'base64' ? body.toString('base64') : new Uint8Array(body);
+    }
+  }
   let counter = 0;
   return {
     randomUUID: jest.fn(() => {
@@ -64,6 +96,23 @@ jest.mock('expo-crypto', () => {
     }),
     digestStringAsync: jest.fn(async (_alg, input) => `digest:${input}`),
     CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    // M3: real AES-256-GCM (Node crypto) so the sealed query cache runs for real.
+    AESEncryptionKey,
+    AESSealedData,
+    aesEncryptAsync: async (plaintext, key) => {
+      const iv = nodeCrypto.randomBytes(12);
+      const cipher = nodeCrypto.createCipheriv('aes-256-gcm', key.raw, iv);
+      const input = typeof plaintext === 'string' ? Buffer.from(plaintext, 'base64') : Buffer.from(plaintext);
+      const body = Buffer.concat([cipher.update(input), cipher.final()]);
+      return new AESSealedData(Buffer.concat([iv, body, cipher.getAuthTag()]));
+    },
+    aesDecryptAsync: async (sealed, key, options) => {
+      const all = sealed.raw;
+      const decipher = nodeCrypto.createDecipheriv('aes-256-gcm', key.raw, all.subarray(0, 12));
+      decipher.setAuthTag(all.subarray(all.length - 16));
+      const out = Buffer.concat([decipher.update(all.subarray(12, all.length - 16)), decipher.final()]);
+      return options && options.output === 'base64' ? out.toString('base64') : new Uint8Array(out);
+    },
   };
 });
 
@@ -84,6 +133,7 @@ jest.mock('expo-secure-store', () => {
   const store = new Map();
   return {
     __store: store,
+    AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY',
     setItemAsync: jest.fn(async (k, v) => {
       store.set(k, v);
     }),

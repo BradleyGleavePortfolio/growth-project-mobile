@@ -30,6 +30,7 @@ import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persi
 import { persistQueryClientSubscribe } from '@tanstack/react-query-persist-client';
 import type { PersistedClient } from '@tanstack/react-query-persist-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isSealedCacheValue, openCacheValue, sealCacheValue } from './queryCacheCrypto';
 
 function getHttpStatus(err: unknown): number | undefined {
   return (err as { response?: { status?: number } })?.response?.status;
@@ -207,13 +208,27 @@ export function createIdentityPersistence(
   const inflightWrites = new Set<Promise<void>>();
 
   const fencedStorage = {
-    getItem: (k: string) => AsyncStorage.getItem(k),
+    // M3: blobs are sealed at rest (queryCacheCrypto). A blob that cannot be
+    // opened throws, so restore() takes its 'failed' path and removes it. A
+    // plain blob from an older build is used once and removed at once; the
+    // next write stores the cache sealed.
+    getItem: async (k: string): Promise<string | null> => {
+      const stored = await AsyncStorage.getItem(k);
+      if (stored === null) return null;
+      if (isSealedCacheValue(stored)) return openCacheValue(stored);
+      await AsyncStorage.removeItem(k).catch(() => undefined);
+      return stored;
+    },
     removeItem: (k: string) => AsyncStorage.removeItem(k),
     setItem: async (k: string, value: string): Promise<void> => {
       if (retired) return; // write fence: dropped at the actual write
       const write = (async () => {
         try {
-          await AsyncStorage.setItem(k, value);
+          // If the key or cipher is unavailable the write fails and nothing
+          // reaches disk; health data is never written in plain text.
+          const sealed = await sealCacheValue(value);
+          if (retired) return; // fence re-checked after the async seal
+          await AsyncStorage.setItem(k, sealed);
         } finally {
           if (retired && drainTimedOut) {
             // Fail-closed: this write outlived the bounded drain (and any purge
