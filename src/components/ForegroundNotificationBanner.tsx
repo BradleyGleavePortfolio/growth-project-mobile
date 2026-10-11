@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useForegroundBanner } from '../store/foregroundBannerStore';
 import { useTheme } from '../theme/ThemeProvider';
 import type { IoniconName } from '../types/common';
+import { featureFlags } from '../config/featureFlags';
 
 const AUTO_DISMISS_MS = 4000;
 
@@ -96,7 +97,11 @@ export default function ForegroundNotificationBanner() {
     const actionScreen = banner?.actionScreen;
     const actionParams = banner?.actionParams;
     animateOut(() => {
-      if (actionScreen) {
+      if (actionScreen === 'AIGuide') {
+        navigation.navigate('MoreTab' as never, {
+          screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
+        } as never);
+      } else if (actionScreen) {
         (navigation.navigate as (screen: string, params?: Record<string, string>) => void)(
           actionScreen,
           actionParams,

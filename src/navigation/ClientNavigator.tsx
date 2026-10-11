@@ -65,7 +65,6 @@ import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
-import AIGuideScreen from '../screens/client/AIGuideScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
 // Phase 7B — Transformation Timeline
 import TimelineScreen from '../screens/client/TimelineScreen';
@@ -182,7 +181,6 @@ const ProtectedRoutineBuilderScreen = withProtectedScreen(RoutineBuilderScreen, 
 // behind the one-time community terms agreement too. Not OWN: community
 // feed, wins and leaderboard still need a package server-side.
 const ProtectedCommunityScreen = withProtectedScreen(withCommunityTerms(CommunityScreen));
-const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen, OWN);
 // Messages is deliberately NOT wrapped (audit #304 B1). Basic text DM with
 // the assigned coach is free server-side (client-messaging.controller.ts:
 // GET/POST /messages, /messages/read, /messages/unread-count carry no
@@ -291,7 +289,6 @@ export type MoreStackParamList = {
   RomanConversations: undefined;
   RomanConversation: RomanConversationParams;
   Preferences: undefined;
-  AIGuide:     undefined;
   Membership:  undefined;
   /** Phase 7B — Transformation Timeline */
   Timeline:    undefined;
@@ -532,7 +529,6 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="RomanConversations" component={RomanConversationsScreen} />
       <MoreStackNav.Screen name="RomanConversation" component={RomanConversationScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
-      <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
       <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} options={backOnlyHeader()} />
