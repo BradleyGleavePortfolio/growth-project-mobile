@@ -105,6 +105,13 @@ function otherNativeCalls(): string {
   return JSON.stringify(Object.entries(calls).filter(([name]) => name !== 'captureEnvelope'));
 }
 
+function expectNoCanaryLeak(payload: string): void {
+  // Only well-shaped SDK identifiers are noise; identically shaped values elsewhere remain checked.
+  const content = payload.replace(/"(?:event_id|trace_id|sid)"\s*:\s*"[a-f0-9]{32}"|"span_id"\s*:\s*"[a-f0-9]{16}"/gi, '');
+  for (const fragment of FRAGMENTS) expect(content).not.toContain(fragment);
+  expect(content).not.toContain('emergency_launch_reason');
+}
+
 function eventOf(envelope: string): { contexts?: Record<string, Record<string, unknown>>; message?: unknown } | undefined {
   return envelope
     .split('\n')
@@ -230,19 +237,26 @@ describe('OTA privacy canary: no native free-form text leaves the phone through 
   it('no canary fragment appears in any envelope sent to the native transport', () => {
     const all = sentEnvelopes().join('\n');
     expect(all.length).toBeGreaterThan(0);
-    for (const fragment of FRAGMENTS) {
-      expect(all).not.toContain(fragment);
-    }
-    expect(all).not.toContain('emergency_launch_reason');
+    expectNoCanaryLeak(all);
   });
 
   it('no canary fragment appears in any other native call (native crash scope: setContext, tags, extras, breadcrumbs)', () => {
     const native = otherNativeCalls();
     expect(native).toContain('setContext');
-    for (const fragment of FRAGMENTS) {
-      expect(native).not.toContain(fragment);
-    }
-    expect(native).not.toContain('emergency_launch_reason');
+    expectNoCanaryLeak(native);
+  });
+
+  it.each(['event_id', 'trace_id', 'sid', 'span_id'])('allows random %s collisions, not a leaked identifier', (key) => {
+    const id = `${'a'.repeat(key === 'span_id' ? 12 : 28)}7731`;
+    expectNoCanaryLeak(JSON.stringify({ [key]: id }));
+    expect(() => expectNoCanaryLeak(JSON.stringify({ [key]: '7731' }))).toThrow();
+    expect(() => expectNoCanaryLeak(JSON.stringify({ message: id }))).toThrow();
+  });
+
+  it.each(FRAGMENTS)('still rejects leaked fragment %s in an event or native crash context', (fragment) => {
+    const event = eventOf(sentEnvelopes()[0]);
+    expect(() => expectNoCanaryLeak(JSON.stringify({ ...event, message: fragment }))).toThrow();
+    expect(() => expectNoCanaryLeak(JSON.stringify(['setContext', ['ota_updates', { update_id: fragment }]]))).toThrow();
   });
 
   it('every OTA context in every event holds only allowlisted keys', () => {
