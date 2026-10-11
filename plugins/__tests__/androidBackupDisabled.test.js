@@ -2,10 +2,11 @@
  * M3 (AUTHA-08, DATA-11): Android auto-backup copies the app's data folder
  * (AsyncStorage, SQLite) to the person's cloud backup. That folder holds the
  * health and food cache, so backup is off in every build mode, through the
- * same Expo step that writes android:allowBackup into the manifest.
+ * same Expo step that writes android:allowBackup into the manifest. (Kept in
+ * plugins/: src/ must not import expo/config-plugins, see declaredDependencies.)
  */
 const { AndroidConfig } = require('expo/config-plugins');
-const configure = require('../../../app.config');
+const configure = require('../../app.config');
 
 const originalSwitch = process.env.TGP_ANDROID_HEALTH_CONNECT;
 
