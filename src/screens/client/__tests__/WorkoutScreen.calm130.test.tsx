@@ -100,7 +100,7 @@ function fontSizes(view: { toJSON: () => unknown }): number[] {
 const pending = (id: string, name: string) => ({ id, completed_at: null, workout_plan: { name } });
 const done = (id: string) => ({ id, completed_at: '2026-10-01T10:00:00Z', workout_plan: { name: `Done ${id}` } });
 const lifted = (id: string) => ({
-  id, date: new Date().toISOString(), workout_name: `Session ${id}`, duration_minutes: 30, notes: '',
+  id, date: new Date(Date.now() - 60_000).toISOString(), workout_name: `Session ${id}`, duration_minutes: 30, notes: '',
   exercises: [{ muscle_group: 'chest', exercise_name: 'Bench Press', sets_completed: 1, weight_per_set: [100], reps_per_set: [5] }],
 });
 const QUICK = ['ActiveWorkout', { routineName: 'Quick Workout', exercises: '[]' }];
