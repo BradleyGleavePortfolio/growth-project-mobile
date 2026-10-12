@@ -1,7 +1,7 @@
 /**
  * CoachCodeSheet — enter a coach code after signup (coachless Home).
  *
- *   1. Live validation: once the text is a well-formed code, POST
+ *   1. Live validation: once the text is a complete generated code, POST
  *      /coachless/coach-code/check (no write) shows the coach's name or the
  *      specific refusal. Only the latest check is applied.
  *   2. Join: POST /coachless/coach-code/redeem with an Idempotency-Key. One
@@ -34,6 +34,7 @@ import { presentJoinFrom } from '../../lib/joinPackage';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { logger } from '../../utils/logger';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
+import { isCompleteInviteCode } from '../../lib/inviteCodeInput';
 import {
   checkCoachCode,
   coachlessFailureOf,
@@ -109,7 +110,7 @@ export default function CoachCodeSheet({
   // Live validation (debounced; a stale answer never overwrites a newer one).
   useEffect(() => {
     setJoinFailure(null);
-    if (!visible || welcome || !isWellFormedCoachCode(code)) {
+    if (!visible || welcome || !isCompleteInviteCode(code)) {
       checkSeq.current += 1;
       setCheck({ state: 'idle' });
       return;

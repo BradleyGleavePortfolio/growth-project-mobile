@@ -22,6 +22,11 @@
 export const INVITE_CODE_MIN_LENGTH = 3;
 export const INVITE_CODE_MAX_LENGTH = 32;
 
+/** Backend-generated GP- + six characters; variable-length vanity codes wait for Join. */
+export function isCompleteInviteCode(code: string): boolean {
+  return /^GP-[A-Z0-9]{6}$/i.test(code.trim());
+}
+
 const CODE_CHARS = /^[A-Z0-9-]+$/;
 const HAS_ALNUM = /[A-Z0-9]/;
 const JOIN_SEGMENT = /\/join\/([^/?#\s]+)(?:[/?#]|$)/i;

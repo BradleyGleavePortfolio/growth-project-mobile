@@ -41,6 +41,7 @@ import {
 } from '../../lib/signupPolicy';
 import { readInviteAttachOutcome } from '../../lib/inviteAttachOutcome';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
+import { isCompleteInviteCode } from '../../lib/inviteCodeInput';
 import InviteCoachCardDetails from '../../components/invite/InviteCoachCardDetails';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -1442,7 +1443,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
                 setInviteCode(v);
                 setInvitePreview(null);
               }}
-              onBlur={() => previewCode(inviteCode)}
+              onBlur={() => { if (isCompleteInviteCode(inviteCode)) void previewCode(inviteCode); }}
               placeholder="From your coach"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
