@@ -24,11 +24,12 @@ export const INVITE_CODE_MAX_LENGTH = 32;
 
 /**
  * A complete generated coach code: the new `TGP-` + 7 (owner 26) or the older
- * `GP-` + 6, any case. Vanity and other codes are not "complete": the coach
- * code sheet checks them after a typing pause, and Join accepts them as before.
+ * `GP-` + 6 from the backend generator alphabet (no 0/O/1/I/L), any case. Vanity
+ * and other codes are not "complete" (so `GP-BRADLE` is not checked mid-typing):
+ * the coach code sheet checks them after a typing pause, and Join accepts them.
  */
 export function isCompleteInviteCode(code: string): boolean {
-  return /^(?:TGP-[A-Z0-9]{7}|GP-[A-Z0-9]{6})$/i.test(code.trim());
+  return /^(?:TGP-[A-Z0-9]{7}|GP-[2-9A-HJKMNP-Z]{6})$/i.test(code.trim());
 }
 
 const CODE_CHARS = /^[A-Z0-9-]+$/;

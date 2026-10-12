@@ -115,13 +115,14 @@ it.each(['TGP-ABC2345', 'tgp-abc2345'])('typing %s quickly sends one check, at o
   expect(checks()).toEqual(once);
 });
 
-it('a typed vanity code is checked once after a pause and shows the preview', async () => {
+// GP-BRADLEY: its prefix GP-BRADLE is not a generated code (L), so it is never checked mid-typing.
+it.each(['GP-TOP', 'GP-BRADLEY'])('typing vanity %s sends one check after the pause, with the preview', async (code) => {
   jest.useFakeTimers();
   checkReturns(BASE);
   await renderSheet('', 1200);
-  await typeQuickly('GP-TOP');
+  await typeQuickly(code);
   expect(checks()).toHaveLength(0);
   await act(async () => jest.advanceTimersByTime(1200));
-  expect(checks()).toEqual([['/coachless/coach-code/check', { code: 'GP-TOP' }, expect.anything()]]);
+  expect(checks()).toEqual([['/coachless/coach-code/check', { code }, expect.anything()]]);
   expect(screen.getByText('Coach: Alex Rivera')).toBeTruthy();
 });
