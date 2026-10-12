@@ -64,6 +64,23 @@ describe('CoachMacrosReviewScreen set targets', () => {
     expect(screen.getByTestId('macros-save-error').props.children).toMatch(/not on your roster/);
   });
 
+  it('stops 800 kcal on the phone and shows the server floor message for a man', async () => {
+    mockMutate.mockImplementation((_vars, opts: { onError: (e: unknown) => void }) =>
+      opts.onError({ response: { status: 400, data: { message: "Calorie targets can't go below 1,500 for this client." } } }));
+    await renderScreen();
+    await fireEvent.changeText(screen.getByTestId('macros-input-calories'), '800');
+    await fireEvent.changeText(screen.getByTestId('macros-input-protein'), '150');
+    await fireEvent.changeText(screen.getByTestId('macros-input-carbs'), '100');
+    await fireEvent.changeText(screen.getByTestId('macros-input-fat'), '40');
+    await fireEvent.press(screen.getByTestId('macros-save'));
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('macros-save-error').props.children).toBe('Calories must be between 1200 and 7000 kcal.');
+    await fireEvent.changeText(screen.getByTestId('macros-input-calories'), '1300');
+    await fireEvent.press(screen.getByTestId('macros-save'));
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('macros-save-error').props.children).toBe("Calorie targets can't go below 1,500 for this client.");
+  });
+
   it('shows a load failure with Retry instead of claiming there is no target', async () => {
     mockCurrent.isError = true;
     await renderScreen();
