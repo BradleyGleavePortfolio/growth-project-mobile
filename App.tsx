@@ -38,6 +38,7 @@ import { reportOtaUpdateLaunch } from './src/services/otaUpdateTags';
 // for app_opened so the typed AnalyticsEvents constant is used.
 import { track } from './src/lib/analytics';
 import { AnalyticsEvents } from './src/analytics/events';
+import { installBackgroundedEvent, trackInstallOrUpdate } from './src/services/appLifecycleEvents';
 import { ThemeProvider } from './src/theme/ThemeProvider';
 import BiometricUnlockGate from './src/components/BiometricUnlockGate';
 
@@ -180,6 +181,12 @@ function App() {
     );
   }, []);
 
+  // M1b: the app's own backgrounded event (the SDK's lifecycle events are off).
+  useEffect(() => {
+    if (isScreenshotMode()) return undefined;
+    return installBackgroundedEvent();
+  }, []);
+
   const initApp = async () => {
     try {
       // Single source of truth for foreground push behaviour. Wired here
@@ -212,6 +219,8 @@ function App() {
         await registerPushChannels();
         // Phase 11: use typed AnalyticsEvents constant for app_opened.
         track(AnalyticsEvents.APP_OPENED, { cold_start: true });
+        // M1b: the app's own install/update event (the SDK's is off).
+        void trackInstallOrUpdate();
       }
     } catch (err) {
       // initSentry has already run at module load, so we can capture in any
