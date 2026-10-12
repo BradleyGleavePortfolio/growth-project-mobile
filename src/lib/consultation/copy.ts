@@ -8,18 +8,27 @@
  * apostrophes so the R2a server copy hashes match). Paragraph 4's last
  * sentence is the client-ai-v4 retention line (owner 2026-10-01 20:32: Roman
  * chats are kept until the client deletes them or their account; backend
- * #635), which moved P0 to consult-consent-v3. Any change to the P0 paragraphs, either box label
+ * #635), which moved P0 to consult-consent-v3. Owner C-6a removed paragraph 3's clinic sentence
+ * (consult-consent-v5 / v6); owner 62 added the coach-free versions below. Any change to the P0 paragraphs, either box label
  * or the footer must bump CONSULT_CONSENT_COPY_VERSION (and, for paragraph 4
  * or box 2, AI_CONSENT_VERSION), update the pinned hashes below, and goes
  * through T4 review (privacy / data path).
  */
 import { anyScreeningYes, ageOn } from './engine';
 import type { Answers, MeasureAnswer } from './types';
-import { CONSENT_TITLE } from './consentVersion';
+import {
+  CONSENT_TITLE,
+  CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COPY_VERSION,
+  CONSULT_CONSENT_MEMORY_COPY_VERSION,
+} from './consentVersion';
 
 export {
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
   CONSENT_BINDING,
   AI_CONSENT_VERSION,
   WAIVER_VERSION,
@@ -30,7 +39,7 @@ export { CONSENT_TITLE };
 export const CONSENT_PARAGRAPHS: readonly string[] = [
   'The Growth Project provides personal training and nutrition guidance only. We do not diagnose, treat, or give medical advice. Nothing in this app replaces the advice of a physician or other qualified health provider.',
   'Exercise carries some risk of injury. You choose how hard to work, you stop if something hurts, and you take part at your own risk.',
-  'To coach you, The Growth Project and your coach collect and use what you share here: your profile, this consultation including the screening questions, your targets, food and workout logs, check-ins, any health, sleep or wearable data you choose to connect, your messages with your coach, and posts you write in the community. We use it only to provide your training. We never sell it. If you joined through a clinic, the clinic does not see it.',
+  'To coach you, The Growth Project and your coach collect and use what you share here: your profile, this consultation including the screening questions, your targets, food and workout logs, check-ins, any health, sleep or wearable data you choose to connect, your messages with your coach, and posts you write in the community. We use it only to provide your training. We never sell it.',
 ];
 
 /** Box 1 (required to continue). */
@@ -49,17 +58,34 @@ export const CONSENT_FOOTER =
   "Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman's guided tour works either way.";
 
 /**
+ * Owner 62 (Option 1): what a client with no coach sees instead of paragraphs 1-3, box 1, paragraph 4
+ * and box 2. The same text with every coach sentence or clause removed and no new words; the one
+ * grammar join is paragraph 3's "collects and uses". Title and footer are shared.
+ */
+export const CONSENT_PARAGRAPHS_COACH_FREE: readonly string[] = [
+  CONSENT_PARAGRAPHS[0],
+  CONSENT_PARAGRAPHS[1],
+  'To coach you, The Growth Project collects and uses what you share here: your profile, this consultation including the screening questions, your targets, food and workout logs, check-ins, any health, sleep or wearable data you choose to connect, and posts you write in the community. We use it only to provide your training. We never sell it.',
+];
+export const CONSENT_CHECKBOX_LABEL_COACH_FREE =
+  'I agree to the training waiver, and to The Growth Project collecting and using my information to coach me.';
+export const AI_CONSENT_PARAGRAPH_COACH_FREE =
+  "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions. Only your own data is used, never another client's. Your conversations with Roman are kept until you delete them or delete your account.";
+export const AI_CONSENT_CHECKBOX_LABEL_COACH_FREE =
+  'Optional: I allow Roman to use my information, processed by Anthropic.';
+
+/**
  * Exact text of the whole P0 screen, in display order (title, paragraphs
  * 1-3, box 1, paragraph 4, box 2, footer). Its sha256 is sent as the P0
  * record's `text_sha256` (backend #607 stores what was shown).
  */
-export function consentCopyText(aiParagraph: string = AI_CONSENT_PARAGRAPH): string {
+export function consentCopyText(aiParagraph?: string, coachFree = false): string {
   return [
     CONSENT_TITLE,
-    ...CONSENT_PARAGRAPHS,
-    CONSENT_CHECKBOX_LABEL,
-    aiParagraph,
-    AI_CONSENT_CHECKBOX_LABEL,
+    ...(coachFree ? CONSENT_PARAGRAPHS_COACH_FREE : CONSENT_PARAGRAPHS),
+    coachFree ? CONSENT_CHECKBOX_LABEL_COACH_FREE : CONSENT_CHECKBOX_LABEL,
+    aiParagraph ?? (coachFree ? AI_CONSENT_PARAGRAPH_COACH_FREE : AI_CONSENT_PARAGRAPH),
+    coachFree ? AI_CONSENT_CHECKBOX_LABEL_COACH_FREE : AI_CONSENT_CHECKBOX_LABEL,
     CONSENT_FOOTER,
   ].join('\n\n');
 }
@@ -69,8 +95,10 @@ export function consentCopyText(aiParagraph: string = AI_CONSENT_PARAGRAPH): str
  * the `copy_sha256` of POST /me/ai-consent/roman; the R2a server copy for
  * `client-ai-v4` must hash to the same value.
  */
-export function aiConsentCopyText(): string {
-  return [AI_CONSENT_PARAGRAPH, AI_CONSENT_CHECKBOX_LABEL].join('\n\n');
+export function aiConsentCopyText(coachFree = false): string {
+  return coachFree
+    ? [AI_CONSENT_PARAGRAPH_COACH_FREE, AI_CONSENT_CHECKBOX_LABEL_COACH_FREE].join('\n\n')
+    : [AI_CONSENT_PARAGRAPH, AI_CONSENT_CHECKBOX_LABEL].join('\n\n');
 }
 
 /**
@@ -79,7 +107,7 @@ export function aiConsentCopyText(): string {
  * without these (and the versions) changing too. Pinned rather than hashed
  * at runtime so the record never depends on a native digest call.
  */
-export const CONSENT_COPY_SHA256 = '79ceeb6b8316ee9e3f583fe678e2463584c6dda4c93b5c95746dfe5c52ef31c9';
+export const CONSENT_COPY_SHA256 = '926b4ec8abe6d003798b44d720f625aa69871f59b4963cc5ec39f8599c2255fa';
 export const AI_CONSENT_COPY_SHA256 = 'fbf821401d4313c6a301a6cc08d3870bb117c293fbb970e321bf87f49abe34f4';
 
 /**
@@ -89,7 +117,47 @@ export const AI_CONSENT_COPY_SHA256 = 'fbf821401d4313c6a301a6cc08d3870bb117c293f
  * Box 2 shows server v5 text only when its copy sha256 equals the first pin, so the P0 record is exact.
  */
 export const AI_CONSENT_MEMORY_COPY_SHA256 = '8c19fca94c2455094c47b1802bb6693aff47d24c7b6df3b256d0a0e8e90fe8ee';
-export const CONSENT_MEMORY_COPY_SHA256 = '74d0a48ad2b0a50f6f8e699fe6d131f0262f35ce1fff6248c9770d9267a5fb1a';
+export const CONSENT_MEMORY_COPY_SHA256 = '6b15d88b6bf9b77f11c526f073936264c6253fbc54474a7cdd8c55b564f5e9ee';
+
+/**
+ * Owner 62 pins, the same four for the coach-free copies (backend consult-consent-v5-coach-free /
+ * v6-coach-free and client-ai-v4-coach-free / v5-coach-free): the whole P0 screen with the app's
+ * coach-free paragraph 4, its paragraph 4 + box 2, the server's coach-free memory paragraph + box 2,
+ * and the whole P0 screen with it.
+ */
+export const CONSENT_COACH_FREE_COPY_SHA256 = 'c56fc409ca188fdcd8a7f52209d72299e3bf19ea68bff0e01b35b1f3295826b5';
+export const AI_CONSENT_COACH_FREE_COPY_SHA256 = '2a8c7973ba6047b58a0fdccb2604a796403d5b4773a6f6a73c98da3d84e68447';
+export const AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256 = 'c7cd7ebd3b47e3eb0e890a8efa932610c35716aa79ad4f139b6f0c0aad7128fe';
+export const CONSENT_COACH_FREE_MEMORY_COPY_SHA256 = 'a1769134cf30a3208ef56a8906603d942fb2ca058db9c33c69f4ff14f223ee00';
+
+/**
+ * The P0 screen a client sees (owner 62: coach-free for a client with no coach) and what its record
+ * names: `version` / `sha256` with this build's paragraph 4, `memoryVersion` / `memorySha256` when box 2
+ * shows the server's memory paragraph.
+ */
+export function consentScreenCopy(coachFree: boolean) {
+  return coachFree
+    ? {
+        paragraphs: CONSENT_PARAGRAPHS_COACH_FREE,
+        box1Label: CONSENT_CHECKBOX_LABEL_COACH_FREE,
+        aiParagraph: AI_CONSENT_PARAGRAPH_COACH_FREE,
+        box2Label: AI_CONSENT_CHECKBOX_LABEL_COACH_FREE,
+        version: CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+        sha256: CONSENT_COACH_FREE_COPY_SHA256,
+        memoryVersion: CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+        memorySha256: CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
+      }
+    : {
+        paragraphs: CONSENT_PARAGRAPHS,
+        box1Label: CONSENT_CHECKBOX_LABEL,
+        aiParagraph: AI_CONSENT_PARAGRAPH,
+        box2Label: AI_CONSENT_CHECKBOX_LABEL,
+        version: CONSULT_CONSENT_COPY_VERSION,
+        sha256: CONSENT_COPY_SHA256,
+        memoryVersion: CONSULT_CONSENT_MEMORY_COPY_VERSION,
+        memorySha256: CONSENT_MEMORY_COPY_SHA256,
+      };
+}
 
 /** P8: general guidance and a safe next step, then the physician line. */
 export const P8_COPY = {

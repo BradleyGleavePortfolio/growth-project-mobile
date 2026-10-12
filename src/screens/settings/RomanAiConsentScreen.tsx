@@ -53,12 +53,13 @@ import {
   pinnedMemoryCopy,
   readAiWithdrawalPending,
   romanBox2MemoryCopyOf,
+  romanFamily,
+  romanFamilyOf,
   romanGrantBody,
   withdrawAiChoiceAs,
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
-import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH, SUPPORT_EMAIL } from '../../lib/consultation/copy';
-import { AI_CONSENT_MEMORY_VERSION, AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
+import { SUPPORT_EMAIL } from '../../lib/consultation/copy';
 import { reportUnexpected } from '../../lib/consultation/report';
 import { shortReference } from '../../utils/correlation';
 import { logger } from '../../utils/logger';
@@ -127,10 +128,14 @@ export const ROMAN_AI_COPY = {
   stateOff: 'Roman is off. Your past conversations stay until you delete them.',
 } as const;
 
+// Owner 62: every check below uses the copies the server answered with (romanFamilyOf): coach-free
+// (client-ai-v4-coach-free / v5-coach-free) for a client with no coach, otherwise client-ai-v4 / v5.
+
 /** The server's v5 paragraph for a live client-ai-v5 (memory) grant, or null. */
 function memoryParagraphOf(status: AiConsentStatusResponse): string | null {
   const c = status.copy;
-  if (status.current_version !== AI_CONSENT_MEMORY_VERSION || c?.version !== AI_CONSENT_MEMORY_VERSION) return null;
+  const v = romanFamilyOf(status).memoryVersion;
+  if (status.current_version !== v || c?.version !== v) return null;
   const text = c.paragraph?.text;
   return text && text.trim() ? text : null;
 }
@@ -141,7 +146,7 @@ export function isMemoryAllowed(status: AiConsentStatusResponse): boolean {
     status.state === 'granted' &&
     status.granted === true &&
     !status.needs_reconsent &&
-    status.version === AI_CONSENT_MEMORY_VERSION &&
+    status.version === romanFamilyOf(status).memoryVersion &&
     memoryParagraphOf(status) !== null
   );
 }
@@ -153,9 +158,10 @@ export function isMemoryAllowed(status: AiConsentStatusResponse): boolean {
  */
 export function choiceOf(status: AiConsentStatusResponse): { choice: RomanAiChoice; withdrawable: boolean } {
   const latestIsGrant = status.state === 'granted' || status.state === 'needs_reconsent';
+  const base = romanFamilyOf(status).baseVersion;
   if (isMemoryAllowed(status)) return { choice: 'allowed', withdrawable: true };
-  if (status.current_version !== AI_CONSENT_VERSION) return { choice: 'update_app', withdrawable: latestIsGrant };
-  if (status.state === 'granted' && status.granted && status.version === AI_CONSENT_VERSION) {
+  if (status.current_version !== base) return { choice: 'update_app', withdrawable: latestIsGrant };
+  if (status.state === 'granted' && status.granted && status.version === base) {
     return { choice: 'allowed', withdrawable: true };
   }
   if (latestIsGrant) return { choice: 'reconsent', withdrawable: true };
@@ -172,16 +178,17 @@ export function memorySwitchOf(
   status: AiConsentStatusResponse,
 ): { on: boolean; onCopy: AiConsentUpgradeCopy | null } | null {
   if (isMemoryAllowed(status)) return { on: true, onCopy: null };
-  const liveV4 = choiceOf(status).choice === 'allowed' && status.version === AI_CONSENT_VERSION;
+  const family = romanFamilyOf(status);
+  const liveV4 = choiceOf(status).choice === 'allowed' && status.version === family.baseVersion;
   if (!liveV4 || status.memory_on !== true) return null;
-  const onCopy = pinnedMemoryCopy(status.memory_copy) ?? pinnedMemoryCopy(status.upgrade);
+  const onCopy = pinnedMemoryCopy(status.memory_copy, family) ?? pinnedMemoryCopy(status.upgrade, family);
   return onCopy ? { on: false, onCopy } : null;
 }
 
 /** What Allow grants (not allowed / reconsent): the server's v5 copy while memory is on, else null (v4). */
 export function allowCopyOf(status: AiConsentStatusResponse): AiConsentUpgradeCopy | null {
   const { choice } = choiceOf(status);
-  return choice === 'not_allowed' || choice === 'reconsent' ? romanBox2MemoryCopyOf(status) : null;
+  return choice === 'not_allowed' || choice === 'reconsent' ? romanBox2MemoryCopyOf(status, romanFamilyOf(status)) : null;
 }
 
 /** The heading: "Allowed" only for a live server grant (C-310-2). */
@@ -228,6 +235,9 @@ export default function RomanAiConsentScreen({
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // Owner 62: a client with no coach is offered the coach-free copies.
+  const cachedUser = readUserCacheSync();
+  const coachless = Boolean(cachedUser?.id && !cachedUser.coach_id);
   const [view, setView] = useState<View_>({ phase: 'loading' });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -253,20 +263,24 @@ export default function RomanAiConsentScreen({
       if (stale()) return;
       setPendingWithdraw(false);
     }
-    const out = await api.getStatus();
+    const out = coachless ? await api.getStatus({ coachFree: true }) : await api.getStatus();
     if (stale()) return;
     if (out.kind === 'ok' && out.status) {
       const c = out.status.copy;
+      const f = romanFamilyOf(out.status);
       // C-9: the server copy for this version must be the text shown here.
       const differs =
-        c?.version === AI_CONSENT_VERSION &&
-        ((!!c.sha256 && c.sha256.toLowerCase() !== AI_CONSENT_COPY_SHA256) ||
-          (!!c.paragraph && c.paragraph.text !== AI_CONSENT_PARAGRAPH) ||
-          (!!c.box_label && c.box_label.text !== AI_CONSENT_CHECKBOX_LABEL));
+        c?.version === f.baseVersion &&
+        ((!!c.sha256 && c.sha256.toLowerCase() !== f.baseSha256) ||
+          (!!c.paragraph && c.paragraph.text !== f.paragraph) ||
+          (!!c.box_label && c.box_label.text !== f.boxLabel));
       if (differs) logger.warn('RomanAiConsent', 'server AI copy differs from the app copy for this version');
     }
     setView(toView(out));
-  }, [api, sessionUserId]);
+  }, [api, coachless, sessionUserId]);
+
+  // The copies on screen: the server's answer, else (while loading) this client's.
+  const family = view.phase === 'ready' ? romanFamilyOf(view.status) : romanFamily(coachless);
 
   useEffect(() => {
     void load();
@@ -286,7 +300,7 @@ export default function RomanAiConsentScreen({
         kind === 'allow'
           ? await grantAiChoiceAs(uid, sessionUserId, () =>
               // The offered copy: its version and the server's sha256 of exactly the text shown.
-              api.grantRoman(romanGrantBody(offer)),
+              api.grantRoman(romanGrantBody(offer, family)),
             )
           : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman());
       if (!mounted.current) return;
@@ -323,11 +337,11 @@ export default function RomanAiConsentScreen({
       await load();
       if (!stale()) setNotice(notice);
     },
-    [api, busy, load, sessionUserId],
+    [api, busy, family, load, sessionUserId],
   );
 
   const confirmAllow = (offer: AiConsentUpgradeCopy | null) =>
-    Alert.alert(ROMAN_AI_COPY.confirmAllowTitle, AI_CONSENT_CHECKBOX_LABEL.replace(/^Optional: /, ''), [
+    Alert.alert(ROMAN_AI_COPY.confirmAllowTitle, family.boxLabel.replace(/^Optional: /, ''), [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
       { text: ROMAN_AI_COPY.allow, onPress: () => void act('allow', offer) },
     ]);
@@ -472,7 +486,7 @@ export default function RomanAiConsentScreen({
         <Text style={styles.body} testID="roman-ai-paragraph">
           {(view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) ||
             (view.phase === 'ready' && allowCopyOf(view.status)?.paragraph.text) ||
-            AI_CONSENT_PARAGRAPH}
+            family.paragraph}
         </Text>
         {renderState()}
         {notice ? (
