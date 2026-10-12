@@ -32,6 +32,7 @@ import { signInWithApple } from '../../utils/appleAuth';
 // way, and a static import lets the Google path be exercised in Jest.
 import { signInWithGoogle } from '../../utils/googleAuth';
 import { setUserCache } from '../../lib/userCache';
+import { openPrivacyPolicyPage, openTermsOfService } from '../../lib/legalLinks';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { getLastKnownSignupPolicy, loadSignupPolicy } from '../../lib/signupPolicy';
 import { profileOnboardingCompleted } from '../../lib/profileOnboarding';
@@ -591,6 +592,30 @@ export default function LoginScreen({ navigation, route }: Props) {
           ) : null}
         </View>
 
+        {/* D28: a first Google or Apple sign-in creates an account, so the
+            sign-up screen's agreement line (B-IOSREV-2) shows here too. */}
+        <Text style={styles.legalText} testID="login-legal">
+          By continuing, you agree to the{' '}
+          <Text
+            style={styles.legalLink}
+            onPress={openTermsOfService}
+            accessibilityRole="link"
+            testID="login-terms-link"
+          >
+            Terms of Service
+          </Text>{' '}
+          and the{' '}
+          <Text
+            style={styles.legalLink}
+            onPress={openPrivacyPolicyPage}
+            accessibilityRole="link"
+            testID="login-privacy-link"
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
+
         {/* C13: role choice is on, so a first provider sign-in would create
             an account before the role question. Ask first. */}
         {pendingProvider ? (
@@ -748,6 +773,8 @@ const makeStyles = (colors: SemanticTokens) =>
     justifyContent: 'center',
   },
   appleSpinner: { position: 'absolute', alignSelf: 'center' },
+  legalText: { ...Typography.bodySmall, color: colors.textMuted, marginTop: Spacing.md },
+  legalLink: { color: colors.accentText, textDecorationLine: 'underline' },
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',
