@@ -8,11 +8,12 @@
  * success haptic plays (docs/HAPTICS.md: data saved). Not now (or Close, or Android back) keeps the
  * coached client's not-allowed behaviour; Settings > Privacy > Roman and AI is where they allow it
  * later. Either way the offer is done and never comes back by itself (lib/romanJoinOffer). A client
- * whose Roman grant is already live is not asked. A client with no coach is never shown it.
+ * whose Roman grant is already live is not asked; when the status does not load, the sheet opens and
+ * shows its own failure and Try again states. A client with no coach is never shown it.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import AiConsentSheet, { type AiConsentSheetApi } from './AiConsentSheet';
-import defaultAiConsentApi from '../../api/aiConsentApi';
+import defaultAiConsentApi, { type AiConsentOutcome } from '../../api/aiConsentApi';
 import { isLiveRomanGrant } from '../../lib/consultation/aiConsent';
 import { finishRomanJoinOffer, romanJoinOfferDue, subscribeRomanJoinOffer } from '../../lib/romanJoinOffer';
 import { readUserCacheSync } from '../../lib/userCache';
@@ -39,19 +40,25 @@ export default function RomanJoinOfferHost({ api = defaultAiConsentApi }: RomanJ
       if (!id) return;
       const user = readUserCacheSync();
       if (user?.id !== id || !user.coach_id) return; // never for a client with no coach
-      const out = await api.getStatus();
+      let out: AiConsentOutcome | null = null;
+      try {
+        out = await api.getStatus();
+      } catch (err) {
+        logger.warn('RomanJoinOffer', 'status read failed', err);
+      }
       if (!live || romanJoinOfferDue() !== id) return;
-      if (out.kind !== 'ok' || !out.status) return; // not read: asked again on the next change or start
-      if (isLiveRomanGrant(out.status)) {
+      if (out?.kind === 'ok' && out.status && isLiveRomanGrant(out.status)) {
         await finishRomanJoinOffer(id);
         return;
       }
+      // Not allowed yet, or the status did not load: the sheet reads it again and shows its own loading,
+      // failure and Try again states, so a failed read never drops the choice.
       setOpenFor(id);
     };
     const sync = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        check().catch((err: unknown) => logger.warn('RomanJoinOffer', 'status read failed', err));
+        check().catch((err: unknown) => logger.warn('RomanJoinOffer', 'offer check failed', err));
       }, ROMAN_JOIN_OFFER_DELAY_MS);
     };
     sync();

@@ -132,6 +132,27 @@ describe('RomanJoinOfferHost (owner 62y2)', () => {
     expect(r.queryByTestId('roman-join-offer')).toBeNull();
   });
 
+  it.each([
+    ['an error', { kind: 'error', status: 500 } as AiConsentOutcome],
+    ['no reply', { kind: 'error', status: null } as AiConsentOutcome],
+  ])('when the first read after the join fails (%s), the sheet still opens; Try again, then Allow, records the grant', async (_l, failed) => {
+    const success = jest.spyOn(HapticService, 'success');
+    const api = makeApi();
+    api.getStatus.mockResolvedValueOnce(failed).mockResolvedValueOnce(failed);
+    const r = await render(<RomanJoinOfferHost api={api} />);
+    await join();
+    await waitFor(() => expect(r.getByTestId('roman-join-offer-try-again')).toBeTruthy());
+    expect(await mark()).toBe('due');
+    await fireEvent.press(r.getByTestId('roman-join-offer-try-again'));
+    await waitFor(() => r.getByTestId('roman-join-offer-allow'));
+    await fireEvent.press(r.getByTestId('roman-join-offer-allow'));
+    await waitFor(() => expect(r.queryByTestId('roman-join-offer')).toBeNull());
+    expect(api.grantRoman).toHaveBeenCalledWith(expect.objectContaining({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 }));
+    expect(success).toHaveBeenCalledTimes(1);
+    await waitFor(async () => expect(await mark()).toBe('done'));
+    success.mockRestore();
+  });
+
   it('a client with no coach is never shown it, and the server is not asked', async () => {
     const api = makeApi();
     mockUser = NO_COACH;
