@@ -75,6 +75,7 @@ import {
 } from '../../../services/health/sessionFence';
 import {
   cloudConnectFailureMessage,
+  cloudFinishFailureMessage,
   cloudReturnFailed,
   cloudReturnedErrorMessage,
   cloudReturnTicket,
@@ -233,8 +234,9 @@ export default function ConnectProviderSheet({
 
   /**
    * A6 (AUTHB-05): finish a returned cloud link with its single-use ticket.
-   * Success closes the sheet with a success haptic; a refused, expired or
-   * failed ticket keeps it open with the failed-return copy and Continue.
+   * Success closes the sheet with a success haptic; a refused or expired
+   * ticket keeps it open with the failed-return copy and Continue, and any
+   * other failure with the cloud connect copy for its status.
    */
   const finishReturn = useCallback(
     async (ticket: string, target: WearableProvider) => {
@@ -252,9 +254,9 @@ export default function ConnectProviderSheet({
         emitTutorialSignal('wearable_connected');
         onConnected?.();
         onClose();
-      } catch {
+      } catch (err) {
         invalidate();
-        if (current()) showMessage(cloudReturnedErrorMessage(configFor(target).displayName));
+        if (current()) showMessage(cloudFinishFailureMessage(err, configFor(target).displayName));
       } finally {
         if (current()) setFinishing(false);
       }
