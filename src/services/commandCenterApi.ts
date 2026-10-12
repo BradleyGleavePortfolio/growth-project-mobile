@@ -93,10 +93,26 @@ export interface ActionQueueItem {
     | 'no_message_exchange'
     | 'high_churn_risk'
     | 'build_week_gate'
-    | 'bloodwork_review';
+    | 'bloodwork_review'
+    | 'roman_urgent_reply'
+    | 'roman_eating_disorder_reply';
   message: string;          // plain English, generated server-side
   created_at: string;
   dismissed_at: string | null;
+  /**
+   * Roman safety alerts only (backend B-R1F): the client's message behind the
+   * alert, in full, and when they sent it. Null once the client deleted it.
+   */
+  quote?: string | null;
+  sent_at?: string | null;
+}
+
+export type SafetyAlertType = 'roman_urgent_reply' | 'roman_eating_disorder_reply';
+
+export function isSafetyAlert(
+  item: ActionQueueItem,
+): item is ActionQueueItem & { alert_type: SafetyAlertType } {
+  return item.alert_type === 'roman_urgent_reply' || item.alert_type === 'roman_eating_disorder_reply';
 }
 
 export interface ActionQueueResponse {
