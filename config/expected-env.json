@@ -236,6 +236,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_TEAM_MODE": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "TeamStack and Coach Brief team navigation stay hidden for launch; off in every EAS build profile."
+    },
     "EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF": {
       "kind": "flag",
       "default": "on in dev, off in release",
