@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { logApi, weightApi } from '../../services/api';
 import { parseWeightLogRow, weightHistoryRows } from './progress/weightHistory';
 import { WeightLog } from '../../types';
@@ -27,6 +28,10 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
+  // Same source as Home and Food Log: the server's target (with its floor and
+  // holds) wins; the profile's saved number is the fallback when none exists.
+  const macroTargets = useMacroTargets();
+  const calorieTarget = macroTargets?.calories ?? currentUser?.profile?.calorie_target;
   const [weeklyWeights, setWeeklyWeights] = useState<WeightLog[]>([]);
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   // Until today's log has been read the totals are unknown, not zero.
@@ -136,11 +141,11 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
             <MacroBox label="Carbs" value={macrosRead ? `${Math.round(todayMacros.carbs)}` : '--'} unit="g" />
             <MacroBox label="Fat" value={macrosRead ? `${Math.round(todayMacros.fat)}` : '--'} unit="g" />
           </View>
-          {currentUser?.profile?.calorie_target && (
+          {calorieTarget ? (
             <Text style={styles.targetHint}>
-              Target: {currentUser.profile.calorie_target} kcal / day
+              Target: {calorieTarget} kcal / day
             </Text>
-          )}
+          ) : null}
         </View>
 
         {/* Weekly Progress */}

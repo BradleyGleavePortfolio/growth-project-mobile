@@ -17,8 +17,11 @@ jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: jest.requireActual('../constants/colors').default, semanticColors: jest.requireActual('../theme/tokens').lightTokens }),
 }));
 jest.mock('../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'u1', firstName: 'Ada', profile: { current_weight: 180, calorie_target: 2000, primary_goal: 'maintain' } }),
+  useCurrentUser: () => ({ id: 'u1', firstName: 'Ada', profile: { current_weight: 180, calorie_target: 1600, primary_goal: 'maintain' } }),
 }));
+// R5m: the server's target (R4 floor, R5 holds) as on Home and Food Log.
+let mockServerTargets: { calories: number; protein: number; carbs: number; fat: number } | null = null;
+jest.mock('../hooks/useMacroTargets', () => ({ useMacroTargets: () => mockServerTargets }));
 jest.mock('../services/api', () => ({
   logApi: { getDaily: jest.fn() },
   weightApi: { getHistory: jest.fn() },
@@ -34,6 +37,7 @@ const mount = (d: (typeof DEVICES)[number]) => render(
 );
 
 beforeEach(() => {
+  mockServerTargets = null;
   jest.mocked(weightApi.getHistory).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof weightApi.getHistory>>);
 });
 
@@ -55,6 +59,20 @@ it('shows -- for today, not zero, when the food log cannot be read', async () =>
   await waitFor(() => expect(logApi.getDaily).toHaveBeenCalled());
   await waitFor(() => expect(s.getAllByText('--').length).toBeGreaterThanOrEqual(4));
   expect(s.queryByText('0')).toBeNull();
+});
+
+it('shows the server calorie target over the locally saved one', async () => {
+  mockServerTargets = { calories: 2000, protein: 150, carbs: 200, fat: 60 };
+  jest.mocked(logApi.getDaily).mockResolvedValue({ data: { entries: [] } } as Awaited<ReturnType<typeof logApi.getDaily>>);
+  const s = await mount(DEVICES[0]);
+  await waitFor(() => expect(s.getByText('Target: 2000 kcal / day')).toBeTruthy());
+  expect(s.queryByText('Target: 1600 kcal / day')).toBeNull();
+});
+
+it('keeps the saved calorie target when the server has none', async () => {
+  jest.mocked(logApi.getDaily).mockResolvedValue({ data: { entries: [] } } as Awaited<ReturnType<typeof logApi.getDaily>>);
+  const s = await mount(DEVICES[0]);
+  await waitFor(() => expect(s.getByText('Target: 1600 kcal / day')).toBeTruthy());
 });
 
 it('uses the rounded tokens only and the shared wrapper', () => {
