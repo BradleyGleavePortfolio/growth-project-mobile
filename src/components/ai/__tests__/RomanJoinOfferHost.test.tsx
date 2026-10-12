@@ -7,7 +7,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RomanJoinOfferHost from '../RomanJoinOfferHost';
-import type { AiConsentSheetApi } from '../AiConsentSheet';
+import { AI_CONSENT_SHEET_COPY, type AiConsentSheetApi } from '../AiConsentSheet';
 import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
 import { isLiveRomanGrant, resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
 import {
@@ -72,7 +72,7 @@ beforeEach(async () => {
 });
 
 describe('RomanJoinOfferHost (owner 62y2)', () => {
-  it('opens the existing sheet with the coached paragraph and box after a join', async () => {
+  it('opens the existing sheet as "Roman and AI" with the coached paragraph and box, "Allow" and "Not now", after a join', async () => {
     const api = makeApi();
     const r = await render(<RomanJoinOfferHost api={api} />);
     expect(r.queryByTestId('roman-join-offer')).toBeNull();
@@ -82,6 +82,14 @@ describe('RomanJoinOfferHost (owner 62y2)', () => {
     expect(r.getByText(AI_CONSENT_CHECKBOX_LABEL)).toBeTruthy();
     expect(r.getByTestId('roman-join-offer-not-now')).toBeTruthy();
     expect(api.getStatus).toHaveBeenCalledWith();
+    // Owner 62y2 option 1: titled "Roman and AI", with "Allow" and "Not now".
+    expect(AI_CONSENT_SHEET_COPY.afterJoinTitle).toBe('Roman and AI');
+    expect(AI_CONSENT_SHEET_COPY.afterJoinAllow).toBe('Allow');
+    expect(AI_CONSENT_SHEET_COPY.notNow).toBe('Not now');
+    expect(r.getAllByText('Roman and AI').length).toBeGreaterThan(0);
+    expect(r.getByText('Allow')).toBeTruthy();
+    expect(r.getByText('Not now')).toBeTruthy();
+    expect(r.queryByText(AI_CONSENT_SHEET_COPY.title)).toBeNull();
   });
 
   it('Allow records client-ai-v6, Roman is on at once, a success haptic plays, and it is done', async () => {

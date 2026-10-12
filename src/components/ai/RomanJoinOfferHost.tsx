@@ -1,7 +1,8 @@
 /**
  * RomanJoinOfferHost (owner 62y2): right after a client with no coach joins a coach, the existing
- * AiConsentSheet opens once with the coached Roman paragraph and optional box (the server's coached
- * copy, client-ai-v6 / v7). Mounted once beside the client tabs (with JoinPackageHost), it waits until
+ * AiConsentSheet opens once as "Roman and AI" with "Allow" and "Not now" (`variant="afterJoin"`, the
+ * owner's option 1 words) and the coached Roman paragraph and optional box (the server's coached copy,
+ * client-ai-v6 / v7). Mounted once beside the client tabs (with JoinPackageHost), it waits until
  * the coach-code and package sheets have closed (`useRomanJoinOfferHold`).
  *
  * Allow records the coached version on the server (the sheet's own grant), Roman is on at once, and a
@@ -84,6 +85,7 @@ export default function RomanJoinOfferHost({ api = defaultAiConsentApi }: RomanJ
   return (
     <AiConsentSheet
       visible
+      variant="afterJoin"
       api={api}
       onGranted={granted}
       onClose={done}
