@@ -31,7 +31,10 @@ const UNCOVERED = {
   'expo-eas-client': { UserDefaults: 'CA92.1' }, // ios/EASClient/EASClientID.swift:10
   'expo-sharing': { UserDefaults: 'CA92.1' }, // ios/SharingModule.swift:95, app-group suite unused (no app group)
   // vendor/sqlite3/sqlite3.c (compiled into the pod): fstat/stat on the app's own
-  // database files, and fstatfs on open (line 45304) to read the volume type.
+  // database files, and fstatfs on open (line 45304) to read the volume type so it
+  // knows how to write the file. E174.1 is the only DiskSpace reason this use can
+  // meet (85F4.1 shows space to the user, 7D9E.1 is a bug report, B728.1 is a
+  // health-research-only app); SQLCipher ships E174.1 for the same code.
   'expo-sqlite': { FileTimestamp: 'C617.1', DiskSpace: 'E174.1' },
   'expo-updates': { UserDefaults: 'CA92.1' }, // ios/EXUpdates/UpdatesConfigOverride.swift:15
   'expo-video': { UserDefaults: 'CA92.1', FileTimestamp: 'C617.1' }, // ios/Cache/VideoCacheManager.swift:11,173
@@ -98,6 +101,16 @@ describe('M4a: iOS privacy manifest', () => {
     }
   });
 
+  test('the only SQLite disk-space call built for iOS is the fstatfs volume-type check', () => {
+    const dir = path.join(NM, 'expo-sqlite');
+    expect(fs.readFileSync(path.join(dir, 'ios/ExpoSQLite.podspec'), 'utf8')).toContain('-DSQLITE_ENABLE_LOCKING_STYLE=0');
+    const src = fs.readFileSync(path.join(dir, 'vendor/sqlite3/sqlite3.c'), 'utf8');
+    expect(src).toContain(
+      '#if defined(__APPLE__) || SQLITE_ENABLE_LOCKING_STYLE\n  if( fstatfs(fd, &fsInfo) == -1 ){',
+    );
+    expect(src).not.toMatch(/f_bavail|f_bfree/); // never reads free space
+  });
+
   test('no tracking and no tracking domains', () => {
     expect(manifest.NSPrivacyTracking).toBe(false);
     expect(manifest.NSPrivacyTrackingDomains).toEqual([]);
@@ -118,6 +131,9 @@ describe('M4a: iOS privacy manifest', () => {
     ['CrashData', ['AppFunctionality'], 'src/services/sentry.ts', 'enableNative: true'],
     ['PerformanceData', ['AppFunctionality'], 'src/services/sentry.ts', 'tracesSampleRate:'],
     ['ProductInteraction', ['Analytics'], 'src/lib/analytics.ts', 'getClient()?.capture(event'],
+    // Pregnancy or childbirth answer in the consultation (on in production, eas.json).
+    ['SensitiveInfo', ['AppFunctionality'], 'src/lib/consultation/definitions.ts', 'Are you currently pregnant, or have you given birth in the last 6 months?'],
+    ['PurchaseHistory', ['AppFunctionality'], 'src/lib/packagePayment.ts', 'export const PAYMENT_INTENT_PATH = "/v1/checkout/payment-intent"'],
   ];
 
   test('collected data types match the code that collects them, linked to the account, never tracking', () => {
