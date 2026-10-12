@@ -44,6 +44,10 @@ Copy is the contract copy v2 (approved by the owner 2026-10-01 09:07), verbatim 
 
 Coach-free (owner 62, Option 1): a client with no coach (`coachless`, no `coach_id`) sees the same screen with every coach sentence or clause removed and no new words (`consentScreenCopy(true)`; one grammar join: "collects and uses"). P0 records `consult-consent-v5-coach-free` (or `v6-coach-free`), box 2 grants `client-ai-v4-coach-free` (or `client-ai-v5-coach-free` with memory), and the flow, Settings > Roman and AI and the AI consent sheet read `GET /me/ai-consent?variant=coach_free`. Each pin equals the backend's.
 
+Owner 57c (Option 1): paragraph 4 for a client with a coach adds the privacy page's exception sentence ("One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you."). P0 records `consult-consent-v7` (or `v8` with the memory paragraph), box 2 grants `client-ai-v6` (or `client-ai-v7`), and the app reads `GET /me/ai-consent?variant=safety_exception`. A live `client-ai-v4` / `v5` grant keeps being read with its own copies.
+
+Owner 62y2 (Option 1): a client with no coach has no paragraph 4 and no box 2, and the footer is "Nothing is sent until you continue." (`consult-consent-v7-coach-free`). The flow makes no AI consent ledger call for them; a yes kept on the device from an earlier build is dropped, a kept no still withdraws.
+
 - **Box 1 (required).** The training waiver, and The Growth Project and the coach collecting and using the client's information to coach them. Continue stays disabled until it is ticked. It is recorded by the intake only.
 - **Box 2 (optional, unticked by default).** Roman and the coach's AI tools may use the client's information, processed by Anthropic. It never gates anything: onboarding, plan assignment, coach messaging, community, wearables, Roman's scripted tour, the welcome message and reminders all work with it unticked.
 

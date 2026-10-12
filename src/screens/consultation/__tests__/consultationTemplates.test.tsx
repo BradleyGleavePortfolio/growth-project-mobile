@@ -185,7 +185,8 @@ describe('aiConsentApi (backend #622: GET /me/ai-consent, POST and DELETE /me/ai
   it('uses the contract routes and body, and parses the #622 status', async () => {
     mockGet.mockResolvedValueOnce({ status: 200, data: body() });
     const got = await aiConsentApi.getStatus();
-    expect(mockGet).toHaveBeenLastCalledWith('/me/ai-consent');
+    // Owner 57c: the coached copies with the safety-reply exception (client-ai-v6 / v7).
+    expect(mockGet).toHaveBeenLastCalledWith('/me/ai-consent', { params: { variant: 'safety_exception' } });
     expect(got).toMatchObject({
       kind: 'ok',
       status: { granted: true, state: 'granted', version: 'client-ai-v4', copy: { sha256: 'c'.repeat(64), paragraph: { text: 'p' } } },

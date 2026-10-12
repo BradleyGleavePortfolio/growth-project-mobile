@@ -28,6 +28,11 @@
  * there is no control that deletes them. Until #845 is live, production deletes them on memory off, so
  * the off copy says neither "deleted" nor "kept": it is true on both.
  *
+ * Owner 62x (2026-10-12): a client with no coach has no access to Roman. The screen shows only that
+ * sentence and "Your conversations with Roman", the existing list where prior chats are deleted (its
+ * own empty state when there are none). No Allow, Withdraw or memory control, and no ledger read; the
+ * server refuses a grant from a client with no coach (403 ROMAN_REQUIRES_COACH).
+ *
  * Prototype 74 (ROMAN-ROOM-133, presentation only): the shared src/ui Screen (real insets, so Android
  * clears the status bar), a "Privacy" overline over the serif title, Roman's portrait beside a one-line
  * on/off state, and rounded radius tokens. The consent wording, choices and ledger writes are unchanged.
@@ -126,10 +131,12 @@ export const ROMAN_AI_COPY = {
   stateOn:
     'Roman is on. Turning Roman off stops sending your data to Anthropic. Your past conversations stay until you delete them.',
   stateOff: 'Roman is off. Your past conversations stay until you delete them.',
+  // Owner 62x, verbatim: a client with no coach.
+  noAccess: 'You have no access to Roman, but may delete prior data here.',
 } as const;
 
-// Owner 62: every check below uses the copies the server answered with (romanFamilyOf): coach-free
-// (client-ai-v4-coach-free / v5-coach-free) for a client with no coach, otherwise client-ai-v4 / v5.
+// Every check below uses the copies the server answered with (romanFamilyOf): client-ai-v6 / v7
+// (owner 57c), client-ai-v4 / v5 for a live grant of them, coach-free for one recorded before 62y2.
 
 /** The server's v5 paragraph for a live client-ai-v5 (memory) grant, or null. */
 function memoryParagraphOf(status: AiConsentStatusResponse): string | null {
@@ -235,7 +242,7 @@ export default function RomanAiConsentScreen({
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  // Owner 62: a client with no coach is offered the coach-free copies.
+  // Owner 62x: a client with no coach has no access to Roman (no ledger read, no controls).
   const cachedUser = readUserCacheSync();
   const coachless = Boolean(cachedUser?.id && !cachedUser.coach_id);
   const [view, setView] = useState<View_>({ phase: 'loading' });
@@ -263,7 +270,7 @@ export default function RomanAiConsentScreen({
       if (stale()) return;
       setPendingWithdraw(false);
     }
-    const out = coachless ? await api.getStatus({ coachFree: true }) : await api.getStatus();
+    const out = await api.getStatus();
     if (stale()) return;
     if (out.kind === 'ok' && out.status) {
       const c = out.status.copy;
@@ -277,14 +284,14 @@ export default function RomanAiConsentScreen({
       if (differs) logger.warn('RomanAiConsent', 'server AI copy differs from the app copy for this version');
     }
     setView(toView(out));
-  }, [api, coachless, sessionUserId]);
+  }, [api, sessionUserId]);
 
-  // The copies on screen: the server's answer, else (while loading) this client's.
-  const family = view.phase === 'ready' ? romanFamilyOf(view.status) : romanFamily(coachless);
+  // The copies on screen: the server's answer, else (while loading) this build's.
+  const family = view.phase === 'ready' ? romanFamilyOf(view.status) : romanFamily(false);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!coachless) void load();
+  }, [coachless, load]);
 
   const act = useCallback(
     async (kind: 'allow' | 'withdraw', offer: AiConsentUpgradeCopy | null = null, doneNotice: string | null = null) => {
@@ -363,13 +370,14 @@ export default function RomanAiConsentScreen({
       { text: ROMAN_AI_COPY.withdraw, style: 'destructive', onPress: () => void act('withdraw') },
     ]);
 
-  const button = (label: string, onPress: () => void, testID: string, quiet = false) => (
+  const button = (label: string, onPress: () => void, testID: string, quiet = false, hint?: string) => (
     <HapticPressable
       intent="light"
       onPress={onPress}
       disabled={busy}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={hint}
       accessibilityState={{ disabled: busy, busy }}
       style={[quiet ? styles.buttonQuiet : styles.button, busy && styles.disabled]}
       testID={testID}
@@ -475,6 +483,23 @@ export default function RomanAiConsentScreen({
     );
   }
 
+  const openChats = () => navigation.navigate('RomanConversations');
+
+  if (coachless) {
+    // Owner 62x: the sentence and one way to the existing list of prior chats, which has its delete
+    // actions and its own empty state. The one action, so the one filled button.
+    return (
+      <View style={styles.container} testID="roman-ai-screen" ph-no-capture>
+        <Screen edges={['top']} header={<ScreenTopBar onBack={() => navigation.goBack()} />} contentStyle={styles.content}>
+          <Overline>{ROMAN_AI_COPY.overline}</Overline>
+          <Headline level="h1">{ROMAN_AI_COPY.title}</Headline>
+          <Text style={styles.body} testID="roman-ai-no-access">{ROMAN_AI_COPY.noAccess}</Text>
+          {button(ROMAN_CHATS_COPY.entryLabel, openChats, 'roman-ai-conversations', false, ROMAN_CHATS_COPY.entryHint)}
+        </Screen>
+      </View>
+    );
+  }
+
   return (
     // C-310-4: excluded from analytics autocapture, so the Allow / Withdraw
     // choice never reaches product analytics.
@@ -494,7 +519,7 @@ export default function RomanAiConsentScreen({
         ) : null}
         {/* Owner 10-01 20:32 + OR-110-1: chats are kept until the client deletes
             them or their account, so they can be found and deleted here. */}
-        {button(ROMAN_CHATS_COPY.entryLabel, () => navigation.navigate('RomanConversations'), 'roman-ai-conversations', true)}
+        {button(ROMAN_CHATS_COPY.entryLabel, openChats, 'roman-ai-conversations', true)}
         <View style={styles.divider} />
         <Text style={styles.caption} testID="roman-ai-account-line">{ROMAN_AI_COPY.accountLine}</Text>
         {button(ROMAN_AI_COPY.deleteAccount, () => navigation.navigate('DeleteAccount'), 'roman-ai-delete-account', true)}

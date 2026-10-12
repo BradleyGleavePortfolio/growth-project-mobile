@@ -46,13 +46,14 @@ jest.mock('../../../services/queryClient', () => ({
   purgePersistedQueryCacheForAllUsers: jest.fn(async () => undefined),
 }));
 
-// Owner-approved client-ai-v5 paragraph (D1, 2026-10-06 12:01), as the server sends it. Verbatim.
+// Owner-approved client-ai-v5 paragraph (D1, 2026-10-06 12:01) with the owner 57c exception: the server's
+// client-ai-v7 paragraph, as it sends it. Verbatim.
 const V5_PARAGRAPH =
-  "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Roman may keep notes and summaries about your training, preferences and circumstances to personalise his replies. Deleting a chat removes its messages but not these notes; deleting your account removes them. Roman may also learn your coach's methods, including from your coach's private session notes, and information about your training may help with that without identifying you. Roman never quotes those notes or shows you another client's information. Your coach never sees your conversations with Roman or his notes about you. Your conversations with Roman are kept until you delete them or delete your account.";
+  "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Roman may keep notes and summaries about your training, preferences and circumstances to personalise his replies. Deleting a chat removes its messages but not these notes; deleting your account removes them. Roman may also learn your coach's methods, including from your coach's private session notes, and information about your training may help with that without identifying you. Roman never quotes those notes or shows you another client's information. Your coach never sees your conversations with Roman or his notes about you. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you. Your conversations with Roman are kept until you delete them or delete your account.";
 const sha = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
 
 const V5_COPY: AiConsentUpgradeCopy = {
-  version: 'client-ai-v5',
+  version: 'client-ai-v7',
   paragraph: { text: V5_PARAGRAPH, sha256: sha(V5_PARAGRAPH) },
   box_label: { text: AI_CONSENT_CHECKBOX_LABEL, sha256: sha(AI_CONSENT_CHECKBOX_LABEL) },
   sha256: AI_CONSENT_MEMORY_COPY_SHA256,
@@ -62,8 +63,8 @@ const memoryOn = (over: Partial<AiConsentStatusResponse> = {}) =>
 const V5_HOLDER = aiStatus({
   granted: true,
   state: 'granted',
-  version: 'client-ai-v5',
-  current_version: 'client-ai-v5',
+  version: 'client-ai-v7',
+  current_version: 'client-ai-v7',
   copy: { ...V5_COPY, processor: 'anthropic' },
   scope: 'memory',
   memory_on: true,
@@ -127,14 +128,14 @@ describe('box 2 shows and grants client-ai-v5 while the server says Roman memory
     await tickBothAndContinue(r);
     await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
     expect(api.grantRomanConsent).toHaveBeenCalledWith({
-      version: 'client-ai-v5',
+      version: 'client-ai-v7',
       copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256,
       platform: 'ios',
     });
     const first = api.save.mock.calls[0][0];
     expect(first.answers.P0).toMatchObject({
       agreed: true,
-      copy_version: 'consult-consent-v6',
+      copy_version: 'consult-consent-v8',
       text_sha256: CONSENT_MEMORY_COPY_SHA256,
     });
     expect(isConsentAnswerCurrent(first.answers.P0)).toBe(true);
@@ -166,12 +167,12 @@ describe("otherwise today's pinned v4 exactly", () => {
     expect(paragraph(r)).toBe(AI_CONSENT_PARAGRAPH);
     await tickBothAndContinue(r);
     await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
-    expect(api.grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
-    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ copy_version: 'consult-consent-v5', text_sha256: CONSENT_COPY_SHA256 });
+    expect(api.grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ copy_version: 'consult-consent-v7', text_sha256: CONSENT_COPY_SHA256 });
   });
 
   it('a malformed memory_copy body parses to null', () => {
-    const s = parseStatus({ ...memoryOn(), memory_copy: { version: 'client-ai-v5', sha256: AI_CONSENT_MEMORY_COPY_SHA256 } });
+    const s = parseStatus({ ...memoryOn(), memory_copy: { version: 'client-ai-v7', sha256: AI_CONSENT_MEMORY_COPY_SHA256 } });
     expect(s?.memory_copy).toBeNull();
     expect(romanBox2MemoryCopyOf(s)).toBeNull();
     expect(parseStatus({ ...memoryOn() })?.memory_copy).toEqual(V5_COPY);
@@ -196,6 +197,6 @@ describe('existing holders', () => {
     await waitFor(() => expect(aiBox(r)).toBe(true));
     expect(paragraph(r)).toBe(V5_PARAGRAPH);
     expect(isLiveRomanGrant(V5_HOLDER)).toBe(true);
-    expect(romanGrantBody(romanBox2MemoryCopyOf(V5_HOLDER))).toMatchObject({ version: 'client-ai-v5', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256 });
+    expect(romanGrantBody(romanBox2MemoryCopyOf(V5_HOLDER))).toMatchObject({ version: 'client-ai-v7', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256 });
   });
 });

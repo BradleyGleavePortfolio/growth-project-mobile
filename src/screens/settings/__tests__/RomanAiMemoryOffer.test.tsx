@@ -19,7 +19,13 @@ import RomanAiConsentScreen, {
   ROMAN_AI_COPY,
 } from '../RomanAiConsentScreen';
 import { parseStatus, type AiConsentOutcome, type AiConsentStatusResponse } from '../../../api/aiConsentApi';
-import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
+// A server (or a live grant) of the client-ai-v4 / v5 generation, before owner 57c: the app reads and
+// grants it with its own copies (see RomanAiConsent57c.test.tsx for client-ai-v6 / v7).
+import {
+  AI_CONSENT_CHECKBOX_LABEL,
+  AI_CONSENT_PRE57C_COPY_SHA256 as AI_CONSENT_COPY_SHA256,
+  AI_CONSENT_PARAGRAPH_PRE57C as AI_CONSENT_PARAGRAPH,
+} from '../../../lib/consultation/copy';
 import { resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));

@@ -76,6 +76,10 @@ Coverage:
 
 Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).
 
+### RomanAiConsentScreen: client with no coach (owner 62x)
+
+A client with no coach has no access to Roman. The screen shows the overline and title, the owner's sentence "You have no access to Roman, but may delete prior data here.", and one filled button, "Your conversations with Roman", which opens `RomanConversationsScreen` (its delete actions, and its empty state when there is nothing). No Allow, Withdraw or memory control and no `GET /me/ai-consent`; the server answers a grant from a client with no coach with 403 `ROMAN_REQUIRES_COACH`. Owner 57c: for a client with a coach the paragraph is `client-ai-v6` / `v7` (the safety-reply exception), read with `?variant=safety_exception`.
+
 ### RomanAiConsentScreen: prototype 74 look
 
 Built on the shared `src/ui` `Screen` (`edges={['top']}`, real insets, so Android clears the status bar; it sits in the More stack above the tab bar) with `ScreenTopBar` Back, a "Privacy" overline and the serif title "Roman and AI". When the choice has loaded, Roman's portrait sits beside one state line: "Roman is on. ..." exactly when the heading says Allowed (a live server grant), otherwise "Roman is off. ...". The card uses `radius.card` and a hairline, the buttons `radius.button`. Presentation only (ROMAN-ROOM-133): the consent paragraph, choices, confirmations and ledger writes are unchanged.
