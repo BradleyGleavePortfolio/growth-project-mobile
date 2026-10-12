@@ -12,9 +12,11 @@ export interface MacroTargetDraft {
 
 type NumberField = Exclude<keyof MacroTargetDraft, 'notes'>;
 
-// Same limits as the server's CreateMacroTargetDto (backend src/macros/macros.dto.ts).
+// Same limits as the server's CreateMacroTargetDto (backend src/macros/macros.dto.ts). The calorie
+// minimum is the lowest client floor (1,200 women); the server rejects 1,200-1,499 for men or an
+// unrecorded sex (backend src/macros/calorie-floor.ts) and its message is shown on save.
 export const MACRO_TARGET_LIMITS: Record<NumberField, { label: string; min: number; max: number; unit: string }> = {
-  calories: { label: 'Calories', min: 800, max: 7000, unit: 'kcal' },
+  calories: { label: 'Calories', min: 1200, max: 7000, unit: 'kcal' },
   protein: { label: 'Protein', min: 0, max: 500, unit: 'g' },
   carbs: { label: 'Carbs', min: 0, max: 900, unit: 'g' },
   fat: { label: 'Fat', min: 0, max: 400, unit: 'g' },
@@ -94,6 +96,10 @@ export function macroTargetSaveError(err: unknown): string {
     return 'This client is not on your roster. Return to Clients and open a current client.';
   }
   if (status === 400) {
+    // The server's floor rejection is a plain sentence ("Calorie targets can't go below 1,500 for
+    // this client."); DTO validation sends an array of field codes, which keeps the copy below.
+    const serverMessage = (err as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+    if (typeof serverMessage === 'string' && serverMessage.trim() !== '') return serverMessage.trim();
     return 'The server did not accept these numbers. Calories 800 to 7000 kcal, protein up to 500 g, carbs up to 900 g, fat up to 400 g.';
   }
   if (status === 429) {

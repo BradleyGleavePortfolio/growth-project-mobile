@@ -23,7 +23,10 @@ describe('coach macro target form', () => {
   it('names the field and the allowed range instead of failing on the server', () => {
     expect(validateMacroTargetDraft(draft({ calories: '' }))).toEqual({ ok: false, message: 'Enter calories in kcal.' });
     const msg = (over: Parameters<typeof draft>[0]) => (validateMacroTargetDraft(draft(over)) as { message: string }).message;
-    expect(msg({ calories: '650' })).toBe('Calories must be between 800 and 7000 kcal.');
+    expect(msg({ calories: '650' })).toBe('Calories must be between 1200 and 7000 kcal.');
+    expect(msg({ calories: '800' })).toBe('Calories must be between 1200 and 7000 kcal.');
+    expect(msg({ calories: '1199' })).toBe('Calories must be between 1200 and 7000 kcal.');
+    expect(validateMacroTargetDraft(draft({ calories: '1200' }))).toMatchObject({ ok: true, input: { calories_kcal: 1200 } });
     expect(msg({ fat: '450' })).toBe('Fat must be between 0 and 400 g.');
     expect(msg({ carbs: 'lots' })).toBe('Carbs must be a whole number of g.');
   });
@@ -32,7 +35,17 @@ describe('coach macro target form', () => {
     expect(macroTargetSaveError({ response: { status: 404 } })).toMatch(/not on your roster/);
     expect(macroTargetSaveError({ response: { status: 400, data: { message: ['calories_kcal must not be less than 800'] } } }))
       .toMatch(/did not accept these numbers/);
+    expect(macroTargetSaveError({ response: { status: 400 } })).toMatch(/did not accept these numbers/);
+    expect(macroTargetSaveError({ response: { status: 400, data: { message: '  ' } } })).toMatch(/did not accept these numbers/);
     expect(macroTargetSaveError({ response: { status: 429 } })).toMatch(/Too many saves/);
     expect(macroTargetSaveError({ message: 'Network Error' })).toMatch(/Check your connection/);
+  });
+
+  it("shows the server's calorie floor message on a 400", () => {
+    const floorError = (message: string) => ({ response: { status: 400, data: { statusCode: 400, message, error: 'Bad Request' } } });
+    expect(macroTargetSaveError(floorError("Calorie targets can't go below 1,200 for this client.")))
+      .toBe("Calorie targets can't go below 1,200 for this client.");
+    expect(macroTargetSaveError(floorError("Calorie targets can't go below 1,500 for this client.")))
+      .toBe("Calorie targets can't go below 1,500 for this client.");
   });
 });
