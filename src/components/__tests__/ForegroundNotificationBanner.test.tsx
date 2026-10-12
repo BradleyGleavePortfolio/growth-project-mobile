@@ -7,7 +7,12 @@
 // paddingTop: 47.
 
 import React from 'react';
-import { render, act } from '@testing-library/react-native';
+import { render, act, fireEvent } from '@testing-library/react-native';
+import { Animated } from 'react-native';
+
+const mockNavigate = jest.fn();
+const mockFlags = { romanChat: false };
+jest.mock('../../config/featureFlags', () => ({ get featureFlags() { return mockFlags; } }));
 
 const COLORS = {
   textPrimary: '#1A1A18',
@@ -21,7 +26,7 @@ jest.mock('../../theme/ThemeProvider', () => ({
 }));
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -43,6 +48,23 @@ const flatten = (style: unknown): Record<string, unknown> => {
 };
 
 describe('ForegroundNotificationBanner safe-area inset', () => {
+  it.each([true, false])('legacy Guidance banner redirects with Roman=%s', async (roman) => {
+    mockNavigate.mockClear();
+    mockFlags.romanChat = roman;
+    const timing = jest.spyOn(Animated, 'timing').mockReturnValue({
+      start: (done) => done?.({ finished: true }), stop: jest.fn(), reset: jest.fn(),
+    });
+    await act(() => foregroundBannerStore.getState().showBanner({
+      title: 'Plan note', body: 'Open chat', notificationId: 'legacy', actionScreen: 'AIGuide',
+    }));
+    const r = await render(<ForegroundNotificationBanner />);
+    await fireEvent.press(r.getByLabelText('Plan note. Open chat. Tap to view.'));
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
+      screen: roman ? 'RomanChat' : 'MoreIndex', initial: false,
+    });
+    timing.mockRestore();
+  });
+
   afterEach(async () => {
     await act(() => {
       foregroundBannerStore.getState().reset();

@@ -69,6 +69,10 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Habits: () => ({ root: 'Home', screen: 'Habits' }),
   Timeline: () => ({ root: 'MoreTab', screen: 'Timeline' }),
   MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex' }),
+  // Legacy Guidance notifications open Roman when available, otherwise You.
+  AIGuide: () => ({
+    root: 'MoreTab', screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
+  }),
   Membership: () => ({ root: 'MoreTab', screen: 'Membership' }),
   Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
   UpdateCard: () => ({ root: 'MoreTab', screen: 'UpdateCard', initial: false }),
