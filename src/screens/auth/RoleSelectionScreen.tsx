@@ -15,7 +15,6 @@ import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { authApi, InvitePreview } from '../../services/api';
-import { isCompleteInviteCode } from '../../lib/inviteCodeInput';
 import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { readUserCache, setUserCache } from '../../lib/userCache';
@@ -404,7 +403,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
               setInviteCode(v);
               setInvitePreview(null);
             }}
-            onBlur={() => { if (isCompleteInviteCode(inviteCode)) void previewCode(inviteCode); }}
+            onBlur={() => previewCode(inviteCode)}
             placeholder="From your coach"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="characters"

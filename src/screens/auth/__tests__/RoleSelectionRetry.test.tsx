@@ -62,10 +62,7 @@ describe('RoleSelection retry step', () => {
     const view = await render(<RoleSelectionScreen navigation={{} as Props['navigation']} route={route()} />);
     expect(view.queryByText(/You will be paired with/)).toBeNull();
     expect(view.queryByText('Coach Avery')).toBeNull();
-    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TE');
-    await fireEvent(view.getByTestId('role-invite-code-input'), 'blur');
-    expect(mockPreview).not.toHaveBeenCalled();
-    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST12');
+    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST1');
     await fireEvent(view.getByTestId('role-invite-code-input'), 'blur');
     if (valid) {
       const name = await view.findByText('Coach Avery');
@@ -75,7 +72,7 @@ describe('RoleSelection retry step', () => {
       expect(view.queryByText('Coach Avery')).toBeNull();
       expect(view.queryByText(/You will be paired with/)).toBeNull();
     }
-    expect(mockPreview).toHaveBeenCalledWith('GP-TEST12');
+    expect(mockPreview).toHaveBeenCalledWith('GP-TEST1');
   });
 
   it('COACH-CARD-134: the coach card shows headline and specialties when the preview has them, and no rows when not', async () => {
@@ -84,13 +81,13 @@ describe('RoleSelection retry step', () => {
       data: { valid: true, coach_name: 'Coach Avery', headline: 'Strength for busy parents', specialties: ['strength', 'busy'] },
     });
     const view = await render(<RoleSelectionScreen navigation={{} as Props['navigation']} route={route()} />);
-    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST12');
+    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST1');
     await fireEvent(view.getByTestId('role-invite-code-input'), 'blur');
     expect(await view.findByTestId('role-coach-card-headline')).toHaveTextContent('Strength for busy parents');
     expect(view.getByTestId('role-coach-card-specialties')).toHaveTextContent('Specialises in strength and busy professionals.');
 
     mockPreview.mockResolvedValue({ data: { valid: true, coach_name: 'Coach Blake', headline: null, specialties: [] } });
-    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST23');
+    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST2');
     await fireEvent(view.getByTestId('role-invite-code-input'), 'blur');
     await view.findByText('Coach Blake');
     expect(view.queryByTestId('role-coach-card')).toBeNull();

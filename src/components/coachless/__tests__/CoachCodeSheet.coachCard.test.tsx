@@ -29,7 +29,7 @@ function checkReturns(coach: Record<string, unknown>) {
   });
 }
 
-function renderSheet(initialCode = 'GP-ABC234', debounceMs = 0) {
+function renderSheet(initialCode = 'GP-TOP', debounceMs?: number) {
   return render(
     <CoachCodeSheet
       visible
@@ -38,7 +38,7 @@ function renderSheet(initialCode = 'GP-ABC234', debounceMs = 0) {
       onAttached={jest.fn()}
       onChoosePlan={jest.fn()}
       onMessageCoach={jest.fn()}
-      debounceMs={debounceMs}
+      debounceMs={debounceMs ?? 0}
     />,
   );
 }
@@ -50,57 +50,14 @@ beforeEach(() => {
 
 afterEach(() => jest.useRealTimers());
 
-it('checks at most once when a complete generated code is typed one character at a time', async () => {
-  jest.useFakeTimers();
-  checkReturns(BASE);
-  await renderSheet('', 400);
-  const code = 'GP-ABC234';
-  for (let length = 1; length <= code.length; length++) {
-    await fireEvent.changeText(screen.getByTestId('coach-code-input'), code.slice(0, length));
-    await act(async () => jest.advanceTimersByTime(400));
-    expect(mockPost).toHaveBeenCalledTimes(length === code.length ? 1 : 0);
+const checks = () => mockPost.mock.calls.filter(([url]) => url === '/coachless/coach-code/check');
+
+async function typeQuickly(code: string) {
+  for (let i = 1; i <= code.length; i++) {
+    await fireEvent.changeText(screen.getByTestId('coach-code-input'), code.slice(0, i));
+    await act(async () => jest.advanceTimersByTime(150));
   }
-  expect(mockPost).toHaveBeenCalledWith(
-    '/coachless/coach-code/check', { code }, expect.anything(),
-  );
-  expect(screen.getByText('Coach: Alex Rivera')).toBeTruthy();
-});
-
-it.each(['GP-ABC23', 'GP-ABC2345', 'GP-ABC23!', 'GP-BRADLEY'])('does not live-check %s', async (code) => {
-  jest.useFakeTimers();
-  checkReturns(BASE);
-  await renderSheet(code, 400);
-  await act(async () => jest.advanceTimersByTime(400));
-  expect(mockPost).not.toHaveBeenCalled();
-});
-
-it('keeps a short legacy code redeemable only when Join is tapped', async () => {
-  jest.useFakeTimers();
-  mockPost.mockResolvedValue({ data: {
-    status: 'attached', already_attached: false, coach: BASE,
-    next: { featured_package: null, packages_available: 0 },
-  } });
-  await renderSheet('GP-TOP', 400);
-  await act(async () => jest.advanceTimersByTime(400));
-  expect(mockPost).not.toHaveBeenCalled();
-  await fireEvent.press(screen.getByTestId('coach-code-join'));
-  expect(mockPost).toHaveBeenCalledTimes(1);
-  expect(mockPost).toHaveBeenCalledWith(
-    '/coachless/coach-code/redeem', { code: 'GP-TOP' }, expect.anything(),
-  );
-});
-
-it('checks a complete pasted lowercase code with surrounding spaces', async () => {
-  jest.useFakeTimers();
-  checkReturns(BASE);
-  await renderSheet('', 400);
-  await fireEvent.changeText(screen.getByTestId('coach-code-input'), ' gp-abc234 ');
-  await act(async () => jest.advanceTimersByTime(400));
-  expect(mockPost).toHaveBeenCalledTimes(1);
-  expect(mockPost).toHaveBeenCalledWith(
-    '/coachless/coach-code/check', { code: 'GP-ABC234' }, expect.anything(),
-  );
-});
+}
 
 it('shows the headline and the specialties sentence under the coach name', async () => {
   checkReturns({ ...BASE, headline: 'Strength for busy parents', specialties: ['strength', 'busy', 'other'] });
@@ -125,4 +82,33 @@ it('an older backend without the fields still validates and shows only the name'
   expect(await screen.findByText('Coach: Alex Rivera')).toBeTruthy();
   expect(screen.queryByTestId('coach-code-card')).toBeNull();
   expect(screen.getByTestId('coach-code-join')).toBeTruthy();
+});
+
+it('a pre-filled vanity code (featured banner) is checked once, at once, with the preview', async () => {
+  jest.useFakeTimers();
+  checkReturns(BASE);
+  await renderSheet('GP-TOP', 1200);
+  await act(async () => jest.advanceTimersByTime(0));
+  expect(checks()).toEqual([['/coachless/coach-code/check', { code: 'GP-TOP' }, expect.anything()]]);
+  expect(screen.getByText('Coach: Alex Rivera')).toBeTruthy();
+});
+
+it('typing GP-ABC234 one character at a time quickly sends one check', async () => {
+  jest.useFakeTimers();
+  checkReturns(BASE);
+  await renderSheet('', 1200);
+  await typeQuickly('GP-ABC234');
+  await act(async () => jest.advanceTimersByTime(1200));
+  expect(checks()).toEqual([['/coachless/coach-code/check', { code: 'GP-ABC234' }, expect.anything()]]);
+});
+
+it('a typed vanity code is checked once after a pause and shows the preview', async () => {
+  jest.useFakeTimers();
+  checkReturns(BASE);
+  await renderSheet('', 1200);
+  await typeQuickly('GP-TOP');
+  expect(checks()).toHaveLength(0);
+  await act(async () => jest.advanceTimersByTime(1200));
+  expect(checks()).toEqual([['/coachless/coach-code/check', { code: 'GP-TOP' }, expect.anything()]]);
+  expect(screen.getByText('Coach: Alex Rivera')).toBeTruthy();
 });

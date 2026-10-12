@@ -39,7 +39,7 @@ function renderSheet() {
   return render(
     <CoachCodeSheet
       visible
-      initialCode="GP-ABC234"
+      initialCode="GP-TOP"
       onClose={jest.fn()}
       onAttached={jest.fn()}
       onChoosePlan={jest.fn()}
@@ -61,7 +61,7 @@ it('current production policy: no sentence on the sheet and the old redeem body'
   expect(await screen.findByText('Coach: Alex Rivera')).toBeTruthy();
   await waitFor(() => expect(mockPolicy).toHaveBeenCalled());
   expect(screen.queryByTestId('coach-sharing-notice')).toBeNull();
-  expect(await joinAndReadBody()).toEqual({ code: 'GP-ABC234' });
+  expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP' });
 });
 
 it('advertised version: the sentence names the coach above Join and the version rides on the redeem', async () => {
@@ -70,5 +70,5 @@ it('advertised version: the sentence names the coach above Join and the version 
   });
   await renderSheet();
   expect(await screen.findByText(SENTENCE)).toBeTruthy();
-  expect(await joinAndReadBody()).toEqual({ code: 'GP-ABC234', coach_sharing_notice: 'coach_sharing_join_v1' });
+  expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP', coach_sharing_notice: 'coach_sharing_join_v1' });
 });

@@ -135,18 +135,6 @@ describe('CreateAccountScreen', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
-  it('previews on blur only after the invite code is complete', async () => {
-    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
-    const ui = await renderScreen();
-    const input = ui.getByLabelText('Coach invite code');
-    await fireEvent.changeText(input, 'GP-TE');
-    await fireEvent(input, 'blur');
-    expect(mockPreview).not.toHaveBeenCalled();
-    await fireEvent.changeText(input, 'GP-TEST12');
-    await fireEvent(input, 'blur');
-    expect(mockPreview).toHaveBeenCalledWith('GP-TEST12');
-  });
-
   it.each([lightTokens, darkTokens])('uses the active semantic theme, hairline fields and readable type (%#)', async (palette) => {
     mockSemanticColors = palette;
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'google', 'apple'] } });

@@ -63,8 +63,8 @@ function homeAccepting() {
   return {
     eligible: true,
     coach_attached: false,
-    banner: { title: 'Banner title from the server', offer_text: OFFER, code: 'GP-ABC234' },
-    roman_card: { text: PITCH, code: 'GP-ABC234' },
+    banner: { title: 'Banner title from the server', offer_text: OFFER, code: 'GP-TOP' },
+    roman_card: { text: PITCH, code: 'GP-TOP' },
     roman_card_hidden_reason: null,
     featured_coach: { name: COACH.name, photo_url: null, business_name: COACH.business_name, package: PKG },
   };
@@ -154,14 +154,14 @@ describe('CoachlessHomeSlot banner and story', () => {
     expect(screen.getByText('Monthly coaching, $49.00 a month')).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId('coachless-join'));
-    expect(screen.getByTestId('coach-code-input').props.value).toBe('GP-ABC234');
+    expect(screen.getByTestId('coach-code-input').props.value).toBe('GP-TOP');
     expect(await screen.findByText('Coach: Alex Rivera', {}, { timeout: 2000 })).toBeTruthy();
-    expect(mockPost).toHaveBeenCalledWith('/coachless/coach-code/check', { code: 'GP-ABC234' }, expect.anything());
+    expect(mockPost).toHaveBeenCalledWith('/coachless/coach-code/check', { code: 'GP-TOP' }, expect.anything());
 
     await fireEvent.press(screen.getByTestId('coach-code-join'));
     expect(await screen.findByText('Alex Rivera is now your coach.')).toBeTruthy();
     const redeem = mockPost.mock.calls.find((c) => c[0] === '/coachless/coach-code/redeem');
-    expect(redeem?.[1]).toEqual({ code: 'GP-ABC234' });
+    expect(redeem?.[1]).toEqual({ code: 'GP-TOP' });
     expect(redeem?.[2].headers['Idempotency-Key']).toMatch(UUID);
     expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'coach-1' });
     expect(screen.getByText('Next, start the plan: Monthly coaching, $49.00 a month.')).toBeTruthy();
@@ -200,7 +200,7 @@ describe('CoachlessHomeSlot banner and story', () => {
     });
     await renderSlot();
     await fireEvent.press(await screen.findByTestId('coachless-join'));
-    expect(screen.getByTestId('coach-code-input').props.value).toBe('GP-ABC234');
+    expect(screen.getByTestId('coach-code-input').props.value).toBe('GP-TOP');
     await fireEvent.changeText(screen.getByTestId('coach-code-input'), 'gp-one');
     await fireEvent.press(screen.getByTestId('coach-code-join'));
     expect(await screen.findByText(refusalLine({ code: 'network', status: 0, requestId: null }))).toBeTruthy();
