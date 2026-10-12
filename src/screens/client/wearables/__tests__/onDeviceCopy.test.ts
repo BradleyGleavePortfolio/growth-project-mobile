@@ -15,6 +15,7 @@ jest.mock('../../../../lib/consultation/report', () => ({
 import {
   WEARABLES_SUPPORT_EMAIL,
   cloudConnectFailureMessage,
+  cloudReturnTicket,
   cloudSessionLockedMessage,
   connectFailureMessage,
   ctaLabelFor,
@@ -278,5 +279,15 @@ describe('S-WEAR-3: permission states', () => {
     expect(ctaLabelFor({ action: 'resume' })).toBe('Try again');
     expect(ctaLabelFor({ action: 'login' })).toBe('Log in again');
     expect(ctaLabelFor({ action: 'open_settings' })).toBe('Open Health Connect');
+  });
+});
+
+describe('cloudReturnTicket (A6, AUTHB-05)', () => {
+  it('reads the single-use ticket a good return carries, and nothing else', () => {
+    expect(cloudReturnTicket('tgp://wearables/connected?status=ok&provider=OURA&ticket=aB3_-x')).toBe(
+      'aB3_-x',
+    );
+    expect(cloudReturnTicket('tgp://wearables/connected?status=error')).toBeNull();
+    expect(cloudReturnTicket(undefined)).toBeNull();
   });
 });

@@ -11,9 +11,10 @@
  *   • Cloud OAuth (Oura, WHOOP, Garmin, Fitbit, Strava, …): Continue calls
  *     `POST /v1/wearables/connections/oauth/start` to mint the authorization
  *     URL + CSRF state, then opens it via `WebBrowser.openAuthSessionAsync`.
- *     The provider redirects to the SERVER callback (which carries the JWT and
- *     completes the token exchange + connection upsert server-side); when the
- *     auth session returns we invalidate the connections cache so the hub
+ *     The provider redirects to the SERVER callback, which swaps the code and
+ *     sends the browser back with a single-use ticket; the sheet then finishes
+ *     the link with `oauth/complete` (A6, AUTHB-05: only the signed-in person
+ *     who started it can) and invalidates the connections cache so the hub
  *     re-reads the new status. We do NOT handle tokens client-side (#1/#12).
  *
  *   • On-device (Apple HealthKit, Health Connect, Samsung Health): there is no
@@ -43,8 +44,10 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import {
+  claimReturnTicket,
   configFor,
   isOnDeviceProvider,
+  wearablesConnectionsApi,
   type WearableProvider,
 } from '../../../api/wearablesConnectionsApi';
 import {
@@ -74,6 +77,7 @@ import {
   cloudConnectFailureMessage,
   cloudReturnFailed,
   cloudReturnedErrorMessage,
+  cloudReturnTicket,
   cloudSessionLockedMessage,
   connectFailureMessage,
   ctaLabelFor,
@@ -91,11 +95,13 @@ import {
 } from '../../../config/healthConnect';
 import { colors, radius, spacing, typography, withAlpha } from '../../../theme/tokens';
 import { emitTutorialSignal } from '../../../tutorial/tutorialEvents';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 
 /**
- * The auth-session return URL. The backend server callback completes the OAuth
- * exchange, then redirects the in-app browser to this app-scheme deep link,
- * which closes the auth session and hands control back to this sheet. The
+ * The auth-session return URL. The backend server callback swaps the code,
+ * then redirects the in-app browser to this app-scheme deep link (with a
+ * single-use ticket, A6), which closes the auth session and hands control back
+ * to this sheet. The
  * scheme (`tgp://`) is the app's registered scheme (see RootNavigator linking).
  */
 const RETURN_URL = 'tgp://wearables/connected';
@@ -115,6 +121,11 @@ export interface ConnectProviderSheetProps {
   onConnected?: () => void;
   /** The client has no coach: the disclosure names no coach (FW-BODY U10). */
   coachless?: boolean;
+  /**
+   * A6 (AUTHB-05): a returned link ticket the app link delivered
+   * (ConnectionsScreen) rather than the sign-in window; the sheet finishes it.
+   */
+  returnTicket?: string | null;
 }
 
 /**
@@ -127,6 +138,7 @@ export default function ConnectProviderSheet({
   onClose,
   onConnected,
   coachless = false,
+  returnTicket = null,
 }: ConnectProviderSheetProps) {
   const startOauth = useStartOauth();
   const invalidate = useInvalidateWearableConnections();
@@ -147,6 +159,8 @@ export default function ConnectProviderSheet({
   const [importing, setImporting] = useState(false);
   /** The source connected and the sheet stays open to explain (empty import). */
   const [connectedNotice, setConnectedNotice] = useState(false);
+  /** A6: a returned cloud link is being finished. */
+  const [finishing, setFinishing] = useState(false);
 
   /**
    * S14 round 3 (Sol A-317-1): the session fence for the current on-device
@@ -189,6 +203,7 @@ export default function ConnectProviderSheet({
     // settling for the previous sheet never keeps this one disabled.
     setImporting(false);
     setRequestingOnDevice(false);
+    setFinishing(false);
   }, [visible, provider]);
 
   /**
@@ -215,6 +230,41 @@ export default function ConnectProviderSheet({
     setRetry(message.action);
     setCtaOverride(message.cta);
   }, []);
+
+  /**
+   * A6 (AUTHB-05): finish a returned cloud link with its single-use ticket.
+   * Success closes the sheet with a success haptic; a refused, expired or
+   * failed ticket keeps it open with the failed-return copy and Continue.
+   */
+  const finishReturn = useCallback(
+    async (ticket: string, target: WearableProvider) => {
+      if (!claimReturnTicket(ticket)) return; // the other return path has it
+      const epoch = epochRef.current;
+      const generation = currentAuthGeneration();
+      const current = () =>
+        mountedRef.current && epochRef.current === epoch && currentAuthGeneration() === generation;
+      setFinishing(true);
+      try {
+        await wearablesConnectionsApi.completeOauth(ticket);
+        invalidate();
+        if (!current()) return;
+        void HapticService.success();
+        emitTutorialSignal('wearable_connected');
+        onConnected?.();
+        onClose();
+      } catch {
+        invalidate();
+        if (current()) showMessage(cloudReturnedErrorMessage(configFor(target).displayName));
+      } finally {
+        if (current()) setFinishing(false);
+      }
+    },
+    [invalidate, onConnected, onClose, showMessage],
+  );
+
+  useEffect(() => {
+    if (visible && provider != null && returnTicket) void finishReturn(returnTicket, provider);
+  }, [visible, provider, returnTicket, finishReturn]);
 
   const handleCloudConnect = useCallback(
     async (target: WearableProvider, epoch: number) => {
@@ -262,6 +312,11 @@ export default function ConnectProviderSheet({
         showMessage(cloudReturnedErrorMessage(name));
         return;
       }
+      const ticket = result.type === 'success' ? cloudReturnTicket(result.url) : null;
+      if (ticket != null) {
+        await finishReturn(ticket, target);
+        return;
+      }
       // Clinic tutorial: only an explicit success counts as connected; a
       // dismiss is confirmed (or not) by the re-read connections list.
       if (result.type === 'success') emitTutorialSignal('wearable_connected');
@@ -270,7 +325,7 @@ export default function ConnectProviderSheet({
         onClose();
       }
     },
-    [startOauth, invalidate, onConnected, onClose, showMessage],
+    [startOauth, invalidate, onConnected, onClose, showMessage, finishReturn],
   );
 
   /**
@@ -562,7 +617,7 @@ export default function ConnectProviderSheet({
   // B-317-11: the attempt's own busy flag (set for cloud and on-device
   // attempts alike). The shared mint mutation's isPending is not used: a
   // mint still pending for a closed sheet must not disable the next one.
-  const continuing = requestingOnDevice;
+  const continuing = requestingOnDevice || finishing;
   // A connected source is closed, not cancelled (Sol B-362-4).
   const dismissLabel =
     buildDisabled || !showCta || resumeTarget != null || connectedNotice ? 'Close' : 'Cancel';

@@ -440,6 +440,12 @@ export function cloudReturnFailed(url: string | null | undefined): boolean {
   return typeof url === 'string' && /[?&]status=error(?:&|#|$)/.test(url);
 }
 
+/** A6 (AUTHB-05): the single-use ticket a good return URL carries, or null. */
+export function cloudReturnTicket(url: string | null | undefined): string | null {
+  const match = typeof url === 'string' ? /[?&]ticket=([A-Za-z0-9_-]+)/.exec(url) : null;
+  return match ? match[1] : null;
+}
+
 export function cloudSessionLockedMessage(name: string): OnDeviceMessage {
   return {
     text: `Another sign-in window is already open. Finish or close it, then tap Continue to connect ${name}.`,

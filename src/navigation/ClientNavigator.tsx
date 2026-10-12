@@ -363,8 +363,11 @@ export type MoreStackParamList = {
   BlockedUsers: undefined;
   /** Client-facing checkout for a coach's package share link. */
   PackageCheckout: { shareToken: string };
-  /** PR-HK-1-mobile — Wearable Connections Hub (manage health data sources). */
-  Connections: undefined;
+  /**
+   * PR-HK-1-mobile — Wearable Connections Hub (manage health data sources).
+   * A6: a cloud tracker's return link may carry a single-use ticket.
+   */
+  Connections: { ticket?: string; provider?: string; status?: string } | undefined;
   /** PR-HK-3a — Wearables bucket shell (Fitness | Recovery segmented switcher). */
   Health: { bucket?: 'fitness' | 'recovery' } | undefined;
   /** PR-HK-3a — shared metric drill-down (compare sources + glow-drag chart). */
