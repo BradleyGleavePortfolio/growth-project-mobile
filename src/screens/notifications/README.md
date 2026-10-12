@@ -160,7 +160,6 @@ No additional env vars are required while mocked. When live, the standard `EXPO_
 | | Badge renders "99+" for count > 99 |
 | | Badge renders nothing for count = 0 |
 | `src/__tests__/moneyInboxRows.test.tsx` | Backend money rows (content unlocked, trial ending, payment blocker, full refund, new purchase) get real titles; "New content" opens Deliverables for its purchase and lists it; the blocker row and an `UpdateCard` push open the card screen; a coach never does |
-| `src/__tests__/flaggedJoinAlertRoute.test.tsx` | The flagged-client join alert opens that client's consultation answers from a push (background and cold start) and from the inbox row (router ready or not); a client account never reaches the coach screen |
 
 ---
 

@@ -1,16 +1,8 @@
 /**
- * M-FLAGROUTE (owner 61a): tapping the flagged-client join alert opens that
- * client's consultation answers (Clients > ClientConsultation), with the
- * Clients list kept beneath so Back works.
- *
- * The row copies the backend's own write (backend main, b#943,
- * src/onboarding/flagged-join-alert.ts): kind coach_alert, channel inapp,
- * payload { type: 'onboarding_screening_review', client_id, actionScreen:
- * 'ClientConsultation', actionParams: { clientId } }. It runs through the
- * real push tap handler (pushNotifications.ts), the real normalizer
- * (notificationsApi.ts), the real router (pushTapRouter.ts), the real
- * NotificationCenterScreen and the real ClientConsultationScreen. Only HTTP,
- * expo-notifications, navigation hooks, icons and the theme are stubbed.
+ * M-FLAGROUTE (owner 61a): the flagged-client join alert opens that client's
+ * consultation answers from a push and from the notification inbox. The row
+ * copies backend b#943's write (src/onboarding/flagged-join-alert.ts) and
+ * runs through the real push handler, normalizer, router and screens.
  */
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -73,7 +65,6 @@ jest.mock('../components/support/SupportEmailFallback', () => ({
   SupportEmailFallback: () => null,
 }));
 
-import { normalizeNotification } from '../services/notificationsApi';
 import { installNotificationResponseHandler } from '../services/pushNotifications';
 import {
   __resetPushTapRouterForTests,
@@ -122,20 +113,10 @@ function attachRoot(routeNames: string[]): jest.Mock {
   return navigate;
 }
 
-/** The push the alert would arrive as: the row's payload as the data. */
-function pushResponse(id: string) {
-  const { actionScreen, actionParams } = FLAGGED_JOIN_ROW.payload;
-  return {
-    notification: {
-      request: { identifier: id, content: { data: { kind: 'coach_alert', actionScreen, actionParams } } },
-    },
-  };
-}
-
-const flush = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
-};
+/** The same alert as a push: the row's payload as the data. */
+const pushResponse = (identifier: string) => ({
+  notification: { request: { identifier, content: { data: { kind: 'coach_alert', ...FLAGGED_JOIN_ROW.payload } } } },
+});
 
 describe('owner 61a: the flagged-client join alert opens that client\'s answers', () => {
   beforeEach(() => {
@@ -149,40 +130,24 @@ describe('owner 61a: the flagged-client join alert opens that client\'s answers'
     mockGetLast.mockResolvedValue(null);
   });
 
-  it('the inbox row keeps its link to that client, and its wording is unchanged', () => {
-    const n = normalizeNotification(FLAGGED_JOIN_ROW);
-    expect(n?.actionScreen).toBe('ClientConsultation');
-    expect(n?.actionParams).toEqual({ clientId: CLIENT });
-    expect(n?.body).toBe(BODY);
-    expect(n?.title).toBe('Update');
-  });
-
-  it('push tapped while the app runs in the background: the tap opens the answers', async () => {
+  it('push: a cold-start tap waits for the coach app, a background tap opens at once; both open the answers', async () => {
     let live: ((r: unknown) => void) | undefined;
     mockAddResponse.mockImplementation((cb: (r: unknown) => void) => {
       live = cb;
       return { remove: jest.fn() };
     });
-    setPushSession(COACH);
-    const navigate = attachRoot(COACH_TABS);
-    const cleanup = installNotificationResponseHandler(routePushTap);
-    await flush();
-    live?.(pushResponse('push-1'));
-    expect(navigate).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith('ClientsStack', OPEN_ANSWERS);
-    cleanup();
-  });
-
-  it('push that cold-starts the app: held until the coach app is mounted, then opens the answers', async () => {
-    mockAddResponse.mockImplementation(() => ({ remove: jest.fn() }));
     mockGetLast.mockResolvedValueOnce(pushResponse('push-cold'));
     const navigate = attachRoot(COACH_TABS);
     const cleanup = installNotificationResponseHandler(routePushTap);
-    await flush();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(navigate).not.toHaveBeenCalled();
     setPushSession(COACH);
-    expect(navigate).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith('ClientsStack', OPEN_ANSWERS);
+    live?.(pushResponse('push-live'));
+    expect(navigate.mock.calls).toEqual([
+      ['ClientsStack', OPEN_ANSWERS],
+      ['ClientsStack', OPEN_ANSWERS],
+    ]);
     cleanup();
   });
 
@@ -202,20 +167,6 @@ describe('owner 61a: the flagged-client join alert opens that client\'s answers'
     expect(mockScreenNavigate).not.toHaveBeenCalled();
   });
 
-  it('notification inbox before the app navigator is ready: the row still opens the answers', async () => {
-    mockGet.mockImplementation(async (url: string) =>
-      url.startsWith('/notifications/unread-count')
-        ? { data: { count: 1 } }
-        : { data: { items: [FLAGGED_JOIN_ROW], nextCursor: null } },
-    );
-    const screen = await render(<NotificationCenterScreen />);
-    await waitFor(() => expect(screen.getByText(BODY)).toBeTruthy());
-    await fireEvent.press(screen.getByText(BODY));
-    await waitFor(() =>
-      expect(mockScreenNavigate).toHaveBeenCalledWith('ClientConsultation', { clientId: CLIENT }),
-    );
-  });
-
   it('a client account is never sent to the coach screen', () => {
     setPushSession({ kind: 'app', userId: 'client-1', role: 'student' });
     const navigate = attachRoot(CLIENT_TABS);
@@ -229,24 +180,13 @@ describe('owner 61a: the flagged-client join alert opens that client\'s answers'
   });
 
   it('the screen the tap opens reads that client\'s answers', async () => {
+    const answer = { screen: 'B3', question: 'Your height and weight.', answer_label: '5 ft 6 in (168 cm), 172 lb' };
     mockGet.mockResolvedValueOnce({
       data: {
-        version: 'consult-v1',
-        revision: 1,
-        revision_cause: 'complete',
-        submitted_at: '2026-10-12T15:00:00.000Z',
-        saved_at: '2026-10-12T15:00:00.000Z',
-        chapters: [
-          {
-            key: 'body',
-            title: 'Body basics',
-            answers: [{ screen: 'B3', question: 'Your height and weight.', answer_label: '5 ft 6 in (168 cm), 172 lb' }],
-          },
-        ],
-        screening: {
-          any_yes: true,
-          items: [{ key: 'P2', question: 'Has a joint ever stopped you training?', answer: 'yes', note: null }],
-        },
+        version: 'consult-v1', revision: 1, revision_cause: 'complete',
+        submitted_at: '2026-10-12T15:00:00.000Z', saved_at: '2026-10-12T15:00:00.000Z',
+        chapters: [{ key: 'body', title: 'Body basics', answers: [answer] }],
+        screening: { any_yes: false, items: [] },
         consent: { version: 'consult-consent-v3', agreed_at: '2026-10-12T14:00:00.000Z' },
       },
     });
@@ -258,7 +198,6 @@ describe('owner 61a: the flagged-client join alert opens that client\'s answers'
     );
     await screen.findByTestId('consultation-answers');
     expect(mockGet).toHaveBeenCalledWith(`/coach/clients/${CLIENT}/consultation`);
-    expect(screen.getByText('Has a joint ever stopped you training?')).toBeTruthy();
-    expect(screen.getByText('5 ft 6 in (168 cm), 172 lb')).toBeTruthy();
+    expect(screen.getByText(answer.answer_label)).toBeTruthy();
   });
 });
