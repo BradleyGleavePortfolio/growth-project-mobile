@@ -8,12 +8,15 @@ import React, { useEffect, useState } from 'react';
 import { Modal } from 'react-native';
 import { subscribeJoin, takePresentedJoin, type JoinOutcome } from '../../lib/joinPackage';
 import JoinPackageScreen from '../../screens/join/JoinPackageScreen';
+import { useRomanJoinOfferHold } from '../../lib/romanJoinOffer';
 
 /** Lets a closing sheet (the coach-code sheet) finish before this one opens. */
 export const JOIN_SHEET_HANDOFF_MS = 400;
 
 export default function JoinPackageHost() {
   const [open, setOpen] = useState<JoinOutcome | null>(null);
+  // Owner 62y2: the Roman and AI offer waits until the package sheet closes.
+  useRomanJoinOfferHold(open !== null);
 
   useEffect(() => {
     let live = true;
