@@ -22,9 +22,13 @@
 export const INVITE_CODE_MIN_LENGTH = 3;
 export const INVITE_CODE_MAX_LENGTH = 32;
 
-/** Backend-generated GP- + six characters; variable-length vanity codes wait for Join. */
+/**
+ * A complete generated coach code: the new `TGP-` + 7 (owner 26) or the older
+ * `GP-` + 6, any case. Vanity and other codes are not "complete": the coach
+ * code sheet checks them after a typing pause, and Join accepts them as before.
+ */
 export function isCompleteInviteCode(code: string): boolean {
-  return /^GP-[A-Z0-9]{6}$/i.test(code.trim());
+  return /^(?:TGP-[A-Z0-9]{7}|GP-[A-Z0-9]{6})$/i.test(code.trim());
 }
 
 const CODE_CHARS = /^[A-Z0-9-]+$/;

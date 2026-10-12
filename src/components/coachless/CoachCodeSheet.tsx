@@ -2,9 +2,10 @@
  * CoachCodeSheet — enter a coach code after signup (coachless Home).
  *
  *   1. Live validation: POST /coachless/coach-code/check (no write) shows the
- *      coach's name or the specific refusal. A complete GP- + 6 code or the
- *      pre-filled code is checked at once; any other well-formed text after a
- *      typing pause. Only the latest check is applied.
+ *      coach's name or the specific refusal. A complete generated code
+ *      (TGP- + 7, or the older GP- + 6) or the pre-filled code is checked at
+ *      once; any other well-formed text (e.g. a vanity code) after a typing
+ *      pause. Only the latest check is applied.
  *   2. Join: POST /coachless/coach-code/redeem with an Idempotency-Key. One
  *      key per code; a retry of the same code reuses it (a lost answer
  *      replays the same result), a different code gets a new key.
@@ -51,7 +52,7 @@ import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import CoachSharingNotice from '../coachSharing/CoachSharingNotice';
 import InviteCoachCardDetails from '../invite/InviteCoachCardDetails';
 
-/** Typing pause before a code that is not GP- + 6 (vanity) is checked. */
+/** Typing pause before a code that is not TGP- + 7 or GP- + 6 (e.g. vanity) is checked. */
 export const CHECK_DEBOUNCE_MS = 1200;
 
 export interface CoachCodeSheetProps {

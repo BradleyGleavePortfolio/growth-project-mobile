@@ -102,6 +102,19 @@ it('typing GP-ABC234 one character at a time quickly sends one check', async () 
   expect(checks()).toEqual([['/coachless/coach-code/check', { code: 'GP-ABC234' }, expect.anything()]]);
 });
 
+// Owner 26: new coach codes are TGP- + 7. Complete, so checked at once (well inside the pause), never a shorter prefix.
+it.each(['TGP-ABC2345', 'tgp-abc2345'])('typing %s quickly sends one check, at once, with the preview', async (typed) => {
+  jest.useFakeTimers();
+  checkReturns(BASE);
+  await renderSheet('', 1200);
+  await typeQuickly(typed);
+  const once = [['/coachless/coach-code/check', { code: 'TGP-ABC2345' }, expect.anything()]];
+  expect(checks()).toEqual(once);
+  expect(screen.getByText('Coach: Alex Rivera')).toBeTruthy();
+  await act(async () => jest.advanceTimersByTime(1200));
+  expect(checks()).toEqual(once);
+});
+
 it('a typed vanity code is checked once after a pause and shows the preview', async () => {
   jest.useFakeTimers();
   checkReturns(BASE);
