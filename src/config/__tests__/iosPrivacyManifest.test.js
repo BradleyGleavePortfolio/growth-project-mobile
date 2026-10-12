@@ -14,13 +14,14 @@ const ROOT = path.join(__dirname, '../../..');
 const NM = path.join(ROOT, 'node_modules');
 const manifest = require('../../../app.json').expo.ios.privacyManifests;
 const configure = require('../../../app.config');
+const { patchSource, patchPackage } = require('../../../scripts/patch-expo-sqlite-fstatfs');
 
 const CATEGORY = {
   UserDefaults: /\b(NS)?UserDefaults\b/,
   FileTimestamp:
     /contentModificationDateKey|creationDateKey|contentAccessDateKey|NSFile(Creation|Modification)Date|FileAttributeKey\.(creationDate|modificationDate)|getattrlist|[^\w.](f|l)?stat\(/,
   SystemBootTime: /systemUptime|mach_absolute_time/,
-  DiskSpace: /volume(Available|Total)Capacity|NSFileSystem(Free)?Size|[^\w.]statv?fs\(/,
+  DiskSpace: /volume(Available|Total)Capacity|NSFileSystem(Free)?Size|[^\w.]f?statv?fs\(/,
   ActiveKeyboards: /activeInputModes/,
 };
 
@@ -31,14 +32,30 @@ const UNCOVERED = {
   'expo-eas-client': { UserDefaults: 'CA92.1' }, // ios/EASClient/EASClientID.swift:10
   'expo-sharing': { UserDefaults: 'CA92.1' }, // ios/SharingModule.swift:95, app-group suite unused (no app group)
   // vendor/sqlite3/sqlite3.c (compiled into the pod): fstat/stat on the app's own
-  // database files, and fstatfs on open (line 45304) to read the volume type so it
-  // knows how to write the file. E174.1 is the only DiskSpace reason this use can
-  // meet (85F4.1 shows space to the user, 7D9E.1 is a bug report, B728.1 is a
-  // health-research-only app); SQLCipher ships E174.1 for the same code.
-  'expo-sqlite': { FileTimestamp: 'C617.1', DiskSpace: 'E174.1' },
+  // database files. Its only iOS disk-space call (fstatfs in unixOpen) is compiled
+  // out by scripts/patch-expo-sqlite-fstatfs.js (postinstall).
+  'expo-sqlite': { FileTimestamp: 'C617.1' },
   'expo-updates': { UserDefaults: 'CA92.1' }, // ios/EXUpdates/UpdatesConfigOverride.swift:15
   'expo-video': { UserDefaults: 'CA92.1', FileTimestamp: 'C617.1' }, // ios/Cache/VideoCacheManager.swift:11,173
 };
+
+// SQLite's amalgamation: keep only the lines its iOS build compiles (podspec sets
+// SQLITE_ENABLE_LOCKING_STYLE=0; the QNX branch never builds), comments dropped.
+const NOT_ON_IOS = new Set(['SQLITE_ENABLE_LOCKING_STYLE', 'defined(__APPLE__) && SQLITE_ENABLE_LOCKING_STYLE', '!(!defined(__QNXNTO__))']);
+function builtForIos(text) {
+  const stack = [];
+  const out = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\/\*.*?\*\//g, '').trim();
+    const d = line.match(/^#\s*(if|ifdef|ifndef|elif|else|endif)\b\s*(.*)$/);
+    if (!d) {
+      if (!stack.some((c) => NOT_ON_IOS.has(c))) out.push(line);
+    } else if (d[1] === 'endif') stack.pop();
+    else if (d[1] === 'else' || d[1] === 'elif') stack.push(`!(${stack.pop()})`);
+    else stack.push({ if: d[2], ifdef: `defined(${d[2]})`, ifndef: `!defined(${d[2]})` }[d[1]]);
+  }
+  return out.join('\n');
+}
 
 const SKIP_DIRS = new Set(['android', 'node_modules', 'example', 'Tests', 'tests', '__tests__', 'build', 'lib']);
 function nativeSources(dir, out = []) {
@@ -76,7 +93,9 @@ describe('M4a: iOS privacy manifest', () => {
     const found = {};
     for (const pod of installedPods()) {
       if (pod.podspecs.some((p) => fs.readFileSync(p, 'utf8').includes('PrivacyInfo.xcprivacy'))) continue;
-      const text = nativeSources(pod.dir).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+      const text = nativeSources(pod.dir)
+        .map((f) => (f.endsWith('sqlite3.c') ? builtForIos(fs.readFileSync(f, 'utf8')) : fs.readFileSync(f, 'utf8')))
+        .join('\n');
       const used = Object.keys(CATEGORY).filter((c) => CATEGORY[c].test(text));
       if (used.length) found[pod.name] = used.sort();
     }
@@ -101,14 +120,32 @@ describe('M4a: iOS privacy manifest', () => {
     }
   });
 
-  test('the only SQLite disk-space call built for iOS is the fstatfs volume-type check', () => {
+  describe('expo-sqlite fstatfs patch (postinstall)', () => {
     const dir = path.join(NM, 'expo-sqlite');
-    expect(fs.readFileSync(path.join(dir, 'ios/ExpoSQLite.podspec'), 'utf8')).toContain('-DSQLITE_ENABLE_LOCKING_STYLE=0');
-    const src = fs.readFileSync(path.join(dir, 'vendor/sqlite3/sqlite3.c'), 'utf8');
-    expect(src).toContain(
-      '#if defined(__APPLE__) || SQLITE_ENABLE_LOCKING_STYLE\n  if( fstatfs(fd, &fsInfo) == -1 ){',
-    );
-    expect(src).not.toMatch(/f_bavail|f_bfree/); // never reads free space
+    const vendored = ['sqlite3', 'sqlcipher'].map((v) => fs.readFileSync(path.join(dir, 'vendor', v, 'sqlite3.c'), 'utf8'));
+    const unixOpen = (src) => src.slice(src.indexOf('\nstatic int unixOpen('), src.indexOf('\n}\n', src.indexOf('\nstatic int unixOpen(')));
+
+    test('the installed SQLite copies build no statfs/fstatfs call for iOS', () => {
+      expect(fs.readFileSync(path.join(dir, 'ios/ExpoSQLite.podspec'), 'utf8')).toContain('-DSQLITE_ENABLE_LOCKING_STYLE=0');
+      for (const src of vendored) {
+        expect(unixOpen(src)).toContain('#if SQLITE_ENABLE_LOCKING_STYLE\n  if( fstatfs(fd, &fsInfo) == -1 ){');
+        expect(builtForIos(unixOpen(src))).not.toMatch(/statv?fs/);
+        expect(builtForIos(src)).not.toMatch(CATEGORY.DiskSpace);
+      }
+    });
+
+    test('a second run is a no-op', () => {
+      for (const src of vendored) expect(patchSource(src)).toBe(src);
+    });
+
+    test('fails loudly on unexpected source text or another version', () => {
+      const changed = vendored[0].replace('#if SQLITE_ENABLE_LOCKING_STYLE\n  if( fstatfs', '#if defined(__APPLE__)\n  if( fstatfs');
+      expect(() => patchSource(changed)).toThrow('unixOpen() source changed');
+      expect(() => patchSource('int main(void) { return 0; }\n')).toThrow('unixOpen() not found');
+      const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'expo-sqlite-'));
+      fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ version: '56.0.6' }));
+      expect(() => patchPackage(tmp)).toThrow('Revalidate the expo-sqlite fstatfs patch for version 56.0.6');
+    });
   });
 
   test('no tracking and no tracking domains', () => {
