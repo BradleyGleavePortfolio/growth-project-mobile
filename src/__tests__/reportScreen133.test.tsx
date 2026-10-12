@@ -22,6 +22,8 @@ jest.mock('../hooks/useCurrentUser', () => ({
 // R5m: the server's target (R4 floor, R5 holds) as on Home and Food Log.
 let mockServerTargets: { calories: number; protein: number; carbs: number; fat: number } | null = null;
 jest.mock('../hooks/useMacroTargets', () => ({ useMacroTargets: () => mockServerTargets }));
+const mockCurrentForSelf = jest.fn();
+jest.mock('../api/macrosApi', () => ({ macrosApi: { currentForSelf: () => mockCurrentForSelf() } }));
 jest.mock('../services/api', () => ({
   logApi: { getDaily: jest.fn() },
   weightApi: { getHistory: jest.fn() },
@@ -38,6 +40,7 @@ const mount = (d: (typeof DEVICES)[number]) => render(
 
 beforeEach(() => {
   mockServerTargets = null;
+  mockCurrentForSelf.mockReset().mockResolvedValue({ data: null });
   jest.mocked(weightApi.getHistory).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof weightApi.getHistory>>);
 });
 
@@ -61,15 +64,24 @@ it('shows -- for today, not zero, when the food log cannot be read', async () =>
   expect(s.queryByText('0')).toBeNull();
 });
 
+it('shows no target number while the server target is still loading', async () => {
+  mockServerTargets = { calories: 1400, protein: 150, carbs: 200, fat: 60 }; // stale cache
+  mockCurrentForSelf.mockReturnValue(new Promise(() => undefined));
+  jest.mocked(logApi.getDaily).mockResolvedValue({ data: { entries: [] } } as Awaited<ReturnType<typeof logApi.getDaily>>);
+  const s = await mount(DEVICES[0]);
+  await waitFor(() => expect(s.getAllByText('0')).toHaveLength(4));
+  expect(s.queryByText(/Target:/)).toBeNull();
+});
+
 it('shows the server calorie target over the locally saved one', async () => {
-  mockServerTargets = { calories: 2000, protein: 150, carbs: 200, fat: 60 };
+  mockCurrentForSelf.mockResolvedValue({ data: { calories_kcal: 2000, protein_g: 150, carbs_g: 200, fats_g: 60 } });
   jest.mocked(logApi.getDaily).mockResolvedValue({ data: { entries: [] } } as Awaited<ReturnType<typeof logApi.getDaily>>);
   const s = await mount(DEVICES[0]);
   await waitFor(() => expect(s.getByText('Target: 2000 kcal / day')).toBeTruthy());
   expect(s.queryByText('Target: 1600 kcal / day')).toBeNull();
 });
 
-it('keeps the saved calorie target when the server has none', async () => {
+it('keeps the saved calorie target once the server confirms it has none', async () => {
   jest.mocked(logApi.getDaily).mockResolvedValue({ data: { entries: [] } } as Awaited<ReturnType<typeof logApi.getDaily>>);
   const s = await mount(DEVICES[0]);
   await waitFor(() => expect(s.getByText('Target: 1600 kcal / day')).toBeTruthy());
