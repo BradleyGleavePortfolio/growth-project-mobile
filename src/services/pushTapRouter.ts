@@ -106,6 +106,9 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   CoachBookingInbox: () => ({ root: 'ClientsStack', screen: 'CoachBookingInbox' }),
   // B-R1F: a Roman safety alert push or inbox row opens Command Center > Actions.
   CoachActionQueue: () => ({ root: 'CommandCenter', params: { tab: 'action-queue' } }),
+  // Owner 61a (backend b#943): the flagged-client join alert opens that
+  // client's consultation answers ({ clientId }), Clients list kept beneath.
+  ClientConsultation: () => ({ root: 'ClientsStack', screen: 'ClientConsultation', initial: false }),
   // The daily brief push (backend coach-brief.scheduler actionScreen).
   CoachBrief: () =>
     featureFlags.coachBrief
