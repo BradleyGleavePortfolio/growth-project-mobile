@@ -91,6 +91,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Coach client lookup (UI-4: Needs you under 15 clients, Search first with A to Z); off in every profile until the owner switches it on."
+    },
     "EXPO_PUBLIC_FF_COACH_COMMUNITY": {
       "kind": "flag",
       "default": "off",

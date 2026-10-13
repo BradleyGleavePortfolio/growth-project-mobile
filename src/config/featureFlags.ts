@@ -37,6 +37,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
+  EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP: process.env.EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COACH_HOME_V11: process.env.EXPO_PUBLIC_FF_COACH_HOME_V11,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
@@ -401,6 +402,13 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_CLIENT_HOME_RINGS
   clientHomeRings: readFlag('EXPO_PUBLIC_FF_CLIENT_HOME_RINGS', false),
+  // UI-4 (V1_1_UI_SPEC, owner 2026-10-09): the Clients tab becomes the client
+  // lookup (Needs you under 15 clients, Search first with A to Z at 15 or
+  // more). OFF (default, and in every eas.json profile): today's Clients list,
+  // unchanged. Switching it on is its own one-line PR.
+  //
+  // env: EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP
+  coachClientLookup: readFlag('EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP', false),
   // ─── Roman P3 — backend-authority gates ──────────────────────────────────
   // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
   // expose authoritatively, so each is held behind its own backend-live gate
