@@ -172,6 +172,15 @@ export type CoachTabParamList = {
   CommunityStack: undefined;
 };
 
+/** One Roman safety alert as CoachSafetyAlert shows it (its action queue row). */
+export type SafetyAlertParams = {
+  alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply';
+  clientId: string;
+  clientName: string;
+  quote: string | null;
+  sentAt: string;
+};
+
 export type ClientsStackParamList = {
   ClientsList: undefined;
   /** initialTab: opens on that tab (the daily brief opens Workouts). */
@@ -198,14 +207,11 @@ export type ClientsStackParamList = {
   CoachMacrosReview:    { clientId: string; clientName: string };
   /** S-REACH: consultation answers, from client detail > Summary. */
   ClientConsultation:   { clientId: string; clientName?: string };
-  /** B-R1F: one Roman safety alert, from its card in the action queue. */
-  CoachSafetyAlert: {
-    alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply';
-    clientId: string;
-    clientName: string;
-    quote: string | null;
-    sentAt: string;
-  };
+  /**
+   * B-R1F: one Roman safety alert, from its card in the action queue. Owner
+   * 57d: or by id ({ alertId }) from its push or inbox row.
+   */
+  CoachSafetyAlert: SafetyAlertParams | { alertId: string };
   /** COACH-PAY-M-130: payments, refund, pause and cancel, from client detail > Summary (server flag coach_payment_actions). */
   ClientPayments:       { clientId: string; clientName?: string };
   /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */

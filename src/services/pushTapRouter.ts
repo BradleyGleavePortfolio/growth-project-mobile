@@ -104,8 +104,13 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
   // S-SCHED: coach booking pushes open the booking inbox.
   CoachBookingInbox: () => ({ root: 'ClientsStack', screen: 'CoachBookingInbox' }),
-  // B-R1F: a Roman safety alert push or inbox row opens Command Center > Actions.
+  // B-R1F: a Roman safety alert push or inbox row sent before 57d opens
+  // Command Center > Actions.
   CoachActionQueue: () => ({ root: 'CommandCenter', params: { tab: 'action-queue' } }),
+  // Owner 57d: a Roman safety alert push or inbox row opens that alert
+  // ({ alertId }), Clients list kept beneath. The screen itself falls back to
+  // Command Center > Actions when the alert can't be read.
+  CoachSafetyAlert: () => ({ root: 'ClientsStack', screen: 'CoachSafetyAlert', initial: false }),
   // Owner 61a (backend b#943): the flagged-client join alert opens that
   // client's consultation answers ({ clientId }), Clients list kept beneath.
   ClientConsultation: () => ({ root: 'ClientsStack', screen: 'ClientConsultation', initial: false }),

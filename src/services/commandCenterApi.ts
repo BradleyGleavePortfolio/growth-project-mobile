@@ -353,6 +353,15 @@ export const commandCenterApi = {
   },
 
   /**
+   * GET /coach/command-center/action-queue/:alertId
+   * Owner 57d: one Roman safety alert, as its queue row, for the client's
+   * current coach only (404 otherwise). Errors propagate: the caller falls
+   * back to the action queue.
+   */
+  getSafetyAlert: async (alertId: string): Promise<{ data: ActionQueueItem }> =>
+    api.get<ActionQueueItem>(`${BASE}/action-queue/${encodeURIComponent(alertId)}`),
+
+  /**
    * GET /coach/command-center/ltv-metrics
    * Returns MRR / LTV / RPCM / churn / streak metrics for the coach roster.
    * Surfaced by CoachLtvDashboard. Errors are re-thrown so the dashboard

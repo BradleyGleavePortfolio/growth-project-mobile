@@ -5,18 +5,33 @@
  *     message on one muted line with a tail ellipsis; no name header.
  *   - Tapping the card opens the detail screen: name, time sent, the full
  *     message, the one fixed line, and "Message {first name}" to the chat.
- *   - A safety alert push or inbox row opens Command Center > Actions.
+ *   - A safety alert push or inbox row opens that alert by id (owner 57d):
+ *     the shared skeleton, then the alert with one warning haptic. An alert
+ *     the coach can't read lands on Command Center > Actions, as before.
+ *     Rows sent before 57d (CoachActionQueue) still open Actions.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render, waitFor, fireEvent } from '@testing-library/react-native';
+
+jest.mock('../ui/haptics/haptics.service', () => ({
+  HapticService: {
+    selection: jest.fn(),
+    softImpact: jest.fn(),
+    mediumImpact: jest.fn(),
+    heavyImpact: jest.fn(),
+    success: jest.fn(),
+    warning: jest.fn(),
+    error: jest.fn(),
+  },
+}));
 
 jest.mock('../services/commandCenterApi', () => {
   const original = jest.requireActual('../services/commandCenterApi');
   return {
     ...original,
     __USING_MOCK_DATA: false,
-    commandCenterApi: { getActionQueue: jest.fn(), dismissAlert: jest.fn() },
+    commandCenterApi: { getActionQueue: jest.fn(), dismissAlert: jest.fn(), getSafetyAlert: jest.fn() },
   };
 });
 
@@ -33,6 +48,7 @@ import {
   type PushNavigator,
 } from '../services/pushTapRouter';
 import { lightTokens } from '../theme/tokens';
+import { HapticService } from '../ui/haptics/haptics.service';
 
 const URGENT_LINE = 'Urgent: Roman sent Jane Doe a medical safety reply. Check in with them →';
 const ED_LINE = 'Roman sent Sam Lee an eating-disorder safety reply. Check in with them →';
@@ -91,15 +107,17 @@ describe('the safety alert card', () => {
 });
 
 describe('the detail screen', () => {
+  beforeEach(() => jest.clearAllMocks());
   async function renderDetail(params: Record<string, unknown>) {
-    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const tabs = { navigate: jest.fn() };
+    const navigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: () => true, getParent: () => tabs };
     const utils = await render(
       <CoachSafetyAlertScreen
         route={{ key: 'k', name: 'CoachSafetyAlert', params } as never}
         navigation={navigation as never}
       />,
     );
-    return { navigation, utils };
+    return { navigation, tabs, utils };
   }
 
   it('urgent: name, time sent, the full message, the fixed line, and Message {first name}', async () => {
@@ -121,6 +139,40 @@ describe('the detail screen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-1', clientName: 'Jane Doe' });
     await fireEvent.press(getByRole('button', { name: 'Back' }));
     expect(navigation.goBack).toHaveBeenCalled();
+    expect(HapticService.warning).toHaveBeenCalledTimes(1);
+    expect(commandCenterApi.getSafetyAlert).not.toHaveBeenCalled();
+  });
+
+  it('by id (push or inbox tap): the shared skeleton, then that alert, with one warning haptic', async () => {
+    let answer: (v: { data: ActionQueueItem }) => void = () => {};
+    (commandCenterApi.getSafetyAlert as jest.Mock).mockReturnValue(new Promise((r) => (answer = r)));
+    const { navigation, tabs, utils } = await renderDetail({ alertId: 'a1' });
+    const { getByLabelText, getByText, getByTestId, queryByTestId, getByRole } = utils;
+    expect(commandCenterApi.getSafetyAlert).toHaveBeenCalledWith('a1');
+    expect(getByLabelText('Loading')).toBeTruthy();
+    expect(queryByTestId('coach-safety-alert-message')).toBeNull();
+    expect(HapticService.warning).not.toHaveBeenCalled();
+    answer({ data: urgent });
+    await waitFor(() => expect(getByText(QUOTE)).toBeTruthy());
+    expect(getByText('Jane Doe')).toBeTruthy();
+    expect(getByTestId('coach-safety-alert-sent').props.children).toBe(formatSentAt(SENT));
+    expect(queryByTestId('coach-safety-alert-loading')).toBeNull();
+    expect(HapticService.warning).toHaveBeenCalledTimes(1);
+    await fireEvent.press(getByRole('button', { name: 'Message Jane' }));
+    expect(navigation.navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-1', clientName: 'Jane Doe' });
+    expect(tabs.navigate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the server will not give it (another coach, a deleted message)', () => Promise.reject(new Error('404'))],
+    ['it is not a safety alert', () => Promise.resolve({ data: { ...urgent, alert_type: 'missed_checkins' } })],
+  ])('by id, when %s: Command Center > Actions, as before, with no new words', async (_label, reply) => {
+    (commandCenterApi.getSafetyAlert as jest.Mock).mockImplementation(reply);
+    const { navigation, tabs, utils } = await renderDetail({ alertId: 'a9' });
+    await waitFor(() => expect(tabs.navigate).toHaveBeenCalledWith('CommandCenter', { tab: 'action-queue' }));
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
+    expect(utils.queryByTestId('coach-safety-alert-excluded')).toBeNull();
+    expect(HapticService.warning).not.toHaveBeenCalled();
   });
 
   it('eating disorder: its own fixed line; no quote block once the message is deleted', async () => {
@@ -141,7 +193,7 @@ describe('the detail screen', () => {
 describe('the push and inbox route', () => {
   afterEach(() => __resetPushTapRouterForTests());
 
-  it('CoachActionQueue (push tap or inbox row) opens Command Center on the Actions tab', () => {
+  function coachNav() {
     const nav = {
       navigate: jest.fn(),
       isReady: () => true,
@@ -149,6 +201,19 @@ describe('the push and inbox route', () => {
     };
     attachPushNavigator(nav as unknown as PushNavigator);
     setPushSession({ kind: 'app', userId: 'coach-1', role: 'coach' });
+    return nav;
+  }
+
+  it('CoachSafetyAlert { alertId } (push tap or inbox row) opens that alert over the Clients list', () => {
+    const nav = coachNav();
+    expect(routeInAppNotification('CoachSafetyAlert', { alertId: 'a1' })).toBe(true);
+    routePushTap('CoachSafetyAlert', { alertId: 'a1' }, 'push-1');
+    const opened = ['ClientsStack', { screen: 'CoachSafetyAlert', params: { alertId: 'a1' }, initial: false }];
+    expect(nav.navigate.mock.calls).toEqual([opened, opened]);
+  });
+
+  it('CoachActionQueue (rows sent before 57d) opens Command Center on the Actions tab', () => {
+    const nav = coachNav();
     expect(routeInAppNotification('CoachActionQueue')).toBe(true);
     routePushTap('CoachActionQueue', undefined, 'push-1');
     expect(nav.navigate.mock.calls).toEqual([
