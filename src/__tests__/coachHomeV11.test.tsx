@@ -1,0 +1,201 @@
+/**
+ * UI-2 coach Home (featureFlags.coachHomeV11): real numbers only, every tap arrives somewhere real, the Money
+ * tab opens the Money page, and the flag is off in every build profile.
+ */
+import * as fs from 'fs';
+import * as path from 'path';
+import React from 'react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useNavigation: () => ({ navigate: mockNavigate }),
+  useIsFocused: () => true,
+}));
+jest.mock('react-native-safe-area-context', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  const insets = { top: 47, bottom: 0, left: 0, right: 0 };
+  return { useSafeAreaInsets: () => insets, SafeAreaInsetsContext: R.createContext(insets) };
+});
+jest.mock('react-native-svg', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  const El = ({ children, testID }: { children?: React.ReactNode; testID?: string }) => R.createElement(View, { testID }, children);
+  return { __esModule: true, default: El, Circle: El };
+});
+const mockHaptics = { softImpact: jest.fn(), mediumImpact: jest.fn(), selection: jest.fn() };
+jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: mockHaptics }));
+const mockOverview = jest.fn();
+jest.mock('../services/commandCenterApi', () => ({
+  ...jest.requireActual('../services/commandCenterApi'),
+  commandCenterApi: { getOverview: () => mockOverview() },
+}));
+jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => Promise.resolve(2) }));
+const mockDrafts = jest.fn();
+jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => mockDrafts() }));
+const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false };
+jest.mock('../config/featureFlags', () => ({ featureFlags: mockFlags }));
+const mockStub = (testID: string) => () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { __esModule: true, default: () => R.createElement(Text, { testID }, testID) };
+};
+jest.mock('../screens/coach/command-center/CoachHomeCards', () => mockStub('setup-cards')());
+jest.mock('../screens/coach/command-center/OverviewScreen', () => mockStub('today-overview')());
+const mockSources = { monthSoFar: jest.fn(), nextPayout: jest.fn(), ltv: jest.fn(), atRisk: jest.fn() };
+jest.mock('../screens/coach/command-center/coachHomeSources', () => ({ get coachHomeSources() { return mockSources; } }));
+
+// Required after the mocks above exist (an import would be hoisted above them).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const CommandCenterScreen = require('../screens/coach/command-center/CommandCenterScreen').default as React.ComponentType;
+
+const overview = (roster: number) => ({
+  roster_size: roster, active_today: roster ? 21 : 0, check_in_rate_7day: 0.82, open_alerts: 0,
+  at_risk_count: roster ? 2 : 0, win_streak_count: 9, unread_messages: 1, pending_actions: 0,
+});
+const entry = (id: string, name: string, factor: string) => ({
+  user_id: id, display_name: name, bucket: 'amber', risk_score: null, last_active_at: new Date().toISOString(), top_factor: factor, days_since_checkin: 8,
+});
+const summary = (netCents: number) => ({
+  currency: 'usd', changeCents: null,
+  totals: { netCents, chargeCount: netCents ? 3 : 0 },
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockFlags.coachHomeV11 = true;
+  mockOverview.mockResolvedValue({ data: overview(30) });
+  mockSources.atRisk.mockResolvedValue([entry('c1', 'Casey Lin', 'No check-in for 8 days'), entry('c2', 'Ana Ruiz', 'Payment failed')]);
+  mockSources.ltv.mockResolvedValue({ active_client_count: 30, churn_rate_pct: 3, mrr_30d_ago_cents: 100000 });
+  mockSources.monthSoFar.mockResolvedValue(summary(214000));
+  mockSources.nextPayout.mockResolvedValue({ amountCents: 48600, currency: 'usd', arrivalDate: null });
+  mockDrafts.mockReturnValue({
+    data: { drafts: [
+      { id: 'd1', capability: 'draft.assign_workout' },
+      { id: 'd2', capability: 'draft.assign_workout' },
+      { id: 'd3', capability: 'draft.send_notification' },
+      { id: 'd4', capability: 'draft.coach_message' },
+    ] },
+    refetch: jest.fn(),
+  });
+});
+
+async function renderHome() {
+  const view = render(<CommandCenterScreen />);
+  await waitFor(() => expect(view.getByTestId('coach-home-v11-dials')).toBeTruthy());
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  return view;
+}
+
+describe('UI-2 coach Home, flag on', () => {
+  it('draws only real numbers in the three dials', async () => {
+    const v = await renderHome();
+    expect(v.getByTestId('coach-home-v11-dial-today').props.accessibilityLabel).toBe('Today: 21 of 30');
+    expect(v.getByTestId('coach-home-v11-dial-checkins').props.accessibilityLabel).toBe('Check-ins: 82% check-ins. Last 7 days');
+    expect(v.getByTestId('coach-home-v11-dial-retention').props.accessibilityLabel).toBe('Retention: 97% stayed. This month');
+  });
+
+  it('leaves the retention dial out when there is no real base', async () => {
+    mockSources.ltv.mockResolvedValue(null);
+    const v = await renderHome();
+    expect(v.queryByTestId('coach-home-v11-dial-retention')).toBeNull();
+  });
+
+  it("counts exactly the drafts the queue shows and opens it with a medium haptic", async () => {
+    const v = await renderHome();
+    const button = v.getByTestId('coach-home-v11-drafts');
+    expect(button.props.accessibilityLabel).toBe("Approve Roman's drafts, 3");
+    expect(v.getByText("Approve Roman's drafts →")).toBeTruthy();
+    fireEvent.press(button);
+    expect(mockHaptics.mediumImpact).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'PendingAiDrafts', initial: false });
+  });
+
+  it('hides the drafts action when nothing is waiting', async () => {
+    mockDrafts.mockReturnValue({ data: { drafts: [{ id: 'd4', capability: 'draft.coach_message' }] }, refetch: jest.fn() });
+    const v = await renderHome();
+    expect(v.queryByTestId('coach-home-v11-drafts')).toBeNull();
+    expect(v.getByTestId('coach-home-v11-ask-roman')).toBeTruthy();
+  });
+
+  it('opens Roman, the bell, a client, Clients and the Money tab', async () => {
+    const v = await renderHome();
+    fireEvent.press(v.getByTestId('coach-home-v11-ask-roman'));
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'RomanChat', initial: false });
+    expect(v.getByTestId('coach-home-v11-bell').props.accessibilityLabel).toBe('Notifications, 2 unread');
+    fireEvent.press(v.getByTestId('coach-home-v11-bell'));
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', initial: false });
+    expect(v.getByText('Needs you, 2')).toBeTruthy();
+    fireEvent.press(v.getByTestId('coach-home-v11-client-c1'));
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientDetail', params: { clientId: 'c1', clientName: 'Casey Lin' }, initial: false });
+    fireEvent.press(v.getByTestId('coach-home-v11-all-clients'));
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList' });
+    expect(v.getByText('Next payout')).toBeTruthy();
+    fireEvent.press(v.getByTestId('coach-home-v11-payout'));
+    fireEvent.press(v.getByTestId('coach-home-v11-month'));
+    expect(mockNavigate).toHaveBeenCalledWith('MoneyStack', { screen: 'CoachMoney' });
+    expect(mockHaptics.softImpact).toHaveBeenCalled();
+  });
+
+  it('shows the Clients and Earnings dials and the setup cards for a coach with no clients', async () => {
+    mockOverview.mockResolvedValue({ data: overview(0) });
+    mockSources.monthSoFar.mockResolvedValue(summary(0));
+    const v = await renderHome();
+    expect(v.getByTestId('coach-home-v11-dial-clients').props.accessibilityLabel).toBe('Clients: 0 clients. None yet');
+    expect(v.getByTestId('coach-home-v11-dial-earnings').props.accessibilityLabel).toMatch(/^Earnings: \$0(\.00)? this month\. \w+ so far$/);
+    expect(v.getByTestId('setup-cards')).toBeTruthy();
+    expect(v.queryByTestId('coach-home-v11-all-clients')).toBeNull();
+    expect(v.queryByTestId('coach-home-v11-business')).toBeNull();
+  });
+
+  it('says so with a Try again when the roster cannot load', async () => {
+    mockOverview.mockRejectedValueOnce(new Error('down'));
+    const v = render(<CommandCenterScreen />);
+    await waitFor(() => expect(v.getByTestId('coach-home-v11-error')).toBeTruthy());
+    expect(v.getByText('Roster numbers could not load.')).toBeTruthy();
+    fireEvent.press(v.getByText('Try again'));
+    await waitFor(() => expect(v.getByTestId('coach-home-v11-dials')).toBeTruthy());
+  });
+});
+
+describe('UI-2 flag off', () => {
+  it("keeps today's Overview", () => {
+    mockFlags.coachHomeV11 = false;
+    const v = render(<CommandCenterScreen />);
+    expect(v.getByTestId('today-overview')).toBeTruthy();
+    expect(v.queryByTestId('coach-home-v11')).toBeNull();
+  });
+});
+
+describe('UI-2 Money tab and flag wiring', () => {
+  const ROOT = path.resolve(__dirname, '..', '..');
+  const nav = fs.readFileSync(path.join(ROOT, 'src', 'navigation', 'CoachNavigator.tsx'), 'utf8');
+
+  it('registers the Money tab ($ icon) only behind the flag, opening the Money page', () => {
+    const gate = nav.search(/\{featureFlags\.coachHomeV11 && \(\s*<Tab\.Screen\s+name="MoneyStack"/);
+    expect(gate).toBeGreaterThan(-1);
+    const tab = nav.slice(gate, gate + 500);
+    expect(tab).toMatch(/component=\{MoneyStackNavigator\}/);
+    expect(tab).toMatch(/tabBarLabel: 'Money'/);
+    expect(tab).toMatch(/name="logo-usd"/);
+    expect(nav).toMatch(/function MoneyStackNavigator\(\) \{\s*return <SettingsStackNavigator initialRouteName="CoachMoney" \/>;/);
+    expect(nav).toMatch(/<SettingsStack\.Navigator\s+initialRouteName=\{initialRouteName\}/);
+    expect(nav).toMatch(/<SettingsStack\.Screen name="CoachMoney" component=\{MoneyScreen\} \/>/);
+    expect(nav.match(/name="MoneyStack"/g)).toHaveLength(1);
+  });
+
+  it('opens the app on the new Home only with the flag on', () => {
+    expect(nav).toMatch(/const initialTab = __USING_MOCK_DATA \|\| featureFlags\.coachHomeV11 \? 'CommandCenter' : 'ClientsStack';/);
+  });
+
+  it('is off by default and in every EAS profile', () => {
+    const flags = fs.readFileSync(path.join(ROOT, 'src', 'config', 'featureFlags.ts'), 'utf8');
+    expect(flags).toMatch(/coachHomeV11: readFlag\('EXPO_PUBLIC_FF_COACH_HOME_V11', false\)/);
+    const eas = JSON.parse(fs.readFileSync(path.join(ROOT, 'eas.json'), 'utf8')) as { build: Record<string, { env?: Record<string, string> }> };
+    for (const [name, profile] of Object.entries(eas.build)) {
+      expect([undefined, 'false']).toContain(profile.env?.EXPO_PUBLIC_FF_COACH_HOME_V11);
+      if (profile.env) expect(`${name}:${profile.env.EXPO_PUBLIC_FF_COACH_HOME_V11}`).toBe(`${name}:false`);
+    }
+  });
+});
