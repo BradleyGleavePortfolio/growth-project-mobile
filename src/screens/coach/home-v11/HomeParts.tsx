@@ -6,6 +6,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, radius, typography } from '../../../theme/tokens';
 import { QuietOverline } from '../../../ui';
@@ -41,7 +42,8 @@ export function HomeDial({ value, unit, label, sub, progress, testID }: DialSpec
         </View>
       </View>
       <QuietOverline style={styles.dialLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.2}>{label}</QuietOverline>
-      {sub ? <Text style={[styles.dialSub, { color: sc.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{sub}</Text> : null}
+      {/* Two lines, so large text on a narrow phone wraps the sub-line instead of cutting it. */}
+      {sub ? <Text style={[styles.dialSub, { color: sc.textMuted }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>{sub}</Text> : null}
     </View>
   );
 }
@@ -101,6 +103,30 @@ export function AllClientsTile({ count, width, onPress }: { count: number; width
   );
 }
 
+/** A setup step (zero clients): "Step {n}", what to do, the checklist's line, the action in a forest tag; opens the step. */
+export function StepTile({ step, title, detail, action, qr, width, onPress, testID }: {
+  step: number; title: string; detail: string; action: string | null; qr?: boolean; width: number; onPress: () => void; testID: string;
+}) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <Pressable
+      onPress={() => { void HapticService.softImpact(); onPress(); }}
+      accessibilityRole="button" accessibilityLabel={`Step ${step}. ${title}. ${detail}${action ? ` ${action}` : ''}`} testID={testID}
+      style={({ pressed }) => [styles.tile, { width, backgroundColor: sc.bgSurface, borderColor: sc.border }, pressed && styles.pressed]}
+    >
+      <QuietOverline style={styles.flat}>{`Step ${step}`}</QuietOverline>
+      <Text style={[styles.tileName, { color: sc.textPrimary }]} numberOfLines={3}>{title}</Text>
+      <Text style={[styles.tileLine, { color: sc.textMuted }]} numberOfLines={4}>{detail}</Text>
+      {action ? (
+        <View style={[styles.why, styles.actionRow]}>
+          <Text style={[styles.action, { backgroundColor: sc.accent, color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.1} testID={`${testID}-action`}>{action}</Text>
+          {qr ? <Ionicons name="qr-code-outline" size={22} color={sc.textPrimary} /> : null}
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
 /** A Business figure: small-caps label, serif number, muted line; opens Money. */
 export function BusinessTile({ label, value, sub, width, onPress, testID }: {
   label: string; value: string; sub: string; width: number; onPress: () => void; testID: string;
@@ -143,6 +169,9 @@ const styles = StyleSheet.create({
   // Server reasons run to three lines, so a soft tag (button radius) rather than a full pill.
   pill: { ...typography.caption, letterSpacing: 0, lineHeight: 16, overflow: 'hidden', backgroundColor: colors.cream, borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 5 },
   link: { ...typography.bodyMd, fontSize: 15, lineHeight: 22 },
+  // The QR mark drops below the tag rather than squeezing it on a narrow phone with large text.
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 6 },
+  action: { ...typography.caption, letterSpacing: 0, lineHeight: 16, overflow: 'hidden', borderRadius: radius.chip, paddingHorizontal: 10, paddingVertical: 5 },
   flat: { marginBottom: 0 },
   bizValue: { ...typography.h2, fontSize: 26, lineHeight: 33, letterSpacing: 0.3, marginTop: 8, fontVariant: FIGURES },
   bottom: { marginTop: 'auto', paddingTop: 6 },

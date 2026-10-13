@@ -1,11 +1,12 @@
 /**
- * UI-2 second PR: the extra reads behind the chips, the Steady wall and the unread badges, all on existing
- * endpoints. Swappable in tests.
+ * UI-2: the extra reads behind the chips, the Steady wall, the unread badges and the zero-client setup steps, all
+ * on existing endpoints. Swappable in tests.
  */
 import { useCoachStore } from '../../../store/coachStore';
 import { coachApi } from '../../../services/api';
 import { commandCenterApi, type WinStreakEntry } from '../../../services/commandCenterApi';
 import { readUserCache } from '../../../lib/userCache';
+import { loadSetupStatus, type SetupSnapshot } from '../../../lib/coachSetup/setupStatus';
 import type { RosterClient } from '../../../utils/coach/clientRoster';
 
 export const rosterSources = {
@@ -32,6 +33,12 @@ export const rosterSources = {
       if (typeof n === 'number' && Number.isFinite(n) && n > 0) out[id] = Math.floor(n);
     }
     return out;
+  },
+  /** The Home checklist's setup reads (Stripe, packages, clients, payments); each read settles on its own. */
+  setup: async (): Promise<SetupSnapshot> => {
+    const me = await readUserCache();
+    if (!me?.id) throw new Error('no signed-in coach');
+    return loadSetupStatus(me.id);
   },
 };
 

@@ -7,10 +7,14 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { RosterClient } from '../utils/coach/clientRoster';
 
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useIsFocused: () => true,
-}));
+jest.mock('@react-navigation/native', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  return {
+    ...jest.requireActual('@react-navigation/native'),
+    useIsFocused: () => true,
+    useFocusEffect: (cb: () => void) => R.useEffect(() => cb(), [cb]),
+  };
+});
 jest.mock('react-native-svg', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -240,6 +244,26 @@ describe('UI-2 roster reads', () => {
     expect(store().clients.map((c) => c.id)).toEqual(['b-client-1']);
     read.mockRestore();
     store().reset();
+  });
+
+  it("the zero-client setup read takes only this coach's own invite mark from a shared device", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { default: api } = require('../services/api') as typeof import('../services/api');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { prefsStorage } = require('../storage/mmkv') as typeof import('../storage/mmkv');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { inviteSharedKey } = require('../lib/coachSetup/setupStatus') as typeof import('../lib/coachSetup/setupStatus');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { rosterSources: real } = require('../screens/coach/home-v11/rosterSources') as typeof import('../screens/coach/home-v11/rosterSources');
+    const get = jest.spyOn(api, 'get').mockRejectedValue(new Error('offline'));
+    // Signed in as coach-b; coach-a shared their link earlier on this device.
+    await prefsStorage.set(inviteSharedKey('coach-a'), 'true');
+    expect((await real.setup()).sharedLink).toBe(false);
+    await prefsStorage.set(inviteSharedKey('coach-b'), 'true');
+    expect((await real.setup()).sharedLink).toBe(true);
+    get.mockRestore();
+    await prefsStorage.delete(inviteSharedKey('coach-a'));
+    await prefsStorage.delete(inviteSharedKey('coach-b'));
   });
 });
 

@@ -31,6 +31,7 @@ import WinStreaksScreen from './WinStreaksScreen';
 import InboxScreen from './InboxScreen';
 import ActionQueueScreen from './ActionQueueScreen';
 import CoachHomeCards from './CoachHomeCards';
+import { useSetupOpener } from './useSetupOpener';
 import { coachHomeSources } from './coachHomeSources';
 import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
 import { featureFlags } from '../../../config/featureFlags';
@@ -104,6 +105,7 @@ export default function CommandCenterScreen({
   const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList' });
   // UI-2: with the new Home on, Money is its own tab.
   const openMoneyTab = () => navigation.navigate('MoneyStack', { screen: 'CoachMoney' });
+  const { open: openSetup } = useSetupOpener();
   const openDrafts = () => navigation.navigate('ClientsStack', { screen: 'PendingAiDrafts', initial: false });
   const openNotifications = () => navigation.navigate('ClientsStack', { screen: 'NotificationCenter', initial: false });
   const askRoman = featureFlags.romanChat
@@ -136,7 +138,7 @@ export default function CommandCenterScreen({
               onOpenDrafts={openDrafts}
               onOpenNotifications={openNotifications}
               onAskRoman={askRoman}
-              header={<CoachHomeCards />}
+              onOpenSetup={openSetup}
             />
           );
         }
