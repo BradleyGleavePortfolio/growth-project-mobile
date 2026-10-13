@@ -45,6 +45,17 @@ with a row are kept; "Thank you, Roman" follows them. Clients are counted by dis
 that client gets the list row. Head coach: failed payments and team revenue give one "See Money" row; Team rows ("See your
 team") only with Team Mode on. A row with no destination is never shown.
 
+Screen (`brief/CoachBriefLightScreen.tsx`, `BriefField.tsx`): with the gate on, the `CoachBrief` route shows Concept A,
+"Roman in the light": a dark forest field with a cream and gold glow (SVG), Roman's face and the date, the greeting, Roman's
+words, "Where would you like to start?" when there is an action, the rows, then "Thank you, Roman" (closes onto Home, the
+coach app's first tab). The tab bar steps aside while it is open. States: still being prepared (checks every 5 s for 60 s,
+then offers Try again), could not load (Try again), could not be prepared (Prepare again), prepared too often (Try again);
+each has "Continue". Marked read once when the words show; "Today's brief is ready." is announced once after a wait.
+Motion: 1.3 s reveal, a tap anywhere completes it, rows take no tap while hidden; 6 s breathing glow that stops in the
+background. Reduce Motion and screen readers: everything at once, 150 ms fade, still glow. Haptics: `softImpact` on every
+row; one `error` when Try again or Prepare again fails again; nothing on open or on a failure the coach did not cause.
+A single-client row closes the brief and opens its screen with the Clients list beneath.
+
 `CoachBriefList` (`brief/CoachBriefListScreen.tsx`) lists exactly the items the row counted (passed as route params, never
 stored), each opening that client like the single-client row; Back returns to the brief.
 
@@ -66,4 +77,5 @@ stored), each opening that client like the single-client row; Back returns to th
 | `src/services/__tests__/pushTapRouter.test.ts` | `CoachBrief` push tap opens the brief with Settings underneath. |
 | `src/screens/coach/brief/__tests__/briefActions.test.ts` | Action rows: messages {0,1,2,6} x weight {0,1,2,6} x check-ins {0,1,5}, shuffled; repeats, names, ids, unknown and head coach kinds. |
 | `src/screens/coach/brief/__tests__/CoachBriefListScreen.test.tsx` | Every counted client listed and opened; no "Client"; Back; empty list. |
-| `src/navigation/__tests__/coachBriefGateFlagOff.test.ts` | Gate defaults off, no profile sets it, list route only behind both flags. |
+| `src/screens/coach/brief/__tests__/CoachBriefLightScreen.test.tsx` | Every state, every row's destination, haptics, mark read once, announce once, reveal never takes a hidden tap. |
+| `src/navigation/__tests__/coachBriefGateFlagOff.test.ts` | Gate defaults off, no profile sets it; gate off keeps `CoachBriefScreen`, the tab bar and no list route. |

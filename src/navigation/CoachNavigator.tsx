@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { AppState, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import type { NavigatorScreenParams } from '@react-navigation/native';
+import { getFocusedRouteNameFromRoute, type NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { coachApi } from '../services/api';
 import { logger } from '../utils/logger';
@@ -41,6 +41,7 @@ import TrustCenterScreen from '../screens/TrustCenterScreen';
 // reach production binaries.
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import CoachBriefListScreen, { type CoachBriefListParams } from '../screens/coach/brief/CoachBriefListScreen';
+import CoachBriefLightScreen from '../screens/coach/brief/CoachBriefLightScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
 import { featureFlags } from '../config/featureFlags';
 // Community v1-6 — coach community sub-stack (six screens). Mounted as a
@@ -546,7 +547,10 @@ function SettingsStackNavigator() {
           flag is explicitly true, so stub/coming-soon surfaces never reach
           production binaries. */}
       {featureFlags.coachBrief && (
-        <SettingsStack.Screen name="CoachBrief" component={CoachBriefScreen} />
+        <SettingsStack.Screen
+          name="CoachBrief"
+          component={featureFlags.coachBriefGate ? CoachBriefLightScreen : CoachBriefScreen}
+        />
       )}
       {featureFlags.coachBrief && featureFlags.coachBriefGate && (
         <SettingsStack.Screen name="CoachBriefList" component={CoachBriefListScreen} />
@@ -845,12 +849,16 @@ export default function CoachNavigator() {
       <Tab.Screen
         name="SettingsStack"
         component={SettingsStackNavigator}
-        options={{
+        options={({ route }) => ({
           tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
-        }}
+          // BRIEFA: Concept A's brief is full screen; the tab bar steps aside while it is open.
+          ...(featureFlags.coachBriefGate && getFocusedRouteNameFromRoute(route) === 'CoachBrief'
+            ? { tabBarStyle: { display: 'none' as const } }
+            : {}),
+        })}
       />
     </Tab.Navigator>
     </FirstPaymentWowHost>
