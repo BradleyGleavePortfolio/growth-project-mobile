@@ -163,7 +163,7 @@ it('builds the usual day for a client with no coach, ready to repeat', async () 
   expect(screen.getByText('Built from the meals you logged this week. 1,250 kcal target.')).toBeTruthy();
   expect(screen.getByText('1 of 3 meals logged')).toBeTruthy();
   expect(screen.getByText('390 of 1,250 kcal')).toBeTruthy();
-  expect(screen.getByText('1 food')).toBeTruthy();
+  expect(screen.queryByText('1 food')).toBeNull();
   expect(screen.getByText('UP NEXT, YOUR USUAL SNACK')).toBeTruthy();
   expect(screen.getByText('Apple, medium and Peanut butter')).toBeTruthy();
   expect(screen.getByText(`Logged yesterday and on ${weekday(addDays(today, -4))}`)).toBeTruthy();

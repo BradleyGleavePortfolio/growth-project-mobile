@@ -173,7 +173,8 @@ export function buildUsualDay(past: PastDay[], logs: FoodLog[]): FoodDay {
       slots.push({
         ...base, name: joinNames(counted.map((l) => l.foodName)), kcal: sum(counted, (l) => l.calories), protein: sum(counted, (l) => l.protein),
         carbs: sum(counted, (l) => l.carbs), fat: sum(counted, (l) => l.fat), foods: [], logs: counted,
-        status: `${counted.length} ${counted.length === 1 ? 'food' : 'foods'}`,
+        // Only the mockup's plural is approved; a one-food meal shows no count (singular is under Wording needed).
+        status: counted.length > 1 ? `${counted.length} foods` : null,
       });
     } else if (usual) {
       slots.push({

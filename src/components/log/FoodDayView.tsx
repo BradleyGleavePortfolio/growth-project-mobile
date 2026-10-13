@@ -127,7 +127,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
     const first = [...x.logs].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))[0];
     const label = isDone && first?.createdAt ? `${x.label}, ${clock(first.createdAt)}` : x.label;
     const sub = isDone ? x.status : x.usual
-      ? `${x.usual.meal.entries.length} ${x.usual.meal.entries.length === 1 ? 'food' : 'foods'}, ${n(x.protein)} g protein, last on ${weekday(x.usual.days[0])}`
+      ? `${x.usual.meal.entries.length > 1 ? `${x.usual.meal.entries.length} foods, ` : ''}${n(x.protein)} g protein, last on ${weekday(x.usual.days[0])}`
       : `${n(x.protein)} g protein`;
     const name = !isDone && x.usual ? `Your usual: ${x.name}` : x.name;
     const kcal = n(isDone ? x.logs.reduce((t, l) => t + l.calories, 0) : x.kcal);

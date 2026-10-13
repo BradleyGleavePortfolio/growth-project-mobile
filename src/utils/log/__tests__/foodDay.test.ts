@@ -118,7 +118,7 @@ describe('buildUsualDay', () => {
     const day = buildUsualDay(past, [
       log('1', 'breakfast', 'Rolled oats', { foodItemId: 'oats' }), log('2', 'breakfast', 'Coffee with milk'), log('3', 'dinner', 'Pizza'),
     ]);
-    expect(day.slots.map((x) => [x.mealType, x.status, x.logs.map((l) => l.id)])).toEqual([['breakfast', '1 food', ['1']], ['dinner', '1 food', ['3']]]);
+    expect(day.slots.map((x) => [x.mealType, x.status, x.logs.map((l) => l.id)])).toEqual([['breakfast', null, ['1']], ['dinner', null, ['3']]]);
     expect(day.extras.map((l) => l.id)).toEqual(['2']);
     expect(nextSlot(day)).toBeNull();
     expect(buildUsualDay(past.slice(0, 1), [log('3', 'dinner', 'Pizza')]).slots).toEqual([]);
