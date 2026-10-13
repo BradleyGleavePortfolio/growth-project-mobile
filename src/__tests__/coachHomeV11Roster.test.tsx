@@ -26,6 +26,7 @@ jest.mock('../services/commandCenterApi', () => ({
 }));
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => Promise.resolve(0) }));
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => ({ data: { drafts: [] }, refetch: jest.fn() }) }));
+jest.mock('../lib/userCache', () => ({ ...jest.requireActual('../lib/userCache'), readUserCache: () => Promise.resolve({ id: 'coach-b' }) }));
 
 // Required after the mocks above exist (an import would be hoisted above them).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -137,6 +138,18 @@ describe('UI-2 roster section', () => {
     expect(mockHaptics.selection).toHaveBeenCalledTimes(2);
   });
 
+  it('a lone chip is a heading in the same pill, never a button that does nothing', async () => {
+    mockOverview.mockResolvedValue({ data: { ...overview, at_risk_count: 0, win_streak_count: 0 } });
+    sources.atRisk.mockResolvedValue([]);
+    rosterSources.winStreaks.mockResolvedValue([]);
+    const v = await renderHome();
+    const chip = v.getByTestId('coach-home-v11-chip-steady');
+    expect(chip.props.accessibilityRole).toBe('header');
+    expect(chip.props.accessibilityLabel).toBe('Steady, 5');
+    expect(v.queryByTestId('coach-home-v11-chip-needs')).toBeNull();
+    expect(v.getByTestId('coach-home-v11-wall')).toBeTruthy();
+  });
+
   it('leaves the wall and the Steady chip out when the roster does not load', async () => {
     rosterSources.clients.mockRejectedValue(new Error('offline'));
     const v = await renderHome();
@@ -173,6 +186,25 @@ describe('UI-2 roster section', () => {
     await fireEvent.press(v.getByTestId('coach-home-v11-wall-more'));
     expect(props.onOpenClients).toHaveBeenCalled();
     expect(v.getByTestId('coach-home-v11-wall-more').props.accessibilityLabel).toBe('All 32 clients. Open Clients');
+  });
+});
+
+describe('UI-2 roster reads', () => {
+  it('a failed roster read never hands the Home the rows already in the shared roster store', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useCoachStore } = require('../store/coachStore') as typeof import('../store/coachStore');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { coachApi } = require('../services/api') as typeof import('../services/api');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { rosterSources: real } = require('../screens/coach/home-v11/rosterSources') as typeof import('../screens/coach/home-v11/rosterSources');
+    useCoachStore.setState({ clients: roster(), loadError: null });
+    const read = jest.spyOn(coachApi, 'getClients').mockRejectedValue(new Error('offline'));
+    await expect(real.clients()).rejects.toThrow();
+    expect(read).toHaveBeenCalled();
+    // The store keeps its old rows for the Clients list; the Home's read refuses them.
+    expect(useCoachStore.getState().clients).toHaveLength(6);
+    read.mockRestore();
+    useCoachStore.getState().reset();
   });
 });
 

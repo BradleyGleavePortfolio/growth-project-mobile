@@ -19,11 +19,15 @@ const FACE = 40;
 /** Four rows; past that the last place says how many more and opens Clients. */
 export const WALL_MAX = 24;
 
-/** The chip row: one selected (forest), each with its count; a tap switches what the roster section shows. */
+/**
+ * The chip row: one selected (forest), each with its count; a tap switches what the roster section shows. A lone
+ * chip has nothing to switch to, so it is the same pill as a heading, never a button that does nothing.
+ */
 export function FilterChips({ chips, selected, onSelect }: {
-  chips: FilterChip[]; selected: RosterFilter | null; onSelect: (key: RosterFilter) => void;
+  chips: FilterChip[]; selected: RosterFilter | null; onSelect?: (key: RosterFilter) => void;
 }) {
   const { semanticColors: sc } = useTheme();
+  const pick = chips.length > 1 ? onSelect : undefined;
   return (
     <ScrollView
       horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRow}
@@ -31,17 +35,26 @@ export function FilterChips({ chips, selected, onSelect }: {
     >
       {chips.map((c) => {
         const on = c.key === selected;
-        return (
-          <Pressable
-            key={c.key}
-            onPress={() => { if (on) return; void HapticService.selection(); onSelect(c.key); }}
-            accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${c.label}, ${c.count}`}
-            hitSlop={{ top: 4, bottom: 4 }} testID={`coach-home-v11-chip-${c.key}`}
-            style={[styles.chip, on ? { backgroundColor: sc.accent, borderColor: sc.accent } : { backgroundColor: sc.bgSurface, borderColor: sc.border }]}
-          >
+        const look = [styles.chip, on ? { backgroundColor: sc.accent, borderColor: sc.accent } : { backgroundColor: sc.bgSurface, borderColor: sc.border }];
+        const words = (
+          <>
             <Text style={[styles.chipText, { color: on ? sc.textOnAccent : sc.textPrimary }]} maxFontSizeMultiplier={1.3}>{c.label}</Text>
             <Text style={[styles.chipText, on ? [styles.onCount, { color: sc.textOnAccent }] : { color: sc.textMuted }]} maxFontSizeMultiplier={1.3}>{c.count}</Text>
+          </>
+        );
+        return pick ? (
+          <Pressable
+            key={c.key}
+            onPress={() => { if (on) return; void HapticService.selection(); pick(c.key); }}
+            accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${c.label}, ${c.count}`}
+            hitSlop={{ top: 4, bottom: 4 }} testID={`coach-home-v11-chip-${c.key}`} style={look}
+          >
+            {words}
           </Pressable>
+        ) : (
+          <View key={c.key} accessible accessibilityRole="header" accessibilityLabel={`${c.label}, ${c.count}`} testID={`coach-home-v11-chip-${c.key}`} style={look}>
+            {words}
+          </View>
         );
       })}
     </ScrollView>
