@@ -221,8 +221,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
         <Text style={s.eyebrow}>EXTRAS, NOT IN THE PLAN</Text>
         <TextLink label="Add" tone="accent" underline={false} accessibilityHint="Search or pick a recent food" onPress={() => p.onSomethingElse(next?.mealType ?? 'snack')} testID="food-day-add" />
       </View>
-      {day.extras.map((l) => (
-        <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)} style={s.extra}
+      {/* The water card's top hairline closes this list, so the last extra draws none of its own. */}
+      {day.extras.map((l, i) => (
+        <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)}
+          style={[s.extra, i < day.extras.length - 1 && s.extraLine]}
           accessibilityRole="button" accessibilityLabel={`${l.foodName}, logged to ${l.mealType}, ${n(l.calories)} kcal`}
           accessibilityHint="Edit, move or delete this food">
           <Text style={s.time}>{l.createdAt ? clock(l.createdAt) : ''}</Text>
@@ -304,10 +306,8 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   },
   outlineText: { ...typography.bodyMd, color: sc.accentText },
   sect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 4 },
-  extra: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border,
-  },
+  extra: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 8 },
+  extraLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
   time: { ...typography.caption, letterSpacing: 0, width: 62, color: sc.textMuted },
   quiet: {
     marginTop: 20, padding: 16, borderRadius: radius.card, backgroundColor: sc.bgSurface,
