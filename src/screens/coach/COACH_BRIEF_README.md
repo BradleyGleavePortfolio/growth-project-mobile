@@ -39,11 +39,11 @@ Behind `EXPO_PUBLIC_FF_COACH_BRIEF_GATE` (off in every profile; needs `coachBrie
 | 1, with a first name | "Reply to {first name}", "Review {first name}'s weight change", "Check on {first name}": opens what `actionTarget` opens |
 | 2 or more, or 1 with no usable name | one row, "See messages", "See weight logs" or "See check-ins": opens `SettingsStack > CoachBriefList` |
 
-Kinds are taken in a fixed order (messages, weight, check-ins, then the head coach's Money and Team) and only the first two
+Kinds are taken in a fixed order (messages, weight, check-ins) and only the first two
 with a row are kept; "Thank you, Roman" follows them. Clients are counted by distinct `client_id`; items with no
 `client_id`, unknown kinds and the retired `workout_approval` are dropped. A missing, blank or "Client" name never shows:
-that client gets the list row. Head coach: failed payments and team revenue give one "See Money" row; Team rows ("See your
-team") only with Team Mode on. A row with no destination is never shown.
+that client gets the list row. Head coach items (failed payments, team revenue, team) give no row until Money and Team have
+their own tabs, so Back from every row lands on Home; the head coach reads the lines and taps "Thank you, Roman".
 
 Screen (`brief/CoachBriefLightScreen.tsx`, `BriefField.tsx`): with the gate on, the `CoachBrief` route shows Concept A,
 "Roman in the light": a dark forest field with a cream and gold glow (SVG), Roman's face and the date, the greeting, Roman's

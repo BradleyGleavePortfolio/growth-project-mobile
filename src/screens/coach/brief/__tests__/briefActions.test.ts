@@ -7,7 +7,7 @@
  * for a kind with two or more clients; the exact destination of a
  * single-client row; and that a list row carries every client counted.
  * Then: repeats, missing names, missing client_id, unknown and retired kinds,
- * head coach kinds with Team Mode off and on.
+ * head coach kinds (no row, Team Mode off and on).
  */
 import type { CoachBriefActionItem } from '../../../../api/coachBriefApi';
 import { featureFlags } from '../../../../config/featureFlags';
@@ -164,32 +164,16 @@ describe('selectBriefActions: counting clients', () => {
 
 describe('selectBriefActions: head coach kinds', () => {
   const head = (type: string): CoachBriefActionItem => ({ type, detail: `${type} detail`, priority: 1 });
-  const money = { tab: 'SettingsStack', params: { screen: 'CoachMoney', initial: false } };
+  const HEAD = ['dunning_queue', 'team_revenue_review', 'sub_coach_operations', 'team_performance'].map(head);
 
   afterEach(() => jest.replaceProperty(featureFlags, 'teamMode', false));
 
-  it('opens Money once for failed payments and team revenue', () => {
-    const rows = selectBriefActions([head('team_revenue_review'), head('dunning_queue')]);
-    expect(rows).toEqual([{ kind: 'money', label: 'See Money', opens: 'screen', target: money }]);
-  });
-
-  it('hides Team rows while Team Mode is off', () => {
-    expect(selectBriefActions([head('sub_coach_operations'), head('team_performance')])).toEqual([]);
-    expect(selectBriefActions([head('team_performance'), head('dunning_queue')]).map((r) => r.kind)).toEqual(['money']);
-  });
-
-  it('shows one Team row after Money when Team Mode is on', () => {
-    jest.replaceProperty(featureFlags, 'teamMode', true);
-    const rows = selectBriefActions([head('team_performance'), head('sub_coach_operations'), head('dunning_queue')]);
-    expect(rows).toEqual([
-      { kind: 'money', label: 'See Money', opens: 'screen', target: money },
-      { kind: 'team', label: 'See your team', opens: 'screen', target: { tab: 'TeamStack' } },
+  it.each([false, true])('give no row, Team Mode %s (Back must land on Home)', (teamMode) => {
+    jest.replaceProperty(featureFlags, 'teamMode', teamMode);
+    expect(selectBriefActions(HEAD)).toEqual([]);
+    expect(selectBriefActions([...HEAD, ...many('weight_flag', 6), item('checkin_missing', 0)]).map((r) => r.label)).toEqual([
+      'See weight logs',
+      'Check on Tom',
     ]);
-  });
-
-  it('client kinds come first and the total stays at two', () => {
-    jest.replaceProperty(featureFlags, 'teamMode', true);
-    const rows = selectBriefActions([head('dunning_queue'), head('team_performance'), ...many('weight_flag', 6), item('checkin_missing', 0)]);
-    expect(rows.map((r) => r.label)).toEqual(['See weight logs', 'Check on Tom']);
   });
 });
