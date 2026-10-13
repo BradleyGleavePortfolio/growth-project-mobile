@@ -39,6 +39,7 @@ const client = (shared = true) => ({
   activity: { shared, lastActiveOn: shared ? day(0) : null, checkInsToReview: shared ? 2 : null },
 }) as unknown as RosterClient;
 const now = new Date().toISOString();
+const WORKOUT = `Full body A on ${new Date().toLocaleDateString('en-US', { weekday: 'long' })}, 1 of 2`;
 const assignment = (coach: string, done: boolean) => ({ scheduled_for: `${day(0)}T12:00:00`, assigned_by_coach_id: coach, completed_at: done ? now : null });
 const summary = (consent: Record<string, boolean> = {}, empty = false) => ({
   data: {
@@ -77,7 +78,7 @@ describe('UI-4 peek sheet', () => {
     expect(screen.getByText('Logged today. 2 check-ins waiting for you.')).toBeTruthy();
     expect(screen.getByText('Today: energy 2 of 5, knee tight')).toBeTruthy();
     expect(screen.getByText('1,420 of 1,900 kcal, protein 96 g')).toBeTruthy();
-    expect(screen.getByText('Full body A today, 1 of 2')).toBeTruthy();
+    expect(screen.getByText(WORKOUT)).toBeTruthy();
     expect(screen.getByText('Not shared by Maya')).toBeTruthy();
     expect(screen.getByText('icon:lock-closed-outline')).toBeTruthy();
     expect(screen.getByText('Message Maya')).toBeTruthy();
@@ -136,13 +137,13 @@ describe('UI-4 peek sheet', () => {
     await mount();
     expect(screen.getByText('Could not load this client. Please try again.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('peek-retry'));
-    await waitFor(() => expect(screen.getByText('Full body A today, 1 of 2')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(WORKOUT)).toBeTruthy());
   });
 
   it('reads weigh-ins and targets the way the mockup words them', () => {
     const s = summary({ body_metrics: true }).data;
     const slices = peekSlices(client(), { ...s, weight_logs: [{ weight_lbs: 182.44, date: day(0) }] }, [], 'coach-1', null);
-    expect(slices.weighIn.text).toBe('182.4 lb today');
+    expect(slices.weighIn.text).toBe('Today: 182.4 lb');
     expect(slices.food.text).toBe('1,420 kcal, protein 96 g'); // no target: no "of"
     expect(slices.checkIn).toEqual({ text: 'Nothing logged yet', shared: true, hasOne: false });
   });

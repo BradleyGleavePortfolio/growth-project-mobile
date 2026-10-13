@@ -109,12 +109,12 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
                 <Text style={[s.small, s.statusText]}>{status.text}</Text>
               </View>
             ) : null}
-            {load.state === 'loading' ? <QuietLoading label={`Loading ${first}`} rows={4} testID="peek-loading" /> : null}
+            {load.state === 'loading' ? <QuietLoading label="Loading clients" rows={4} testID="peek-loading" /> : null}
             {load.state === 'error' ? <QuietError message={LOAD_FAILED} onRetry={() => void fetchPeek(client.id)} /> : null}
             {slices ? (
               <View>
                 {slice('checkins', 'clipboard-outline', 'Check-ins', slices.checkIn, slices.checkIn.hasOne ? (
-                  <HapticPressable intent="light" style={s.review} onPress={() => open({ screen: 'ClientDetail', tab: 'timeline' })} accessibilityRole="button" accessibilityLabel={`Review ${first}'s check-ins`} testID="peek-review">
+                  <HapticPressable intent="light" style={s.review} onPress={() => open({ screen: 'ClientDetail', tab: 'timeline' })} accessibilityRole="button" accessibilityLabel="Review" testID="peek-review">
                     <Text style={s.link}>Review</Text>
                   </HapticPressable>
                 ) : undefined)}
@@ -130,14 +130,14 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
                 </HapticPressable>
               </View>
               <View style={s.flex}>
-                <HapticPressable intent="light" style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel={`Send ${first} a nudge`} testID="peek-nudge">
+                <HapticPressable intent="light" style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
                   <Text style={s.outlineText} numberOfLines={1}>Send nudge</Text>
                 </HapticPressable>
               </View>
             </View>
             <View style={s.chips}>
               {chips.map(([label, t]) => (
-                <HapticPressable key={label} intent="light" style={s.chip} onPress={() => open(t)} accessibilityRole="button" accessibilityLabel={`${label}, ${first}`} testID={`peek-chip-${label}`}>
+                <HapticPressable key={label} intent="light" style={s.chip} onPress={() => open(t)} accessibilityRole="button" accessibilityLabel={label} testID={`peek-chip-${label}`}>
                   <Text style={s.chipText}>{label}</Text>
                 </HapticPressable>
               ))}

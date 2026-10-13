@@ -29,23 +29,20 @@ function localDay(v: unknown, timestamp: boolean): string | null {
   return Number.isNaN(d.getTime()) ? null : bucketDateLocal(d);
 }
 
-/** "today", "yesterday", "on Wednesday" (this week) or "on Sep 30" (the mockup's "Full body A on Wednesday"). */
+/** "on Wednesday" within the last week, else "on Sep 30" (the mockup's "Full body A on Wednesday"). */
 function whenWords(day: string, today: Date): string {
-  const word = dayWord(day, today);
-  if (word === 'Today' || word === 'Yesterday') return word.toLowerCase();
   const [y, m, d] = day.split('-').map(Number);
-  return /^[A-Z][a-z]{2}$/.test(word) ? `on ${WEEKDAYS[new Date(y, m - 1, d).getDay()]}` : `on ${MONTHS[m - 1]} ${d}`;
+  return /^(Today|Yesterday|[A-Z][a-z]{2})$/.test(dayWord(day, today)) ? `on ${WEEKDAYS[new Date(y, m - 1, d).getDay()]}` : `on ${MONTHS[m - 1]} ${d}`;
 }
 
 export const notSharedBy = (c: RosterClient) => `Not shared by ${firstName(c)}`;
 
-/** "Active, joined Aug 14" (the mockup's plan type is not on any coach route, so it is left out). */
+/** "Active, joined Aug 14" (the mockup's plan type is on no coach route, so it is left out); archived reads "Archived". */
 export function peekJoinedLine(c: RosterClient): string {
-  const state = c.status === 'archived' ? 'Archived' : 'Active';
-  const day = localDay(c.createdAt, false);
-  if (!day) return state;
+  const day = c.status === 'archived' ? null : localDay(c.createdAt, false);
+  if (!day) return c.status === 'archived' ? 'Archived' : 'Active';
   const [, m, d] = day.split('-').map(Number);
-  return `${state}, joined ${MONTHS[m - 1]} ${d}`;
+  return `Active, joined ${MONTHS[m - 1]} ${d}`;
 }
 
 /** "Logged today. 2 check-ins waiting for you." Null when the client shares or logged nothing (each slice says so). */
@@ -95,7 +92,7 @@ export function peekSlices(
   const energy = latest ? num(latest.energy) : null;
   const note = latest ? text(latest.notes)?.split('\n')[0] ?? null : null;
   const parts = [energy != null ? `energy ${energy} of 5` : null, note].filter(Boolean);
-  const checkText = checkDay ? `${dayWord(checkDay, today)}: ${parts.length ? parts.join(', ') : 'checked in'}` : NOTHING;
+  const checkText = checkDay ? `${dayWord(checkDay, today)}${parts.length ? `: ${parts.join(', ')}` : ''}` : NOTHING;
 
   const day = obj(s.today);
   const targets = resolveCoachTargets(target ?? null, (s.profile as ClientProfile | null) ?? null);
@@ -119,7 +116,8 @@ export function peekSlices(
   const weight = rows(s.weight_logs)[0];
   const lbs = weight ? num(weight.weight_lbs) : null;
   const weightDay = weight ? localDay(weight.date, false) : null;
-  const weighText = lbs != null && weightDay ? `${Math.round(lbs * 10) / 10} lb ${whenWords(weightDay, today)}` : NOTHING;
+  // The check-in slice's "{day}: {value}" with today's "{weight} lb" (WeeklySummaryTab).
+  const weighText = lbs != null && weightDay ? `${dayWord(weightDay, today)}: ${Math.round(lbs * 10) / 10} lb` : NOTHING;
 
   return {
     checkIn: { text: shared.checkIns ? checkText : off, shared: shared.checkIns, hasOne: shared.checkIns && !!checkDay },
