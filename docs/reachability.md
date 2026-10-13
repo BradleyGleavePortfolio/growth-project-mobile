@@ -68,6 +68,10 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
   (`ClientConsultationPrivacy.test.tsx`).
 - Summary card on Client detail shows the status line ("Completed Oct 1, 2026",
   or "In progress") and flags readiness yes answers before any tap.
+- Heading: the client's name from the route (Client detail), else the read's
+  `client_name` (a flag alert tap, whose row stores no name; the server sends
+  it only to a reader with live access). The line keeps its height while the
+  read loads and says "Client" only when neither has a name (FLAG-2).
 
 
 ## Signed out and onboarding

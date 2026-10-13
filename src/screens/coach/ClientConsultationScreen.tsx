@@ -2,7 +2,8 @@
  * ClientConsultationScreen — the coach's read of one client's consultation
  * answers (owner decision 2026-09-30: the coach sees every client's
  * consultation answers, easily). Reached from client detail > Summary >
- * "Consultation" card (ConsultationSummaryCard).
+ * "Consultation" card (ConsultationSummaryCard), and from a flag alert tap
+ * (pushTapRouter `ClientConsultation`, `{ clientId }` with no name).
  *
  * Reads GET /coach/clients/:clientId/consultation (backend #607, live in
  * production; contract in src/api/coachConsultationApi.ts). Read-only: the
@@ -139,7 +140,14 @@ export default function ClientConsultationScreen({ route }: Props): React.ReactE
     });
   }, [q.error]);
 
-  const first = firstNameOf(clientName);
+  // FLAG-2: a flag alert tap carries no name (alert rows store none, owner 4),
+  // so the read supplies it, and the server sends it only to a coach who can
+  // read the answers now. The heading keeps its height while the read loads,
+  // so it never flashes "Client" and nothing moves when the name arrives.
+  const name =
+    clientName?.trim() || (q.data?.kind === 'ok' ? q.data.view.client_name?.trim() : '') || '';
+  const heading = name || (q.isLoading ? '' : 'Client');
+  const first = firstNameOf(name);
 
   let body: React.ReactNode;
   if (q.isLoading) {
@@ -248,10 +256,12 @@ export default function ClientConsultationScreen({ route }: Props): React.ReactE
         }
       >
         <Text style={[typography.eyebrow, { color: sc.textMuted }]}>Consultation</Text>
-        <View ph-no-capture testID="client-consultation-heading">
-          <Text style={[typography.h2, { color: sc.textPrimary }]} accessibilityRole="header">
-            {clientName?.trim() ? clientName.trim() : 'Client'}
-          </Text>
+        <View ph-no-capture style={styles.heading} testID="client-consultation-heading">
+          {heading ? (
+            <Text style={[typography.h2, { color: sc.textPrimary }]} accessibilityRole="header">
+              {heading}
+            </Text>
+          ) : null}
         </View>
         {body}
       </ScrollView>
@@ -398,6 +408,7 @@ function makeStyles(sc: SemanticTokens) {
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
     content: { padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing['3xl'] },
     center: { paddingVertical: spacing.xl, alignItems: 'center' },
+    heading: { minHeight: typography.h2.lineHeight },
     card: {
       backgroundColor: sc.bgSurface,
       borderRadius: 12,
