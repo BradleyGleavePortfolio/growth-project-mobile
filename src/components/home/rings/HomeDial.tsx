@@ -22,13 +22,12 @@ export interface HomeDialProps {
   view: DialView;
   onPress: () => void;
   accessibilityLabel: string;
-  accessibilityHint: string;
   testID: string;
   /** The centre is a prompt ("Connect"), not a number. */
   prompt?: boolean;
 }
 
-export default function HomeDial({ label, view, onPress, accessibilityLabel, accessibilityHint, testID, prompt }: HomeDialProps) {
+export default function HomeDial({ label, view, onPress, accessibilityLabel, testID, prompt }: HomeDialProps) {
   const { semanticColors: sc } = useTheme();
   const fill = clamp01(view.progress) * C;
   return (
@@ -40,7 +39,6 @@ export default function HomeDial({ label, view, onPress, accessibilityLabel, acc
       }}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint={accessibilityHint}
       style={({ pressed }) => [styles.dial, { opacity: pressed ? 0.7 : 1 }]}
     >
       <View style={styles.ring}>

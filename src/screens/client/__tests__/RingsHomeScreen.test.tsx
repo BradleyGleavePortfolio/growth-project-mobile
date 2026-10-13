@@ -9,6 +9,8 @@ let mockRomanChat = true;
 let mockRecovery: number | null = null;
 let mockAsleep: number | null = null;
 let mockCheckIn: unknown = null;
+let mockSleepRead: 'ok' | 'failed' | 'pending' = 'ok';
+let mockCheckInRead: 'ok' | 'failed' | 'pending' = 'ok';
 const mockUser: { id: string; coach_id: string; profile: Record<string, unknown> } = { id: 'u1', coach_id: 'c1', profile: {} };
 const mockDay = {
   foodLogs: [], dailyTotals: { calories: 1030 }, waterOz: 0, selectedDate: getTodayString(), hasLoadedDay: true,
@@ -25,10 +27,12 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUs
 jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => ({ calories: 1850, protein: 150, carbs: 200, fat: 60 }) }));
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockDay }));
-jest.mock('../../../hooks/useWearableSamples', () => ({ useWearableSamples: () => ({ data: undefined, refetch: jest.fn() }) }));
+jest.mock('../../../hooks/useWearableSamples', () => ({
+  useWearableSamples: () => ({ data: undefined, isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn() }),
+}));
 jest.mock('../../../hooks/useApi', () => ({
   ...jest.requireActual('../../../hooks/useApi'),
-  useTodayCheckIn: () => ({ data: mockCheckIn, refetch: jest.fn() }),
+  useTodayCheckIn: () => ({ data: mockCheckIn, isSuccess: mockCheckInRead === 'ok', isError: mockCheckInRead === 'failed', refetch: jest.fn() }),
 }));
 jest.mock('../../../entitlements/EntitlementProvider', () => ({
   useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
@@ -75,7 +79,7 @@ const { start: weekStart } = require('../../../components/home/rings/homeRings')
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockUser.profile = { workout_days_per_week: 3 };
-  mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockCheckIn = null;
+  mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockCheckIn = null; mockSleepRead = 'ok'; mockCheckInRead = 'ok';
   mockDay.loadError = null;
   mockHistory.mockResolvedValue({ data: [] });
   mockAssignments.mockResolvedValue([
@@ -132,6 +136,37 @@ it('Sleep falls back to the check-in, and with neither shows Connect, never "com
   await view.rerender(<HomeScreen />);
   expect(await screen.findByLabelText('Sleep, Connect')).toBeTruthy();
   expect(screen.queryByText(/coming soon/i)).toBeNull();
+});
+
+it.each([
+  ['loading', 'pending', 'ok'],
+  ['failed', 'failed', 'ok'],
+  ['check-in loading', 'ok', 'pending'],
+  ['check-in failed', 'ok', 'failed'],
+] as const)('Sleep while its read is %s shows "—", never Connect, and opens Sleep and recovery', async (_, sleepRead, checkInRead) => {
+  mockSleepRead = sleepRead; mockCheckInRead = checkInRead;
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Sleep, —'));
+  expect(screen.queryByText('Connect')).toBeNull();
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
+});
+
+it('Sleep keeps a verified check-in when the Health read failed', async () => {
+  mockSleepRead = 'failed'; mockCheckIn = { sleep_hours: 6.5 };
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Sleep, 6.5 h asleep'));
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
+});
+
+it.each([
+  ['history', () => mockHistory.mockRejectedValue(new Error('offline'))],
+  ['assignments', () => mockAssignments.mockRejectedValue(new Error('offline'))],
+] as const)('Train shows "—", not a count, when the %s read failed', async (_, fail) => {
+  mockAssignments.mockResolvedValue([]);
+  mockHistory.mockResolvedValue({ data: [{ date: weekStart }] });
+  fail();
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Train, — workouts, This week')).toBeTruthy();
 });
 
 it('coachless: Roman shown locked in the header, never opens Roman, Join a coach under the dials', async () => {

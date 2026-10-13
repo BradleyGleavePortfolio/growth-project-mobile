@@ -24,7 +24,7 @@ import { recoveryScore, sleepDeficit } from '../wearables/recoveryData';
 import HomeHeaderActions from '../../../components/home/HomeHeaderActions';
 import CoachlessHomeSlot from '../../../components/coachless/CoachlessHomeSlot';
 import HomeDial from '../../../components/home/rings/HomeDial';
-import { foodDial, sleepDial, trainDial, type DialView } from '../../../components/home/rings/homeRings';
+import { foodDial, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
 import { homeDateLine } from '../homeDate';
 
 /** The raw workout reads behind the Train dial (null = that read failed). */
@@ -40,6 +40,8 @@ export interface RingsHomeScreenProps {
   onRefresh: () => Promise<void>;
 }
 
+const readState = (q: { isSuccess: boolean; isError: boolean }): ReadState => (q.isSuccess ? 'ok' : q.isError ? 'failed' : 'pending');
+
 const dialLabel = (name: string, v: DialView): string =>
   [name, `${v.value}${v.unit ? ` ${v.unit}` : ''}`, v.sub].filter(Boolean).join(', ');
 
@@ -47,15 +49,18 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
+  // One window per local day (last 7 days through tomorrow's midnight), so the query key is
+  // stable: Home reopens on cached data and pull to refresh refetches the same key.
+  const today = getTodayString();
   const range = useMemo(() => {
-    const to = new Date();
-    return { from: new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), to: to.toISOString() };
-  }, [refreshing]);
+    const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+    return { from: new Date(y, m - 1, d - 7).toISOString(), to: new Date(y, m - 1, d + 1).toISOString() };
+  }, [today]);
   const sleepRead = useWearableSamples(
     { bucket: 'SLEEP_RECOVERY', from: range.from, to: range.to, granularity: 'day', preferredOnly: true },
     { enabled: !!currentUser },
   );
-  const checkIn = useTodayCheckIn(getTodayString(), !!currentUser);
+  const checkIn = useTodayCheckIn(today, !!currentUser);
   const refresh = useCallback(async () => {
     await Promise.all([onRefresh(), sleepRead.refetch(), checkIn.refetch()]);
   }, [onRefresh, sleepRead.refetch, checkIn.refetch]);
@@ -69,8 +74,10 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
     recovery: recoveryScore(sleepRead.data),
     asleepMin: sleepDeficit(sleepRead.data)?.asleepMinutes ?? null,
     checkInHours: Number((checkIn.data as { sleep_hours?: number | string | null } | null | undefined)?.sleep_hours) || null,
+    reads: { health: readState(sleepRead), checkIn: readState(checkIn) },
   });
-  const sleepHasHealth = sleep.source === 'health';
+  // Connections only when Health answered with no sleep; pending or failed opens Sleep and recovery.
+  const sleepToConnections = sleep.source === 'none' || (sleep.source === 'checkin' && readState(sleepRead) === 'ok');
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
@@ -89,20 +96,19 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
         <Text testID="home-date" style={[typography.eyebrow, { color: sc.textMuted }]}>{homeDateLine(new Date())}</Text>
         <View style={styles.dials} testID="home-dials">
           <HomeDial label="Food" view={food} testID="home-dial-food" accessibilityLabel={dialLabel('Food', food)}
-            accessibilityHint="Opens the food log" onPress={() => navigation.navigate('Log')} />
+            onPress={() => navigation.navigate('Log')} />
           <HomeDial label="Train" view={train} testID="home-dial-train" accessibilityLabel={dialLabel('Train', train)}
-            accessibilityHint="Opens Train" onPress={() => navigation.navigate('WorkoutTab')} />
+            onPress={() => navigation.navigate('WorkoutTab')} />
           <HomeDial label="Sleep" view={sleep} testID="home-dial-sleep" prompt={sleep.source === 'none'}
             accessibilityLabel={dialLabel('Sleep', sleep)}
-            accessibilityHint={sleepHasHealth ? 'Opens Sleep and recovery' : 'Opens connected devices'}
-            onPress={() => (sleepHasHealth
-              ? navigation.navigate('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } })
-              : navigation.navigate('MoreTab', { screen: 'Connections', initial: false }))} />
+            onPress={() => (sleepToConnections
+              ? navigation.navigate('MoreTab', { screen: 'Connections', initial: false })
+              : navigation.navigate('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } }))} />
         </View>
         <CoachlessHomeSlot part="join" />
         <View style={styles.cta}>
           {workout.exists === 'loading' ? (
-            <QuietLoading label="Loading today's workout" rows={1} testID="cta-skeleton" />
+            <QuietLoading label="Loading" rows={1} testID="cta-skeleton" />
           ) : workout.exists ? (
             <PrimaryButton label={workout.label} accessibilityHint={workout.hint} onPress={workout.onContinue} testID="home-continue-cta" />
           ) : (

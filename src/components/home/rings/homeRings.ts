@@ -2,7 +2,8 @@
  * homeRings — the numbers inside the three Home dials (UI-1 rings and tiles).
  * Each dial is its own number, never a combined score. Pure, so every rule is
  * unit tested: no invented data, "—" while a read is pending or failed, and the
- * Sleep dial never says "coming soon" (an empty ring and "Connect" instead).
+ * Sleep dial never says "coming soon" (an empty ring and "Connect" instead, only
+ * once both of its reads answered with no sleep).
  */
 import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
@@ -62,17 +63,19 @@ export function trainDial(input: {
   daysPerWeek: number | undefined;
   loading: boolean;
 }): DialView {
-  if (input.loading) return { value: '—', unit: 'workouts', sub: 'This week', progress: 0 };
+  const unknown: DialView = { value: '—', unit: 'workouts', sub: 'This week', progress: 0 };
+  // A failed read is not a zero: a failed assignment read is no proof of no coach plan.
+  if (input.loading || input.assignments === null) return unknown;
   const week = weekBounds(input.now);
-  const planned = (input.assignments ?? []).filter((a) => inWeek(dayOf(a.scheduled_for), week));
+  const planned = input.assignments.filter((a) => inWeek(dayOf(a.scheduled_for), week));
   if (planned.length > 0) {
     const done = planned.filter((a) => !!a.completed_at).length;
     return { value: `${done} of ${planned.length}`, unit: 'workouts', sub: 'This week', progress: clamp01(done / planned.length) };
   }
-  if (input.history === null && input.assignments === null) return { value: '—', unit: 'workouts', sub: 'This week', progress: 0 };
-  // No coach assignments this week (or a failed read, null): the client's own workouts against days per week.
+  if (input.history === null) return unknown;
+  // No coach assignments this week: the client's own workouts against days per week.
   const days = new Set(
-    (input.history ?? [])
+    input.history
       .filter((r) => r && r.completed !== false)
       // `date` is a calendar day (UTC midnight): its day part, as isWorkoutDoneToday reads it.
       .map((r) => (typeof r.date === 'string' && r.date.length >= 10 ? r.date.slice(0, 10) : dayOf(r.created_at ?? null)))
@@ -83,12 +86,15 @@ export function trainDial(input: {
   return { value: `${days.size} of ${goal}`, unit: 'workouts', sub: 'This week', progress: clamp01(days.size / goal) };
 }
 
-export type SleepSource = 'health' | 'checkin' | 'none';
+/** 'unknown': a read is still pending or failed, so the dial shows "—", never "Connect". */
+export type SleepSource = 'health' | 'checkin' | 'none' | 'unknown';
+export type ReadState = 'pending' | 'failed' | 'ok';
 
 export function sleepDial(input: {
   recovery: number | null;
   asleepMin: number | null;
   checkInHours: number | null | undefined;
+  reads: { health: ReadState; checkIn: ReadState };
 }): DialView & { source: SleepSource } {
   if (input.recovery !== null) {
     return {
@@ -102,9 +108,13 @@ export function sleepDial(input: {
   if (input.asleepMin !== null) {
     return { value: `${Math.round(input.asleepMin / 6) / 10}`, unit: 'h asleep', sub: '', progress: clamp01(input.asleepMin / DEFAULT_SLEEP_NEED_MIN), source: 'health' };
   }
+  const unknown = { value: '—', unit: '', sub: '', progress: 0, source: 'unknown' as const };
+  if (input.reads.health === 'pending') return unknown;
+  // Health answered with no sleep, or failed: the check-in's verified hours still count.
   const hours = typeof input.checkInHours === 'number' && input.checkInHours > 0 ? input.checkInHours : null;
   if (hours !== null) {
     return { value: `${Math.round(hours * 10) / 10}`, unit: 'h asleep', sub: '', progress: clamp01((hours * 60) / DEFAULT_SLEEP_NEED_MIN), source: 'checkin' };
   }
+  if (input.reads.health !== 'ok' || input.reads.checkIn !== 'ok') return unknown;
   return { value: 'Connect', unit: '', sub: '', progress: 0, source: 'none' };
 }
