@@ -161,6 +161,8 @@ describe('UI-2 coach Home, flag on', () => {
     expect(v.getByTestId('coach-home-v11-dial-earnings').props.accessibilityLabel).toMatch(/^Earnings: \$0(\.00)? this month\. \w+ so far$/);
     expect(v.getByTestId('coach-home-v11-roman-line').props.children).toBe(PACKAGE_NEXT);
     expect(v.getByTestId('coach-home-v11-chip-setup').props.accessibilityLabel).toBe('Setup, 3');
+    // The one Setup chip has nothing to switch to: a heading in the mockup's pill, never a button.
+    expect(v.getByTestId('coach-home-v11-chip-setup').props.accessibilityRole).toBe('header');
     expect(v.queryByTestId('coach-home-v11-step-get_paid')).toBeNull();
     expect(v.getByTestId('coach-home-v11-step-package').props.accessibilityLabel).toBe('Step 2. Create your first package. Free, or $19.99 and up. Create');
     expect(v.getByTestId('coach-home-v11-step-invite').props.accessibilityLabel).toBe('Step 3. Invite your first client. Share your link or QR code. Share link');

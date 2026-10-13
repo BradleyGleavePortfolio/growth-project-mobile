@@ -193,7 +193,7 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
       {zero && setupSnap ? (
         <View style={styles.rosterSection} testID="coach-home-v11-setup">
           {plan && plan.open.length > 0 ? (
-            <FilterChips chips={[{ key: 'setup', label: 'Setup', count: plan.open.length }]} selected="setup" onSelect={() => undefined} />
+            <FilterChips chips={[{ key: 'setup', label: 'Setup', count: plan.open.length }]} selected="setup" />
           ) : null}
           {setupSnap.errors.length > 0 ? <SetupNotice error={setupSnap.errors[0]} onRetry={reloadSetup} testID="coach-home-v11-setup-error" /> : null}
           {plan && plan.open.length > 0 ? (
