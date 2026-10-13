@@ -60,7 +60,7 @@ async function relaunchAndShow() {
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <FoodDayGate on coached selectedDate={today} foodLogs={foodLogs} eaten={{ calories: 810, protein: 52 }}
         targets={{ calories: 1200, protein: 100 }} ready saving={false} notes={null} water={null}
-        onDateChange={noop} onLogPlanned={noop} onSomethingElse={noop} onEditFood={noop}>
+        onDateChange={noop} onLogPlanned={noop} onRepeat={noop} onSomethingElse={noop} onEditFood={noop}>
         <Text>Classic food log</Text>
       </FoodDayGate>
     </QueryClientProvider>,
