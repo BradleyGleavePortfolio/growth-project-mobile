@@ -42,17 +42,17 @@ describe('CoachBriefListScreen', () => {
       <CoachBriefListScreen route={{ params: { kind: row.kind, items: row.items } }} />,
     );
     expect(getByText('Weight logs')).toBeTruthy();
-    SIX.forEach((client, n) => {
+    for (const [n, client] of SIX.entries()) {
       expect(getByText(client.client_name as string)).toBeTruthy();
       const press = getByTestId(`brief-list-row-w-${n}`);
       expect(press.props.accessibilityHint).toBe('Opens the screen for this item');
-      fireEvent.press(press);
+      await fireEvent.press(press);
       expect(mockNavigate).toHaveBeenLastCalledWith('ClientsStack', {
         screen: 'ClientDetail',
         params: { clientId: `w-${n}`, clientName: client.client_name },
         initial: false,
       });
-    });
+    }
     expect(mockNavigate).toHaveBeenCalledTimes(6);
   });
 
@@ -66,7 +66,7 @@ describe('CoachBriefListScreen', () => {
     );
     expect(getByText('Messages')).toBeTruthy();
     expect(getByText('Can we move Thursday?')).toBeTruthy();
-    fireEvent.press(getByTestId('brief-list-row-m-2'));
+    await fireEvent.press(getByTestId('brief-list-row-m-2'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', {
       screen: 'ClientMessages',
       params: { clientId: 'm-2', clientName: 'Dana Ortiz' },
@@ -85,7 +85,7 @@ describe('CoachBriefListScreen', () => {
 
   it('Back returns to the brief', async () => {
     const { getByTestId } = await render(<CoachBriefListScreen route={{ params: { kind: 'weight', items: SIX } }} />);
-    fireEvent.press(getByTestId('brief-list-top-back'));
+    await fireEvent.press(getByTestId('brief-list-top-back'));
     expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 
