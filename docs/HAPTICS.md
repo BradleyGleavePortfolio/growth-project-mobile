@@ -68,6 +68,8 @@ When the toggle changes:
 | `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
 | `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
+| `HomeTile` (rings Home) | `selection()` | A tile opens its screen |
+| `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |
 
 ## Architecture
 

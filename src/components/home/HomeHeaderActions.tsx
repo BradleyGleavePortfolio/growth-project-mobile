@@ -16,7 +16,8 @@
  * on, and stays empty otherwise.
  *
  * `layout="rings"` (UI-1 rings Home): a coachless client sees Roman locked
- * ("Opens with a coach", status only) instead of "Ask Roman" (139-15).
+ * ("Opens with a coach", status only) instead of "Ask Roman" (139-15), and a
+ * coached client's Roman avatar moves to "Ask Roman" under Roman's line.
  *
  * The coach name comes from `GET /v1/clients/me/coach` (same endpoint as
  * CoachIntroductionBanner); any failure keeps the generic label.
@@ -166,7 +167,8 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
       ) : (
         <View style={styles.message} testID="home-leading-empty" />
       )}
-      {hasCoach && featureFlags.romanChat ? (
+      {/* Rings layout: Roman's door is "Ask Roman" under Roman's line, not the header. */}
+      {hasCoach && featureFlags.romanChat && !rings ? (
         <Pressable
           onPress={openRoman}
           accessibilityRole="button"
