@@ -34,7 +34,7 @@ import { colors, motion, radius } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { logger } from '../../../utils/logger';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import BriefField from './BriefField';
 import { selectBriefActions, type BriefAction, type BriefTarget } from './briefActions';
 
@@ -98,6 +98,7 @@ export default function CoachBriefLightScreen() {
   const { width } = useWindowDimensions();
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [revealed, setRevealed] = useState(false);
+  const [fit, setFit] = useState({ view: 0, content: 0 });
   const mounted = useRef(true);
   const markedRead = useRef<string | null>(null);
   const waited = useRef(false);
@@ -294,6 +295,8 @@ export default function CoachBriefLightScreen() {
           style={styles.words}
           contentContainerStyle={{ paddingTop: insets.top + (wide ? 64 : 44), paddingBottom: 8 }}
           showsVerticalScrollIndicator={false}
+          onLayout={(e) => setFit((f) => ({ ...f, view: e.nativeEvent.layout.height }))}
+          onContentSizeChange={(_w, h) => setFit((f) => ({ ...f, content: h }))}
         >
           <Animated.View
             style={[styles.who, rise(0, 0, 300)]}
@@ -338,6 +341,18 @@ export default function CoachBriefLightScreen() {
             </View>
           ) : null}
         </ScrollView>
+        {fit.content > fit.view + 1 ? (
+          // Long words scroll above the rows; a 32 pt fade shows there is more.
+          <Svg height={32} width="100%" style={styles.more} pointerEvents="none" testID="brief-more">
+            <Defs>
+              <LinearGradient id="more" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset={0} stopColor={colors.forest} stopOpacity={0} />
+                <Stop offset={1} stopColor={colors.forest} stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect width="100%" height={32} fill="url(#more)" />
+          </Svg>
+        ) : null}
         <Animated.View
           style={[styles.rows, { paddingBottom: Math.max(insets.bottom, 16) + 16 }, rise(1000, 8, 300)]}
           pointerEvents={revealed ? 'auto' : 'none'}
@@ -368,6 +383,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#111612' },
   fill: { flex: 1 },
   words: { flexGrow: 0, flexShrink: 1 },
+  more: { marginTop: -32 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   halo: { borderRadius: 31, borderWidth: 4, borderColor: 'rgba(201,169,97,0.14)' },
   glow: { position: 'absolute', left: -29, top: -29 },
