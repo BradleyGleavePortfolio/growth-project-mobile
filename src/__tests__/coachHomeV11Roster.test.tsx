@@ -241,6 +241,26 @@ describe('UI-2 roster reads', () => {
     read.mockRestore();
     store().reset();
   });
+
+  it("the zero-client setup read takes only this coach's own invite mark from a shared device", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { default: api } = require('../services/api') as typeof import('../services/api');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { prefsStorage } = require('../storage/mmkv') as typeof import('../storage/mmkv');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { inviteSharedKey } = require('../lib/coachSetup/setupStatus') as typeof import('../lib/coachSetup/setupStatus');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { rosterSources: real } = require('../screens/coach/home-v11/rosterSources') as typeof import('../screens/coach/home-v11/rosterSources');
+    const get = jest.spyOn(api, 'get').mockRejectedValue(new Error('offline'));
+    // Signed in as coach-b; coach-a shared their link earlier on this device.
+    await prefsStorage.set(inviteSharedKey('coach-a'), 'true');
+    expect((await real.setup()).sharedLink).toBe(false);
+    await prefsStorage.set(inviteSharedKey('coach-b'), 'true');
+    expect((await real.setup()).sharedLink).toBe(true);
+    get.mockRestore();
+    await prefsStorage.delete(inviteSharedKey('coach-a'));
+    await prefsStorage.delete(inviteSharedKey('coach-b'));
+  });
 });
 
 describe('UI-2 roster rules', () => {
