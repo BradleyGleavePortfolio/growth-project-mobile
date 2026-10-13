@@ -12,6 +12,8 @@ import PushPermissionCard from '../../components/home/PushPermissionCard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { featureFlags } from '../../config/featureFlags';
+import ClientLookupScreen from './lookup/ClientLookupScreen';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
@@ -49,7 +51,12 @@ function initials(c: RosterClient): string {
   return `${first}${second}`.toUpperCase();
 }
 
-export default function ClientsListScreen({ navigation }: Props) {
+/** UI-4: the client lookup replaces this list only while its flag is on. */
+export default function ClientsListScreen(props: Props) {
+  return featureFlags.coachClientLookup ? <ClientLookupScreen {...props} /> : <ClientsRosterList {...props} />;
+}
+
+function ClientsRosterList({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // REDO-COACH-133: the Clients tab hides the stack header, so the screen owns
