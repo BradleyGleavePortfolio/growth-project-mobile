@@ -1,4 +1,6 @@
-import { checkInTile, habitsTile, proteinTile, stepsTile, waterTile, weightTile } from '../homeTiles';
+import {
+  checkInTile, fastingTile, habitsTile, loggingTile, nextSessionTile, proteinTile, shiftDay, stepsTile, waterTile, weightTile,
+} from '../homeTiles';
 import type { WeightLog } from '../../../../types';
 
 const log = (date: string, weight: number): WeightLog =>
@@ -71,5 +73,68 @@ describe('stepsTile', () => {
   it('says Connect with no Health source, and dashes when connected with nothing today', () => {
     expect(stepsTile({ today: null, connected: false, goal: 5000, source: null }).value).toBe('Connect');
     expect(stepsTile({ today: null, connected: true, goal: 5000, source: null }).value).toBe('—');
+  });
+});
+
+const MIN = 60000;
+const iso = (ms: number) => new Date(ms).toISOString();
+
+describe('fastingTile', () => {
+  const now = Date.parse('2026-10-13T12:00:00.000Z');
+  it('shows the latest ended fast with "Last fast.", in either key style', () => {
+    expect(fastingTile([
+      { start_time: iso(now - 40 * 60 * MIN), end_time: iso(now - 30 * 60 * MIN) },
+      { startTime: iso(now - (17 * 60 + 5) * MIN), endTime: iso(now - 60 * MIN) },
+    ], now)).toEqual({ value: '16 h 5 m', small: '', sub: 'Last fast.', progress: null, active: false });
+  });
+  it('a running fast shows its time so far, with no foot line', () => {
+    expect(fastingTile([
+      { start_time: iso(now - 90 * MIN), end_time: null },
+      { start_time: iso(now - 30 * 60 * MIN), end_time: iso(now - 14 * 60 * MIN) },
+    ], now)).toEqual({ value: '1 h 30 m', small: '', sub: '', progress: null, active: true });
+  });
+  it('"—" with no fasts, an unread history or unreadable rows', () => {
+    expect(fastingTile([], now).value).toBe('—');
+    expect(fastingTile(undefined, now).value).toBe('—');
+    expect(fastingTile([{ start_time: 'not a date', end_time: null }], now).value).toBe('—');
+  });
+});
+
+describe('nextSessionTile', () => {
+  const now = new Date(2026, 9, 13, 8, 0).getTime();
+  const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).toISOString();
+  it('the earliest scheduled session still ahead: weekday, 12-hour time and its title', () => {
+    const view = nextSessionTile([
+      { id: 's3', status: 'scheduled', start_at: at(16, 13, 30), title: 'Later' },
+      { id: 's1', status: 'scheduled', start_at: at(14, 9), title: ' Check-in call with Jordan ' },
+      { id: 's0', status: 'canceled', start_at: at(13, 10), title: 'Canceled' },
+      { id: 'sp', status: 'scheduled', start_at: at(12, 9), title: 'Past' },
+    ], now);
+    expect(view).toEqual({ value: 'Wed', small: '9:00 am', sub: 'Check-in call with Jordan', progress: null, sessionId: 's1' });
+  });
+  it('12-hour time: midnight and afternoon', () => {
+    expect(nextSessionTile([{ id: 'a', status: 'scheduled', start_at: at(15, 0, 5), title: '' }], now).small).toBe('12:05 am');
+    expect(nextSessionTile([{ id: 'b', status: 'scheduled', start_at: at(15, 13, 30), title: '' }], now).small).toBe('1:30 pm');
+  });
+  it('"—" and no session while the read is pending or failed, or with nothing scheduled ahead', () => {
+    expect(nextSessionTile(undefined, now)).toEqual({ value: '—', small: '', sub: '', progress: null, sessionId: null });
+    expect(nextSessionTile([{ id: 'r', status: 'requested', start_at: at(15, 9), title: 'Asked' }], now).sessionId).toBeNull();
+  });
+});
+
+describe('loggingTile and shiftDay', () => {
+  it('shiftDay moves calendar days across month and year ends', () => {
+    expect(shiftDay('2026-11-01', -1)).toBe('2026-10-31');
+    expect(shiftDay('2027-01-01', -13)).toBe('2026-12-19');
+  });
+  it('counts the days in a row ending today, or yesterday while today is still empty', () => {
+    expect(loggingTile(['2026-10-13', '2026-10-12', '2026-10-11', '2026-10-09'], '2026-10-13'))
+      .toEqual({ value: '3', small: 'days in a row', sub: 'Food logged each day', progress: null });
+    expect(loggingTile(['2026-10-12', '2026-10-11'], '2026-10-13').value).toBe('2');
+    expect(loggingTile(['2026-10-13'], '2026-10-13')).toEqual({ value: '1', small: 'day in a row', sub: 'Food logged each day', progress: null });
+  });
+  it('no run is 0 with no foot line; an unread log is "—"', () => {
+    expect(loggingTile(['2026-10-10'], '2026-10-13')).toEqual({ value: '0', small: 'days in a row', sub: '', progress: null });
+    expect(loggingTile(null, '2026-10-13').value).toBe('—');
   });
 });

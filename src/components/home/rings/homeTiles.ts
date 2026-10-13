@@ -3,7 +3,7 @@
  * every rule is unit tested: real data only, "—" while a read is pending, failed
  * or empty (today's Home placeholder), and Steps says "Connect" without Health.
  */
-import { formatCount } from './homeRings';
+import { formatCount, formatHm } from './homeRings';
 import { ENERGY_LABELS, MOOD_LABELS } from '../../../screens/client/habits/constants';
 import type { WeightLog } from '../../../types';
 
@@ -81,4 +81,54 @@ export function stepsTile(i: { today: number | null; connected: boolean; goal: n
   if (i.today === null) return i.connected ? DASH : { value: 'Connect', small: '', sub: '', progress: null };
   const sub = `Of ${formatCount(i.goal)}${i.source ? `, ${i.source}` : ''}`;
   return { value: formatCount(i.today), small: '', sub, progress: frac(i.today, i.goal) };
+}
+
+type FastRow = { start_time?: string; startTime?: string; end_time?: string | null; endTime?: string | null };
+
+/** A fast running now shows its time so far; otherwise the last fast's length ("Last fast."). */
+export function fastingTile(rows: unknown, now: number): TileView & { active: boolean } {
+  if (!Array.isArray(rows)) return { ...DASH, active: false };
+  const fasts = (rows as FastRow[]).map((r) => {
+    const end = r.end_time || r.endTime;
+    return { start: Date.parse(r.start_time || r.startTime || ''), end: end ? Date.parse(end) : null };
+  }).filter((f) => Number.isFinite(f.start));
+  const active = fasts.filter((f) => f.end === null).sort((a, b) => b.start - a.start)[0];
+  if (active) return { value: formatHm((now - active.start) / 60000), small: '', sub: '', progress: null, active: true };
+  const last = fasts.filter((f) => f.end !== null && Number.isFinite(f.end))
+    .sort((a, b) => (b.end as number) - (a.end as number))[0];
+  if (!last) return { ...DASH, active: false };
+  return { value: formatHm(((last.end as number) - last.start) / 60000), small: '', sub: 'Last fast.', progress: null, active: false };
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** The earliest scheduled session still ahead: "Tue" "9:00 am" and its title. */
+export function nextSessionTile(
+  sessions: ReadonlyArray<{ id: string; status: string; start_at: string; title: string }> | null | undefined,
+  now: number,
+): TileView & { sessionId: string | null } {
+  const next = (sessions ?? []).filter((s) => s.status === 'scheduled' && Date.parse(s.start_at) > now)
+    .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at))[0];
+  if (!next) return { ...DASH, sessionId: null };
+  const at = new Date(next.start_at);
+  const h = at.getHours() % 12 || 12;
+  const time = `${h}:${String(at.getMinutes()).padStart(2, '0')} ${at.getHours() < 12 ? 'am' : 'pm'}`;
+  return { value: WEEKDAYS[at.getDay()] as string, small: time, sub: next.title.trim(), progress: null, sessionId: next.id };
+}
+
+/** A YYYY-MM-DD calendar date moved by whole days. */
+export function shiftDay(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const at = new Date(y, m - 1, d + days);
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
+}
+
+/** Days in a row with food logged, ending today (or yesterday while today is still empty). */
+export function loggingTile(loggedDays: ReadonlyArray<string> | null | undefined, today: string): TileView {
+  if (!loggedDays) return DASH;
+  const days = new Set(loggedDays);
+  let day = days.has(today) ? today : shiftDay(today, -1);
+  let run = 0;
+  while (days.has(day)) { run += 1; day = shiftDay(day, -1); }
+  return { value: String(run), small: run === 1 ? 'day in a row' : 'days in a row', sub: run > 0 ? 'Food logged each day' : '', progress: null };
 }

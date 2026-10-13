@@ -1,6 +1,8 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getTodayString } from '../../../utils/date';
+import { shiftDay } from '../../../components/home/rings/homeTiles';
 
 const mockNavigate = jest.fn();
 const mockHistory = jest.fn();
@@ -12,6 +14,11 @@ let mockCheckIn: unknown = null;
 let mockFitness: unknown;
 const mockInsights = jest.fn((): { data?: unknown } => ({ data: undefined }));
 const WATER_NOT_SAVED = '8 oz of water was not saved. Check the connection, then add it again.';
+const mockFasts = jest.fn(async (): Promise<{ data: unknown }> => ({ data: [] }));
+const mockWeekly = jest.fn<Promise<{ data: unknown }>, [string]>(async () => ({ data: [] }));
+const mockSessions = jest.fn(async (): Promise<unknown[]> => []);
+let mockCalendar = true;
+const mockFocusCallbacks = new Set<() => void>();
 let mockSleepRead: 'ok' | 'failed' | 'pending' = 'ok';
 let mockCheckInRead: 'ok' | 'failed' | 'pending' = 'ok';
 const mockUser: { id: string; coach_id: string; profile: Record<string, unknown> } = { id: 'u1', coach_id: 'c1', profile: {} };
@@ -24,6 +31,7 @@ jest.mock('../../../config/featureFlags', () => {
   // A getter in the object literal would be read once by the spread helper; define it after.
   const flags = { ...jest.requireActual('../../../config/featureFlags').featureFlags, clientHomeRings: true };
   Object.defineProperty(flags, 'romanChat', { get: () => mockRomanChat });
+  Object.defineProperty(flags, 'clientCalendar', { get: () => mockCalendar });
   return { featureFlags: flags };
 });
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
@@ -58,12 +66,21 @@ jest.mock('../wearables/recoveryData', () => ({
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
-  useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
+  useFocusEffect: (cb: () => void) => {
+    mockFocusCallbacks.add(cb);
+    return jest.requireActual('react').useEffect(cb, [cb]);
+  },
 }));
 jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: { get: async (url: string) => ({ data: url.includes('unread') ? { total: 1 } : { name: 'Jordan Lee' } }) },
   workoutApi: { getAll: () => mockHistory() },
+  fastingApi: { getHistory: () => mockFasts() },
+  logApi: { getWeekly: (start: string) => mockWeekly(start) },
+}));
+jest.mock('../../../api/schedulingApi', () => ({
+  ...jest.requireActual('../../../api/schedulingApi'),
+  schedulingApi: { listMySessions: () => mockSessions() },
 }));
 jest.mock('../../../api/workoutBuilderApi', () => ({ workoutBuilderApi: { listMyAssignments: () => mockAssignments() } }));
 jest.mock('../../../storage/activeWorkoutSession', () => ({ loadActiveWorkoutSession: async () => null }));
@@ -89,11 +106,25 @@ import { HapticService } from '../../../ui/haptics/haptics.service';
 
 const { start: weekStart } = require('../../../components/home/rings/homeRings').weekBounds(new Date());
 
+/** Each render gets its own query cache (the tiles' fasting, session and logging reads). */
+function render(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(ui, {
+    wrapper: function Queries({ children }: { children: React.ReactNode }) {
+      return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    },
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockUser.profile = { workout_days_per_week: 3 };
   mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockCheckIn = null; mockFitness = undefined;
-  mockSleepRead = 'ok'; mockCheckInRead = 'ok';
+  mockSleepRead = 'ok'; mockCheckInRead = 'ok'; mockCalendar = true;
+  mockFocusCallbacks.clear();
+  mockFasts.mockResolvedValue({ data: [] });
+  mockWeekly.mockResolvedValue({ data: [] });
+  mockSessions.mockResolvedValue([]);
   mockDay.loadError = null;
   mockInsights.mockReturnValue({ data: undefined });
   mockHistory.mockResolvedValue({ data: [] });
@@ -289,4 +320,71 @@ it("coachless: Roman's line is locked, makes no insights read and is not a contr
   expect(mockInsights).not.toHaveBeenCalled();
   await fireEvent.press(locked);
   expect(mockNavigate).not.toHaveBeenCalled();
+});
+
+const MIN = 60000;
+
+it('Fasting: the last fast\'s length ("Last fast."), a running fast\'s time so far, and it opens Fasting', async () => {
+  const end = Date.now() - 60 * MIN;
+  mockFasts.mockResolvedValue({ data: [
+    { start_time: new Date(end - 30 * 60 * MIN).toISOString(), end_time: new Date(end - 20 * 60 * MIN).toISOString() },
+    { start_time: new Date(end - (16 * 60 + 5) * MIN).toISOString(), end_time: new Date(end).toISOString() },
+  ] });
+  const view = await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Fasting, 16 h 5 m, Last fast.'));
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Fast', initial: false });
+  view.unmount();
+  mockFasts.mockResolvedValue({ data: [{ start_time: new Date(Date.now() - 90 * MIN).toISOString(), end_time: null }] });
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Fasting, 1 h 30 m')).toBeTruthy();
+});
+
+it('tiles read again when Home is focused again, so a fast ended elsewhere shows on return', async () => {
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Fasting, —')).toBeTruthy();
+  expect(mockFasts).toHaveBeenCalledTimes(1);
+  mockFasts.mockResolvedValue({ data: [{ startTime: new Date(Date.now() - 10 * 60 * MIN).toISOString(), endTime: new Date().toISOString() }] });
+  await act(async () => { mockFocusCallbacks.forEach((cb) => cb()); });
+  expect(await screen.findByLabelText('Fasting, 10 h, Last fast.')).toBeTruthy();
+});
+
+it('coached: Next session is the earliest scheduled session ahead and opens it; none opens Calendar', async () => {
+  const at = new Date(Date.now() + 24 * 60 * MIN);
+  at.setHours(9, 0, 0, 0);
+  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][at.getDay()];
+  mockSessions.mockResolvedValue([
+    { id: 's3', status: 'scheduled', start_at: new Date(at.getTime() + 2 * 24 * 60 * MIN).toISOString(), title: 'Later call' },
+    { id: 's1', status: 'scheduled', start_at: at.toISOString(), title: 'Check-in call with Jordan' },
+    { id: 's0', status: 'canceled', start_at: new Date(Date.now() + 60 * MIN).toISOString(), title: 'Canceled call' },
+  ]);
+  const view = await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText(`Next session, ${day} 9:00 am, Check-in call with Jordan`));
+  expect(mockNavigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', initial: false, params: { sessionId: 's1' } });
+  expect(screen.queryByTestId('home-tile-logging')).toBeNull();
+  view.unmount();
+  mockSessions.mockResolvedValue([]);
+  await render(<HomeScreen />);
+  await waitFor(() => expect(mockSessions).toHaveBeenCalledTimes(2));
+  await fireEvent.press(await screen.findByLabelText('Next session, —'));
+  expect(mockNavigate).toHaveBeenLastCalledWith('CalendarTab', { screen: 'CalendarHome' });
+});
+
+it('coachless: Logging counts the days in a row with food logged (two weekly reads) and opens the Food log', async () => {
+  mockUser.coach_id = '';
+  const today = getTodayString();
+  mockWeekly.mockResolvedValue({ data: [today, shiftDay(today, -1), shiftDay(today, -2), shiftDay(today, -4)].map((date) => ({ date, calories: 900 })) });
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Logging, 3 days in a row, Food logged each day'));
+  expect(mockNavigate).toHaveBeenCalledWith('Log');
+  expect(mockWeekly.mock.calls.map(([start]) => start).sort()).toEqual([shiftDay(today, -13), shiftDay(today, -6)].sort());
+  expect(screen.queryByTestId('home-tile-session')).toBeNull();
+  expect(mockSessions).not.toHaveBeenCalled();
+});
+
+it('coached with the Calendar tab off: Logging instead of a Next session that could not open', async () => {
+  mockCalendar = false;
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Logging, 0 days in a row')).toBeTruthy();
+  expect(screen.queryByTestId('home-tile-session')).toBeNull();
+  expect(mockSessions).not.toHaveBeenCalled();
 });

@@ -120,7 +120,8 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             <PrimaryButton label="Log a meal →" accessibilityLabel="Log a meal" onPress={() => navigation.navigate('Log')} testID="home-explore-cta" />
           )}
         </View>
-        <HomeTiles day={{ ...day, ready: day.ready && !day.error }} checkIn={checkIn.data} refreshing={refreshing} />
+        <HomeTiles day={{ ...day, ready: day.ready && !day.error }} checkIn={checkIn.data} refreshing={refreshing}
+          coached={currentUser ? !!currentUser.coach_id : null} />
       </ScrollView>
     </SafeAreaView>
   );
