@@ -13,6 +13,7 @@ import { useNavigation, type NavigationProp, type ParamListBase } from '@react-n
 import api from '../../services/api';
 import { mealTemplatesApi } from '../../api/mealTemplatesApi';
 import HapticPressable from '../HapticPressable';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import { PrimaryButton, TextLink } from '../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -170,15 +171,15 @@ export default function FoodDayView(p: FoodDayViewProps) {
       <View style={s.between}>
         <View style={s.dayRow}>
           <HapticPressable intent="light" disableAnimation onPress={() => p.onDateChange(addDays(p.selectedDate, -1))} hitSlop={12}
-            accessibilityRole="button" accessibilityLabel="Previous day">
+            accessibilityRole="button" accessibilityLabel="Previous day" style={s.fixed}>
             <Ionicons name="chevron-back" size={20} color={sc.textMuted} />
           </HapticPressable>
-          <HapticPressable intent="light" disableAnimation onPress={() => p.onDateChange(today)} accessibilityRole="button"
+          <Pressable onPress={() => { void HapticService.softImpact(); p.onDateChange(today); }} accessibilityRole="button"
             accessibilityLabel={isToday ? `Viewing ${dayLabel}` : `Viewing ${dayLabel}, tap to go to today`} style={s.shrink}>
             <Text style={[s.eyebrow, s.ink]}>{dayLabel.toUpperCase()}</Text>
-          </HapticPressable>
+          </Pressable>
           <HapticPressable intent="light" disableAnimation onPress={() => p.onDateChange(addDays(p.selectedDate, 1))} hitSlop={12}
-            accessibilityRole="button" accessibilityLabel="Next day">
+            accessibilityRole="button" accessibilityLabel="Next day" style={s.fixed}>
             <Ionicons name="chevron-forward" size={20} color={sc.textMuted} />
           </HapticPressable>
         </View>
@@ -207,7 +208,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
             </View>
           ))}
         </View>
-        <View style={s.between}>
+        <View style={s.stats}>
           <Text style={s.smallMuted}>{`${done} of ${day.slots.length} meals done`}</Text>
           <Text style={s.smallMuted}>{`${n(p.eaten.calories)} of ${n(total)} kcal`}</Text>
         </View>
@@ -218,7 +219,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
 
       <View style={s.sect}>
         <Text style={s.eyebrow}>EXTRAS, NOT IN THE PLAN</Text>
-        <TextLink label="Add" underline={false} onPress={() => p.onSomethingElse(next?.mealType ?? 'snack')} testID="food-day-add" />
+        <TextLink label="Add" tone="accent" underline={false} accessibilityHint="Search or pick a recent food" onPress={() => p.onSomethingElse(next?.mealType ?? 'snack')} testID="food-day-add" />
       </View>
       {day.extras.map((l) => (
         <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)} style={s.extra}
@@ -232,9 +233,9 @@ export default function FoodDayView(p: FoodDayViewProps) {
           <Text style={s.smallMd}>{n(l.calories)}</Text>
         </HapticPressable>
       ))}
-      {p.water}
+      <View style={s.water}>{p.water}</View>
 
-      {next ? (
+      {next && isToday ? (
         <View style={s.quiet} testID="food-day-projection">
           <Text style={s.eyebrow}>IF YOU EAT THE REST AS PLANNED</Text>
           <Text style={s.body}>{`${n(restKcal)} kcal and ${n(restProtein)} g protein.${onTarget ? ' Both on target.' : ''}`}</Text>
@@ -248,9 +249,12 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   page: { paddingTop: 6 },
   grow: { flex: 1, minWidth: 0 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: layout.touchMin, flexShrink: 1 },
-  shrink: { flexShrink: 1 },
-  bell: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'flex-end', justifyContent: 'center' },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: layout.touchMin, flexShrink: 1, minWidth: 0 },
+  shrink: { flexShrink: 1, minWidth: 0 },
+  fixed: { flexShrink: 0 },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 12 },
+  water: { marginTop: 12 },
+  bell: { flexShrink: 0, minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'flex-end', justifyContent: 'center' },
   eyebrow: { ...typography.eyebrow, color: sc.textMuted },
   ink: { color: sc.textPrimary },
   forest: { color: sc.accentText },
