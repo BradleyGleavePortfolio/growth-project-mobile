@@ -46,29 +46,37 @@ export function HomeDial({ value, unit, label, sub, progress, testID }: DialSpec
   );
 }
 
-/** The mockup's client mark: serif initials on cream inside a camel hairline. */
-function Monogram({ name }: { name: string }) {
+/** The mockup's client mark: serif initials on cream; the camel hairline unless a ring sits around it. */
+export function Monogram({ name, size = 36, bordered = true }: { name: string; size?: number; bordered?: boolean }) {
   const words = name.trim().split(/\s+/).filter(Boolean);
   const initials = words.length > 1 ? `${words[0][0]}${words[words.length - 1][0]}` : (words[0] ?? '?').slice(0, 1);
   return (
-    <View style={styles.mono}>
+    <View style={[styles.mono, { width: size, height: size }, !bordered && styles.monoBare]}>
       <Text style={styles.monoText} maxFontSizeMultiplier={1.2}>{initials.toUpperCase()}</Text>
     </View>
   );
 }
 
-/** A client who needs the coach: monogram, name, last activity, the server's reason in a cream pill. */
-export function ClientTile({ name, line, reason, width, onPress, testID }: {
-  name: string; line: string | null; reason: string; width: number; onPress: () => void; testID: string;
+/** A client tile: monogram (and unread messages), name, a muted line, the reason in a cream pill. */
+export function ClientTile({ name, line, reason, unread = 0, width, onPress, testID }: {
+  name: string; line: string | null; reason: string; unread?: number; width: number; onPress: () => void; testID: string;
 }) {
   const { semanticColors: sc } = useTheme();
+  const count = unread > 99 ? '99+' : String(unread);
   return (
     <Pressable
       onPress={() => { void HapticService.softImpact(); onPress(); }}
-      accessibilityRole="button" accessibilityLabel={[name, line, reason].filter(Boolean).join('. ')} testID={testID}
+      accessibilityRole="button" accessibilityLabel={[name, line, reason, unread > 0 ? `${count} unread` : null].filter(Boolean).join('. ')} testID={testID}
       style={({ pressed }) => [styles.tile, { width, backgroundColor: sc.bgSurface, borderColor: sc.border }, pressed && styles.pressed]}
     >
-      <Monogram name={name} />
+      <View style={styles.tileTop}>
+        <Monogram name={name} />
+        {unread > 0 ? (
+          <View style={[styles.unread, { backgroundColor: sc.accent }]} testID={`${testID}-unread`}>
+            <Text style={[styles.unreadText, { color: sc.textOnAccent }]} maxFontSizeMultiplier={1.2}>{count}</Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={[styles.tileName, { color: sc.textPrimary }]} numberOfLines={2}>{name}</Text>
       {line ? <Text style={[styles.tileLine, { color: sc.textMuted }]} numberOfLines={2}>{line}</Text> : null}
       <View style={styles.why}>
@@ -120,7 +128,11 @@ const styles = StyleSheet.create({
   dialLabel: { marginTop: 10, marginBottom: 0, textAlign: 'center' },
   dialSub: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, marginTop: 4, textAlign: 'center' },
   mono: { width: 36, height: 36, borderRadius: radius.chip, borderWidth: 1, borderColor: colors.camel, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center' },
+  monoBare: { borderWidth: 0 },
   monoText: { fontFamily: typography.h2.fontFamily, fontSize: 15, lineHeight: 19, color: colors.ink },
+  tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  unread: { minWidth: 18, height: 18, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
+  unreadText: { ...typography.caption, fontSize: 11, lineHeight: 14, letterSpacing: 0, fontFamily: 'Inter_600SemiBold' },
   tile: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: 14, minHeight: 132 },
   dashed: { borderStyle: 'dashed', borderWidth: 1, borderColor: colors.stone, justifyContent: 'space-between' },
   business: { minHeight: 118 },

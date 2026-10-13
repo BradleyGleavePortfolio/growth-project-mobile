@@ -40,6 +40,8 @@ ClientsListScreen ─► useCoachStore.loadClients(coachId, status?)
 Sign-out path ─► clientStore.reset() + coachStore.reset()
 ```
 
+`coachStore.loadClients` writes only in the session it started in. `reset()` (sign-out) starts a new one, so a roster answer or failure that arrives late for the previous coach never lands in the next coach's store, even when the next coach's own read fails.
+
 `loadDayData` applies results and failure notices only while its requested date is still selected. Returning from an earlier Food Log day to Home therefore keeps today's foods, totals, water entries and loading state, even if the earlier read finishes afterward. Same-day refresh failures still retain the day's verified data.
 
 Failed water-add notices round ounces to a whole number for display, including amounts converted from metric quick-adds. The millilitre request and optimistic rollback keep the original amount; only the notice is rounded.

@@ -2,9 +2,10 @@
  * UI-2 coach Home (V1_1_UI_SPEC UI-2, owner 10-09 "render 2"), behind featureFlags.coachHomeV11: the date and
  * bell, three dials, Roman with the one action "Approve Roman's drafts →", the clients who need the coach as
  * tiles, and Business. Only real numbers are drawn; a dial with no real base is left out. Zero clients: the
- * Clients and Earnings dials, then the existing setup cards (`header`).
+ * Clients and Earnings dials, then the existing setup cards (`header`). The chips filter the roster section:
+ * Needs you (tiles, then the Steady wall, as in the mockup), Steady (the wall) and Streaks (streak tiles).
  */
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -18,6 +19,10 @@ import { dateOverline, heroAmount, lastActiveWords, monthOverline, paceLine, pay
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
 import { AllClientsTile, BusinessTile, ClientTile, HomeDial, type DialSpec } from './HomeParts';
 import { useCoachHomeV11, type CoachHomeData } from './useCoachHomeV11';
+import { FilterChips, SteadyWall } from './RosterParts';
+import { filterChips, loggedLine, steadyWall, streakLabel, type RosterFilter } from './rosterWall';
+import type { RosterSources } from './rosterSources';
+import { useRosterWall } from './useRosterWall';
 
 const TILE_GAP = 12;
 /** Seven clients and the "All clients" tile fill four rows, as in the mockup. */
@@ -34,6 +39,7 @@ interface Props {
   /** Zero clients: the existing setup checklist and Money card. */
   header?: React.ReactNode;
   sources?: CoachHomeSources;
+  rosterSources?: RosterSources;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -68,22 +74,44 @@ export function homeDials(d: CoachHomeData): DialSpec[] {
   return dials;
 }
 
-export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, header, sources }: Props) {
+export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, header, sources, rosterSources }: Props) {
   const { semanticColors: sc } = useTheme();
   const { width } = useWindowDimensions();
   const { data, reload, retryMonth, retryUrgent, retryDrafts } = useCoachHomeV11(sources);
-  const tileWidth = (Math.min(width, 600) - 2 * layout.gutter - TILE_GAP) / 2;
+  const { roster: rw, reloadRoster } = useRosterWall(rosterSources);
+  const [picked, setPicked] = useState<RosterFilter | null>(null);
+  const contentWidth = Math.min(width, 600) - 2 * layout.gutter;
+  const tileWidth = (contentWidth - TILE_GAP) / 2;
   const o = data.overview;
   const roster = o?.roster_size ?? 0;
   const dials = homeDials(data);
   const needsYou = roster > 0 && (o?.at_risk_count ?? 0) > 0;
   const urgent = needsYou ? data.urgent.slice(0, MAX_TILES) : [];
   const bell = data.unreadNotifications;
+  const byId = useMemo(() => new Map((rw.clients ?? []).map((c) => [c.id, c])), [rw.clients]);
+  // The wall and the chips wait for the needs-you list, so a client who needs the coach is never drawn as steady.
+  const urgentReady = !needsYou || (data.urgentState === 'ok' && data.urgent.length > 0);
+  const wallReady = rw.clients !== null && roster > 0 && urgentReady;
+  const wall = useMemo(
+    () => (wallReady && rw.clients ? steadyWall(rw.clients, new Set(data.urgent.map((e) => e.user_id)), data.now) : null),
+    [wallReady, rw.clients, data.urgent, data.now],
+  );
+  const streaks = rw.streaks.slice(0, MAX_TILES);
+  // The chips arrive together, once every read behind them has answered, so the section never jumps.
+  const chips = roster > 0 && rw.settled && urgentReady
+    ? filterChips(
+      urgent.length > 0 ? (o?.at_risk_count ?? 0) : 0,
+      wall ? wall.length : null,
+      streaks.length > 0 ? Math.max(o?.win_streak_count ?? 0, rw.streaks.length) : 0,
+    )
+    : [];
+  const filter: RosterFilter | null = chips.find((c) => c.key === picked)?.key ?? chips[0]?.key ?? null;
+  const showWall = wall !== null && wall.length > 0 && (filter === 'needs' || filter === 'steady');
 
   return (
     <ScrollView
       style={{ backgroundColor: sc.bgPrimary }} contentContainerStyle={styles.content} testID="coach-home-v11"
-      refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => void reload(true)} tintColor={sc.accent} />}
+      refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => { void reload(true); reloadRoster(); }} tintColor={sc.accent} />}
     >
       <View style={styles.topRow}>
         <QuietOverline style={styles.flat} maxFontSizeMultiplier={1.3}>{dateOverline(data.now)}</QuietOverline>
@@ -148,21 +176,37 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
       {o && roster === 0 ? <View style={styles.section}>{header}</View> : null}
 
       {o && roster > 0 ? (
-        <View style={styles.section}>
-          {urgent.length > 0 ? <QuietOverline accessibilityRole="header">{`Needs you, ${o.at_risk_count}`}</QuietOverline> : null}
+        <View style={styles.rosterSection} testID="coach-home-v11-roster">
+          {chips.length > 0 ? <FilterChips chips={chips} selected={filter} onSelect={setPicked} /> : null}
           {needsYou && data.urgentState === 'loading' ? <QuietLoading label="Loading" rows={2} testID="coach-home-v11-urgent-loading" /> : null}
           {needsYou && data.urgentState === 'error' ? (
             <QuietError layout="inline" message="At-risk clients could not load." onRetry={retryUrgent} testID="coach-home-v11-urgent-error" />
           ) : null}
-          <View style={styles.tiles}>
-            {urgent.map((e) => (
-              <ClientTile
-                key={e.user_id} name={e.display_name} line={lastActiveWords(e.last_active_at, data.now)} reason={e.top_factor}
-                width={tileWidth} onPress={() => onSelectClient(e.user_id, e.display_name)} testID={`coach-home-v11-client-${e.user_id}`}
-              />
-            ))}
-            <AllClientsTile count={roster} width={tileWidth} onPress={onOpenClients} />
-          </View>
+          {filter !== 'steady' ? (
+            <View style={styles.rosterTiles}>
+              {filter === 'streaks'
+                ? streaks.map((e) => (
+                  <ClientTile
+                    key={e.user_id} name={e.display_name} line={streakLabel(e)} reason={`${e.streak_days} days`} unread={rw.unread[e.user_id]}
+                    width={tileWidth} onPress={() => onSelectClient(e.user_id, e.display_name)} testID={`coach-home-v11-streak-${e.user_id}`}
+                  />
+                ))
+                : urgent.map((e) => (
+                  <ClientTile
+                    key={e.user_id} name={e.display_name} reason={e.top_factor} unread={rw.unread[e.user_id]}
+                    line={loggedLine(byId.get(e.user_id), data.now) ?? lastActiveWords(e.last_active_at, data.now)}
+                    width={tileWidth} onPress={() => onSelectClient(e.user_id, e.display_name)} testID={`coach-home-v11-client-${e.user_id}`}
+                  />
+                ))}
+              <AllClientsTile count={roster} width={tileWidth} onPress={onOpenClients} />
+            </View>
+          ) : null}
+          {showWall && wall ? (
+            <SteadyWall
+              members={wall} width={contentWidth} total={roster} flushTop={filter === 'steady'}
+              onSelect={onSelectClient} onOpenClients={onOpenClients}
+            />
+          ) : null}
         </View>
       ) : null}
 
@@ -210,6 +254,8 @@ const styles = StyleSheet.create({
   drafts: { minHeight: 44, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },
   draftsLabel: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, flexShrink: 1 },
   section: { marginTop: 28 },
+  rosterSection: { marginTop: 18 },
+  rosterTiles: { flexDirection: 'row', flexWrap: 'wrap', gap: TILE_GAP, marginTop: 14 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: TILE_GAP, marginTop: 10 },
   pressed: { opacity: 0.6 },
 });
