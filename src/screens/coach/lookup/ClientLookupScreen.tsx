@@ -317,7 +317,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     avatar: { borderRadius: radius.chip, borderWidth: 1, borderColor: palette.camel, backgroundColor: palette.cream, alignItems: 'center', justifyContent: 'center' },
     avatarText: { fontFamily: 'CormorantGaramond_400Regular', color: colors.textPrimary },
     name: { ...typography.h4, color: colors.textPrimary },
-    reasonRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    reasonRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
     reason: { ...typography.bodySmall, color: colors.textMuted, flexShrink: 1 },
     reasonOk: { color: colors.textPrimary },
     dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: colors.primary },
