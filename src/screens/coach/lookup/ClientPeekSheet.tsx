@@ -112,7 +112,7 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
             {load.state === 'loading' ? <QuietLoading label="Loading clients" rows={4} testID="peek-loading" /> : null}
             {load.state === 'error' ? <QuietError message={LOAD_FAILED} onRetry={() => void fetchPeek(client.id)} /> : null}
             {slices ? (
-              <View>
+              <View style={s.slices}>
                 {slice('checkins', 'clipboard-outline', 'Check-ins', slices.checkIn, slices.checkIn.hasOne ? (
                   <HapticPressable intent="light" style={s.review} onPress={() => open({ screen: 'ClientDetail', tab: 'timeline' })} accessibilityRole="button" accessibilityLabel="Review" testID="peek-review">
                     <Text style={s.link}>Review</Text>
@@ -126,12 +126,12 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
             <View style={s.buttons}>
               <View style={s.flex}>
                 <HapticPressable intent="medium" style={s.primary} onPress={() => open({ screen: 'ClientMessages' })} accessibilityRole="button" accessibilityLabel={`Message ${first}`} testID="peek-message">
-                  <Text style={s.primaryText} numberOfLines={1}>{`Message ${first}`}</Text>
+                  <Text style={s.primaryText} numberOfLines={2}>{`Message ${first}`}</Text>
                 </HapticPressable>
               </View>
               <View style={s.flex}>
                 <HapticPressable intent="light" style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
-                  <Text style={s.outlineText} numberOfLines={1}>Send nudge</Text>
+                  <Text style={s.outlineText} numberOfLines={2}>Send nudge</Text>
                 </HapticPressable>
               </View>
             </View>
@@ -167,6 +167,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     status: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 10, marginBottom: 4 },
     statusText: { flexShrink: 1 },
     dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: colors.primary },
+    slices: { marginTop: 4 },
     slice: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 54, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
     sliceTitle: { color: colors.textMuted },
     sliceText: { ...typography.bodySmall, fontSize: 15, lineHeight: 21, color: colors.textPrimary },
@@ -175,9 +176,9 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     buttons: { flexDirection: 'row', gap: 10, marginTop: 16 },
     flex: { flex: 1 },
     primary: { minHeight: 48, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-    primaryText: { ...typography.bodyMd, fontSize: 15, color: sem.textOnAccent },
+    primaryText: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, textAlign: 'center', color: sem.textOnAccent },
     outline: { minHeight: 48, borderRadius: radius.button, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-    outlineText: { ...typography.bodyMd, fontSize: 15, color: colors.primary },
+    outlineText: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, textAlign: 'center', color: colors.primary },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
     chip: { minHeight: 36, paddingHorizontal: 12, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: sem.border, backgroundColor: sem.bgSurface },
     chipText: { ...typography.bodySmall, fontSize: 13, fontFamily: 'Inter_500Medium', color: colors.textPrimary },
