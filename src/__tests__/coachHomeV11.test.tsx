@@ -45,6 +45,9 @@ jest.mock('../screens/coach/command-center/CoachHomeCards', () => mockStub('setu
 jest.mock('../screens/coach/command-center/OverviewScreen', () => mockStub('today-overview')());
 const mockSources = { monthSoFar: jest.fn(), nextPayout: jest.fn(), ltv: jest.fn(), atRisk: jest.fn() };
 jest.mock('../screens/coach/command-center/coachHomeSources', () => ({ get coachHomeSources() { return mockSources; } }));
+jest.mock('../screens/coach/home-v11/rosterSources', () => ({
+  rosterSources: { clients: () => Promise.resolve([]), winStreaks: () => Promise.resolve([]), unreadByClient: () => Promise.resolve({}) },
+}));
 
 // Required after the mocks above exist (an import would be hoisted above them).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -126,7 +129,7 @@ describe('UI-2 coach Home, flag on', () => {
     expect(v.getByTestId('coach-home-v11-bell').props.accessibilityLabel).toBe('Notifications, 2 unread');
     await fireEvent.press(v.getByTestId('coach-home-v11-bell'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', initial: false });
-    expect(v.getByText('Needs you, 2')).toBeTruthy();
+    expect(v.getByTestId('coach-home-v11-chip-needs').props.accessibilityLabel).toBe('Needs you, 2');
     await fireEvent.press(v.getByTestId('coach-home-v11-client-c1'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientDetail', params: { clientId: 'c1', clientName: 'Casey Lin' }, initial: false });
     await fireEvent.press(v.getByTestId('coach-home-v11-all-clients'));
