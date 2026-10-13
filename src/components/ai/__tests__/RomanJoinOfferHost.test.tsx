@@ -23,6 +23,7 @@ import {
   useRomanJoinOfferHold,
 } from '../../../lib/romanJoinOffer';
 import { HapticService } from '../../../ui/haptics/haptics.service';
+import { authApi } from '../../../services/api';
 import type { CurrentUser } from '../../../hooks/useCurrentUser';
 
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
@@ -69,6 +70,8 @@ beforeEach(async () => {
   resetAiLedgerWritesForTests();
   await AsyncStorage.clear();
   mockUser = null;
+  // The account re-read on opening (RomanJoinOfferReturn.test.tsx covers it) answers with no coach here.
+  jest.spyOn(authApi, 'me').mockResolvedValue({ data: {} } as never);
 });
 
 describe('RomanJoinOfferHost (owner 62y2)', () => {
@@ -161,7 +164,7 @@ describe('RomanJoinOfferHost (owner 62y2)', () => {
     success.mockRestore();
   });
 
-  it('a client with no coach is never shown it, and the server is not asked', async () => {
+  it('a client with no coach is never shown it, and the consent status is not read', async () => {
     const api = makeApi();
     mockUser = NO_COACH;
     noteCachedUser(null, NO_COACH);

@@ -13,17 +13,36 @@
  * shows its own failure and Try again states. A client with no coach is never shown it.
  */
 import React, { useCallback, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import AiConsentSheet, { type AiConsentSheetApi } from './AiConsentSheet';
 import defaultAiConsentApi, { type AiConsentOutcome } from '../../api/aiConsentApi';
 import { isLiveRomanGrant } from '../../lib/consultation/aiConsent';
 import { finishRomanJoinOffer, romanJoinOfferDue, subscribeRomanJoinOffer } from '../../lib/romanJoinOffer';
-import { readUserCacheSync } from '../../lib/userCache';
+import { patchUserCache, readUserCacheSync } from '../../lib/userCache';
+import { authApi } from '../../services/api';
 import { JOIN_SHEET_HANDOFF_MS } from '../join/JoinPackageHost';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { logger } from '../../utils/logger';
 
 /** After the package sheet's own handoff, so the two never open at once. */
 export const ROMAN_JOIN_OFFER_DELAY_MS = JOIN_SHEET_HANDOFF_MS * 2;
+
+/**
+ * A web join (coach landing page, storefront or guest checkout) happens on the server while the client
+ * may stay signed in here. On opening the client app and on each return from the background, a client
+ * cached without a coach re-reads their account (GET /auth/me, the paid in-app join's read); a coach
+ * the server confirms goes into the user cache, where the one offer rule (lib/romanJoinOffer) makes the
+ * offer due. A client with a coach and a coach account send nothing extra.
+ */
+export async function learnServerCoach(): Promise<void> {
+  const user = readUserCacheSync();
+  if (!user?.id || user.coach_id || user.role !== 'student') return;
+  const me = ((await authApi.me())?.data ?? {}) as { id?: unknown; coach_id?: unknown };
+  const coachId = me.id === user.id && typeof me.coach_id === 'string' ? me.coach_id : '';
+  const now = readUserCacheSync();
+  // Only for the same signed-in account, still without a coach here; never written after a sign-out.
+  if (coachId && now?.id === user.id && !now.coach_id) await patchUserCache({ coach_id: coachId });
+}
 
 export interface RomanJoinOfferHostProps {
   /** Injected in tests. */
@@ -70,6 +89,22 @@ export default function RomanJoinOfferHost({ api = defaultAiConsentApi }: RomanJ
       unsubscribe();
     };
   }, [api]);
+
+  // Opening the client app (cold start or sign-in) and each return from the background.
+  useEffect(() => {
+    const learn = () => {
+      learnServerCoach().catch((err: unknown) => logger.warn('RomanJoinOffer', 'account read failed', err));
+    };
+    learn();
+    let away = false;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') away = true;
+      if (state !== 'active' || !away) return;
+      away = false;
+      learn();
+    });
+    return () => sub.remove();
+  }, []);
 
   const done = useCallback(() => {
     if (openFor) void finishRomanJoinOffer(openFor);

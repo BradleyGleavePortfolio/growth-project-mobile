@@ -4,8 +4,10 @@
  *
  * The app learns about a coach only through the user cache (`lib/userCache`): a code (CoachCodeSheet,
  * Settings > Add coach code), a link (pending invite claim, Day 1 pairing), the paid in-app join
- * (`refreshAfterJoinPaid`) and a sign-in that returns the coach (a web storefront or guest checkout
- * join). userCache hands every change to `noteCachedUser`, so one rule covers each path:
+ * (`refreshAfterJoinPaid`), and a web join (coach landing page, storefront or guest checkout) through
+ * a sign-in that returns the coach or, while signed in, the host's account re-read on opening the app
+ * and on each return (`learnServerCoach`). userCache hands every change to `noteCachedUser`, so one
+ * rule covers each path:
  *
  *   - a client (role student, onboarding done) seen here without a coach is marked `no_coach`;
  *   - when that client has a coach (seen without one before, or the change itself is the join),
