@@ -729,6 +729,8 @@ export default function CoachNavigator() {
         // routes are unchanged.
         tabBarActiveTintColor: sc.accentText,
         tabBarInactiveTintColor: sc.textMuted,
+        // UI-2: six tabs at 360 pt; labels hold their size, as in iOS's own tab bars.
+        tabBarAllowFontScaling: !featureFlags.coachHomeV11,
         tabBarLabel: ({ focused, color, children }) => (
           <Text
             style={{

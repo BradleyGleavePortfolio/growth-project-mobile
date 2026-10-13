@@ -38,10 +38,10 @@ export function HomeDial({ value, unit, label, sub, progress, testID }: DialSpec
         </Svg>
         <View style={styles.ringCenter} pointerEvents="none">
           <Text style={[styles.dialValue, { color: sc.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>{value}</Text>
-          <Text style={[styles.dialUnit, { color: sc.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{unit}</Text>
+          <Text style={[styles.dialUnit, { color: sc.textMuted }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.1}>{unit}</Text>
         </View>
       </View>
-      <QuietOverline style={styles.dialLabel} numberOfLines={1} maxFontSizeMultiplier={1.3}>{label}</QuietOverline>
+      <QuietOverline style={styles.dialLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.2}>{label}</QuietOverline>
       {sub ? <Text style={[styles.dialSub, { color: sc.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{sub}</Text> : null}
     </View>
   );
@@ -59,10 +59,10 @@ export function ClientTile({ name, line, reason, width, onPress, testID }: {
       style={({ pressed }) => [styles.tile, { width, backgroundColor: sc.bgSurface, borderColor: sc.border }, pressed && styles.pressed]}
     >
       <MonogramBadge name={name} size={36} />
-      <Text style={[styles.tileName, { color: sc.textPrimary }]} numberOfLines={1}>{name}</Text>
+      <Text style={[styles.tileName, { color: sc.textPrimary }]} numberOfLines={2}>{name}</Text>
       {line ? <Text style={[styles.tileLine, { color: sc.textMuted }]} numberOfLines={2}>{line}</Text> : null}
       <View style={styles.why}>
-        <Text style={[styles.pill, { color: colors.ink }]} numberOfLines={1}>{reason}</Text>
+        <Text style={[styles.pill, { color: colors.ink }]} numberOfLines={3} maxFontSizeMultiplier={1.2}>{reason}</Text>
       </View>
     </Pressable>
   );
@@ -94,15 +94,15 @@ export function BusinessTile({ label, value, sub, width, onPress, testID }: {
       accessibilityRole="button" accessibilityLabel={`${label}: ${value}. ${sub}`} testID={testID}
       style={({ pressed }) => [styles.tile, styles.business, { width, backgroundColor: sc.bgSurface, borderColor: sc.border }, pressed && styles.pressed]}
     >
-      <QuietOverline style={styles.flat} numberOfLines={1}>{label}</QuietOverline>
+      <QuietOverline style={styles.flat} numberOfLines={2}>{label}</QuietOverline>
       <Text style={[styles.bizValue, { color: sc.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>{value}</Text>
-      <Text style={[styles.tileLine, styles.bottom, { color: sc.textMuted }]} numberOfLines={2}>{sub}</Text>
+      <Text style={[styles.tileLine, styles.bottom, { color: sc.textMuted }]} numberOfLines={3}>{sub}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  dial: { width: '31%', alignItems: 'center' },
+  dial: { width: '33%', alignItems: 'center' },
   ring: { width: SIZE, height: SIZE },
   ringCenter: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   dialValue: { ...typography.h2, fontSize: 25, lineHeight: 32, letterSpacing: 0.3, fontVariant: FIGURES },
@@ -116,7 +116,8 @@ const styles = StyleSheet.create({
   flushTop: { marginTop: 0 },
   tileLine: { ...typography.bodySmall, fontSize: 13, lineHeight: 18 },
   why: { marginTop: 'auto', paddingTop: 10, alignItems: 'flex-start' },
-  pill: { ...typography.caption, letterSpacing: 0, lineHeight: 16, overflow: 'hidden', backgroundColor: colors.cream, borderRadius: radius.chip, paddingHorizontal: 10, paddingVertical: 5 },
+  // Server reasons run to three lines, so a soft tag (button radius) rather than a full pill.
+  pill: { ...typography.caption, letterSpacing: 0, lineHeight: 16, overflow: 'hidden', backgroundColor: colors.cream, borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 5 },
   link: { ...typography.bodyMd, fontSize: 15, lineHeight: 22 },
   flat: { marginBottom: 0 },
   bizValue: { ...typography.h2, fontSize: 26, lineHeight: 33, letterSpacing: 0.3, marginTop: 8, fontVariant: FIGURES },

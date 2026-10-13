@@ -37,6 +37,15 @@ interface Props {
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** "$0", as in the mockup, rather than "$0.00". */
+function amount(cents: number, currency: string): string {
+  if (cents !== 0) return heroAmount(cents, currency);
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0, minimumFractionDigits: 0 }).format(0);
+  } catch {
+    return heroAmount(0, currency);
+  }
+}
 
 export function homeDials(d: CoachHomeData): DialSpec[] {
   const o = d.overview;
@@ -45,7 +54,7 @@ export function homeDials(d: CoachHomeData): DialSpec[] {
     const dials: DialSpec[] = [{ key: 'clients', value: '0', unit: 'clients', label: 'Clients', sub: 'None yet', progress: 0 }];
     if (d.month.kind === 'ok') {
       const { totals, currency } = d.month.summary;
-      dials.push({ key: 'earnings', value: heroAmount(totals.netCents, currency), unit: 'this month', label: 'Earnings', sub: monthOverline(d.now), progress: 0 });
+      dials.push({ key: 'earnings', value: amount(totals.netCents, currency), unit: 'this month', label: 'Earnings', sub: monthOverline(d.now), progress: 0 });
     }
     return dials;
   }
@@ -111,7 +120,7 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
                 accessibilityRole="button" accessibilityLabel={`Approve Roman's drafts, ${data.draftsWaiting}`} testID="coach-home-v11-drafts"
                 style={({ pressed }) => [styles.drafts, { backgroundColor: sc.accent }, pressed && styles.pressed]}
               >
-                <Text style={[styles.draftsLabel, { color: sc.textOnAccent }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>Approve Roman's drafts →</Text>
+                <Text style={[styles.draftsLabel, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>Approve Roman's drafts →</Text>
                 <View style={[styles.badge, { backgroundColor: sc.textOnAccent }]}>
                   <Text style={[styles.badgeText, { color: sc.accent }]} maxFontSizeMultiplier={1.2}>{data.draftsWaiting}</Text>
                 </View>
@@ -180,8 +189,8 @@ const styles = StyleSheet.create({
   dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
   dialsFew: { justifyContent: 'space-around' },
   roman: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 20, paddingVertical: 16, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
-  grow: { flex: 1, gap: 6, alignItems: 'flex-start' },
-  drafts: { minHeight: 44, borderRadius: radius.button, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },
+  grow: { flex: 1, alignItems: 'flex-start' },
+  drafts: { minHeight: 44, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },
   draftsLabel: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, flexShrink: 1 },
   section: { marginTop: 28 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: TILE_GAP, marginTop: 10 },
