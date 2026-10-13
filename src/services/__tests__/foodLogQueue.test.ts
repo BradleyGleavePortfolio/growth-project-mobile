@@ -108,7 +108,7 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
     expect(await getQueueLength()).toBe(1);
   });
 
-  it('drops items on permanent 4xx but continues flushing remaining items', async () => {
+  it('parks an item the server refuses (400): kept on the phone, never resent, the rest still flush', async () => {
     await enqueue({
       kind: 'search',
       foodItemId: 'a',
@@ -127,11 +127,57 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
       .mockRejectedValueOnce(e400)
       .mockResolvedValueOnce({ data: {} });
 
-    const { flushed, remaining, dropped } = await flush();
+    const { flushed, remaining, parked } = await flush();
 
-    expect(dropped).toBe(1);
+    expect(parked).toBe(1);
     expect(flushed).toBe(1);
     expect(remaining).toBe(0);
+    // Out of the pending count, still counted for the sign-out warning.
+    expect(await getQueueLength()).toBe(0);
+    expect(await getQueueLength({ includeParked: true })).toBe(1);
+    await flush();
+    expect(api.__logFood).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a food logged while an earlier one is being sent', async () => {
+    const log = { date: '2026-04-23', meal_type: 'snack' as const, quantity_multiplier: 1 };
+    await enqueue({ kind: 'search', foodItemId: 'a', log });
+    let refuse: (err: unknown) => void = () => undefined;
+    api.__logFood.mockReturnValueOnce(new Promise((_, reject) => { refuse = reject; }));
+    const sending = flush();
+    await new Promise((r) => setImmediate(r));
+    await enqueue({ kind: 'search', foodItemId: 'b', log });
+    refuse(Object.assign(new Error('bad payload'), { response: { status: 400 } }));
+
+    expect(await sending).toEqual({ flushed: 0, remaining: 1, parked: 1 });
+    expect(await getQueueLength()).toBe(1);
+    expect(await getQueueLength({ includeParked: true })).toBe(2);
+  });
+
+  it('keeps an item the server rate limits (429) and sends it once Retry-After (capped at 1 min) has passed', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      await enqueue({
+        kind: 'search',
+        foodItemId: 'a',
+        log: { date: '2026-04-23', meal_type: 'breakfast', quantity_multiplier: 1 },
+      });
+      const e429 = Object.assign(new Error('too many requests'), {
+        response: { status: 429, headers: { 'retry-after': '3600' } },
+      });
+      api.__logFood.mockRejectedValueOnce(e429).mockResolvedValueOnce({ data: {} });
+
+      expect(await flush()).toEqual({ flushed: 0, remaining: 1, parked: 0 });
+      now.mockReturnValue(60_999);
+      expect(await flush()).toEqual({ flushed: 0, remaining: 1, parked: 0 });
+      expect(api.__logFood).toHaveBeenCalledTimes(1);
+
+      now.mockReturnValue(61_000);
+      expect(await flush()).toEqual({ flushed: 1, remaining: 0, parked: 0 });
+      expect(api.__logFood).toHaveBeenCalledTimes(2);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it('preserves the queue on 401 (lets the auth refresh layer handle it)', async () => {
@@ -146,10 +192,10 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
     });
     api.__logFood.mockRejectedValueOnce(e401);
 
-    const { flushed, remaining, dropped } = await flush();
+    const { flushed, remaining, parked } = await flush();
 
     expect(flushed).toBe(0);
-    expect(dropped).toBe(0);
+    expect(parked).toBe(0);
     expect(remaining).toBe(1);
   });
 
@@ -165,9 +211,9 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
     });
     api.__logFood.mockRejectedValueOnce(e503);
 
-    const { remaining, dropped } = await flush();
+    const { remaining, parked } = await flush();
     expect(remaining).toBe(1);
-    expect(dropped).toBe(0);
+    expect(parked).toBe(0);
   });
 
   it('captures userId once at the top of flush — sign-out mid-flush neither retargets the queue key nor keeps posting (S6 R3 owner fence)', async () => {

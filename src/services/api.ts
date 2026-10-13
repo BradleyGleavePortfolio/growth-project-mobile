@@ -789,6 +789,8 @@ export const aiApi = {
 export const workoutApi = {
   create: (data: Record<string, unknown>) =>
     api.post('/workouts', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.put(`/workouts/${encodeURIComponent(id)}`, data),
   getAll: (limit = 10) =>
     api.get(`/workouts?limit=${limit}`),
   getVolume: (period: 'week' | 'month') =>

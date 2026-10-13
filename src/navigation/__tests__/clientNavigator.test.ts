@@ -3,7 +3,7 @@
  * (it would pull in reanimated and gesture-handler), we just read the source
  * file and assert structural invariants that have caused regressions before:
  *
- *   1. AIGuide is registered as a real screen (no longer orphan).
+ *   1. Legacy AIGuide is unreachable; Roman is the only AI chat.
  *   2. Membership is registered (sale-readiness surface).
  *   3. RecipeDetail's typed param is a serializable id, not a recipe object —
  *      passing whole records via navigation params triggers React Navigation's
@@ -26,19 +26,19 @@ const MORE_SRC = fs.readFileSync(
 );
 
 describe('ClientNavigator — sale-readiness completion', () => {
-  it('imports AIGuideScreen and MembershipScreen', () => {
-    expect(NAV_SRC).toMatch(/import\s+AIGuideScreen\s+from/);
+  it('does not import AIGuideScreen but keeps MembershipScreen', () => {
+    expect(NAV_SRC).not.toMatch(/import\s+AIGuideScreen\s+from/);
     expect(NAV_SRC).toMatch(/import\s+MembershipScreen\s+from/);
   });
 
-  it('registers AIGuide and Membership as named stack screens', () => {
+  it('retires AIGuide and keeps Membership as a named stack screen', () => {
     // Components may be wrapped with withProtectedScreen (paywall gating), so
     // accept either the raw screen import or a Protected* wrapper of it.
-    expect(NAV_SRC).toMatch(/name=["']AIGuide["']\s+component=\{(?:Protected)?AIGuideScreen\}/);
+    expect(NAV_SRC).not.toMatch(/\bAIGuide\b|\bProtectedAIGuideScreen\b/);
     expect(NAV_SRC).toMatch(/name=["']Membership["']\s+component=\{(?:Protected)?MembershipScreen\}/);
   });
 
-  it('declares AIGuide and Membership in MoreStackParamList', () => {
+  it('removes AIGuide and keeps Membership in MoreStackParamList', () => {
     // Pull just the MoreStackParamList block so a stray match elsewhere in the
     // file (e.g., a comment) can't accidentally satisfy this assertion. The
     // closing `};` is anchored to start-of-line so an inner `{ recipeId }`
@@ -46,7 +46,7 @@ describe('ClientNavigator — sale-readiness completion', () => {
     const block = NAV_SRC.match(/MoreStackParamList\s*=\s*\{([\s\S]*?)^\};/m);
     expect(block).not.toBeNull();
     const body = block![1];
-    expect(body).toMatch(/AIGuide:\s*undefined/);
+    expect(body).not.toMatch(/AIGuide:\s*undefined/);
     expect(body).toMatch(/Membership:\s*undefined/);
   });
 
@@ -59,9 +59,9 @@ describe('ClientNavigator — sale-readiness completion', () => {
 });
 
 describe('MoreScreen — sale-readiness entry points', () => {
-  it('exposes a Guidance row that targets the AIGuide stack screen', () => {
-    expect(MORE_SRC).toMatch(/screen:\s*['"]AIGuide['"]/);
-    expect(MORE_SRC).toMatch(/label:\s*['"]Guidance['"]/);
+  it('does not expose a Guidance entry point', () => {
+    expect(MORE_SRC).not.toMatch(/screen:\s*['"]AIGuide['"]/);
+    expect(MORE_SRC).not.toMatch(/label:\s*['"]Guidance['"]/);
   });
 
   it('exposes a Membership row that targets the Membership stack screen', () => {

@@ -117,9 +117,9 @@ describe("More: your plan rows (S-REACH)", () => {
     });
   });
 
-  it("keeps every existing row, after the plan rows", async () => {
+  it("keeps other existing rows, after the plan rows", async () => {
     await render(<MoreScreen />);
-    for (const label of ["Guidance", "Membership", "Recipes", "Settings"]) {
+    for (const label of ["Membership", "Recipes", "Settings"]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
     const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
@@ -131,8 +131,8 @@ describe("More: your plan rows (S-REACH)", () => {
     await render(<MoreScreen />);
     const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
     expect(labels[0]).toBe("Roman");
-    expect(labels.slice(0, 3)).toEqual(["Roman", "Guidance", "Community"]);
-    // Prototype 67: Roman's row says what he is for, beside the guidance row.
+    expect(labels.slice(0, 2)).toEqual(["Roman", "Community"]);
+    // Roman's row still says what he is for.
     expect(screen.getByText("Ask Roman about your plan and targets")).toBeTruthy();
     expect(screen.getByLabelText("Roman").props.accessibilityHint).toBe("Opens a conversation with Roman");
   });
@@ -201,7 +201,7 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
   const originalOS = Platform.OS;
   const stackRows = [
     ["Meal plan", "Plan"], ["Macro targets", "ClientMacros"], ["Progress", "Progress"],
-    ["Timeline", "Timeline"], ["Guidance", "AIGuide"], ["Membership", "Membership"],
+    ["Timeline", "Timeline"], ["Membership", "Membership"],
     ["Recipes", "Recipes"], ["Fasting", "Fast"], ["Community", "Community"],
     ["Profile", "ProfileMain"], ["Settings", "Settings"], ["Report", "Report"],
     ["Learn", "Learn"], ["Shortcuts", "Widgets"], ["Grocery list", "GroceryList"],
@@ -224,6 +224,8 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
     mockFlags.clientTutorial = Boolean(tutorial);
     mockHealthConnectBuild = Boolean(health);
     await render(<MoreScreen />);
+    expect(screen.queryByLabelText("Guidance")).toBeNull();
+    expect(screen.queryByText("Open AI guidance")).toBeNull();
     const wearableRows = tutorial || health || os === "ios"
       ? [["Health and sleep", "Health"], ["Connected devices", "Connections"]] : [];
     const rows = [...stackRows, ...wearableRows, ...(roman ? [["Roman", "RomanChat"]] : [])];
@@ -249,7 +251,7 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
       ...(!roman ? ["Guidance and community"] : []), "Food and preparation", "Account", "Learning",
     ]);
     const healthLabels = wearableRows.map(([label]) => label);
-    const guidanceLabels = [...(roman ? ["Roman"] : []), "Guidance", "Community"];
+    const guidanceLabels = [...(roman ? ["Roman"] : []), "Community"];
     expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual([
       ...(tutorial ? healthLabels : []), ...(roman ? guidanceLabels : []),
       "Meal plan", "Macro targets", "Progress", "Habits and check-in", "Timeline",
@@ -272,12 +274,11 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
   it("does not assume a coach, assigned plan, targets or video", async () => {
     await render(<MoreScreen />);
     for (const copy of ["View meal plans", "View daily calorie and nutrient targets",
-      "Browse exercise instructions", "Open AI guidance", "View timeline entries",
+      "Browse exercise instructions", "View timeline entries",
       "Membership and access details", "Quick log and start a fast", "View meal preparation guidance",
       "View weight trends and daily totals"]) {
       expect(screen.getByText(copy)).toBeTruthy();
     }
-    expect(screen.getByLabelText("Guidance").props.accessibilityHint).toBe("Opens AI guidance");
   });
 
   it.each([lightTokens, darkTokens])("uses semantic colors and comfortable unboxed rows", async (palette) => {

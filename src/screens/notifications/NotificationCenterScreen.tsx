@@ -36,6 +36,7 @@ import {
   markAllNotificationsRead,
 } from '../../services/notificationsApi';
 import { routeInAppNotification } from '../../services/pushTapRouter';
+import { featureFlags } from '../../config/featureFlags';
 
 function relativeTime(iso: string): string {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -66,6 +67,10 @@ export function routeNotification(
   const screen = notification.actionScreen;
   if (!screen) return;
   if (routeInAppNotification(screen, notification.actionParams)) return;
+  if (screen === 'AIGuide') {
+    nav.navigate('MoreTab', { screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false });
+    return;
+  }
   // Param types are enforced by the navigator param lists. actionScreen values
   // come from a constrained server enum, not user input.
   nav.navigate(screen, notification.actionParams);
