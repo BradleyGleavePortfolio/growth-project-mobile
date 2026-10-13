@@ -5,6 +5,8 @@
  *
  *   GET    /me/ai-consent        status, current version, server copy
  *          ?variant=coach_free   the coach-free copies, for a client with no coach (owner 62)
+ *          ?variant=safety_exception   otherwise: the coached copies with the safety-reply exception
+ *                                (client-ai-v6 / v7, owner 57c); a live grant reads its own copies
  *   POST   /me/ai-consent/roman  { version, copy_sha256?, platform?, app_version?, locale? }
  *                                grant (idempotent); 409 CONSENT_VERSION_MISMATCH
  *   DELETE /me/ai-consent/roman  withdraw (idempotent)
@@ -202,12 +204,15 @@ export function isLiveGrant(s: AiConsentStatusResponse | null | undefined, versi
 }
 
 export const aiConsentApi = {
-  /** `coachFree`: a client with no coach (owner 62); a server before it ignores the query. */
+  /**
+   * `coachFree`: a client with no coach (owner 62); otherwise the owner 57c copies. A server before
+   * either ignores the query.
+   */
   getStatus: async (opts?: { coachFree?: boolean }): Promise<AiConsentOutcome> => {
     try {
-      const res = opts?.coachFree
-        ? await api.get<unknown>('/me/ai-consent', { params: { variant: 'coach_free' } })
-        : await api.get<unknown>('/me/ai-consent');
+      const res = await api.get<unknown>('/me/ai-consent', {
+        params: { variant: opts?.coachFree ? 'coach_free' : 'safety_exception' },
+      });
       const status = parseStatus(res?.data);
       return status ? { kind: 'ok', status } : { kind: 'error', status: res?.status ?? null };
     } catch (err) {

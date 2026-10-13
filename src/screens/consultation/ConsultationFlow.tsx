@@ -552,6 +552,9 @@ export default function ConsultationFlow({
       aiConfirmed.current = aiRomanOf(local);
       aiWant.current = aiWantOf(local);
       aiAttempted.current = aiAttemptedOf(local);
+      // Owner 62y2: a client with no coach makes no Roman choice here, so a yes kept from an
+      // earlier build is not sent (a kept no still withdraws, which only turns AI off).
+      if (coachless && aiWant.current === true) aiWant.current = null;
       // A withdrawal that outlived the draft (or its last write) is still
       // wanted, unless the draft holds a newer choice (Sol B-310-5).
       // Read in marker order: a write or clear still in flight from an earlier
@@ -700,13 +703,14 @@ export default function ConsultationFlow({
    */
   async function refreshAiFromLedger(gen: number) {
     try {
-      // Owner 62: a client with no coach is offered (and box 2 grants) the coach-free copies.
-      const out = coachless ? await api.getRomanConsent({ coachFree: true }) : await api.getRomanConsent();
+      // Owner 62y2: a client with no coach has no box 2, so nothing to read.
+      if (coachless) return;
+      const out = await api.getRomanConsent();
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, romanFamily(coachless));
+        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, romanFamily(false));
         setAiMemory(aiMemoryRef.current);
-        setAiConfirmed(isLiveRomanGrant(out.status, romanFamily(coachless)), true);
+        setAiConfirmed(isLiveRomanGrant(out.status, romanFamily(false)), true);
         reconcileAi(gen);
       }
     } catch {
@@ -758,7 +762,7 @@ export default function ConsultationFlow({
             grantRomanWithRetry(
               api.grantRomanConsent,
               () => aiLive(gen) && aiWant.current === true,
-              () => romanGrantBody(aiMemoryRef.current, romanFamily(coachless)),
+              () => romanGrantBody(aiMemoryRef.current, romanFamily(false)),
             ),
           );
           if (!aiLive(gen)) return;

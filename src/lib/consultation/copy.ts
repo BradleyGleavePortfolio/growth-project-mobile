@@ -9,7 +9,9 @@
  * sentence is the client-ai-v4 retention line (owner 2026-10-01 20:32: Roman
  * chats are kept until the client deletes them or their account; backend
  * #635), which moved P0 to consult-consent-v3. Owner C-6a removed paragraph 3's clinic sentence
- * (consult-consent-v5 / v6); owner 62 added the coach-free versions below. Any change to the P0 paragraphs, either box label
+ * (consult-consent-v5 / v6); owner 62 added the coach-free versions below; owner 57c added the
+ * safety-reply exception to paragraph 4 (consult-consent-v7 / v8, client-ai-v6 / v7) and owner 62y2
+ * took Roman out of the coach-free screen (consult-consent-v7-coach-free). Any change to the P0 paragraphs, either box label
  * or the footer must bump CONSULT_CONSENT_COPY_VERSION (and, for paragraph 4
  * or box 2, AI_CONSENT_VERSION), update the pinned hashes below, and goes
  * through T4 review (privacy / data path).
@@ -19,7 +21,6 @@ import type { Answers, MeasureAnswer } from './types';
 import {
   CONSENT_TITLE,
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
-  CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
 } from './consentVersion';
@@ -28,7 +29,6 @@ export {
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
-  CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
   CONSENT_BINDING,
   AI_CONSENT_VERSION,
   WAIVER_VERSION,
@@ -46,9 +46,16 @@ export const CONSENT_PARAGRAPHS: readonly string[] = [
 export const CONSENT_CHECKBOX_LABEL =
   'I agree to the training waiver, and to The Growth Project and my coach collecting and using my information to coach me.';
 
-/** Paragraph 4: shown above box 2, and again in Settings > Privacy > Roman and AI. */
-export const AI_CONSENT_PARAGRAPH =
+/** Paragraph 4 before owner 57c (client-ai-v4): still shown to a client whose live grant is of it. */
+export const AI_CONSENT_PARAGRAPH_PRE57C =
   "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Only your own data is used, never another client's, and never your coach's private notes. Your conversations with Roman are private from your coach and are kept until you delete them or delete your account.";
+
+/** Owner 57c: the same sentence as the privacy page, added to paragraph 4. */
+export const AI_CONSENT_SAFETY_EXCEPTION =
+  'One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.';
+
+/** Paragraph 4 (client-ai-v6): shown above box 2, and again in Settings > Privacy > Roman and AI. */
+export const AI_CONSENT_PARAGRAPH = `${AI_CONSENT_PARAGRAPH_PRE57C} ${AI_CONSENT_SAFETY_EXCEPTION}`;
 
 /** Box 2 (optional, unticked by default). */
 export const AI_CONSENT_CHECKBOX_LABEL =
@@ -73,19 +80,27 @@ export const AI_CONSENT_PARAGRAPH_COACH_FREE =
   "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions. Only your own data is used, never another client's. Your conversations with Roman are kept until you delete them or delete your account.";
 export const AI_CONSENT_CHECKBOX_LABEL_COACH_FREE =
   'Optional: I allow Roman to use my information, processed by Anthropic.';
+/** Owner 62y2: the coach-free footer keeps only the sentence that does not name the removed choice. */
+export const CONSENT_FOOTER_COACH_FREE = 'Nothing is sent until you continue.';
 
 /**
  * Exact text of the whole P0 screen, in display order (title, paragraphs
- * 1-3, box 1, paragraph 4, box 2, footer). Its sha256 is sent as the P0
- * record's `text_sha256` (backend #607 stores what was shown).
+ * 1-3, box 1, paragraph 4, box 2, footer; coach-free: title, paragraphs 1-3,
+ * box 1, footer). Its sha256 is sent as the P0 record's `text_sha256`
+ * (backend #607 stores what was shown).
  */
 export function consentCopyText(aiParagraph?: string, coachFree = false): string {
+  if (coachFree) {
+    return [CONSENT_TITLE, ...CONSENT_PARAGRAPHS_COACH_FREE, CONSENT_CHECKBOX_LABEL_COACH_FREE, CONSENT_FOOTER_COACH_FREE].join(
+      '\n\n',
+    );
+  }
   return [
     CONSENT_TITLE,
-    ...(coachFree ? CONSENT_PARAGRAPHS_COACH_FREE : CONSENT_PARAGRAPHS),
-    coachFree ? CONSENT_CHECKBOX_LABEL_COACH_FREE : CONSENT_CHECKBOX_LABEL,
-    aiParagraph ?? (coachFree ? AI_CONSENT_PARAGRAPH_COACH_FREE : AI_CONSENT_PARAGRAPH),
-    coachFree ? AI_CONSENT_CHECKBOX_LABEL_COACH_FREE : AI_CONSENT_CHECKBOX_LABEL,
+    ...CONSENT_PARAGRAPHS,
+    CONSENT_CHECKBOX_LABEL,
+    aiParagraph ?? AI_CONSENT_PARAGRAPH,
+    AI_CONSENT_CHECKBOX_LABEL,
     CONSENT_FOOTER,
   ].join('\n\n');
 }
@@ -107,8 +122,8 @@ export function aiConsentCopyText(coachFree = false): string {
  * without these (and the versions) changing too. Pinned rather than hashed
  * at runtime so the record never depends on a native digest call.
  */
-export const CONSENT_COPY_SHA256 = '926b4ec8abe6d003798b44d720f625aa69871f59b4963cc5ec39f8599c2255fa';
-export const AI_CONSENT_COPY_SHA256 = 'fbf821401d4313c6a301a6cc08d3870bb117c293fbb970e321bf87f49abe34f4';
+export const CONSENT_COPY_SHA256 = '7711079209acecedfb50c31787787124af843f076154e9bfbd1e33550e861e09';
+export const AI_CONSENT_COPY_SHA256 = '52066998fbccac128c78a68dc19c45c4e067d169c4b3e5aaaa0d7821a7a1ee38';
 
 /**
  * R11-C2B pins for box 2 with the server's client-ai-v5 paragraph (the app holds no v5 text): the
@@ -116,42 +131,49 @@ export const AI_CONSENT_COPY_SHA256 = 'fbf821401d4313c6a301a6cc08d3870bb117c293f
  * of the whole P0 screen with it, consentCopyText(v5 paragraph) (backend CONSULT_CONSENT_V4_TEXT_SHA256).
  * Box 2 shows server v5 text only when its copy sha256 equals the first pin, so the P0 record is exact.
  */
-export const AI_CONSENT_MEMORY_COPY_SHA256 = '8c19fca94c2455094c47b1802bb6693aff47d24c7b6df3b256d0a0e8e90fe8ee';
-export const CONSENT_MEMORY_COPY_SHA256 = '6b15d88b6bf9b77f11c526f073936264c6253fbc54474a7cdd8c55b564f5e9ee';
+export const AI_CONSENT_MEMORY_COPY_SHA256 = '15c1b92f0c68e485d8e2c4d399c00eeb17a16291da8fae636260e085cada0842';
+export const CONSENT_MEMORY_COPY_SHA256 = 'b98e160e884aecdca059b90f7a88803ba84eeac79b692e83eba9f734f93274b2';
+
+/** Before owner 57c (client-ai-v4 / v5 copy sha256): a live grant of them is read with these. */
+export const AI_CONSENT_PRE57C_COPY_SHA256 = 'fbf821401d4313c6a301a6cc08d3870bb117c293fbb970e321bf87f49abe34f4';
+export const AI_CONSENT_PRE57C_MEMORY_COPY_SHA256 = '8c19fca94c2455094c47b1802bb6693aff47d24c7b6df3b256d0a0e8e90fe8ee';
 
 /**
- * Owner 62 pins, the same four for the coach-free copies (backend consult-consent-v5-coach-free /
- * v6-coach-free and client-ai-v4-coach-free / v5-coach-free): the whole P0 screen with the app's
- * coach-free paragraph 4, its paragraph 4 + box 2, the server's coach-free memory paragraph + box 2,
- * and the whole P0 screen with it.
+ * Owner 62 / 62y2 pins: the whole coach-free P0 screen (backend consult-consent-v7-coach-free), and the
+ * coach-free box 2 copies (client-ai-v4-coach-free / v5-coach-free paragraph + label) a grant recorded
+ * before 62y2 is read with.
  */
-export const CONSENT_COACH_FREE_COPY_SHA256 = 'c56fc409ca188fdcd8a7f52209d72299e3bf19ea68bff0e01b35b1f3295826b5';
+export const CONSENT_COACH_FREE_COPY_SHA256 = '82dddf635ee262e30e8a69e7a4a39be3e1255470d70b12e42a757f7578ee95a3';
 export const AI_CONSENT_COACH_FREE_COPY_SHA256 = '2a8c7973ba6047b58a0fdccb2604a796403d5b4773a6f6a73c98da3d84e68447';
 export const AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256 = 'c7cd7ebd3b47e3eb0e890a8efa932610c35716aa79ad4f139b6f0c0aad7128fe';
-export const CONSENT_COACH_FREE_MEMORY_COPY_SHA256 = 'a1769134cf30a3208ef56a8906603d942fb2ca058db9c33c69f4ff14f223ee00';
 
 /**
- * The P0 screen a client sees (owner 62: coach-free for a client with no coach) and what its record
- * names: `version` / `sha256` with this build's paragraph 4, `memoryVersion` / `memorySha256` when box 2
- * shows the server's memory paragraph.
+ * The P0 screen a client sees and what its record names: `version` / `sha256` with this build's
+ * paragraph 4, `memoryVersion` / `memorySha256` when box 2 shows the server's memory paragraph.
+ * Owner 62y2: a client with no coach sees no paragraph 4 and no box 2 (`roman` false), so no Roman
+ * choice is made or sent.
  */
 export function consentScreenCopy(coachFree: boolean) {
   return coachFree
     ? {
+        roman: false,
         paragraphs: CONSENT_PARAGRAPHS_COACH_FREE,
         box1Label: CONSENT_CHECKBOX_LABEL_COACH_FREE,
-        aiParagraph: AI_CONSENT_PARAGRAPH_COACH_FREE,
-        box2Label: AI_CONSENT_CHECKBOX_LABEL_COACH_FREE,
+        aiParagraph: null,
+        box2Label: null,
+        footer: CONSENT_FOOTER_COACH_FREE,
         version: CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
         sha256: CONSENT_COACH_FREE_COPY_SHA256,
-        memoryVersion: CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
-        memorySha256: CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
+        memoryVersion: CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+        memorySha256: CONSENT_COACH_FREE_COPY_SHA256,
       }
     : {
+        roman: true,
         paragraphs: CONSENT_PARAGRAPHS,
         box1Label: CONSENT_CHECKBOX_LABEL,
         aiParagraph: AI_CONSENT_PARAGRAPH,
         box2Label: AI_CONSENT_CHECKBOX_LABEL,
+        footer: CONSENT_FOOTER,
         version: CONSULT_CONSENT_COPY_VERSION,
         sha256: CONSENT_COPY_SHA256,
         memoryVersion: CONSULT_CONSENT_MEMORY_COPY_VERSION,
