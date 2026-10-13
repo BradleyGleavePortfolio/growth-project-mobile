@@ -20,13 +20,12 @@ const mockDay = {
   hasLoadedDay: true, loadDayData: jest.fn(), loadProfile: jest.fn(), isLoading: false, loadError: null as string | null,
   logWater: jest.fn(async () => undefined),
 };
-jest.mock('../../../config/featureFlags', () => ({
-  featureFlags: {
-    ...jest.requireActual('../../../config/featureFlags').featureFlags,
-    clientHomeRings: true,
-    get romanChat() { return mockRomanChat; },
-  },
-}));
+jest.mock('../../../config/featureFlags', () => {
+  // A getter in the object literal would be read once by the spread helper; define it after.
+  const flags = { ...jest.requireActual('../../../config/featureFlags').featureFlags, clientHomeRings: true };
+  Object.defineProperty(flags, 'romanChat', { get: () => mockRomanChat });
+  return { featureFlags: flags };
+});
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => ({ calories: 1850, protein: 150, carbs: 200, fat: 60 }) }));
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
