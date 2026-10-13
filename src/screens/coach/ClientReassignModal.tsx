@@ -90,24 +90,17 @@ export default function ClientReassignModal() {
           style={styles.list}
           renderItem={({ item }) => {
             const isSelected = selected?.id === item.id;
-            const atCapacity = !item.capacity.hasCapacity;
+            // Owner TM-P1: no plan client cap, so every coach can be picked.
             return (
               <Pressable
-                style={[styles.option, isSelected && styles.optionSelected, atCapacity && styles.optionDisabled]}
-                onPress={() => !atCapacity && setSelected(item)}
+                style={[styles.option, isSelected && styles.optionSelected]}
+                onPress={() => setSelected(item)}
                 accessibilityRole="radio"
-                accessibilityState={{ checked: isSelected, disabled: atCapacity }}
-                accessibilityLabel={`${item.name}${atCapacity ? ', at capacity' : ''}`}
-                disabled={atCapacity}
+                accessibilityState={{ checked: isSelected }}
+                accessibilityLabel={item.name}
               >
                 <View style={styles.optionInfo}>
-                  <Text style={[styles.optionName, atCapacity && styles.optionNameMuted]}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.optionCapacity}>
-                    {item.capacity.assignedClients} / {item.capacity.maxClients} clients
-                    {atCapacity ? ' (full)' : ''}
-                  </Text>
+                  <Text style={styles.optionName}>{item.name}</Text>
                 </View>
                 {isSelected && (
                   <View style={styles.checkmark} accessibilityLabel="Selected">
@@ -203,9 +196,6 @@ const styles = StyleSheet.create({
   optionSelected: {
     borderColor: Colors.primary,
   },
-  optionDisabled: {
-    opacity: 0.45,
-  },
   optionInfo: {
     flex: 1,
   },
@@ -213,14 +203,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
-  },
-  optionNameMuted: {
-    color: Colors.textMuted,
-  },
-  optionCapacity: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 2,
   },
   checkmark: {
     width: 32,

@@ -91,8 +91,6 @@ jest.mock('../hooks/useCommunityEvents', () => ({
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AIBudgetMount } from '../components/coach/ai-budget/AIBudgetMount';
 import { AIBudgetTutorialModal } from '../components/coach/ai-budget/AIBudgetTutorialModal';
-import { UpgradeGate } from '../screens/coach/TeamManagementScreen';
-import { seatLimitMessage } from '../screens/coach/SubCoachInviteModal';
 import CommunityEventDetailScreen from '../screens/community/CommunityEventDetailScreen';
 import { digitalPurchasesHidden, nonP2PPurchasesHidden, externalLinkAllowed, isPaymentUrl } from '../config/purchaseSurfaces';
 import { withNonP2PPurchaseGate } from '../components/purchases/withNonP2PPurchaseGate';
@@ -252,18 +250,6 @@ describe.each(ROWS)('$name', (row) => {
     } finally {
       jest.useRealTimers();
     }
-  });
-
-  it('Team gate: no upgrade instruction when hidden', async () => {
-    const { toJSON } = await render(<UpgradeGate />);
-    expect(/Upgrade/.test(allText(toJSON()))).toBe(!digitalHidden);
-  });
-
-  it('exhausted / partial seat messages: no upgrade instruction when hidden', () => {
-    const hidden = digitalPurchasesHidden();
-    expect(/upgrade/i.test(seatLimitMessage(0, hidden))).toBe(!digitalHidden);
-    expect(/upgrade/i.test(seatLimitMessage(2, hidden))).toBe(!digitalHidden);
-    expect(seatLimitMessage(0, hidden)).toMatch(/Revoke an existing sub-coach|revoke an existing sub-coach/);
   });
 
   describe('community event external link', () => {

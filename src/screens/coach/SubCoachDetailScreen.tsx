@@ -145,12 +145,7 @@ export default function SubCoachDetailScreen() {
               );
             } catch (err) {
               const status = (err as { response?: { status?: number } })?.response?.status;
-              if (status === 404 || status === 501) {
-                Alert.alert(
-                  'Not enabled yet',
-                  'Sub-coach revocation is not enabled on your plan yet.',
-                );
-              } else if (status === 409) {
+              if (status === 409) {
                 // P0-4 — concurrent revoke / capacity conflict. The backend
                 // returns 409 when the sub-coach was already revoked in
                 // another session, or when reassigning their clients back
@@ -237,10 +232,6 @@ export default function SubCoachDetailScreen() {
         <Text style={styles.capacityStat} accessibilityLabel={`${detail.capacity.assignedClients} clients assigned`}>
           {detail.capacity.assignedClients}
           <Text style={styles.capacityStatLabel}> clients</Text>
-        </Text>
-        <Text style={styles.capacityStat}>
-          {detail.capacity.maxClients}
-          <Text style={styles.capacityStatLabel}> max ({detail.capacity.planTier})</Text>
         </Text>
       </View>
 
