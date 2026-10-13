@@ -806,6 +806,9 @@ export default function CoachNavigator() {
         name="Messages"
         component={MessagesScreen}
         options={{
+          // UI-2: a string label like every other tab, so all six draw at one size and keep it
+          // (the shared 11 pt label cut "Messages" to "Messa..." at 360 pt).
+          ...(featureFlags.coachHomeV11 ? { tabBarLabel: 'Messages' } : {}),
           tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
           // Quiet forest count instead of the default red dot (no status hue).
           tabBarBadgeStyle: {
