@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   tile: { flex: 1, minWidth: 0, minHeight: 118, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   main: { flexGrow: 1, padding: 14 },
   mainWithAccessory: { paddingBottom: 8 },
-  value: { ...typography.h2, fontSize: 26, lineHeight: 33, letterSpacing: 0.3, marginTop: 8, fontVariant: ['tabular-nums'] },
+  value: { ...typography.h2, fontSize: 26, lineHeight: 33, letterSpacing: 0.3, marginTop: 8 },
   small: { ...typography.bodySmall, fontSize: 14, lineHeight: 18, letterSpacing: 0 },
   prompt: { ...typography.bodyMd, fontSize: 15, lineHeight: 22, marginTop: 12 },
   bar: { height: 4, borderRadius: radius.chip, marginTop: 10, overflow: 'hidden' },
