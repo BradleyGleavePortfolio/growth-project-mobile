@@ -615,9 +615,9 @@ function SettingsStackNavigator() {
 /**
  * TeamStackNavigator
  *
- * Phase 11 / Track 7. No coach plan gate (owner TM-P1); the parent tab
- * registers only with Team Mode on and a confirmed head coach whose roster
- * includes a sub-coach.
+ * Phase 11 / Track 7. No coach plan gate (owner TM-P1),
+ * and the parent tab registers only with Team Mode on and a confirmed
+ * head coach whose roster includes a sub-coach.
  */
 function TeamStackNavigator() {
   return (
@@ -788,8 +788,8 @@ export default function CoachNavigator() {
           ),
         }}
       />
-      {/* P0-1 + Phase 11 / Track 7 — Team tab. No coach plan gate (owner
-          TM-P1); role gate enforced here: sub-coaches and unresolved
+      {/* P0-1 + Phase 11 / Track 7 — Team tab. No coach plan gate
+          (owner TM-P1); role gate enforced here: sub-coaches and unresolved
           sessions never see the tab. */}
       {showTeamTab && (
         <Tab.Screen

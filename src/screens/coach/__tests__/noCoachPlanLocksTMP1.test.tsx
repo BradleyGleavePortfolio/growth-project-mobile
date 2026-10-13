@@ -1,6 +1,6 @@
 // Owner TM-P1 (2026-10-12): "There should be zero locks - there is no free or paid plan - we only do a 2%
-// take rate on GMV, thats all!" Sub-coach detail shows no plan max or tier, a 404 revoke is a plain
-// "Could not revoke" (never "not enabled on your plan"), and a reassign can pick a full sub-coach.
+// take rate on GMV, thats all!" Sub-coach detail shows no plan max or tier, a failed revoke or reassign
+// never names a plan or capacity, and a reassign can pick a full sub-coach.
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -60,10 +60,10 @@ describe('TM-P1: no coach plan line or plan lock in the Team stack', () => {
     expect(v.queryByText(/\bmax\b|flat_300/i)).toBeNull();
   });
 
-  it('a 404 revoke says Could not revoke, never that the plan lacks it', async () => {
+  it.each([[404, 'Could not revoke'], [409, 'Already changed']])('a %s revoke says %s, never a plan or capacity', async (status, title) => {
     mockParams = { subCoachId: 's1' };
     mockGetSubCoach.mockResolvedValue({ data: DETAIL });
-    mockRevoke.mockRejectedValue({ response: { status: 404, data: {} } });
+    mockRevoke.mockRejectedValue({ response: { status, data: {} } });
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const v = await mount(<SubCoachDetailScreen />);
     await fireEvent.press(await v.findByLabelText('Revoke Mia Chen as sub-coach'));
@@ -71,8 +71,8 @@ describe('TM-P1: no coach plan line or plan lock in the Team stack', () => {
     await act(async () => {
       await buttons.find((b) => b.text === 'Revoke')?.onPress?.();
     });
-    expect(alert).toHaveBeenLastCalledWith('Could not revoke', expect.any(String));
-    expect(alert.mock.calls.flat().join(' ')).not.toMatch(/your plan|Not enabled yet/);
+    expect(alert.mock.calls.at(-1)?.[0]).toBe(title);
+    expect(alert.mock.calls.flat().join(' ')).not.toMatch(/your plan|Not enabled yet|capacity/);
     alert.mockRestore();
   });
 
@@ -87,5 +87,17 @@ describe('TM-P1: no coach plan line or plan lock in the Team stack', () => {
     await fireEvent.press(v.getByLabelText('Confirm reassign to Mia Chen'));
     await waitFor(() => expect(mockReassign).toHaveBeenCalledWith('s1', { clientId: 'c1', reason: undefined }));
     expect(mockPop).toHaveBeenCalledWith(2);
+  });
+
+  it('a failed reassign never says the coach is at capacity', async () => {
+    mockParams = { clientId: 'c1', clientName: 'Ava', fromSubCoachId: 's0' };
+    mockList.mockResolvedValue({ data: [DETAIL] });
+    mockReassign.mockRejectedValue(new Error('Network Error'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const v = await mount(<ClientReassignModal />);
+    await fireEvent.press(await v.findByLabelText('Mia Chen'));
+    await fireEvent.press(v.getByLabelText('Confirm reassign to Mia Chen'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Reassignment failed', 'The client could not be reassigned.'));
+    alert.mockRestore();
   });
 });

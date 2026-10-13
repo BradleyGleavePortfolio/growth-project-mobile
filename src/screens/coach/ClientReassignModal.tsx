@@ -67,7 +67,7 @@ export default function ClientReassignModal() {
     } catch {
       Alert.alert(
         'Reassignment failed',
-        'The client could not be reassigned. The destination coach may be at capacity.',
+        'The client could not be reassigned.',
       );
     } finally {
       setSubmitting(false);
