@@ -1,4 +1,4 @@
-import { buildPlanDay, joinNames, nextSlot } from '../foodDay';
+import { buildPlanDay, extrasMeal, joinNames, nextSlot } from '../foodDay';
 import type { DailyMealPlan, SlotLabel } from '../../../api/mealTemplatesApi';
 import type { FoodLog } from '../../../types';
 
@@ -58,6 +58,17 @@ describe('buildPlanDay', () => {
     const day = buildPlanDay(noSnackPlan, [log('1', 'snack', 'Coffee with milk')]);
     expect(day.extras.map((l) => l.foodName)).toEqual(['Coffee with milk']);
     expect(day.slots.every((x) => x.logs.length === 0)).toBe(true);
+  });
+
+  it('files an extra under a meal with no plan meal open, so the next meal stays open', () => {
+    expect(extrasMeal(buildPlanDay(plan, []))).toBeNull();
+    const done = [log('1', 'breakfast', 'Overnight oats'), log('2', 'snack', 'Banana')];
+    expect(extrasMeal(buildPlanDay(plan, done))).toBe('breakfast');
+    const day = buildPlanDay(plan, [...done, log('3', 'breakfast', 'Coffee')]);
+    expect(nextSlot(day)?.key).toBe('l');
+    expect(day.extras.map((l) => l.foodName)).toEqual(['Coffee']);
+    const noLunch = { ...plan, slots: plan.slots.filter((x) => x.slot_label !== 'lunch') } as DailyMealPlan;
+    expect(extrasMeal(buildPlanDay(noLunch, []))).toBe('lunch');
   });
 
   it('has no next meal once every meal is logged', () => {

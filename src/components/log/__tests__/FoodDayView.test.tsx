@@ -17,19 +17,11 @@ const today = getTodayString();
 const template = (name: string, kcal: number, items: unknown[] = []) => ({
   name, calories_kcal: kcal, protein_g: 30, carbs_g: 20, fats_g: 5, items,
 });
-const planDay = {
-  date: today,
-  assignments: [{
-    daily_meal_plan: {
-      name: 'Lean week 2', notes: 'Protein first at lunch.',
-      slots: [
-        { id: 'b', slot_label: 'breakfast', order: 0, meal_template: template('Overnight oats', 390) },
-        { id: 's', slot_label: 'snack', order: 0, meal_template: template('Greek yogurt and berries', 210, [{ name: 'Greek yogurt', grams: 250 }]) },
-        { id: 'd', slot_label: 'dinner', order: 0, meal_template: template('Salmon and rice', 610) },
-      ],
-    },
-  }],
-};
+const planDay = { date: today, assignments: [{ daily_meal_plan: { name: 'Lean week 2', notes: 'Protein first at lunch.', slots: [
+  { id: 'b', slot_label: 'breakfast', order: 0, meal_template: template('Overnight oats', 390) },
+  { id: 's', slot_label: 'snack', order: 0, meal_template: template('Greek yogurt and berries', 210, [{ name: 'Greek yogurt', grams: 250 }]) },
+  { id: 'd', slot_label: 'dinner', order: 0, meal_template: template('Salmon and rice', 610) },
+] } }] };
 const log = (id: string, mealType: FoodLog['mealType'], foodName: string, calories: number): FoodLog => ({
   id, userId: 'u', coachId: 'c', date: today, mealType, foodName, calories, protein: 20, carbs: 10, fat: 5,
   quantity: 1, unit: 'serving', createdAt: `${today}T08:00:00.000`,
@@ -92,8 +84,9 @@ it('sends every tap to a real Food log path', async () => {
   expect(props.onLogPlanned).toHaveBeenCalledWith(expect.objectContaining({ name: 'Greek yogurt and berries', mealType: 'snack', kcal: 210 }));
   await fireEvent.press(screen.getByTestId('food-day-something-else'));
   expect(props.onSomethingElse).toHaveBeenLastCalledWith('snack');
+  // Extras go to lunch (no plan meal), the meal before Snack, so they never tick Snack off.
   await fireEvent.press(screen.getByTestId('food-day-add'));
-  expect(props.onSomethingElse).toHaveBeenCalledTimes(2);
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('lunch');
   await fireEvent.press(screen.getByLabelText('Coffee with milk, logged to lunch, 30 kcal'));
   expect(props.onEditFood).toHaveBeenLastCalledWith(logs[1]);
   await fireEvent.press(screen.getByTestId('food-day-slot-b'));
@@ -110,6 +103,13 @@ it('says the target is met when the rest of the plan lands within 5 percent', as
   serve(planDay);
   await show({ targets: { calories: 1240, protein: 100 } });
   expect(await screen.findByText('1,240 kcal and 100 g protein. Both on target.')).toBeTruthy();
+});
+
+it('keeps the classic log open while the plan is still loading', async () => {
+  mockGet.mockReturnValue(new Promise(() => {}));
+  await show();
+  expect(screen.getByText('Classic food log')).toBeTruthy();
+  expect(screen.queryByTestId('food-day')).toBeNull();
 });
 
 it('keeps the classic log when the plan cannot load, with a working retry', async () => {
