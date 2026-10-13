@@ -10,9 +10,10 @@
  *   2. Push: iterate every `pending` workout_log and POST it to the backend.
  *      On success → mark `synced` + store server ID.
  *      On conflict (409) → server-wins: mark `conflict`, surface a toast.
- *      On other 4xx (non-401) → permanent: mark `dead_letter` so we stop
+ *      On other 4xx (not 401/408/425/429) → permanent: mark `dead_letter` so we stop
  *        hammering the server on every triggerSync (Hunt P1-1).
- *      On 401 / 5xx / network error → leave `pending`, retry next time.
+ *      On 401/408/425/429/5xx/network error (retryLater.ts) → leave `pending`,
+ *        retry next time, after any Retry-After the server sent.
  *
  * Conflict policy (server wins):
  *   When the server returns HTTP 409 for a record, the local copy is marked
@@ -42,6 +43,7 @@ import { workoutBuilderApi } from '../../api/workoutBuilderApi';
 import type { CompleteAssignmentInput } from '../../api/workoutBuilderApi';
 import { generateId } from '../../utils/date';
 import { readUserCache, readUserCacheSync } from '../../lib/userCache';
+import { isHeld, isRetryLater, retryAfterMs } from './retryLater';
 
 // ---------------------------------------------------------------------------
 // Conflict toast event bus
@@ -55,7 +57,7 @@ export const conflictToastEvents = new EventEmitter();
   .setMaxListeners?.(20);
 
 // Dead-letter toast: emitted when a row is permanently rejected by the server
-// (4xx other than 401/409). UI can subscribe to surface a "we couldn't sync"
+// (a 4xx refusal other than 409). UI can subscribe to surface a "we couldn't sync"
 // banner; the existing conflict-toast subscriber is the documented anchor for
 // any future UI work in this area. Until a dedicated UI lands, the count is
 // visible via Sentry breadcrumbs (logged in pushPending below).
@@ -69,6 +71,10 @@ export const workoutSyncEvents = new EventEmitter();
 // Internal state
 // ---------------------------------------------------------------------------
 let syncInProgress = false;
+
+// The server asked for a pause (Retry-After): no send before this time.
+let retryNotBefore = 0;
+const waitingOutRetryAfter = () => isHeld(retryNotBefore);
 
 // Client keys whose POST is in flight right now (from the Finish screen or
 // from this engine). A held row is never sent a second time in parallel.
@@ -169,9 +175,22 @@ export interface QueueWorkoutInput {
 
 export interface QueueWorkoutResult {
   id: string;
-  /** True when this session already reached the server (nothing to send). */
+  /**
+   * True when this session already reached the server: nothing for the caller
+   * to POST. Changed sets or notes are queued as an update to that workout.
+   */
   alreadySynced: boolean;
   serverId: string | null;
+}
+
+/** True when two bodies carry the same sets and notes (what the client edits). */
+function sameEdits(storedJson: string | null, next: Record<string, unknown>): boolean {
+  try {
+    const prev = JSON.parse(storedJson ?? '{}') as Record<string, unknown>;
+    return JSON.stringify([prev.exercises, prev.notes]) === JSON.stringify([next.exercises, next.notes]);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -180,6 +199,8 @@ export interface QueueWorkoutResult {
  * the one queued row instead of adding a copy. The row is held until the
  * caller reports the outcome with `settleQueuedWorkout` or
  * `releaseQueuedWorkout`, so the background sync never sends it in parallel.
+ * If the background sync already sent an earlier copy, changed sets or notes
+ * are queued as an update (PUT) to that server workout, so the latest wins.
  */
 export async function queueWorkout(
   input: QueueWorkoutInput,
@@ -197,16 +218,20 @@ export async function queueWorkout(
     id: string;
     sync_status: string;
     server_id: string | null;
+    payload: string | null;
   }>(
-    `SELECT id, sync_status, server_id FROM workout_logs WHERE client_key = ? LIMIT 1`,
+    `SELECT id, sync_status, server_id, payload FROM workout_logs WHERE client_key = ? LIMIT 1`,
     [clientKey],
   );
-  if (existing && existing.sync_status === 'synced') {
+  const sent = existing?.sync_status === 'synced';
+  if (existing && sent && (!existing.server_id || sameEdits(existing.payload, input.payload))) {
     return { id: existing.id, alreadySynced: true, serverId: existing.server_id };
   }
 
-  heldKeys.add(clientKey);
+  // An update to a sent workout is not held: the caller does not POST it.
+  if (!sent) heldKeys.add(clientKey);
   if (existing) {
+    // A sent row keeps its server_id, so pushQueuedRow sends a PUT.
     await db.runAsync(
       `UPDATE workout_logs
           SET payload = ?, assignment_json = ?, sync_status = 'pending',
@@ -214,7 +239,7 @@ export async function queueWorkout(
         WHERE id = ?`,
       [payloadJson, assignmentJson, input.durationMinutes ?? null, userId, existing.id],
     );
-    return { id: existing.id, alreadySynced: false, serverId: null };
+    return { id: existing.id, alreadySynced: sent, serverId: sent ? existing.server_id : null };
   }
 
   const id = generateId();
@@ -258,17 +283,14 @@ export async function settleQueuedWorkout(
 }
 
 /**
- * The Finish screen's POST failed. With no answer from the server (no signal,
- * timeout, 5xx) the row stays queued for the background sync. When the server
- * refused the body (`rejected`), the row is parked so it is not retried; a
- * later Finish for the same session re-queues it.
+ * The Finish screen's POST failed with `error`. When it should be tried again
+ * later (retryLater.ts) the row stays queued for the background sync, after any
+ * Retry-After. When the server refused the body, the row is parked so it is not
+ * retried; a later Finish for the same session re-queues it.
  */
-export async function releaseQueuedWorkout(
-  clientKey: string,
-  opts: { rejected?: boolean } = {},
-): Promise<void> {
+export async function releaseQueuedWorkout(clientKey: string, error?: unknown): Promise<void> {
   try {
-    if (opts.rejected) {
+    if (classifyPushError(error) !== 'transient') {
       const db = await getDatabase();
       await db.runAsync(
         `UPDATE workout_logs SET sync_status = 'dead_letter' WHERE client_key = ? AND sync_status = 'pending'`,
@@ -280,12 +302,20 @@ export async function releaseQueuedWorkout(
   }
 }
 
-/** Number of finished workouts on this phone still waiting to be sent. */
-export async function countQueuedWorkouts(userId: string): Promise<number> {
+/**
+ * Number of finished workouts on this phone still waiting to be sent.
+ * `includeParked` also counts the ones the server refused (kept, never resent):
+ * sign-out removes both, so its warning counts both.
+ */
+export async function countQueuedWorkouts(
+  userId: string,
+  opts: { includeParked?: boolean } = {},
+): Promise<number> {
   if (!userId) return 0;
   const db = await getDatabase();
+  const status = opts.includeParked ? `IN ('pending', 'dead_letter')` : `= 'pending'`;
   const row = await db.getFirstAsync<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM workout_logs WHERE payload IS NOT NULL AND sync_status = 'pending' AND user_id = ?`,
+    `SELECT COUNT(*) AS n FROM workout_logs WHERE payload IS NOT NULL AND sync_status ${status} AND user_id = ?`,
     [userId],
   );
   return Number(row?.n ?? 0);
@@ -380,20 +410,13 @@ export async function deleteWorkoutLogsForUser(userId: string): Promise<number> 
 
 type PushErrorClass = 'conflict' | 'permanent' | 'transient';
 
+/** Also starts the server's Retry-After wait when the answer is "try again later". */
 function classifyPushError(err: unknown): PushErrorClass {
   const status = (err as { response?: { status?: number } })?.response?.status;
   if (status === 409) return 'conflict';
-  if (typeof status === 'number') {
-    // 401 → bubble back as transient; the request layer will refresh the
-    // session and the next triggerSync cycle re-pushes.
-    if (status === 401) return 'transient';
-    // 5xx → transient by definition.
-    if (status >= 500) return 'transient';
-    // Any other 4xx (400/403/404/422/etc.) means the server has rejected
-    // this payload permanently. Don't loop on it.
-    if (status >= 400) return 'permanent';
-  }
-  // No status (network / timeout) → transient.
+  if (!isRetryLater(err)) return 'permanent';
+  const wait = retryAfterMs(err);
+  if (wait > 0) retryNotBefore = Date.now() + wait;
   return 'transient';
 }
 
@@ -428,6 +451,7 @@ async function pushPending(): Promise<void> {
   let sent = 0;
 
   for (const row of rows) {
+    if (waitingOutRetryAfter()) break;
     if (typeof row.payload === 'string' && row.payload) {
       const outcome = await pushQueuedRow(row);
       if (outcome === 'sent') sent++;
@@ -463,7 +487,7 @@ async function pushPending(): Promise<void> {
           );
         }
       }
-      // transient errors (401/5xx/network): leave `pending` for the next cycle.
+      // transient errors: leave `pending` for the next cycle.
       if (__DEV__) {
         console.warn('[SyncEngine] push failed for record', log.id, err);
       }
@@ -513,9 +537,12 @@ async function pushQueuedRow(
       return 'dead_letter';
     }
     try {
-      const response = await workoutApi.create(body);
+      // server_id is set when an earlier copy is on the server: update it.
+      const response = row.server_id
+        ? await workoutApi.update(row.server_id, body)
+        : await workoutApi.create(body);
       const data = response.data as { id?: string; workout?: { id?: string } };
-      await markSynced(row.id, data?.id ?? data?.workout?.id ?? '');
+      await markSynced(row.id, row.server_id || (data?.id ?? data?.workout?.id ?? ''));
     } catch (err: unknown) {
       const errorClass = classifyPushError(err);
       if (errorClass === 'transient') return 'kept';
@@ -579,6 +606,7 @@ async function retryAssignmentCompletions(userId: string): Promise<number> {
       [userId],
     );
     for (const row of rows) {
+      if (waitingOutRetryAfter()) break;
       if (row.client_key && heldKeys.has(row.client_key)) continue;
       if (await sendAssignmentCompletion(row.id, row.assignment_json)) sent++;
     }

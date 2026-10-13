@@ -133,7 +133,7 @@ export function actionTarget(
       return { tab: 'SettingsStack', params: { screen: 'CoachMoney', initial: false } };
     case 'sub_coach_operations':
     case 'team_performance':
-      return { tab: 'TeamStack' };
+      return featureFlags.teamMode ? { tab: 'TeamStack' } : null;
     default:
       return null;
   }

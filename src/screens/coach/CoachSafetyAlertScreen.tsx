@@ -1,21 +1,32 @@
 /**
  * CoachSafetyAlertScreen: one Roman safety alert, opened from its card in the
- * coach's action queue (owner 22a, 57, 57w, 57x; backend B-R1F).
+ * coach's action queue (owner 22a, 57, 57w, 57x; backend B-R1F), or from its
+ * push or inbox row by id (owner 57d; backend R1F-2).
  *
  * Shows the client's name, when they sent the message, that one message in
  * full (nothing else from the chat), one fixed line saying what Roman told
  * them, and a "Message {first name}" button that opens the coach-client chat.
- * Everything comes from the queue item (route params), which the server gives
- * only to the client's current coach, so the screen makes no request of its
- * own. Light and dark from the theme; the client's words stay out of
- * analytics capture (`ph-no-capture`).
+ * From the card everything comes from the queue item (route params). By id
+ * the screen reads that one alert (shared skeleton while it loads); the
+ * server gives it only to the client's current coach, and anything it won't
+ * give (another coach's, a deleted message, offline) lands on Command Center
+ * > Actions, as before 57d. The alert opens with one warning haptic
+ * (docs/HAPTICS.md). Light and dark from the theme; the client's words stay
+ * out of analytics capture (`ph-no-capture`).
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
-import type { SafetyAlertType } from '../../services/commandCenterApi';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type {
+  ClientsStackParamList,
+  CoachTabParamList,
+  SafetyAlertParams,
+} from '../../navigation/CoachNavigator';
+import { commandCenterApi, isSafetyAlert, type SafetyAlertType } from '../../services/commandCenterApi';
 import { Headline, PrimaryButton, Screen, ScreenTopBar } from '../../ui';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { QuietLoading } from '../../ui/states/QuietStates';
 import { useTheme } from '../../theme/useTheme';
 import { radius, spacing, typography } from '../../theme/tokens';
 
@@ -46,8 +57,61 @@ export function formatSentAt(iso: string): string {
 }
 
 export default function CoachSafetyAlertScreen({ route, navigation }: Props): React.ReactElement {
-  const { alertType, clientId, clientName, quote, sentAt } = route.params;
+  const { params } = route;
+  const alertId = 'alertId' in params ? params.alertId : null;
+  const [loaded, setLoaded] = useState<{ id: string; alert: SafetyAlertParams } | null>(null);
+  const alert = !('alertId' in params) ? params : loaded?.id === params.alertId ? loaded.alert : null;
   const { semanticColors: sc } = useTheme();
+
+  useEffect(() => {
+    if (alertId === null) return undefined;
+    let live = true;
+    const toActions = () => {
+      if (!live) return;
+      if (navigation.canGoBack()) navigation.goBack();
+      navigation
+        .getParent<BottomTabNavigationProp<CoachTabParamList>>()
+        ?.navigate('CommandCenter', { tab: 'action-queue' });
+    };
+    commandCenterApi.getSafetyAlert(alertId).then(({ data }) => {
+      if (!isSafetyAlert(data)) {
+        toActions();
+        return;
+      }
+      if (!live) return;
+      setLoaded({
+        id: alertId,
+        alert: {
+          alertType: data.alert_type,
+          clientId: data.client_id,
+          clientName: data.client_name,
+          quote: data.quote ?? null,
+          sentAt: data.sent_at ?? data.created_at,
+        },
+      });
+    }, toActions);
+    return () => {
+      live = false;
+    };
+  }, [alertId, navigation]);
+
+  useEffect(() => {
+    if (alert) void HapticService.warning();
+  }, [alert]);
+
+  if (!alert) {
+    return (
+      <Screen
+        edges={['top', 'bottom']}
+        testID="coach-safety-alert-screen"
+        header={<ScreenTopBar onBack={() => navigation.goBack()} />}
+      >
+        <QuietLoading label="Loading" testID="coach-safety-alert-loading" />
+      </Screen>
+    );
+  }
+
+  const { alertType, clientId, clientName, quote, sentAt } = alert;
   const first = firstName(clientName);
   const sent = formatSentAt(sentAt);
   const openChat = () => navigation.navigate('ClientMessages', { clientId, clientName });

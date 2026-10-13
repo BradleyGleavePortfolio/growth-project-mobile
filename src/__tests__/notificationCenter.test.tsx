@@ -16,6 +16,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { routeInAppNotification } from '../services/pushTapRouter';
+import { featureFlags } from '../config/featureFlags';
 jest.mock('../services/pushTapRouter', () => ({ routeInAppNotification: jest.fn(() => false) }));
 jest.mock('react-native/Libraries/Components/RefreshControl/RefreshControl', () => {
   const React = require('react');
@@ -37,7 +38,7 @@ jest.mock('@expo/vector-icons', () => {
   return { Ionicons: Icon, MaterialIcons: Icon, Feather: Icon };
 });
 
-import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
+import NotificationCenterScreen, { routeNotification } from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
 import NotificationBadge from '../components/NotificationBadge';
 
@@ -214,6 +215,16 @@ describe('NotificationCenterScreen', () => {
 
     // Should not show the empty state.
     expect(queryByText('No notifications.')).toBeNull();
+  });
+
+  it.each([true, false])('legacy Guidance fallback redirects with Roman=%s', (roman) => {
+    const flag = jest.replaceProperty(featureFlags, 'romanChat', roman);
+    routeNotification({ id: 'legacy', kind: 'tip', title: 'Note', body: '', read: false,
+      createdAt: new Date().toISOString(), actionScreen: 'AIGuide' }, { navigate: mockNavigate });
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
+      screen: roman ? 'RomanChat' : 'MoreIndex', initial: false,
+    });
+    flag.restore();
   });
 
   it('shows unread count banner when unread > 0', async () => {

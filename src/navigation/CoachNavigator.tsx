@@ -172,6 +172,15 @@ export type CoachTabParamList = {
   CommunityStack: undefined;
 };
 
+/** One Roman safety alert as CoachSafetyAlert shows it (its action queue row). */
+export type SafetyAlertParams = {
+  alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply';
+  clientId: string;
+  clientName: string;
+  quote: string | null;
+  sentAt: string;
+};
+
 export type ClientsStackParamList = {
   ClientsList: undefined;
   /** initialTab: opens on that tab (the daily brief opens Workouts). */
@@ -198,14 +207,11 @@ export type ClientsStackParamList = {
   CoachMacrosReview:    { clientId: string; clientName: string };
   /** S-REACH: consultation answers, from client detail > Summary. */
   ClientConsultation:   { clientId: string; clientName?: string };
-  /** B-R1F: one Roman safety alert, from its card in the action queue. */
-  CoachSafetyAlert: {
-    alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply';
-    clientId: string;
-    clientName: string;
-    quote: string | null;
-    sentAt: string;
-  };
+  /**
+   * B-R1F: one Roman safety alert, from its card in the action queue. Owner
+   * 57d: or by id ({ alertId }) from its push or inbox row.
+   */
+  CoachSafetyAlert: SafetyAlertParams | { alertId: string };
   /** COACH-PAY-M-130: payments, refund, pause and cancel, from client detail > Summary (server flag coach_payment_actions). */
   ClientPayments:       { clientId: string; clientName?: string };
   /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */
@@ -627,8 +633,8 @@ function SettingsStackNavigator() {
  * TeamStackNavigator
  *
  * Phase 11 / Track 7. Scale+ tier gate is enforced inside TeamManagementScreen
- * so it is safe to mount for all coaches — non-Scale coaches see an upgrade
- * prompt rather than the roster.
+ * and the parent tab registers only with Team Mode on and a confirmed
+ * head coach whose roster includes a sub-coach.
  */
 function TeamStackNavigator() {
   return (
@@ -693,7 +699,9 @@ export default function CoachNavigator() {
   // where it could only show the plan gate. The tab now mounts only for a
   // head coach (useCoachRoleType contract) whose roster already has a sub-coach.
   const teamStatus = useCoachTeamStatus();
-  const showTeamTab = teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
+  // Team Mode stays hidden for launch even when an old roster still exists.
+  const showTeamTab = featureFlags.teamMode &&
+    teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
   // Audit P0: while the Command Center API still ships only mock data
   // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
   // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,

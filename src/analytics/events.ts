@@ -20,6 +20,8 @@ export const AnalyticsEvents = {
   // App lifecycle
   APP_OPENED: 'app_opened',
   APP_BACKGROUNDED: 'app_backgrounded',
+  APP_INSTALLED: 'app_installed',
+  APP_UPDATED: 'app_updated',
 
   // Onboarding funnel
   ONBOARDING_STARTED: 'onboarding_started',

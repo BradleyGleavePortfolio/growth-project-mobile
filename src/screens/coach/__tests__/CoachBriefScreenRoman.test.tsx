@@ -16,10 +16,12 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { logger } from '../../../utils/logger';
 import type { CoachBrief } from '../../../api/coachBriefApi';
+import { featureFlags } from '../../../config/featureFlags';
 
 jest.mock('../../../config/featureFlags', () => ({
   featureFlags: {
     coachBrief: true,
+    teamMode: false,
     romanChat: true,
     romanCheckInBackendLive: false,
     romanStreakBackendLive: false,
@@ -87,6 +89,7 @@ function brief(over: Partial<CoachBrief> = {}): CoachBrief {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.replaceProperty(featureFlags, 'teamMode', false);
   mockMarkRead.mockResolvedValue(undefined);
 });
 
@@ -115,6 +118,21 @@ describe('CoachBriefScreen — live brief', () => {
       initial: false,
     });
   });
+
+  it.each(['team_performance', 'sub_coach_operations'] as const)(
+    '%s is informational while Team Mode is off',
+    async (type) => {
+      const today = brief();
+      today.summary!.action_items = [{ type, detail: 'Team update', priority: 3 }];
+      mockToday.mockResolvedValue(today);
+      const { getByTestId } = await render(<CoachBriefScreen />);
+      await waitFor(() => expect(getByTestId(`brief-action-${type}`)).toBeTruthy());
+      const row = getByTestId(`brief-action-${type}`);
+      expect(row.props.onPress).toBeUndefined();
+      fireEvent.press(row);
+      expect(mockNavigate).not.toHaveBeenCalled();
+    },
+  );
 
   // S-BRIEF-124 B-398-1: an older server may still send a workout item.
   it('a workout item opens the client workout history and never says approve', async () => {
@@ -199,9 +217,17 @@ describe('actionTarget', () => {
       tab: 'SettingsStack',
       params: { screen: 'CoachMoney', initial: false },
     });
-    expect(actionTarget({ type: 'team_performance', detail: 'd', priority: 3 })).toEqual({
-      tab: 'TeamStack',
-    });
+    expect(actionTarget({ type: 'team_performance', detail: 'd', priority: 3 })).toBeNull();
     expect(actionTarget({ type: 'payment_due', detail: 'd', priority: 2 })).toBeNull();
   });
+
+  it.each(['team_performance', 'sub_coach_operations'] as const)(
+    '%s has no TeamStack entry while Team Mode is off',
+    (type) => {
+      const item = { type, detail: 'd', priority: 3 };
+      expect(actionTarget(item)).toBeNull();
+      jest.replaceProperty(featureFlags, 'teamMode', true);
+      expect(actionTarget(item)).toEqual({ tab: 'TeamStack' });
+    },
+  );
 });
