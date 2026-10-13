@@ -21,7 +21,7 @@ import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import { EmptyStateNoResults } from '../../../ui/empty-states';
 import { matchesRosterSearch, rosterDisplayName, sortRoster, type RosterClient } from '../../../utils/coach/clientRoster';
 import {
-  FILTER_LABELS, SEARCH_FIRST_AT, groupByLetter, initialsOf, lastLoggedWord, lookupReason, matchesLookupFilter,
+  FILTER_LABELS, SEARCH_FIRST_AT, firstName, groupByLetter, initialsOf, lastLoggedWord, lookupReason, matchesLookupFilter,
   needsYouSentence, parseLookupQuery, readRecentClientIds, recentFromRoster, rememberRecentClient,
   type LookupAction, type LookupFilter, type LookupReason, type UnreadByClient,
 } from '../../../utils/coach/clientLookup';
@@ -133,7 +133,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
     return (
       <View key={c.id} style={s.row}>
         <View style={s.mid}>
-          <HapticPressable intent="light" style={s.rowMain} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`Open ${name}, ${r.text}`} testID={`lookup-row-${c.id}`}>
+          <HapticPressable intent="light" style={s.rowMain} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`${name}, ${r.text}`} testID={`lookup-row-${c.id}`}>
             {avatar(c, 40)}
             <View style={s.mid}>
               <Text style={s.name} numberOfLines={1}>{name}</Text>
@@ -153,8 +153,8 @@ export default function ClientLookupScreen({ navigation }: Props) {
     const name = rosterDisplayName(c);
     return clientRow(c, { ...lookupReason(c, unread, 'recent'), ok: false }, (
       <>
-        {iconButton('chatbubble-ellipses-outline', `Message ${name}`, () => openMessages(c), `lookup-message-${c.id}`)}
-        {iconButton('notifications-outline', `Send ${name} a nudge`, () => nudge.open(c), `lookup-nudge-${c.id}`)}
+        {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
+        {iconButton('notifications-outline', `Nudge, ${name}`, () => nudge.open(c), `lookup-nudge-${c.id}`)}
       </>
     ));
   };
@@ -164,15 +164,13 @@ export default function ClientLookupScreen({ navigation }: Props) {
       <Overline style={s.date}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Overline>
       <View style={s.titleRow}>
         <Text style={s.title} accessibilityRole="header">Clients</Text>
-        <HapticPressable intent="light" style={s.invite} onPress={() => navigation.navigate('InviteCodes')} accessibilityRole="button" accessibilityLabel="Invite a client" accessibilityHint="Opens your invite codes" hitSlop={4} testID="lookup-invite">
+        <HapticPressable intent="light" style={s.invite} onPress={() => navigation.navigate('InviteCodes')} accessibilityRole="button" accessibilityLabel="Invite" hitSlop={4} testID="lookup-invite">
           <Ionicons name="person-add-outline" size={16} color={theme.semanticColors.textOnAccent} />
           <Text style={s.inviteText}>Invite</Text>
         </HapticPressable>
       </View>
       {known ? (
-        <Text style={s.count} testID="lookup-count">
-          {roster.length} {archived ? 'archived' : 'active'} {roster.length === 1 ? 'client' : 'clients'}
-        </Text>
+        <Text style={s.count} testID="lookup-count">{roster.length} {archived ? 'archived' : 'active'} {roster.length === 1 ? 'client' : 'clients'}</Text>
       ) : null}
     </View>
   );
@@ -207,9 +205,9 @@ export default function ClientLookupScreen({ navigation }: Props) {
           </HapticPressable>
         </View>
         {privacy}
-        {archivedCount ? (
-          <HapticPressable intent="light" style={s.archivedLink} onPress={toggleArchived} accessibilityRole="button" accessibilityLabel={`Archived, ${archivedCount}`} testID="lookup-archived-link">
-            <Text style={s.chipText}>Archived <Text style={s.chipCount}>{archivedCount}</Text></Text>
+        {archivedCount !== 0 ? ( // an unknown count (full first page, failed read) still shows the link
+          <HapticPressable intent="light" style={s.archivedLink} onPress={toggleArchived} accessibilityRole="button" accessibilityLabel="Archived" testID="lookup-archived-link">
+            <Text style={s.chipText}>Archived</Text>
           </HapticPressable>
         ) : null}
       </>
@@ -221,7 +219,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
       <>
         <View style={s.search}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput style={s.searchInput} value={query} onChangeText={setQuery} placeholder="Name, email or a filter" placeholderTextColor={colors.textMuted} accessibilityLabel="Search clients by name, email or a filter" autoCorrect={false} autoCapitalize="none" returnKeyType="search" clearButtonMode="while-editing" testID="lookup-search" />
+          <TextInput style={s.searchInput} value={query} onChangeText={setQuery} placeholder="Name, email or a filter" placeholderTextColor={colors.textMuted} accessibilityLabel="Name, email or a filter" autoCorrect={false} autoCapitalize="none" returnKeyType="search" clearButtonMode="while-editing" testID="lookup-search" />
         </View>
         <View style={s.chips}>
           {(archived ? [] : FILTERS).map((f) => (
@@ -261,7 +259,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
                     const name = rosterDisplayName(c);
                     const when = lastLoggedWord(c);
                     return (
-                      <HapticPressable key={c.id} intent="light" style={s.azRow} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`Open ${name}, ${when}`} testID={`lookup-az-${c.id}`}>
+                      <HapticPressable key={c.id} intent="light" style={s.azRow} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`${name}, ${when}`} testID={`lookup-az-${c.id}`}>
                         {avatar(c, 32)}
                         <Text style={s.azName} numberOfLines={1}>{name}</Text>
                         <Text style={s.azWhen} numberOfLines={2}>{when}</Text>
@@ -299,7 +297,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
       {showIndex ? (
         <View style={[s.index, { top: insets.top + 72 }]} testID="lookup-index">
           {LETTERS.map((l) => (
-            <HapticPressable key={l} intent="light" onPress={() => jumpTo(l)} hitSlop={{ left: 12, right: 6 }} accessibilityRole="button" accessibilityLabel={`Jump to ${l}`} testID={`lookup-index-${l}`}>
+            <HapticPressable key={l} intent="light" onPress={() => jumpTo(l)} hitSlop={{ left: 12, right: 6 }} accessibilityRole="button" accessibilityLabel={l} testID={`lookup-index-${l}`}>
               <Text style={s.indexLetter}>{l}</Text>
             </HapticPressable>
           ))}

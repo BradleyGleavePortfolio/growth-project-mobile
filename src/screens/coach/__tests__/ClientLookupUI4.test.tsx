@@ -62,8 +62,8 @@ const wire = (id: string, name: string, a: Act = {}, joined = day(-60)) => ({
 const navigate = jest.fn();
 const nav = { navigate, addListener: () => () => undefined } as never;
 
-async function mount(rows: ReturnType<typeof wire>[], unread: Record<string, number> = {}) {
-  mockGetClients.mockImplementation(async (status: string) => ({ data: status === 'archived' ? [wire('z1', 'Zed Old')] : rows }));
+async function mount(rows: ReturnType<typeof wire>[], unread: Record<string, number> = {}, archivedReply = async (_cursor?: string) => ({ data: [wire('z1', 'Zed Old')] })) {
+  mockGetClients.mockImplementation(async (status: string, cursor?: string) => (status === 'archived' ? archivedReply(cursor) : { data: rows }));
   mockUnread.mockResolvedValue({ data: { total: 0, by_client: unread } });
   await render(<ClientLookupScreen navigation={nav} />);
   await waitFor(() => expect(screen.getByTestId('lookup-count')).toBeTruthy());
@@ -79,9 +79,7 @@ beforeEach(() => { jest.clearAllMocks(); mockCache.clear(); useCoachStore.getSta
 describe('UI-4 helpers', () => {
   it('reads typed filter words and writes the Needs you sentence with number words', () => {
     expect(parseLookupQuery(' Review  messages ')).toEqual({ filters: ['review', 'messages'], text: '' });
-    expect(needsYouSentence(2, 1)).toBe('Two need you today. One is steady.');
-    expect(needsYouSentence(1, 0)).toBe('One needs you today.');
-    expect(needsYouSentence(0, 3)).toBe('Three are steady.');
+    expect([needsYouSentence(2, 1), needsYouSentence(1, 0), needsYouSentence(0, 3)]).toEqual(['Two need you today. One is steady.', 'One needs you today.', 'Three are steady.']);
   });
   it('never shows an empty value: not shared names the client, nothing logged says so', () => {
     const c = (a: Act) => ({ id: 'x', firstName: 'Ava', lastName: 'Price', email: '', createdAt: day(-30), activity: { shared: a.shared ?? true, lastActiveOn: a.last ?? null, checkInsToReview: 0 } }) as unknown as RosterClient;
@@ -89,8 +87,7 @@ describe('UI-4 helpers', () => {
     expect(lookupReason(c({ shared: false }), {}, 'recent').text).toBe('Not shared by Ava');
     expect(lastLoggedWord(c({}))).toBe('Nothing logged yet');
     expect(lookupReason(c({ last: day(-1) }), { x: 3 }, 'recent')).toEqual({ text: '3 new messages', action: 'reply', ok: false });
-    expect(dayWord(day(0))).toBe('Today');
-    expect(dayWord(day(-1))).toBe('Yesterday');
+    expect([dayWord(day(0)), dayWord(day(-1))]).toEqual(['Today', 'Yesterday']);
   });
   it('groups A to Z and keeps only recent ids the roster still returns (moved clients drop out)', () => {
     const roster = [{ id: 'a', firstName: 'Ana', lastName: 'L' }, { id: 'b', firstName: 'Ben', lastName: 'C' }] as RosterClient[];
@@ -107,12 +104,7 @@ describe('UI-4 helpers', () => {
 describe('UI-4 Needs you (under 15 clients)', () => {
   it('matches the mockup: count, sentence, Review / Say hello, and the steady row', async () => {
     await mount(UNDER_15);
-    expect(screen.getByText('3 active clients')).toBeTruthy();
-    expect(screen.getByText('Two need you today. One is steady.')).toBeTruthy();
-    expect(screen.getByText('2 check-ins to review')).toBeTruthy();
-    expect(screen.getByText('Logged today, workout done')).toBeTruthy();
-    expect(screen.getByText('New, no logs yet')).toBeTruthy();
-    expect(screen.getByText('Add your next client')).toBeTruthy();
+    for (const t of ['3 active clients', 'Two need you today. One is steady.', '2 check-ins to review', 'Logged today, workout done', 'New, no logs yet', 'Add your next client', 'Archived']) expect(screen.getByText(t)).toBeTruthy();
     expect(screen.queryByTestId('lookup-search')).toBeNull();
   });
   it('every button opens a real screen', async () => {
@@ -140,6 +132,18 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     await fireEvent.press(screen.getByTestId('lookup-archived-link'));
     await waitFor(() => expect(screen.getByText('1 archived client')).toBeTruthy());
   });
+  it.each(['full first page', 'failed read'])('Archived stays reachable when its count is unknown (%s); the chip returns to Active', async (mode) => {
+    let reads = 0; // the first archived read is the count
+    await mount(UNDER_15, {}, async (cursor) => {
+      if (reads++ === 0 && mode === 'failed read') throw new Error('offline');
+      return { data: cursor ? [] : Array.from({ length: 50 }, (_, i) => wire(`z${i}`, `Zed Old ${i}`)) };
+    });
+    await waitFor(() => expect(reads).toBeGreaterThan(0));
+    await fireEvent.press(screen.getByTestId('lookup-archived-link'));
+    await waitFor(() => expect(screen.getByText('50 archived clients')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('lookup-chip-archived'));
+    await waitFor(() => expect(screen.getByText('3 active clients')).toBeTruthy());
+  });
 });
 
 describe('UI-4 Search first (15 or more)', () => {
@@ -147,9 +151,7 @@ describe('UI-4 Search first (15 or more)', () => {
     await mount(MANY, { m3: 2 });
     expect(screen.getByText('15 active clients')).toBeTruthy();
     expect(screen.getByTestId('lookup-search').props.placeholder).toBe('Name, email or a filter');
-    expect(screen.getByTestId('lookup-chip-messages').props.accessibilityLabel).toBe('New messages, 1');
-    expect(screen.getByTestId('lookup-chip-notSharing').props.accessibilityLabel).toBe('Not sharing, 1');
-    expect(screen.getByTestId('lookup-chip-quiet').props.accessibilityLabel).toBe('Quiet 3+ days, 1');
+    expect(['messages', 'notSharing', 'quiet'].map((f) => screen.getByTestId(`lookup-chip-${f}`).props.accessibilityLabel)).toEqual(['New messages, 1', 'Not sharing, 1', 'Quiet 3+ days, 1']);
     expect(screen.getByText('Not shared by Ava')).toBeTruthy();
     expect(screen.getByTestId('lookup-letter-A')).toBeTruthy();
     expect(screen.getByText(/filters combine with typing/)).toBeTruthy();
