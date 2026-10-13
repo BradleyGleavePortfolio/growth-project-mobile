@@ -105,14 +105,14 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
       ) : o === null ? (
         <QuietLoading label="Loading" testID="coach-home-v11-loading" />
       ) : (
-        <View style={[styles.dials, dials.length < 3 && styles.dialsFew]} testID="coach-home-v11-dials">
+        <View style={styles.dials} testID="coach-home-v11-dials">
           {dials.map(({ key, ...dial }) => <HomeDial key={key} {...dial} testID={`coach-home-v11-dial-${key}`} />)}
         </View>
       )}
 
       {data.draftsWaiting > 0 || onAskRoman ? (
         <View style={[styles.roman, { borderColor: sc.border }]} testID="coach-home-v11-roman">
-          <RomanAvatar crop="monogram" size={28} />
+          <View style={styles.romanMark}><RomanAvatar crop="monogram" size={28} /></View>
           <View style={styles.grow}>
             {data.draftsWaiting > 0 ? (
               <Pressable
@@ -187,8 +187,9 @@ const styles = StyleSheet.create({
   badge: { minWidth: 20, height: 20, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
   badgeText: { ...typography.caption, fontSize: 11, lineHeight: 14, letterSpacing: 0, fontFamily: 'Inter_600SemiBold' },
   dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
-  dialsFew: { justifyContent: 'space-around' },
   roman: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 20, paddingVertical: 16, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
+  // Centres Roman on the first 44 pt control beside him.
+  romanMark: { height: 44, justifyContent: 'center' },
   grow: { flex: 1, alignItems: 'flex-start' },
   drafts: { minHeight: 44, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },
   draftsLabel: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, flexShrink: 1 },

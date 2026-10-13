@@ -9,7 +9,6 @@ import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, radius, typography } from '../../../theme/tokens';
 import { QuietOverline } from '../../../ui';
-import MonogramBadge from '../../../components/community/coach/MonogramBadge';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { FIGURES } from '../command-center/CoachHomeSections';
 
@@ -47,6 +46,17 @@ export function HomeDial({ value, unit, label, sub, progress, testID }: DialSpec
   );
 }
 
+/** The mockup's client mark: serif initials on cream inside a camel hairline. */
+function Monogram({ name }: { name: string }) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const initials = words.length > 1 ? `${words[0][0]}${words[words.length - 1][0]}` : (words[0] ?? '?').slice(0, 1);
+  return (
+    <View style={styles.mono}>
+      <Text style={styles.monoText} maxFontSizeMultiplier={1.2}>{initials.toUpperCase()}</Text>
+    </View>
+  );
+}
+
 /** A client who needs the coach: monogram, name, last activity, the server's reason in a cream pill. */
 export function ClientTile({ name, line, reason, width, onPress, testID }: {
   name: string; line: string | null; reason: string; width: number; onPress: () => void; testID: string;
@@ -58,7 +68,7 @@ export function ClientTile({ name, line, reason, width, onPress, testID }: {
       accessibilityRole="button" accessibilityLabel={[name, line, reason].filter(Boolean).join('. ')} testID={testID}
       style={({ pressed }) => [styles.tile, { width, backgroundColor: sc.bgSurface, borderColor: sc.border }, pressed && styles.pressed]}
     >
-      <MonogramBadge name={name} size={36} />
+      <Monogram name={name} />
       <Text style={[styles.tileName, { color: sc.textPrimary }]} numberOfLines={2}>{name}</Text>
       {line ? <Text style={[styles.tileLine, { color: sc.textMuted }]} numberOfLines={2}>{line}</Text> : null}
       <View style={styles.why}>
@@ -102,13 +112,15 @@ export function BusinessTile({ label, value, sub, width, onPress, testID }: {
 }
 
 const styles = StyleSheet.create({
-  dial: { width: '33%', alignItems: 'center' },
+  dial: { flex: 1, alignItems: 'center' },
   ring: { width: SIZE, height: SIZE },
   ringCenter: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   dialValue: { ...typography.h2, fontSize: 25, lineHeight: 32, letterSpacing: 0.3, fontVariant: FIGURES },
   dialUnit: { ...typography.caption, fontSize: 11, lineHeight: 13, letterSpacing: 0 },
   dialLabel: { marginTop: 10, marginBottom: 0, textAlign: 'center' },
   dialSub: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, marginTop: 4, textAlign: 'center' },
+  mono: { width: 36, height: 36, borderRadius: radius.chip, borderWidth: 1, borderColor: colors.camel, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center' },
+  monoText: { fontFamily: typography.h2.fontFamily, fontSize: 15, lineHeight: 19, color: colors.ink },
   tile: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: 14, minHeight: 132 },
   dashed: { borderStyle: 'dashed', borderWidth: 1, borderColor: colors.stone, justifyContent: 'space-between' },
   business: { minHeight: 118 },
