@@ -117,12 +117,12 @@ describe('CoachBriefLightScreen: busy', () => {
     expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'messages', items: six('message_unread') });
   });
 
-  it('head coach: failed payments open Money', async () => {
+  it('head coach: the business lines and the way out only', async () => {
     mockToday.mockResolvedValue(brief([{ type: 'dunning_queue', detail: '1 failed payment', priority: 1 }, { type: 'team_performance', detail: 'x', priority: 3 }]));
     const s = await render(<CoachBriefLightScreen />);
-    await waitFor(() => expect(rowLabels(s)).toEqual(['See Money', 'Thank you, Roman']));
-    await fireEvent.press(s.getByTestId('brief-row-money'));
-    expect(mockTab).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachMoney', initial: false });
+    await waitFor(() => expect(s.getByText(BODY)).toBeTruthy());
+    expect(rowLabels(s)).toEqual(['Thank you, Roman']);
+    expect(s.queryByText('Where would you like to start?')).toBeNull();
   });
 });
 
