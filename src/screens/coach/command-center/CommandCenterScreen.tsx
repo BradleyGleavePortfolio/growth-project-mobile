@@ -32,6 +32,7 @@ import InboxScreen from './InboxScreen';
 import ActionQueueScreen from './ActionQueueScreen';
 import CoachHomeCards from './CoachHomeCards';
 import { coachHomeSources } from './coachHomeSources';
+import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
 
 export type CommandCenterTab =
   | 'overview'
@@ -55,14 +56,25 @@ interface Props {
   onOpenThread?: (clientId: string, clientName: string) => void;
   /** Pre-select a tab on mount. Defaults to 'overview'. */
   initialTab?: CommandCenterTab;
+  /** The tab route: a safety alert push or inbox row opens `tab: 'action-queue'`. */
+  route?: { params?: { tab?: 'action-queue' } };
 }
 
 export default function CommandCenterScreen({
   onSelectClient,
   onOpenThread,
   initialTab = 'overview',
+  route,
 }: Props) {
-  const [activeTab, setActiveTab] = React.useState<CommandCenterTab>(initialTab);
+  const routeParams = route?.params;
+  const [activeTab, setActiveTab] = React.useState<CommandCenterTab>(
+    routeParams?.tab ?? initialTab,
+  );
+  // Each open of a safety alert push or inbox row switches to Actions, even
+  // when Command Center is already mounted on another tab.
+  React.useEffect(() => {
+    if (routeParams?.tab === 'action-queue') setActiveTab('action-queue');
+  }, [routeParams]);
   // AUDIT-13-125: the Overview tab mounts this screen with no props, so every
   // client row and inbox thread was a dead tap. Default to the Clients stack
   // (`initial: false` keeps the Clients list under it for Back).
@@ -88,6 +100,20 @@ export default function CommandCenterScreen({
   const openMoney = () =>
     navigation.navigate('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
   const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList' });
+  const openSafetyAlert = (item: ActionQueueItem) => {
+    if (!isSafetyAlert(item)) return;
+    navigation.navigate('ClientsStack', {
+      screen: 'CoachSafetyAlert',
+      params: {
+        alertType: item.alert_type,
+        clientId: item.client_id,
+        clientName: item.client_name,
+        quote: item.quote ?? null,
+        sentAt: item.sent_at ?? item.created_at,
+      },
+      initial: false,
+    });
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -113,7 +139,7 @@ export default function CommandCenterScreen({
       case 'inbox':
         return <InboxScreen onOpenThread={openThread} />;
       case 'action-queue':
-        return <ActionQueueScreen onSelectClient={selectClient} />;
+        return <ActionQueueScreen onSelectClient={selectClient} onOpenSafetyAlert={openSafetyAlert} />;
     }
   };
 

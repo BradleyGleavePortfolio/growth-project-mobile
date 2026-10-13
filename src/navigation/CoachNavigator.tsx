@@ -66,6 +66,7 @@ import ClientReassignModal from '../screens/coach/ClientReassignModal';
 import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
 // S-REACH: coach read of a client's consultation answers (backend #607).
 import ClientConsultationScreen from '../screens/coach/ClientConsultationScreen';
+import CoachSafetyAlertScreen from '../screens/coach/CoachSafetyAlertScreen';
 import ClientPaymentsScreen from '../screens/coach/ClientPaymentsScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
@@ -152,7 +153,8 @@ export type CoachTabParamList = {
   // Phase 8: Command Center replaces the old top-level Dashboard tab.
   // The 'Dashboard' name is kept in the param list so any existing
   // navigate('Dashboard') calls in the codebase don't break.
-  CommandCenter: undefined;
+  // B-R1F: a Roman safety alert push or inbox row opens the Actions tab.
+  CommandCenter: { tab?: 'action-queue' } | undefined;
   // R27: typed nested nav so navigate('ClientsStack', { screen: 'ClientsList' })
   // type-checks against ClientsStackParamList (mirrors SettingsStack below).
   // `| undefined` preserves existing no-arg navigate('ClientsStack') callers.
@@ -196,6 +198,14 @@ export type ClientsStackParamList = {
   CoachMacrosReview:    { clientId: string; clientName: string };
   /** S-REACH: consultation answers, from client detail > Summary. */
   ClientConsultation:   { clientId: string; clientName?: string };
+  /** B-R1F: one Roman safety alert, from its card in the action queue. */
+  CoachSafetyAlert: {
+    alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply';
+    clientId: string;
+    clientName: string;
+    quote: string | null;
+    sentAt: string;
+  };
   /** COACH-PAY-M-130: payments, refund, pause and cancel, from client detail > Summary (server flag coach_payment_actions). */
   ClientPayments:       { clientId: string; clientName?: string };
   /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */
@@ -404,6 +414,7 @@ function ClientsStackNavigator() {
         component={ClientConsultationScreen}
         options={{ headerShown: true, title: 'Consultation', headerBackTitle: 'Back' }}
       />
+      <ClientsStack.Screen name="CoachSafetyAlert" component={CoachSafetyAlertScreen} />
       {/* COACH-PAY-M-130: draws its own Back; entry shown only while the server flag is on. */}
       <ClientsStack.Screen name="ClientPayments" component={ClientPaymentsScreen} />
       <ClientsStack.Screen
