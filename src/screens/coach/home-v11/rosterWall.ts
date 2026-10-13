@@ -11,7 +11,8 @@ export type WallRing = 'logged' | 'notYet' | 'unknown';
 
 export interface WallMember { id: string; name: string; label: string; ring: WallRing }
 
-export type RosterFilter = 'needs' | 'steady' | 'streaks';
+/** 'setup' is the zero-client Home's one chip over its setup steps. */
+export type RosterFilter = 'needs' | 'steady' | 'streaks' | 'setup';
 
 export interface FilterChip { key: RosterFilter; label: string; count: number }
 

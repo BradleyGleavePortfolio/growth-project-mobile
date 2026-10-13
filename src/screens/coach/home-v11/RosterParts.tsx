@@ -1,6 +1,6 @@
 /**
- * UI-2 second PR (V1_1_UI_SPEC UI-2, owner 10-09 "render 2"): the filter chips and the Steady wall with its
- * legend, to the mockup in tgp-agent-context planning/v1_1_ui/ui-2-coach-home. Theme colours, type and radius
+ * UI-2 (V1_1_UI_SPEC UI-2, owner 10-09 "render 2"): the filter chips, the Steady wall with its legend and the
+ * zero-client empty wall, to the mockup in tgp-agent-context planning/v1_1_ui/ui-2-coach-home. Theme colours, type and radius
  * tokens only.
  */
 import React from 'react';
@@ -110,6 +110,30 @@ export function SteadyWall({ members, width, total, flushTop, onSelect, onOpenCl
   );
 }
 
+/** Zero clients: "Your clients 0", six dashed places and the mockup's line about what will fill them. */
+export function EmptyWall({ width }: { width: number }) {
+  const { semanticColors: sc } = useTheme();
+  const cell = (width - (COLS - 1) * COL_GAP) / COLS;
+  return (
+    <View style={styles.wall} testID="coach-home-v11-empty-wall">
+      <View style={styles.head}>
+        <QuietOverline style={styles.flat} accessibilityRole="header">Your clients</QuietOverline>
+        <Text style={[styles.note, { color: sc.textMuted }]} maxFontSizeMultiplier={1.3}>0</Text>
+      </View>
+      <View style={styles.grid} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {Array.from({ length: COLS }, (_, i) => (
+          <View key={i} style={[styles.cell, { width: cell }]}>
+            <View style={styles.slot}><View style={[styles.emptyFace, { borderColor: colors.stone }]} /></View>
+          </View>
+        ))}
+      </View>
+      <Text style={[styles.emptyLine, { color: sc.textMuted }]}>
+        Clients appear here as they join. A green ring means they logged today, and anyone who needs you moves to the tiles above.
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   chipScroll: { marginHorizontal: -layout.gutter, flexGrow: 0 },
   chipRow: { paddingHorizontal: layout.gutter, gap: 8 },
@@ -131,5 +155,8 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 6, marginTop: 14 },
   key: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 12, height: 12, borderRadius: radius.chip, borderWidth: 3 },
+  slot: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
+  emptyFace: { width: FACE, height: FACE, borderRadius: radius.chip, borderWidth: 1, borderStyle: 'dashed' },
+  emptyLine: { ...typography.bodySmall, marginTop: 20 },
   pressed: { opacity: 0.6 },
 });

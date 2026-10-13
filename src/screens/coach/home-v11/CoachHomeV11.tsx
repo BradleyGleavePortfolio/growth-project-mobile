@@ -2,7 +2,8 @@
  * UI-2 coach Home (V1_1_UI_SPEC UI-2, owner 10-09 "render 2"), behind featureFlags.coachHomeV11: the date and
  * bell, three dials, Roman with the one action "Approve Roman's drafts →", the clients who need the coach as
  * tiles, and Business. Only real numbers are drawn; a dial with no real base is left out. Zero clients: the
- * Clients and Earnings dials, then the existing setup cards (`header`). The chips filter the roster section:
+ * Setup, Clients and Earnings dials, Roman's next step, the open setup steps as tiles and the empty wall, as in
+ * the zero-client mockup. The chips filter the roster section:
  * Needs you (tiles, then the Steady wall, as in the mockup), Steady (the wall) and Streaks (streak tiles).
  */
 import React, { useMemo, useState } from 'react';
@@ -13,16 +14,20 @@ import { layout, radius, typography } from '../../../theme/tokens';
 import { QuietOverline, TextLink } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
+import SetupNotice from '../../../components/coach/setup/SetupNotice';
+import type { ChecklistTarget } from '../../../components/coach/setup/CoachSetupChecklist';
+import { useRomanVoiceFont } from '../../consultation/components';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, lastActiveWords, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
-import { AllClientsTile, BusinessTile, ClientTile, HomeDial, type DialSpec } from './HomeParts';
+import { AllClientsTile, BusinessTile, ClientTile, HomeDial, StepTile, type DialSpec } from './HomeParts';
 import { useCoachHomeV11, type CoachHomeData } from './useCoachHomeV11';
-import { FilterChips, SteadyWall } from './RosterParts';
+import { EmptyWall, FilterChips, SteadyWall } from './RosterParts';
 import { filterChips, loggedLine, steadyWall, streakLabel, type RosterFilter } from './rosterWall';
 import type { RosterSources } from './rosterSources';
-import { useRosterWall } from './useRosterWall';
+import { useRosterWall, useSetupSnapshot } from './useRosterWall';
+import { PACKAGE_NEXT_LINE, setupDial, setupPlan, type SetupPlan } from './setupSteps';
 
 const TILE_GAP = 12;
 /** Seven clients and the "All clients" tile fill four rows, as in the mockup. */
@@ -36,8 +41,8 @@ interface Props {
   onOpenNotifications: () => void;
   /** Only when Roman's coach chat is on. */
   onAskRoman?: () => void;
-  /** Zero clients: the existing setup checklist and Money card. */
-  header?: React.ReactNode;
+  /** A setup step's screen (Stripe, packages, the invite link); the payment step opens Money. */
+  onOpenSetup: (target: ChecklistTarget) => void;
   sources?: CoachHomeSources;
   rosterSources?: RosterSources;
 }
@@ -53,11 +58,12 @@ function amount(cents: number, currency: string): string {
   }
 }
 
-export function homeDials(d: CoachHomeData): DialSpec[] {
+export function homeDials(d: CoachHomeData, setup: SetupPlan | null = null): DialSpec[] {
   const o = d.overview;
   if (!o) return [];
   if (o.roster_size === 0) {
-    const dials: DialSpec[] = [{ key: 'clients', value: '0', unit: 'clients', label: 'Clients', sub: 'None yet', progress: 0 }];
+    const dials: DialSpec[] = setup && setup.open.length > 0 ? [setupDial(setup)] : [];
+    dials.push({ key: 'clients', value: '0', unit: 'clients', label: 'Clients', sub: 'None yet', progress: 0 });
     if (d.month.kind === 'ok') {
       const { totals, currency } = d.month.summary;
       dials.push({ key: 'earnings', value: amount(totals.netCents, currency), unit: 'this month', label: 'Earnings', sub: monthOverline(d.now), progress: 0 });
@@ -74,7 +80,7 @@ export function homeDials(d: CoachHomeData): DialSpec[] {
   return dials;
 }
 
-export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, header, sources, rosterSources }: Props) {
+export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, onOpenSetup, sources, rosterSources }: Props) {
   const { semanticColors: sc } = useTheme();
   const { width } = useWindowDimensions();
   const { data, reload, retryMonth, retryUrgent, retryDrafts } = useCoachHomeV11(sources);
@@ -84,7 +90,12 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
   const tileWidth = (contentWidth - TILE_GAP) / 2;
   const o = data.overview;
   const roster = o?.roster_size ?? 0;
-  const dials = homeDials(data);
+  const zero = o !== null && roster === 0;
+  const { setup: setupSnap, reloadSetup } = useSetupSnapshot(zero, rosterSources);
+  const plan = zero && setupSnap ? setupPlan(setupSnap) : null;
+  const romanLine = plan?.packageNext ? PACKAGE_NEXT_LINE : null;
+  const romanFont = useRomanVoiceFont();
+  const dials = homeDials(data, plan);
   const needsYou = roster > 0 && (o?.at_risk_count ?? 0) > 0;
   const urgent = needsYou ? data.urgent.slice(0, MAX_TILES) : [];
   const bell = data.unreadNotifications;
@@ -111,7 +122,7 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
   return (
     <ScrollView
       style={{ backgroundColor: sc.bgPrimary }} contentContainerStyle={styles.content} testID="coach-home-v11"
-      refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => { void reload(true); reloadRoster(); }} tintColor={sc.accent} />}
+      refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => { void reload(true); reloadRoster(); if (zero) reloadSetup(); }} tintColor={sc.accent} />}
     >
       <View style={styles.topRow}>
         <QuietOverline style={styles.flat} maxFontSizeMultiplier={1.3}>{dateOverline(data.now)}</QuietOverline>
@@ -131,7 +142,8 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
 
       {o === null && data.overviewFailed ? (
         <QuietError message="Roster numbers could not load." onRetry={() => void reload(false)} testID="coach-home-v11-error" />
-      ) : o === null ? (
+      ) : o === null || (zero && !setupSnap) ? (
+        // Zero clients: the dials wait for the setup read, so the Setup dial never pushes the others aside.
         <QuietLoading label="Loading" testID="coach-home-v11-loading" />
       ) : (
         <View style={styles.dials} testID="coach-home-v11-dials">
@@ -139,10 +151,15 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
         </View>
       )}
 
-      {data.draftsWaiting > 0 || onAskRoman || data.draftsState !== 'ok' ? (
+      {data.draftsWaiting > 0 || onAskRoman || data.draftsState !== 'ok' || romanLine ? (
         <View style={[styles.roman, { borderColor: sc.border }]} testID="coach-home-v11-roman">
-          <View style={styles.romanMark}><RomanAvatar crop="monogram" size={28} /></View>
+          <View style={[styles.romanMark, romanLine ? styles.romanMarkLine : null]}><RomanAvatar crop="monogram" size={28} /></View>
           <View style={styles.grow}>
+            {romanLine ? (
+              <Text style={[styles.romanLine, { color: sc.textPrimary, fontFamily: romanFont }]} accessibilityLabel={`Roman says: ${romanLine}`} testID="coach-home-v11-roman-line">
+                {romanLine}
+              </Text>
+            ) : null}
             {data.draftsState === 'loading' ? (
               <View style={styles.wide}><QuietLoading label="Loading pending drafts" rows={1} testID="coach-home-v11-drafts-loading" /></View>
             ) : data.draftsState === 'error' ? (
@@ -173,7 +190,25 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
         </View>
       ) : null}
 
-      {o && roster === 0 ? <View style={styles.section}>{header}</View> : null}
+      {zero && setupSnap ? (
+        <View style={styles.rosterSection} testID="coach-home-v11-setup">
+          {plan && plan.open.length > 0 ? (
+            <FilterChips chips={[{ key: 'setup', label: 'Setup', count: plan.open.length }]} selected="setup" onSelect={() => undefined} />
+          ) : null}
+          {setupSnap.errors.length > 0 ? <SetupNotice error={setupSnap.errors[0]} onRetry={reloadSetup} testID="coach-home-v11-setup-error" /> : null}
+          {plan && plan.open.length > 0 ? (
+            <View style={styles.rosterTiles}>
+              {plan.open.map((st) => (
+                <StepTile
+                  key={st.key} step={st.step} title={st.title} detail={st.detail} action={st.action} qr={st.key === 'invite'} width={tileWidth}
+                  onPress={() => (st.key === 'money' ? onOpenMoney() : onOpenSetup(st.key))} testID={`coach-home-v11-step-${st.key}`}
+                />
+              ))}
+            </View>
+          ) : null}
+          <EmptyWall width={contentWidth} />
+        </View>
+      ) : null}
 
       {o && roster > 0 ? (
         <View style={styles.rosterSection} testID="coach-home-v11-roster">
@@ -249,6 +284,9 @@ const styles = StyleSheet.create({
   roman: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 20, paddingVertical: 16, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
   // Centres Roman on the first 44 pt control beside him.
   romanMark: { height: 44, justifyContent: 'center' },
+  romanMarkLine: { height: 26 },
+  // The mockup's Roman voice: serif italic 19/26.
+  romanLine: { fontSize: 19, lineHeight: 26, letterSpacing: 0.2, marginBottom: 6 },
   grow: { flex: 1, alignItems: 'flex-start' },
   wide: { alignSelf: 'stretch' },
   drafts: { minHeight: 44, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },

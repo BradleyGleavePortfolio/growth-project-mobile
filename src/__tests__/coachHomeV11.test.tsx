@@ -11,8 +11,9 @@ const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({ navigate: mockNavigate }),
-  useIsFocused: () => true,
+  useIsFocused: () => mockFocused,
 }));
+let mockFocused = true;
 jest.mock('react-native-safe-area-context', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const insets = { top: 47, bottom: 0, left: 0, right: 0 };
@@ -46,8 +47,16 @@ jest.mock('../screens/coach/command-center/OverviewScreen', () => mockStub('toda
 const mockSources = { monthSoFar: jest.fn(), nextPayout: jest.fn(), ltv: jest.fn(), atRisk: jest.fn() };
 jest.mock('../screens/coach/command-center/coachHomeSources', () => ({ get coachHomeSources() { return mockSources; } }));
 jest.mock('../screens/coach/home-v11/rosterSources', () => ({
-  rosterSources: { clients: () => Promise.resolve([]), winStreaks: () => Promise.resolve([]), unreadByClient: () => Promise.resolve({}) },
+  rosterSources: {
+    clients: () => Promise.resolve([]), winStreaks: () => Promise.resolve([]), unreadByClient: () => Promise.resolve({}), setup: () => mockSetup(),
+  },
 }));
+const mockSetup = jest.fn();
+// Stripe ready, nothing else yet: the zero-client mockup's state.
+const snapshot = (over: Record<string, unknown> = {}) => ({
+  connect: { state: 'active', actionRequired: false }, livePackageTitle: '', hasClient: false, paid: false, sharedLink: false, errors: [], ...over,
+});
+const PACKAGE_NEXT = 'Next is your first package. Once it is live, share your link and the rings start to fill.';
 
 // Required after the mocks above exist (an import would be hoisted above them).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -68,6 +77,8 @@ const summary = (netCents: number) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.coachHomeV11 = true;
+  mockFocused = true;
+  mockSetup.mockResolvedValue(snapshot());
   mockOverview.mockResolvedValue({ data: overview(30) });
   mockSources.atRisk.mockResolvedValue([entry('c1', 'Casey Lin', 'No check-in for 8 days'), entry('c2', 'Ana Ruiz', 'Payment failed')]);
   mockSources.ltv.mockResolvedValue({ active_client_count: 30, churn_rate_pct: 3, mrr_30d_ago_cents: 100000 });
@@ -141,15 +152,83 @@ describe('UI-2 coach Home, flag on', () => {
     expect(mockHaptics.softImpact).toHaveBeenCalled();
   });
 
-  it('shows the Clients and Earnings dials and the setup cards for a coach with no clients', async () => {
+  it('shows the Setup, Clients and Earnings dials, Roman\'s next step, the open steps and the empty wall for a coach with no clients', async () => {
     mockOverview.mockResolvedValue({ data: overview(0) });
     mockSources.monthSoFar.mockResolvedValue(summary(0));
     const v = await renderHome();
+    expect(v.getByTestId('coach-home-v11-dial-setup').props.accessibilityLabel).toBe('Setup: 1 of 4 steps. Stripe is ready');
     expect(v.getByTestId('coach-home-v11-dial-clients').props.accessibilityLabel).toBe('Clients: 0 clients. None yet');
     expect(v.getByTestId('coach-home-v11-dial-earnings').props.accessibilityLabel).toMatch(/^Earnings: \$0(\.00)? this month\. \w+ so far$/);
-    expect(v.getByTestId('setup-cards')).toBeTruthy();
+    expect(v.getByTestId('coach-home-v11-roman-line').props.children).toBe(PACKAGE_NEXT);
+    expect(v.getByTestId('coach-home-v11-chip-setup').props.accessibilityLabel).toBe('Setup, 3');
+    expect(v.queryByTestId('coach-home-v11-step-get_paid')).toBeNull();
+    expect(v.getByTestId('coach-home-v11-step-package').props.accessibilityLabel).toBe('Step 2. Create your first package. Free, or $19.99 and up. Create');
+    expect(v.getByTestId('coach-home-v11-step-invite').props.accessibilityLabel).toBe('Step 3. Invite your first client. Share your link or QR code. Share link');
+    expect(v.getByTestId('coach-home-v11-step-money').props.accessibilityLabel).toBe('Step 4. First client payment. This ticks when your first client payment arrives.');
+    await fireEvent.press(v.getByTestId('coach-home-v11-step-package'));
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachPackagesList', initial: false });
+    await fireEvent.press(v.getByTestId('coach-home-v11-step-invite'));
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachSetup', params: { section: 'invite' }, initial: false });
+    await fireEvent.press(v.getByTestId('coach-home-v11-step-money'));
+    expect(mockNavigate).toHaveBeenCalledWith('MoneyStack', { screen: 'CoachMoney' });
+    expect(mockHaptics.softImpact).toHaveBeenCalledTimes(3);
+    expect(v.getByTestId('coach-home-v11-empty-wall')).toBeTruthy();
+    expect(v.getByText(/^Clients appear here as they join\./)).toBeTruthy();
+    expect(v.queryByTestId('setup-cards')).toBeNull();
     expect(v.queryByTestId('coach-home-v11-all-clients')).toBeNull();
     expect(v.queryByTestId('coach-home-v11-business')).toBeNull();
+  });
+
+  it('puts Stripe first, and leaves out the Roman line, when Stripe is not connected', async () => {
+    mockOverview.mockResolvedValue({ data: overview(0) });
+    mockSetup.mockResolvedValue(snapshot({ connect: { state: 'not_started', actionRequired: true } }));
+    const v = await renderHome();
+    expect(v.getByTestId('coach-home-v11-dial-setup').props.accessibilityLabel).toBe('Setup: 0 of 4 steps');
+    expect(v.queryByTestId('coach-home-v11-roman-line')).toBeNull();
+    expect(v.getByTestId('coach-home-v11-chip-setup').props.accessibilityLabel).toBe('Setup, 4');
+    const stripe = v.getByTestId('coach-home-v11-step-get_paid');
+    expect(stripe.props.accessibilityLabel).toBe('Step 1. Get paid. Connect Stripe so clients can pay you. Connect Stripe');
+    await fireEvent.press(stripe);
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachSetup', params: { section: 'get_paid' }, initial: false });
+  });
+
+  it('says when a setup read failed, with Try again, and never ticks that step', async () => {
+    mockOverview.mockResolvedValue({ data: overview(0) });
+    mockSetup.mockResolvedValueOnce(snapshot({
+      connect: null, errors: [{ title: 'Could not check Stripe', body: 'Try again in a moment.', requestId: null, code: null, retryable: true }],
+    }));
+    const v = await renderHome();
+    expect(v.getByTestId('coach-home-v11-setup-error')).toBeTruthy();
+    expect(v.getByTestId('coach-home-v11-step-get_paid').props.accessibilityLabel).toBe('Step 1. Get paid. This could not be checked just now. Connect Stripe');
+    expect(v.getByTestId('coach-home-v11-dial-setup').props.accessibilityLabel).toBe('Setup: 0 of 4 steps');
+    await fireEvent.press(v.getByTestId('coach-home-v11-setup-error-retry'));
+    await waitFor(() => expect(v.queryByTestId('coach-home-v11-setup-error')).toBeNull());
+    expect(v.queryByTestId('coach-home-v11-step-get_paid')).toBeNull();
+    expect(mockSetup).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves setup out for a coach whose head coach runs the practice', async () => {
+    mockOverview.mockResolvedValue({ data: overview(0) });
+    mockSetup.mockResolvedValue(snapshot({ connect: null, headCoachHandlesMoney: true }));
+    const v = await renderHome();
+    expect(v.queryByTestId('coach-home-v11-dial-setup')).toBeNull();
+    expect(v.queryByTestId('coach-home-v11-chip-setup')).toBeNull();
+    expect(v.queryByTestId('coach-home-v11-step-package')).toBeNull();
+    expect(v.getByTestId('coach-home-v11-empty-wall')).toBeTruthy();
+  });
+
+  it('reads setup again when the Home comes back into focus, so a new package ticks', async () => {
+    mockOverview.mockResolvedValue({ data: overview(0) });
+    const v = await renderHome();
+    expect(v.getByTestId('coach-home-v11-step-package')).toBeTruthy();
+    mockSetup.mockResolvedValue(snapshot({ livePackageTitle: 'Starter' }));
+    mockFocused = false;
+    await v.rerender(<CommandCenterScreen />);
+    mockFocused = true;
+    await v.rerender(<CommandCenterScreen />);
+    await waitFor(() => expect(v.queryByTestId('coach-home-v11-step-package')).toBeNull());
+    expect(v.getByTestId('coach-home-v11-dial-setup').props.accessibilityLabel).toBe('Setup: 2 of 4 steps. Stripe is ready');
+    expect(v.queryByTestId('coach-home-v11-roman-line')).toBeNull();
   });
 
   it('says so with a Try again when the roster cannot load', async () => {
