@@ -74,10 +74,8 @@ beforeEach(() => {
   mockReduced = true;
   mockMarkRead.mockResolvedValue(undefined);
 });
-// Fake timers across a render can deadlock React 19's work loop in this repo (see
-// CreditPackCheckoutScreen.SuccessReceipt.test.tsx). Instead, timers of one length are held
-// and released by the test: the 5 s poll waits, or the 16 ms after which the test
-// environment ends native animations (so the reveal can be held in progress).
+// No fake timers (they can deadlock React 19 here, see CreditPackCheckoutScreen.SuccessReceipt.test.tsx):
+// hold timers of one length instead, the 5 s polls or the 16 ms that ends a native animation in jest.
 const realSetTimeout = global.setTimeout;
 let held: Array<() => void> = [];
 function hold(ms: number) {
@@ -98,9 +96,7 @@ async function nextPoll() {
   });
 }
 const DOTS = { includeHiddenElements: true };
-afterEach(() => {
-  Object.assign(global, { setTimeout: realSetTimeout });
-});
+afterEach(() => Object.assign(global, { setTimeout: realSetTimeout }));
 
 describe('CoachBriefLightScreen: busy', () => {
   it('one of each kind: messages and weight, then Thank you, Roman', async () => {
