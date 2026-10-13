@@ -88,21 +88,21 @@ it('shows the coach plan as a checklist with the next meal ready to log', async 
 it('sends every tap to a real Food log path', async () => {
   serve(planDay);
   await show();
-  fireEvent.press(await screen.findByTestId('food-day-primary'));
+  await fireEvent.press(await screen.findByTestId('food-day-primary'));
   expect(props.onLogPlanned).toHaveBeenCalledWith(expect.objectContaining({ name: 'Greek yogurt and berries', mealType: 'snack', kcal: 210 }));
-  fireEvent.press(screen.getByTestId('food-day-something-else'));
+  await fireEvent.press(screen.getByTestId('food-day-something-else'));
   expect(props.onSomethingElse).toHaveBeenLastCalledWith('snack');
-  fireEvent.press(screen.getByTestId('food-day-add'));
+  await fireEvent.press(screen.getByTestId('food-day-add'));
   expect(props.onSomethingElse).toHaveBeenCalledTimes(2);
-  fireEvent.press(screen.getByLabelText('Coffee with milk, logged to lunch, 30 kcal'));
+  await fireEvent.press(screen.getByLabelText('Coffee with milk, logged to lunch, 30 kcal'));
   expect(props.onEditFood).toHaveBeenLastCalledWith(logs[1]);
-  fireEvent.press(screen.getByTestId('food-day-slot-b'));
-  fireEvent.press(screen.getByLabelText('Overnight oats, 390 kcal'));
+  await fireEvent.press(screen.getByTestId('food-day-slot-b'));
+  await fireEvent.press(screen.getByLabelText('Overnight oats, 390 kcal'));
   expect(props.onEditFood).toHaveBeenLastCalledWith(logs[0]);
-  fireEvent.press(screen.getByLabelText('Previous day'));
-  fireEvent.press(screen.getByLabelText('Next day'));
+  await fireEvent.press(screen.getByLabelText('Previous day'));
+  await fireEvent.press(screen.getByLabelText('Next day'));
   expect(props.onDateChange).toHaveBeenCalledTimes(2);
-  fireEvent.press(screen.getByTestId('food-day-bell'));
+  await fireEvent.press(screen.getByTestId('food-day-bell'));
   expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', initial: false });
 });
 
@@ -118,7 +118,7 @@ it('keeps the classic log when the plan cannot load, with a working retry', asyn
   expect(await screen.findByText('Your meal plan could not load. Check your connection, then try again.')).toBeTruthy();
   expect(screen.getByText('Classic food log')).toBeTruthy();
   serve(planDay);
-  fireEvent.press(screen.getByTestId('food-day-plan-error-retry'));
+  await fireEvent.press(screen.getByTestId('food-day-plan-error-retry'));
   expect(await screen.findByText("Jordan's plan for today")).toBeTruthy();
 });
 
@@ -126,7 +126,7 @@ it('shows the classic log with no plan, no coach, or the flag off', async () => 
   serve({ date: today, assignments: [] });
   const { unmount } = await show();
   expect(await screen.findByText('Classic food log')).toBeTruthy();
-  unmount();
+  await unmount();
   await show({ coached: false });
   expect(screen.getByText('Classic food log')).toBeTruthy();
   await show({ on: false });
