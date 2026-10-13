@@ -30,7 +30,7 @@ import { QuantityPickerContent } from '../../components/log/QuantityPickerModal'
 import { ManualFields } from '../../components/log/ManualFoodEntryForm';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
-import { useFoodBrowse } from '../../hooks/useFoodBrowse';
+import { useFoodBrowse, type PastMeal } from '../../hooks/useFoodBrowse';
 import { SearchResult, MEAL_SECTIONS, unitOptionsFor } from '../../utils/log/types';
 import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
 import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../utils/log/editPortion';
@@ -398,9 +398,10 @@ export default function LogScreen() {
     : '';
 
   // Logs every food of the most recent earlier meal in this slot with the
-  // same saved portions, so a repeated breakfast is two taps.
-  const handleRepeatMeal = async () => {
-    if (!currentUser || !repeatMeal || foodSaving) return;
+  // same saved portions, so a repeated breakfast is two taps. The usual day
+  // (UI-3) repeats its usual meal through the same path.
+  const repeatMealTo = async (meal: PastMeal | null, mealType: MealType) => {
+    if (!currentUser || !meal || foodSaving) return;
     if (!online) {
       Alert.alert(
         'Connection needed',
@@ -408,27 +409,28 @@ export default function LogScreen() {
       );
       return;
     }
-    const target = mealLabel(activeMealType);
+    const target = mealLabel(mealType);
     setFoodSaving(true);
     try {
-      const { added, failedNames } = await repeatPastMeal(repeatMeal, selectedDate, activeMealType);
+      const { added, failedNames } = await repeatPastMeal(meal, selectedDate, mealType);
       await loadDayData(currentUser.id, selectedDate);
       if (failedNames.length === 0) {
         HapticService.success();
-        track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'repeat_meal' });
+        track(AnalyticsEvents.MEAL_LOGGED, { meal_type: mealType, source: 'repeat_meal' });
         setModalVisible(false);
         setSavedMessage(`${added} ${added === 1 ? 'food' : 'foods'} added to ${target}.`);
       } else {
         HapticService.error();
         Alert.alert(
           added > 0 ? 'Some foods were not added' : "Couldn't repeat this meal",
-          `${added} of ${repeatMeal.entries.length} foods added to ${target}. Not added: ${failedNames.join(', ')}. Check the connection, then add ${failedNames.length === 1 ? 'it' : 'them'} from Recent.`,
+          `${added} of ${meal.entries.length} foods added to ${target}. Not added: ${failedNames.join(', ')}. Check the connection, then add ${failedNames.length === 1 ? 'it' : 'them'} from Recent.`,
         );
       }
     } finally {
       setFoodSaving(false);
     }
   };
+  const handleRepeatMeal = () => repeatMealTo(repeatMeal, activeMealType);
 
   // UI-3 "Ate it as planned": one tap logs the coach's plan meal into its meal with the same
   // manual-entry write (and offline queue) as LogPlannedMealButton on the meal plan screen.
@@ -644,6 +646,7 @@ export default function LogScreen() {
           water={waterNode}
           onDateChange={handleDateChange}
           onLogPlanned={(slot) => void logPlanned(slot)}
+          onRepeat={(slot) => void repeatMealTo(slot.usual?.meal ?? null, slot.mealType)}
           onSomethingElse={(meal) => void openAddFood(meal)}
           onEditFood={handleEditFood}
         >

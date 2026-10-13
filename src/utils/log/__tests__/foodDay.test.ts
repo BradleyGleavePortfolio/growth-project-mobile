@@ -1,4 +1,4 @@
-import { buildPlanDay, joinNames, nextSlot } from '../foodDay';
+import { buildPlanDay, buildUsualDay, dayWord, joinNames, loggedOn, nextSlot, weekday, type PastDay } from '../foodDay';
 import type { DailyMealPlan, SlotLabel } from '../../../api/mealTemplatesApi';
 import type { FoodLog } from '../../../types';
 
@@ -74,4 +74,47 @@ it('joins names the way a sentence does', () => {
   expect(joinNames(['Oats'])).toBe('Oats');
   expect(joinNames(['Oats', 'Berries'])).toBe('Oats and Berries');
   expect(joinNames(['Oats', 'Berries', 'Honey'])).toBe('Oats, Berries and Honey');
+});
+
+const eat = (meal: FoodLog['mealType'], id: string, name: string, k = 1, qty?: number, unit?: string) => ({
+  meal_type: meal, food_item_id: id, quantity_multiplier: k, original_quantity: qty, original_unit: unit,
+  food_item: { id, name, calories: 200, protein_g: 10, carbs_g: 20, fat_g: 5, nutrient_basis: 'PER_100G' },
+}) as PastDay['entries'][number];
+const oats = [eat('breakfast', 'oats', 'Rolled oats', 0.6, 60, 'g'), eat('breakfast', 'milk', 'Milk', 2)];
+const eggs = [eat('breakfast', 'eggs', 'Eggs', 1)];
+
+describe('buildUsualDay', () => {
+  it('takes the meal eaten on the most days, the newest on a tie, and needs two days', () => {
+    const day = buildUsualDay([
+      { date: '2026-10-05', entries: eggs }, { date: '2026-10-08', entries: oats }, { date: '2026-10-07', entries: eggs },
+      { date: '2026-10-06', entries: oats }, { date: '2026-10-04', entries: [eat('lunch', 'soup', 'Soup')] },
+    ], []);
+    expect(day.kind).toBe('usual');
+    expect(day.slots.map((x) => x.mealType)).toEqual(['breakfast']);
+    const b = day.slots[0];
+    expect(b.name).toBe('Rolled oats and Milk');
+    expect(b.usual?.days).toEqual(['2026-10-08', '2026-10-06']);
+    expect(b.usual?.meal.entries[0]).toEqual({
+      foodItemId: 'oats', name: 'Rolled oats', calories: 120, quantityMultiplier: 0.6, originalQuantity: 60, originalUnit: 'g',
+    });
+    expect(b.foods).toEqual([{ name: 'Rolled oats', portion: '60 g' }, { name: 'Milk', portion: '200 g' }]);
+    expect(b.kcal).toBe(520);
+    expect(nextSlot(day)).toBe(b);
+  });
+
+  it('counts the usual foods of a logged meal and lists the others as extras', () => {
+    const past = [{ date: '2026-10-08', entries: oats }, { date: '2026-10-07', entries: oats }];
+    const day = buildUsualDay(past, [
+      log('1', 'breakfast', 'Rolled oats', { foodItemId: 'oats' }), log('2', 'breakfast', 'Coffee with milk'), log('3', 'dinner', 'Pizza'),
+    ]);
+    expect(day.slots.map((x) => [x.mealType, x.status, x.logs.map((l) => l.id)])).toEqual([['breakfast', '1 food', ['1']], ['dinner', '1 food', ['3']]]);
+    expect(day.extras.map((l) => l.id)).toEqual(['2']);
+    expect(nextSlot(day)).toBeNull();
+  });
+});
+
+it('names the days a meal was logged', () => {
+  expect(dayWord('2026-10-08', '2026-10-08')).toBe('yesterday');
+  expect(dayWord('2026-10-08', null)).toBe(weekday('2026-10-08'));
+  expect(loggedOn(['2026-10-08', '2026-10-06'], '2026-10-08')).toBe(`Logged yesterday and on ${weekday('2026-10-06')}`);
 });
