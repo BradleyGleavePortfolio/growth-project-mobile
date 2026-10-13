@@ -106,7 +106,7 @@ describe('UI-2 coach Home, flag on', () => {
     const v = await renderHome();
     const button = v.getByTestId('coach-home-v11-drafts');
     expect(button.props.accessibilityLabel).toBe("Approve Roman's drafts, 3");
-    expect(v.getByText("Approve Roman's drafts →")).toBeTruthy();
+    expect(v.getByText("Approve Roman's drafts\u00a0→")).toBeTruthy();
     await fireEvent.press(button);
     expect(mockHaptics.mediumImpact).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'PendingAiDrafts', initial: false });

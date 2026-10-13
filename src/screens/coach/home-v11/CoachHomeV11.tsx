@@ -120,7 +120,10 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
                 accessibilityRole="button" accessibilityLabel={`Approve Roman's drafts, ${data.draftsWaiting}`} testID="coach-home-v11-drafts"
                 style={({ pressed }) => [styles.drafts, { backgroundColor: sc.accent }, pressed && styles.pressed]}
               >
-                <Text style={[styles.draftsLabel, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>Approve Roman's drafts →</Text>
+                <Text style={[styles.draftsLabel, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+                  {/* A no-break space keeps the arrow beside "drafts" when large text wraps the label. */}
+                  {"Approve Roman's drafts\u00a0→"}
+                </Text>
                 <View style={[styles.badge, { backgroundColor: sc.textOnAccent }]}>
                   <Text style={[styles.badgeText, { color: sc.accent }]} maxFontSizeMultiplier={1.2}>{data.draftsWaiting}</Text>
                 </View>
