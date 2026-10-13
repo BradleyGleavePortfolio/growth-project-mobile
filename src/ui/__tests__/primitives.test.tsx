@@ -126,15 +126,17 @@ describe('PrimaryButton', () => {
 
   it('wrap gives a long label a second line and a taller button; the default stays one line', async () => {
     const label = "Repeat yesterday's breakfast";
-    const one = await render(<PrimaryButton label={label} onPress={jest.fn()} testID="b" />);
-    expect(one.getByText(label).props.numberOfLines).toBe(1);
-    expect(flat(one.getByTestId('b')).paddingVertical).toBeUndefined();
-    one.unmount();
     const onPress = jest.fn();
-    const two = await render(<PrimaryButton label={label} onPress={onPress} wrap testID="b" />);
-    expect(two.getByText(label).props.numberOfLines).toBe(2);
-    expect(flat(two.getByTestId('b'))).toMatchObject({ minHeight: 54, paddingVertical: 12, borderRadius: radius.button });
-    fireEvent.press(two.getByTestId('b'));
+    const r = await render(
+      <>
+        <PrimaryButton label={label} onPress={jest.fn()} testID="one" />
+        <PrimaryButton label={label} onPress={onPress} wrap testID="two" />
+      </>,
+    );
+    expect(r.getAllByText(label).map((t) => t.props.numberOfLines)).toEqual([1, 2]);
+    expect(flat(r.getByTestId('one')).paddingVertical).toBeUndefined();
+    expect(flat(r.getByTestId('two'))).toMatchObject({ minHeight: 54, paddingVertical: 12, borderRadius: radius.button });
+    fireEvent.press(r.getByTestId('two'));
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(mockImpact).toHaveBeenCalledWith('light');
   });

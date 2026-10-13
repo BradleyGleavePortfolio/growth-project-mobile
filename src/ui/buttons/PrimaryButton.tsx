@@ -63,7 +63,7 @@ export function PrimaryButton({
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: inert, busy: loading }}
       testID={testID}
-      style={[styles.primary, wrap && styles.primaryWrap, { backgroundColor: disabled ? sc.disabledBg : sc.accent }, style]}
+      style={[wrap ? [styles.primary, styles.primaryWrap] : styles.primary, { backgroundColor: disabled ? sc.disabledBg : sc.accent }, style]}
     >
       {({ pressed }) => (
         <>
