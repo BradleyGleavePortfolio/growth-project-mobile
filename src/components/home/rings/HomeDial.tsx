@@ -67,7 +67,7 @@ export default function HomeDial({ label, view, onPress, accessibilityLabel, acc
         </View>
       </View>
       <Text style={[styles.label, { color: sc.textMuted }]} numberOfLines={1}>{label}</Text>
-      <Text style={[styles.sub, { color: sc.textMuted }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+      <Text style={[styles.sub, { color: sc.textMuted }]} numberOfLines={2}>
         {view.sub || ' '}
       </Text>
     </Pressable>
@@ -75,12 +75,13 @@ export default function HomeDial({ label, view, onPress, accessibilityLabel, acc
 }
 
 const styles = StyleSheet.create({
-  dial: { width: '31%', alignItems: 'center', minHeight: 44 },
+  // A third of the row each, so "7 h 20 m asleep" fits on one line at 360 pt; larger text wraps, never clips.
+  dial: { width: '33%', alignItems: 'center', minHeight: 44 },
   ring: { width: DIAL_SIZE, height: DIAL_SIZE },
-  centre: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  centre: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   number: { ...typography.h2, fontSize: 25, lineHeight: 32, letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
   prompt: { ...typography.bodyMd, fontSize: 14, lineHeight: 20 },
   unit: { ...typography.eyebrow, letterSpacing: 0, textTransform: 'none' },
   label: { ...typography.eyebrow, marginTop: 10 },
-  sub: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, marginTop: 4, fontVariant: ['tabular-nums'] },
+  sub: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, marginTop: 4, textAlign: 'center', fontVariant: ['tabular-nums'] },
 });

@@ -93,13 +93,13 @@ it('the flag is off in every eas.json profile, so merging changes nothing for us
 });
 
 it('coached: three dials with their own numbers and one forest button', async () => {
-  render(<HomeScreen />);
+  await render(<HomeScreen />);
   expect(await screen.findByLabelText('Start Full Body A')).toBeTruthy();
   expect(screen.getByText('Message Jordan')).toBeTruthy();
   expect(screen.getByLabelText('Food, 820 kcal left, 1,030 of 1,850')).toBeTruthy();
   expect(screen.getByLabelText('Train, 1 of 2 workouts, This week')).toBeTruthy();
   expect(screen.queryByText('Opens with a coach')).toBeNull();
-  fireEvent.press(screen.getByLabelText('Start Full Body A'));
+  await fireEvent.press(screen.getByLabelText('Start Full Body A'));
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
     screen: 'WorkoutAssignmentDetail', initial: false, params: { assignmentId: 'a2' },
   });
@@ -110,26 +110,26 @@ it.each([
   ['home-dial-train', ['WorkoutTab']],
   ['home-dial-sleep', ['MoreTab', { screen: 'Connections', initial: false }]],
 ] as const)('%s opens a real screen, with a light haptic', async (testID, destination) => {
-  render(<HomeScreen />);
+  await render(<HomeScreen />);
   await screen.findByLabelText('Start Full Body A');
-  fireEvent.press(screen.getByTestId(testID));
+  await fireEvent.press(screen.getByTestId(testID));
   expect(mockNavigate).toHaveBeenCalledWith(...destination);
   expect(HapticService.selection).toHaveBeenCalledTimes(1);
 });
 
 it('Sleep with Health data shows recovered and asleep and opens Sleep and recovery', async () => {
   mockRecovery = 78; mockAsleep = 440;
-  render(<HomeScreen />);
-  fireEvent.press(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep'));
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep'));
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
 });
 
 it('Sleep falls back to the check-in, and with neither shows Connect, never "coming soon"', async () => {
   mockCheckIn = { sleep_hours: 7.5 };
-  const view = render(<HomeScreen />);
+  const view = await render(<HomeScreen />);
   expect(await screen.findByLabelText('Sleep, 7.5 h asleep')).toBeTruthy();
   mockCheckIn = null;
-  view.rerender(<HomeScreen />);
+  await view.rerender(<HomeScreen />);
   expect(await screen.findByLabelText('Sleep, Connect')).toBeTruthy();
   expect(screen.queryByText(/coming soon/i)).toBeNull();
 });
@@ -138,7 +138,7 @@ it('coachless: Roman shown locked in the header, never opens Roman, Join a coach
   mockUser.coach_id = '';
   mockAssignments.mockResolvedValue([]);
   mockHistory.mockResolvedValue({ data: [{ date: weekStart }] });
-  render(<HomeScreen />);
+  await render(<HomeScreen />);
   expect(await screen.findByLabelText('Open Train')).toBeTruthy();
   expect(screen.getByLabelText('Roman. Opens with a coach')).toBeTruthy();
   expect(screen.getByText('coachless-slot-join')).toBeTruthy();
@@ -147,16 +147,16 @@ it('coachless: Roman shown locked in the header, never opens Roman, Join a coach
   expect(screen.queryByLabelText('Chat with Roman')).toBeNull();
   expect(screen.queryByText(/^Message /)).toBeNull();
   expect(screen.getByTestId('roman-locked-avatar')).toBeTruthy();
-  fireEvent.press(screen.getByLabelText('Roman. Opens with a coach'));
+  await fireEvent.press(screen.getByLabelText('Roman. Opens with a coach'));
   expect(mockNavigate).not.toHaveBeenCalled();
 });
 
 it('a failed day read shows the quiet error with Try again and dashes, not zero totals', async () => {
   mockDay.loadError = 'Today could not load. Try again.';
-  render(<HomeScreen />);
+  await render(<HomeScreen />);
   expect(await screen.findByText('Today could not load. Try again.')).toBeTruthy();
   expect(screen.getByLabelText('Food, — kcal left')).toBeTruthy();
-  fireEvent.press(screen.getByTestId('home-day-data-error-retry'));
+  await fireEvent.press(screen.getByTestId('home-day-data-error-retry'));
   expect(mockDay.loadDayData).toHaveBeenCalledTimes(2); // on mount, then Try again
   expect(mockDay.loadDayData).toHaveBeenLastCalledWith('u1', getTodayString());
 });
