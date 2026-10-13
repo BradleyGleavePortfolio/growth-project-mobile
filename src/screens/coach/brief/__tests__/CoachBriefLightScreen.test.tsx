@@ -90,7 +90,7 @@ describe('CoachBriefLightScreen: busy', () => {
     expect(mockMarkRead).toHaveBeenCalledTimes(1);
     expect(HapticService.softImpact).not.toHaveBeenCalled();
 
-    fireEvent.press(s.getByTestId('brief-row-messages'));
+    await fireEvent.press(s.getByTestId('brief-row-messages'));
     expect(HapticService.softImpact).toHaveBeenCalledTimes(1);
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(mockTab).toHaveBeenCalledWith('ClientsStack', {
@@ -104,7 +104,7 @@ describe('CoachBriefLightScreen: busy', () => {
     await waitFor(() => expect(s.getByTestId('brief-row-weight')).toBeTruthy());
     expect(rowLabels(s)).toEqual(['See weight logs', 'Thank you, Roman']);
     expect(s.getByTestId('brief-row-weight').props.accessibilityHint).toBe('Opens the full list');
-    fireEvent.press(s.getByTestId('brief-row-weight'));
+    await fireEvent.press(s.getByTestId('brief-row-weight'));
     expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'weight', items: six('weight_flag') });
     expect(mockGoBack).not.toHaveBeenCalled();
   });
@@ -113,7 +113,7 @@ describe('CoachBriefLightScreen: busy', () => {
     mockToday.mockResolvedValue(brief([...six('message_unread'), client('weight_flag', 0, 'Maya Chen')]));
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(rowLabels(s)).toEqual(['See messages', 'Review Maya\u2019s weight change', 'Thank you, Roman']));
-    fireEvent.press(s.getByTestId('brief-row-messages'));
+    await fireEvent.press(s.getByTestId('brief-row-messages'));
     expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'messages', items: six('message_unread') });
   });
 
@@ -121,7 +121,7 @@ describe('CoachBriefLightScreen: busy', () => {
     mockToday.mockResolvedValue(brief([{ type: 'dunning_queue', detail: '1 failed payment', priority: 1 }, { type: 'team_performance', detail: 'x', priority: 3 }]));
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(rowLabels(s)).toEqual(['See Money', 'Thank you, Roman']));
-    fireEvent.press(s.getByTestId('brief-row-money'));
+    await fireEvent.press(s.getByTestId('brief-row-money'));
     expect(mockTab).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachMoney', initial: false });
   });
 });
@@ -133,7 +133,7 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
     await waitFor(() => expect(s.getByText(BODY)).toBeTruthy());
     expect(s.queryByText('Where would you like to start?')).toBeNull();
     expect(rowLabels(s)).toEqual(['Thank you, Roman']);
-    fireEvent.press(s.getByTestId('brief-row-out'));
+    await fireEvent.press(s.getByTestId('brief-row-out'));
     expect(HapticService.softImpact).toHaveBeenCalledTimes(1);
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(mockTab).toHaveBeenCalledWith('ClientsStack', undefined);
@@ -174,7 +174,7 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
     await waitFor(() => expect(s.getByText('Today\u2019s brief could not load. Check the connection, then try again.')).toBeTruthy());
     expect(rowLabels(s)).toEqual(['Try again', 'Continue']);
     expect(HapticService.error).not.toHaveBeenCalled();
-    await act(async () => { fireEvent.press(s.getByTestId('brief-row-retry')); });
+    await fireEvent.press(s.getByTestId('brief-row-retry'));
     expect(HapticService.softImpact).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(HapticService.error).toHaveBeenCalledTimes(1));
     expect(mockMarkRead).not.toHaveBeenCalled();
@@ -186,7 +186,7 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(s.getByText('Today\u2019s brief could not be prepared. Tap Prepare again to build it from the latest activity.')).toBeTruthy());
     expect(rowLabels(s)).toEqual(['Prepare again', 'Continue']);
-    await act(async () => { fireEvent.press(s.getByTestId('brief-row-prepare')); });
+    await fireEvent.press(s.getByTestId('brief-row-prepare'));
     await waitFor(() => expect(s.getByText(BODY)).toBeTruthy());
     expect(HapticService.error).not.toHaveBeenCalled();
   });
@@ -196,11 +196,11 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
     mockRegenerate.mockRejectedValue(new CoachBriefApiError('throttled', 'limit'));
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(s.getByTestId('brief-row-prepare')).toBeTruthy());
-    await act(async () => { fireEvent.press(s.getByTestId('brief-row-prepare')); });
+    await fireEvent.press(s.getByTestId('brief-row-prepare'));
     await waitFor(() => expect(s.getByText('Today\u2019s brief was prepared several times this hour. It can be prepared again within the hour.')).toBeTruthy());
     expect(rowLabels(s)).toEqual(['Try again', 'Continue']);
     expect(HapticService.error).toHaveBeenCalledTimes(1);
-    fireEvent.press(s.getByTestId('brief-row-out'));
+    await fireEvent.press(s.getByTestId('brief-row-out'));
     expect(mockTab).toHaveBeenCalledWith('ClientsStack', undefined);
   });
 });
@@ -211,10 +211,10 @@ describe('CoachBriefLightScreen: reveal', () => {
     mockToday.mockResolvedValue(brief([client('message_unread', 0)]));
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(s.getByTestId('brief-row-messages')).toBeTruthy());
-    fireEvent.press(s.getByTestId('brief-row-messages'));
+    await fireEvent.press(s.getByTestId('brief-row-messages'));
     expect(mockTab).not.toHaveBeenCalled();
-    await act(async () => { fireEvent(s.getByTestId('brief-light'), 'touchStart'); });
-    fireEvent.press(s.getByTestId('brief-row-messages'));
+    await fireEvent(s.getByTestId('brief-light'), 'touchStart');
+    await fireEvent.press(s.getByTestId('brief-row-messages'));
     expect(mockTab).toHaveBeenCalledTimes(1);
   });
 });
