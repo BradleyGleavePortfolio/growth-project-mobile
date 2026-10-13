@@ -48,20 +48,47 @@ describe('UI-1 Home dials: each its own number, never invented', () => {
     ];
     expect(trainDial({ now, assignments: [], history, daysPerWeek: 3, loading: false }))
       .toMatchObject({ value: '1 of 3', progress: 1 / 3 });
-    expect(trainDial({ now, assignments: null, history, daysPerWeek: undefined, loading: false }))
+    expect(trainDial({ now, assignments: [], history, daysPerWeek: undefined, loading: false }))
       .toMatchObject({ value: '1', progress: 0 });
     expect(trainDial({ now, assignments: null, history: null, daysPerWeek: 3, loading: false })).toMatchObject({ value: '—' });
     expect(trainDial({ now, assignments: [], history: [], daysPerWeek: 3, loading: true })).toMatchObject({ value: '—' });
   });
 
+  it('Train: a failed read is never a count (no zero, no claim of no coach plan)', () => {
+    const history = [{ date: '2026-10-06' }];
+    // Assignments failed: no proof there is no coach plan, even with the client's own workouts.
+    expect(trainDial({ now, assignments: null, history, daysPerWeek: 3, loading: false })).toMatchObject({ value: '—', progress: 0 });
+    // History failed and no coach assignments this week: not "0 of 3".
+    expect(trainDial({ now, assignments: [], history: null, daysPerWeek: 3, loading: false })).toMatchObject({ value: '—', progress: 0 });
+    // The coach plan count rests on the assignment read alone.
+    expect(trainDial({ now, assignments: [{ scheduled_for: '2026-10-07', completed_at: null }], history: null, daysPerWeek: 3, loading: false }))
+      .toMatchObject({ value: '0 of 1' });
+  });
+
+  const ok = { health: 'ok', checkIn: 'ok' } as const;
   it('Sleep: recovered and asleep from Health, then the check-in, then Connect (never "coming soon")', () => {
-    expect(sleepDial({ recovery: 78, asleepMin: 440, checkInHours: 6 })).toEqual({
+    expect(sleepDial({ recovery: 78, asleepMin: 440, checkInHours: 6, reads: ok })).toEqual({
       value: '78%', unit: 'recovered', sub: '7 h 20 m asleep', progress: 0.78, source: 'health',
     });
-    expect(sleepDial({ recovery: null, asleepMin: 440, checkInHours: null })).toMatchObject({ value: '7.3', unit: 'h asleep', source: 'health' });
-    expect(sleepDial({ recovery: null, asleepMin: null, checkInHours: 7.5 })).toMatchObject({ value: '7.5', unit: 'h asleep', source: 'checkin' });
-    const none = sleepDial({ recovery: null, asleepMin: null, checkInHours: null });
+    expect(sleepDial({ recovery: null, asleepMin: 440, checkInHours: null, reads: ok })).toMatchObject({ value: '7.3', unit: 'h asleep', source: 'health' });
+    expect(sleepDial({ recovery: null, asleepMin: null, checkInHours: 7.5, reads: ok })).toMatchObject({ value: '7.5', unit: 'h asleep', source: 'checkin' });
+    const none = sleepDial({ recovery: null, asleepMin: null, checkInHours: null, reads: ok });
     expect(none).toEqual({ value: 'Connect', unit: '', sub: '', progress: 0, source: 'none' });
     expect(JSON.stringify(none)).not.toMatch(/soon/i);
+  });
+
+  it('Sleep: "—", never Connect, while a read is pending or failed; a verified check-in still shows', () => {
+    const dash = { value: '—', unit: '', sub: '', progress: 0, source: 'unknown' };
+    const empty = { recovery: null, asleepMin: null, checkInHours: null };
+    expect(sleepDial({ ...empty, reads: { health: 'pending', checkIn: 'ok' } })).toEqual(dash);
+    expect(sleepDial({ ...empty, reads: { health: 'failed', checkIn: 'ok' } })).toEqual(dash);
+    expect(sleepDial({ ...empty, reads: { health: 'ok', checkIn: 'pending' } })).toEqual(dash);
+    expect(sleepDial({ ...empty, reads: { health: 'ok', checkIn: 'failed' } })).toEqual(dash);
+    // Health pending: no check-in number first, so the dial does not jump from one source to another.
+    expect(sleepDial({ ...empty, checkInHours: 7.5, reads: { health: 'pending', checkIn: 'ok' } })).toEqual(dash);
+    expect(sleepDial({ ...empty, checkInHours: 7.5, reads: { health: 'failed', checkIn: 'ok' } }))
+      .toMatchObject({ value: '7.5', unit: 'h asleep', source: 'checkin' });
+    // Data already read stays, even if the latest refresh failed.
+    expect(sleepDial({ ...empty, recovery: 78, reads: { health: 'failed', checkIn: 'failed' } })).toMatchObject({ value: '78%', source: 'health' });
   });
 });

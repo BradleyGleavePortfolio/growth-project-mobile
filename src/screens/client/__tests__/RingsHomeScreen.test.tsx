@@ -12,6 +12,8 @@ let mockCheckIn: unknown = null;
 let mockFitness: unknown;
 const mockInsights = jest.fn((): { data?: unknown } => ({ data: undefined }));
 const WATER_NOT_SAVED = '8 oz of water was not saved. Check the connection, then add it again.';
+let mockSleepRead: 'ok' | 'failed' | 'pending' = 'ok';
+let mockCheckInRead: 'ok' | 'failed' | 'pending' = 'ok';
 const mockUser: { id: string; coach_id: string; profile: Record<string, unknown> } = { id: 'u1', coach_id: 'c1', profile: {} };
 const mockDay = {
   foodLogs: [], dailyTotals: { calories: 1030, protein: 73, carbs: 100, fat: 38 }, waterOz: 48, selectedDate: getTodayString(),
@@ -30,14 +32,15 @@ jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => ({ c
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: Object.assign(() => mockDay, { getState: () => mockDay }) }));
 jest.mock('../../../hooks/useWearableSamples', () => ({
-  useWearableSamples: (args: { bucket: string }) => (args.bucket === 'HEALTH_FITNESS' && mockFitness
-    ? { data: mockFitness, isSuccess: true, refetch: jest.fn() } : { data: undefined, refetch: jest.fn() }),
+  useWearableSamples: (args: { bucket: string }) => (args.bucket === 'HEALTH_FITNESS'
+    ? (mockFitness ? { data: mockFitness, isSuccess: true, refetch: jest.fn() } : { data: undefined, refetch: jest.fn() })
+    : { data: undefined, isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn() }),
 }));
 jest.mock('../../../hooks/useHolisticInsights', () => ({ useHolisticInsights: () => mockInsights() }));
 const mockRead = (data: unknown) => ({ data, isSuccess: true, refetch: jest.fn() });
 jest.mock('../../../hooks/useApi', () => ({
   ...jest.requireActual('../../../hooks/useApi'),
-  useTodayCheckIn: () => ({ data: mockCheckIn, refetch: jest.fn() }),
+  useTodayCheckIn: () => ({ data: mockCheckIn, isSuccess: mockCheckInRead === 'ok', isError: mockCheckInRead === 'failed', refetch: jest.fn() }),
   useWeightHistory: () => mockRead({ logs: [
     { id: 'w1', weight_lbs: 169.6, date: '2026-09-14T00:00:00.000Z' },
     { id: 'w2', weight_lbs: 168.4, date: '2026-10-12T00:00:00.000Z' },
@@ -91,6 +94,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockUser.profile = { workout_days_per_week: 3 };
   mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockCheckIn = null; mockFitness = undefined;
+  mockSleepRead = 'ok'; mockCheckInRead = 'ok';
   mockDay.loadError = null;
   mockInsights.mockReturnValue({ data: undefined });
   mockHistory.mockResolvedValue({ data: [] });
@@ -150,6 +154,37 @@ it('Sleep falls back to the check-in, and with neither shows Connect, never "com
   expect(screen.queryByText(/coming soon/i)).toBeNull();
 });
 
+it.each([
+  ['loading', 'pending', 'ok'],
+  ['failed', 'failed', 'ok'],
+  ['check-in loading', 'ok', 'pending'],
+  ['check-in failed', 'ok', 'failed'],
+] as const)('Sleep while its read is %s shows "—", never Connect, and opens Sleep and recovery', async (_, sleepRead, checkInRead) => {
+  mockSleepRead = sleepRead; mockCheckInRead = checkInRead;
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Sleep, —'));
+  expect(screen.queryByText('Connect')).toBeNull();
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
+});
+
+it('Sleep keeps a verified check-in when the Health read failed', async () => {
+  mockSleepRead = 'failed'; mockCheckIn = { sleep_hours: 6.5 };
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Sleep, 6.5 h asleep'));
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
+});
+
+it.each([
+  ['history', () => mockHistory.mockRejectedValue(new Error('offline'))],
+  ['assignments', () => mockAssignments.mockRejectedValue(new Error('offline'))],
+] as const)('Train shows "—", not a count, when the %s read failed', async (_, fail) => {
+  mockAssignments.mockResolvedValue([]);
+  mockHistory.mockResolvedValue({ data: [{ date: weekStart }] });
+  fail();
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Train, — workouts, This week')).toBeTruthy();
+});
+
 it('coachless: Roman shown locked in the header, never opens Roman, Join a coach under the dials', async () => {
   mockUser.coach_id = '';
   mockAssignments.mockResolvedValue([]);
@@ -202,9 +237,12 @@ it.each([
   expect(HapticService.selection).toHaveBeenCalledTimes(1);
 });
 
-it('Steps shows Connect without Health and opens connected devices; with steps today it opens Health and fitness', async () => {
-  mockFitness = { series: [], freshness: { providers: [] } };
+it('Steps: "—" while Health loads, Connect without Health (connected devices), steps today (Health and fitness)', async () => {
   const view = await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Steps, —'));
+  expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'fitness' } });
+  mockFitness = { series: [], freshness: { providers: [] } };
+  await view.rerender(<HomeScreen />);
   await fireEvent.press(await screen.findByLabelText('Steps, Connect'));
   expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'Connections', initial: false });
   mockFitness = {

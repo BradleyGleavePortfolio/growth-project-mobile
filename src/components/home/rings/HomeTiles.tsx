@@ -44,10 +44,11 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
   const weight = useWeightHistory(30);
   const habits = useHabits();
   const habitLogs = useHabitLogs(today);
+  // One window per local day (as the Sleep dial's), so the query key is stable and refresh refetches it.
   const range = useMemo(() => {
-    const to = new Date();
-    return { from: new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), to: to.toISOString() };
-  }, [refreshing]);
+    const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+    return { from: new Date(y, m - 1, d - 7).toISOString(), to: new Date(y, m - 1, d + 1).toISOString() };
+  }, [today]);
   const fitness = useWearableSamples(
     { bucket: 'HEALTH_FITNESS', from: range.from, to: range.to, granularity: 'day', preferredOnly: true },
     { enabled: !!currentUser },
@@ -99,8 +100,9 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
       {body.points.length > 1 ? <Sparkline points={body.points} color={sc.accent} /> : null}
     </HomeTile>,
     <HomeTile key="habits" label="Habits" view={habitView} testID="home-tile-habits" onPress={() => navigation.navigate('Habits')} />,
+    // Connections only once Health answered with no source; pending or failed opens Health and fitness.
     <HomeTile key="steps" label="Steps" view={steps} testID="home-tile-steps" prompt={steps.value === 'Connect'}
-      onPress={todaySteps ? open('Health', { bucket: 'fitness' }) : open('Connections')} />,
+      onPress={steps.value === 'Connect' ? open('Connections') : open('Health', { bucket: 'fitness' })} />,
     <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits')} />,
   ];
   const pairs: React.ReactNode[][] = [];
