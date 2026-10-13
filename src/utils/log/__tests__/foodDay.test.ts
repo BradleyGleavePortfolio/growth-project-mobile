@@ -41,17 +41,19 @@ describe('buildPlanDay', () => {
     expect(nextSlot(day)?.name).toBe('Banana');
   });
 
-  it('names a changed amount or the other foods as the change', () => {
+  it('names a changed amount, or the foods eaten instead, as the change', () => {
     const amount = buildPlanDay(plan, [log('1', 'breakfast', 'Overnight oats', { quantity: 1.5 })]);
     expect(amount.slots[0].status).toBe('Logged with a change: 1.5 servings');
-    const extra = buildPlanDay(plan, [log('1', 'lunch', 'Chicken bowl'), log('2', 'lunch', 'Avocado')]);
-    expect(extra.slots[2].status).toBe('Logged with a change: Avocado');
-    expect(extra.slots[2].logs.map((l) => l.id)).toEqual(['1', '2']);
     const swap = buildPlanDay(plan, [log('1', 'dinner', 'Pasta'), log('2', 'dinner', 'Salad')]);
     expect(swap.slots[3].status).toBe('Logged with a change: Pasta and Salad');
+    expect(swap.slots[3].logs.map((l) => l.id)).toEqual(['1', '2']);
+    expect(nextSlot(swap)?.name).toBe('Overnight oats');
   });
 
-  it('keeps foods in a meal the plan does not have as extras', () => {
+  it('keeps foods beside a logged plan meal, or in a meal the plan does not have, as extras', () => {
+    const lunch = buildPlanDay(plan, [log('1', 'lunch', 'Chicken bowl'), log('2', 'lunch', 'Avocado')]);
+    expect(lunch.slots[2].status).toBe('Logged as planned');
+    expect(lunch.extras.map((l) => l.foodName)).toEqual(['Avocado']);
     const noSnackPlan = { ...plan, slots: plan.slots.filter((x) => x.slot_label !== 'preworkout') } as DailyMealPlan;
     const day = buildPlanDay(noSnackPlan, [log('1', 'snack', 'Coffee with milk')]);
     expect(day.extras.map((l) => l.foodName)).toEqual(['Coffee with milk']);

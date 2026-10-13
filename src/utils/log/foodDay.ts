@@ -19,7 +19,7 @@ export interface DaySlot {
   foods: Array<{ name: string; portion: string }>;
   /** Foods logged today that count toward this meal; empty while it is still to eat. */
   logs: FoodLog[];
-  /** Done line: "Logged as planned" or "Logged with a change: ...". */
+  /** Done line: "Logged as planned", or "Logged with a change:" and the new amount or the foods eaten instead. */
   status: string | null;
 }
 
@@ -55,13 +55,12 @@ export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[]): FoodDay {
     return i >= 0 ? left.splice(i, 1)[0] : null;
   });
   const claimed: FoodLog[][] = planned.map((p) => (p ? [p] : []));
-  // Any other food in a planned meal is a change to it: the first still-open slot of that meal takes
-  // it, else the meal's last slot. Foods in a meal the plan does not have are extras.
+  // Other foods in a meal whose plan meal is still open stand in for it (a change); the first open
+  // slot of that meal takes them. Every other food is an extra, not in the plan.
   for (const meal of DAY_MEALS) {
     const rest = left.filter((l) => l.mealType === meal);
-    const idx = slots.map((s, i) => (LOG_MEAL[s.slot_label] === meal ? i : -1)).filter((i) => i >= 0);
-    if (rest.length === 0 || idx.length === 0) continue;
-    const to = idx.find((i) => !planned[i]) ?? idx[idx.length - 1];
+    const to = slots.findIndex((s, i) => LOG_MEAL[s.slot_label] === meal && !planned[i]);
+    if (rest.length === 0 || to < 0) continue;
     claimed[to].push(...rest);
     rest.forEach((l) => left.splice(left.indexOf(l), 1));
   }
@@ -70,14 +69,10 @@ export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[]): FoodDay {
     slots: slots.map((s, i) => {
       const t = s.meal_template;
       const mine = claimed[i];
-      const others = mine.filter((l) => l !== planned[i]);
-      const status = mine.length === 0
-        ? null
-        : planned[i] && others.length === 0
-          ? isPlainServing(planned[i]!)
-            ? 'Logged as planned'
-            : `Logged with a change: ${formatPortion(planned[i]!.quantity, planned[i]!.unit)}`
-          : `Logged with a change: ${joinNames(others.map((l) => l.foodName))}`;
+      const p = planned[i];
+      const status = p
+        ? isPlainServing(p) ? 'Logged as planned' : `Logged with a change: ${formatPortion(p.quantity, p.unit)}`
+        : mine.length > 0 ? `Logged with a change: ${joinNames(mine.map((l) => l.foodName))}` : null;
       return {
         key: s.id,
         mealType: LOG_MEAL[s.slot_label],
