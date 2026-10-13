@@ -67,6 +67,8 @@ When the toggle changes:
 | `EditProfileScreen` | `error()` | Profile save API failure |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
 | `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
+| `HomeTile` (rings Home) | `selection()` | A tile opens its screen |
+| `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |
 
 ## Architecture
 

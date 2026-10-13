@@ -381,7 +381,9 @@ export default function HomeScreen() {
   if (featureFlags.clientHomeRings) {
     return (
       <RingsHomeScreen
-        day={{ ready: dayReady, error: loadError, retrying: isLoading || refreshing, calories: dailyTotals?.calories, calorieTarget }}
+        day={{ ready: dayReady, error: loadError, retrying: isLoading || refreshing, calories: dailyTotals?.calories, calorieTarget,
+          protein: dailyTotals?.protein, carbs: dailyTotals?.carbs, fat: dailyTotals?.fat, proteinTarget,
+          simple: macroMode === 'simple', waterOz }}
         workout={{ exists: workoutExists, label: workoutLabel, hint: workoutHint, onContinue, ...workoutReads }}
         refreshing={refreshing}
         onRefresh={onRefresh}
