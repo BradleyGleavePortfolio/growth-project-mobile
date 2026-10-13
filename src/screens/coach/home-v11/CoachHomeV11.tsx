@@ -97,7 +97,7 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
         <QuietLoading label="Loading" testID="coach-home-v11-loading" />
       ) : (
         <View style={[styles.dials, dials.length < 3 && styles.dialsFew]} testID="coach-home-v11-dials">
-          {dials.map((dial) => <HomeDial key={dial.key} {...dial} testID={`coach-home-v11-dial-${dial.key}`} />)}
+          {dials.map(({ key, ...dial }) => <HomeDial key={key} {...dial} testID={`coach-home-v11-dial-${key}`} />)}
         </View>
       )}
 

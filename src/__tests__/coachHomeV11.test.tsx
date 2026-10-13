@@ -82,7 +82,7 @@ beforeEach(() => {
 });
 
 async function renderHome() {
-  const view = render(<CommandCenterScreen />);
+  const view = await render(<CommandCenterScreen />);
   await waitFor(() => expect(view.getByTestId('coach-home-v11-dials')).toBeTruthy());
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return view;
@@ -107,7 +107,7 @@ describe('UI-2 coach Home, flag on', () => {
     const button = v.getByTestId('coach-home-v11-drafts');
     expect(button.props.accessibilityLabel).toBe("Approve Roman's drafts, 3");
     expect(v.getByText("Approve Roman's drafts →")).toBeTruthy();
-    fireEvent.press(button);
+    await fireEvent.press(button);
     expect(mockHaptics.mediumImpact).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'PendingAiDrafts', initial: false });
   });
@@ -121,19 +121,19 @@ describe('UI-2 coach Home, flag on', () => {
 
   it('opens Roman, the bell, a client, Clients and the Money tab', async () => {
     const v = await renderHome();
-    fireEvent.press(v.getByTestId('coach-home-v11-ask-roman'));
+    await fireEvent.press(v.getByTestId('coach-home-v11-ask-roman'));
     expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'RomanChat', initial: false });
     expect(v.getByTestId('coach-home-v11-bell').props.accessibilityLabel).toBe('Notifications, 2 unread');
-    fireEvent.press(v.getByTestId('coach-home-v11-bell'));
+    await fireEvent.press(v.getByTestId('coach-home-v11-bell'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', initial: false });
     expect(v.getByText('Needs you, 2')).toBeTruthy();
-    fireEvent.press(v.getByTestId('coach-home-v11-client-c1'));
+    await fireEvent.press(v.getByTestId('coach-home-v11-client-c1'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientDetail', params: { clientId: 'c1', clientName: 'Casey Lin' }, initial: false });
-    fireEvent.press(v.getByTestId('coach-home-v11-all-clients'));
+    await fireEvent.press(v.getByTestId('coach-home-v11-all-clients'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList' });
     expect(v.getByText('Next payout')).toBeTruthy();
-    fireEvent.press(v.getByTestId('coach-home-v11-payout'));
-    fireEvent.press(v.getByTestId('coach-home-v11-month'));
+    await fireEvent.press(v.getByTestId('coach-home-v11-payout'));
+    await fireEvent.press(v.getByTestId('coach-home-v11-month'));
     expect(mockNavigate).toHaveBeenCalledWith('MoneyStack', { screen: 'CoachMoney' });
     expect(mockHaptics.softImpact).toHaveBeenCalled();
   });
@@ -151,18 +151,18 @@ describe('UI-2 coach Home, flag on', () => {
 
   it('says so with a Try again when the roster cannot load', async () => {
     mockOverview.mockRejectedValueOnce(new Error('down'));
-    const v = render(<CommandCenterScreen />);
+    const v = await render(<CommandCenterScreen />);
     await waitFor(() => expect(v.getByTestId('coach-home-v11-error')).toBeTruthy());
     expect(v.getByText('Roster numbers could not load.')).toBeTruthy();
-    fireEvent.press(v.getByText('Try again'));
+    await fireEvent.press(v.getByText('Try again'));
     await waitFor(() => expect(v.getByTestId('coach-home-v11-dials')).toBeTruthy());
   });
 });
 
 describe('UI-2 flag off', () => {
-  it("keeps today's Overview", () => {
+  it("keeps today's Overview", async () => {
     mockFlags.coachHomeV11 = false;
-    const v = render(<CommandCenterScreen />);
+    const v = await render(<CommandCenterScreen />);
     expect(v.getByTestId('today-overview')).toBeTruthy();
     expect(v.queryByTestId('coach-home-v11')).toBeNull();
   });

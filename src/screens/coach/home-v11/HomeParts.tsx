@@ -104,7 +104,7 @@ export function BusinessTile({ label, value, sub, width, onPress, testID }: {
 const styles = StyleSheet.create({
   dial: { width: '31%', alignItems: 'center' },
   ring: { width: SIZE, height: SIZE },
-  ringCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  ringCenter: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   dialValue: { ...typography.h2, fontSize: 25, lineHeight: 32, letterSpacing: 0.3, fontVariant: FIGURES },
   dialUnit: { ...typography.caption, fontSize: 11, lineHeight: 13, letterSpacing: 0 },
   dialLabel: { marginTop: 10, marginBottom: 0, textAlign: 'center' },
