@@ -269,8 +269,8 @@ export default function ClientLookupScreen({ navigation }: Props) {
     );
   }
 
-  // The index shows once Everyone reaches its top line, so it never sits over the header, search or chips.
-  const showIndex = searchFirst && !narrowing && everyoneY != null && scrollY >= everyoneY - insets.top - 72 && roster.length > 0;
+  // The index (top at insets.top + 72) shows once Everyone is near the top, so it never sits beside the header or search box.
+  const showIndex = searchFirst && !narrowing && everyoneY != null && scrollY >= everyoneY - insets.top - 200 && roster.length > 0;
   return (
     <View style={s.screen}>
       <ScrollView
