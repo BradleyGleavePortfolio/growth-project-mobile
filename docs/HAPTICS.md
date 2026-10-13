@@ -65,7 +65,7 @@ When the toggle changes:
 | `EditProfileScreen` | `warning()` | DOB / weight validation error |
 | `EditProfileScreen` | `success()` | Profile saved successfully |
 | `EditProfileScreen` | `error()` | Profile save API failure |
-| `MoneyAIPool` (Money page) | `mediumImpact()` | "Buy more credits" pressed |
+| `MoneyAIPool` (Money page) | `mediumImpact()` / `softImpact()` | "Buy more credits" pressed (filled button / quiet text while the Stripe setup card shows) |
 
 ## Architecture
 

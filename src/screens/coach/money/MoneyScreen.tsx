@@ -329,6 +329,16 @@ export default function MoneyScreen({
   const firstLoad =
     !anyLoaded && [summary, connect].some((x) => x.loading) && isOnline;
 
+  // PK-2: on both Money states. While the Stripe setup card shows its filled
+  // button, buying is the quiet text action, so one filled button per page.
+  const aiPool = (
+    <MoneyAIPool
+      query={aiBudget}
+      onBuy={creditPacksHidden() ? undefined : () => navigation.navigate("CreditPackCheckout")}
+      quiet={!!c && !stripeActive}
+    />
+  );
+
   if (headCoachHandles) {
     return (
       <SafeAreaView ph-no-capture style={styles.page} edges={["top"]}>
@@ -356,6 +366,7 @@ export default function MoneyScreen({
               payments.
             </Text>
           </View>
+          {aiPool}
         </ScrollView>
       </SafeAreaView>
     );
@@ -597,14 +608,7 @@ export default function MoneyScreen({
           ) : null}
         </View>
 
-        <MoneyAIPool
-          query={aiBudget}
-          onBuy={
-            creditPacksHidden()
-              ? undefined
-              : () => navigation.navigate("CreditPackCheckout")
-          }
-        />
+        {aiPool}
 
         {/* Needs attention */}
         <Text style={styles.h2} accessibilityRole="header">
