@@ -26,6 +26,7 @@ jest.mock('../services/commandCenterApi', () => ({
 }));
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => Promise.resolve(0) }));
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => ({ data: { drafts: [] }, refetch: jest.fn() }) }));
+jest.mock('../lib/userCache', () => ({ ...jest.requireActual('../lib/userCache'), readUserCache: () => Promise.resolve({ id: 'coach-b' }) }));
 
 // Required after the mocks above exist (an import would be hoisted above them).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -173,6 +174,25 @@ describe('UI-2 roster section', () => {
     await fireEvent.press(v.getByTestId('coach-home-v11-wall-more'));
     expect(props.onOpenClients).toHaveBeenCalled();
     expect(v.getByTestId('coach-home-v11-wall-more').props.accessibilityLabel).toBe('All 32 clients. Open Clients');
+  });
+});
+
+describe('UI-2 roster reads', () => {
+  it('a failed roster read never hands the Home the rows already in the shared roster store', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useCoachStore } = require('../store/coachStore') as typeof import('../store/coachStore');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { coachApi } = require('../services/api') as typeof import('../services/api');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { rosterSources: real } = require('../screens/coach/home-v11/rosterSources') as typeof import('../screens/coach/home-v11/rosterSources');
+    useCoachStore.setState({ clients: roster(), loadError: null });
+    const read = jest.spyOn(coachApi, 'getClients').mockRejectedValue(new Error('offline'));
+    await expect(real.clients()).rejects.toThrow();
+    expect(read).toHaveBeenCalled();
+    // The store keeps its old rows for the Clients list; the Home's read refuses them.
+    expect(useCoachStore.getState().clients).toHaveLength(6);
+    read.mockRestore();
+    useCoachStore.getState().reset();
   });
 });
 
