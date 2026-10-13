@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography } from '../../../theme/tokens';
 import { QuietOverline, TextLink } from '../../../ui';
-import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
+import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
@@ -71,12 +71,13 @@ export function homeDials(d: CoachHomeData): DialSpec[] {
 export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, header, sources }: Props) {
   const { semanticColors: sc } = useTheme();
   const { width } = useWindowDimensions();
-  const { data, reload, retryMonth } = useCoachHomeV11(sources);
+  const { data, reload, retryMonth, retryUrgent, retryDrafts } = useCoachHomeV11(sources);
   const tileWidth = (Math.min(width, 600) - 2 * layout.gutter - TILE_GAP) / 2;
   const o = data.overview;
   const roster = o?.roster_size ?? 0;
   const dials = homeDials(data);
-  const urgent = roster > 0 && (o?.at_risk_count ?? 0) > 0 ? data.urgent.slice(0, MAX_TILES) : [];
+  const needsYou = roster > 0 && (o?.at_risk_count ?? 0) > 0;
+  const urgent = needsYou ? data.urgent.slice(0, MAX_TILES) : [];
   const bell = data.unreadNotifications;
 
   return (
@@ -110,11 +111,18 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
         </View>
       )}
 
-      {data.draftsWaiting > 0 || onAskRoman ? (
+      {data.draftsWaiting > 0 || onAskRoman || data.draftsState !== 'ok' ? (
         <View style={[styles.roman, { borderColor: sc.border }]} testID="coach-home-v11-roman">
           <View style={styles.romanMark}><RomanAvatar crop="monogram" size={28} /></View>
           <View style={styles.grow}>
-            {data.draftsWaiting > 0 ? (
+            {data.draftsState === 'loading' ? (
+              <View style={styles.wide}><QuietLoading label="Loading pending drafts" rows={1} testID="coach-home-v11-drafts-loading" /></View>
+            ) : data.draftsState === 'error' ? (
+              <QuietError
+                layout="inline" message={loadFailureMessage(data.draftsError, 'Pending AI drafts')} onRetry={retryDrafts}
+                retrying={data.draftsRetrying} testID="coach-home-v11-drafts-error"
+              />
+            ) : data.draftsWaiting > 0 ? (
               <Pressable
                 onPress={() => { void HapticService.mediumImpact(); onOpenDrafts(); }}
                 accessibilityRole="button" accessibilityLabel={`Approve Roman's drafts, ${data.draftsWaiting}`} testID="coach-home-v11-drafts"
@@ -142,6 +150,10 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
       {o && roster > 0 ? (
         <View style={styles.section}>
           {urgent.length > 0 ? <QuietOverline accessibilityRole="header">{`Needs you, ${o.at_risk_count}`}</QuietOverline> : null}
+          {needsYou && data.urgentState === 'loading' ? <QuietLoading label="Loading" rows={2} testID="coach-home-v11-urgent-loading" /> : null}
+          {needsYou && data.urgentState === 'error' ? (
+            <QuietError layout="inline" message="At-risk clients could not load." onRetry={retryUrgent} testID="coach-home-v11-urgent-error" />
+          ) : null}
           <View style={styles.tiles}>
             {urgent.map((e) => (
               <ClientTile
@@ -194,6 +206,7 @@ const styles = StyleSheet.create({
   // Centres Roman on the first 44 pt control beside him.
   romanMark: { height: 44, justifyContent: 'center' },
   grow: { flex: 1, alignItems: 'flex-start' },
+  wide: { alignSelf: 'stretch' },
   drafts: { minHeight: 44, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },
   draftsLabel: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, flexShrink: 1 },
   section: { marginTop: 28 },

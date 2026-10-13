@@ -157,6 +157,39 @@ describe('UI-2 coach Home, flag on', () => {
     await fireEvent.press(v.getByText('Try again'));
     await waitFor(() => expect(v.getByTestId('coach-home-v11-dials')).toBeTruthy());
   });
+
+  it('tells a failed needs-you or drafts read from an empty one, with Try again, while the rest stays usable', async () => {
+    mockSources.atRisk.mockRejectedValueOnce(new Error('down'));
+    const refetch = jest.fn();
+    mockDrafts.mockReturnValue({ data: undefined, isError: true, error: new Error('down'), isFetching: false, refetch });
+    const v = await renderHome();
+    expect(v.getByText('At-risk clients could not load.')).toBeTruthy();
+    expect(v.getByTestId('coach-home-v11-drafts-error')).toBeTruthy();
+    expect(v.queryByTestId('coach-home-v11-drafts')).toBeNull();
+    expect(v.getByTestId('coach-home-v11-all-clients')).toBeTruthy();
+    expect(v.getByTestId('coach-home-v11-payout')).toBeTruthy();
+    await fireEvent.press(v.getByTestId('coach-home-v11-drafts-error-retry'));
+    expect(refetch).toHaveBeenCalled();
+    await fireEvent.press(v.getByTestId('coach-home-v11-urgent-error-retry'));
+    await waitFor(() => expect(v.getByTestId('coach-home-v11-client-c1')).toBeTruthy());
+    expect(v.queryByTestId('coach-home-v11-urgent-error')).toBeNull();
+  });
+
+  it('keeps the verified clients when a refresh fails', async () => {
+    const v = await renderHome();
+    mockSources.atRisk.mockRejectedValueOnce(new Error('down'));
+    await act(async () => { v.getByTestId('coach-home-v11').props.refreshControl.props.onRefresh(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(v.getByTestId('coach-home-v11-client-c1')).toBeTruthy();
+    expect(v.queryByTestId('coach-home-v11-urgent-error')).toBeNull();
+  });
+
+  it('shows the drafts as loading until they answer', async () => {
+    mockDrafts.mockReturnValue({ data: undefined, isError: false, refetch: jest.fn() });
+    const v = await renderHome();
+    expect(v.getByTestId('coach-home-v11-drafts-loading')).toBeTruthy();
+    expect(v.queryByTestId('coach-home-v11-drafts')).toBeNull();
+  });
 });
 
 describe('UI-2 flag off', () => {
