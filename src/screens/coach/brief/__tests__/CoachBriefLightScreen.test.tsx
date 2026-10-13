@@ -74,7 +74,28 @@ beforeEach(() => {
   mockReduced = true;
   mockMarkRead.mockResolvedValue(undefined);
 });
-afterEach(() => jest.useRealTimers());
+// Fake timers across a render can deadlock React 19's work loop in this repo (see
+// CreditPackCheckoutScreen.SuccessReceipt.test.tsx), so the 5 s poll waits are captured instead.
+const realSetTimeout = global.setTimeout;
+let polls: Array<() => void> = [];
+let timeoutSpy: jest.SpyInstance | undefined;
+function capturePolls() {
+  polls = [];
+  timeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation(((cb: () => void, ms?: number) => {
+    if (ms === 5_000) {
+      polls.push(cb);
+      return 0;
+    }
+    return realSetTimeout(cb, ms);
+  }) as unknown as typeof setTimeout);
+}
+async function nextPoll() {
+  await waitFor(() => expect(polls).toHaveLength(1));
+  await act(async () => {
+    polls.shift()?.();
+  });
+}
+afterEach(() => timeoutSpy?.mockRestore());
 
 describe('CoachBriefLightScreen: busy', () => {
   it('one of each kind: messages and weight, then Thank you, Roman', async () => {
@@ -140,7 +161,7 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
   });
 
   it('preparing: checks every 5 s, then shows the brief and announces it once', async () => {
-    jest.useFakeTimers();
+    capturePolls();
     const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
     mockToday.mockResolvedValueOnce(pending()).mockResolvedValueOnce(pending()).mockResolvedValue(brief([]));
     const s = await render(<CoachBriefLightScreen />);
@@ -148,8 +169,8 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
     expect(s.getByText('Good morning, Jordan.')).toBeTruthy();
     expect(s.getByTestId('brief-dots')).toBeTruthy();
     expect(rowLabels(s)).toEqual(['Continue']);
-    await act(async () => { jest.advanceTimersByTime(5_000); });
-    await act(async () => { jest.advanceTimersByTime(5_000); });
+    await nextPoll();
+    await nextPoll();
     await waitFor(() => expect(s.getByText(BODY)).toBeTruthy());
     expect(mockToday).toHaveBeenCalledTimes(3);
     expect(announce).toHaveBeenCalledTimes(1);
@@ -158,11 +179,12 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
   });
 
   it('preparing for over a minute: stops checking and offers Try again', async () => {
-    jest.useFakeTimers();
+    capturePolls();
     mockToday.mockResolvedValue(pending());
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(s.getByTestId('brief-dots')).toBeTruthy());
-    for (let i = 0; i < 12; i += 1) await act(async () => { jest.advanceTimersByTime(5_000); });
+    for (let i = 0; i < 12; i += 1) await nextPoll();
+    await waitFor(() => expect(s.queryByTestId('brief-dots')).toBeNull());
     expect(mockToday).toHaveBeenCalledTimes(12);
     expect(s.queryByTestId('brief-dots')).toBeNull();
     expect(rowLabels(s)).toEqual(['Try again', 'Continue']);
