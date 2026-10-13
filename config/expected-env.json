@@ -91,6 +91,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_COACH_HOME_V11": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "UI-2 coach Home (render 2), Overview as the landing tab and the Money tab; off in every profile until the owner switches it on."
+    },
     "EXPO_PUBLIC_FF_COMMUNITY_ACKS": {
       "kind": "flag",
       "default": "off",

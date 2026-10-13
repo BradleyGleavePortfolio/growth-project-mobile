@@ -27,7 +27,7 @@ describe('coach tab bar', () => {
     expect(names.length).toBeGreaterThanOrEqual(7);
     for (const n of names) expect(n).toMatch(/-outline$/);
     const routes = [...tabSection.matchAll(/name="([A-Za-z]+)"\s*\n\s*component=/g)].map((m) => m[1]);
-    expect(routes).toEqual(['CommandCenter', 'ClientsStack', 'Templates', 'Messages', 'TeamStack', 'CommunityStack', 'SettingsStack']);
+    expect(routes).toEqual(['CommandCenter', 'ClientsStack', 'Templates', 'Messages', 'MoneyStack', 'TeamStack', 'CommunityStack', 'SettingsStack']);
   });
 
   it('labels are 11 pt Inter, the bar is bone with one hairline, and a tab press gives a selection haptic', () => {

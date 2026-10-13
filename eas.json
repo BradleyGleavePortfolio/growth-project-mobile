@@ -7,7 +7,8 @@
   "build": {
     "development": {
       "env": {
-        "EXPO_PUBLIC_FF_TEAM_MODE": "false"
+        "EXPO_PUBLIC_FF_TEAM_MODE": "false",
+        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
       },
       "developmentClient": true,
       "distribution": "internal",
@@ -34,7 +35,8 @@
         "EXPO_PUBLIC_FF_DELIVERABLES": "true",
         "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true",
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
-        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true"
+        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true",
+        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
       }
     },
     "production": {
@@ -57,7 +59,8 @@
         "EXPO_PUBLIC_FF_COMMUNITY_COHORTS": "true",
         "EXPO_PUBLIC_FF_DELIVERABLES": "true",
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
-        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true"
+        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true",
+        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
       }
     },
     "clinic": {
@@ -81,7 +84,8 @@
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_DM": "false",
         "EXPO_PUBLIC_FF_ROMAN_CHAT": "true",
-        "EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK": "true"
+        "EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK": "true",
+        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
       }
     },
     "clinic-apk": {
@@ -95,7 +99,8 @@
       "env": {
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "1",
-        "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true"
+        "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true",
+        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
       }
     }
   },

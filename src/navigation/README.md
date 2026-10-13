@@ -166,6 +166,8 @@ CoachNavigator tabs: ClientsStack | Dashboard | Templates | Messages | Settings
 CoachNavigator tabs: CommandCenter | ClientsStack | Templates | Messages | Settings
 ```
 
+**UI-2 (`featureFlags.coachHomeV11`, off in every profile):** the app opens on `CommandCenter` and a `MoneyStack` tab ("Money", `$` icon) sits between Messages and Settings. It is a second copy of the Settings routes that starts on `CoachMoney`, so every screen Money opens stays inside the tab.
+
 The `CoachHomeScreen` (`Dashboard`) is preserved as a sub-screen inside `ClientsStack` under the route name `Dashboard`, so any existing `navigate('Dashboard')` calls in analytics payloads, push notification handlers, or deep links keep resolving without a crash.
 
 `CommandCenterScreen` lives at `src/screens/coach/command-center/CommandCenterScreen.tsx` and hosts an internal top-tab bar with 5 views:

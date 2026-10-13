@@ -166,6 +166,8 @@ export type CoachTabParamList = {
   // navigate('SettingsStack', ... as never) as the only way to deep-link
   // into a settings sub-screen, which silently broke when names changed.
   SettingsStack: NavigatorScreenParams<SettingsStackParamList> | undefined;
+  // UI-2 (featureFlags.coachHomeV11): the Money tab, the Settings routes starting on CoachMoney.
+  MoneyStack: NavigatorScreenParams<SettingsStackParamList> | undefined;
   TeamStack: undefined;
   // Community v1-6 — only present in the param list / tab bar when
   // `featureFlags.coachCommunity` is true (registered conditionally below).
@@ -528,9 +530,10 @@ function ClientsStackNavigator() {
   );
 }
 
-function SettingsStackNavigator() {
+function SettingsStackNavigator({ initialRouteName }: { initialRouteName?: keyof SettingsStackParamList }) {
   return (
     <SettingsStack.Navigator
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: Colors.background },
@@ -630,6 +633,14 @@ function SettingsStackNavigator() {
 }
 
 /**
+ * UI-2 Money tab: its own copy of the Settings routes, opening on the Money page, so every screen Money
+ * opens (charges, packages, setup, credit packs) lives in this tab and Back stays inside it.
+ */
+function MoneyStackNavigator() {
+  return <SettingsStackNavigator initialRouteName="CoachMoney" />;
+}
+
+/**
  * TeamStackNavigator
  *
  * Phase 11 / Track 7. Scale+ tier gate is enforced inside TeamManagementScreen
@@ -706,7 +717,8 @@ export default function CoachNavigator() {
   // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
   // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
   // screenshots) keep the CommandCenter landing surface.
-  const initialTab = __USING_MOCK_DATA ? 'CommandCenter' : 'ClientsStack';
+  // UI-2: the new Home is where the app opens.
+  const initialTab = __USING_MOCK_DATA || featureFlags.coachHomeV11 ? 'CommandCenter' : 'ClientsStack';
   return (
     <FirstPaymentWowHost>
     <Tab.Navigator
@@ -719,6 +731,8 @@ export default function CoachNavigator() {
         // routes are unchanged.
         tabBarActiveTintColor: sc.accentText,
         tabBarInactiveTintColor: sc.textMuted,
+        // UI-2: six tabs at 360 pt; labels hold their size, as in iOS's own tab bars.
+        tabBarAllowFontScaling: !featureFlags.coachHomeV11,
         tabBarLabel: ({ focused, color, children }) => (
           <Text
             style={{
@@ -792,6 +806,9 @@ export default function CoachNavigator() {
         name="Messages"
         component={MessagesScreen}
         options={{
+          // UI-2: a string label like every other tab, so all six draw at one size and keep it
+          // (the shared 11 pt label cut "Messages" to "Messa..." at 360 pt).
+          ...(featureFlags.coachHomeV11 ? { tabBarLabel: 'Messages' } : {}),
           tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
           // Quiet forest count instead of the default red dot (no status hue).
           tabBarBadgeStyle: {
@@ -808,6 +825,18 @@ export default function CoachNavigator() {
       {/* P0-1 + Phase 11 / Track 7 — Team tab. Scale+ tier gate enforced
           in-screen, role gate enforced here: sub-coaches and unresolved
           sessions never see the tab. */}
+      {/* UI-2 (owner 10-09): "$" + "Money" opens the Money page; flag off, no tab. */}
+      {featureFlags.coachHomeV11 && (
+        <Tab.Screen
+          name="MoneyStack"
+          component={MoneyStackNavigator}
+          options={{
+            tabBarLabel: 'Money',
+            tabBarAccessibilityLabel: 'Money',
+            tabBarIcon: ({ color, size }) => <Ionicons name="logo-usd" size={size} color={color} />,
+          }}
+        />
+      )}
       {showTeamTab && (
         <Tab.Screen
           name="TeamStack"
