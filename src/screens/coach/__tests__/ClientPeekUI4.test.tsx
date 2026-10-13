@@ -200,8 +200,8 @@ describe('UI-4 peek sheet', () => {
   it('reads weigh-ins and targets the way the mockup words them', () => {
     const s = summary({ body_metrics: true }).data;
     const slices = peekSlices(client(), { ...s, weight_logs: [{ weight_lbs: 182.44, date: day(0) }] }, [], 'coach-1', null);
-    expect(slices.weighIn.text).toBe('Today: 182.4 lb');
-    expect(slices.food.text).toBe('1,420 kcal, protein 96 g'); // no target: no "of"
+    expect(slices.weighIn.text).toBe('Today: 182.4\u00a0lb');
+    expect(slices.food.text).toBe('1,420\u00a0kcal, protein 96\u00a0g'); // no target: no "of"; units never wrap apart
     expect(slices.checkIn).toEqual({ text: 'Nothing logged yet', shared: true, hasOne: false });
   });
 });

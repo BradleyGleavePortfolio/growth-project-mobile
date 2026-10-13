@@ -98,7 +98,8 @@ export function peekSlices(
   const targets = resolveCoachTargets(target ?? null, (s.profile as ClientProfile | null) ?? null);
   const kcal = num(day.total_calories) ?? 0;
   const of = targets?.calories != null ? ` of ${grouped(targets.calories)}` : '';
-  const foodText = rows(day.entries).length > 0 ? `${grouped(kcal)}${of} kcal, protein ${grouped(num(day.total_protein_g) ?? 0)} g` : NOTHING;
+  // A no-break space keeps each number with its unit when the line wraps ("96 g", never "96" / "g").
+  const foodText = rows(day.entries).length > 0 ? `${grouped(kcal)}${of}\u00a0kcal, protein ${grouped(num(day.total_protein_g) ?? 0)}\u00a0g` : NOTHING;
 
   const session = rows(s.recent_workouts)[0];
   const sessionDay = session ? localDay(session.completed_at ?? session.created_at, true) : null;
@@ -117,7 +118,7 @@ export function peekSlices(
   const lbs = weight ? num(weight.weight_lbs) : null;
   const weightDay = weight ? localDay(weight.date, false) : null;
   // The check-in slice's "{day}: {value}" with today's "{weight} lb" (WeeklySummaryTab).
-  const weighText = lbs != null && weightDay ? `${dayWord(weightDay, today)}: ${Math.round(lbs * 10) / 10} lb` : NOTHING;
+  const weighText = lbs != null && weightDay ? `${dayWord(weightDay, today)}: ${Math.round(lbs * 10) / 10}\u00a0lb` : NOTHING;
 
   return {
     checkIn: { text: shared.checkIns ? checkText : off, shared: shared.checkIns, hasOne: shared.checkIns && !!checkDay },
