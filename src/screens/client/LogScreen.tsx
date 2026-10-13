@@ -36,6 +36,7 @@ import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
 import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../utils/log/editPortion';
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import { matchLoggedFoods, mergeWithLoggedMatches, repeatPastMeal } from '../../utils/log/quickLog';
+import type { PlanLink } from '../../utils/log/planLink';
 import { addDays, getTodayString } from '../../utils/date';
 import {
   submitSearchLogOffline,
@@ -174,7 +175,10 @@ export default function LogScreen() {
       unit: 'serving',
     });
 
-  const openAddFood = useCallback(async (mealType: MealType) => {
+  // FOODLINK: what this sheet's foods are logged for (the Food tab's "Something else"); every open resets it.
+  const [sheetLink, setSheetLink] = useState<PlanLink | undefined>(undefined);
+  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink) => {
+    setSheetLink(link);
     searchRequest.current += 1;
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     setSearching(false);
@@ -295,6 +299,7 @@ export default function LogScreen() {
       multiplier,
       originalQuantity: qty,
       originalUnit: selectedUnit,
+      link: sheetLink,
     };
     setFoodSaving(true);
 
@@ -345,7 +350,7 @@ export default function LogScreen() {
       Alert.alert('Missing info', 'Enter at least a food name and calories.');
       return;
     }
-    const args = { ...manualFields, date: selectedDate, mealType: activeMealType };
+    const args = { ...manualFields, date: selectedDate, mealType: activeMealType, link: sheetLink };
     setFoodSaving(true);
 
     if (!online) {
@@ -400,7 +405,7 @@ export default function LogScreen() {
   // Logs every food of the most recent earlier meal in this slot with the
   // same saved portions, so a repeated breakfast is two taps. The usual day
   // (UI-3) repeats its usual meal through the same path.
-  const repeatMealTo = async (meal: PastMeal | null, mealType: MealType) => {
+  const repeatMealTo = async (meal: PastMeal | null, mealType: MealType, link?: PlanLink) => {
     if (!currentUser || !meal || foodSaving) return;
     if (!online) {
       Alert.alert(
@@ -412,7 +417,7 @@ export default function LogScreen() {
     const target = mealLabel(mealType);
     setFoodSaving(true);
     try {
-      const { added, failedNames } = await repeatPastMeal(meal, selectedDate, mealType);
+      const { added, failedNames } = await repeatPastMeal(meal, selectedDate, mealType, link);
       await loadDayData(currentUser.id, selectedDate);
       if (failedNames.length === 0) {
         HapticService.success();
@@ -430,7 +435,7 @@ export default function LogScreen() {
       setFoodSaving(false);
     }
   };
-  const handleRepeatMeal = () => repeatMealTo(repeatMeal, activeMealType);
+  const handleRepeatMeal = () => repeatMealTo(repeatMeal, activeMealType, sheetLink);
 
   // UI-3 "Ate it as planned": one tap logs the coach's plan meal into its meal with the same
   // manual-entry write (and offline queue) as LogPlannedMealButton on the meal plan screen.
@@ -439,7 +444,7 @@ export default function LogScreen() {
     const v = (x: number) => String(Math.round(x * 10) / 10);
     const args = {
       foodName: slot.name, calories: v(slot.kcal), protein: v(slot.protein), carbs: v(slot.carbs), fat: v(slot.fat),
-      quantity: '1', unit: 'serving', date: selectedDate, mealType: slot.mealType,
+      quantity: '1', unit: 'serving', date: selectedDate, mealType: slot.mealType, link: { planSlotId: slot.key },
     };
     setFoodSaving(true);
     try {
@@ -646,8 +651,8 @@ export default function LogScreen() {
           water={waterNode}
           onDateChange={handleDateChange}
           onLogPlanned={(slot) => void logPlanned(slot)}
-          onRepeat={(slot) => void repeatMealTo(slot.usual?.meal ?? null, slot.mealType)}
-          onSomethingElse={(meal) => void openAddFood(meal)}
+          onRepeat={(slot) => void repeatMealTo(slot.usual?.meal ?? null, slot.mealType, { fillsUsualMeal: true })}
+          onSomethingElse={(meal, link) => void openAddFood(meal, link)}
           onEditFood={handleEditFood}
         >
         <Overline>Food log</Overline>

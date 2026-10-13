@@ -197,7 +197,7 @@ function SlotGroup({
               {s.meal_template.description}
             </Text>
           ) : null}
-          <LogPlannedMealButton meal={plannedMealFromSlot(s)} slot={s.slot_label} />
+          <LogPlannedMealButton meal={plannedMealFromSlot(s)} slot={s.slot_label} planSlotId={s.id} />
         </View>
       ))}
     </View>

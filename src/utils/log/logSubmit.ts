@@ -1,6 +1,7 @@
 import { foodApi, logApi } from '../../services/api';
 import { enqueue as enqueueFoodLog } from '../../services/foodLogQueue';
 import { MealType } from '../../types';
+import { planLink, type PlanLink } from './planLink';
 import { SearchResult } from './types';
 import { parseQuantityInput, densityGramsFor } from './macros';
 
@@ -16,6 +17,7 @@ interface SearchLogArgs {
   // a derived multiplier.
   originalQuantity?: number;
   originalUnit?: string;
+  link?: PlanLink;
 }
 
 interface ManualLogArgs {
@@ -28,6 +30,7 @@ interface ManualLogArgs {
   unit: string;
   date: string;
   mealType: MealType;
+  link?: PlanLink;
 }
 
 export class FoodLogValidationError extends Error {
@@ -86,6 +89,7 @@ export async function submitSearchLogOffline({
   multiplier,
   originalQuantity,
   originalUnit,
+  link,
 }: SearchLogArgs) {
   const needsCreate = !food.id || food.id.startsWith('off_');
   await enqueueFoodLog({
@@ -98,6 +102,7 @@ export async function submitSearchLogOffline({
       quantity_multiplier: multiplier,
       original_quantity: originalQuantity,
       original_unit: originalUnit,
+      ...planLink(link),
     },
   });
 }
@@ -109,6 +114,7 @@ export async function submitSearchLogOnline({
   multiplier,
   originalQuantity,
   originalUnit,
+  link,
 }: SearchLogArgs) {
   let foodItemId = food.id || '';
   if (!foodItemId || foodItemId.startsWith('off_')) {
@@ -122,6 +128,7 @@ export async function submitSearchLogOnline({
     quantity_multiplier: multiplier,
     original_quantity: originalQuantity,
     original_unit: originalUnit,
+    ...planLink(link),
   });
 }
 
@@ -207,6 +214,7 @@ function buildManualPayload(args: ManualLogArgs) {
     quantity_multiplier: 1,
     original_quantity: qty,
     original_unit: unit,
+    ...planLink(args.link),
   };
   return { foodPayload, logPayload };
 }
