@@ -84,6 +84,15 @@ const mockFocus: { current: (() => void) | null } = { current: null };
 const mockNavigate = jest.fn();
 const mockReplace = jest.fn();
 const mockParentNavigate = jest.fn();
+// PK-2: the AI pool reads the budget query; moneyAIPool.test.tsx covers it.
+jest.mock("../../../../hooks/useAIBudget", () => ({
+  useAIBudget: () => ({
+    data: undefined,
+    error: null,
+    isFetching: false,
+    refetch: async () => undefined,
+  }),
+}));
 jest.mock("@react-navigation/native", () => {
   const actual = jest.requireActual("@react-navigation/native");
   return {
@@ -95,6 +104,7 @@ jest.mock("@react-navigation/native", () => {
       canGoBack: () => true,
       getParent: () => ({ navigate: mockParentNavigate }),
     }),
+    useIsFocused: () => true,
     useFocusEffect: (cb: () => void) => {
       const R = jest.requireActual("react");
       R.useEffect(() => {
