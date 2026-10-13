@@ -7,7 +7,8 @@
   "build": {
     "development": {
       "env": {
-        "EXPO_PUBLIC_FF_TEAM_MODE": "false"
+        "EXPO_PUBLIC_FF_TEAM_MODE": "false",
+        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
       },
       "developmentClient": true,
       "distribution": "internal",
