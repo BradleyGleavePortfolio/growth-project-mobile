@@ -191,3 +191,12 @@ export const dayWord = (date: string, yesterday: string | null) => (date === yes
 /** "Logged yesterday and on Tuesday", "Logged on Monday and on Friday". */
 export const loggedOn = (days: string[], yesterday: string | null) =>
   `Logged ${joinNames(days.map((d) => (d === yesterday ? 'yesterday' : `on ${weekday(d)}`)))}`;
+
+/** Where Extras "Add" files a food: the latest meal before the next one (else the latest) with no plan meal open,
+ * since buildPlanDay counts other foods in an open plan meal's meal as a change. Null when every meal has one open. */
+export function extrasMeal(day: FoodDay): MealType | null {
+  const free = DAY_MEALS.filter((m) => !day.slots.some((x) => x.mealType === m && x.logs.length === 0));
+  const next = nextSlot(day);
+  const before = next ? free.filter((m) => DAY_MEALS.indexOf(m) < DAY_MEALS.indexOf(next.mealType)) : [];
+  return before[before.length - 1] ?? free[free.length - 1] ?? null;
+}
