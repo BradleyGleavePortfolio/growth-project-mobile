@@ -75,27 +75,32 @@ beforeEach(() => {
   mockMarkRead.mockResolvedValue(undefined);
 });
 // Fake timers across a render can deadlock React 19's work loop in this repo (see
-// CreditPackCheckoutScreen.SuccessReceipt.test.tsx), so the 5 s poll waits are captured instead.
+// CreditPackCheckoutScreen.SuccessReceipt.test.tsx). Instead, timers of one length are held
+// and released by the test: the 5 s poll waits, or the 16 ms after which the test
+// environment ends native animations (so the reveal can be held in progress).
 const realSetTimeout = global.setTimeout;
-let polls: Array<() => void> = [];
-let timeoutSpy: jest.SpyInstance | undefined;
-function capturePolls() {
-  polls = [];
-  timeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation(((cb: () => void, ms?: number) => {
-    if (ms === 5_000) {
-      polls.push(cb);
+let held: Array<() => void> = [];
+function hold(ms: number) {
+  held = [];
+  const fake = (cb: () => void, wait?: number) => {
+    if (wait === ms) {
+      held.push(cb);
       return 0;
     }
-    return realSetTimeout(cb, ms);
-  }) as unknown as typeof setTimeout);
+    return realSetTimeout(cb, wait);
+  };
+  Object.assign(global, { setTimeout: fake });
 }
 async function nextPoll() {
-  await waitFor(() => expect(polls).toHaveLength(1));
+  await waitFor(() => expect(held).toHaveLength(1));
   await act(async () => {
-    polls.shift()?.();
+    held.shift()?.();
   });
 }
-afterEach(() => timeoutSpy?.mockRestore());
+const DOTS = { includeHiddenElements: true };
+afterEach(() => {
+  Object.assign(global, { setTimeout: realSetTimeout });
+});
 
 describe('CoachBriefLightScreen: busy', () => {
   it('one of each kind: messages and weight, then Thank you, Roman', async () => {
@@ -161,13 +166,13 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
   });
 
   it('preparing: checks every 5 s, then shows the brief and announces it once', async () => {
-    capturePolls();
+    hold(5_000);
     const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
     mockToday.mockResolvedValueOnce(pending()).mockResolvedValueOnce(pending()).mockResolvedValue(brief([]));
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(s.getByText('Today\u2019s brief is still being prepared. It appears here in a moment.')).toBeTruthy());
     expect(s.getByText('Good morning, Jordan.')).toBeTruthy();
-    expect(s.getByTestId('brief-dots')).toBeTruthy();
+    expect(s.getByTestId('brief-dots', DOTS)).toBeTruthy();
     expect(rowLabels(s)).toEqual(['Continue']);
     await nextPoll();
     await nextPoll();
@@ -179,14 +184,13 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
   });
 
   it('preparing for over a minute: stops checking and offers Try again', async () => {
-    capturePolls();
+    hold(5_000);
     mockToday.mockResolvedValue(pending());
     const s = await render(<CoachBriefLightScreen />);
-    await waitFor(() => expect(s.getByTestId('brief-dots')).toBeTruthy());
+    await waitFor(() => expect(s.getByTestId('brief-dots', DOTS)).toBeTruthy());
     for (let i = 0; i < 12; i += 1) await nextPoll();
-    await waitFor(() => expect(s.queryByTestId('brief-dots')).toBeNull());
+    await waitFor(() => expect(s.queryByTestId('brief-dots', DOTS)).toBeNull());
     expect(mockToday).toHaveBeenCalledTimes(12);
-    expect(s.queryByTestId('brief-dots')).toBeNull();
     expect(rowLabels(s)).toEqual(['Try again', 'Continue']);
   });
 
@@ -229,6 +233,7 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
 
 describe('CoachBriefLightScreen: reveal', () => {
   it('rows take no tap while hidden; a tap anywhere completes the reveal', async () => {
+    hold(16);
     mockReduced = false;
     mockToday.mockResolvedValue(brief([client('message_unread', 0)]));
     const s = await render(<CoachBriefLightScreen />);
