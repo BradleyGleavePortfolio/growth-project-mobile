@@ -196,6 +196,8 @@ it('builds the usual day for a client with no coach, ready to repeat', async () 
   expect(screen.queryByTestId('food-day-projection')).toBeNull();
   expect(mockGet).not.toHaveBeenCalled();
 
+  // The approved label is never cut: at large text it takes a second line (Sol B3 at 14e9b87f).
+  expect(screen.getByText("Repeat yesterday's snack").props.numberOfLines).toBe(2);
   await fireEvent.press(screen.getByText("Repeat yesterday's snack"));
   expect(props.onRepeat).toHaveBeenCalledWith(expect.objectContaining({
     mealType: 'snack',

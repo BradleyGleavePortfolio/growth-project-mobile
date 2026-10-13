@@ -190,7 +190,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
         </View>
       ) : null}
       <PrimaryButton label={x.usual ? `Repeat ${dayWord(x.usual.meal.date, yesterday)}'s ${x.mealType}` : 'Ate it as planned'} loading={p.saving}
-        haptic={false} style={s.nowPrimary} testID="food-day-primary" onPress={() => (x.usual ? p.onRepeat(x) : p.onLogPlanned(x))} />
+        haptic={false} wrap style={s.nowPrimary} testID="food-day-primary" onPress={() => (x.usual ? p.onRepeat(x) : p.onLogPlanned(x))} />
       <HapticPressable intent="light" disabled={p.saving} style={s.outline} onPress={() => {
         swap.current = { date: p.selectedDate, slot: x.key, meal: x.mealType, seen: p.foodLogs.map((l) => l.id) };
         p.onSomethingElse(x.mealType);

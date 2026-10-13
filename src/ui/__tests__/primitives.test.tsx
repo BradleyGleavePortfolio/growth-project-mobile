@@ -124,6 +124,21 @@ describe('PrimaryButton', () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
+  it('wrap gives a long label a second line and a taller button; the default stays one line', async () => {
+    const label = "Repeat yesterday's breakfast";
+    const one = await render(<PrimaryButton label={label} onPress={jest.fn()} testID="b" />);
+    expect(one.getByText(label).props.numberOfLines).toBe(1);
+    expect(flat(one.getByTestId('b')).paddingVertical).toBeUndefined();
+    one.unmount();
+    const onPress = jest.fn();
+    const two = await render(<PrimaryButton label={label} onPress={onPress} wrap testID="b" />);
+    expect(two.getByText(label).props.numberOfLines).toBe(2);
+    expect(flat(two.getByTestId('b'))).toMatchObject({ minHeight: 54, paddingVertical: 12, borderRadius: radius.button });
+    fireEvent.press(two.getByTestId('b'));
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(mockImpact).toHaveBeenCalledWith('light');
+  });
+
   it('a fuller screen-reader label never changes the visible word', async () => {
     const r = await render(<PrimaryButton label="Save" accessibilityLabel="Save weight log entry" onPress={jest.fn()} testID="b" />);
     expect(r.getByTestId('b').props.accessibilityLabel).toBe('Save weight log entry');
