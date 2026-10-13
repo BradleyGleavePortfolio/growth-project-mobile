@@ -48,17 +48,20 @@ function serve(plan: unknown, fail = false) {
 const props = {
   onDateChange: jest.fn(), onLogPlanned: jest.fn(), onRepeat: jest.fn(), onSomethingElse: jest.fn(), onEditFood: jest.fn(),
 };
-function show(over: Partial<React.ComponentProps<typeof FoodDayGate>> = {}) {
+type Over = Partial<React.ComponentProps<typeof FoodDayGate>>;
+async function show(over: Over = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const tree = (o: Over) => (
     <QueryClientProvider client={client}>
       <FoodDayGate on coached selectedDate={today} foodLogs={logs} eaten={{ calories: 420, protein: 40 }}
         targets={{ calories: 1250, protein: 120 }} ready saving={false} notes={null} water={<Text>Water card</Text>}
-        {...props} {...over}>
+        {...props} {...o}>
         <Text>Classic food log</Text>
       </FoodDayGate>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = await render(tree(over));
+  return Object.assign(view, { client, update: (o: Over) => view.rerender(tree(o)) });
 }
 
 beforeEach(() => {
@@ -93,9 +96,6 @@ it('sends every tap to a real Food log path', async () => {
   expect(props.onLogPlanned).toHaveBeenCalledWith(expect.objectContaining({ name: 'Greek yogurt and berries', mealType: 'snack', kcal: 210 }));
   await fireEvent.press(screen.getByTestId('food-day-something-else'));
   expect(props.onSomethingElse).toHaveBeenLastCalledWith('snack');
-  // Extras go to lunch (no plan meal), the meal before Snack, so they never tick Snack off.
-  await fireEvent.press(screen.getByTestId('food-day-add'));
-  expect(props.onSomethingElse).toHaveBeenLastCalledWith('lunch');
   await fireEvent.press(screen.getByLabelText('Coffee with milk, logged to lunch, 30 kcal'));
   expect(props.onEditFood).toHaveBeenLastCalledWith(logs[1]);
   await fireEvent.press(screen.getByTestId('food-day-slot-b'));
@@ -106,6 +106,26 @@ it('sends every tap to a real Food log path', async () => {
   expect(props.onDateChange).toHaveBeenCalledTimes(2);
   await fireEvent.press(screen.getByTestId('food-day-bell'));
   expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', initial: false });
+});
+
+it('keeps an extra out of a day with every meal open, and lets Something else fill the meal up next', async () => {
+  serve(planDay);
+  const coffee = log('9', 'breakfast', 'Coffee with milk', 30);
+  const view = await show({ foodLogs: [], eaten: { calories: 0, protein: 0 } });
+  await fireEvent.press(await screen.findByTestId('food-day-add'));
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
+  await view.update({ foodLogs: [coffee], eaten: { calories: 30, protein: 20 } });
+  expect(screen.getByText('UP NEXT, BREAKFAST')).toBeTruthy();
+  expect(screen.getByText('0 of 3 meals done')).toBeTruthy();
+  expect(screen.getByText('Logged to breakfast')).toBeTruthy();
+  expect(screen.getByText('1,240 kcal and 110 g protein.')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('food-day-something-else'));
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
+  await view.update({ foodLogs: [coffee, log('10', 'breakfast', 'Toast', 200)], eaten: { calories: 230, protein: 40 } });
+  expect(await screen.findByText('Logged with a change: Toast')).toBeTruthy();
+  expect(screen.getByText('UP NEXT, SNACK')).toBeTruthy();
+  expect(screen.getByText('Logged to breakfast')).toBeTruthy();
+  expect(view.client.getQueryData(['food-day-changes', today])).toEqual({ 10: 'b' });
 });
 
 it('says the target is met when the rest of the plan lands within 5 percent', async () => {
@@ -161,9 +181,10 @@ it('builds the usual day for a client with no coach, ready to repeat', async () 
   await show({ coached: false, foodLogs: [logs[0]], eaten: { calories: 390, protein: 20 } });
   expect(await screen.findByText('Your usual day')).toBeTruthy();
   expect(screen.getByText('Built from the meals you logged this week. 1,250 kcal target.')).toBeTruthy();
-  expect(screen.getByText('1 of 3 meals logged')).toBeTruthy();
+  // No usual breakfast, so the oats logged today are an extra, not a meal of the usual day.
+  expect(screen.getByText('0 of 2 meals logged')).toBeTruthy();
   expect(screen.getByText('390 of 1,250 kcal')).toBeTruthy();
-  expect(screen.queryByText('1 food')).toBeNull();
+  expect(screen.getByText('Logged to breakfast')).toBeTruthy();
   expect(screen.getByText('UP NEXT, YOUR USUAL SNACK')).toBeTruthy();
   expect(screen.getByText('Apple, medium and Peanut butter')).toBeTruthy();
   expect(screen.getByText(`Logged yesterday and on ${weekday(addDays(today, -4))}`)).toBeTruthy();
@@ -188,4 +209,26 @@ it('builds the usual day for a client with no coach, ready to repeat', async () 
   expect(screen.getByText('MEAL PLANS COME FROM A COACH')).toBeTruthy();
   await fireEvent.press(screen.getByLabelText('Join a coach'));
   expect(mockMessageCoach).toHaveBeenCalledTimes(1);
+});
+
+it('keeps an extra out of a usual day with four meals open, and lets Something else fill the meal up next', async () => {
+  const four = [entry('breakfast', 'eggs', 'Eggs', 140, 2, 'large'), entry('lunch', 'soup', 'Lentil soup', 300, 1, 'bowl'), ...snack, ...dinner];
+  mockDaily.mockImplementation(async (date: string) => ({ data: { entries: [addDays(today, -1), addDays(today, -3)].includes(date) ? four : [] } }));
+  const coffee = log('9', 'breakfast', 'Coffee with milk', 30);
+  const view = await show({ coached: false, foodLogs: [], eaten: { calories: 0, protein: 0 } });
+  await fireEvent.press(await screen.findByTestId('food-day-add'));
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
+  await view.update({ coached: false, foodLogs: [coffee], eaten: { calories: 30, protein: 20 } });
+  expect(screen.getByText('UP NEXT, YOUR USUAL BREAKFAST')).toBeTruthy();
+  expect(screen.getByText('0 of 4 meals logged')).toBeTruthy();
+  expect(screen.getByText('Logged to breakfast')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('food-day-something-else'));
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
+  await view.update({ coached: false, foodLogs: [coffee, log('10', 'breakfast', 'Toast', 200)], eaten: { calories: 230, protein: 40 } });
+  expect(await screen.findByText('UP NEXT, YOUR USUAL LUNCH')).toBeTruthy();
+  expect(screen.getByText('1 of 4 meals logged')).toBeTruthy();
+  expect(screen.getByText('Toast')).toBeTruthy();
+  expect(screen.queryByText('1 food')).toBeNull();
+  expect(screen.getByText('Logged to breakfast')).toBeTruthy();
+  expect(view.client.getQueryData(['food-day-changes', today])).toEqual({ 10: 'breakfast' });
 });

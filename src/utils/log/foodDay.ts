@@ -1,8 +1,8 @@
 /**
  * The Food tab's day as a checklist (V1_1_UI_SPEC UI-3): the coach's plan meals in order, or, for a
  * client with no coach, "Your usual day" from the meals they repeat; each one done once the day's log
- * has it. Pure: every meal, food and number comes from the plan read, the past week's logs and the
- * day's logs; nothing is invented.
+ * has it. Pure: every meal, food and number comes from the plan read, the past week's logs, the day's
+ * logs and the client's own "Something else" taps; nothing is invented.
  */
 import type { FoodLog, MealType } from '../../types';
 import type { DailyMealPlan, SlotLabel } from '../../api/mealTemplatesApi';
@@ -61,7 +61,8 @@ export function joinNames(names: string[]): string {
 
 const isPlainServing = (l: FoodLog) => l.quantity === 1 && l.unit === 'serving';
 
-export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[]): FoodDay {
+/** `changes` maps a food log id to the plan meal (slot id) the client logged it for through "Something else". */
+export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[], changes: Record<string, string> = {}): FoodDay {
   const left = [...logs];
   const slots = [...plan.slots].sort((a, b) => RANK[a.slot_label] - RANK[b.slot_label] || a.order - b.order);
   // A plan meal is logged when an entry under its own name is in its meal ("Ate it as planned").
@@ -69,23 +70,17 @@ export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[]): FoodDay {
     const i = left.findIndex((l) => l.mealType === LOG_MEAL[s.slot_label] && same(l.foodName, s.meal_template.name));
     return i >= 0 ? left.splice(i, 1)[0] : null;
   });
-  const claimed: FoodLog[][] = planned.map((p) => (p ? [p] : []));
-  // Other foods in a meal whose plan meal is still open stand in for it (a change); the first open
-  // slot of that meal takes them. Every other food is an extra, not in the plan.
-  for (const meal of DAY_MEALS) {
-    const rest = left.filter((l) => l.mealType === meal);
-    const to = slots.findIndex((s, i) => LOG_MEAL[s.slot_label] === meal && !planned[i]);
-    if (rest.length === 0 || to < 0) continue;
-    claimed[to].push(...rest);
-    rest.forEach((l) => left.splice(left.indexOf(l), 1));
-  }
+  // A food logged through "Something else" for an open plan meal, and still in its meal, stands in for it (a
+  // change). Every other food is an extra, not in the plan, even while its meal's plan meal is open.
+  const claimed = slots.map((s, i) =>
+    (planned[i] ? [] : left.filter((l) => changes[l.id] === s.id && l.mealType === LOG_MEAL[s.slot_label])));
   return {
     kind: 'plan',
-    extras: left,
+    extras: left.filter((l) => !claimed.some((c) => c.includes(l))),
     slots: slots.map((s, i) => {
       const t = s.meal_template;
-      const mine = claimed[i];
       const p = planned[i];
+      const mine = p ? [p] : claimed[i];
       const status = p
         ? isPlainServing(p) ? 'Logged as planned' : `Logged with a change: ${formatPortion(p.quantity, p.unit)}`
         : mine.length > 0 ? `Logged with a change: ${joinNames(mine.map((l) => l.foodName))}` : null;
@@ -151,39 +146,33 @@ function usualMeal(meal: MealType, newestFirst: PastDay[]): Usual | null {
 }
 
 /**
- * "Your usual day" for a client with no coach: each meal with a usual version (usualMeal), and each meal
- * logged on the shown day. A logged meal counts the foods of its usual version, or every food when none
- * of them is; its other foods are extras. A usual meal still to eat can be repeated with the same portions.
- * With no usual version of any meal there is no usual day (no slots), and the classic log shows.
+ * "Your usual day" for a client with no coach: each meal with a usual version (usualMeal). As on the plan
+ * day, a usual meal is logged when a food of its usual version is in its meal ("Repeat"), or when a food was
+ * logged through "Something else" for it (`changes`: log id -> meal); every other food is an extra. A usual
+ * meal still to eat can be repeated with the same portions. With no usual meal there is no usual day (no
+ * slots), and the classic log shows.
  */
-export function buildUsualDay(past: PastDay[], logs: FoodLog[]): FoodDay {
+export function buildUsualDay(past: PastDay[], logs: FoodLog[], changes: Record<string, string> = {}): FoodDay {
   const newestFirst = [...past].sort((a, b) => (a.date < b.date ? 1 : -1));
   const slots: DaySlot[] = [];
-  const extras: FoodLog[] = [];
-  let found = false;
   for (const meal of DAY_MEALS) {
     const usual = usualMeal(meal, newestFirst);
-    found = found || !!usual;
-    const mine = logs.filter((l) => l.mealType === meal);
-    const inUsual = mine.filter((l) => usual?.meal.entries.some((x) => x.foodItemId === l.foodItemId || same(x.name, l.foodName)));
-    const counted = inUsual.length > 0 ? inUsual : mine;
-    extras.push(...mine.filter((l) => !counted.includes(l)));
+    if (!usual) continue;
+    const counted = logs.filter((l) => l.mealType === meal && (changes[l.id] === meal
+      || usual.meal.entries.some((x) => x.foodItemId === l.foodItemId || same(x.name, l.foodName))));
     const base = { key: meal, mealType: meal, label: LABEL[meal] };
-    if (counted.length > 0) {
-      slots.push({
-        ...base, name: joinNames(counted.map((l) => l.foodName)), kcal: sum(counted, (l) => l.calories), protein: sum(counted, (l) => l.protein),
-        carbs: sum(counted, (l) => l.carbs), fat: sum(counted, (l) => l.fat), foods: [], logs: counted,
-        // Only the mockup's plural is approved; a one-food meal shows no count (singular is under Wording needed).
-        status: counted.length > 1 ? `${counted.length} foods` : null,
-      });
-    } else if (usual) {
-      slots.push({
-        ...base, name: joinNames(usual.meal.entries.map((x) => x.name)), kcal: usual.meal.calories, protein: usual.protein,
-        carbs: usual.carbs, fat: usual.fat, foods: usual.foods, logs: [], status: null, usual: { meal: usual.meal, days: usual.days },
-      });
-    }
+    slots.push(counted.length > 0 ? {
+      ...base, name: joinNames(counted.map((l) => l.foodName)), kcal: sum(counted, (l) => l.calories), protein: sum(counted, (l) => l.protein),
+      carbs: sum(counted, (l) => l.carbs), fat: sum(counted, (l) => l.fat), foods: [], logs: counted,
+      // Only the mockup's plural is approved; a one-food meal shows no count (singular is under Wording needed).
+      status: counted.length > 1 ? `${counted.length} foods` : null,
+    } : {
+      ...base, name: joinNames(usual.meal.entries.map((x) => x.name)), kcal: usual.meal.calories, protein: usual.protein,
+      carbs: usual.carbs, fat: usual.fat, foods: usual.foods, logs: [], status: null, usual: { meal: usual.meal, days: usual.days },
+    });
   }
-  return { kind: 'usual', slots: found ? slots : [], extras: found ? extras : [] };
+  const used = new Set(slots.flatMap((x) => x.logs));
+  return { kind: 'usual', slots, extras: slots.length > 0 ? logs.filter((l) => !used.has(l)) : [] };
 }
 
 /** "Tuesday" for a YYYY-MM-DD day. */
@@ -195,12 +184,3 @@ export const dayWord = (date: string, yesterday: string | null) => (date === yes
 /** "Logged yesterday and on Tuesday", "Logged on Monday and on Friday". */
 export const loggedOn = (days: string[], yesterday: string | null) =>
   `Logged ${joinNames(days.map((d) => (d === yesterday ? 'yesterday' : `on ${weekday(d)}`)))}`;
-
-/** Where Extras "Add" files a food: the latest meal before the next one (else the latest) with no plan meal open,
- * since buildPlanDay counts other foods in an open plan meal's meal as a change. Null when every meal has one open. */
-export function extrasMeal(day: FoodDay): MealType | null {
-  const free = DAY_MEALS.filter((m) => !day.slots.some((x) => x.mealType === m && x.logs.length === 0));
-  const next = nextSlot(day);
-  const before = next ? free.filter((m) => DAY_MEALS.indexOf(m) < DAY_MEALS.indexOf(next.mealType)) : [];
-  return before[before.length - 1] ?? free[free.length - 1] ?? null;
-}
