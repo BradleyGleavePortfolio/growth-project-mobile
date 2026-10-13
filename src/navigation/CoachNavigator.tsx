@@ -644,8 +644,8 @@ function MoneyStackNavigator() {
  * TeamStackNavigator
  *
  * Phase 11 / Track 7. Scale+ tier gate is enforced inside TeamManagementScreen
- * so it is safe to mount for all coaches — non-Scale coaches see an upgrade
- * prompt rather than the roster.
+ * and the parent tab registers only with Team Mode on and a confirmed
+ * head coach whose roster includes a sub-coach.
  */
 function TeamStackNavigator() {
   return (
@@ -710,7 +710,9 @@ export default function CoachNavigator() {
   // where it could only show the plan gate. The tab now mounts only for a
   // head coach (useCoachRoleType contract) whose roster already has a sub-coach.
   const teamStatus = useCoachTeamStatus();
-  const showTeamTab = teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
+  // Team Mode stays hidden for launch even when an old roster still exists.
+  const showTeamTab = featureFlags.teamMode &&
+    teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
   // Audit P0: while the Command Center API still ships only mock data
   // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
   // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
