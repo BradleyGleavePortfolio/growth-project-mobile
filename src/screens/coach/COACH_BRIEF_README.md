@@ -27,6 +27,27 @@ Action rows: unread message opens the client thread; weight or check-in opens Cl
 backend no longer sends one) opens Client Detail on Workouts and reads "Completed a workout", never an approval; dunning and revenue
 open Money; team items open Team.
 
+## Action rows (Concept A, `coachBriefGate`)
+
+Behind `EXPO_PUBLIC_FF_COACH_BRIEF_GATE` (off in every profile; needs `coachBrief` too). Off: everything above is unchanged.
+
+`selectBriefActions` (`brief/briefActions.ts`) is the only source of the brief's action rows:
+
+| Clients of one kind | Row |
+|---|---|
+| 0 | none |
+| 1, with a first name | "Reply to {first name}", "Review {first name}'s weight change", "Check on {first name}": opens what `actionTarget` opens |
+| 2 or more, or 1 with no usable name | one row, "See messages", "See weight logs" or "See check-ins": opens `SettingsStack > CoachBriefList` |
+
+Kinds are taken in a fixed order (messages, weight, check-ins, then the head coach's Money and Team) and only the first two
+with a row are kept; "Thank you, Roman" follows them. Clients are counted by distinct `client_id`; items with no
+`client_id`, unknown kinds and the retired `workout_approval` are dropped. A missing, blank or "Client" name never shows:
+that client gets the list row. Head coach: failed payments and team revenue give one "See Money" row; Team rows ("See your
+team") only with Team Mode on. A row with no destination is never shown.
+
+`CoachBriefList` (`brief/CoachBriefListScreen.tsx`) lists exactly the items the row counted (passed as route params, never
+stored), each opening that client like the single-client row; Back returns to the brief.
+
 ## API
 
 | Endpoint | Notes |
@@ -43,3 +64,6 @@ open Money; team items open Team.
 | `src/components/roman/__tests__/romanP3FlagOff.test.tsx` | romanChat off: plain header, no Roman surfaces. |
 | `src/__tests__/wave11Screens.test.tsx` | Flag-off preview lock; source guards (live route, no approve-to-send copy). |
 | `src/services/__tests__/pushTapRouter.test.ts` | `CoachBrief` push tap opens the brief with Settings underneath. |
+| `src/screens/coach/brief/__tests__/briefActions.test.ts` | Action rows: messages {0,1,2,6} x weight {0,1,2,6} x check-ins {0,1,5}, shuffled; repeats, names, ids, unknown and head coach kinds. |
+| `src/screens/coach/brief/__tests__/CoachBriefListScreen.test.tsx` | Every counted client listed and opened; no "Client"; Back; empty list. |
+| `src/navigation/__tests__/coachBriefGateFlagOff.test.ts` | Gate defaults off, no profile sets it, list route only behind both flags. |

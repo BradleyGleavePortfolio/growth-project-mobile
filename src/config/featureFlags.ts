@@ -146,6 +146,10 @@ export const featureFlags = {
   clientPathCopilot: readFlag('EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT', isDev),
   /** Coach Brief — daily morning brief on the coach home tab. */
   coachBrief: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF', isDev),
+  /** BRIEFA: today's brief as Concept A, "Roman in the light" (full screen,
+   *  at most two suggested actions, list rows for busy kinds). Needs coachBrief
+   *  too. Off in every profile; off shows today's brief screen unchanged. */
+  coachBriefGate: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF_GATE', false),
   /** Admin Control Room — governance view, gated to admin role. */
   adminControlRoom: readFlag('EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM', isDev),
   /** Private community hub — rooms, cohorts, announcements, coach-led threads. */
