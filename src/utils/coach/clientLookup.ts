@@ -98,7 +98,7 @@ export function lookupReason(
   }
   const workoutToday = !!c.activity?.lastWorkoutOn && dayDiff(c.activity.lastWorkoutOn, today) <= 0;
   const text = line.text === 'Logged today' && workoutToday && variant === 'needs' ? 'Logged today, workout done' : line.text;
-  if (isNew) return { text: `New, ${text.charAt(0).toLowerCase()}${text.slice(1)}`, action: null, ok: line.tone === 'ok' };
+  if (isNew) return { text, action: null, ok: line.tone === 'ok' }; // first week: no Nudge yet
   if (line.tone === 'quiet') return { text, action: 'nudge', ok: false };
   return { text, action: null, ok: line.tone === 'ok' };
 }
