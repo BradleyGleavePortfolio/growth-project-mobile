@@ -26,6 +26,7 @@ import {
   type LookupAction, type LookupFilter, type LookupReason, type UnreadByClient,
 } from '../../../utils/coach/clientLookup';
 import { useLookupNudge } from './useLookupNudge';
+import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
 
 type Props = { navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'> };
 const FILTERS = Object.keys(FILTER_LABELS) as LookupFilter[];
@@ -44,6 +45,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
   const [unread, setUnread] = useState<UnreadByClient>({});
   const [archivedCount, setArchivedCount] = useState<number | null>(null);
   const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [peek, setPeek] = useState<RosterClient | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollY, setScrollY] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -93,13 +95,21 @@ export default function ClientLookupScreen({ navigation }: Props) {
   const results = roster.filter((c) => matchesRosterSearch(c, parsed.text) && filters.every((f) => matchesLookupFilter(c, f, unread)));
   const recent = recentFromRoster(recentIds, archived ? [] : roster);
 
+  // A row tap opens the peek sheet (and Opened recently); each sheet button opens today's screen for it.
   const openClient = (c: RosterClient) => {
     if (coachId) void rememberRecentClient(coachId, c.id).then(setRecentIds);
-    navigation.navigate('ClientDetail', { clientId: c.id, clientName: rosterDisplayName(c) });
+    setPeek(c);
   };
-  const openMessages = (c: RosterClient) =>
-    navigation.navigate('ClientMessages', { clientId: c.id, clientName: rosterDisplayName(c) });
-  const runAction = (c: RosterClient, a: LookupAction) => (a === 'review' ? openClient(c) : a === 'nudge' ? nudge.open(c) : openMessages(c));
+  const openTarget = (c: RosterClient, t: PeekTarget) => {
+    setPeek(null);
+    const p = { clientId: c.id, clientName: rosterDisplayName(c) };
+    if (t.screen === 'ClientDetail') navigation.navigate('ClientDetail', t.tab ? { ...p, initialTab: t.tab } : p);
+    else if (t.screen === 'ClientPayments') navigation.navigate('ClientPayments', p);
+    else navigation.navigate('ClientMessages', p);
+  };
+  const openMessages = (c: RosterClient) => openTarget(c, { screen: 'ClientMessages' });
+  const runAction = (c: RosterClient, a: LookupAction) =>
+    a === 'review' ? openTarget(c, { screen: 'ClientDetail', tab: 'timeline' }) : a === 'nudge' ? nudge.open(c) : openMessages(c);
   const toggleArchived = () => { setChip(null); setFilterStatus(archived ? 'active' : 'archived'); };
   const jumpTo = (letter: string) => {
     const present = LETTERS.slice(LETTERS.indexOf(letter)).find((l) => sectionY.current[l] != null);
@@ -293,7 +303,10 @@ export default function ClientLookupScreen({ navigation }: Props) {
           ))}
         </View>
       ) : null}
-      {nudge.modal}
+      {peek ? null : nudge.modal}
+      <ClientPeekSheet client={peek} coachId={coachId} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open}>
+        {peek ? nudge.modal : null}
+      </ClientPeekSheet>
     </View>
   );
 }
