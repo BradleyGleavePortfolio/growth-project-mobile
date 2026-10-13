@@ -1,16 +1,19 @@
-// FOODLINK durability (Sol B1 / Opus B1 at m#700 bd2c3712): an offline "Something else" food goes through the real
-// persisted queue, its flush, the server's snake-case day row and the real day-store mapping, and its plan meal is
-// still done in a fresh view and cache. Only storage (the AsyncStorage jest mock) and the network (api) are faked.
+// FOODLINK durability (Sol B1 / Opus B1 at m#700 bd2c3712; the usual day: Sol B2 at m#694 1220f6a8): an offline
+// "Something else" food goes through the real persisted queue, its flush, the server's snake-case day row and the real
+// day-store mapping, and its plan or usual meal is still done in a fresh view and cache. Only storage (the
+// AsyncStorage jest mock) and the network (api) are faked.
 import React from 'react';
 import { Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FoodDayGate } from '../../../components/log/FoodDayView';
 import { flush, getQueueLength } from '../../../services/foodLogQueue';
 import { useClientStore } from '../../../store/clientStore';
-import { getTodayString } from '../../date';
+import { addDays, getTodayString } from '../../date';
+import type { DaySlot } from '../foodDay';
 import { submitManualLogOffline, submitSearchLogOffline } from '../logSubmit';
+import { repeatPastMeal } from '../quickLog';
 import type { SearchResult } from '../types';
 
 const mockFlags = { foodPlanChecklist: true };
@@ -51,16 +54,16 @@ jest.mock('../../../services/api', () => ({
 }));
 
 const noop = () => undefined;
-async function relaunchAndShow() {
+async function relaunchAndShow(coached = true, onRepeat: (slot: DaySlot) => void = noop) {
   // Nothing from the last session but the server: a fresh day store and a fresh query cache.
   useClientStore.getState().reset();
   await useClientStore.getState().loadDayData('client', today);
   const { foodLogs } = useClientStore.getState();
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <FoodDayGate on coached selectedDate={today} foodLogs={foodLogs} eaten={{ calories: 810, protein: 52 }}
+      <FoodDayGate on coached={coached} selectedDate={today} foodLogs={foodLogs} eaten={{ calories: 810, protein: 52 }}
         targets={{ calories: 1200, protein: 100 }} ready saving={false} notes={null} water={null}
-        onDateChange={noop} onLogPlanned={noop} onRepeat={noop} onSomethingElse={noop} onEditFood={noop}>
+        onDateChange={noop} onLogPlanned={noop} onRepeat={onRepeat} onSomethingElse={noop} onEditFood={noop}>
         <Text>Classic food log</Text>
       </FoodDayGate>
     </QueryClientProvider>,
@@ -92,4 +95,55 @@ it('keeps an offline Something else meal done through the queue, a relaunch, the
   await relaunchAndShow();
   expect(await screen.findByText('Logged with a change: Eggs on toast')).toBeTruthy();
   expect(screen.getByText('UP NEXT, SNACK')).toBeTruthy();
+});
+
+it('keeps a usual-day meal logged through the queue, a relaunch, the server row and a sign-in again; Add stays an extra', async () => {
+  await AsyncStorage.clear();
+  mockRows.length = 0;
+  mockFoods.gy = { id: 'gy', name: 'Greek yogurt', calories: 210, protein_g: 20 };
+  // The server's last two days: the same breakfast and the same snack, so a client with no coach has a usual day.
+  for (const [i, date] of [addDays(today, -1), addDays(today, -2)].entries()) {
+    for (const [meal, food] of [['breakfast', 'cat'], ['snack', 'gy']]) {
+      mockRows.push({ id: `past-${i}-${meal}`, user_id: 'client', date, meal_type: meal, food_item_id: food, quantity_multiplier: 1,
+        created_at: `${date}T08:00:00.000Z`, plan_slot_id: null, fills_usual_meal: false });
+    }
+  }
+  const todayRows = () => mockRows.filter((r) => r.date === today);
+
+  // Offline: the usual card's "Something else" for breakfast (the sheet's manual entry, marked), then the usual
+  // snack's own food through Extras "Add" to the meal up next (no mark).
+  await submitManualLogOffline({ foodName: 'Eggs on toast', calories: '420', protein: '24', carbs: '30', fat: '18',
+    quantity: '1', unit: 'serving', date: today, mealType: 'breakfast', link: { fillsUsualMeal: true } });
+  await submitSearchLogOffline({ food: { id: 'gy', name: 'Greek yogurt' } as SearchResult, date: today, mealType: 'snack', multiplier: 1 });
+  expect((await AsyncStorage.getItem('pending_food_logs_client'))?.match(/"fills_usual_meal":true/g)).toHaveLength(1);
+
+  // Relaunch, back online: the stored queue flushes, then the day is read back from the server.
+  await flush();
+  expect(await getQueueLength()).toBe(0);
+  expect(todayRows().map((r) => r.fills_usual_meal)).toEqual([true, false]);
+  let repeating: Promise<unknown> = Promise.resolve();
+  // The usual card's "Repeat", wired as LogScreen wires it (repeatMealTo -> repeatPastMeal, marked).
+  const onRepeat = (slot: DaySlot) => {
+    if (slot.usual) repeating = repeatPastMeal(slot.usual.meal, today, slot.mealType, { fillsUsualMeal: true });
+  };
+  const first = await relaunchAndShow(false, onRepeat);
+  expect(useClientStore.getState().foodLogs.map((l) => l.fillsUsualMeal)).toEqual([true, undefined]);
+  expect(await screen.findByText('1 of 2 meals logged')).toBeTruthy();
+  expect(screen.getByText('Eggs on toast')).toBeTruthy();
+  expect(screen.getByText('UP NEXT, YOUR USUAL SNACK')).toBeTruthy();
+  expect(screen.getByLabelText('Greek yogurt, logged to snack, 210 kcal')).toBeTruthy();
+
+  // Online "Repeat yesterday's snack": the server stores the mark with the repeated food.
+  await fireEvent.press(screen.getByText("Repeat yesterday's snack"));
+  await repeating;
+  expect(todayRows().map((r) => [r.food_item_id, r.fills_usual_meal])).toEqual([[expect.any(String), true], ['gy', false], ['gy', true]]);
+  await first.unmount();
+
+  // Sign out and in, a cleared cache or another phone: the phone's storage is empty, the server rows are not.
+  await AsyncStorage.clear();
+  await relaunchAndShow(false);
+  expect(await screen.findByText('2 of 2 meals logged')).toBeTruthy();
+  expect(useClientStore.getState().foodLogs.map((l) => l.fillsUsualMeal)).toEqual([true, undefined, true]);
+  expect(screen.getByLabelText('Greek yogurt, logged to snack, 210 kcal')).toBeTruthy();
+  expect(screen.queryByText(/^UP NEXT/)).toBeNull();
 });
