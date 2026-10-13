@@ -6,7 +6,7 @@
  * tgp-agent-context planning/v1_1_ui/ui-4-client-lookup/.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import HapticPressable from '../../../components/HapticPressable';
@@ -37,7 +37,6 @@ export default function ClientLookupScreen({ navigation }: Props) {
   const s = useMemo(() => makeStyles(theme), [theme]);
   const { colors } = theme;
   const insets = useScreenInsets();
-  const { height: viewportH } = useWindowDimensions();
   const coachId = useCurrentUser()?.id;
   const { clients, isLoading, loadError, filterStatus, loadClients, setFilterStatus } = useCoachStore();
   const [query, setQuery] = useState('');
@@ -130,7 +129,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
               <Text style={s.name} numberOfLines={1}>{name}</Text>
               <View style={s.reasonRow}>
                 {r.ok ? <View style={s.dot} /> : null}
-                <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={1}>{r.text}</Text>
+                <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={2}>{r.text}</Text>
               </View>
             </View>
             {trailing ? null : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
@@ -240,7 +239,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
                 {recent.map(quickRow)}
               </>
             ) : null}
-            <View style={s.sect} onLayout={(e) => setEveryoneY(e.nativeEvent.layout.y)} testID="lookup-everyone">
+            <View style={[s.sect, s.azList]} onLayout={(e) => setEveryoneY(e.nativeEvent.layout.y)} testID="lookup-everyone">
               <Overline style={s.eyebrow}>{archived ? 'Archived' : 'Everyone'} <Text style={s.eyebrowCount}>{roster.length}</Text></Overline>
               <Text style={s.note}>A to Z</Text>
             </View>
@@ -255,7 +254,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
                       <HapticPressable key={c.id} intent="light" style={s.azRow} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`Open ${name}, ${when}`} testID={`lookup-az-${c.id}`}>
                         {avatar(c, 32)}
                         <Text style={s.azName} numberOfLines={1}>{name}</Text>
-                        <Text style={s.azWhen} numberOfLines={1}>{when}</Text>
+                        <Text style={s.azWhen} numberOfLines={2}>{when}</Text>
                       </HapticPressable>
                     );
                   })}
@@ -270,7 +269,8 @@ export default function ClientLookupScreen({ navigation }: Props) {
     );
   }
 
-  const showIndex = searchFirst && !narrowing && everyoneY != null && scrollY > everyoneY - viewportH / 2 && roster.length > 0;
+  // The index shows once Everyone reaches its top line, so it never sits over the header, search or chips.
+  const showIndex = searchFirst && !narrowing && everyoneY != null && scrollY >= everyoneY - insets.top - 72 && roster.length > 0;
   return (
     <View style={s.screen}>
       <ScrollView
@@ -335,7 +335,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     tip: { marginTop: 14 },
     archivedLink: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
     search: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 54, marginTop: 14, paddingHorizontal: 14, borderRadius: radius.input, borderWidth: 1.5, borderColor: colors.primary, backgroundColor: sem.bgSurface },
-    searchInput: { ...typography.body, flex: 1, color: colors.textPrimary, paddingVertical: 0 },
+    searchInput: { ...typography.body, flex: 1, minWidth: 0, color: colors.textPrimary, paddingVertical: 0 },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
     chip: { height: 36, paddingHorizontal: 14, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: sem.border, backgroundColor: sem.bgSurface },
     chipOn: { borderColor: colors.primary },
@@ -349,7 +349,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     letter: { ...typography.bodyMd, color: colors.primary, marginTop: 12, paddingBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
     azRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
     azName: { ...typography.h4, flex: 1, color: colors.textPrimary },
-    azWhen: { ...typography.bodySmall, color: colors.textMuted, maxWidth: '45%' },
+    azWhen: { ...typography.bodySmall, color: colors.textMuted, maxWidth: '45%', textAlign: 'right' },
     index: { position: 'absolute', right: 4, alignItems: 'center' },
     indexLetter: { ...typography.caption, fontFamily: 'Inter_600SemiBold', fontSize: 11, lineHeight: 17, letterSpacing: 0, color: colors.primary, paddingHorizontal: 4 },
   });

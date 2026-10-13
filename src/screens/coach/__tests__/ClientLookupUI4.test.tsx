@@ -163,10 +163,11 @@ describe('UI-4 Search first (15 or more)', () => {
     expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'm0', clientName: 'Ana Lopez' });
     await waitFor(() => expect(JSON.parse(mockCache.get('coach_lookup_recent:coach-1') ?? '[]')).toEqual(['m0', 'moved-away', 'm9']));
   });
-  it('the side index appears once the A to Z list is in view and scrolls to a letter', async () => {
+  it('the side index appears once Everyone reaches its top line and scrolls to a letter', async () => {
     await mount(MANY);
     await fireEvent(screen.getByTestId('lookup-everyone'), 'layout', { nativeEvent: { layout: { y: 600, height: 20 } } });
     await fireEvent(screen.getByTestId('lookup-letter-B'), 'layout', { nativeEvent: { layout: { y: 140, height: 120 } } });
+    expect(screen.queryByTestId('lookup-index')).toBeNull(); // not over the header, search or chips
     await fireEvent.scroll(screen.getByTestId('lookup-scroll'), { nativeEvent: { contentOffset: { y: 600 } } });
     const scrollTo = (ScrollView.prototype as unknown as { scrollTo: jest.Mock }).scrollTo;
     await fireEvent.press(screen.getByTestId('lookup-index-B'));
