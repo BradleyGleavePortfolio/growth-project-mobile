@@ -31,7 +31,6 @@ type Props = { navigation: NativeStackNavigationProp<ClientsStackParamList, 'Cli
 const FILTERS = Object.keys(FILTER_LABELS) as LookupFilter[];
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const ACTION_LABEL: Record<LookupAction, string> = { review: 'Review', reply: 'Reply', nudge: 'Nudge', hello: 'Say hello' };
-const NEED_ORDER: Record<LookupAction, number> = { review: 0, reply: 1, nudge: 2, hello: 3 };
 
 export default function ClientLookupScreen({ navigation }: Props) {
   const theme = useTheme();
@@ -124,17 +123,19 @@ export default function ClientLookupScreen({ navigation }: Props) {
     const name = rosterDisplayName(c);
     return (
       <View key={c.id} style={s.row}>
-        <HapticPressable intent="light" style={s.rowMain} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`Open ${name}, ${r.text}`} testID={`lookup-row-${c.id}`}>
-          {avatar(c, 40)}
-          <View style={s.mid}>
-            <Text style={s.name} numberOfLines={1}>{name}</Text>
-            <View style={s.reasonRow}>
-              {r.ok ? <View style={s.dot} /> : null}
-              <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={1}>{r.text}</Text>
+        <View style={s.mid}>
+          <HapticPressable intent="light" style={s.rowMain} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`Open ${name}, ${r.text}`} testID={`lookup-row-${c.id}`}>
+            {avatar(c, 40)}
+            <View style={s.mid}>
+              <Text style={s.name} numberOfLines={1}>{name}</Text>
+              <View style={s.reasonRow}>
+                {r.ok ? <View style={s.dot} /> : null}
+                <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={1}>{r.text}</Text>
+              </View>
             </View>
-          </View>
-          {trailing ? null : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
-        </HapticPressable>
+            {trailing ? null : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
+          </HapticPressable>
+        </View>
         {trailing}
       </View>
     );
@@ -178,8 +179,8 @@ export default function ClientLookupScreen({ navigation }: Props) {
   else if (loadError && roster.length === 0) {
     body = <QuietError message={loadError} onRetry={() => coachId && loadClients(coachId, filterStatus)} testID="lookup-error" />;
   } else if (!searchFirst) {
-    const rows = roster.map((c) => ({ c, r: lookupReason(c, unread, 'needs') }));
-    rows.sort((a, b) => (a.r.action ? NEED_ORDER[a.r.action] : 9) - (b.r.action ? NEED_ORDER[b.r.action] : 9));
+    // Mockup 1's order: last logged first (sortRoster 'recent').
+    const rows = sortRoster(roster, 'recent').map((c) => ({ c, r: lookupReason(c, unread, 'needs') }));
     const needs = rows.filter((x) => x.r.action).length;
     body = (
       <>

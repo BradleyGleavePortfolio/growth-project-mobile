@@ -6,7 +6,7 @@ import React from 'react';
 import fs from 'fs';
 import path from 'path';
 import { ScrollView } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockGetClients = jest.fn();
 const mockUnread = jest.fn();
@@ -51,7 +51,7 @@ const nav = { navigate, addListener: () => () => undefined } as never;
 async function mount(rows: ReturnType<typeof wire>[], unread: Record<string, number> = {}) {
   mockGetClients.mockImplementation(async (status: string) => ({ data: status === 'archived' ? [wire('z1', 'Zed Old')] : rows }));
   mockUnread.mockResolvedValue({ data: { total: 0, by_client: unread } });
-  render(<ClientLookupScreen navigation={nav} />);
+  await render(<ClientLookupScreen navigation={nav} />);
   await waitFor(() => expect(screen.getByTestId('lookup-count')).toBeTruthy());
 }
 
@@ -103,18 +103,18 @@ describe('UI-4 Needs you (under 15 clients)', () => {
   });
   it('every button opens a real screen', async () => {
     await mount(UNDER_15);
-    fireEvent.press(screen.getByTestId('lookup-act-c1'));
+    await fireEvent.press(screen.getByTestId('lookup-act-c1'));
     expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'c1', clientName: 'Maya Brooks' });
-    fireEvent.press(screen.getByTestId('lookup-act-c3'));
+    await fireEvent.press(screen.getByTestId('lookup-act-c3'));
     expect(navigate).toHaveBeenLastCalledWith('ClientMessages', { clientId: 'c3', clientName: 'Priya Nair' });
-    fireEvent.press(screen.getByTestId('lookup-row-c2'));
+    await fireEvent.press(screen.getByTestId('lookup-row-c2'));
     expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'c2', clientName: 'Theo Grant' });
-    fireEvent.press(screen.getByTestId('lookup-share-code'));
+    await fireEvent.press(screen.getByTestId('lookup-share-code'));
     expect(navigate).toHaveBeenLastCalledWith('InviteCodes');
-    fireEvent.press(screen.getByTestId('lookup-invite'));
+    await fireEvent.press(screen.getByTestId('lookup-invite'));
     expect(navigate).toHaveBeenLastCalledWith('InviteCodes');
-    fireEvent.press(screen.getByTestId('lookup-archived-link'));
-    await waitFor(() => expect(mockGetClients).toHaveBeenCalledWith('archived', undefined, 50));
+    await fireEvent.press(screen.getByTestId('lookup-archived-link'));
+    await waitFor(() => expect(screen.getByText('1 archived client')).toBeTruthy());
   });
 });
 
@@ -132,24 +132,24 @@ describe('UI-4 Search first (15 or more)', () => {
   });
   it('"quiet ben" finds Ben Carter, and a chip narrows the list', async () => {
     await mount(MANY);
-    fireEvent.changeText(screen.getByTestId('lookup-search'), 'quiet ben');
+    await fireEvent.changeText(screen.getByTestId('lookup-search'), 'quiet ben');
     expect(screen.getByText('1 result')).toBeTruthy();
     expect(screen.getByText('Ben Carter')).toBeTruthy();
-    fireEvent.changeText(screen.getByTestId('lookup-search'), '');
-    fireEvent.press(screen.getByTestId('lookup-chip-notSharing'));
+    await fireEvent.changeText(screen.getByTestId('lookup-search'), '');
+    await fireEvent.press(screen.getByTestId('lookup-chip-notSharing'));
     expect(screen.getByText('1 result')).toBeTruthy();
     expect(screen.getByText('Ava Price')).toBeTruthy();
   });
   it('message and bell open the thread and the nudge form; a sent nudge gives the success haptic', async () => {
     mockSendNudge.mockResolvedValue({});
     await mount(MANY);
-    fireEvent.changeText(screen.getByTestId('lookup-search'), 'ben');
-    fireEvent.press(screen.getByTestId('lookup-message-m2'));
+    await fireEvent.changeText(screen.getByTestId('lookup-search'), 'ben');
+    await fireEvent.press(screen.getByTestId('lookup-message-m2'));
     expect(navigate).toHaveBeenLastCalledWith('ClientMessages', { clientId: 'm2', clientName: 'Ben Carter' });
-    fireEvent.press(screen.getByTestId('lookup-nudge-m2'));
-    fireEvent.changeText(screen.getByPlaceholderText('e.g. Great job today'), 'Checking in');
-    fireEvent.changeText(screen.getByPlaceholderText('Write a short message...'), 'How is the week going');
-    await act(async () => fireEvent.press(screen.getByLabelText('Send nudge')));
+    await fireEvent.press(screen.getByTestId('lookup-nudge-m2'));
+    await fireEvent.changeText(screen.getByPlaceholderText('e.g. Great job today'), 'Checking in');
+    await fireEvent.changeText(screen.getByPlaceholderText('Write a short message...'), 'How is the week going');
+    await fireEvent.press(screen.getByLabelText('Send nudge'));
     expect(mockSendNudge).toHaveBeenCalledWith('m2', { title: 'Checking in', body: 'How is the week going' });
     expect(mockHaptic.success).toHaveBeenCalled();
   });
@@ -159,17 +159,17 @@ describe('UI-4 Search first (15 or more)', () => {
     await waitFor(() => expect(screen.getByText('Opened recently')).toBeTruthy());
     expect(screen.getAllByText('Maya Brooks').length).toBe(2);
     expect(screen.queryByTestId('lookup-row-moved-away')).toBeNull();
-    fireEvent.press(screen.getByTestId('lookup-az-m0'));
+    await fireEvent.press(screen.getByTestId('lookup-az-m0'));
     expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'm0', clientName: 'Ana Lopez' });
     await waitFor(() => expect(JSON.parse(mockCache.get('coach_lookup_recent:coach-1') ?? '[]')).toEqual(['m0', 'moved-away', 'm9']));
   });
   it('the side index appears once the A to Z list is in view and scrolls to a letter', async () => {
     await mount(MANY);
-    fireEvent(screen.getByTestId('lookup-everyone'), 'layout', { nativeEvent: { layout: { y: 600, height: 20 } } });
-    fireEvent(screen.getByTestId('lookup-letter-B'), 'layout', { nativeEvent: { layout: { y: 140, height: 120 } } });
-    fireEvent.scroll(screen.getByTestId('lookup-scroll'), { nativeEvent: { contentOffset: { y: 600 } } });
+    await fireEvent(screen.getByTestId('lookup-everyone'), 'layout', { nativeEvent: { layout: { y: 600, height: 20 } } });
+    await fireEvent(screen.getByTestId('lookup-letter-B'), 'layout', { nativeEvent: { layout: { y: 140, height: 120 } } });
+    await fireEvent.scroll(screen.getByTestId('lookup-scroll'), { nativeEvent: { contentOffset: { y: 600 } } });
     const scrollTo = (ScrollView.prototype as unknown as { scrollTo: jest.Mock }).scrollTo;
-    fireEvent.press(screen.getByTestId('lookup-index-B'));
+    await fireEvent.press(screen.getByTestId('lookup-index-B'));
     expect(scrollTo).toHaveBeenCalled();
   });
 });
