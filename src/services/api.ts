@@ -745,6 +745,10 @@ export const logApi = {
     // Idempotency key from the offline queue so a flush retry doesn't create
     // a duplicate LoggedFoodEntry. Optional — direct (non-queued) logs omit it.
     client_uuid?: string;
+    // FOODLINK: the plan meal (DailyMealPlanSlot id) this food was logged for, and the coachless usual
+    // day's mark. Sent only through logSubmit's planLink(), i.e. only with featureFlags.foodPlanChecklist on.
+    plan_slot_id?: string;
+    fills_usual_meal?: boolean;
     // Clinic tutorial: a 2xx food log is the real "first meal" action. The
     // response passes through untouched; a failure emits nothing.
   }) => withTutorialSignal(api.post('/log/food', data), 'meal_logged'),
