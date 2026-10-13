@@ -138,6 +138,18 @@ describe('UI-2 roster section', () => {
     expect(mockHaptics.selection).toHaveBeenCalledTimes(2);
   });
 
+  it('a lone chip is a heading in the same pill, never a button that does nothing', async () => {
+    mockOverview.mockResolvedValue({ data: { ...overview, at_risk_count: 0, win_streak_count: 0 } });
+    sources.atRisk.mockResolvedValue([]);
+    rosterSources.winStreaks.mockResolvedValue([]);
+    const v = await renderHome();
+    const chip = v.getByTestId('coach-home-v11-chip-steady');
+    expect(chip.props.accessibilityRole).toBe('header');
+    expect(chip.props.accessibilityLabel).toBe('Steady, 5');
+    expect(v.queryByTestId('coach-home-v11-chip-needs')).toBeNull();
+    expect(v.getByTestId('coach-home-v11-wall')).toBeTruthy();
+  });
+
   it('leaves the wall and the Steady chip out when the roster does not load', async () => {
     rosterSources.clients.mockRejectedValue(new Error('offline'));
     const v = await renderHome();
