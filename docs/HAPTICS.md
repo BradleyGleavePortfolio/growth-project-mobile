@@ -65,6 +65,8 @@ When the toggle changes:
 | `EditProfileScreen` | `warning()` | DOB / weight validation error |
 | `EditProfileScreen` | `success()` | Profile saved successfully |
 | `EditProfileScreen` | `error()` | Profile save API failure |
+| `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
+| `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
 
 ## Architecture
 

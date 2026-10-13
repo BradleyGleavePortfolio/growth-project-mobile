@@ -385,6 +385,12 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
   mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
+  // UI-1 (owner 10-09, V1_1_UI_SPEC): the rings and tiles client Home. Off in
+  // every eas.json profile until the owner switches it on in its own PR; off
+  // renders today's Home unchanged.
+  //
+  // env: EXPO_PUBLIC_FF_CLIENT_HOME_RINGS
+  clientHomeRings: readFlag('EXPO_PUBLIC_FF_CLIENT_HOME_RINGS', false),
   // ─── Roman P3 — backend-authority gates ──────────────────────────────────
   // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
   // expose authoritatively, so each is held behind its own backend-live gate
