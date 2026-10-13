@@ -4,7 +4,7 @@
  * the server flag coach_payment_actions is on. `children` (today's nudge form) render inside this
  * Modal so "Send nudge" opens over the sheet and returns to it.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
@@ -33,7 +33,8 @@ type Props = {
   children?: React.ReactNode;
 };
 
-type Load = { state: 'loading' } | { state: 'error' } | { state: 'ready'; summary: unknown; checkIns: unknown };
+/** Each answer carries the client it was read for, so it is drawn only under that client's name. */
+type Load = { id: string; state: 'loading' | 'error' } | { id: string; state: 'ready'; summary: unknown; checkIns: unknown };
 const LOAD_FAILED = 'Could not load this client. Please try again.';
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
@@ -44,27 +45,34 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
   const insets = useScreenInsets();
   const payments = useFeatureFlags().flags.coach_payment_actions === true;
   const target = useCurrentMacrosForClient(client?.id);
-  const [load, setLoad] = useState<Load>({ state: 'loading' });
+  const [load, setLoad] = useState<Load | null>(null);
+  // Only the newest read for the open client writes: closing or opening another client drops a late answer.
+  const seq = useRef(0);
 
   const fetchPeek = useCallback(async (id: string) => {
-    setLoad({ state: 'loading' });
+    const mine = ++seq.current;
+    setLoad({ id, state: 'loading' });
     try {
       const [summary, checkIns] = await Promise.all([coachApi.getClientSummary(id), coachApi.getClientCheckIns(id, { limit: 1 })]);
       if (obj(summary?.data).error) throw new Error('not found');
-      setLoad({ state: 'ready', summary: summary?.data, checkIns: checkIns?.data });
+      if (mine === seq.current) setLoad({ id, state: 'ready', summary: summary?.data, checkIns: checkIns?.data });
     } catch {
-      setLoad({ state: 'error' });
+      if (mine === seq.current) setLoad({ id, state: 'error' });
     }
   }, []);
+  const id = client?.id;
   useEffect(() => {
-    if (client) void fetchPeek(client.id);
-  }, [client, fetchPeek]);
+    if (!id) return undefined;
+    void fetchPeek(id);
+    return () => { seq.current += 1; };
+  }, [id, fetchPeek]);
 
   if (!client) return null;
+  const own = load?.id === client.id ? load : null;
   const first = firstName(client);
   const status = peekStatusLine(client);
-  const slices: PeekSlices | null = load.state === 'ready'
-    ? peekSlices(client, load.summary, load.checkIns, coachId, target.isSuccess ? target.data : null)
+  const slices: PeekSlices | null = own?.state === 'ready'
+    ? peekSlices(client, own.summary, own.checkIns, coachId, target.isSuccess ? target.data : null)
     : null;
   const open = (t: PeekTarget) => onOpen(client, t);
   const chips: Array<[string, PeekTarget]> = [
@@ -90,7 +98,7 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
     <Modal visible transparent animationType="slide" onRequestClose={onClose} testID="peek-sheet">
       <View style={s.scrim}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" testID="peek-scrim" />
-        <View style={[s.sheet, { paddingBottom: 24 + insets.bottom }]} accessibilityViewIsModal>
+        <View style={[s.sheet, { paddingBottom: 20 + insets.bottom }]} accessibilityViewIsModal>
           <View style={s.grab} />
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
             <View style={s.head}>
@@ -109,8 +117,8 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
                 <Text style={[s.small, s.statusText]}>{status.text}</Text>
               </View>
             ) : null}
-            {load.state === 'loading' ? <QuietLoading label="Loading clients" rows={4} testID="peek-loading" /> : null}
-            {load.state === 'error' ? <QuietError message={LOAD_FAILED} onRetry={() => void fetchPeek(client.id)} /> : null}
+            {!own || own.state === 'loading' ? <QuietLoading label="Loading clients" rows={4} testID="peek-loading" /> : null}
+            {own?.state === 'error' ? <QuietError message={LOAD_FAILED} onRetry={() => void fetchPeek(client.id)} /> : null}
             {slices ? (
               <View style={s.slices}>
                 {slice('checkins', 'clipboard-outline', 'Check-ins', slices.checkIn, slices.checkIn.hasOne ? (
@@ -137,8 +145,8 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
             </View>
             <View style={s.chips}>
               {chips.map(([label, t]) => (
-                <HapticPressable key={label} intent="light" style={s.chip} onPress={() => open(t)} accessibilityRole="button" accessibilityLabel={label} testID={`peek-chip-${label}`}>
-                  <Text style={s.chipText}>{label}</Text>
+                <HapticPressable key={label} intent="light" style={s.chipTarget} onPress={() => open(t)} accessibilityRole="button" accessibilityLabel={label} testID={`peek-chip-${label}`}>
+                  <View style={s.chip}><Text style={s.chipText}>{label}</Text></View>
                 </HapticPressable>
               ))}
             </View>
@@ -179,7 +187,10 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     primaryText: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, textAlign: 'center', color: sem.textOnAccent },
     outline: { minHeight: 48, borderRadius: radius.button, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
     outlineText: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, textAlign: 'center', color: colors.primary },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+    // Each chip is a 44 pt target: the mockup's 36 pt pill and 4 pt above and below it. The targets meet with no row
+    // gap, so the pills keep their 8 pt gap at any text size, 12 pt above, and (with the sheet's 20) 24 below.
+    chips: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, marginTop: 8 },
+    chipTarget: { minHeight: layout.touchMin, paddingVertical: 4, justifyContent: 'center' },
     chip: { minHeight: 36, paddingHorizontal: 12, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: sem.border, backgroundColor: sem.bgSurface },
     chipText: { ...typography.bodySmall, fontSize: 13, fontFamily: 'Inter_500Medium', color: colors.textPrimary },
   });

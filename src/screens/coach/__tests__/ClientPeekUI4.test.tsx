@@ -3,7 +3,8 @@
  * does not share reads "Not shared by <first name>", and Payments shows only while coach_payment_actions is on.
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockSummary = jest.fn();
 const mockCheckIns = jest.fn();
@@ -138,6 +139,62 @@ describe('UI-4 peek sheet', () => {
     expect(screen.getByText('Could not load this client. Please try again.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('peek-retry'));
     await waitFor(() => expect(screen.getByText(WORKOUT)).toBeTruthy());
+  });
+
+  it("one client's answer never shows under another client's name, early or late", async () => {
+    const later = () => {
+      let settle!: { resolve: (v: unknown) => void; reject: (e: unknown) => void };
+      const p = new Promise((resolve, reject) => { settle = { resolve, reject }; });
+      return { p, ...settle };
+    };
+    const theo = { ...client(), id: 'c2', firstName: 'Theo', lastName: 'Grant' } as unknown as RosterClient;
+    const theoSummary = summary();
+    theoSummary.data.today.total_calories = 2210;
+    const MAYA = ['Today: energy 2 of 5, knee tight', '1,420 of 1,900 kcal, protein 96 g'];
+    const THEO = ['Today: energy 4 of 5, felt strong', '2,210 of 1,900 kcal, protein 96 g'];
+    mockCheckIns.mockImplementation((id: string) => Promise.resolve({
+      data: [id === 'c2' ? { id: 'k2', date: `${day(0)}T00:00:00.000Z`, energy: 4, notes: 'felt strong' } : { id: 'k1', date: `${day(0)}T00:00:00.000Z`, energy: 2, notes: 'knee tight' }],
+    }));
+    const sheet = (c: RosterClient | null) => <ClientPeekSheet client={c} coachId="coach-1" onClose={onClose} onOpen={onOpen} onNudge={onNudge} />;
+    const showsOnly = (mine: string[], other: string[]) => {
+      for (const t of mine) expect(screen.getByText(t)).toBeTruthy();
+      for (const t of other) expect(screen.queryByText(t)).toBeNull();
+    };
+    const { rerender } = await render(sheet(client()));
+    await waitFor(() => showsOnly(MAYA, THEO));
+
+    // Maya has loaded; the coach closes her and opens Theo while his read is still on its way.
+    const theoRead = later();
+    mockSummary.mockImplementation((id: string) => (id === 'c2' ? theoRead.p : Promise.resolve(summary())));
+    await rerender(sheet(null));
+    await rerender(sheet(theo));
+    expect(screen.getByText('Theo Grant')).toBeTruthy();
+    expect(screen.getByText('Loading')).toBeTruthy();
+    showsOnly([], MAYA);
+    await act(async () => { theoRead.resolve(theoSummary); });
+    await waitFor(() => showsOnly(THEO, MAYA));
+
+    // Maya's slow read lands after the coach has moved on to Theo, as an answer and as a failure.
+    for (const late of ['answer', 'failure'] as const) {
+      const mayaRead = later();
+      mockSummary.mockImplementation((id: string) => (id === 'c1' ? mayaRead.p : Promise.resolve(theoSummary)));
+      await rerender(sheet(null));
+      await rerender(sheet(client()));
+      await rerender(sheet(null));
+      await rerender(sheet(theo));
+      await waitFor(() => showsOnly(THEO, MAYA));
+      await act(async () => { if (late === 'answer') mayaRead.resolve(summary()); else mayaRead.reject(new Error('offline')); });
+      showsOnly(THEO, MAYA);
+      expect(screen.queryByText('Could not load this client. Please try again.')).toBeNull();
+    }
+  });
+
+  it("every chip is a 44 pt touch target around the mockup's 36 pt pill", async () => {
+    mockFlags = { coach_payment_actions: true };
+    await mount();
+    for (const label of ['Food log', 'Meal plan', 'Workouts', 'Payments', 'Full profile']) {
+      expect(StyleSheet.flatten(screen.getByTestId(`peek-chip-${label}`).props.style).minHeight).toBeGreaterThanOrEqual(44);
+    }
   });
 
   it('reads weigh-ins and targets the way the mockup words them', () => {
