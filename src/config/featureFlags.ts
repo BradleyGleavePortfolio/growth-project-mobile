@@ -67,6 +67,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH: process.env.EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH,
   EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE,
   EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER: process.env.EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER,
+  EXPO_PUBLIC_FF_TEAM_MODE: process.env.EXPO_PUBLIC_FF_TEAM_MODE,
   EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF: process.env.EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF,
   EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS: process.env.EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS,
   EXPO_PUBLIC_NOTIFICATIONS_MOCK: process.env.EXPO_PUBLIC_NOTIFICATIONS_MOCK,
@@ -85,6 +86,8 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 
 /** Centralised, typed flag map. Add new flags here as new surfaces land. */
 export const featureFlags = {
+  /** Team management stays hidden for launch, including in development. */
+  teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),
   /**
    * UI-2 (V1_1_UI_SPEC, owner 10-09 "render 2"): the coach Home with dials, Roman's drafts and client tiles on
    * the Overview tab, Overview as the landing tab, and a Money tab. OFF in every EAS profile until the owner

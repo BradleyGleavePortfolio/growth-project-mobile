@@ -4,6 +4,7 @@ const mockFlags = {
   coachCommunity: true,
   clientCalendar: true,
   coachBrief: true,
+  romanChat: false,
 };
 jest.mock('../../config/featureFlags', () => ({
   get featureFlags() {
@@ -59,10 +60,27 @@ describe('pushTapRouter', () => {
     mockFlags.communityEvents = true;
     mockFlags.coachCommunity = true;
     mockFlags.clientCalendar = true;
+    mockFlags.romanChat = false;
     mockHidden = false;
   });
 
   describe('client nested destinations (real tab roots)', () => {
+    it.each([true, false])('legacy Guidance notifications redirect with Roman=%s', (roman) => {
+      mockFlags.romanChat = roman;
+      const nav = makeNav(CLIENT_TABS);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('AIGuide');
+      expect(routeInAppNotification('AIGuide')).toBe(true);
+      expect(nav.navigate).toHaveBeenCalledTimes(2);
+      expect(nav.navigate).toHaveBeenNthCalledWith(1, 'MoreTab', {
+        screen: roman ? 'RomanChat' : 'MoreIndex', params: undefined, initial: false,
+      });
+      expect(nav.navigate).toHaveBeenNthCalledWith(2, 'MoreTab', {
+        screen: roman ? 'RomanChat' : 'MoreIndex', params: undefined, initial: false,
+      });
+    });
+
     it('Messages -> Home stack', () => {
       const nav = makeNav(CLIENT_TABS);
       attachPushNavigator(nav);

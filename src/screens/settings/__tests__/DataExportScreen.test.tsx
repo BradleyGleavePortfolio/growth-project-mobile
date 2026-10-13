@@ -162,6 +162,9 @@ describe("DataExportScreen", () => {
     expect(getByText(/Weight, food, and water logs/)).toBeTruthy();
     expect(getByText(/Coaching messages you sent/)).toBeTruthy();
     expect(getByText(/Audit log entries about your account/)).toBeTruthy();
+    expect(getByText("Bloodwork panels and results")).toBeTruthy();
+    expect(getByText("Onboarding answers")).toBeTruthy();
+    expect(getByText("Calorie and macro targets")).toBeTruthy();
     // C-636-2 / backend archive inventory: recipes, Roman chats, AI consent.
     expect(getByText("Recipes you created and recipes you saved")).toBeTruthy();
     expect(getByText("Your Roman chats you have not deleted")).toBeTruthy();
