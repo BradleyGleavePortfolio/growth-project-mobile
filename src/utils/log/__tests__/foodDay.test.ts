@@ -1,4 +1,4 @@
-import { buildPlanDay, extrasMeal, joinNames, nextSlot } from '../foodDay';
+import { buildPlanDay, joinNames, nextSlot } from '../foodDay';
 import type { DailyMealPlan, SlotLabel } from '../../../api/mealTemplatesApi';
 import type { FoodLog } from '../../../types';
 
@@ -41,34 +41,23 @@ describe('buildPlanDay', () => {
     expect(nextSlot(day)?.name).toBe('Banana');
   });
 
-  it('names a changed amount, or the foods eaten instead, as the change', () => {
+  it('names a changed amount, or the foods logged through Something else, as the change', () => {
     const amount = buildPlanDay(plan, [log('1', 'breakfast', 'Overnight oats', { quantity: 1.5 })]);
     expect(amount.slots[0].status).toBe('Logged with a change: 1.5 servings');
-    const swap = buildPlanDay(plan, [log('1', 'dinner', 'Pasta'), log('2', 'dinner', 'Salad')]);
+    const swap = buildPlanDay(plan, [log('1', 'dinner', 'Pasta'), log('2', 'dinner', 'Salad')], { 1: 'd', 2: 'd' });
     expect(swap.slots[3].status).toBe('Logged with a change: Pasta and Salad');
     expect(swap.slots[3].logs.map((l) => l.id)).toEqual(['1', '2']);
     expect(nextSlot(swap)?.name).toBe('Overnight oats');
   });
 
-  it('keeps foods beside a logged plan meal, or in a meal the plan does not have, as extras', () => {
+  it('keeps every food not logged through Something else for an open plan meal as an extra', () => {
     const lunch = buildPlanDay(plan, [log('1', 'lunch', 'Chicken bowl'), log('2', 'lunch', 'Avocado')]);
     expect(lunch.slots[2].status).toBe('Logged as planned');
     expect(lunch.extras.map((l) => l.foodName)).toEqual(['Avocado']);
-    const noSnackPlan = { ...plan, slots: plan.slots.filter((x) => x.slot_label !== 'preworkout') } as DailyMealPlan;
-    const day = buildPlanDay(noSnackPlan, [log('1', 'snack', 'Coffee with milk')]);
-    expect(day.extras.map((l) => l.foodName)).toEqual(['Coffee with milk']);
-    expect(day.slots.every((x) => x.logs.length === 0)).toBe(true);
-  });
-
-  it('files an extra under a meal with no plan meal open, so the next meal stays open', () => {
-    expect(extrasMeal(buildPlanDay(plan, []))).toBeNull();
-    const done = [log('1', 'breakfast', 'Overnight oats'), log('2', 'snack', 'Banana')];
-    expect(extrasMeal(buildPlanDay(plan, done))).toBe('breakfast');
-    const day = buildPlanDay(plan, [...done, log('3', 'breakfast', 'Coffee')]);
-    expect(nextSlot(day)?.key).toBe('l');
-    expect(day.extras.map((l) => l.foodName)).toEqual(['Coffee']);
-    const noLunch = { ...plan, slots: plan.slots.filter((x) => x.slot_label !== 'lunch') } as DailyMealPlan;
-    expect(extrasMeal(buildPlanDay(noLunch, []))).toBe('lunch');
+    // Every meal open. Toast was logged for breakfast through Something else, then moved to lunch.
+    const open = buildPlanDay(plan, [log('1', 'breakfast', 'Coffee'), log('2', 'lunch', 'Toast')], { 2: 'b' });
+    expect(open.extras.map((l) => l.foodName)).toEqual(['Coffee', 'Toast']);
+    expect(open.slots.every((x) => x.logs.length === 0)).toBe(true);
   });
 
   it('has no next meal once every meal is logged', () => {
