@@ -112,7 +112,8 @@ function refreshFoodLog() {
 
 type Phase = 'idle' | 'saving' | 'logged' | 'queued' | 'undoing';
 
-export default function LogPlannedMealButton({ meal, slot }: { meal: PlannedMeal; slot?: string | null }) {
+/** `planSlotId` (FOODLINK): the coach's plan meal, so the Food tab's checklist ticks that same meal. */
+export default function LogPlannedMealButton({ meal, slot, planSlotId }: { meal: PlannedMeal; slot?: string | null; planSlotId?: string }) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const name = meal.name.trim();
@@ -134,7 +135,7 @@ export default function LogPlannedMealButton({ meal, slot }: { meal: PlannedMeal
   const log = async (v: Values, t: MealType) => {
     setPhase('saving');
     setNote(null);
-    const args = { foodName: name, ...v, quantity: '1', unit: 'serving', date: getTodayString(), mealType: t };
+    const args = { foodName: name, ...v, quantity: '1', unit: 'serving', date: getTodayString(), mealType: t, link: { planSlotId } };
     try {
       const net = await NetInfo.fetch();
       if (!isEffectivelyOnline({ isOnline: !!net.isConnected, isInternetReachable: net.isInternetReachable })) {

@@ -1,7 +1,7 @@
 /**
  * The Food tab's day as a checklist (V1_1_UI_SPEC UI-3): the coach's plan meals in order, each one done
- * once the day's log has it. Pure: every meal, food and number comes from the plan read, the day's logs
- * and the client's own "Something else" taps; nothing is invented.
+ * once the day's log has it. Pure: every meal, food and number comes from the plan read and the day's logs,
+ * each carrying the plan meal it was logged for; nothing is invented.
  */
 import type { FoodLog, MealType } from '../../types';
 import type { DailyMealPlan, SlotLabel } from '../../api/mealTemplatesApi';
@@ -45,25 +45,20 @@ export function joinNames(names: string[]): string {
 
 const isPlainServing = (l: FoodLog) => l.quantity === 1 && l.unit === 'serving';
 
-/** `changes` maps a food log id to the plan meal (slot id) the client logged it for through "Something else". */
-export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[], changes: Record<string, string> = {}): FoodDay {
-  const left = [...logs];
+/**
+ * A plan meal's foods are the day's entries logged for it (`planSlotId`, FOODLINK: stored with the entry) that
+ * are still in its meal. One such food under the plan meal's own name at 1 serving is "Logged as planned".
+ * Every other food is an extra, whatever its name, so an extra can never tick a plan meal off.
+ */
+export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[]): FoodDay {
   const slots = [...plan.slots].sort((a, b) => RANK[a.slot_label] - RANK[b.slot_label] || a.order - b.order);
-  // A plan meal is logged when an entry under its own name is in its meal ("Ate it as planned").
-  const planned = slots.map((s) => {
-    const i = left.findIndex((l) => l.mealType === LOG_MEAL[s.slot_label] && same(l.foodName, s.meal_template.name));
-    return i >= 0 ? left.splice(i, 1)[0] : null;
-  });
-  // A food logged through "Something else" for an open plan meal, and still in its meal, stands in for it (a
-  // change). Every other food is an extra, not in the plan, even while its meal's plan meal is open.
-  const claimed = slots.map((s, i) =>
-    (planned[i] ? [] : left.filter((l) => changes[l.id] === s.id && l.mealType === LOG_MEAL[s.slot_label])));
+  const linked = slots.map((s) => logs.filter((l) => l.planSlotId === s.id && l.mealType === LOG_MEAL[s.slot_label]));
   return {
-    extras: left.filter((l) => !claimed.some((c) => c.includes(l))),
+    extras: logs.filter((l) => !linked.some((c) => c.includes(l))),
     slots: slots.map((s, i) => {
       const t = s.meal_template;
-      const p = planned[i];
-      const mine = p ? [p] : claimed[i];
+      const mine = linked[i];
+      const p = mine.length === 1 && same(mine[0].foodName, t.name) ? mine[0] : null;
       const status = p
         ? isPlainServing(p) ? 'Logged as planned' : `Logged with a change: ${formatPortion(p.quantity, p.unit)}`
         : mine.length > 0 ? `Logged with a change: ${joinNames(mine.map((l) => l.foodName))}` : null;

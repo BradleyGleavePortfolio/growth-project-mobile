@@ -27,6 +27,12 @@ jest.mock('../../../store/clientStore', () => ({
 }));
 jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-1' }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
+const mockFlags = { foodPlanChecklist: false };
+jest.mock('../../../config/featureFlags', () => {
+  const real = jest.requireActual('../../../config/featureFlags');
+  // A Proxy (as in CreditPackCheckoutScreen.ExternalLink.test) so each test's mockFlags value is read live.
+  return { ...real, featureFlags: new Proxy(real.featureFlags, { get: (t, k) => (k in mockFlags ? mockFlags[k as 'foodPlanChecklist'] : (t as Record<string | symbol, unknown>)[k]) }) };
+});
 jest.mock('../../../utils/date', () => ({
   ...jest.requireActual('../../../utils/date'), getTodayString: () => '2026-10-07',
 }));
@@ -146,6 +152,21 @@ describe('LogPlannedMealButton', () => {
     await screen.findByText('The service could not be reached. Check your connection and try again.');
     await waitFor(() => expect(screen.getByText('Log this meal')).not.toBeDisabled());
     expect(screen.queryByText(/Added to today/)).toBeNull();
+  });
+
+  it('FOODLINK: names the plan meal on the entry only with the plan checklist flag on', async () => {
+    mockFlags.foodPlanChecklist = true;
+    const first = await render(<LogPlannedMealButton meal={bowl} slot="lunch" planSlotId="slot-l" />);
+    await fireEvent.press(screen.getByText('Log this meal'));
+    await screen.findByText("Added to today's lunch.");
+    expect(logApi.logFood).toHaveBeenLastCalledWith(expect.objectContaining({ meal_type: 'lunch', plan_slot_id: 'slot-l' }));
+    await first.unmount();
+
+    mockFlags.foodPlanChecklist = false;
+    await render(<LogPlannedMealButton meal={bowl} slot="lunch" planSlotId="slot-l" />);
+    await fireEvent.press(screen.getByText('Log this meal'));
+    await screen.findByText("Added to today's lunch.");
+    expect(jest.mocked(logApi.logFood).mock.calls[1][0]).not.toHaveProperty('plan_slot_id');
   });
 
   it('renders nothing for a planned row without a name', async () => {
