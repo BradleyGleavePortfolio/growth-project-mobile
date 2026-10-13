@@ -7,10 +7,14 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { RosterClient } from '../utils/coach/clientRoster';
 
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useIsFocused: () => true,
-}));
+jest.mock('@react-navigation/native', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  return {
+    ...jest.requireActual('@react-navigation/native'),
+    useIsFocused: () => true,
+    useFocusEffect: (cb: () => void) => R.useEffect(() => cb(), [cb]),
+  };
+});
 jest.mock('react-native-svg', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');

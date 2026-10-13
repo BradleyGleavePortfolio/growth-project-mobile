@@ -1,7 +1,8 @@
 /**
  * S-COACH — Home checklist: Get paid, first package, first client, first
  * client payment. Every tick comes from a live route through
- * loadSetupStatus (src/lib/coachSetup/setupStatus.ts):
+ * loadSetupStatus (src/lib/coachSetup/setupStatus.ts), read on focus by
+ * useSetupSnapshot (shared with the UI-2 zero-client Home):
  *   Get paid        GET /coach/connect/status (state === 'active')
  *   First package   GET /v1/coach/packages (a live, published package)
  *   First client    GET /coach/clients (a client has joined)
@@ -13,7 +14,7 @@
  * EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW). The card hides once all four are
  * done.
  */
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -21,7 +22,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
 import { radius, typography } from "../../../theme/tokens";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
@@ -29,7 +29,7 @@ import {
   loadSetupStatus,
   type SetupSnapshot,
 } from "../../../lib/coachSetup/setupStatus";
-import { describeError } from "../../../lib/coachSetup/errors";
+import { useSetupSnapshot } from "../../../lib/coachSetup/useSetupSnapshot";
 import SetupNotice from "./SetupNotice";
 
 export {
@@ -135,34 +135,11 @@ export default function CoachSetupChecklist({ onOpen }: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const user = useCurrentUser();
   const coachId = user?.id ?? null;
-  const [snap, setSnap] = useState<SetupSnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!coachId) return;
-    setLoading(true);
-    try {
-      setSnap(await loadSetupStatus(coachId));
-    } catch (err) {
-      // loadSetupStatus settles every read; this only catches a bug in it.
-      setSnap({
-        connect: null,
-        livePackageTitle: null,
-        hasClient: null,
-        paid: null,
-        sharedLink: false,
-        errors: [describeError(err, "check your setup")],
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [coachId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
+  const read = useMemo(
+    () => (coachId ? () => loadSetupStatus(coachId) : null),
+    [coachId],
   );
+  const { snap, loading, reload } = useSetupSnapshot(read);
 
   if (!snap) {
     return loading ? (
@@ -189,7 +166,7 @@ export default function CoachSetupChecklist({ onOpen }: Props) {
       {snap.errors.length > 0 ? (
         <SetupNotice
           error={snap.errors[0]}
-          onRetry={loading ? undefined : () => void load()}
+          onRetry={loading ? undefined : reload}
           testID="coach-setup-checklist-error"
         />
       ) : null}

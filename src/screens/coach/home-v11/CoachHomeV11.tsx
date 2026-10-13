@@ -25,8 +25,9 @@ import { AllClientsTile, BusinessTile, ClientTile, HomeDial, StepTile, type Dial
 import { useCoachHomeV11, type CoachHomeData } from './useCoachHomeV11';
 import { EmptyWall, FilterChips, SteadyWall } from './RosterParts';
 import { filterChips, loggedLine, steadyWall, streakLabel, type RosterFilter } from './rosterWall';
-import type { RosterSources } from './rosterSources';
-import { useRosterWall, useSetupSnapshot } from './useRosterWall';
+import { rosterSources as liveRosterSources, type RosterSources } from './rosterSources';
+import { useRosterWall } from './useRosterWall';
+import { useSetupSnapshot } from '../../../lib/coachSetup/useSetupSnapshot';
 import { PACKAGE_NEXT_LINE, setupDial, setupPlan, type SetupPlan } from './setupSteps';
 
 const TILE_GAP = 12;
@@ -80,7 +81,7 @@ export function homeDials(d: CoachHomeData, setup: SetupPlan | null = null): Dia
   return dials;
 }
 
-export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, onOpenSetup, sources, rosterSources }: Props) {
+export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, onOpenSetup, sources, rosterSources = liveRosterSources }: Props) {
   const { semanticColors: sc } = useTheme();
   const { width } = useWindowDimensions();
   const { data, reload, retryMonth, retryUrgent, retryDrafts } = useCoachHomeV11(sources);
@@ -91,7 +92,7 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
   const o = data.overview;
   const roster = o?.roster_size ?? 0;
   const zero = o !== null && roster === 0;
-  const { setup: setupSnap, reloadSetup } = useSetupSnapshot(zero, rosterSources);
+  const { snap: setupSnap, reload: reloadSetup } = useSetupSnapshot(zero ? rosterSources.setup : null);
   const plan = zero && setupSnap ? setupPlan(setupSnap) : null;
   const romanLine = plan?.packageNext ? PACKAGE_NEXT_LINE : null;
   const romanFont = useRomanVoiceFont();
@@ -184,7 +185,7 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
             ) : null}
             {onAskRoman ? (
               <TextLink label="Ask Roman" tone="accent" underline={false} align="start" size="small" testID="coach-home-v11-ask-roman"
-                onPress={() => { void HapticService.softImpact(); onAskRoman(); }} />
+                style={romanLine ? styles.underLine : undefined} onPress={() => { void HapticService.softImpact(); onAskRoman(); }} />
             ) : null}
           </View>
         </View>
@@ -287,6 +288,8 @@ const styles = StyleSheet.create({
   romanMarkLine: { height: 26 },
   // The mockup's Roman voice: serif italic 19/26.
   romanLine: { fontSize: 19, lineHeight: 26, letterSpacing: 0.2, marginBottom: 6 },
+  // Under Roman's line, "Ask Roman" starts on the line's edge (the mockup): this takes back the link's 4 pt side padding.
+  underLine: { marginStart: -4 },
   grow: { flex: 1, alignItems: 'flex-start' },
   wide: { alignSelf: 'stretch' },
   drafts: { minHeight: 44, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },

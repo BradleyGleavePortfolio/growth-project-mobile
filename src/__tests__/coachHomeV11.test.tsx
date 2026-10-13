@@ -6,13 +6,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({ navigate: mockNavigate }),
-  useIsFocused: () => mockFocused,
-}));
+jest.mock('@react-navigation/native', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  return {
+    ...jest.requireActual('@react-navigation/native'),
+    useNavigation: () => ({ navigate: mockNavigate }),
+    useIsFocused: () => mockFocused,
+    // Runs each time the screen comes into focus, as the real hook does.
+    useFocusEffect: (cb: () => void) => {
+      const focused = mockFocused;
+      R.useEffect(() => { if (focused) cb(); }, [cb, focused]);
+    },
+  };
+});
 let mockFocused = true;
 jest.mock('react-native-safe-area-context', () => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -131,6 +140,8 @@ describe('UI-2 coach Home, flag on', () => {
     const v = await renderHome();
     expect(v.queryByTestId('coach-home-v11-drafts')).toBeNull();
     expect(v.getByTestId('coach-home-v11-ask-roman')).toBeTruthy();
+    // No Roman line: the link keeps its own side padding.
+    expect(StyleSheet.flatten(v.getByTestId('coach-home-v11-ask-roman').props.style).marginStart).toBeUndefined();
   });
 
   it('opens Roman, the bell, a client, Clients and the Money tab', async () => {
@@ -160,6 +171,8 @@ describe('UI-2 coach Home, flag on', () => {
     expect(v.getByTestId('coach-home-v11-dial-clients').props.accessibilityLabel).toBe('Clients: 0 clients. None yet');
     expect(v.getByTestId('coach-home-v11-dial-earnings').props.accessibilityLabel).toMatch(/^Earnings: \$0(\.00)? this month\. \w+ so far$/);
     expect(v.getByTestId('coach-home-v11-roman-line').props.children).toBe(PACKAGE_NEXT);
+    // Under Roman's line, "Ask Roman" starts on the line's edge, as in the mockup (LOC C2).
+    expect(StyleSheet.flatten(v.getByTestId('coach-home-v11-ask-roman').props.style).marginStart).toBe(-4);
     expect(v.getByTestId('coach-home-v11-chip-setup').props.accessibilityLabel).toBe('Setup, 3');
     // The one Setup chip has nothing to switch to: a heading in the mockup's pill, never a button.
     expect(v.getByTestId('coach-home-v11-chip-setup').props.accessibilityRole).toBe('header');
