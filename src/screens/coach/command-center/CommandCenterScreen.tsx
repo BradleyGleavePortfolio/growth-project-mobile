@@ -33,6 +33,8 @@ import ActionQueueScreen from './ActionQueueScreen';
 import CoachHomeCards from './CoachHomeCards';
 import { coachHomeSources } from './coachHomeSources';
 import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
+import { featureFlags } from '../../../config/featureFlags';
+import CoachHomeV11 from '../home-v11/CoachHomeV11';
 
 export type CommandCenterTab =
   | 'overview'
@@ -100,6 +102,13 @@ export default function CommandCenterScreen({
   const openMoney = () =>
     navigation.navigate('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
   const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList' });
+  // UI-2: with the new Home on, Money is its own tab.
+  const openMoneyTab = () => navigation.navigate('MoneyStack', { screen: 'CoachMoney' });
+  const openDrafts = () => navigation.navigate('ClientsStack', { screen: 'PendingAiDrafts', initial: false });
+  const openNotifications = () => navigation.navigate('ClientsStack', { screen: 'NotificationCenter', initial: false });
+  const askRoman = featureFlags.romanChat
+    ? () => navigation.navigate('SettingsStack', { screen: 'RomanChat', initial: false })
+    : undefined;
   const openSafetyAlert = (item: ActionQueueItem) => {
     if (!isSafetyAlert(item)) return;
     navigation.navigate('ClientsStack', {
@@ -118,6 +127,19 @@ export default function CommandCenterScreen({
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
+        if (featureFlags.coachHomeV11) {
+          return (
+            <CoachHomeV11
+              onSelectClient={selectClient}
+              onOpenClients={openClients}
+              onOpenMoney={openMoneyTab}
+              onOpenDrafts={openDrafts}
+              onOpenNotifications={openNotifications}
+              onAskRoman={askRoman}
+              header={<CoachHomeCards />}
+            />
+          );
+        }
         return (
           <OverviewScreen
             onNavigateToAtRisk={() => setActiveTab('at-risk')}

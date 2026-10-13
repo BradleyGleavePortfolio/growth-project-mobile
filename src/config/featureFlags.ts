@@ -37,6 +37,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
+  EXPO_PUBLIC_FF_COACH_HOME_V11: process.env.EXPO_PUBLIC_FF_COACH_HOME_V11,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
   EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: process.env.EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE,
@@ -87,6 +88,14 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 export const featureFlags = {
   /** Team management stays hidden for launch, including in development. */
   teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),
+  /**
+   * UI-2 (V1_1_UI_SPEC, owner 10-09 "render 2"): the coach Home with dials, Roman's drafts and client tiles on
+   * the Overview tab, Overview as the landing tab, and a Money tab. OFF in every EAS profile until the owner
+   * switches it on; off renders today's Home and tabs unchanged.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_HOME_V11
+   */
+  coachHomeV11: readFlag('EXPO_PUBLIC_FF_COACH_HOME_V11', false),
 
   // ─── Bloodwork ────────────────────────────────────────────────────────────
   /**
