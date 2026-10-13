@@ -39,7 +39,7 @@ jest.mock('../../../services/api', () => ({
   logApi: { logFood: jest.fn().mockResolvedValue({ data: { id: 'entry-new' } }), updateEntry: jest.fn(), deleteEntry: jest.fn() },
 }));
 jest.mock('../../../services/foodLogQueue', () => ({ flush: jest.fn(), enqueue: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../../../services/foodLogSync', () => ({ notifyPendingFoodLogs: jest.fn(), syncFoodLogQueue: jest.fn() }));
+jest.mock('../../../services/foodLogSync', () => ({ ...jest.requireActual('../../../services/foodLogSync'), notifyPendingFoodLogs: jest.fn() }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../components/FoodImage', () => ({ __esModule: true, default: () => null }));
 

@@ -30,7 +30,8 @@ jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 const mockFlags = { foodPlanChecklist: false };
 jest.mock('../../../config/featureFlags', () => {
   const real = jest.requireActual('../../../config/featureFlags');
-  return { ...real, get featureFlags() { return { ...real.featureFlags, ...mockFlags }; } };
+  // A Proxy (as in CreditPackCheckoutScreen.ExternalLink.test) so each test's mockFlags value is read live.
+  return { ...real, featureFlags: new Proxy(real.featureFlags, { get: (t, k) => (k in mockFlags ? mockFlags[k as 'foodPlanChecklist'] : (t as Record<string | symbol, unknown>)[k]) }) };
 });
 jest.mock('../../../utils/date', () => ({
   ...jest.requireActual('../../../utils/date'), getTodayString: () => '2026-10-07',

@@ -10,7 +10,8 @@ import type { SearchResult } from '../types';
 const mockFlags = { foodPlanChecklist: true };
 jest.mock('../../../config/featureFlags', () => {
   const real = jest.requireActual('../../../config/featureFlags');
-  return { ...real, get featureFlags() { return { ...real.featureFlags, ...mockFlags }; } };
+  // A Proxy (as in CreditPackCheckoutScreen.ExternalLink.test) so each test's mockFlags value is read live.
+  return { ...real, featureFlags: new Proxy(real.featureFlags, { get: (t, k) => (k in mockFlags ? mockFlags[k as 'foodPlanChecklist'] : (t as Record<string | symbol, unknown>)[k]) }) };
 });
 jest.mock('../../../services/api', () => ({
   foodApi: { create: jest.fn().mockResolvedValue({ data: { id: 'food-new' } }) },
