@@ -56,6 +56,8 @@ interface Target {
    * opened by a push still reaches Settings, sign out and account deletion).
    */
   initial?: false;
+  /** Fixed params for a root-only target (merged over the push's own). */
+  params?: Record<string, string>;
 }
 
 type Resolver = () => Target | null;
@@ -102,6 +104,8 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
   // S-SCHED: coach booking pushes open the booking inbox.
   CoachBookingInbox: () => ({ root: 'ClientsStack', screen: 'CoachBookingInbox' }),
+  // B-R1F: a Roman safety alert push or inbox row opens Command Center > Actions.
+  CoachActionQueue: () => ({ root: 'CommandCenter', params: { tab: 'action-queue' } }),
   // The daily brief push (backend coach-brief.scheduler actionScreen).
   CoachBrief: () =>
     featureFlags.coachBrief
@@ -302,7 +306,7 @@ function deliver(
         ...(target.initial === false ? { initial: false } : {}),
       });
     } else {
-      nav.navigate(target.root, params);
+      nav.navigate(target.root, target.params ? { ...params, ...target.params } : params);
     }
     return true;
   } catch {
