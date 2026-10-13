@@ -7,6 +7,7 @@
   "build": {
     "development": {
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false"
       },
       "developmentClient": true,
@@ -26,6 +27,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "0",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
@@ -43,6 +45,7 @@
       "environment": "production",
       "prebuildCommand": "prebuild --no-install",
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "0",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
@@ -65,6 +68,7 @@
       "channel": "clinic",
       "environment": "production",
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
@@ -93,6 +97,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true"
