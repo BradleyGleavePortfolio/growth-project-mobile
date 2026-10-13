@@ -48,12 +48,12 @@ export function peekJoinedLine(c: RosterClient): string {
   return `${state}, joined ${MONTHS[m - 1]} ${d}`;
 }
 
-/** "Logged today. 2 check-ins waiting for you." Null when the client shares nothing (each slice says so). */
+/** "Logged today. 2 check-ins waiting for you." Null when the client shares or logged nothing (each slice says so). */
 export function peekStatusLine(c: RosterClient, today: Date = new Date()): { text: string; ok: boolean } | null {
   const a = c.activity;
-  if (!a?.shared) return null;
+  const n = a?.checkInsToReview ?? 0;
+  if (!a?.shared || (!a.lastActiveOn && n === 0)) return null; // the slices already say so
   const line = a.lastActiveOn ? rosterActivityLine(c, today) : { text: NOTHING, tone: 'quiet' as const };
-  const n = a.checkInsToReview ?? 0;
   const waiting = n > 0 ? ` ${n} ${n === 1 ? 'check-in' : 'check-ins'} waiting for you.` : '';
   return { text: `${line.text}.${waiting}`, ok: line.tone === 'ok' };
 }
