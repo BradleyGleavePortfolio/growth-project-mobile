@@ -154,13 +154,16 @@ function usualMeal(meal: MealType, newestFirst: PastDay[]): Usual | null {
  * "Your usual day" for a client with no coach: each meal with a usual version (usualMeal), and each meal
  * logged on the shown day. A logged meal counts the foods of its usual version, or every food when none
  * of them is; its other foods are extras. A usual meal still to eat can be repeated with the same portions.
+ * With no usual version of any meal there is no usual day (no slots), and the classic log shows.
  */
 export function buildUsualDay(past: PastDay[], logs: FoodLog[]): FoodDay {
   const newestFirst = [...past].sort((a, b) => (a.date < b.date ? 1 : -1));
   const slots: DaySlot[] = [];
   const extras: FoodLog[] = [];
+  let found = false;
   for (const meal of DAY_MEALS) {
     const usual = usualMeal(meal, newestFirst);
+    found = found || !!usual;
     const mine = logs.filter((l) => l.mealType === meal);
     const inUsual = mine.filter((l) => usual?.meal.entries.some((x) => x.foodItemId === l.foodItemId || same(x.name, l.foodName)));
     const counted = inUsual.length > 0 ? inUsual : mine;
@@ -179,7 +182,7 @@ export function buildUsualDay(past: PastDay[], logs: FoodLog[]): FoodDay {
       });
     }
   }
-  return { kind: 'usual', slots, extras };
+  return { kind: 'usual', slots: found ? slots : [], extras: found ? extras : [] };
 }
 
 /** "Tuesday" for a YYYY-MM-DD day. */
