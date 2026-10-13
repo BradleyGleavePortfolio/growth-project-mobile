@@ -206,6 +206,41 @@ describe('UI-2 roster reads', () => {
     read.mockRestore();
     useCoachStore.getState().reset();
   });
+
+  it("a previous coach's late roster never reaches the next coach's store, whether the next read fails or loads", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useCoachStore } = require('../store/coachStore') as typeof import('../store/coachStore');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { coachApi } = require('../services/api') as typeof import('../services/api');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { rosterSources: real } = require('../screens/coach/home-v11/rosterSources') as typeof import('../screens/coach/home-v11/rosterSources');
+    const store = useCoachStore.getState;
+    let answerA: (v: unknown) => void = () => undefined;
+    let failA: (e: unknown) => void = () => undefined;
+    const read = jest.spyOn(coachApi, 'getClients')
+      .mockImplementationOnce((() => new Promise((ok) => { answerA = ok; })) as never)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce((() => new Promise((_ok, no) => { failA = no; })) as never)
+      .mockResolvedValueOnce({ data: [{ id: 'b-client-1', name: 'Client B' }] } as never);
+    // Coach A's read is still out when A signs out (reset), and coach B's first read fails.
+    const lateA = store().loadClients('coach-a', 'active', { silent: true });
+    store().reset();
+    await expect(real.clients()).rejects.toThrow();
+    answerA({ data: [{ id: 'a-client-1', name: 'Client A' }] });
+    await lateA;
+    expect(store().clients).toEqual([]);
+    expect(store().loadError).not.toBeNull();
+    // A late failure from before a sign-out does not mark B's loaded roster as failed.
+    const lateFail = store().loadClients('coach-a');
+    store().reset();
+    await expect(real.clients()).resolves.toHaveLength(1);
+    failA(new Error('offline'));
+    await lateFail;
+    expect(store()).toMatchObject({ loadError: null, isLoading: false });
+    expect(store().clients.map((c) => c.id)).toEqual(['b-client-1']);
+    read.mockRestore();
+    store().reset();
+  });
 });
 
 describe('UI-2 roster rules', () => {
