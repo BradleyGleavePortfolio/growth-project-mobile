@@ -302,6 +302,17 @@ describe('UI-2 Money tab and flag wiring', () => {
     expect(nav.match(/name="MoneyStack"/g)).toHaveLength(1);
   });
 
+  it('gives every tab a string label with the flag on, so all six labels share one size and keep it at large text', () => {
+    const tabs = nav.split('<Tab.Screen').slice(1);
+    expect(tabs.length).toBeGreaterThanOrEqual(6);
+    for (const t of tabs) {
+      const name = /name="(\w+)"/.exec(t)?.[1];
+      expect(`${name}:${/tabBarLabel: (featureFlags\.\w+ \? )?'/.test(t)}`).toBe(`${name}:true`);
+    }
+    expect(nav).toMatch(/\.\.\.\(featureFlags\.coachHomeV11 \? \{ tabBarLabel: 'Messages' \} : \{\}\),/);
+    expect(nav).toMatch(/tabBarAllowFontScaling: !featureFlags\.coachHomeV11,/);
+  });
+
   it('opens the app on the new Home only with the flag on', () => {
     expect(nav).toMatch(/const initialTab = __USING_MOCK_DATA \|\| featureFlags\.coachHomeV11 \? 'CommandCenter' : 'ClientsStack';/);
   });
