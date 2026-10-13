@@ -198,6 +198,20 @@ describe('ClientConsultationScreen', () => {
     });
   });
 
+  it('FLAG-2: the heading is the route name, else the name the read returns, else "Client"', async () => {
+    const heading = async (routeName: string, client_name: string | null) => {
+      mockGet.mockResolvedValueOnce({ data: { ...VIEW, client_name } });
+      const { unmount } = await mount(routeName);
+      await screen.findByTestId('consultation-answers');
+      const text = screen.getByRole('header').props.children as string;
+      await unmount();
+      return text;
+    };
+    expect(await heading('Sam Rivera', 'Samuel Rivera')).toBe('Sam Rivera');
+    expect(await heading(' ', 'Samuel Rivera')).toBe('Samuel Rivera');
+    expect(await heading('', null)).toBe('Client');
+  });
+
   it('shows an honest empty state on the uniform 404', async () => {
     mockGet.mockRejectedValueOnce(httpError(404, { message: 'Consultation not found' }));
     await mount();

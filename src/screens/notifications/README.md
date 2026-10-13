@@ -107,7 +107,7 @@ All calls go through `src/services/notificationsApi.ts`. The mock flag is `NOTIF
 | `MoreIndex` | `MoreStack → MoreIndex` | Build-week gate approvals |
 | `Deliverables` | `MoreStack → Deliverables` | "New content" rows (`drip_released`), with `purchaseId` from `payload.client_purchase_id` so the screen lists that purchase |
 | `UpdateCard` | `MoreStack → UpdateCard` (More index kept beneath) | The Day 3, Day 7 and dispute payment blocker (`dunning_blocker` with `payload.headline`); the full-refund notice of the same kind has no destination |
-| `ClientConsultation` | `ClientsStack → ClientConsultation` (coach; Clients list kept beneath) | The flagged-client join alert (`coach_alert`, `payload.type` `onboarding_screening_review`) opens that client's consultation answers (`{ clientId }`). A client account lands on its notification center |
+| `ClientConsultation` | `ClientsStack → ClientConsultation` (coach; Clients list kept beneath) | Both flag alerts (`coach_alert`, `payload.type` `onboarding_screening_review`: the join alert and, from backend FLAG-2, the coached completion alert) open that client's consultation answers (`{ clientId }`), headed by the name the read returns. A client account lands on its notification center |
 | `undefined` | No navigation | Informational only |
 
 Rows without `payload.title` use their kind's push title: "New content" (`drip_released`), "Your free trial" (`trial_ending`), "Payment" (`dunning_blocker`; the blocker shows its `payload.headline`), "New purchase" (`coach_new_purchase`). Other kinds fall back to "Update".
