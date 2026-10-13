@@ -104,7 +104,7 @@ describe('UI-4 peek sheet', () => {
     await fireEvent.press(screen.getByTestId('peek-nudge'));
     expect(onNudge).toHaveBeenCalledWith(maya);
     await fireEvent.press(screen.getByTestId('peek-close'));
-    await fireEvent.press(screen.getByTestId('peek-scrim'));
+    await fireEvent.press(screen.getByTestId('peek-scrim', { includeHiddenElements: true })); // screen readers use Close (the sheet is the modal view)
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
