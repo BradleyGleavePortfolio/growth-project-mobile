@@ -18,12 +18,15 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
+import { layout, radius } from '../../../theme/tokens';
 import { formatCents } from '../../../api/types/coachAIBudget';
 import { CREDIT_PACK_NON_REFUNDABLE, creditPacksHidden } from '../../../config/purchaseSurfaces';
 
 export interface PackOptionsRowProps {
   /** Pack option face-values in cents (server-provided). */
   options: number[];
+  /** S3 fallback marks $99 when no pack can be suggested; taps still buy. */
+  selected?: number;
   onSelect: (amountCents: number | 'custom') => void;
   style?: ViewStyle;
   testID?: string;
@@ -31,6 +34,7 @@ export interface PackOptionsRowProps {
 
 export function PackOptionsRow({
   options,
+  selected,
   onSelect,
   style,
   testID,
@@ -52,8 +56,9 @@ export function PackOptionsRow({
             intent="medium"
             onPress={() => onSelect(cents)}
             accessibilityRole="button"
-            accessibilityLabel={`Buy ${formatCents(cents)} credit pack`}
-            style={styles.btn}
+            accessibilityLabel={selected === undefined ? `Buy ${formatCents(cents)} credit pack` : `${formatCents(cents)} pack`}
+            accessibilityState={selected === undefined ? undefined : { selected: cents === selected }}
+            style={[styles.btn, cents === selected && styles.selected]}
             testID={`ai-pack-option-${cents}`}
           >
             <Text style={styles.btnText}>{formatCents(cents)}</Text>
@@ -89,8 +94,9 @@ function makeStyles(colors: ThemeColors) {
     btn: {
       flexGrow: 1,
       minWidth: 70,
+      minHeight: layout.touchMin,
       paddingVertical: 12,
-      borderRadius: 8,
+      borderRadius: radius.button,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
@@ -101,6 +107,7 @@ function makeStyles(colors: ThemeColors) {
       letterSpacing: 0.4,
       fontSize: 15,
     },
+    selected: { borderWidth: 2, borderColor: colors.textPrimary },
     btnGhost: {
       backgroundColor: 'transparent',
       borderWidth: 1,

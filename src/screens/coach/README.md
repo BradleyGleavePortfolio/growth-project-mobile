@@ -1,5 +1,7 @@
 # Coach screens
 
+Credit-pack tier/custom choices, checkout retry, Done and Open checkout again have at least 44 pt targets and grow with larger text. Filled actions use `radius.button`; their purchase gates, amounts and checkout handlers are unchanged.
+
 Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs: Clients / Dashboard / Templates / Messages / Settings). The Settings tab is a nested stack — `SettingsHome → Billing → TrustCenter` — so child screens are reachable without leaving the tab. The coach surface is read-mostly — the source of truth for client data is the backend; these screens are dashboards over it.
 
 ## Purpose
@@ -81,6 +83,8 @@ The coach can ask the AI to propose a side-effecting action (message, workout as
 ### Success state — `SuccessReceipt`
 
 The credit-pack purchase confirmation uses the `SuccessReceipt` component (defined inline at the bottom of `CreditPackCheckoutScreen.tsx`). It is the pattern any future purchase-confirm surface on the coach side should follow.
+
+With `coachAiCredits` off, pack selection keeps the existing copy and direct checkout paths. With it on, S3 group 12 uses `CreditPackSelection`: the existing head-coach-gated pool and `paceOf` supply the suggested pack, an ink card explains its coverage, and Other amounts reveals the remaining prices and Custom amount. No suggestion (including no pace, enough credits already, or even $99 not covering renewal) keeps the original pick-a-pack row with $99 marked selected. Custom retains the existing bounds and validation. Numeric route `preselect` still starts checkout once, without another tap. Selection scrolls at larger text sizes. Browser, WebView, receipt, store gates and payment contracts are unchanged.
 
 Why this pattern exists: `docs/QUIET_LUXURY_DOCTRINE.md` §3 bans confetti, particle bursts, and full-screen celebration overlays. An earlier draft of the screen rendered a particle burst that violated the doctrine and tripped `src/__tests__/quietLuxuryDoctrine.test.ts`. The Round-3 audit + operator decision pulled it.
 
