@@ -51,3 +51,11 @@ it('has no current night for an older-only or absent response', () => {
   expect(lastNightSleep(data, new Date('2026-10-11T20:00:00Z'), zone)).toEqual({ recovery: null, asleepMin: null });
   expect(lastNightSleep(undefined, new Date('2026-10-09T20:00:00Z'), zone)).toEqual({ recovery: null, asleepMin: null });
 });
+
+it('uses current total sleep when the preferred duration is from an older night', () => {
+  const mixed: WearableSamplesResponse = { ...data, series: [
+    { ...data.series[1]!, samples: [{ ...data.series[1]!.samples[0]!, end_at: '2026-10-08T12:20:00Z' }] },
+    { ...data.series[1]!, metric: 'SLEEP_TOTAL_MIN' },
+  ] };
+  expect(lastNightSleep(mixed, new Date('2026-10-09T20:00:00Z'), zone)).toEqual({ recovery: null, asleepMin: 440 });
+});

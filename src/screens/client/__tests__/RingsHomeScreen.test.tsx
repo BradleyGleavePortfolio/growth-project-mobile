@@ -148,7 +148,7 @@ it('Sleep with only an older night shows the existing empty state, with a matchi
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Connections', initial: false });
 });
 
-it('Sleep keeps the existing 130% text layout contract without clipping its supporting line', async () => {
+it('Sleep retains the 130% font limits and two-line supporting layout', async () => {
   mockSleepData = sleepData(getTodayString());
   await render(<HomeScreen />);
   expect(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep')).toHaveStyle({ minHeight: 44, width: '33%' });
@@ -158,6 +158,7 @@ it('Sleep keeps the existing 130% text layout contract without clipping its supp
 });
 
 it('Sleep falls back to the check-in, and with neither shows Connect, never "coming soon"', async () => {
+  mockSleepData = sleepData('2020-01-01');
   mockCheckIn = { sleep_hours: 7.5 };
   const view = await render(<HomeScreen />);
   expect(await screen.findByLabelText('Sleep, 7.5 h asleep')).toBeTruthy();
@@ -173,6 +174,7 @@ it.each([
   ['check-in loading', 'ok', 'pending'],
   ['check-in failed', 'ok', 'failed'],
 ] as const)('Sleep while its read is %s shows "—", never Connect, and opens Sleep and recovery', async (_, sleepRead, checkInRead) => {
+  mockSleepData = sleepData('2020-01-01');
   mockSleepRead = sleepRead; mockCheckInRead = checkInRead;
   await render(<HomeScreen />);
   await fireEvent.press(await screen.findByLabelText('Sleep, —'));
