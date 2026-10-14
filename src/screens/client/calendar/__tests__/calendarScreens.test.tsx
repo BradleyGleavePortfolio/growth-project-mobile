@@ -552,12 +552,36 @@ describe('CalendarSessionScreen', () => {
     expect(r.getByText('Call link not added yet.')).toBeTruthy();
   });
 
-  it('a started session (server says not cancellable) explains why it is locked', async () => {
-    api.getSession.mockResolvedValue(sess({ cancellable: false, reschedulable: false }));
-    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
-    await waitFor(() => expect(r.getByTestId('calendar-session-status')).toBeTruthy());
-    expect(r.getByText(/has started, so it can no longer be changed here/)).toBeTruthy();
-    expect(r.queryByTestId('calendar-cancel')).toBeNull();
+  it.each([
+    { name: 'not started, server locked', hoursUntilStart: 23, flags: { cancellable: false, reschedulable: false }, note: 'locked' },
+    { name: 'at the start, server locked', hoursUntilStart: 0, flags: { cancellable: false, reschedulable: false }, note: 'started' },
+    { name: 'started, server locked', hoursUntilStart: -0.1, flags: { cancellable: false, reschedulable: false }, note: 'started' },
+    { name: 'inside 24 hours, server allows changes', hoursUntilStart: 23, flags: { cancellable: true, reschedulable: true }, note: null },
+    { name: 'older server, inside 24 hours', hoursUntilStart: 23, flags: {}, note: 'locked' },
+    { name: 'older server, outside 24 hours', hoursUntilStart: 25, flags: {}, note: null },
+  ])('$name: shows only the appropriate change note', async ({ hoursUntilStart, flags, note }) => {
+    const now = Date.parse('2030-10-07T16:00:00.000Z');
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    const startedLine = 'This session has started, so it can no longer be changed here. Message your coach if you need help.';
+    const lockedLine = 'Changes are locked within 24 hours of the start. Message your coach if you need help changing this session.';
+    const start = now + hoursUntilStart * 60 * 60_000;
+    api.getSession.mockResolvedValue(sess({
+      start_at: new Date(start).toISOString(),
+      end_at: new Date(start + 20 * 60_000).toISOString(),
+      ...flags,
+    }));
+    try {
+      const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+      await waitFor(() => expect(r.getByTestId('calendar-session-status')).toBeTruthy());
+      expect(!!r.queryByText(startedLine)).toBe(note === 'started');
+      expect(!!r.queryByText(lockedLine)).toBe(note === 'locked');
+      expect(!!r.queryByTestId('calendar-cancel')).toBe(note === null);
+      expect(!!r.queryByTestId('calendar-reschedule')).toBe(note === null);
+      await fireEvent.press(r.getByTestId('calendar-session-message'));
+      expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('a past or cancelled session offers no reschedule or cancel', async () => {
