@@ -759,6 +759,7 @@ export default function CoachNavigator() {
         component={CommandCenterScreen}
         options={{
           title: 'Overview',
+          tabBarAccessibilityLabel: 'Overview',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid-outline" size={size} color={color} />
           ),
@@ -769,6 +770,7 @@ export default function CoachNavigator() {
         component={ClientsStackNavigator}
         options={{
           title: 'Clients',
+          tabBarAccessibilityLabel: 'Clients',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
           ),
@@ -797,6 +799,7 @@ export default function CoachNavigator() {
         name="Messages"
         component={MessagesScreen}
         options={{
+          tabBarAccessibilityLabel: 'Messages',
           tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
           // Quiet forest count instead of the default red dot (no status hue).
           tabBarBadgeStyle: {
@@ -819,6 +822,7 @@ export default function CoachNavigator() {
           component={TeamStackNavigator}
           options={{
             title: 'Team',
+            tabBarAccessibilityLabel: 'Team',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="briefcase-outline" size={size} color={color} />
             ),
@@ -835,6 +839,7 @@ export default function CoachNavigator() {
           component={CoachCommunityNavigator}
           options={{
             title: 'Community',
+            tabBarAccessibilityLabel: 'Community',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-circle-outline" size={size} color={color} />
             ),
@@ -846,6 +851,7 @@ export default function CoachNavigator() {
         component={SettingsStackNavigator}
         options={{
           title: 'Settings',
+          tabBarAccessibilityLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
