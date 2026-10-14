@@ -156,7 +156,10 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     if (flow === 'manual') {
       await fireEvent.press(screen.getByText('Enter manually'));
       await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Rolled oats');
-      await fireEvent.changeText(screen.getAllByPlaceholderText('0')[0], '379');
+      for (const [index, value] of ['379', '13', '68', '6.5'].entries()) {
+        await fireEvent.changeText(screen.getAllByPlaceholderText('0')[index], value);
+      }
+      expect(screen.getByRole('button', { name: 'Log food' })).toBeEnabled();
       await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     } else {
       await fireEvent.press(await screen.findByRole('button', { name: /Repeat .*breakfast: add all 1 food/ }));
