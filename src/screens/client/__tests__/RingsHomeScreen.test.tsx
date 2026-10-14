@@ -117,15 +117,15 @@ it.each([
 });
 
 function sleepData(day: string): WearableSamplesResponse {
-  const start_at = `${day}T00:00:00`;
-  const end_at = `${day}T07:20:00`;
+  const start_at = `${day}T00:00:00.000Z`;
+  const end_at = `${day}T23:59:59.999Z`;
   return {
     version: 1, user_id: 'u1', bucket: 'SLEEP_RECOVERY', window: { from: start_at, to: end_at },
     freshness: { providers: [] },
     series: [
-      { metric: 'RECOVERY_SCORE', unit: 'score', provider_used: 'OURA', sample_count: 1,
+      { metric: 'READINESS_SCORE', unit: 'score', provider_used: 'OURA', sample_count: 1,
         samples: [{ start_at, end_at, value: 78, provider: 'OURA' }] },
-      { metric: 'SLEEP_DURATION_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1,
+      { metric: 'SLEEP_TOTAL_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1,
         samples: [{ start_at, end_at, value: 440, provider: 'OURA' }] },
     ],
   };

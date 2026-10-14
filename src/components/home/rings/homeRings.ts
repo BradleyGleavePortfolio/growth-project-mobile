@@ -91,7 +91,7 @@ export function trainDial(input: {
 export type SleepSource = 'health' | 'checkin' | 'none' | 'unknown';
 export type ReadState = 'pending' | 'failed' | 'ok';
 
-/** Last night ends today locally; scores are dated at their start, sleep at wake time. */
+/** Whole-UTC-day records keep their calendar date; other samples use the local end (wake) day. */
 export function lastNightSleep(
   data: WearableSamplesResponse | undefined,
   now: Date,
@@ -103,8 +103,11 @@ export function lastNightSleep(
     series: data.series.map((series) => ({
       ...series,
       samples: series.samples.filter((sample) => {
-        const score = series.metric === 'RECOVERY_SCORE' || series.metric === 'READINESS_SCORE';
-        const at = new Date(score ? sample.start_at : sample.end_at);
+        const day = sample.start_at.slice(0, 10);
+        if (sample.start_at === `${day}T00:00:00.000Z` && sample.end_at === `${day}T23:59:59.999Z`) {
+          return day === today;
+        }
+        const at = new Date(sample.end_at);
         return !Number.isNaN(at.getTime()) && bucketDateLocal(at, timeZone) === today;
       }),
     })),
