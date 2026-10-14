@@ -13,8 +13,9 @@ import { linkLoadedFor } from './K6PersonalLink';
 import { CoachStepFrame } from '../CoachStepFrame';
 import type { CoachStepProps } from '../types';
 import { K8_COPY, practiceSummary, specialtyLabels } from './practiceCopy';
+import { K8_CREDITS_LABEL, k8CreditsSentence } from '../../../../components/coach/credits/creditCopy';
 
-export default function K8PracticeReady({ answers, onNext, onBack, eyebrow, firstName, completing }: CoachStepProps) {
+export default function K8PracticeReady({ answers, onNext, onBack, eyebrow, firstName, completing, credits }: CoachStepProps) {
   const { semanticColors: sc } = useTheme();
   const user = useCurrentUser();
   const sections = practiceSummary({
@@ -22,6 +23,7 @@ export default function K8PracticeReady({ answers, onNext, onBack, eyebrow, firs
     name: answers.display_name?.trim() || firstName,
     business: answers.business_name,
     specialtyLabels: specialtyLabels(answers.specialties),
+    aiCredits: credits ? { label: K8_CREDITS_LABEL, sentence: k8CreditsSentence(credits.budget.base_displayed_cents) } : null,
   });
   return (
     <CoachStepFrame

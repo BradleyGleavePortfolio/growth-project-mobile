@@ -74,7 +74,7 @@ export function specialtyLabels(keys: readonly string[] | null | undefined): str
 }
 
 export interface SummarySection {
-  key: 'card' | 'specialties' | 'link';
+  key: 'card' | 'specialties' | 'link' | 'credits';
   label: string;
   sentence: string;
 }
@@ -85,6 +85,8 @@ export function practiceSummary(input: {
   business?: string | null;
   specialtyLabels?: readonly string[];
   linkLoaded?: boolean;
+  /** CREDITBUILD-143: "AI credits" row for a head coach's pool ({label, sentence}). */
+  aiCredits?: { label: string; sentence: string } | null;
 }): SummarySection[] {
   const out: SummarySection[] = [];
   const card = cardSentence(input.name, input.business);
@@ -93,5 +95,6 @@ export function practiceSummary(input: {
   if (spec) out.push({ key: 'specialties', label: K8_COPY.specialtiesLabel, sentence: spec });
   // "Ready" only when K6 showed the link; otherwise point to where it always is.
   out.push({ key: 'link', label: K8_COPY.linkLabel, sentence: input.linkLoaded ? K8_COPY.linkReady : K8_COPY.linkInSettings });
+  if (input.aiCredits) out.push({ key: 'credits', ...input.aiCredits });
   return out;
 }
