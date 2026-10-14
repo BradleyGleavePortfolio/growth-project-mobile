@@ -79,6 +79,8 @@ import { spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import { useTheme } from '../../theme/useTheme';
+import { featureFlags } from '../../config/featureFlags';
+import CreditPoolEmptyLinks from '../../components/coach/credits/CreditPoolEmptyLinks';
 
 export interface RomanChatScreenProps {
   /** Host surface; defaults to 'client' when a route omits it. */
@@ -507,6 +509,10 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
               </TouchableOpacity>
             ) : null}
           </View>
+        ) : null}
+        {/* CREDITBUILD: the approved buy links under the coach's used-up line (flag off). */}
+        {featureFlags.coachAiCredits && surface === 'coach' && sendError?.kind === 'poolEmpty' ? (
+          <CreditPoolEmptyLinks inset={spacing.xl + 28 + spacing.sm} />
         ) : null}
 
       </View>
