@@ -731,6 +731,7 @@ export default function CoachNavigator() {
           return (
             <Pressable
               {...props}
+              ref={props.ref as React.Ref<View>}
               role="tab"
               accessibilityRole="tab"
               aria-label={Platform.OS === 'ios'
