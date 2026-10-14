@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   ViewStyle,
 } from 'react-native';
-import { colors, spacing, typography, radius } from '../../theme/tokens';
+import { colors, lightTokens, spacing, typography, radius } from '../../theme/tokens';
 import { Colors } from '../../constants/colors';
 import type { RiskBucket } from '../../services/commandCenterApi';
 
@@ -42,6 +42,13 @@ interface AlertRowProps {
   messageLines?: number;
   /** Visible label for what tapping the row does, e.g. "Message Sam". */
   actionLabel?: string;
+  /**
+   * Safety alert card (owner 57w, 57x): the message already names the
+   * client, so the name header is left out, and `quote` (the client's own
+   * message) shows under it on one muted line, cut off with an ellipsis.
+   */
+  quote?: string | null;
+  hideClientName?: boolean;
   testID?: string;
   style?: ViewStyle;
 }
@@ -54,40 +61,62 @@ export default function AlertRow({
   onDismiss,
   messageLines = 3,
   actionLabel,
+  quote,
+  hideClientName = false,
   testID,
   style,
 }: AlertRowProps) {
   const accent = bucket ? BUCKET_ACCENT[bucket] : colors.camel;
   const bucketLabel = bucket ? BUCKET_LABEL[bucket] : undefined;
+  const quoteLine = quote ? quote.replace(/\s+/g, ' ').trim() : '';
+  // A screen reader hears the card's words once, without the arrow glyph.
+  const label = hideClientName
+    ? `${message.replace(/\s*→\s*$/, '.')}${quoteLine ? ` ${quoteLine}` : ''}`
+    : `${clientName}. ${bucketLabel ? `${bucketLabel}. ` : ''}${message}${
+        actionLabel ? ` ${actionLabel}.` : ''
+      }`;
 
   return (
     <TouchableOpacity
       onPress={onPress}
       testID={testID ?? 'command-center-at-risk-row'}
       accessibilityRole="button"
-      accessibilityLabel={`${clientName}. ${bucketLabel ? `${bucketLabel}. ` : ''}${message}${
-        actionLabel ? ` ${actionLabel}.` : ''
-      }`}
+      accessibilityLabel={label}
       style={[styles.row, { borderLeftColor: accent }, style]}
       activeOpacity={0.75}
     >
       <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.clientName} numberOfLines={1}>
-            {clientName}
-          </Text>
-          {bucketLabel ? (
-            <Text
-              style={[styles.bucketLabel, { color: accent }]}
-              numberOfLines={1}
-            >
-              {bucketLabel}
+        {hideClientName ? null : (
+          <View style={styles.header}>
+            <Text style={styles.clientName} numberOfLines={1}>
+              {clientName}
             </Text>
-          ) : null}
-        </View>
-        <Text style={styles.message} numberOfLines={messageLines}>
+            {bucketLabel ? (
+              <Text
+                style={[styles.bucketLabel, { color: accent }]}
+                numberOfLines={1}
+              >
+                {bucketLabel}
+              </Text>
+            ) : null}
+          </View>
+        )}
+        <Text
+          style={hideClientName ? styles.safetyLine : styles.message}
+          numberOfLines={messageLines}
+        >
           {message}
         </Text>
+        {quoteLine ? (
+          <Text
+            style={styles.quote}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            testID="command-center-alert-quote"
+          >
+            {quoteLine}
+          </Text>
+        ) : null}
         {actionLabel ? (
           <Text style={styles.actionLabel}>{actionLabel}</Text>
         ) : null}
@@ -142,6 +171,17 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.charcoal,
     lineHeight: 20,
+  },
+  safetyLine: {
+    ...typography.bodyMd,
+    color: colors.ink,
+  },
+  quote: {
+    ...typography.bodySmall,
+    // Muted but AA on the cream card (stone is meta-only, below AA).
+    color: lightTokens.textMuted,
+    lineHeight: 20,
+    marginTop: spacing.xs,
   },
   actionLabel: {
     ...typography.bodySmall,
