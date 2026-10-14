@@ -10,8 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Headline, QuietRow, Screen, ScreenTopBar } from '../../../ui';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { CoachBriefActionItem } from '../../../api/coachBriefApi';
-import { actionTarget } from '../CoachBriefScreen';
-import { briefFirstName, type BriefListKind, type BriefTarget } from './briefActions';
+import { actionTarget, briefFirstName, type BriefListKind, type BriefTarget } from './briefActions';
 
 export type CoachBriefListParams = { kind: BriefListKind; items: CoachBriefActionItem[] };
 

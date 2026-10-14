@@ -42,6 +42,7 @@ import RomanBriefCard from '../../components/roman/RomanBriefCard';
 import RomanCheckInNotice from '../../components/roman/RomanCheckInNotice';
 import RomanNewClientNotice from '../../components/roman/RomanNewClientNotice';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { actionTarget, type LooseNavigate } from './brief/briefActions';
 import { logger } from '../../utils/logger';
 
 /** A concurrent open sees 'generating'; poll until the brief is ready. */
@@ -89,55 +90,9 @@ type LoadState =
   | { kind: 'throttled' };
 
 type BriefNav = NavigationProp<CoachTabParamList>;
-/** actionTarget builds nested params per tab; navigate's tuple overloads cannot take a union. */
-type LooseNavigate = (name: keyof CoachTabParamList, params?: object) => void;
-
-/** Where an action item opens. null = informational row (no tap). */
-export function actionTarget(
-  item: CoachBriefActionItem,
-): { tab: keyof CoachTabParamList; params?: object } | null {
-  const clientId = item.client_id;
-  const clientName = item.client_name ?? 'Client';
-  switch (item.type) {
-    case 'message_unread':
-      return clientId
-        ? {
-            tab: 'ClientsStack',
-            params: { screen: 'ClientMessages', params: { clientId, clientName }, initial: false },
-          }
-        : null;
-    // An older server may still send a workout item. Nothing in the app
-    // approves a workout, so it opens the client's workout history
-    // (S-BRIEF-124 B-398-1) and never says approve.
-    case 'workout_approval':
-      return clientId
-        ? {
-            tab: 'ClientsStack',
-            params: {
-              screen: 'ClientDetail',
-              params: { clientId, clientName, initialTab: 'workouts' },
-              initial: false,
-            },
-          }
-        : null;
-    case 'weight_flag':
-    case 'checkin_missing':
-      return clientId
-        ? {
-            tab: 'ClientsStack',
-            params: { screen: 'ClientDetail', params: { clientId, clientName }, initial: false },
-          }
-        : null;
-    case 'dunning_queue':
-    case 'team_revenue_review':
-      return { tab: 'SettingsStack', params: { screen: 'CoachMoney', initial: false } };
-    case 'sub_coach_operations':
-    case 'team_performance':
-      return featureFlags.teamMode ? { tab: 'TeamStack' } : null;
-    default:
-      return null;
-  }
-}
+// actionTarget lives with the brief's row rules (brief/briefActions.ts) so the
+// brief screens import it from there, never from this screen (no import cycle).
+export { actionTarget };
 
 const ACTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   message_unread: 'chatbubble-ellipses-outline',
