@@ -144,6 +144,7 @@ import Day1WinScreen from '../screens/client/Day1WinScreen';
 describe('Day1WinScreen — RTL mount', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockComplete.mockReset();
     mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
     await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
       id: 'client-day1', role: 'student', name: 'Day One',
@@ -231,6 +232,47 @@ describe('Day1WinScreen — RTL mount', () => {
     const r = await render(<Day1WinScreen onComplete={jest.fn()} savedWin="first_meal" />);
     await waitFor(() => expect(alert).toHaveBeenCalled());
     expect(r.queryByTestId('day1win-complete-view')).toBeNull();
+    alert.mockRestore();
+  });
+
+  it.each(['first_meal', 'logged_first_weight', 'first_checkin'] as const)(
+    '%s retries only its saved note and exposes Continue anyway after two failures', async (winType) => {
+      const { Alert } = jest.requireActual('react-native');
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      mockComplete.mockRejectedValue(new Error('Network Error'));
+      const onComplete = jest.fn();
+      const r = await render(<Day1WinScreen onComplete={onComplete} savedWin={winType} />);
+      await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
+      await r.rerender(<Day1WinScreen onComplete={onComplete} savedWin={winType} />);
+      expect(mockComplete).toHaveBeenCalledTimes(1);
+      expect(r.queryByTestId('day1win-continue-anyway-button')).toBeNull();
+      await fireEvent.press(r.getByTestId('day1win-card-first_meal'));
+      await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
+      expect(mockComplete.mock.calls).toEqual([[winType], [winType]]);
+      expect(onComplete).not.toHaveBeenCalled();
+      await fireEvent.press(r.getByTestId('day1win-continue-anyway-button'));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(undefined));
+      expect(mockComplete).toHaveBeenCalledTimes(2);
+      alert.mockRestore();
+    },
+  );
+
+  it('a successful retry shows the same saved win, without opening any logger', async () => {
+    const { Alert } = jest.requireActual('react-native');
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockComplete.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValueOnce({
+      data: { aiMessage: 'The server note for the saved weight.' },
+    });
+    const onComplete = jest.fn();
+    const r = await render(<Day1WinScreen onComplete={onComplete} savedWin="logged_first_weight" />);
+    await waitFor(() => expect(alert).toHaveBeenCalled());
+    await fireEvent.press(r.getByTestId('day1win-card-first_checkin'));
+    expect(await r.findByText('The server note for the saved weight.')).toBeTruthy();
+    expect(r.getByText('Log your starting weight')).toBeTruthy();
+    expect(mockComplete.mock.calls).toEqual([['logged_first_weight'], ['logged_first_weight']]);
+    expect(onComplete).not.toHaveBeenCalled();
+    await fireEvent.press(r.getByTestId('day1win-continue-button'));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith(undefined));
     alert.mockRestore();
   });
 
