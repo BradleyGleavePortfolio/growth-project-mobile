@@ -15,6 +15,15 @@ author deletes their own post from its "..." menu after a confirm
 (DELETE /community/posts/:postId); replies have no delete endpoint. Pull to refresh
 reloads the post and its replies. Tests: `CommunityThreadScreen.test.tsx`.
 
+ReactionBar offers Like, Fire, Strength, Love, Clap and Celebrate from the single
+`COMMUNITY_REACTION_BY_KIND` registry in `api/communityApi.ts`. REST accepts exact
+emoji graphemes; named kinds are for realtime only. Raised hands display the
+backend celebration key; target and eyes are not offered. The quick row's first
+four are Like, Fire, Strength and Love. Accepted stored keys remain tappable;
+unknown/legacy stored keys keep their glyph and count as read-only content.
+No reaction layout, wording or haptic behaviour changed (REACTFIX, agent 146).
+Tests: `components/community/__tests__/ReactionBar.test.tsx`.
+
 Today is a calm date-led column built from `src/ui` (`Screen`, `Headline`,
 `Overline`, `QuietSection`, `PrimaryButton`): a TODAY overline over the serif
 date, one hairline section per item (overline, serif title, muted meta, chevron)
