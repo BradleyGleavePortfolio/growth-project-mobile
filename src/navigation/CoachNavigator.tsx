@@ -1,7 +1,7 @@
 // Phase 9: Bell icon + NotificationCenter added to CoachNavigator.
 // All existing routes preserved.
 import React, { useEffect, useState } from 'react';
-import { AppState, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { AppState, Platform, Pressable, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
@@ -692,6 +692,7 @@ export default function CoachNavigator() {
   const { semanticColors: sc } = useTheme();
   const insets = useSafeAreaInsets();
   const unreadCount = useCoachUnreadPolling();
+  const unreadBadge = unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined;
   // P0-1: TeamStack must only mount for head coaches. Sub-coaches who land
   // on team-management surfaces hit `/sub-coaches` 403s the screen treats as
   // a permanent retry-error — a feature they don't own. The hook fails
@@ -715,7 +716,7 @@ export default function CoachNavigator() {
     <FirstPaymentWowHost>
     <Tab.Navigator
       initialRouteName={initialTab}
-      screenOptions={{
+      screenOptions={({ route, navigation }) => ({
         headerShown: false,
         // REDO-COACH-133 (QA-COACH-128): the coach bar wears the client
         // chrome — bone page colour, one hairline, outline glyphs, 11 pt Inter
@@ -723,6 +724,21 @@ export default function CoachNavigator() {
         // routes are unchanged.
         tabBarActiveTintColor: sc.accentText,
         tabBarInactiveTintColor: sc.textMuted,
+        // A fitted label bypasses bottom-tabs' iOS string-label position.
+        // Keep the native tab role and the library's original position wording.
+        tabBarButton: Platform.OS === 'web' ? undefined : (props) => {
+          const { routes } = navigation.getState();
+          return (
+            <Pressable
+              {...props}
+              role="tab"
+              accessibilityRole="tab"
+              aria-label={Platform.OS === 'ios'
+                ? `${props['aria-label']}, tab, ${routes.findIndex(tab => tab.key === route.key) + 1} of ${routes.length}`
+                : props['aria-label']}
+            />
+          );
+        },
         tabBarLabel: ({ focused, color, children }) => (
           <Text
             numberOfLines={1}
@@ -737,7 +753,6 @@ export default function CoachNavigator() {
             {children}
           </Text>
         ),
-        tabBarItemStyle: { paddingHorizontal: 0 },
         tabBarStyle: {
           backgroundColor: sc.bgPrimary,
           borderTopColor: sc.border,
@@ -746,7 +761,7 @@ export default function CoachNavigator() {
           paddingTop: 4,
           height: 60 + insets.bottom,
         },
-      }}
+      })}
       screenListeners={{
         tabPress: () => {
           HapticService.selection();
@@ -799,8 +814,10 @@ export default function CoachNavigator() {
         name="Messages"
         component={MessagesScreen}
         options={{
-          tabBarAccessibilityLabel: 'Messages',
-          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+          tabBarAccessibilityLabel: unreadBadge !== undefined
+            ? `Messages, ${unreadBadge}`
+            : 'Messages',
+          tabBarBadge: unreadBadge,
           // Quiet forest count instead of the default red dot (no status hue).
           tabBarBadgeStyle: {
             backgroundColor: sc.accent,

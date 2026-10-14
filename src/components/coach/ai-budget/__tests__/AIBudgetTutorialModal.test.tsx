@@ -12,7 +12,9 @@
  */
 
 import React from 'react';
+import { Platform, StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { layout } from '../../../../theme/tokens';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('expo-haptics', () => ({
@@ -110,8 +112,12 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
     }
   });
 
-  it('persists tutorialSeenKey and calls onClose when "later" is pressed on card 4', async () => {
+  it.each([
+    ['ios', false], ['ios', true], ['android', false], ['android', true],
+  ] as const)('%s: dismiss target is 44 pt and persists tutorialSeenKey (purchasesHidden=%s)', async (os, purchasesHidden) => {
     jest.useFakeTimers();
+    const originalOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
     try {
       const onClose = jest.fn();
       const onSelectPack = jest.fn();
@@ -121,6 +127,7 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
           budget={budget}
           onClose={onClose}
           onSelectPack={onSelectPack}
+          purchasesHidden={purchasesHidden}
         />,
       );
       for (let i = 0; i < 3; i += 1) {
@@ -129,7 +136,9 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
           jest.advanceTimersByTime(300);
         });
       }
-      await fireEvent.press(getByTestId('ai-tutorial-later'));
+      const dismiss = getByTestId(purchasesHidden ? 'ai-tutorial-done' : 'ai-tutorial-later');
+      expect(StyleSheet.flatten(dismiss.props.style).minHeight).toBe(layout.touchMin);
+      await fireEvent.press(dismiss);
 
       // setItem is async; let pending promises settle.
       jest.useRealTimers();
@@ -138,6 +147,7 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
       expect(stored).not.toBeNull();
     } finally {
       jest.useRealTimers();
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS });
     }
   });
 

@@ -106,6 +106,7 @@ describe.each(['ios', 'android'] as const)('%s tab accessibility', (os) => {
     const view = await render(<NavigationContainer><CoachNavigator /></NavigationContainer>);
     const badge = unread > 99 ? '99+' : unread;
     const names = ['Overview', 'Clients', 'Programs', unread ? `Messages, ${badge}` : 'Messages', 'Settings'];
+    expect(view.getByLabelText(os === 'ios' ? `${names[3]}, tab, 4 of 5` : names[3])).toBeTruthy();
     const tabs = view.getAllByRole('tab');
     expect(tabs).toHaveLength(names.length);
     for (const [index, name] of names.entries()) {

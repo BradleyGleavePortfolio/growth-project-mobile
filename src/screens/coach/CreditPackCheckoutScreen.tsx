@@ -77,7 +77,7 @@ import * as Haptics from 'expo-haptics';
 
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
-import { motion, radius, typography } from '../../theme/tokens';
+import { layout, motion, radius, typography } from '../../theme/tokens';
 import { PackOptionsRow } from '../../components/coach/ai-budget/PackOptionsRow';
 import {
   coachAiBudgetApi,
@@ -391,7 +391,7 @@ export default function CreditPackCheckoutScreen({
           <PackOptionsRow options={packOptions} onSelect={handleSelect} />
           <View style={styles.customRow}>
             <Text style={styles.customLabel}>Custom amount</Text>
-            <View style={styles.customInputWrap}>
+            <View style={styles.customInputWrap} testID="credit-pack-custom-field">
               <Text style={styles.customInputPrefix}>$</Text>
               <TextInput
                 value={customInput}
@@ -711,9 +711,9 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 10,
+      borderRadius: radius.input,
       paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingVertical: 0,
       backgroundColor: colors.surface,
       gap: 6,
     },
@@ -724,6 +724,7 @@ function makeStyles(colors: ThemeColors) {
     },
     customInput: {
       flex: 1,
+      minHeight: layout.touchMin,
       color: colors.textPrimary,
       fontSize: 16,
       paddingVertical: Platform.OS === 'ios' ? 4 : 0,
@@ -739,7 +740,7 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: 32,
     },
     retryBtn: {
-      minHeight: 44,
+      minHeight: layout.touchMin,
       justifyContent: 'center',
       marginTop: 12,
       paddingHorizontal: 24,
@@ -752,7 +753,7 @@ function makeStyles(colors: ThemeColors) {
       fontWeight: '600',
       fontSize: 15,
     },
-    secondaryBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 12 },
+    secondaryBtn: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 12 },
     secondaryBtnText: { color: colors.primary, fontWeight: '600', fontSize: 15 },
     successWrap: {
       flex: 1,

@@ -16,6 +16,7 @@
 import React from 'react';
 import { AppState, Linking, Platform, StyleSheet, type AppStateStatus } from 'react-native';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-native';
+import { layout, radius } from '../../../theme/tokens';
 
 const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false };
 jest.mock('../../../config/featureFlags', () => {
@@ -158,7 +159,12 @@ describe.each([
     const button = screen.getByTestId(`ai-pack-option-${choice}`);
     expect(StyleSheet.flatten(button.props.style).minHeight).toBeGreaterThanOrEqual(44);
     if (choice === 'custom') {
-      await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+      const input = screen.getByTestId('credit-pack-custom-input');
+      expect(StyleSheet.flatten(input.props.style).minHeight).toBe(layout.touchMin);
+      expect(StyleSheet.flatten(screen.getByTestId('credit-pack-custom-field').props.style)).toMatchObject({
+        paddingVertical: 0, borderRadius: radius.input,
+      });
+      await fireEvent.changeText(input, '20');
     }
     await fireEvent.press(button);
     expect(mockCreateCheckout).toHaveBeenCalledWith(
