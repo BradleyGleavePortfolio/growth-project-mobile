@@ -147,6 +147,14 @@ export interface ClientPurchase {
   cancel_at_period_end: boolean;
   canceled_at: string | null;
   created_at: string;
+  /**
+   * What the server recorded for THIS purchase when it was bought, in minor
+   * units (ClientPurchase.amount_cents, a snapshot that never follows later
+   * package price changes), and its currency. Sent by GET
+   * /v1/checkout/purchases (backend client-purchases.select.ts).
+   */
+  amount_cents?: number;
+  currency?: string;
 }
 
 /**
