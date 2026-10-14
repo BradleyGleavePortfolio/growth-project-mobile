@@ -18,7 +18,7 @@ import { AppState, Linking, Platform, StyleSheet, type AppStateStatus } from 're
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-native';
 import { layout, radius } from '../../../theme/tokens';
 
-const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false };
+const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false };
 jest.mock('../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../config/featureFlags');
   return {
@@ -36,10 +36,19 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack }),
   useIsFocused: () => true,
 }));
+let mockBudget = {
+  period_start: '2026-10-01T00:00:00.000Z',
+  period_end: '2026-11-01T00:00:00.000Z',
+  used_displayed_cents: 10000,
+  remaining_displayed_cents: 0,
+  pack_options_cents: [1000, 2500, 9900],
+  custom_pack_bounds_cents: { min: 1000, max: 50000 },
+};
+let mockRole: 'head_coach' | 'sub_coach' | 'unknown' = 'head_coach';
+const mockUseRole = jest.fn(() => mockRole);
+jest.mock('../../../hooks/useCoachRoleType', () => ({ useCoachRoleType: () => mockUseRole() }));
 jest.mock('../../../hooks/useAIBudget', () => ({
-  useAIBudget: () => ({
-    data: { remaining_displayed_cents: 0, pack_options_cents: [1000, 2500, 9900], custom_pack_bounds_cents: { min: 1000, max: 50000 } },
-  }),
+  useAIBudget: () => ({ data: mockBudget }),
   COACH_AI_BUDGET_QUERY_KEY: ['coachAIBudget'],
 }));
 const mockInvalidate = jest.fn();
@@ -110,7 +119,10 @@ let openURL: jest.SpyInstance;
 
 beforeEach(() => {
   g.__DEV__ = false;
-  Object.assign(mockFlags, { iosUsCreditPackLink: true, androidCreditPackLink: false });
+  Object.assign(mockFlags, { iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false });
+  mockRole = 'head_coach';
+  mockUseRole.mockClear();
+  mockBudget = { ...mockBudget, used_displayed_cents: 10000, remaining_displayed_cents: 0 };
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
   mockCreateCheckout.mockReset().mockResolvedValue({
     data: { checkout_session_id: 'cs_live_abc', checkout_url: CHECKOUT_URL, amount_cents: 1000 },
@@ -297,5 +309,102 @@ describe('checkoutStartErrorMessage', () => {
       'Checkout could not start. Try again in a minute. Nothing was charged.',
     );
     expect(checkoutStartErrorMessage(undefined)).toMatch(/Nothing was charged/);
+  });
+});
+
+describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
+  beforeEach(() => {
+    mockFlags.coachAiCredits = true;
+    mockBudget.remaining_displayed_cents = 2500;
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    jest.setSystemTime(new Date('2026-10-22T00:00:00.000Z'));
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('uses the CB-PACE $25 suggestion, verbatim G2/G4, then the existing browser checkout', async () => {
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.getByTestId('credit-pack-select')).toHaveTextContent(
+      'You pay face value. $10 of credit is $10 of AI usage.',
+    );
+    expect(screen.getByText('Suggested')).toBeTruthy();
+    expect(screen.getByText('A $25 pack should cover you until Nov 1.')).toBeTruthy();
+    expect(screen.queryByTestId('credit-pack-other-amounts')).toBeNull();
+    expect(screen.queryByTestId('credit-pack-custom-input')).toBeNull();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    expect(StyleSheet.flatten(screen.getByTestId('credit-pack-buy').props.style).minHeight).toBeGreaterThanOrEqual(layout.touchMin);
+    await fireEvent.press(screen.getByTestId('credit-pack-buy'));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ amount_cents: 2500, success_url: EXTERNAL_SUCCESS_URL }),
+    );
+    expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
+  });
+
+  it.each([1000, 9900])('Other amounts reveals $10 / $99 / Custom amount and $%s keeps its checkout path', async (cents) => {
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    expect(screen.getByLabelText('$10 pack')).toBeTruthy();
+    expect(screen.getByLabelText('$99 pack')).toBeTruthy();
+    expect(screen.getByLabelText('Custom amount')).toBeTruthy();
+    expect(screen.queryByTestId('ai-pack-option-2500')).toBeNull();
+    await fireEvent.press(screen.getByLabelText(`${cents === 1000 ? '$10' : '$99'} pack`));
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: cents }));
+    expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
+  });
+
+  it.each([0, 50000])('no suggestion for usage %s: original choices, $99 marked selected, no coverage claim', async (used) => {
+    mockBudget.used_displayed_cents = used;
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
+    expect(screen.getByLabelText('$99 pack')).toHaveAccessibilityState({ selected: true });
+    expect(screen.getByLabelText('$25 pack')).toHaveAccessibilityState({ selected: false });
+    expect(screen.getByTestId('credit-pack-custom-input')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('$99 pack'));
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 9900 }));
+  });
+
+  it.each(['sub_coach', 'unknown'] as const)('never derives a suggestion from the retained head pool for %s', async (role) => {
+    mockRole = role;
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
+    expect(screen.queryByText(/should cover you until/)).toBeNull();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+  });
+
+  it('Custom amount reveals the original input, rejects out-of-bounds, then buys the entered amount', async () => {
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    await fireEvent.press(screen.getByTestId('credit-pack-custom-open'));
+    expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
+    const input = screen.getByTestId('credit-pack-custom-input');
+    expect(StyleSheet.flatten(input.props.style).minHeight).toBe(layout.touchMin);
+    await fireEvent.changeText(input, '5');
+    await fireEvent.press(screen.getByTestId('ai-pack-option-custom'));
+    expect(screen.getByTestId('credit-pack-error')).toHaveTextContent('Custom packs must be between $10 and $500.');
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId('credit-pack-retry'));
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    await fireEvent.press(screen.getByTestId('credit-pack-custom-open'));
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20.50');
+    await fireEvent.press(screen.getByLabelText('Buy $20.50 of credits'));
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 2050 }));
+  });
+
+  it('numeric preselect still starts once; custom preselect reveals and focuses the custom field', async () => {
+    const ui = await render(<CreditPackCheckoutScreen route={routeWith('custom')} />);
+    expect(screen.getByTestId('credit-pack-custom-input').props.autoFocus).toBe(true);
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    await ui.unmount();
+    await render(<CreditPackCheckoutScreen route={routeWith(2500)} />);
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it('flag off keeps old words, all choices and no new role read', async () => {
+    mockFlags.coachAiCredits = false;
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.getByTestId('credit-pack-select')).toHaveTextContent('no multiplier math.');
+    expect(screen.getByTestId('ai-pack-option-2500')).toBeTruthy();
+    expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
+    expect(mockUseRole).not.toHaveBeenCalled();
   });
 });

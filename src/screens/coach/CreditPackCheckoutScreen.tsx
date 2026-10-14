@@ -55,7 +55,7 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  SafeAreaView,
+  ScrollView,
   ActivityIndicator,
   Animated,
   Easing,
@@ -74,11 +74,14 @@ import {
 } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
 import { layout, motion, radius, typography } from '../../theme/tokens';
 import { PackOptionsRow } from '../../components/coach/ai-budget/PackOptionsRow';
+import CreditPackSelection from '../../components/coach/credits/CreditPackSelection';
+import { featureFlags } from '../../config/featureFlags';
 import {
   coachAiBudgetApi,
   CUSTOM_PACK_MAX_CENTS,
@@ -170,6 +173,7 @@ export default function CreditPackCheckoutScreen({
   const [phase, setPhase] = useState<Phase>({ kind: 'select' });
   const [customInput, setCustomInput] = useState<string>('');
   const external = creditPackCheckoutMode() === 'external';
+  const concierge = featureFlags.coachAiCredits;
 
   const packOptions = useMemo(
     () => budget?.pack_options_cents ?? [1000, 2500, 9900],
@@ -357,10 +361,33 @@ export default function CreditPackCheckoutScreen({
     [phase, handleSuccess, handleCancel],
   );
 
+  const customField = (
+    <View style={styles.customRow}>
+      <Text style={styles.customLabel}>Custom amount</Text>
+      <View style={styles.customInputWrap} testID="credit-pack-custom-field">
+        <Text style={styles.customInputPrefix}>$</Text>
+        <TextInput
+          value={customInput}
+          onChangeText={setCustomInput}
+          keyboardType="decimal-pad"
+          placeholder="25.00"
+          placeholderTextColor={colors.textMuted}
+          style={styles.customInput}
+          autoFocus={preselect === 'custom'}
+          testID="credit-pack-custom-input"
+          accessibilityLabel="Custom credit pack amount in dollars"
+        />
+      </View>
+      <Text style={styles.customBounds}>
+        Between {formatCents(bounds.min)} and {formatCents(bounds.max)}
+      </Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="light-content" />
-      <View style={styles.header}>
+      <StatusBar barStyle={concierge ? 'dark-content' : 'light-content'} />
+      <View style={[styles.header, concierge && styles.conciergeHeader]}>
         <HapticPressable
           intent="light"
           onPress={() => navigation.goBack()}
@@ -369,18 +396,19 @@ export default function CreditPackCheckoutScreen({
           style={styles.headerBtn}
           testID="credit-pack-back"
         >
-          <Ionicons name="chevron-back" size={24} color={colors.textOnPrimary} />
+          <Ionicons name="chevron-back" size={24} color={concierge ? colors.textPrimary : colors.textOnPrimary} />
         </HapticPressable>
-        <Text style={styles.headerTitle}>Buy AI Credits</Text>
+        <Text style={[styles.headerTitle, concierge && styles.conciergeHeaderTitle]}>Buy AI Credits</Text>
         <View style={styles.headerBtn} />
       </View>
 
       {phase.kind === 'select' && (
-        <View style={styles.body} testID="credit-pack-select">
-          <Text style={styles.heading}>Pick a pack</Text>
+        <ScrollView contentContainerStyle={styles.selectionBody} keyboardShouldPersistTaps="handled" testID="credit-pack-select">
+          <Text style={[styles.heading, concierge && styles.conciergeHeading]}>Pick a pack</Text>
           <Text style={styles.helper}>
-            You pay face value. {formatCents(1000)} of credit = {formatCents(1000)} of AI usage —
-            no multiplier math.
+            {concierge
+              ? 'You pay face value. $10 of credit is $10 of AI usage.'
+              : 'You pay face value. $10 of credit = $10 of AI usage — no multiplier math.'}
           </Text>
           {external ? (
             <Text style={styles.helper} testID="credit-pack-pays-tgp">
@@ -388,28 +416,21 @@ export default function CreditPackCheckoutScreen({
               browser.
             </Text>
           ) : null}
-          <PackOptionsRow options={packOptions} onSelect={handleSelect} />
-          <View style={styles.customRow}>
-            <Text style={styles.customLabel}>Custom amount</Text>
-            <View style={styles.customInputWrap} testID="credit-pack-custom-field">
-              <Text style={styles.customInputPrefix}>$</Text>
-              <TextInput
-                value={customInput}
-                onChangeText={setCustomInput}
-                keyboardType="decimal-pad"
-                placeholder="25.00"
-                placeholderTextColor={colors.textMuted}
-                style={styles.customInput}
-                autoFocus={preselect === 'custom'}
-                testID="credit-pack-custom-input"
-                accessibilityLabel="Custom credit pack amount in dollars"
-              />
-            </View>
-            <Text style={styles.customBounds}>
-              Between {formatCents(bounds.min)} and {formatCents(bounds.max)}
-            </Text>
-          </View>
-        </View>
+          {concierge ? (
+            <CreditPackSelection
+              options={packOptions}
+              onSelect={handleSelect}
+              customField={customField}
+              customCents={parseDollarsToCents(customInput)}
+              initiallyCustom={preselect === 'custom'}
+            />
+          ) : (
+            <>
+              <PackOptionsRow options={packOptions} onSelect={handleSelect} />
+              {customField}
+            </>
+          )}
+        </ScrollView>
       )}
 
       {phase.kind === 'minting' && (
@@ -678,7 +699,11 @@ function makeStyles(colors: ThemeColors) {
       paddingVertical: 10,
       backgroundColor: colors.primaryDark,
     },
-    headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    headerBtn: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
+    conciergeHeader: { backgroundColor: colors.background, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+    conciergeHeaderTitle: { ...typography.bodyMd, color: colors.textPrimary },
+    conciergeHeading: { ...typography.h2 },
+    selectionBody: { flexGrow: 1, paddingHorizontal: layout.gutter, paddingTop: 24, paddingBottom: layout.gutter, gap: 16 },
     headerTitle: {
       flex: 1,
       color: colors.textOnPrimary,
