@@ -1,5 +1,7 @@
 # Coach screens
 
+Credit-pack tier/custom choices, checkout retry, Done and Open checkout again have at least 44 pt targets and grow with larger text. Filled actions use `radius.button`; their purchase gates, amounts and checkout handlers are unchanged.
+
 Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs: Clients / Dashboard / Templates / Messages / Settings). The Settings tab is a nested stack — `SettingsHome → Billing → TrustCenter` — so child screens are reachable without leaving the tab. The coach surface is read-mostly — the source of truth for client data is the backend; these screens are dashboards over it.
 
 ## Purpose
