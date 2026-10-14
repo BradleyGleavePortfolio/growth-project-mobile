@@ -23,7 +23,8 @@ jest.mock('../../components/purchases/withNonP2PPurchaseGate', () => ({
 }));
 jest.mock('../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({
-  Ionicons: ({ name }: { name: string }) => <Text testID={name}>{name}</Text>,
+  Ionicons: ({ name }: { name: string }) =>
+    require('react').createElement(require('react-native').Text, { testID: name }, name),
 }));
 
 // Keep real tab/stack registrations, with only destination contents replaced.
