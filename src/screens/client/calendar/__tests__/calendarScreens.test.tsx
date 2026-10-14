@@ -593,6 +593,34 @@ describe('CalendarSessionScreen', () => {
     expect(r.queryByTestId('calendar-cancel')).toBeNull();
     expect(r.queryByTestId('calendar-add-phone')).toBeNull();
   });
+
+  it('a CHANGES_LOCKED refusal keeps the existing general message and refreshes the note', async () => {
+    const start = Date.now() + 23 * 60 * 60_000;
+    const times = { start_at: new Date(start).toISOString(), end_at: new Date(start + 20 * 60_000).toISOString() };
+    api.getSession
+      .mockResolvedValueOnce(sess({ ...times, cancellable: true, reschedulable: true }))
+      .mockResolvedValue(sess({ ...times, cancellable: false, reschedulable: false }));
+    api.cancelSession.mockRejectedValue({ response: { status: 409, data: { code: 'CHANGES_LOCKED' } } });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      buttons?.find((b) => b.style === 'destructive')?.onPress?.();
+    });
+    try {
+      const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+      await waitFor(() => expect(r.getByTestId('calendar-cancel')).toBeTruthy());
+      await fireEvent.press(r.getByTestId('calendar-cancel'));
+      await waitFor(() => expect(r.getByText(
+        'The schedule changed while you were using it. Refresh Calendar and choose an available time.',
+      )).toBeTruthy());
+      await waitFor(() => expect(r.queryByTestId('calendar-cancel')).toBeNull());
+      expect(r.queryByTestId('calendar-reschedule')).toBeNull();
+      expect(r.getByText('Changes are locked within 24 hours of the start. Message your coach if you need help changing this session.')).toBeTruthy();
+      expect(r.queryByText(/has started, so it can no longer be changed here/)).toBeNull();
+      await fireEvent.press(r.getByTestId('calendar-session-message'));
+      expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
+    } finally {
+      alert.mockRestore();
+    }
+  });
 });
 
 describe('DES-AF calendar hierarchy, truthful states and action parity', () => {
