@@ -1,9 +1,7 @@
 /**
- * CoachBriefLightScreen (Concept A, behind coachBriefGate): every state renders
- * with a way out, every row opens the right place, haptics fire only on the
- * coach's own taps (and once more when a retry fails again), the brief is
- * marked read once, a preparing brief is announced once when it arrives, and
- * the reveal never lets an invisible row take a tap.
+ * CoachBriefLightScreen (Concept A, behind coachBriefGate): every state has a way out, every row opens the right
+ * place, haptics fire only on the coach's own taps (once more when a retry fails again), the brief is marked read
+ * once and announced once after a wait, and the reveal never lets a hidden row take a tap or upsets the native driver.
  */
 import React from 'react';
 import { AccessibilityInfo } from 'react-native';
@@ -55,6 +53,7 @@ const client = (type: string, n: number, name = NAMES[n]): CoachBriefActionItem 
   type, client_id: `${type}-${n}`, client_name: name, detail: `${type} ${n}`, priority: 1,
 });
 const six = (type: string) => NAMES.map((_, n) => client(type, n));
+const az = (xs: CoachBriefActionItem[]) => [...xs].sort((a, b) => (a.client_name ?? '').localeCompare(b.client_name ?? ''));
 
 function brief(items: CoachBriefActionItem[], over: Partial<CoachBrief> = {}): CoachBrief {
   return {
@@ -127,7 +126,7 @@ describe('CoachBriefLightScreen: busy', () => {
     expect(rowLabels(s)).toEqual(['See weight logs', 'Thank you, Roman']);
     expect(s.getByTestId('brief-row-weight').props.accessibilityHint).toBe('Opens the full list');
     await fireEvent.press(s.getByTestId('brief-row-weight'));
-    expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'weight', items: six('weight_flag') });
+    expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'weight', items: az(six('weight_flag')) });
     expect(mockGoBack).not.toHaveBeenCalled();
   });
 
@@ -136,15 +135,17 @@ describe('CoachBriefLightScreen: busy', () => {
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(rowLabels(s)).toEqual(['See messages', 'Review Maya\u2019s weight change', 'Thank you, Roman']));
     await fireEvent.press(s.getByTestId('brief-row-messages'));
-    expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'messages', items: six('message_unread') });
+    expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'messages', items: az(six('message_unread')) });
   });
 
-  it('head coach: the business lines and the way out only', async () => {
+  it('head coach: "See payments" opens Money; no team row while Team Mode is off', async () => {
     mockToday.mockResolvedValue(brief([{ type: 'dunning_queue', detail: '1 failed payment', priority: 1 }, { type: 'team_performance', detail: 'x', priority: 3 }]));
     const s = await render(<CoachBriefLightScreen />);
-    await waitFor(() => expect(s.getByText(BODY)).toBeTruthy());
-    expect(rowLabels(s)).toEqual(['Thank you, Roman']);
-    expect(s.queryByText('Where would you like to start?')).toBeNull();
+    await waitFor(() => expect(rowLabels(s)).toEqual(['See payments', 'Thank you, Roman']));
+    expect(s.getByText('Where would you like to start?')).toBeTruthy();
+    await fireEvent.press(s.getByTestId('brief-row-money'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(mockTab).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachMoney', initial: false });
   });
 });
 
@@ -174,8 +175,7 @@ describe('CoachBriefLightScreen: quiet, preparing, failures', () => {
     await nextPoll();
     await waitFor(() => expect(s.getByText(BODY)).toBeTruthy());
     expect(mockToday).toHaveBeenCalledTimes(3);
-    expect(announce).toHaveBeenCalledTimes(1);
-    expect(announce).toHaveBeenCalledWith('Today\u2019s brief is ready.');
+    expect(announce.mock.calls).toEqual([['Today\u2019s brief is ready.']]);
     expect(mockMarkRead).toHaveBeenCalledTimes(1);
   });
 
@@ -231,6 +231,7 @@ describe('CoachBriefLightScreen: reveal', () => {
   it('rows take no tap while hidden; a tap anywhere completes the reveal', async () => {
     hold(16);
     mockReduced = false;
+    const nativeDriverErrors = jest.spyOn(console, 'error');
     mockToday.mockResolvedValue(brief([client('message_unread', 0)]));
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(s.getByTestId('brief-row-messages')).toBeTruthy());
@@ -239,5 +240,6 @@ describe('CoachBriefLightScreen: reveal', () => {
     await fireEvent(s.getByTestId('brief-light'), 'touchStart');
     await fireEvent.press(s.getByTestId('brief-row-messages'));
     expect(mockTab).toHaveBeenCalledTimes(1);
+    expect(nativeDriverErrors).not.toHaveBeenCalled();
   });
 });

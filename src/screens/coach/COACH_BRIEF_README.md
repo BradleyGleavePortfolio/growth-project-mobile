@@ -58,7 +58,7 @@ each has "Continue". Marked read once when the words show; "Today's brief is rea
 Motion: 1.3 s reveal, a tap anywhere completes it, rows take no tap while hidden; 6 s breathing glow that stops in the
 background. Reduce Motion and screen readers: everything at once, 150 ms fade, still glow. Haptics: `softImpact` on every
 row; one `error` when Try again or Prepare again fails again; nothing on open or on a failure the coach did not cause.
-A single-client row closes the brief and opens its screen with the Clients list beneath.
+A single-client row, "See payments" and "See your team" close the brief and open their screen; a "See ..." list row keeps it.
 
 `CoachBriefList` (`brief/CoachBriefListScreen.tsx`) lists exactly the items the row counted (passed as route params, never
 stored), each opening that client like the single-client row; Back returns to the brief.

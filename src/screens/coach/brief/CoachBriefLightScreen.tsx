@@ -43,7 +43,8 @@ export const BRIEF_LIGHT_POLL_TRIES = 12;
 
 const BONE = '#FBF7F0';
 const END = 1300;
-const DECEL = Easing.bezier(...motion.easing.decel);
+/** The native driver ignores interpolate's `easing`, so the decel curve is sampled into the ranges (within 2%). */
+const CURVE = [0, 0.04, 0.1, 0.18, 0.3, 0.5, 1].map((x) => [x, Easing.bezier(...motion.easing.decel)(x)] as const);
 /** The coach's Home: the tab the coach app opens on (CoachNavigator initialTab). */
 const HOME_TAB = __USING_MOCK_DATA ? 'CommandCenter' : 'ClientsStack';
 const OPENS = 'Opens the screen for this item';
@@ -268,12 +269,11 @@ export default function CoachBriefLightScreen() {
   }
   const paras = [greeting, words, actions.length > 0 ? 'Where would you like to start?' : ''].filter(Boolean);
   const dots = state.kind === 'loading' || (state.kind === 'preparing' && state.polling);
-
   const rise = (start: number, dy: number, dur = 250) => {
-    const range = { inputRange: [start, start + dur], extrapolate: 'clamp' as const, easing: DECEL };
+    const range = { inputRange: CURVE.map(([x]) => start + x * dur), extrapolate: 'clamp' as const };
     return {
-      opacity: t.interpolate({ ...range, outputRange: [0, 1] }),
-      transform: [{ translateY: t.interpolate({ ...range, outputRange: [dy, 0] }) }],
+      opacity: t.interpolate({ ...range, outputRange: CURVE.map(([, y]) => y) }),
+      transform: [{ translateY: t.interpolate({ ...range, outputRange: CURVE.map(([, y]) => dy * (1 - y)) }) }],
     };
   };
   const step = 700 / Math.max(paras.length, 1);
