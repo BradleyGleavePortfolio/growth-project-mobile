@@ -31,6 +31,12 @@ jest.mock('../config/featureFlags', () => ({ featureFlags: {} }));
 jest.mock('../services/api', () => ({ coachApi: {
   getClientSummary: jest.fn(), getClients: jest.fn(), archiveClient: jest.fn(), unarchiveClient: jest.fn(),
 } }));
+let mockShowSummary = false;
+jest.mock('../screens/coach/client-detail/SummaryTab', () => ({
+  SummaryTab: (props: object) => mockShowSummary
+    ? jest.requireActual('react').createElement(jest.requireActual('../screens/coach/client-detail/SummaryTab').SummaryTab, props)
+    : null,
+}));
 jest.mock('../screens/coach/client-detail/ConsultationSummaryCard', () => ({ ConsultationSummaryCard: () => null }));
 jest.mock('../hooks/useMacros', () => ({ useCurrentMacrosForClient: () => ({ data: null }) }));
 jest.mock('../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => ({}) }));
@@ -77,6 +83,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   archived = false;
   mockPaymentsOn = false;
+  mockShowSummary = false;
   useCoachStore.getState().reset();
   (coachApi.getClientSummary as jest.Mock).mockReset().mockResolvedValue({ data: summary });
   clients.mockReset().mockImplementation(async () => ({ data: [row()] }));
@@ -88,6 +95,7 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 it('Summary Workouts opens this client Workouts tab and its builder path carries the client and copied plan', async () => {
+  mockShowSummary = true;
   const view = await render(<ClientDetailScreen {...props} />);
   await fireEvent.press(await view.findByLabelText('Open client workouts'));
   expect(view.getByText('Recent workouts')).toBeTruthy();
