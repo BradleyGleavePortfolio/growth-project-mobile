@@ -154,7 +154,7 @@ const STUDENT = {
 };
 
 beforeEach(async () => {
-  mockNavigate.mockClear();
+  jest.clearAllMocks();
   await AsyncStorage.clear();
   queryClient.clear();
   for (const k of Object.keys(mockSecure)) delete mockSecure[k];
@@ -264,6 +264,31 @@ describe('RootNavigator Day 1 Win skip is remembered per user', () => {
     const r = await mount();
     await r.findByTestId('nav-client');
     expect(r.queryByTestId('day1win')).toBeNull();
+  });
+
+  it.each([false, true])('another client inherits neither the selected card nor its saved note (saved=%s)', async (saved) => {
+    const r = await mount();
+    await r.findByTestId('day1win');
+    await act(async () => mockDay1Props.onComplete('first_meal'));
+    await r.findByTestId('nav-client');
+    if (saved) {
+      await act(async () => mockClientProps.onDay1Saved?.('first_meal'));
+      await r.findByTestId('day1win');
+    }
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
+      ...STUDENT, id: 'client-B', name: 'Taylor',
+    }));
+    const { authEvents } = jest.requireMock('../utils/authEvents');
+    firstWinApi.getStatus.mockResolvedValue({ data: { completed: saved ? false : true } });
+    await act(async () => authEvents.onAuthChange.mock.calls[0][0]());
+    if (saved) {
+      await r.findByTestId('day1win');
+      expect(mockDay1Props.savedWin).toBeUndefined();
+    } else {
+      await r.findByTestId('nav-client');
+      await act(async () => mockClientProps.onDay1Saved?.('first_meal'));
+      expect(r.queryByTestId('day1win')).toBeNull();
+    }
   });
 
   it('a skip by another account on this phone does not apply', async () => {

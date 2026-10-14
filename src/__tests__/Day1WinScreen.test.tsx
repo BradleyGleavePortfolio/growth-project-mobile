@@ -199,9 +199,11 @@ describe('Day1WinScreen — RTL mount', () => {
     },
   );
 
-  it.each(['first_meal', 'logged_first_weight', 'first_checkin'] as const)(
-    '%s requests once only after save and shows the exact server note', async (winType) => {
-      const aiMessage = `Server note for ${winType}.`;
+  it.each((['first_meal', 'logged_first_weight', 'first_checkin'] as const).flatMap(
+    (winType) => ['coachless', 'coached'].map((client) => ({ winType, client })),
+  ))(
+    '$client $winType requests once only after save and shows the exact server note', async ({ winType, client }) => {
+      const aiMessage = `Server note for ${client} ${winType}.`;
       mockComplete.mockResolvedValueOnce({ data: { completedAt: '2026-10-14', aiMessage } });
       const onComplete = jest.fn();
       const r = await render(<Day1WinScreen onComplete={onComplete} savedWin={winType} />);

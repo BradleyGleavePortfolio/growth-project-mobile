@@ -11,6 +11,8 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 
 ## Key files
 
+Day One timing (`FIRSTWINM`): Food, Progress and Habits expose an optional `onSaved` callback for the existing first-log handoff. Only confirmed online meal saves, weight saves and positive habit ticks invoke it; cancellation, failed saves, offline food queues, check-in forms and habit unticks do not. The server note remains in `Day1WinScreen` after save. See `first-win/README.md`.
+
 Shortcuts and fasting copy (SMALL-M-COPY-131): Profile uses the screen's own **Shortcuts** title and an "Opens quick actions" accessibility hint; the route stays `Widgets`. Quick log says "Open the food log" and still opens `Log`. Shortcuts Start responses with HTTP 400/409 use "A fast is already running. Open Fasting to see it."; other Shortcuts Start failures and Fasting Start failures use "The fast did not start. Check the connection and try again." Fasting End uses "The fast did not end. Check the connection and try again." Raw API error text never appears in those alerts. Existing protocol, confirmation, removal, alert scheduling, retry and navigation actions stay unchanged; rendered regression tests cover the copy and action parity.
 
 ### Tab roots

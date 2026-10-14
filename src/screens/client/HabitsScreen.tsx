@@ -54,7 +54,7 @@ export function habitsSummary(done: number, total: number): string {
   return `${cap(word(done))} of ${word(total)} done today.`;
 }
 
-export default function HabitsScreen({ onSaved }: { onSaved?: () => void } = {}) {
+export default function HabitsScreen({ onSaved }: { onSaved?: () => void }) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const today = getTodayString();

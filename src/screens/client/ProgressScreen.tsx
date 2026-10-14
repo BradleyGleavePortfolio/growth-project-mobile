@@ -118,7 +118,7 @@ export function formatLogDate(date: string): string {
   return `${LOG_DATE_WEEKDAYS[d.getDay()]} ${d.getDate()} ${LOG_DATE_MONTHS[d.getMonth()]}`;
 }
 
-export default function ProgressScreen({ onSaved }: { onSaved?: () => void } = {}) {
+export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
   const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
