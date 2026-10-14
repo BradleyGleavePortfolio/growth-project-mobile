@@ -15,16 +15,15 @@ import { layout, typography } from '../../../theme/tokens';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useTodayCheckIn } from '../../../hooks/useApi';
 import { useWearableSamples } from '../../../hooks/useWearableSamples';
-import { getTodayString } from '../../../utils/date';
+import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
 import type { ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilderApi';
 import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import { PrimaryButton } from '../../../ui';
-import { recoveryScore, sleepDeficit } from '../wearables/recoveryData';
 import HomeHeaderActions from '../../../components/home/HomeHeaderActions';
 import CoachlessHomeSlot from '../../../components/coachless/CoachlessHomeSlot';
 import HomeDial from '../../../components/home/rings/HomeDial';
-import { foodDial, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
+import { foodDial, lastNightSleep, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
 import { homeDateLine } from '../homeDate';
 
 /** The raw workout reads behind the Train dial (null = that read failed). */
@@ -51,11 +50,13 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
   const currentUser = useCurrentUser();
   // One window per local day (last 7 days through tomorrow's midnight), so the query key is
   // stable: Home reopens on cached data and pull to refresh refetches the same key.
-  const today = getTodayString();
+  const now = new Date();
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const today = bucketDateLocal(now, timeZone);
   const range = useMemo(() => {
     const [y, m, d] = today.split('-').map(Number) as [number, number, number];
     return { from: new Date(y, m - 1, d - 7).toISOString(), to: new Date(y, m - 1, d + 1).toISOString() };
-  }, [today]);
+  }, [today, timeZone]);
   const sleepRead = useWearableSamples(
     { bucket: 'SLEEP_RECOVERY', from: range.from, to: range.to, granularity: 'day', preferredOnly: true },
     { enabled: !!currentUser },
@@ -71,8 +72,7 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
     daysPerWeek: currentUser?.profile?.workout_days_per_week, loading: workout.exists === 'loading',
   });
   const sleep = sleepDial({
-    recovery: recoveryScore(sleepRead.data),
-    asleepMin: sleepDeficit(sleepRead.data)?.asleepMinutes ?? null,
+    ...lastNightSleep(sleepRead.data, now, timeZone),
     checkInHours: Number((checkIn.data as { sleep_hours?: number | string | null } | null | undefined)?.sleep_hours) || null,
     reads: { health: readState(sleepRead), checkIn: readState(checkIn) },
   });

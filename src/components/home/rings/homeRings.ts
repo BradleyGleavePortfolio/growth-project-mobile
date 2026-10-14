@@ -7,7 +7,8 @@
  */
 import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
-import { DEFAULT_SLEEP_NEED_MIN } from '../../../screens/client/wearables/recoveryData';
+import { DEFAULT_SLEEP_NEED_MIN, recoveryScore, sleepDeficit } from '../../../screens/client/wearables/recoveryData';
+import type { WearableSamplesResponse } from '../../../api/wearablesSamplesApi';
 
 /** value: serif number in the ring; unit: the line under it; sub: muted line under the label ('' = none). */
 export interface DialView { value: string; unit: string; sub: string; progress: number }
@@ -89,6 +90,27 @@ export function trainDial(input: {
 /** 'unknown': a read is still pending or failed, so the dial shows "—", never "Connect". */
 export type SleepSource = 'health' | 'checkin' | 'none' | 'unknown';
 export type ReadState = 'pending' | 'failed' | 'ok';
+
+/** Last night ends today locally; scores are dated at their start, sleep at wake time. */
+export function lastNightSleep(
+  data: WearableSamplesResponse | undefined,
+  now: Date,
+  timeZone: string,
+): { recovery: number | null; asleepMin: number | null } {
+  const today = bucketDateLocal(now, timeZone);
+  const night = data && {
+    ...data,
+    series: data.series.map((series) => ({
+      ...series,
+      samples: series.samples.filter((sample) => {
+        const score = series.metric === 'RECOVERY_SCORE' || series.metric === 'READINESS_SCORE';
+        const at = new Date(score ? sample.start_at : sample.end_at);
+        return !Number.isNaN(at.getTime()) && bucketDateLocal(at, timeZone) === today;
+      }),
+    })),
+  };
+  return { recovery: recoveryScore(night), asleepMin: sleepDeficit(night)?.asleepMinutes ?? null };
+}
 
 export function sleepDial(input: {
   recovery: number | null;

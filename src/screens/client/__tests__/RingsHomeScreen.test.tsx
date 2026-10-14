@@ -1,13 +1,13 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
+import type { WearableSamplesResponse } from '../../../api/wearablesSamplesApi';
 
 const mockNavigate = jest.fn();
 const mockHistory = jest.fn();
 const mockAssignments = jest.fn();
 let mockRomanChat = true;
-let mockRecovery: number | null = null;
-let mockAsleep: number | null = null;
+let mockSleepData: WearableSamplesResponse | undefined;
 let mockCheckIn: unknown = null;
 let mockSleepRead: 'ok' | 'failed' | 'pending' = 'ok';
 let mockCheckInRead: 'ok' | 'failed' | 'pending' = 'ok';
@@ -28,7 +28,7 @@ jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => ({ c
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockDay }));
 jest.mock('../../../hooks/useWearableSamples', () => ({
-  useWearableSamples: () => ({ data: undefined, isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn() }),
+  useWearableSamples: () => ({ data: mockSleepData, isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn() }),
 }));
 jest.mock('../../../hooks/useApi', () => ({
   ...jest.requireActual('../../../hooks/useApi'),
@@ -38,11 +38,6 @@ jest.mock('../../../entitlements/EntitlementProvider', () => ({
   useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
 }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
-jest.mock('../wearables/recoveryData', () => ({
-  DEFAULT_SLEEP_NEED_MIN: 480,
-  recoveryScore: () => mockRecovery,
-  sleepDeficit: () => (mockAsleep === null ? null : { asleepMinutes: mockAsleep }),
-}));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
   useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
@@ -79,7 +74,7 @@ const { start: weekStart } = require('../../../components/home/rings/homeRings')
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockUser.profile = { workout_days_per_week: 3 };
-  mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockCheckIn = null; mockSleepRead = 'ok'; mockCheckInRead = 'ok';
+  mockRomanChat = true; mockSleepData = undefined; mockCheckIn = null; mockSleepRead = 'ok'; mockCheckInRead = 'ok';
   mockDay.loadError = null;
   mockHistory.mockResolvedValue({ data: [] });
   mockAssignments.mockResolvedValue([
@@ -121,11 +116,45 @@ it.each([
   expect(HapticService.selection).toHaveBeenCalledTimes(1);
 });
 
-it('Sleep with Health data shows recovered and asleep and opens Sleep and recovery', async () => {
-  mockRecovery = 78; mockAsleep = 440;
+function sleepData(day: string): WearableSamplesResponse {
+  const start_at = `${day}T00:00:00`;
+  const end_at = `${day}T07:20:00`;
+  return {
+    version: 1, user_id: 'u1', bucket: 'SLEEP_RECOVERY', window: { from: start_at, to: end_at },
+    freshness: { providers: [] },
+    series: [
+      { metric: 'RECOVERY_SCORE', unit: 'score', provider_used: 'OURA', sample_count: 1,
+        samples: [{ start_at, end_at, value: 78, provider: 'OURA' }] },
+      { metric: 'SLEEP_DURATION_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1,
+        samples: [{ start_at, end_at, value: 440, provider: 'OURA' }] },
+    ],
+  };
+}
+
+it('Sleep with last night shows recovered and asleep and opens Sleep and recovery', async () => {
+  mockSleepData = sleepData(getTodayString());
   await render(<HomeScreen />);
   await fireEvent.press(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep'));
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
+});
+
+it('Sleep with only an older night shows the existing empty state, with a matching spoken label and route', async () => {
+  mockSleepData = sleepData('2020-01-01');
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Sleep, Connect'));
+  expect(screen.queryByText('78%')).toBeNull();
+  expect(screen.queryByText('7 h 20 m asleep')).toBeNull();
+  expect(screen.queryByTestId('home-dial-sleep-fill')).toBeNull();
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Connections', initial: false });
+});
+
+it('Sleep keeps the existing 130% text layout contract without clipping its supporting line', async () => {
+  mockSleepData = sleepData(getTodayString());
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep')).toHaveStyle({ minHeight: 44, width: '33%' });
+  expect(screen.getByText('78%').props.maxFontSizeMultiplier).toBe(1.3);
+  expect(screen.getByText('recovered').props.maxFontSizeMultiplier).toBe(1.3);
+  expect(screen.getByText('7 h 20 m asleep').props.numberOfLines).toBe(2);
 });
 
 it('Sleep falls back to the check-in, and with neither shows Connect, never "coming soon"', async () => {
