@@ -78,7 +78,7 @@ const texts = (ui: UI): string => {
   return out.join(' ');
 };
 const firstCharge = (ui: UI) => ui.queryByTestId('plan-terms-first-charge')?.props.children ?? null;
-const pay = async (ui: UI) => act(async () => { fireEvent.press(ui.getByTestId('join-package-pay')); });
+const pay = (ui: UI) => fireEvent.press(ui.getByTestId('join-package-pay'));
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
 beforeEach(async () => {
@@ -106,17 +106,16 @@ it.each([
   expect(mockAttach).not.toHaveBeenCalled(); // a join just answered is not re-read
 });
 
-it('no quote: no due-today line and no date; price, renewal and a live pay button stay', async () => {
-  for (const j of [MONTHLY, TRIAL, COMBO, withQuote(MONTHLY, null)]) {
-    const ui = await render(<JoinPackageScreen join={j} onClose={onClose} />);
-    expect(firstCharge(ui)).toBeNull();
-    expect(ui.getByTestId('join-package-price')).toBeTruthy();
-    expect(ui.getByTestId('plan-terms-renewal')).toBeTruthy();
-    expect(texts(ui)).not.toMatch(/today|first charge of|next charge of/);
-    await pay(ui);
-    expect(mockStart).toHaveBeenLastCalledWith(expect.objectContaining({ id: j.package.id, quote: null }));
-    ui.unmount();
-  }
+it.each([
+  ['monthly', MONTHLY], ['trial', TRIAL], ['one-time + recurring', COMBO], ['quote null', withQuote(MONTHLY, null)],
+] as const)('no quote (%s): no due-today line or date; price, renewal and a live pay button stay', async (_k, j) => {
+  const ui = await render(<JoinPackageScreen join={j} onClose={onClose} />);
+  expect(firstCharge(ui)).toBeNull();
+  expect(ui.getByTestId('join-package-price')).toBeTruthy();
+  expect(ui.getByTestId('plan-terms-renewal')).toBeTruthy();
+  expect(texts(ui)).not.toMatch(/today|first charge of|next charge of/);
+  await pay(ui);
+  expect(mockStart).toHaveBeenCalledWith(expect.objectContaining({ id: j.package.id, quote: null }));
 });
 
 describe('Finish joining: a resumed pending join never shows the old saved values', () => {
@@ -134,11 +133,11 @@ describe('Finish joining: a resumed pending join never shows the old saved value
     let answer: (v: unknown) => void = () => {};
     mockAttach.mockReturnValue(new Promise((r) => { answer = r; }));
     const ui = await render(<JoinPackageScreen join={saved} resumed onClose={onClose} />);
-    expect(mockAttach).toHaveBeenCalledWith('GP-SAM');
+    await waitFor(() => expect(mockAttach).toHaveBeenCalledWith('GP-SAM'));
     expect(firstCharge(ui)).toBeNull();
     expect(texts(ui)).not.toMatch(/October 20, 2026|today/);
     expect(ui.getByTestId('join-package-pay-spinner')).toBeTruthy(); // pay waits for the answer
-    fireEvent.press(ui.getByTestId('join-package-pay'));
+    await pay(ui);
     expect(mockStart).not.toHaveBeenCalled();
     expect(ui.getByTestId('join-package-not-now')).toBeTruthy();
     // The coach changed the price since.
@@ -182,7 +181,7 @@ describe('Finish joining: a resumed pending join never shows the old saved value
     expect(ui.queryByTestId('plan-terms')).toBeNull();
     expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'coach-1' });
     expect(await readPendingJoin()).toBeNull();
-    await act(async () => { fireEvent.press(ui.getByTestId('join-package-start')); });
+    await fireEvent.press(ui.getByTestId('join-package-start'));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockRefresh).toHaveBeenCalled();
     expect(mockStart).not.toHaveBeenCalled();
