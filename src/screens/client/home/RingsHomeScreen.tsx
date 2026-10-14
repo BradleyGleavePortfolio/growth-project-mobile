@@ -6,7 +6,7 @@
  * coachless client (m#654) and the day's one forest button. Roman's line, the tiles,
  * Edit tiles and the notice slot follow in the next UI-1 pull requests.
  */
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
@@ -53,10 +53,8 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
   const now = new Date();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const today = bucketDateLocal(now, timeZone);
-  const range = useMemo(() => {
-    const [y, m, d] = today.split('-').map(Number) as [number, number, number];
-    return { from: new Date(y, m - 1, d - 7).toISOString(), to: new Date(y, m - 1, d + 1).toISOString() };
-  }, [today, timeZone]);
+  const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+  const range = { from: new Date(y, m - 1, d - 7).toISOString(), to: new Date(y, m - 1, d + 1).toISOString() };
   const sleepRead = useWearableSamples(
     { bucket: 'SLEEP_RECOVERY', from: range.from, to: range.to, granularity: 'day', preferredOnly: true },
     { enabled: !!currentUser },
