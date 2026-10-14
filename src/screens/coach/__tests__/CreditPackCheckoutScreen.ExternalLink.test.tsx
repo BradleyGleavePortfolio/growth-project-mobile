@@ -14,7 +14,7 @@
  * the amount field).
  */
 import React from 'react';
-import { AppState, Linking, Platform, type AppStateStatus } from 'react-native';
+import { AppState, Linking, Platform, StyleSheet, type AppStateStatus } from 'react-native';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false };
@@ -153,6 +153,20 @@ describe.each([
     Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
   });
 
+  it.each([1000, 2500, 9900, 'custom'] as const)('keeps pack %s at least 44 pt tall and its checkout path working', async (choice) => {
+    await render(<CreditPackCheckoutScreen />);
+    const button = screen.getByTestId(`ai-pack-option-${choice}`);
+    expect(StyleSheet.flatten(button.props.style).minHeight).toBeGreaterThanOrEqual(44);
+    if (choice === 'custom') {
+      await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+    }
+    await fireEvent.press(button);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ amount_cents: choice === 'custom' ? 2000 : choice }),
+    );
+    expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
+  });
+
   it('says who is paid, opens Stripe in the browser with tgp return links, and never mounts the WebView', async () => {
     await render(<CreditPackCheckoutScreen />);
     expect(screen.getByTestId('credit-pack-pays-tgp')).toHaveTextContent(/You pay TGP the pack price through Stripe checkout/);
@@ -245,6 +259,11 @@ describe.each([
       appListener?.('active');
     });
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['coachAIBudget'] });
+    for (const id of ['credit-pack-external-done', 'credit-pack-external-reopen']) {
+      expect(StyleSheet.flatten(screen.getByTestId(id).props.style).minHeight).toBeGreaterThanOrEqual(44);
+    }
+    await fireEvent.press(screen.getByTestId('credit-pack-external-reopen'));
+    expect(openURL).toHaveBeenCalledTimes(2);
     await act(async () => {
       fireEvent.press(screen.getByTestId('credit-pack-external-done'));
     });
@@ -258,6 +277,9 @@ describe.each([
     expect(screen.getByTestId('credit-pack-error')).toHaveTextContent(/Checkout did not start/);
     expect(screen.getByTestId('credit-pack-error')).toHaveTextContent(/Nothing was charged/);
     expect(screen.getByTestId('credit-pack-error')).not.toHaveTextContent(/Unable to open URL|Something went wrong/);
+    expect(StyleSheet.flatten(screen.getByTestId('credit-pack-retry').props.style).minHeight).toBeGreaterThanOrEqual(44);
+    await fireEvent.press(screen.getByTestId('credit-pack-retry'));
+    expect(screen.getByTestId('credit-pack-select')).toBeTruthy();
   });
 });
 

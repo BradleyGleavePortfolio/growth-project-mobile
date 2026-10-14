@@ -146,8 +146,12 @@ import RomanConversationsScreen, { type RomanConversationParams } from '../scree
 import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../theme/ThemeProvider';
+import { typography } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCoachTeamStatus } from '../hooks/useCoachRoleType';
+
+// Match ClientNavigator: reclaim the tab button's 5 pt inset for one-line labels.
+const TAB_BUTTON_PADDING = 5;
 
 export type CoachTabParamList = {
   // Phase 8: Command Center replaces the old top-level Dashboard tab.
@@ -721,18 +725,19 @@ export default function CoachNavigator() {
         tabBarInactiveTintColor: sc.textMuted,
         tabBarLabel: ({ focused, color, children }) => (
           <Text
-            style={{
-              fontFamily: focused ? 'Inter_500Medium' : 'Inter_400Regular',
-              fontSize: 11,
-              lineHeight: 14,
-              fontWeight: focused ? '500' : '400',
-              color,
-            }}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            maxFontSizeMultiplier={1.3}
+            style={[
+              focused ? typography.tabLabelActive : typography.tabLabel,
+              { color, marginHorizontal: -TAB_BUTTON_PADDING, textAlign: 'center' },
+            ]}
           >
             {children}
           </Text>
         ),
+        tabBarItemStyle: { paddingHorizontal: 0 },
         tabBarStyle: {
           backgroundColor: sc.bgPrimary,
           borderTopColor: sc.border,
@@ -753,7 +758,7 @@ export default function CoachNavigator() {
         name="CommandCenter"
         component={CommandCenterScreen}
         options={{
-          tabBarLabel: 'Overview',
+          title: 'Overview',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid-outline" size={size} color={color} />
           ),
@@ -763,7 +768,7 @@ export default function CoachNavigator() {
         name="ClientsStack"
         component={ClientsStackNavigator}
         options={{
-          tabBarLabel: 'Clients',
+          title: 'Clients',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
           ),
@@ -777,7 +782,7 @@ export default function CoachNavigator() {
         name="Templates"
         component={featureFlags.mwbPrograms ? ProgramsStackNavigator : ProgramTemplatesScreen}
         options={{
-          tabBarLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
+          title: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
           tabBarAccessibilityLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
           tabBarIcon: ({ color, size }) => (
             <Ionicons
@@ -813,7 +818,7 @@ export default function CoachNavigator() {
           name="TeamStack"
           component={TeamStackNavigator}
           options={{
-            tabBarLabel: 'Team',
+            title: 'Team',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="briefcase-outline" size={size} color={color} />
             ),
@@ -829,7 +834,7 @@ export default function CoachNavigator() {
           name="CommunityStack"
           component={CoachCommunityNavigator}
           options={{
-            tabBarLabel: 'Community',
+            title: 'Community',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-circle-outline" size={size} color={color} />
             ),
@@ -840,7 +845,7 @@ export default function CoachNavigator() {
         name="SettingsStack"
         component={SettingsStackNavigator}
         options={{
-          tabBarLabel: 'Settings',
+          title: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),

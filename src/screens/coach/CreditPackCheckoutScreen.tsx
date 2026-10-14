@@ -77,7 +77,7 @@ import * as Haptics from 'expo-haptics';
 
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
-import { motion, typography } from '../../theme/tokens';
+import { motion, radius, typography } from '../../theme/tokens';
 import { PackOptionsRow } from '../../components/coach/ai-budget/PackOptionsRow';
 import {
   coachAiBudgetApi,
@@ -739,10 +739,12 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: 32,
     },
     retryBtn: {
+      minHeight: 44,
+      justifyContent: 'center',
       marginTop: 12,
       paddingHorizontal: 24,
       paddingVertical: 12,
-      borderRadius: 10,
+      borderRadius: radius.button,
       backgroundColor: colors.primary,
     },
     retryBtnText: {
@@ -750,7 +752,7 @@ function makeStyles(colors: ThemeColors) {
       fontWeight: '600',
       fontSize: 15,
     },
-    secondaryBtn: { paddingHorizontal: 24, paddingVertical: 12 },
+    secondaryBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 12 },
     secondaryBtnText: { color: colors.primary, fontWeight: '600', fontSize: 15 },
     successWrap: {
       flex: 1,
