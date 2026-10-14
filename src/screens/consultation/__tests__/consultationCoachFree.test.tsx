@@ -1,17 +1,20 @@
 /**
- * Owner 62 (Option 1), C-6a and 62y2 (Option 1): P0 for a client with no coach shows the coach-free text
- * (the coached text with every coach sentence or clause removed, no new words) without paragraph 4 and
- * box 2, footer "Nothing is sent until you continue.", and records consult-consent-v7-coach-free. It
- * makes no Roman choice and sends nothing to the AI consent ledger. The coach-free box 2 copies stay
- * known so a grant recorded before 62y2 is still read with its own text.
+ * Owner 62 (Option 1), C-6a, 62y2 (Option 1) and W-CONSENT: P0 for a client with no coach shows the
+ * coach-free text (the coached text with every coach sentence or clause removed, no new words), then
+ * "Before you join a coach" (C3-S-84), led by C3-S-83, with the coached paragraph 4 and box 2
+ * (client-ai-v6, so the grant covers Roman once a coach is linked), and the footer "Nothing is sent
+ * until you continue.". P0 records consult-consent-v7-coach-free. A grant the server refuses (403
+ * ROMAN_REQUIRES_COACH) is quiet: unsaved, no notice. The coach-free box 2 copies stay known so a grant
+ * recorded before 62y2 is still read with its own text.
  */
 import React from 'react';
 import { createHash } from 'crypto';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
-import type { AiConsentUpgradeCopy } from '../../../api/aiConsentApi';
+import type { AiConsentOutcome, AiConsentUpgradeCopy } from '../../../api/aiConsentApi';
 import { NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
-import { aiStatus, makeApi, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
+import { aiStatus, makeApi, resetStores } from '../../../lib/consultation/__fixtures__/flowHarness';
 import {
   isLiveRomanGrant,
   pinnedMemoryCopy,
@@ -25,6 +28,7 @@ import {
   AI_CONSENT_CHECKBOX_LABEL_COACH_FREE,
   AI_CONSENT_COACH_FREE_COPY_SHA256,
   AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
+  AI_CONSENT_COPY_SHA256,
   AI_CONSENT_PARAGRAPH,
   AI_CONSENT_PARAGRAPH_COACH_FREE,
   aiConsentCopyText,
@@ -105,23 +109,25 @@ describe('coach-free copy (owner 62)', () => {
     expect(CONSENT_PARAGRAPHS_COACH_FREE.slice(0, 2)).toEqual(CONSENT_PARAGRAPHS.slice(0, 2));
   });
 
-  it('62y2: the screen is title, paragraphs 1-3, box 1 and the footer only, and hashes to the backend pin', () => {
+  it('W-CONSENT: the coached Roman choice under C3-S-84 and C3-S-83; the P0 record stays v7-coach-free', () => {
     expect(consentCopyText(undefined, true)).toBe(
       [CONSENT_TITLE, ...CONSENT_PARAGRAPHS_COACH_FREE, CONSENT_CHECKBOX_LABEL_COACH_FREE, 'Nothing is sent until you continue.'].join('\n\n'),
     );
     expect(CONSENT_FOOTER_COACH_FREE).toBe('Nothing is sent until you continue.');
-    expect(consentCopyText(undefined, true)).not.toMatch(/Roman|Anthropic|Optional/);
     expect(sha(consentCopyText(undefined, true))).toBe(CONSENT_COACH_FREE_COPY_SHA256);
     expect(CONSENT_COACH_FREE_COPY_SHA256).toBe('82dddf635ee262e30e8a69e7a4a39be3e1255470d70b12e42a757f7578ee95a3');
     expect(consentScreenCopy(true)).toMatchObject({
-      roman: false,
-      aiParagraph: null,
-      box2Label: null,
+      romanTitle: 'Before you join a coach',
+      romanLead:
+        'Roman works with a coach, so he is not available until you join one. If you allow this now, Roman is ready on the day you join and you will not be asked again.',
+      aiParagraph: AI_CONSENT_PARAGRAPH,
+      box2Label: AI_CONSENT_CHECKBOX_LABEL,
       footer: 'Nothing is sent until you continue.',
       version: 'consult-consent-v7-coach-free',
       memoryVersion: 'consult-consent-v7-coach-free',
       sha256: CONSENT_COACH_FREE_COPY_SHA256,
     });
+    expect(consentScreenCopy(false)).toMatchObject({ romanTitle: null, romanLead: null });
   });
 
   it('the coach-free box 2 copies (for a grant recorded before 62y2) still hash to the backend pins', () => {
@@ -177,41 +183,61 @@ beforeEach(async () => {
   await resetStores();
 });
 
-describe('P0 for a client with no coach (owner 62y2)', () => {
-  it('shows no Roman paragraph or box, records consult-consent-v7-coach-free and sends nothing to the AI ledger', async () => {
-    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: CF_STATUS })) });
+async function agree(r: Awaited<ReturnType<typeof toP0>>, allow: boolean) {
+  await fireEvent.press(r.getByTestId('consent-checkbox'));
+  if (allow) await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+  await fireEvent.press(r.getByTestId('consult-continue'));
+  await waitFor(() => r.getByTestId('consult-screen-G1'));
+}
+
+describe('P0 for a client with no coach (W-CONSENT)', () => {
+  it('asks with the coached paragraph and box under "Before you join a coach"; Not now sends nothing', async () => {
+    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: aiStatus() })) });
     const r = await toP0(api);
     for (const p of CONSENT_PARAGRAPHS_COACH_FREE) expect(r.getByText(p)).toBeTruthy();
     expect(r.getByText(CONSENT_CHECKBOX_LABEL_COACH_FREE)).toBeTruthy();
-    expect(r.queryByTestId('consent-ai-paragraph')).toBeNull();
-    expect(r.queryByTestId('consent-ai-checkbox')).toBeNull();
-    expect(r.queryByTestId('consent-ai-unknown')).toBeNull();
+    expect(r.getByTestId('consent-roman-title').props.accessibilityRole).toBe('header');
+    expect(r.getByText('Before you join a coach')).toBeTruthy();
+    expect(r.getByTestId('consent-roman-lead').props.children).toBe(consentScreenCopy(true).romanLead);
+    expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
+    expect(r.getByText(AI_CONSENT_CHECKBOX_LABEL)).toBeTruthy();
     expect(r.getByTestId('consent-footer').props.children).toBe('Nothing is sent until you continue.');
-    expect(r.queryByText(/Roman|Anthropic|your coach|my coach|clinic/i)).toBeNull();
-    await fireEvent.press(r.getByTestId('consent-checkbox'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    expect(api.getRomanConsent).toHaveBeenCalledWith(); // the coached copies, never ?variant=coach_free
+    await agree(r, false);
     await waitFor(() => expect(api.save).toHaveBeenCalled());
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({
       agreed: true,
       copy_version: 'consult-consent-v7-coach-free',
       text_sha256: CONSENT_COACH_FREE_COPY_SHA256,
     });
-    expect(api.getRomanConsent).not.toHaveBeenCalled();
     expect(api.grantRomanConsent).not.toHaveBeenCalled();
-    expect(api.withdrawRomanConsent).not.toHaveBeenCalled();
   });
 
-  it('a yes kept on this device from an earlier build is not sent', async () => {
-    await seedLocal({}, 'P0', { aiWant: true });
+  it('Allow stores the coached grant (client-ai-v6 with its pin)', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const api = makeApi();
-    const r = await renderFlow(api);
+    await agree(await toP0(api), true);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
+    expect(api.grantRomanConsent.mock.calls[0][0]).toMatchObject({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 });
+    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ copy_version: 'consult-consent-v7-coach-free' });
+    expect(alert).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('a 403 ROMAN_REQUIRES_COACH is quiet: no notice, onboarding carries on, the choice stays unsaved', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const api = makeApi({
+      grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'error', status: 403, code: 'ROMAN_REQUIRES_COACH' })),
+    });
+    const r = await toP0(api);
+    await agree(r, true);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
+    expect(r.getByTestId('consult-screen-G1')).toBeTruthy();
+    await fireEvent.press(r.getByTestId('consult-back'));
     await waitFor(() => r.getByTestId('consult-screen-P0'));
-    await fireEvent.press(r.getByTestId('consent-checkbox'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-G1'));
-    await waitFor(() => expect(api.save).toHaveBeenCalled());
-    expect(api.grantRomanConsent).not.toHaveBeenCalled();
-    expect(api.getRomanConsent).not.toHaveBeenCalled();
+    await waitFor(() => expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState?.checked).toBe(false));
+    expect(r.queryByTestId('consent-error')).toBeNull();
+    expect(alert).not.toHaveBeenCalled();
+    alert.mockRestore();
   });
 });

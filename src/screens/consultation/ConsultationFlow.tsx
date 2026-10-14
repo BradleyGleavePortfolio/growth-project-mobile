@@ -552,9 +552,6 @@ export default function ConsultationFlow({
       aiConfirmed.current = aiRomanOf(local);
       aiWant.current = aiWantOf(local);
       aiAttempted.current = aiAttemptedOf(local);
-      // Owner 62y2: a client with no coach makes no Roman choice here, so a yes kept from an
-      // earlier build is not sent (a kept no still withdraws, which only turns AI off).
-      if (coachless && aiWant.current === true) aiWant.current = null;
       // A withdrawal that outlived the draft (or its last write) is still
       // wanted, unless the draft holds a newer choice (Sol B-310-5).
       // Read in marker order: a write or clear still in flight from an earlier
@@ -703,8 +700,7 @@ export default function ConsultationFlow({
    */
   async function refreshAiFromLedger(gen: number) {
     try {
-      // Owner 62y2: a client with no coach has no box 2, so nothing to read.
-      if (coachless) return;
+      // W-CONSENT: a client with no coach reads (and box 2 grants) the coached copies too.
       const out = await api.getRomanConsent();
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
@@ -791,7 +787,9 @@ export default function ConsultationFlow({
           setAiWant(null);
           if (result === 'unavailable') return; // ledger off: skipped silently
           logger.warn('ConsultationFlow', `optional AI choice not recorded (${result}); left for Settings`);
-          noticeOnce('grant', AI_GRANT_NOTICE);
+          // W-CONSENT: a client with no coach is asked again once they join one (RomanJoinOfferHost), so
+          // a refusal (403 ROMAN_REQUIRES_COACH from a server that does not store it yet) stays quiet, unsaved.
+          if (!coachless) noticeOnce('grant', AI_GRANT_NOTICE);
           return;
         }
         // No: nothing can be on file (no confirmed grant, no grant attempted
