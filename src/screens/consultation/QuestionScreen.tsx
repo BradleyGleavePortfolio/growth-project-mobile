@@ -539,9 +539,9 @@ function ConsentBody(props: BodyProps) {
   const consent = useMemo<ConsentAnswer>(
     () => ({
       agreed: true,
-      copy_version: aiMemory && copy.roman ? copy.memoryVersion : copy.version,
+      copy_version: aiMemory ? copy.memoryVersion : copy.version,
       agreed_at: new Date().toISOString(),
-      text_sha256: aiMemory && copy.roman ? copy.memorySha256 : copy.sha256,
+      text_sha256: aiMemory ? copy.memorySha256 : copy.sha256,
     }),
     // agreed_at is taken when box 1 is ticked; the version follows the box 2 text shown.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -571,7 +571,7 @@ function ConsentBody(props: BodyProps) {
             label={props.screen.cta ?? 'Continue'}
             disabled={!checked || blocked}
             accessibilityHint={checked ? undefined : 'Tick the first box to continue'}
-            onPress={() => onNext({ P0: already ? answers.P0 : consent }, copy.roman && aiTouched.current ? aiChecked : null)}
+            onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiTouched.current ? aiChecked : null)}
             testID="consult-continue"
           />
         </>
@@ -586,31 +586,35 @@ function ConsentBody(props: BodyProps) {
         label={copy.box1Label}
         testID="consent-checkbox"
       />
-      {/* Owner 62y2: a client with no coach has no Roman paragraph and no Roman box. */}
-      {copy.roman ? (
+      {/* W-CONSENT: a client with no coach is asked too, with why Roman waits for a coach. */}
+      {copy.romanTitle ? (
         <>
-          <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
-            {aiMemory ? aiMemory.paragraph.text : copy.aiParagraph}
-          </Text>
-          <Checkbox
-            checked={aiChecked}
-            onToggle={() => {
-              aiTouched.current = true;
-              setAiChecked((c) => !c);
-            }}
-            label={copy.box2Label ?? ''}
-            disabled={!aiReady}
-            hint={aiReady ? undefined : 'Checking your saved choice'}
-            testID="consent-ai-checkbox"
-          />
+          <Headline level="h2" style={{ marginTop: 28 }} testID="consent-roman-title">
+            {copy.romanTitle}
+          </Headline>
+          <Text style={[s.body, { marginTop: 8 }]} testID="consent-roman-lead">{copy.romanLead}</Text>
         </>
       ) : null}
-      {copy.roman && state?.aiUnknown && !aiTouched.current ? (
+      <Text style={[s.small, { marginTop: copy.romanTitle ? 12 : 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
+        {aiMemory ? aiMemory.paragraph.text : copy.aiParagraph}
+      </Text>
+      <Checkbox
+        checked={aiChecked}
+        onToggle={() => {
+          aiTouched.current = true;
+          setAiChecked((c) => !c);
+        }}
+        label={copy.box2Label}
+        disabled={!aiReady}
+        hint={aiReady ? undefined : 'Checking your saved choice'}
+        testID="consent-ai-checkbox"
+      />
+      {state?.aiUnknown && !aiTouched.current ? (
         <Text style={[s.mutedSmall, { marginTop: 8 }]} accessibilityLiveRegion="polite" testID="consent-ai-unknown">
           {AI_CHOICE_UNKNOWN_LINE}
         </Text>
       ) : null}
-      {copy.roman && state?.aiUnconfirmed && !aiChecked ? (
+      {state?.aiUnconfirmed && !aiChecked ? (
         <Text style={[s.mutedSmall, { marginTop: 8 }]} accessibilityLiveRegion="polite" testID="consent-ai-unconfirmed">
           {AI_WITHDRAW_UNCONFIRMED_LINE}
         </Text>

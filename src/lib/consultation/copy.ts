@@ -11,7 +11,8 @@
  * #635), which moved P0 to consult-consent-v3. Owner C-6a removed paragraph 3's clinic sentence
  * (consult-consent-v5 / v6); owner 62 added the coach-free versions below; owner 57c added the
  * safety-reply exception to paragraph 4 (consult-consent-v7 / v8, client-ai-v6 / v7) and owner 62y2
- * took Roman out of the coach-free screen (consult-consent-v7-coach-free). Any change to the P0 paragraphs, either box label
+ * took Roman out of the coach-free screen (consult-consent-v7-coach-free); W-CONSENT put the coached
+ * Roman choice back on it, recorded by its grant (consentScreenCopy). Any change to the P0 paragraphs, either box label
  * or the footer must bump CONSULT_CONSENT_COPY_VERSION (and, for paragraph 4
  * or box 2, AI_CONSENT_VERSION), update the pinned hashes below, and goes
  * through T4 review (privacy / data path).
@@ -82,6 +83,10 @@ export const AI_CONSENT_CHECKBOX_LABEL_COACH_FREE =
   'Optional: I allow Roman to use my information, processed by Anthropic.';
 /** Owner 62y2: the coach-free footer keeps only the sentence that does not name the removed choice. */
 export const CONSENT_FOOTER_COACH_FREE = 'Nothing is sent until you continue.';
+/** W-CONSENT (C3-S-84, C3-S-83, owner item 16): above the coached paragraph 4 for a client with no coach. */
+export const CONSENT_ROMAN_COACH_FREE_TITLE = 'Before you join a coach';
+export const CONSENT_ROMAN_COACH_FREE_LEAD =
+  'Roman works with a coach, so he is not available until you join one. If you allow this now, Roman is ready on the day you join and you will not be asked again.';
 
 /**
  * Exact text of the whole P0 screen, in display order (title, paragraphs
@@ -150,17 +155,20 @@ export const AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256 = 'c7cd7ebd3b47e3eb0e890a8
 /**
  * The P0 screen a client sees and what its record names: `version` / `sha256` with this build's
  * paragraph 4, `memoryVersion` / `memorySha256` when box 2 shows the server's memory paragraph.
- * Owner 62y2: a client with no coach sees no paragraph 4 and no box 2 (`roman` false), so no Roman
- * choice is made or sent.
+ * W-CONSENT: a client with no coach sees the coached paragraph 4 and box 2 (client-ai-v6 / v7, so the
+ * grant covers Roman once a coach is linked) under `romanTitle`, led by `romanLead`. Their P0 record
+ * stays consult-consent-v7-coach-free (title, paragraphs 1-3, box 1, footer): the Roman section is
+ * recorded by the AI consent ledger grant with its own copy sha256, as box 2 always is.
  */
 export function consentScreenCopy(coachFree: boolean) {
   return coachFree
     ? {
-        roman: false,
         paragraphs: CONSENT_PARAGRAPHS_COACH_FREE,
         box1Label: CONSENT_CHECKBOX_LABEL_COACH_FREE,
-        aiParagraph: null,
-        box2Label: null,
+        romanTitle: CONSENT_ROMAN_COACH_FREE_TITLE,
+        romanLead: CONSENT_ROMAN_COACH_FREE_LEAD,
+        aiParagraph: AI_CONSENT_PARAGRAPH,
+        box2Label: AI_CONSENT_CHECKBOX_LABEL,
         footer: CONSENT_FOOTER_COACH_FREE,
         version: CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
         sha256: CONSENT_COACH_FREE_COPY_SHA256,
@@ -168,9 +176,10 @@ export function consentScreenCopy(coachFree: boolean) {
         memorySha256: CONSENT_COACH_FREE_COPY_SHA256,
       }
     : {
-        roman: true,
         paragraphs: CONSENT_PARAGRAPHS,
         box1Label: CONSENT_CHECKBOX_LABEL,
+        romanTitle: null,
+        romanLead: null,
         aiParagraph: AI_CONSENT_PARAGRAPH,
         box2Label: AI_CONSENT_CHECKBOX_LABEL,
         footer: CONSENT_FOOTER,
