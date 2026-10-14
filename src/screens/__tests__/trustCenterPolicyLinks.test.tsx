@@ -286,7 +286,7 @@ describe('TrustCenterScreen render', () => {
     const screen = await renderScreen();
     expect(
       screen.getByText(
-        'Not your coach — your Roman conversations, which are kept until you delete them or your account',
+        'Not your coach — your Roman conversations, which are kept until you delete them or your account. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.',
       ),
     ).toBeTruthy();
     expect(screen.queryByText('Data residency')).toBeNull();
