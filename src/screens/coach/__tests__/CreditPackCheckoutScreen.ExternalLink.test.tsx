@@ -116,7 +116,7 @@ beforeEach(() => {
   });
   mockInvalidate.mockClear();
   mockGoBack.mockClear();
-  openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  openURL = jest.spyOn(Linking, 'openURL').mockClear().mockResolvedValue(undefined);
   urlListener = null;
   appListener = null;
   jest.spyOn(Linking, 'addEventListener').mockImplementation((type, listener) => {

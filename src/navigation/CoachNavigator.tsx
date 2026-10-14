@@ -731,7 +731,7 @@ export default function CoachNavigator() {
             maxFontSizeMultiplier={1.3}
             style={[
               focused ? typography.tabLabelActive : typography.tabLabel,
-              { color, marginHorizontal: -TAB_BUTTON_PADDING, textAlign: 'center' },
+              { color, marginHorizontal: -TAB_BUTTON_PADDING, alignSelf: 'stretch', textAlign: 'center' },
             ]}
           >
             {children}

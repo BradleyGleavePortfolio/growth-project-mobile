@@ -68,7 +68,7 @@ it('renders every coach label through the fitted renderer and preserves all six 
       numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.8, maxFontSizeMultiplier: 1.3,
     });
     expect(StyleSheet.flatten(text.props.style)).toMatchObject({
-      ...typography.tabLabelActive, marginHorizontal: -5, textAlign: 'center',
+      ...typography.tabLabelActive, marginHorizontal: -5, alignSelf: 'stretch', textAlign: 'center',
     });
   }
   expect(HapticService.selection).toHaveBeenCalledTimes(tabs.length);
