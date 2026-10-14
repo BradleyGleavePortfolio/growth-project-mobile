@@ -108,9 +108,12 @@ async function renderThread() {
 
 describe('CommunityThreadScreen reactions (U1)', () => {
   it.each(COMMUNITY_REACTION_EMOJI)('routes an offered reaction %s through the real hook with its accepted REST key', async (emoji) => {
-    mockApi.getPost.mockResolvedValue(prodPost({
+    // The settled hook refetches: that read must reflect the persisted tap.
+    mockApi.getPost.mockResolvedValueOnce(prodPost({
       reactions: COMMUNITY_REACTION_EMOJI.map((key) =>
         ({ emoji: key, count: 1, reacted_by_me: false })),
+    })).mockResolvedValue(prodPost({
+      reactions: [{ emoji, count: 2, reacted_by_me: true }],
     }));
     mockApi.reactToPost.mockResolvedValue(state([{ emoji, count: 2, reacted_by_me: true }]));
     const view = await renderThread();
