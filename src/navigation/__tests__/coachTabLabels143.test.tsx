@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Platform, StyleSheet, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { fireEvent, render } from '@testing-library/react-native';
 import * as fs from 'fs';
@@ -9,12 +9,13 @@ import { lightTokens, typography } from '../../theme/tokens';
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 const mockFlags = { coachCommunity: true, mwbPrograms: true, teamMode: true };
 const mockTeam = { role: 'head_coach', hasSubCoaches: false };
+let mockUnreadCount = 0;
 jest.mock('../../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => mockTeam }));
 jest.mock('../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: jest.requireActual('../../theme/tokens').lightTokens }),
 }));
-jest.mock('../../services/api', () => ({ coachApi: { getUnreadCounts: async () => ({ data: { total: 0 } }) } }));
+jest.mock('../../services/api', () => ({ coachApi: { getUnreadCounts: async () => ({ data: { total: mockUnreadCount } }) } }));
 jest.mock('../../services/notificationsApi', () => ({ fetchUnreadCount: async () => 0 }));
 jest.mock('../../services/commandCenterApi', () => ({ __USING_MOCK_DATA: true }));
 jest.mock('../../components/NotificationBadge', () => () => null);
@@ -43,11 +44,17 @@ for (const name of ['ProgramsStackNavigator', 'CoachCommunityNavigator']) {
 }
 const CoachNavigator = require('../CoachNavigator').default;
 const { HapticService } = require('../../ui/haptics/haptics.service');
+const originalOS = Platform.OS;
 
 beforeEach(() => {
   mockFlags.mwbPrograms = true;
+  mockFlags.coachCommunity = true;
   mockTeam.hasSubCoaches = false;
+  mockUnreadCount = 0;
   HapticService.selection.mockClear();
+});
+afterEach(() => {
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS });
 });
 
 it('renders every coach label through the fitted renderer and preserves all six destinations and selection haptics', async () => {
@@ -61,7 +68,7 @@ it('renders every coach label through the fitted renderer and preserves all six 
     ['Settings', '../screens/coach/SettingsScreen'],
   ];
   for (const [label, destination] of tabs) {
-    await fireEvent.press(view.getByLabelText(label));
+    await fireEvent.press(view.getByLabelText(new RegExp(`^${label}(, tab, \\d of \\d)?$`)));
     expect(await view.findByText(destination)).toBeTruthy();
     const text = view.getByText(label);
     expect(text.props).toMatchObject({
@@ -85,8 +92,31 @@ it('keeps the legacy Templates and optional Team labels and destinations', async
     ['Templates', '../screens/coach/ProgramTemplatesScreen'],
     ['Team', '../screens/coach/TeamManagementScreen'],
   ]) {
-    await fireEvent.press(view.getByLabelText(label));
+    await fireEvent.press(view.getByLabelText(new RegExp(`^${label}(, tab, \\d of \\d)?$`)));
     expect(await view.findByText(destination)).toBeTruthy();
     expect(view.getByText(label).props.adjustsFontSizeToFit).toBe(true);
   }
+});
+
+describe.each(['ios', 'android'] as const)('%s tab accessibility', (os) => {
+  it.each([0, 7, 105])('retains every tab role, position and Messages badge at %i unread', async (unread) => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
+    mockFlags.coachCommunity = false; // launch bar: five tabs
+    mockUnreadCount = unread;
+    const view = await render(<NavigationContainer><CoachNavigator /></NavigationContainer>);
+    const badge = unread > 99 ? '99+' : unread;
+    const names = ['Overview', 'Clients', 'Programs', unread ? `Messages, ${badge}` : 'Messages', 'Settings'];
+    const tabs = view.getAllByRole('tab');
+    expect(tabs).toHaveLength(names.length);
+    for (const [index, name] of names.entries()) {
+      const label = os === 'ios' ? `${name}, tab, ${index + 1} of 5` : name;
+      expect(view.getByRole('tab', { name: label })).toBe(tabs[index]);
+      expect(tabs[index].props.accessibilityRole).toBe('tab');
+    }
+    const messages = view.getByRole('tab', { name: os === 'ios' ? `${names[3]}, tab, 4 of 5` : names[3] });
+    await fireEvent.press(messages);
+    expect(view.getByRole('tab', { name: os === 'ios' ? `${names[3]}, tab, 4 of 5` : names[3] })).toHaveAccessibilityState({ selected: true });
+    expect(await view.findByText('../screens/coach/MessagesScreen')).toBeTruthy();
+    expect(view.getByText('Overview').props.adjustsFontSizeToFit).toBe(true);
+  });
 });
