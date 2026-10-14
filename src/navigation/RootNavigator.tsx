@@ -396,7 +396,7 @@ export default function RootNavigator() {
   }, [sessionUserId]);
   const pendingDay1Target = useRef<WinType | null>(null);
   const selectedDay1Target = useRef<{ winType: WinType; userId: string } | null>(null);
-  const [day1SavedWin, setDay1SavedWin] = useState<WinType | undefined>();
+  const [day1SavedWin, setDay1SavedWin] = useState<{ winType: WinType; userId: string } | undefined>();
   // Deep-link replay state for the public accept-invite path. When a
   // signed-in user clicks an accept-invite URL we sign them out and then
   // navigate to AcceptInvite ONLY after authState flips to
@@ -925,8 +925,8 @@ export default function RootNavigator() {
 
   const handleDay1Saved = (winType: WinType) => {
     if (selectedDay1Target.current?.winType !== winType || selectedDay1Target.current.userId !== sessionUserId) return;
+    setDay1SavedWin(selectedDay1Target.current);
     selectedDay1Target.current = null;
-    setDay1SavedWin(winType);
     setAuthStateNow('day1win');
   };
 
@@ -990,7 +990,8 @@ export default function RootNavigator() {
   // a one-time interstitial, not a navigable screen. It is shown once, on
   // first student boot, then replaced by ClientNavigator.
   if (authState === 'day1win') {
-    return <Day1WinScreen onComplete={handleDay1WinComplete} savedWin={day1SavedWin} />;
+    return <Day1WinScreen onComplete={handleDay1WinComplete}
+      savedWin={day1SavedWin?.userId === sessionUserId ? day1SavedWin.winType : undefined} />;
   }
 
   return (
