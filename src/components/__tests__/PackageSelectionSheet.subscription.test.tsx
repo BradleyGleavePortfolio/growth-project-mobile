@@ -72,11 +72,16 @@ const { usePackagePurchase }: typeof import('../../hooks/usePackagePurchase') = 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { purchasableFromCoachPackage, formatPlanDate }: typeof import('../../lib/planTerms') = require('../../lib/planTerms');
 
+// BILLQUOTE-M: the server's quote (backend #998) carries today's charge and
+// the trial's first charge date; the phone shows them and never works them out.
+const TRIAL_END = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString(); })();
 const PACKAGES = [
   { id: PKG_MONTHLY, name: 'Monthly coaching', amount_cents: 9900, currency: 'usd', billing_type: 'recurring', interval: 'month', description: null },
-  { id: PKG_TRIAL, name: 'Trial coaching', amount_cents: 4900, currency: 'usd', billing_type: 'recurring', interval: 'month', trial_days: 7, description: null },
+  { id: PKG_TRIAL, name: 'Trial coaching', amount_cents: 4900, currency: 'usd', billing_type: 'recurring', interval: 'month', trial_days: 7, description: null,
+    quote: { due_today_cents: 0, currency: 'usd', first_charge_at: TRIAL_END, trial_end: TRIAL_END } },
   // Combo: one-time setup fee plus a renewing part (recurring_* columns).
-  { id: PKG_COMBO, name: 'Kickoff plus monthly', amount_cents: 20000, currency: 'usd', billing_type: 'one_time', interval: null, recurring_amount_cents: 5000, recurring_interval: 'month', description: null },
+  { id: PKG_COMBO, name: 'Kickoff plus monthly', amount_cents: 20000, currency: 'usd', billing_type: 'one_time', interval: null, recurring_amount_cents: 5000, recurring_interval: 'month', description: null,
+    quote: { due_today_cents: 25000, currency: 'usd', first_charge_at: '2026-11-14T12:00:00.000Z', trial_end: null } },
 ];
 
 function intent(mode: 'payment' | 'setup', overrides: Record<string, unknown> = {}) {
