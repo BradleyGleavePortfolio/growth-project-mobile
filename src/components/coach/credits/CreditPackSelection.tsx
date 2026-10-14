@@ -3,7 +3,7 @@
  * The existing head-coach gate supplies the pace; this view never calculates
  * a pace or changes checkout. Without a suggestion, keep the original row.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -23,12 +23,14 @@ export default function CreditPackSelection({
   onSelect,
   customField,
   customCents,
+  customEntered,
   initiallyCustom,
 }: {
   options: number[];
   onSelect: (choice: number | 'custom') => void;
   customField: React.ReactNode;
   customCents: number | null;
+  customEntered: boolean;
   initiallyCustom: boolean;
 }) {
   const { semanticColors: sc } = useTheme();
@@ -37,6 +39,13 @@ export default function CreditPackSelection({
   const renews = credits ? renewalDay(credits.budget.period_end) : null;
   const [expanded, setExpanded] = useState(initiallyCustom);
   const [custom, setCustom] = useState(initiallyCustom);
+  // Keep an in-progress custom path visible when the head/pool read finishes.
+  useEffect(() => {
+    if (customEntered) {
+      setExpanded(true);
+      setCustom(true);
+    }
+  }, [customEntered]);
   if (suggestion == null || !renews) {
     return (
       <>
@@ -60,7 +69,7 @@ export default function CreditPackSelection({
         accessibilityRole="button"
         accessibilityLabel={CREDIT_MOMENT_COPY.otherAmounts}
         accessibilityState={{ expanded }}
-        onPress={() => setExpanded(true)}
+        onPress={() => { setExpanded(!expanded); setCustom(false); }}
         style={styles.other}
         testID="credit-pack-other"
       >

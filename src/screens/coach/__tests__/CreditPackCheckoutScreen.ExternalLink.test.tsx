@@ -45,10 +45,11 @@ let mockBudget = {
   custom_pack_bounds_cents: { min: 1000, max: 50000 },
 };
 let mockRole: 'head_coach' | 'sub_coach' | 'unknown' = 'head_coach';
+let mockBudgetLoading = false;
 const mockUseRole = jest.fn(() => mockRole);
 jest.mock('../../../hooks/useCoachRoleType', () => ({ useCoachRoleType: () => mockUseRole() }));
 jest.mock('../../../hooks/useAIBudget', () => ({
-  useAIBudget: () => ({ data: mockBudget }),
+  useAIBudget: () => ({ data: mockBudgetLoading ? undefined : mockBudget }),
   COACH_AI_BUDGET_QUERY_KEY: ['coachAIBudget'],
 }));
 const mockInvalidate = jest.fn();
@@ -121,6 +122,7 @@ beforeEach(() => {
   g.__DEV__ = false;
   Object.assign(mockFlags, { iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false });
   mockRole = 'head_coach';
+  mockBudgetLoading = false;
   mockUseRole.mockClear();
   mockBudget = { ...mockBudget, used_displayed_cents: 10000, remaining_displayed_cents: 0 };
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
@@ -352,6 +354,30 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
   });
 
+  it('Other amounts closes again, restores the suggested primary, and preserves custom input', async () => {
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    await fireEvent.press(screen.getByTestId('credit-pack-custom-open'));
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    expect(screen.queryByTestId('credit-pack-other-amounts')).toBeNull();
+    expect(screen.getByLabelText('Buy $25 of credits')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    await fireEvent.press(screen.getByTestId('credit-pack-custom-open'));
+    expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('20');
+  });
+
+  it('keeps a custom amount typed before the role/pool resolves visible once the suggestion loads', async () => {
+    mockRole = 'unknown';
+    const ui = await render(<CreditPackCheckoutScreen />);
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+    mockRole = 'head_coach';
+    await ui.rerender(<CreditPackCheckoutScreen />);
+    expect(screen.getByTestId('credit-pack-suggested')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('20');
+    expect(screen.getByLabelText('Buy $20 of credits')).toBeTruthy();
+  });
+
   it.each([0, 50000])('no suggestion for usage %s: original choices, $99 marked selected, no coverage claim', async (used) => {
     mockBudget.used_displayed_cents = used;
     await render(<CreditPackCheckoutScreen />);
@@ -361,6 +387,14 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(screen.getByTestId('credit-pack-custom-input')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('$99 pack'));
     expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 9900 }));
+  });
+
+  it('without a loaded pool, shows the original row with $99 and makes no coverage claim', async () => {
+    mockBudgetLoading = true;
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
+    expect(screen.getByLabelText('$99 pack').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId('credit-pack-custom-input')).toBeTruthy();
   });
 
   it.each(['sub_coach', 'unknown'] as const)('never derives a suggestion from the retained head pool for %s', async (role) => {

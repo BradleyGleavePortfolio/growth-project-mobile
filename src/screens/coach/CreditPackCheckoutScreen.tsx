@@ -422,6 +422,7 @@ export default function CreditPackCheckoutScreen({
               onSelect={handleSelect}
               customField={customField}
               customCents={parseDollarsToCents(customInput)}
+              customEntered={customInput.length > 0}
               initiallyCustom={preselect === 'custom'}
             />
           ) : (
