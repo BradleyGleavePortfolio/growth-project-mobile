@@ -200,3 +200,23 @@ describe('RomanJoinOfferHost (owner 62y2)', () => {
     await waitFor(() => expect(r.getByTestId('roman-join-offer-allow')).toBeTruthy());
   });
 });
+
+describe('W-CONSENT: after joining, only a client who chose Not now or never saw box 2 is asked', () => {
+  it.each([
+    ['allowed in "Before we start" while coachless, and it was saved', LIVE, false],
+    ['chose Not now there, or allowed but the server refused it (403), so nothing was saved', status(), true],
+    [
+      'never saw box 2 (a coach-free grant from before reads needs_reconsent)',
+      status({ state: 'needs_reconsent', needs_reconsent: true, version: 'client-ai-v4-coach-free' }),
+      true,
+    ],
+  ])('a client who %s', async (_l, onFile, asked) => {
+    const api = makeApi(onFile);
+    const r = await render(<RomanJoinOfferHost api={api} />);
+    mockUser = COACHED;
+    noteCachedUser(NO_COACH, COACHED);
+    if (asked) await waitFor(() => expect(r.getByTestId('roman-join-offer-allow')).toBeTruthy());
+    else await waitFor(async () => expect(await mark()).toBe('done'));
+    expect(r.queryByTestId('roman-join-offer') !== null).toBe(asked);
+  });
+});

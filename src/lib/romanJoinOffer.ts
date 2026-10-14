@@ -1,6 +1,6 @@
 /**
- * Owner 62y2 (2)-(3): a client with no coach agrees to a "Before we start" without Roman. Right after
- * that client joins a coach, the Roman and AI choice (the coached AiConsentSheet) is offered once.
+ * Owner 62y2 (2)-(3), W-CONSENT: right after a client with no coach joins a coach, the Roman and AI
+ * choice (the coached AiConsentSheet) is offered once, unless their grant is live (RomanJoinOfferHost).
  *
  * The app learns about a coach only through the user cache (`lib/userCache`): a code (CoachCodeSheet,
  * Settings > Add coach code), a link (pending invite claim, Day 1 pairing), the paid in-app join

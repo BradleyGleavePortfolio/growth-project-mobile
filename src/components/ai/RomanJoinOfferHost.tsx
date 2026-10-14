@@ -9,7 +9,8 @@
  * success haptic plays (docs/HAPTICS.md: data saved). Not now (or Close, or Android back) keeps the
  * coached client's not-allowed behaviour; Settings > Privacy > Roman and AI is where they allow it
  * later. Either way the offer is done and never comes back by itself (lib/romanJoinOffer). A client
- * whose Roman grant is already live is not asked; when the status does not load, the sheet opens and
+ * whose Roman grant is already live (W-CONSENT: they allowed in "Before we start" and it was saved) is
+ * not asked, so only one who chose Not now or never saw box 2 is; when the status does not load, the sheet opens and
  * shows its own failure and Try again states. A client with no coach is never shown it.
  */
 import React, { useCallback, useEffect, useState } from 'react';
