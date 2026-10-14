@@ -203,6 +203,10 @@ describe('Day1WinScreen — RTL mount', () => {
     (winType) => ['coachless', 'coached'].map((client) => ({ winType, client })),
   ))(
     '$client $winType requests once only after save and shows the exact server note', async ({ winType, client }) => {
+      await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
+        id: 'client-day1', role: 'student', name: 'Day One',
+        ...(client === 'coached' ? { coach_id: 'coach-day1' } : {}),
+      }));
       const aiMessage = `Server note for ${client} ${winType}.`;
       mockComplete.mockResolvedValueOnce({ data: { completedAt: '2026-10-14', aiMessage } });
       const onComplete = jest.fn();

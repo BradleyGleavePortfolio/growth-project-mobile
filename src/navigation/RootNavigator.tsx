@@ -991,7 +991,7 @@ export default function RootNavigator() {
   // first student boot, then replaced by ClientNavigator.
   if (authState === 'day1win') {
     return <Day1WinScreen onComplete={handleDay1WinComplete}
-      savedWin={day1SavedWin?.userId === sessionUserId ? day1SavedWin.winType : undefined} />;
+      savedWin={day1SavedWin && day1SavedWin.userId === sessionUserId ? day1SavedWin.winType : undefined} />;
   }
 
   return (
