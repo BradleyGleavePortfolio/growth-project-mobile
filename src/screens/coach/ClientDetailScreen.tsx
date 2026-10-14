@@ -46,7 +46,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { layout, radius, typography } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
-import { lightTap } from '../../utils/haptics';
+import { HapticService } from '../../ui/haptics/haptics.service';
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
   // S14 round 3: the coach wearable-prompts screen is reachable from this
@@ -519,7 +519,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               })
             }
             onOpenWorkoutBuilder={() => {
-              lightTap();
+              HapticService.selection();
               setActiveTab('workouts');
             }}
             onOpenPayments={

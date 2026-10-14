@@ -1,6 +1,6 @@
 # Coach screens
 
-DEADFIX1: the client Summary Workouts shortcut selects that client's Workouts tab, reusing the saved-workout copy and explicit assignment flow rather than saving an unassigned library plan. Explicit builder save failures show calm fallback copy (only known product validation copy passes through). Coach AI unavailability never asks the coach to configure the service. Settings reads the existing practice-type endpoint and offers Both pillars only for `both`; cross-pillar failures use task-specific retry sentences, not transport diagnostics. No data or authorization contracts change.
+DEADFIX1: the client Summary Workouts shortcut selects that client's Workouts tab with a selection haptic, reusing the saved-workout copy and explicit assignment flow rather than saving an unassigned library plan. Explicit non-AI builder save failures always show the same plain workout error; no server sentence passes through. Coach AI unavailability never asks the coach to configure the service. Settings reads the existing practice-type endpoint and offers Both pillars only for `both`; cross-pillar failures pair their existing title with non-repeating recovery copy, not transport diagnostics. No data or authorization contracts change.
 
 Credit-pack tier/custom choices, checkout retry, Done and Open checkout again have at least 44 pt targets and grow with larger text. Filled actions use `radius.button`; their purchase gates, amounts and checkout handlers are unchanged.
 

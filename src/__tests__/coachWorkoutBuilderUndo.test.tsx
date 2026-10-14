@@ -887,6 +887,8 @@ describe("CoachWorkoutBuilderScreen — Ask AI on a new workout (AIB-FINISH-127 
   it.each([
     new Error("Request failed with status code 400"),
     { response: { status: 400, data: { message: "name must be a string" } } },
+    { response: { status: 400, data: { message: "Exercise order values must be unique within a plan" } } },
+    { response: { status: 400, data: { message: "Any server message" } } },
   ])("explicit Save shows plain copy and stays on the draft after a failure", async (error) => {
     const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     setFlag(false);
@@ -894,7 +896,7 @@ describe("CoachWorkoutBuilderScreen — Ask AI on a new workout (AIB-FINISH-127 
     const screen = await render(<Screen />);
     mockUpdateMutateAsync.mockRejectedValueOnce(error);
     await fireEvent.press(screen.getByLabelText("Save changes"));
-    await waitFor(() => expect(alert).toHaveBeenCalledWith("Could not save plan", "The workout could not be saved. Try again in a moment."));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith("Could not save workout", "The workout could not be saved. Try again in a moment."));
     expect(mockGoBack).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Plan name").props.value).toBe("Push day A");
     alert.mockRestore();

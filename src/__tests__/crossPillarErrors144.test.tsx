@@ -33,14 +33,15 @@ beforeEach(() => {
 });
 
 it.each([
-  [Home, 'The overview could not load. Try again in a moment.', crossPillarApi.getAnalytics],
-  [Clients, 'The roster could not load. Try again in a moment.', crossPillarApi.getClients],
-  [Assignments, 'The roster could not load. Try again in a moment.', crossPillarApi.getClients],
-  [Profile, 'The profile could not load. Try again in a moment.', crossPillarApi.getClient],
-  [Messages, 'The inbox could not load. Try again in a moment.', coachApi.getUnreadCounts],
-] as const)('shows task-specific copy and retries the same read', async (Screen, copy, read) => {
+  [Home, "Couldn't load", 'The overview could not load. Try again in a moment.', crossPillarApi.getAnalytics],
+  [Clients, "Couldn't load roster", 'Try again in a moment.', crossPillarApi.getClients],
+  [Assignments, "Couldn't load roster", 'Try again in a moment.', crossPillarApi.getClients],
+  [Profile, "Couldn't load profile", 'Try again in a moment.', crossPillarApi.getClient],
+  [Messages, "Couldn't load Body inbox", 'Try again in a moment.', coachApi.getUnreadCounts],
+] as const)('shows the error title with non-repeating recovery copy and retries the same read', async (Screen, title, copy, read) => {
   const screen = await render(<Screen />);
   expect(await screen.findByText(copy)).toBeTruthy();
+  expect(screen.getByText(title)).toBeTruthy();
   expect(screen.queryByText(failure.message)).toBeNull();
   const count = jest.mocked(read).mock.calls.length;
   await fireEvent.press(screen.getByText('Retry'));

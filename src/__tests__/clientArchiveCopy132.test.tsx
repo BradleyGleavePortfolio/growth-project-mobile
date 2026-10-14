@@ -7,7 +7,9 @@ import { useCoachStore } from '../store/coachStore';
 import { coachApi } from '../services/api';
 import type { Props } from '../screens/coach/client-detail/types';
 import { testColors } from '../screens/client/wearables/recoveryTestColors';
+import { HapticService } from '../ui/haptics/haptics.service';
 
+jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) =>
   jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, name) }));
 jest.mock('react-native', () => {
@@ -98,6 +100,7 @@ it('Summary Workouts opens this client Workouts tab and its builder path carries
   mockShowSummary = true;
   const view = await render(<ClientDetailScreen {...props} />);
   await fireEvent.press(await view.findByLabelText('Open client workouts'));
+  expect(HapticService.selection).toHaveBeenCalledTimes(1);
   expect(view.getByText('Recent workouts')).toBeTruthy();
   expect(navigate).not.toHaveBeenCalled();
   await fireEvent.press(view.getByText('Open client copy'));

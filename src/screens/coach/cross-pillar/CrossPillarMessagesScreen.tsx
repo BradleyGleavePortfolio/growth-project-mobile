@@ -174,7 +174,7 @@ export default function CrossPillarMessagesScreen() {
 }
 
 function toMessage(_err: unknown): string {
-  return 'The inbox could not load. Try again in a moment.';
+  return 'Try again in a moment.';
 }
 
 const makeStyles = (colors: ThemeColors) =>

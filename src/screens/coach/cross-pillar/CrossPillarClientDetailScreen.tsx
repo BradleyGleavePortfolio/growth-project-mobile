@@ -379,7 +379,7 @@ function formatMoneyOrDash(v: number | null): string {
 }
 
 function toMessage(_err: unknown): string {
-  return 'The profile could not load. Try again in a moment.';
+  return 'Try again in a moment.';
 }
 
 const makeStyles = (colors: ThemeColors) =>
