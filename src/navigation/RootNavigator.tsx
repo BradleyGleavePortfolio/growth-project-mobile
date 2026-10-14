@@ -930,37 +930,28 @@ export default function RootNavigator() {
     setAuthStateNow('day1win');
   };
 
-  // After auth flips to 'student' and the navigator mounts, route the user
-  // into the logger that matches their selected Day 1 Win card.
-  useEffect(() => {
-    if (authState !== 'student' || !pendingDay1Target.current) return;
+  // Route only once the real logger navigator is ready, including after
+  // the existing persisted-cache gate finishes restoring.
+  const flushPendingDay1Target = () => {
+    if (authState !== 'student' || !pendingDay1Target.current || !navigationRef.isReady()) return;
+    if (selectedDay1Target.current?.userId !== sessionUserId) return;
     const target = pendingDay1Target.current;
     pendingDay1Target.current = null;
-    // Two-frame delay lets ClientNavigator finish its first commit before
-    // we issue the imperative navigate — without it, navigationRef.isReady()
-    // can still be false on slower devices.
-    const t = setTimeout(() => {
-      if (!navigationRef.isReady()) return;
-      try {
-        // The container ref is typed with the loose root param map; we cast
-        // each call's args through `never` because the nested ClientNavigator
-        // tab params are not threaded into this module.
-        const nav = navigationRef as unknown as {
-          navigate: (name: string, params?: object) => void;
-        };
-        if (target === 'first_meal') {
-          nav.navigate('Log');
-        } else if (target === 'first_checkin') {
-          nav.navigate('Home', { screen: 'Habits' });
-        } else if (target === 'logged_first_weight') {
-          nav.navigate('MoreTab', { screen: 'Progress' });
-        }
-      } catch (err) {
-        logger.warn('RootNavigator', 'non-fatal', err);
+    try {
+      const nav = navigationRef as unknown as {
+        navigate: (name: string, params?: object) => void;
+      };
+      if (target === 'first_meal') {
+        nav.navigate('Log');
+      } else if (target === 'first_checkin') {
+        nav.navigate('Home', { screen: 'Habits' });
+      } else if (target === 'logged_first_weight') {
+        nav.navigate('MoreTab', { screen: 'Progress' });
       }
-    }, 50);
-    return () => clearTimeout(t);
-  }, [authState]);
+    } catch (err) {
+      logger.warn('RootNavigator', 'non-fatal', err);
+    }
+  };
 
   // iOS coach-managed gate action (audit #304 B1): the client's thread with
   // their coach lives on the Home stack and is free server-side.
@@ -997,8 +988,8 @@ export default function RootNavigator() {
   return (
     <NavigationContainer
       ref={navigationRef}
-      onReady={() => flushPendingPushTap()}
-      onStateChange={() => { flushPendingPushTap(); }}
+      onReady={() => { flushPendingDay1Target(); flushPendingPushTap(); }}
+      onStateChange={() => { flushPendingDay1Target(); flushPendingPushTap(); }}
       linking={linking}
       theme={{
         ...DefaultTheme,

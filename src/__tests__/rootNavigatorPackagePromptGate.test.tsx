@@ -8,6 +8,8 @@
  */
 const mockSecure: Record<string, string | null> = {};
 const mockNavigate = jest.fn();
+let mockNavigationReady = true;
+let mockOnNavigationReady: () => void;
 let mockDay1Props: {
   onComplete: (target?: import('../services/firstWinApi').WinType) => void;
   savedWin?: import('../services/firstWinApi').WinType;
@@ -45,10 +47,13 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
-    NavigationContainer: ({ children }: { children: React.ReactNode }) =>
-      React.createElement(React.Fragment, null, children),
+    NavigationContainer: ({ children, onReady }: { children: React.ReactNode; onReady: () => void }) => {
+      mockOnNavigationReady = onReady;
+      React.useEffect(() => { if (mockNavigationReady) onReady(); }, [onReady]);
+      return React.createElement(React.Fragment, null, children);
+    },
     createNavigationContainerRef: () => ({
-      isReady: () => true,
+      isReady: () => mockNavigationReady,
       navigate: mockNavigate,
       resetRoot: jest.fn(),
       // S-DUNNING: the payment-lockout provider reads the focused route.
@@ -155,6 +160,7 @@ const STUDENT = {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockNavigationReady = true;
   await AsyncStorage.clear();
   queryClient.clear();
   for (const k of Object.keys(mockSecure)) delete mockSecure[k];
@@ -256,6 +262,21 @@ describe('RootNavigator Day 1 Win skip is remembered per user', () => {
     await act(async () => onSaved(winType));
     expect(r.queryByTestId('day1win')).toBeNull();
     // Continue does not navigate back into the completed logger.
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the selected destination until the navigator is actually ready', async () => {
+    const r = await mount();
+    await r.findByTestId('day1win');
+    mockNavigationReady = false;
+    await act(async () => mockDay1Props.onComplete('first_meal'));
+    await r.findByTestId('nav-client');
+    await act(async () => mockOnNavigationReady());
+    expect(mockNavigate).not.toHaveBeenCalled();
+    mockNavigationReady = true;
+    await act(async () => mockOnNavigationReady());
+    expect(mockNavigate).toHaveBeenCalledWith('Log');
+    await act(async () => mockOnNavigationReady());
     expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
 
