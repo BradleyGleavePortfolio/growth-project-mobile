@@ -117,6 +117,7 @@ it.each([undefined, 'coach-gate'])(
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     mockGetLogs.mockResolvedValue({ data: [{ habit_id: 'water', completed: true, value: 1 }] });
     await act(async () => queryClient.invalidateQueries({ queryKey: ['habits'] }));
+    await waitFor(() => expect(r.getByTestId('habit-row-water').props.accessibilityState.checked).toBe(true));
     await fireEvent.press(r.getByText('Drink water'));
     await waitFor(() => expect(mockLogHabit).toHaveBeenLastCalledWith('water', {
       date: TODAY, completed: false, value: 0,
