@@ -64,6 +64,9 @@ export function trustCoachLine(view: TrustCoachView): string | null {
 /** Roman conversations: "Not your coach" only when there is a coach. */
 export function trustRomanLine(view: TrustCoachView): string {
   return view.kind === 'read' || view.kind === 'unread'
-    ? 'Not your coach — your Roman conversations, which are kept until you delete them or your account'
+    ? sentences([
+        'Not your coach — your Roman conversations, which are kept until you delete them or your account',
+        'One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.',
+      ])
     : 'Your Roman conversations are kept until you delete them or your account';
 }
