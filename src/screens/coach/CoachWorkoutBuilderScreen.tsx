@@ -95,6 +95,7 @@ import { AiMomentumLine, AiWinToast } from '../../components/coach/ai-builder/Ai
 import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/useAiBuilder';
 import type { AiBuilderRef } from '../../api/aiBuilderApi';
 import { appliedToast, NEW_WORKOUT_NAME, NEW_WORKOUT_PROMPT, NEW_WORKOUT_SAVE_FAILED, NEW_WORKOUT_SAVING } from '../../components/coach/ai-builder/aiBuilderCopy';
+import { workoutSaveError } from './workoutSaveError';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
 type HistoryOutcome = 'applied' | 'elsewhere';
@@ -1266,7 +1267,7 @@ export default function CoachWorkoutBuilderScreen() {
       if (forAi) return setAiSaveError(NEW_WORKOUT_SAVE_FAILED);
       Alert.alert(
         'Could not save plan',
-        err instanceof Error ? err.message : 'Unknown error',
+        workoutSaveError(err),
       );
     }
   }, [

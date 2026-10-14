@@ -31,9 +31,18 @@ jest.mock('../config/featureFlags', () => ({ featureFlags: {} }));
 jest.mock('../services/api', () => ({ coachApi: {
   getClientSummary: jest.fn(), getClients: jest.fn(), archiveClient: jest.fn(), unarchiveClient: jest.fn(),
 } }));
-jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: () => null }));
+jest.mock('../screens/coach/client-detail/ConsultationSummaryCard', () => ({ ConsultationSummaryCard: () => null }));
+jest.mock('../hooks/useMacros', () => ({ useCurrentMacrosForClient: () => ({ data: null }) }));
+jest.mock('../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => ({}) }));
+jest.mock('../lib/money/headCoachRole', () => ({ useHeadCoachHandlesMoney: () => false }));
+jest.mock('../components/coach/CoachAiSection', () => ({ __esModule: true, default: () => null }));
+jest.mock('../components/coach/ai-entry/AdjustForClient', () => ({
+  AdjustForClientEntry: ({ onOpened }: { onOpened: (id: string) => void }) =>
+    jest.requireActual('react').createElement(jest.requireActual('react-native').Button, {
+      title: 'Open client copy', onPress: () => onOpened('copied-plan-test'),
+    }),
+}));
 jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: () => null }));
-jest.mock('../screens/coach/client-detail/WorkoutsTab', () => ({ WorkoutsTab: () => null }));
 jest.mock('../screens/coach/client-detail/MealPlanTab', () => ({ MealPlanTab: () => null }));
 jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: () => null }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => null }));
@@ -77,6 +86,17 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
+
+it('Summary Workouts opens this client Workouts tab and its builder path carries the client and copied plan', async () => {
+  const view = await render(<ClientDetailScreen {...props} />);
+  await fireEvent.press(await view.findByLabelText('Open client workouts'));
+  expect(view.getByText('Recent workouts')).toBeTruthy();
+  expect(navigate).not.toHaveBeenCalled();
+  await fireEvent.press(view.getByText('Open client copy'));
+  expect(navigate).toHaveBeenCalledWith('CoachWorkoutBuilder', {
+    planId: 'copied-plan-test', openAi: true, clientId: 'client-test', clientName: 'Test client',
+  });
+});
 
 it('uses the roster archive status when the current summary has no client object', async () => {
   archived = true;

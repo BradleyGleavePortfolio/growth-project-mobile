@@ -884,6 +884,22 @@ describe("CoachWorkoutBuilderScreen — Ask AI on a new workout (AIB-FINISH-127 
   };
   const reopened = () => expect(mockReplace).toHaveBeenCalledWith("CoachWorkoutBuilder", { planId: "new-1", openAi: true });
 
+  it.each([
+    new Error("Request failed with status code 400"),
+    { response: { status: 400, data: { message: "name must be a string" } } },
+  ])("explicit Save shows plain copy and stays on the draft after a failure", async (error) => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    setFlag(false);
+    const Screen = loadScreen();
+    const screen = await render(<Screen />);
+    mockUpdateMutateAsync.mockRejectedValueOnce(error);
+    await fireEvent.press(screen.getByLabelText("Save changes"));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith("Could not save plan", "The workout could not be saved. Try again in a moment."));
+    expect(mockGoBack).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Plan name").props.value).toBe("Push day A");
+    alert.mockRestore();
+  });
+
   it("the bar invites a description (no save-first dead end); a tap saves through Create plan and reopens the saved plan with Ask AI open", async () => {
     const alert = jest.spyOn(Alert, "alert");
     const screen = await mountNew({});

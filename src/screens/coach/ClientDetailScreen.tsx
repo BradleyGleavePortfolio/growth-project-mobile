@@ -46,6 +46,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { layout, radius, typography } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
+import { lightTap } from '../../utils/haptics';
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
   // S14 round 3: the coach wearable-prompts screen is reachable from this
@@ -517,7 +518,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 clientName: route.params.clientName,
               })
             }
-            onOpenWorkoutBuilder={() => navigation.navigate('CoachWorkoutBuilder', undefined)}
+            onOpenWorkoutBuilder={() => {
+              lightTap();
+              setActiveTab('workouts');
+            }}
             onOpenPayments={
               serverFlags.flags.coach_payment_actions
                 ? () => navigation.navigate('ClientPayments', { clientId, clientName: route.params.clientName })
