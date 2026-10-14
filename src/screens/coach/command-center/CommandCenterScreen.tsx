@@ -33,6 +33,8 @@ import ActionQueueScreen from './ActionQueueScreen';
 import CoachHomeCards from './CoachHomeCards';
 import { coachHomeSources } from './coachHomeSources';
 import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
+import { featureFlags } from '../../../config/featureFlags';
+import CreditMomentsHost from '../../../components/coach/credits/CreditMomentsHost';
 
 export type CommandCenterTab =
   | 'overview'
@@ -180,6 +182,8 @@ export default function CommandCenterScreen({
 
       {/* Screen content */}
       {renderContent()}
+      {/* CREDITBUILD: the 80 % / 100 % AI credit sheets (flag off until the Money pool ships). */}
+      {featureFlags.coachAiCredits ? <CreditMomentsHost /> : null}
     </Screen>
   );
 }

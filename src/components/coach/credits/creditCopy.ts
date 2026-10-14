@@ -65,3 +65,29 @@ export function setupRows(packsSold: boolean): CreditGuideRow[] {
       : { key: 'find', label: CREDIT_ROWS.findLabel, text: CREDIT_ROWS.find },
   ];
 }
+
+/** The 80 % and 100 % moments on the coach home (CREDIT-W, CREDIT-SW). */
+export const CREDIT_MOMENT_COPY = {
+  low: {
+    title: 'Your AI credits are low.',
+    line: 'If they run out before then, Roman and AI features pause for you and your clients.',
+  },
+  usedUp: {
+    title: 'Your AI credits are used up.',
+    line: 'Roman and AI features are paused for you and your clients. Everything else keeps working.',
+  },
+  newBalance: 'New balance',
+  otherAmounts: 'Other amounts',
+  notNow: 'Not now',
+  gotIt: 'Got it',
+} as const;
+
+/** SB-6: "Buy $25 of credits". */
+export function buyAmountLabel(cents: number): string {
+  return `Buy ${formatCents(cents)} of credits`;
+}
+
+/** S2-3: how a pack tile is spoken ("$25 pack"). */
+export function packTileLabel(cents: number): string {
+  return `${formatCents(cents)} pack`;
+}
