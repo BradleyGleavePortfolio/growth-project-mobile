@@ -115,7 +115,7 @@ describe.each(['ios', 'android'] as const)('%s tab accessibility', (os) => {
     }
     const messages = view.getByRole('tab', { name: os === 'ios' ? `${names[3]}, tab, 4 of 5` : names[3] });
     await fireEvent.press(messages);
-    expect(view.getByRole('tab', { name: os === 'ios' ? `${names[3]}, tab, 4 of 5` : names[3] })).toHaveAccessibilityState({ selected: true });
+    expect(view.getByRole('tab', { name: os === 'ios' ? `${names[3]}, tab, 4 of 5` : names[3] })).toBeSelected();
     expect(await view.findByText('../screens/coach/MessagesScreen')).toBeTruthy();
     expect(view.getByText('Overview').props.adjustsFontSizeToFit).toBe(true);
   });
