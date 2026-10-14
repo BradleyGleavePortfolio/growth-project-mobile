@@ -356,8 +356,8 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     mockBudget.used_displayed_cents = used;
     await render(<CreditPackCheckoutScreen />);
     expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
-    expect(screen.getByLabelText('$99 pack')).toHaveAccessibilityState({ selected: true });
-    expect(screen.getByLabelText('$25 pack')).toHaveAccessibilityState({ selected: false });
+    expect(screen.getByLabelText('$99 pack').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: false });
     expect(screen.getByTestId('credit-pack-custom-input')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('$99 pack'));
     expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 9900 }));
