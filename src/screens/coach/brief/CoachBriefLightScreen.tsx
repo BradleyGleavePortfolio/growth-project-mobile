@@ -290,10 +290,10 @@ export default function CoachBriefLightScreen() {
     >
       {focused ? <StatusBar barStyle="light-content" /> : null}
       <BriefField lit={t.interpolate({ inputRange: [0, 300], outputRange: [0, 1], extrapolate: 'clamp' })} still={still} />
-      <Animated.View style={[styles.fill, { opacity: fade, paddingHorizontal: gutter }]}>
+      <Animated.View style={[styles.fill, { opacity: fade }]}>
         <ScrollView
           style={styles.words}
-          contentContainerStyle={{ paddingTop: insets.top + (wide ? 64 : 44), paddingBottom: 8 }}
+          contentContainerStyle={{ paddingTop: insets.top + (wide ? 60 : 40), paddingBottom: 8, paddingHorizontal: gutter }}
           showsVerticalScrollIndicator={false}
           onLayout={(e) => setFit((f) => ({ ...f, view: e.nativeEvent.layout.height }))}
           onContentSizeChange={(_w, h) => setFit((f) => ({ ...f, content: h }))}
@@ -308,14 +308,14 @@ export default function CoachBriefLightScreen() {
               <Svg width={112} height={112} style={styles.glow}>
                 <Defs>
                   <RadialGradient id="halo" cx="50%" cy="50%" r="50%">
-                    <Stop offset={0.5} stopColor={colors.romanAccent} stopOpacity={0.42} />
-                    <Stop offset={1} stopColor={colors.romanAccent} stopOpacity={0} />
+                    <Stop offset={0.5} stopColor={colors.romanAccent} stopOpacity={0.16} />
+                    <Stop offset={0.86} stopColor={colors.romanAccent} stopOpacity={0} />
                   </RadialGradient>
                 </Defs>
                 <Circle cx={56} cy={56} r={56} fill="url(#halo)" />
               </Svg>
               <View style={styles.ring}>
-                <RomanAvatar crop="neutral" size={52} />
+                <RomanAvatar crop="neutral" size={50} />
               </View>
             </View>
             <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
@@ -324,7 +324,7 @@ export default function CoachBriefLightScreen() {
             </View>
           </Animated.View>
           {paras.map((p, i) => (
-            <Animated.View key={`${i}-${p.slice(0, 12)}`} style={[{ marginTop: i === 0 ? 28 : 14 }, rise(300 + i * step, 4)]}>
+            <Animated.View key={`${i}-${p.slice(0, 12)}`} style={[{ marginTop: i === 0 ? 24 : 14 }, rise(300 + i * step, 4)]}>
               <Text
                 ref={i === 0 ? greetingRef : undefined}
                 style={styles.words24}
@@ -354,7 +354,7 @@ export default function CoachBriefLightScreen() {
           </Svg>
         ) : null}
         <Animated.View
-          style={[styles.rows, { paddingBottom: Math.max(insets.bottom, 16) + 16 }, rise(1000, 8, 300)]}
+          style={[styles.rows, { paddingBottom: Math.max(insets.bottom, 16) + 16, paddingHorizontal: gutter }, rise(1000, 8, 300)]}
           pointerEvents={revealed ? 'auto' : 'none'}
         >
           {rows.map((row, i) => (
@@ -384,10 +384,10 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   words: { flexGrow: 0, flexShrink: 1 },
   more: { marginTop: -32 },
-  who: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  halo: { borderRadius: 31, borderWidth: 4, borderColor: 'rgba(201,169,97,0.14)' },
-  glow: { position: 'absolute', left: -29, top: -29 },
-  ring: { borderRadius: 27, borderWidth: 1, borderColor: colors.romanAccent, overflow: 'hidden' },
+  who: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  halo: { marginLeft: -4, borderRadius: radius.chip, borderWidth: 4, borderColor: 'rgba(201,169,97,0.14)' },
+  glow: { position: 'absolute', left: -30, top: -30 },
+  ring: { borderRadius: radius.chip, borderWidth: 1, borderColor: colors.romanAccent, overflow: 'hidden' },
   name: { fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 20, color: BONE },
   date: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: 'rgba(251,247,240,0.82)' },
   words24: {
@@ -399,8 +399,8 @@ const styles = StyleSheet.create({
     fontVariant: ['lining-nums'],
   },
   dots: { flexDirection: 'row', gap: 6, marginTop: 18 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(251,247,240,0.7)' },
-  rows: { marginTop: 26, gap: 8 },
+  dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: 'rgba(251,247,240,0.7)' },
+  rows: { marginTop: 18, gap: 8 },
   row: {
     minHeight: 54,
     borderRadius: radius.button,
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   badge: {
     width: 22,
     height: 22,
-    borderRadius: 6,
+    borderRadius: radius.control,
     overflow: 'hidden',
     backgroundColor: '#2C2C29',
     color: colors.stone,
