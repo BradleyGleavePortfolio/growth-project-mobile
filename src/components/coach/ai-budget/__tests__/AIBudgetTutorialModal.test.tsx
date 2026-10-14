@@ -130,7 +130,8 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
           purchasesHidden={purchasesHidden}
         />,
       );
-      for (let i = 0; i < 3; i += 1) {
+      const advances = purchasesHidden ? 2 : 3;
+      for (let i = 0; i < advances; i += 1) {
         await fireEvent.press(getByTestId('ai-tutorial-continue'));
         await act(() => {
           jest.advanceTimersByTime(300);
