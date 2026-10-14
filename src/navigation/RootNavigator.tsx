@@ -395,6 +395,8 @@ export default function RootNavigator() {
     if (sessionUserId) analyticsIdentify(sessionUserId);
   }, [sessionUserId]);
   const pendingDay1Target = useRef<WinType | null>(null);
+  const selectedDay1Target = useRef<{ winType: WinType; userId: string } | null>(null);
+  const [day1SavedWin, setDay1SavedWin] = useState<WinType | undefined>();
   // Deep-link replay state for the public accept-invite path. When a
   // signed-in user clicks an accept-invite URL we sign them out and then
   // navigate to AcceptInvite ONLY after authState flips to
@@ -912,13 +914,20 @@ export default function RootNavigator() {
     void bootstrapAuth();
   };
 
-  // Called by Day1WinScreen when the client completes the win OR skips.
-  // When `target` is set, the user just completed a win and wants to deep
-  // link into the matching logger; we stash it and route after the
-  // ClientNavigator mounts.
+  // A card starts logging, not completion. The matching confirmed save
+  // brings the client back to the existing Day One note surface.
   const handleDay1WinComplete = (target?: WinType) => {
     pendingDay1Target.current = target ?? null;
+    selectedDay1Target.current = target && sessionUserId ? { winType: target, userId: sessionUserId } : null;
+    setDay1SavedWin(undefined);
     setAuthStateNow('student');
+  };
+
+  const handleDay1Saved = (winType: WinType) => {
+    if (selectedDay1Target.current?.winType !== winType || selectedDay1Target.current.userId !== sessionUserId) return;
+    selectedDay1Target.current = null;
+    setDay1SavedWin(winType);
+    setAuthStateNow('day1win');
   };
 
   // After auth flips to 'student' and the navigator mounts, route the user
@@ -981,7 +990,7 @@ export default function RootNavigator() {
   // a one-time interstitial, not a navigable screen. It is shown once, on
   // first student boot, then replaced by ClientNavigator.
   if (authState === 'day1win') {
-    return <Day1WinScreen onComplete={handleDay1WinComplete} />;
+    return <Day1WinScreen onComplete={handleDay1WinComplete} savedWin={day1SavedWin} />;
   }
 
   return (
@@ -1048,7 +1057,7 @@ export default function RootNavigator() {
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
-            <ClientNavigator />
+            <ClientNavigator onDay1Saved={handleDay1Saved} />
           </DunningLockoutProvider>
           <PackageSelectionSheet
             visible
@@ -1078,7 +1087,7 @@ export default function RootNavigator() {
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
-            <ClientNavigator />
+            <ClientNavigator onDay1Saved={handleDay1Saved} />
           </DunningLockoutProvider>
         </EntitlementProvider>
       )}

@@ -118,7 +118,7 @@ export function formatLogDate(date: string): string {
   return `${LOG_DATE_WEEKDAYS[d.getDay()]} ${d.getDate()} ${LOG_DATE_MONTHS[d.getMonth()]}`;
 }
 
-export default function ProgressScreen() {
+export default function ProgressScreen({ onSaved }: { onSaved?: () => void } = {}) {
   const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -310,6 +310,7 @@ export default function ProgressScreen() {
     setNewNotes('');
     setShowLogModal(false);
     loadData();
+    onSaved?.();
   };
 
   // U12 (WEIGH-KB-128): Start, Weight and Change come from every weigh-in,
