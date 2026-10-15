@@ -66,6 +66,7 @@ When the toggle changes:
 | `EditProfileScreen` | `success()` | Profile saved successfully |
 | `EditProfileScreen` | `error()` | Profile save API failure |
 | `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
+| `MoneyAIPool` (Money page) | `mediumImpact()` / `softImpact()` | "Buy more credits" pressed (filled button / quiet text while the Stripe setup card shows) |
 
 ## Architecture
 
