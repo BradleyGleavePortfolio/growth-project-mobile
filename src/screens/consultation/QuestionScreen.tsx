@@ -357,22 +357,29 @@ function parseIso(v: unknown): { y: number; m: number; d: number } | null {
 function DobBody(props: BodyProps) {
   const { screen, answers, now, onAnswer, onNext, header } = props;
   const parsed = parseIso(answers.B2);
-  const [y, setY] = useState(parsed?.y ?? now.getFullYear() - 30);
-  const [m, setM] = useState(parsed?.m ?? now.getMonth() + 1);
-  const [d, setD] = useState(parsed?.d ?? Math.min(28, now.getDate()));
-  const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  // FIXAGE2 R6: "only a date the client actually chose is ever saved as
+  // their date of birth." No wheel starts chosen (a saved answer excepted);
+  // there is no date, and Continue stays off, until all three are picked.
+  const [y, setY] = useState<number | null>(parsed?.y ?? null);
+  const [m, setM] = useState<number | null>(parsed?.m ?? null);
+  const [d, setD] = useState<number | null>(parsed?.d ?? null);
+  const isoOf = (ny: number | null, nm: number | null, nd: number | null) =>
+    ny && nm && nd ? `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}` : undefined;
+  const iso = isoOf(y, m, d);
   const draft = { ...answers, B2: iso };
   const v = validateScreen(screen, draft, now);
   // Prototype 45: an age under 16 leads to a calm, final stop screen (no
   // form, nothing saved) whose only action returns to the wheels.
   const minAge = screen.validation?.ageRange?.min ?? 16;
-  const age = ageOn(iso, now);
+  const age = iso ? ageOn(iso, now) : NaN;
   const under = !Number.isNaN(age) && age < minAge;
   const [stopped, setStopped] = useState(false);
   if (stopped) {
     return (
       <Frame
-        onBack={() => setStopped(false)}
+        // FIXAGE2 R9: no top-bar Back; "Change my date of birth" is the same
+        // action, so the stop screen shows five actions (training 6.2).
+        onBack={null}
         onFinishLater={null}
         footer={<PrimaryButton label="Change my date of birth" onPress={() => setStopped(false)} testID="consult-under-age-change" />}
         testID="consult-screen-UNDER_AGE"
@@ -386,8 +393,10 @@ function DobBody(props: BodyProps) {
       </Frame>
     );
   }
-  const commit = (ny = y, nm = m, nd = d) =>
-    onAnswer('B2', `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`);
+  const commit = (ny: number | null, nm: number | null, nd: number | null) => {
+    const next = isoOf(ny, nm, nd);
+    if (next) onAnswer('B2', next);
+  };
   return (
     <BodyFrame
       props={props}
@@ -395,24 +404,28 @@ function DobBody(props: BodyProps) {
       footer={
         <PrimaryButton
           label="Continue"
-          disabled={!v.valid && !under}
-          onPress={() => (under ? setStopped(true) : onNext({ B2: iso }))}
+          disabled={!iso || (!v.valid && !under)}
+          onPress={() => {
+            if (!iso) return;
+            if (under) setStopped(true);
+            else onNext({ B2: iso });
+          }}
           testID="consult-continue"
         />
       }
     >
       <View style={s.wheels}>
         <View style={[s.wheelCol, { flex: 1.6 }]}>
-          <Wheel label="Birth month" values={MONTHS} value={MONTHS[m - 1]} onChange={(x) => { const nm = MONTHS.indexOf(x) + 1; setM(nm); commit(y, nm, d); }} testID="wheel-dob-month" />
+          <Wheel label="Birth month" values={MONTHS} value={m ? MONTHS[m - 1] : null} anchor={MONTHS[now.getMonth()]} onChange={(x) => { const nm = MONTHS.indexOf(x) + 1; setM(nm); commit(y, nm, d); }} testID="wheel-dob-month" />
         </View>
         <View style={[s.wheelCol, { flex: 0.8 }]}>
-          <Wheel label="Birth day" values={range(1, 31)} value={d} onChange={(x) => { setD(x); commit(y, m, x); }} testID="wheel-dob-day" />
+          <Wheel label="Birth day" values={range(1, 31)} value={d} anchor={Math.min(28, now.getDate())} onChange={(x) => { setD(x); commit(y, m, x); }} testID="wheel-dob-day" />
         </View>
         <View style={s.wheelCol}>
-          <Wheel label="Birth year" values={range(now.getFullYear() - 100, now.getFullYear() - 10)} value={y} onChange={(x) => { setY(x); commit(x, m, d); }} testID="wheel-dob-year" />
+          <Wheel label="Birth year" values={range(now.getFullYear() - 100, now.getFullYear() - 10)} value={y} anchor={now.getFullYear() - 30} onChange={(x) => { setY(x); commit(x, m, d); }} testID="wheel-dob-year" />
         </View>
       </View>
-      {v.message && !under ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
+      {iso && v.message && !under ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
       {props.escape}
     </BodyFrame>
   );

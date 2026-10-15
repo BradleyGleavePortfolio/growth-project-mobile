@@ -13,6 +13,10 @@ jest.mock('../../../services/api', () => ({
   deletionApi: { getDeletionStatus: jest.fn(async () => ({ data: null })) },
   isAccountDeletedError: () => false,
 }));
+jest.mock('../../../services/dataExportApi', () => ({
+  ...jest.requireActual('../../../services/dataExportApi'),
+  dataExportApi: { getStatus: jest.fn(async () => null), requestExport: jest.fn(), createDownloadLink: jest.fn() },
+}));
 jest.mock('../../../services/authActions', () => ({ signOut: jest.fn(async () => undefined) }));
 jest.mock('../../../utils/authProviders', () => ({ getSignInProviders: jest.fn(async () => ['email']) }));
 jest.mock('../../../utils/appleAuth', () => ({ isAppleAuthAvailable: jest.fn(async () => false), reauthenticateWithApple: jest.fn() }));
@@ -32,7 +36,12 @@ type R = Awaited<ReturnType<typeof render>>;
 const STATES: Array<[string, (r: R) => Promise<void>]> = [
   ['the age step', async (r) => expect(r.getByTestId('consult-screen-B2')).toBeTruthy()],
   ['the under-16 stop screen', async (r) => {
-    for (let i = 0; i < 16; i += 1) {
+    // FIXAGE2 R6: month and day are picked too (nothing starts chosen).
+    await fireEvent(r.getByTestId('wheel-dob-month-scroll'), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 0 } } });
+    for (const w of ['wheel-dob-day', 'wheel-dob-year']) {
+      await fireEvent(r.getByTestId(w), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    }
+    for (let i = 0; i < 15; i += 1) {
       await fireEvent(r.getByTestId('wheel-dob-year'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     }
     await fireEvent.press(r.getByTestId('consult-continue'));
@@ -47,7 +56,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-it.each(STATES)('from %s: Sign out signs out; Delete my account opens the real deletion screen', async (state, reach) => {
+it.each(STATES)('from %s: Sign out signs out; Download my data and Delete my account open the real screens', async (state, reach) => {
   const r = await render(
     <NavigationContainer>
       <AgeCheckNavigator onConfirmed={jest.fn()} onSignOut={() => void signOut()} />
@@ -64,6 +73,10 @@ it.each(STATES)('from %s: Sign out signs out; Delete my account opens the real d
   ]);
   buttons.find((b) => b.text === 'Sign out')?.onPress?.();
   expect(signOut).toHaveBeenCalledTimes(1);
+  await fireEvent.press(r.getByTestId('age-data-export'));
+  await r.findByTestId('data-export-screen');
+  await fireEvent.press(r.getByLabelText('Go back'));
+  await r.findByTestId(state === 'the age step' ? 'consult-screen-B2' : 'consult-screen-UNDER_AGE');
   await fireEvent.press(r.getByTestId('age-delete-account'));
   await r.findByText('Delete account');
   await fireEvent.press(r.getByLabelText('Go back'));

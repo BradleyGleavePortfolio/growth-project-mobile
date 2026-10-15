@@ -444,11 +444,23 @@ export default function RootNavigator() {
   // AGEGATE16: a client route refused for a missing age confirmation (the
   // server rule) opens the age step from inside the client app. Setup and
   // the coach app are never interrupted.
+  // FIXAGE2 R7: "a client whose latest known date of birth is not a confirmed
+  // 16+ date never enters the client app from a cache." The refusal is the
+  // latest answer: the cached date is cleared (so no cold start trusts it),
+  // and a client bootstrap past its age check commits nothing after it.
+  const clientPastAgeCheck = useRef(false);
   useEffect(
     () =>
-      onAgeConfirmationRequired(() =>
-        setAuthStateNow((s) => (s === 'student' || s === 'package_prompt' || s === 'day1win' ? 'age_check' : s)),
-      ),
+      onAgeConfirmationRequired(() => {
+        void readUserCache()
+          .then((u) => (u?.role === 'student' ? patchUserCache({ profile: { date_of_birth: null } }) : undefined))
+          .catch((err: unknown) => logger.warn('RootNavigator', 'cached date of birth not cleared', err));
+        const booting = clientPastAgeCheck.current;
+        if (booting) bootGuard.begin();
+        setAuthStateNow((s) =>
+          s === 'student' || s === 'package_prompt' || s === 'day1win' || (s === 'loading' && booting) ? 'age_check' : s,
+        );
+      }),
     [],
   );
 
@@ -687,6 +699,7 @@ export default function RootNavigator() {
     // one (an auth event during a cold start, or Try again) commits nothing,
     // so a slow earlier run can never overwrite the newer outcome.
     const isLatest = bootGuard.begin();
+    clientPastAgeCheck.current = false;
     const setAuthState = (next: AuthState) => {
       if (isLatest()) setAuthStateNow(next);
     };
@@ -853,6 +866,7 @@ export default function RootNavigator() {
           setAuthState('age_check');
           return;
         }
+        if (isLatest()) clientPastAgeCheck.current = true;
 
         // Consultation onboarding (flag on, Opus B-05): the consultation, its
         // plan reveal and Roman's tutorial replace the Day-1 flow and the

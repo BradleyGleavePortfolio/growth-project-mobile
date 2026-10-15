@@ -122,6 +122,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import RootNavigator from '../navigation/RootNavigator';
 import { queryClient } from '../services/queryClient';
 import { reportAgeConfirmationRequired } from '../lib/ageGate';
+import { patchUserCache, readUserCache } from '../lib/userCache';
+import { firstWinApi } from '../services/firstWinApi';
 
 const CLIENT = {
   id: 'client-C',
@@ -136,6 +138,18 @@ const under16 = () => `${new Date().getFullYear() - 14}-01-01`;
 async function seed(user: object, onboardingDone = true) {
   await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify(user));
   if (onboardingDone) await AsyncStorage.setItem('onboarding_complete', 'true');
+}
+// FIXAGE2 R6: nothing on the wheels is chosen until the client moves them.
+async function pickDate(r: Awaited<ReturnType<typeof render>>) {
+  const now = new Date();
+  const rows: Array<[string, number]> = [
+    ['wheel-dob-month', now.getMonth()],
+    ['wheel-dob-day', Math.min(28, now.getDate()) - 1],
+    ['wheel-dob-year', 70],
+  ];
+  for (const [id, row] of rows) {
+    await fireEvent(r.getByTestId(`${id}-scroll`), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: row * 44 } } });
+  }
 }
 const cached = async () => JSON.parse((await AsyncStorage.getItem('prefs:auth.user_data')) ?? '{}');
 
@@ -185,6 +199,7 @@ describe('AGEGATE16: every client confirms 16 or older before the client app', (
     const r = await mount();
     await r.findByTestId('consult-screen-B2');
     expect(r.queryByTestId('nav-client')).toBeNull();
+    await pickDate(r);
     await fireEvent.press(r.getByTestId('consult-continue'));
     await r.findByTestId('nav-client');
     expect(mockProfileUpdate).toHaveBeenCalledWith({ date_of_birth: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
@@ -226,6 +241,54 @@ describe('AGEGATE16: every client confirms 16 or older before the client app', (
     await act(async () => reportAgeConfirmationRequired());
     await r.findByTestId('consult-screen-B2');
     expect(r.queryByTestId('nav-client')).toBeNull();
+  });
+
+  // FIXAGE2 R7: "a client whose latest known date of birth is not a
+  // confirmed 16+ date never enters the client app from a cache." Real cache
+  // writes (lib/userCache), real refusal delivery; the server read fails
+  // (offline), so only the cache could let them in.
+  const offline = () => mockMe.mockRejectedValue(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
+  const R7: Array<[string, () => Promise<void>]> = [
+    ['Edit profile saves an under-16 dob over a cached adult date_of_birth', async () => {
+      await seed({ ...CLIENT, profile: { ...CLIENT.profile, date_of_birth: ADULT } });
+      await readUserCache();
+      await patchUserCache({ profile: { dob: under16() } });
+      expect((await cached()).profile).toEqual(expect.objectContaining({ dob: under16(), date_of_birth: under16() }));
+    }],
+    ['an older cache: canonical under-16, legacy adult dob', async () => {
+      await seed({ ...CLIENT, profile: { ...CLIENT.profile, date_of_birth: under16(), dob: '1990-01-01' } });
+    }],
+    ['the server refused for age in the app, then the app was closed', async () => {
+      await seed({ ...CLIENT, profile: { ...CLIENT.profile, date_of_birth: ADULT, dob: '1990-01-01' } });
+      const live = await mount();
+      await live.findByTestId('nav-client');
+      await act(async () => reportAgeConfirmationRequired());
+      await live.findByTestId('consult-screen-B2');
+      await waitFor(async () => expect((await cached()).profile).toEqual(expect.objectContaining({ date_of_birth: null, dob: null })));
+      await cleanup();
+    }],
+  ];
+  it.each(R7)('%s: offline cold start opens the age step, never the app', async (_row, arrange) => {
+    await arrange();
+    offline();
+    const r = await mount();
+    await r.findByTestId('consult-screen-B2');
+    expect(r.queryByTestId('nav-client')).toBeNull();
+  });
+
+  it('FIXAGE2 R7: a refusal while the app is still opening (first-win read) opens the age step, never the app', async () => {
+    await seed({ ...CLIENT, profile: { ...CLIENT.profile, date_of_birth: ADULT } });
+    await AsyncStorage.setItem('onboarding_standard_path:client-C', 'true');
+    (firstWinApi.getStatus as jest.Mock).mockImplementationOnce(async () => {
+      reportAgeConfirmationRequired();
+      throw new Error('refused for age');
+    });
+    const r = await mount();
+    await r.findByTestId('consult-screen-B2');
+    expect(firstWinApi.getStatus).toHaveBeenCalled();
+    await act(async () => new Promise((res) => setTimeout(res, 50)));
+    expect(r.queryByTestId('nav-client')).toBeNull();
+    expect(r.getByTestId('consult-screen-B2')).toBeTruthy();
   });
 
   it('setup is never interrupted: the consultation asks the date itself', async () => {

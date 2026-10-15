@@ -31,6 +31,19 @@ const START_YEAR = now.getFullYear() - 30;
 const isoFor = (y: number) =>
   `${y}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(Math.min(28, now.getDate())).padStart(2, '0')}`;
 
+// FIXAGE2 R6: nothing is picked until the client moves each wheel. Each
+// wheel is scrolled to rest on the row it opens at (a real pick).
+async function pickStartDate(r: Awaited<ReturnType<typeof render>>) {
+  const rows: Array<[string, number]> = [
+    ['wheel-dob-month', now.getMonth()],
+    ['wheel-dob-day', Math.min(28, now.getDate()) - 1],
+    ['wheel-dob-year', 70],
+  ];
+  for (const [id, row] of rows) {
+    await fireEvent(r.getByTestId(`${id}-scroll`), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: row * 44 } } });
+  }
+}
+
 async function yearsLater(r: Awaited<ReturnType<typeof render>>, n: number) {
   for (let i = 0; i < n; i += 1) {
     await fireEvent(r.getByTestId('wheel-dob-year'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
@@ -60,12 +73,35 @@ describe('AgeCheckScreen', () => {
     expect(r.queryByText(/Chapter/)).toBeNull();
     expect(r.queryByTestId('consult-back')).toBeNull();
     expect(r.queryByTestId('consult-finish-later')).toBeNull();
-    expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: String(START_YEAR) });
+    expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toBeUndefined();
+  });
+
+  // FIXAGE2 R6: "only a date the client actually chose is ever saved as
+  // their date of birth."
+  it('no date is pre-chosen: Continue stays off until month, day and year are all picked', async () => {
+    const onConfirmed = jest.fn();
+    const r = await render(<AgeCheckScreen onConfirmed={onConfirmed} />);
+    const off = () => r.getByTestId('consult-continue').props.accessibilityState?.disabled;
+    for (const id of ['wheel-dob-month', 'wheel-dob-day', 'wheel-dob-year']) {
+      expect([id, r.getByTestId(id).props.accessibilityValue, off()]).toEqual([id, undefined, true]);
+    }
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await fireEvent(r.getByTestId('wheel-dob-year-scroll'), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 70 * 44 } } });
+    await fireEvent(r.getByTestId('wheel-dob-month-scroll'), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 0 } } });
+    expect(off()).toBe(true);
+    expect(r.queryByTestId('consult-validation')).toBeNull();
+    await fireEvent(r.getByTestId('wheel-dob-day'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    expect(off()).toBe(false);
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    const day = String(Math.min(28, now.getDate()) + 1).padStart(2, '0');
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith({ date_of_birth: `${START_YEAR}-01-${day}` }));
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
   });
 
   it('16 or older: Continue saves only the date of birth, caches it and opens the app', async () => {
     const onConfirmed = jest.fn();
     const r = await render(<AgeCheckScreen onConfirmed={onConfirmed} />);
+    await pickStartDate(r);
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => expect(onConfirmed).toHaveBeenCalledTimes(1));
     expect(mockUpdate).toHaveBeenCalledTimes(1);
@@ -75,9 +111,10 @@ describe('AgeCheckScreen', () => {
     expect(alert).not.toHaveBeenCalled();
   });
 
-  it('under 16: Continue shows the calm final stop screen and saves nothing; both ways back keep the wheels', async () => {
+  it('under 16: Continue shows the calm final stop screen and saves nothing; Change keeps the wheels', async () => {
     const onConfirmed = jest.fn();
     const r = await render(<AgeCheckScreen onConfirmed={onConfirmed} />);
+    await pickStartDate(r);
     await yearsLater(r, 16);
     expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: String(START_YEAR + 16) });
     await fireEvent.press(r.getByTestId('consult-continue'));
@@ -86,8 +123,10 @@ describe('AgeCheckScreen', () => {
     expect(r.getByText('If the date was entered by mistake, go back and change it.')).toBeTruthy();
     await fireEvent.press(r.getByTestId('consult-under-age-change'));
     expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: String(START_YEAR + 16) });
+    // FIXAGE2 R9: the stop screen has no second Back (Change is the same action).
     await fireEvent.press(r.getByTestId('consult-continue'));
-    await fireEvent.press(r.getByTestId('consult-back'));
+    expect(r.queryByTestId('consult-back')).toBeNull();
+    await fireEvent.press(r.getByTestId('consult-under-age-change'));
     expect(r.getByTestId('consult-screen-B2')).toBeTruthy();
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(mockPatchCache).not.toHaveBeenCalled();
@@ -98,6 +137,7 @@ describe('AgeCheckScreen', () => {
     const onConfirmed = jest.fn();
     mockUpdate.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
     const r = await render(<AgeCheckScreen onConfirmed={onConfirmed} />);
+    await pickStartDate(r);
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
     expect(alert.mock.calls[0][0]).toBe("Couldn't save");
@@ -114,6 +154,7 @@ describe('AgeCheckScreen', () => {
     mockUpdate.mockReturnValueOnce(new Promise((res) => (finish = res)));
     const onConfirmed = jest.fn();
     const r = await render(<AgeCheckScreen onConfirmed={onConfirmed} />);
+    await pickStartDate(r);
     await fireEvent.press(r.getByTestId('consult-continue'));
     await fireEvent.press(r.getByTestId('consult-continue'));
     finish({ data: {} });
@@ -125,6 +166,7 @@ describe('AgeCheckScreen', () => {
     mockPatchCache.mockRejectedValueOnce(new Error('disk'));
     const onConfirmed = jest.fn();
     const r = await render(<AgeCheckScreen onConfirmed={onConfirmed} />);
+    await pickStartDate(r);
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => expect(onConfirmed).toHaveBeenCalledTimes(1));
     expect(alert).not.toHaveBeenCalled();
