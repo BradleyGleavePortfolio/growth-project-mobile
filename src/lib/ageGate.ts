@@ -9,6 +9,7 @@
  * RootNavigator can open the age step. No other age data is kept.
  */
 import { screenById } from './consultation/definitions';
+import { logger } from '../utils/logger';
 
 export const AGE_CONFIRMATION_REQUIRED = 'AGE_CONFIRMATION_REQUIRED';
 
@@ -32,11 +33,11 @@ export function confirmsMinClientAge(dob: unknown, now: Date = new Date()): bool
 type CachedProfile = { date_of_birth?: unknown; dob?: unknown } | null | undefined;
 
 /**
- * May this client enter the app? Yes when the cached profile already shows
- * 16 or older. Otherwise the server's profile decides once (and the date is
- * cached so it is not asked again). No answer from the server opens the app
- * as before: the server still refuses client routes, which brings the age
- * step back through reportAgeConfirmationRequired.
+ * May this client enter the app? Only on a 16+ date of birth: the cached
+ * profile's, or else the server's (read once, then cached so it is not asked
+ * again). A failed, timed-out or unusable answer is never a yes: the client
+ * gets the age step, whose save failure offers the retry (owner
+ * #C8-UNDER18-B: "if they dont agree theyre over 16 they dont get in").
  */
 export async function clientAgeConfirmed(
   profile: CachedProfile,
@@ -44,20 +45,13 @@ export async function clientAgeConfirmed(
   saveDob: (dob: string) => Promise<void>,
 ): Promise<boolean> {
   if (confirmsMinClientAge(profile?.date_of_birth) || confirmsMinClientAge(profile?.dob)) return true;
-  let data: unknown;
-  try {
-    data = (await readMe())?.data;
-  } catch {
-    return true;
-  }
-  if (!data || typeof data !== 'object' || !('profile' in data)) return true;
-  const dob = (data as { profile?: { date_of_birth?: unknown } | null }).profile?.date_of_birth;
+  const dob = await readMe().then(
+    (res) => (res?.data as { profile?: { date_of_birth?: unknown } | null } | null | undefined)?.profile?.date_of_birth,
+    () => undefined,
+  );
   if (!confirmsMinClientAge(dob)) return false;
-  try {
-    await saveDob(String(dob));
-  } catch {
-    // The server check simply runs again on the next open.
-  }
+  // Not cached: the server is asked again on the next open.
+  await saveDob(String(dob)).catch((err: unknown) => logger.warn('ageGate', 'date of birth not cached', err));
   return true;
 }
 

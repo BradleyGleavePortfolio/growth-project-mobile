@@ -204,16 +204,21 @@ describe('AGEGATE16: every client confirms 16 or older before the client app', (
     expect(mockMe).toHaveBeenCalledTimes(1);
   });
 
-  it('no answer from the server opens the app as before (the server rule still holds)', async () => {
-    mockMe.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
+  // FIXAGE R2: an unreadable answer is never a 16+ date.
+  it.each([
+    ['fails', () => mockMe.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))],
+    ['times out', () => mockMe.mockRejectedValueOnce(new Error('startup timeout: age check'))],
+    ['has no usable profile', () => mockMe.mockResolvedValueOnce({ data: 'unexpected' })],
+  ])('a server read that %s asks the date (never the app)', async (_case, arrange) => {
+    arrange();
     await seed(CLIENT);
     const r = await mount();
-    await r.findByTestId('nav-client');
+    await r.findByTestId('consult-screen-B2');
+    expect(r.queryByTestId('nav-client')).toBeNull();
   });
 
   it('a 403 AGE_CONFIRMATION_REQUIRED inside the client app opens the age step', async () => {
-    mockMe.mockRejectedValueOnce(new Error('offline'));
-    await seed(CLIENT);
+    await seed({ ...CLIENT, profile: { ...CLIENT.profile, date_of_birth: ADULT } });
     const r = await mount();
     await r.findByTestId('nav-client');
     await act(async () => reportAgeConfirmationRequired());

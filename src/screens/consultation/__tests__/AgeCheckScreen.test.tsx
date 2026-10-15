@@ -142,28 +142,44 @@ describe('the 16+ rule (same arithmetic as the server)', () => {
     for (const v of [null, undefined, '', 'soon', 20, {}]) expect(confirmsMinClientAge(v, NOW)).toBe(false);
   });
 
-  it('server check: cached adult skips it; server adult is cached once; server without one asks; no answer opens', async () => {
+  // FIXAGE R2: "a client without a confirmed 16+ date of birth never enters
+  // the client app, including when the age read fails, times out or returns
+  // a reply with no usable profile."
+  const UNDER = isoFor(now.getFullYear() - 14);
+  const CACHED: Array<[string, unknown]> = [
+    ['missing', {}],
+    ['no profile', null],
+    ['malformed', { date_of_birth: 'soon' }],
+    ['under 16', { date_of_birth: UNDER }],
+  ];
+  const SERVER: Array<[string, () => Promise<{ data?: unknown }>]> = [
+    ['network failure', () => Promise.reject(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))],
+    ['timeout', () => Promise.reject(new Error('startup_timeout'))],
+    ['bad envelope', async () => ({ data: 'unexpected' })],
+    ['no profile', async () => ({ data: { profile: null } })],
+    ['no date', async () => ({ data: { profile: { date_of_birth: null } } })],
+    ['malformed date', async () => ({ data: { profile: { date_of_birth: 'soon' } } })],
+    ['under-16 date', async () => ({ data: { profile: { date_of_birth: UNDER } } })],
+  ];
+  const ROWS = CACHED.flatMap(([c, cache]) => SERVER.map(([sv, read]) => [c, sv, cache, read] as const));
+  it.each(ROWS)('cached %s + server %s: never a yes (the age step)', async (_c, _s, cache, read) => {
+    const save = jest.fn(async () => undefined);
+    expect(await clientAgeConfirmed(cache as Parameters<typeof clientAgeConfirmed>[0], read, save)).toBe(false);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('controls: a cached adult skips the read; a server adult and exactly 16 are cached once; a cache failure still opens', async () => {
     const save = jest.fn(async () => undefined);
     const me = jest.fn();
     expect(await clientAgeConfirmed({ date_of_birth: '1990-01-01' }, me, save)).toBe(true);
     expect(await clientAgeConfirmed({ dob: '1990-01-01' }, me, save)).toBe(true);
     expect(me).not.toHaveBeenCalled();
-
     me.mockResolvedValueOnce({ data: { profile: { date_of_birth: '1990-01-01T00:00:00.000Z' } } });
     expect(await clientAgeConfirmed({}, me, save)).toBe(true);
     expect(save).toHaveBeenCalledWith('1990-01-01T00:00:00.000Z');
-
-    me.mockResolvedValueOnce({ data: { profile: { date_of_birth: null } } });
-    expect(await clientAgeConfirmed(null, me, save)).toBe(false);
-    me.mockResolvedValueOnce({ data: { profile: null } });
-    expect(await clientAgeConfirmed(undefined, me, save)).toBe(false);
-    me.mockResolvedValueOnce({ data: { profile: { date_of_birth: isoFor(now.getFullYear() - 14) } } });
-    expect(await clientAgeConfirmed({ date_of_birth: isoFor(now.getFullYear() - 14) }, me, save)).toBe(false);
-
-    me.mockRejectedValueOnce(new Error('offline'));
-    expect(await clientAgeConfirmed({}, me, save)).toBe(true);
-    me.mockResolvedValueOnce({ data: 'unexpected' });
-    expect(await clientAgeConfirmed({}, me, save)).toBe(true);
+    const sixteenToday = new Date(Date.UTC(now.getUTCFullYear() - 16, now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10);
+    me.mockResolvedValueOnce({ data: { profile: { date_of_birth: sixteenToday } } });
+    expect(await clientAgeConfirmed({ date_of_birth: UNDER }, me, save)).toBe(true);
     me.mockResolvedValueOnce({ data: { profile: { date_of_birth: '1990-01-01' } } });
     save.mockRejectedValueOnce(new Error('disk'));
     expect(await clientAgeConfirmed({}, me, save)).toBe(true);
