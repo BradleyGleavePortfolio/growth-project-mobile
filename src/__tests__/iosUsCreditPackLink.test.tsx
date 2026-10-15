@@ -55,7 +55,6 @@ import type { CoachAIBudgetResponse } from '../api/types/coachAIBudget';
 import { AIBudgetMount } from '../components/coach/ai-budget/AIBudgetMount';
 import { AIBudgetTutorialModal } from '../components/coach/ai-budget/AIBudgetTutorialModal';
 import { PackOptionsRow } from '../components/coach/ai-budget/PackOptionsRow';
-import { UpgradeGate } from '../screens/coach/TeamManagementScreen';
 import { withNonP2PPurchaseGate } from '../components/purchases/withNonP2PPurchaseGate';
 import { COACH_PUSH_ROUTES } from '../services/pushTapRouter';
 import {
@@ -126,13 +125,11 @@ describe('iOS store build, US link on', () => {
     await AsyncStorage.clear();
   });
 
-  it('credit packs show; other digital purchases stay hidden; the header says so', async () => {
+  it('credit packs show; other digital purchases stay hidden; the header says so', () => {
     expect(creditPackCheckoutMode()).toBe('external');
     expect(creditPacksHidden()).toBe(false);
     expect(digitalPurchasesHidden()).toBe(true);
     expect(purchasePolicyHeader()).toBe('p2p-and-ai-credits');
-    const gate = await render(<UpgradeGate />);
-    expect(JSON.stringify(gate.toJSON())).not.toMatch(/Upgrade/);
   });
 
   it('the checkout route mounts and a budget push opens it', async () => {

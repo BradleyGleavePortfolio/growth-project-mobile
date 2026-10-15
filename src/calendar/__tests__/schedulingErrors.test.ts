@@ -100,6 +100,10 @@ describe('coach audience', () => {
     expect(msg).not.toMatch(/your coach|assigned coach|choose an available time/i);
   });
 
+  it('HTTP 402 shows a coach no plan or Membership line (owner TM-P1: no coach plans)', () => {
+    expect(calendarErrorMessage({ response: { status: 402 } }, 'save time off', 'coach')).not.toMatch(/plan|Membership/i);
+  });
+
   it('network and unknown failures name a coach next step and the shared support address', () => {
     expect(calendarErrorMessage(new Error('Network Error'), 'save time off', 'coach')).toMatch(/refresh your schedule/);
     const unknown = calendarErrorMessage({ response: { status: 500, data: { request_id: 'req_abcdefabcdef12' } } }, 'save time off', 'coach');
