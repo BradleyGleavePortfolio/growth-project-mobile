@@ -803,8 +803,12 @@ export default function CoachNavigator() {
   // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
   // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
   // screenshots) keep the CommandCenter landing surface.
-  const initialTab = __USING_MOCK_DATA ? 'CommandCenter' : 'ClientsStack';
+  // COACHLAND (owner 10-15 "coaches land on overview/home page"): with the six
+  // tabs every coach opens on Overview. This is the one place the coach's first
+  // screen is picked: nothing saves navigation state or the last tab, and
+  // RootNavigator mounts this navigator afresh on cold start, sign-in and account switch.
   const tabsV2 = featureFlags.coachTabsV2;
+  const initialTab = __USING_MOCK_DATA || tabsV2 ? 'CommandCenter' : 'ClientsStack';
   const programsLabel = featureFlags.mwbPrograms || tabsV2 ? 'Programs' : 'Templates';
   const clientsTab = (
     <Tab.Screen
