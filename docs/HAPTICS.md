@@ -67,7 +67,7 @@ When the toggle changes:
 | `EditProfileScreen` | `error()` | Profile save API failure |
 | `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
 | `MessagesScreen` (client, `c3StyleB` on) | `softImpact()` | Send tapped |
-| `MessagesScreen` (client, `c3StyleB` on) | `error()` | A send fails while online (once; none while offline, the message waits) |
+| `MessagesScreen` (client, `c3StyleB` on) | `error()` | A send fails while online (once per failure; it holds the messages after it; none while offline, the message waits) |
 | `MessagesScreen` (client, `c3StyleB` on) | `success()` | The coach's read lands while the thread is open |
 
 ## Architecture

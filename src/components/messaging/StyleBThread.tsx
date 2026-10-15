@@ -233,7 +233,8 @@ const s = StyleSheet.create({
   day: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', textAlign: 'center', marginTop: 8, marginBottom: 16 },
   right: { alignItems: 'flex-end' },
   left: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '80%', minHeight: layout.touchMin, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'center' },
+  // 44 x 44 pt at least: a one-letter reply ("k") is still a full tap and long-press target.
+  bubble: { maxWidth: '80%', minWidth: layout.touchMin, minHeight: layout.touchMin, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'center' },
   tail: { borderBottomRightRadius: radius.control },
   edge: { borderWidth: 1 },
   dashed: { borderStyle: 'dashed' },
