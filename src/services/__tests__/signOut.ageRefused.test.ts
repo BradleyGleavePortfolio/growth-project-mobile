@@ -42,6 +42,12 @@ jest.mock('../secureStorage', () => ({
 }));
 jest.mock('../sentry', () => ({ setSentryUser: jest.fn(), captureError: jest.fn() }));
 jest.mock('../../lib/analytics', () => ({ reset: jest.fn(), track: jest.fn() }));
+jest.mock('../../storage/mmkv', () => ({
+  clearAllStorage: jest.fn(async () => undefined),
+  prefsStorage: { getString: () => undefined },
+  cacheStorage: { getString: () => undefined },
+  secureStorage: { getString: () => undefined },
+}));
 jest.mock('../../offline/sync/sync-engine', () => ({ deleteWorkoutLogsForUser: jest.fn(async () => 0) }));
 jest.mock('../../db/fastingDb', () => ({
   getActiveFast: jest.fn(async () => null),
@@ -86,6 +92,9 @@ const PLACES: Array<[string, () => Promise<void>]> = [
   ['the payment lockout', () => signOut()],
 ];
 
+// refuse() awaits the real request interceptor first (token read), so let it run.
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 const heard = jest.fn();
 const loggedOut = jest.fn();
 let stop: () => void = () => undefined;
@@ -106,7 +115,7 @@ afterEach(() => {
 describe('FIXAGE2 R5: Sign out never waits on the age step', () => {
   it.each(PLACES)('from %s: signs out at once while the server refuses for age', async (_place, run) => {
     const held = refuse('/me/macros/current').catch((e: unknown) => e);
-    await Promise.resolve();
+    await flush();
     expect(heard).toHaveBeenCalledTimes(1);
     heard.mockReset();
 
@@ -124,8 +133,7 @@ describe('FIXAGE2 R5: Sign out never waits on the age step', () => {
       .finally(() => {
         settled = true;
       });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flush();
     expect(heard).toHaveBeenCalledTimes(1);
     expect(settled).toBe(false);
     settleAgeConfirmation(false);
