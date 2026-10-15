@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import PushPermissionCard from '../../components/home/PushPermissionCard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { CoachTeamEntryContext } from '../../navigation/coachTeamEntry';
+import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
@@ -188,6 +190,9 @@ export default function ClientsListScreen({ navigation }: Props) {
   // pill is not shown to them (no dead end).
   const canSeeRiskBoard = currentUser?.role === 'coach' || currentUser?.role === 'owner';
   const goToRiskBoard = () => navigation.navigate('RiskBoard');
+  // COACHTABS (owner 10-15: "team is a switch to flip under clients in v1.1"):
+  // with the six tabs Team is not a tab; a Team Mode head coach opens it here.
+  const teamEntry = useContext(CoachTeamEntryContext) && featureFlags.coachTabsV2;
 
   const emptyList = searchQuery ? (
     <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
@@ -241,6 +246,21 @@ export default function ClientsListScreen({ navigation }: Props) {
           {isLoading ? 'Loading clients' : loadError ? 'Client count unavailable' : countLine}
         </Text>
       </View>
+
+      {teamEntry ? (
+        <HapticPressable
+          intent="light"
+          onPress={() => navigation.getParent()?.navigate('TeamStack')}
+          style={styles.teamRow}
+          accessibilityRole="button"
+          accessibilityLabel="Team"
+          testID="clients-team-entry"
+        >
+          <Ionicons name="briefcase-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.teamRowText}>Team</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </HapticPressable>
+      ) : null}
 
       {/* C-S-PUSH-3: the coach landing screen carries the same deferred push
           ask as client Home (once per account, dismissible, OS prompt only on
@@ -398,6 +418,17 @@ const makeStyles = (colors: ThemeColors) =>
   pushCardWrap: {
     paddingHorizontal: 24,
   },
+  teamRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: layout.touchMin,
+    marginHorizontal: 24,
+    marginBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  teamRowText: { ...typography.body, flex: 1, color: colors.textPrimary },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',

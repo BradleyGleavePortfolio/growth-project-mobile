@@ -20,6 +20,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { layout, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui';
@@ -33,6 +34,8 @@ import ActionQueueScreen from './ActionQueueScreen';
 import CoachHomeCards from './CoachHomeCards';
 import { coachHomeSources } from './coachHomeSources';
 import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
+import { featureFlags } from '../../../config/featureFlags';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 
 export type CommandCenterTab =
   | 'overview'
@@ -97,8 +100,27 @@ export default function CommandCenterScreen({
         initial: false,
       }));
   // Same Money route as the Home's Money card (B-332-7: `initial: false`).
+  // COACHTABS: with the six tabs it switches to the Money tab's root.
   const openMoney = () =>
-    navigation.navigate('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
+    featureFlags.coachTabsV2
+      ? navigation.navigate('MoneyStack', { screen: 'CoachMoney', pop: true })
+      : navigation.navigate('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
+  // COACHTABS: Settings is no longer a tab; it opens from this 44 pt gear at
+  // the end of Overview's header row.
+  const settingsGear = featureFlags.coachTabsV2 ? (
+    <TouchableOpacity
+      onPress={() => {
+        HapticService.softImpact();
+        navigation.navigate('SettingsStack', { screen: 'SettingsHome', pop: true });
+      }}
+      style={styles.gear}
+      accessibilityRole="button"
+      accessibilityLabel="Settings"
+      testID="command-center-settings"
+    >
+      <Ionicons name="settings-outline" size={22} color={sc.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
   const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList' });
   const openSafetyAlert = (item: ActionQueueItem) => {
     if (!isSafetyAlert(item)) return;
@@ -147,11 +169,12 @@ export default function CommandCenterScreen({
     <Screen edges={['top']} scroll={false} contentStyle={styles.content} testID="command-center-root">
       {/* Top tab bar. AUDIT-13-125: no header above this tab; Screen keeps
           the tab row out of the status bar / Dynamic Island. */}
-      <View style={[styles.tabBarWrapper, { backgroundColor: sc.bgPrimary, borderBottomColor: sc.border }]}>
+      <View style={[styles.tabBarWrapper, settingsGear && styles.tabBarWithGear, { backgroundColor: sc.bgPrimary, borderBottomColor: sc.border }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBar}
+          style={settingsGear && styles.tabScroll}
+          contentContainerStyle={[styles.tabBar, settingsGear && styles.tabBarBeforeGear]}
         >
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key;
@@ -176,6 +199,7 @@ export default function CommandCenterScreen({
             );
           })}
         </ScrollView>
+        {settingsGear}
       </View>
 
       {/* Screen content */}
@@ -188,6 +212,11 @@ const styles = StyleSheet.create({
   tabBarWrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  // COACHTABS: the gear ends the row; its glyph's right edge sits on the page gutter.
+  tabBarWithGear: { flexDirection: 'row', alignItems: 'center' },
+  tabScroll: { flex: 1 },
+  tabBarBeforeGear: { paddingRight: 12 },
+  gear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: layout.gutter - 11 },
   // SHOTS-134B f: the five tabs share the content width (gutter to gutter) instead of
   // running off the right edge; it still scrolls at the largest text sizes.
   tabBar: {

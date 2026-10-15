@@ -103,7 +103,8 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   Notifications: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
   // S-SCHED: coach booking pushes open the booking inbox.
-  CoachBookingInbox: () => ({ root: 'ClientsStack', screen: 'CoachBookingInbox' }),
+  // COACHTABS: with the six tabs the booking inbox is the Calendar tab's root.
+  CoachBookingInbox: () => ({ root: featureFlags.coachTabsV2 ? 'CalendarStack' : 'ClientsStack', screen: 'CoachBookingInbox' }),
   // B-R1F: a Roman safety alert push or inbox row sent before 57d opens
   // Command Center > Actions.
   CoachActionQueue: () => ({ root: 'CommandCenter', params: { tab: 'action-queue' } }),
