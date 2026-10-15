@@ -373,6 +373,11 @@ it.each([
   'screens/client/wearables/cards/ActivityBars.tsx',
   'screens/client/wearables/cards/SleepStagesCard.tsx',
   'screens/client/wearables/MetricDetailScreen.tsx',
+  'screens/client/wearables/HealthFitnessScreen.tsx',
+  'screens/client/wearables/SleepRecoveryScreen.tsx',
+  'screens/client/ProgressScreen.tsx',
+  'screens/coach/client-detail/HealthFitnessTab.tsx',
+  'screens/coach/client-detail/SleepRecoveryTab.tsx',
   'screens/client/WorkoutScreen.tsx',
   'screens/coach/client-detail/WorkoutsTab.tsx',
 ])('%s follows the no-area/no-gradient/no-glow rule', (file) => {

@@ -181,7 +181,7 @@ describe('RevolutGlowChart', () => {
       mockPan.finalize?.();
     });
     expect(onSelect.mock.calls).toEqual([[0], [DATA.length - 1], [null]]);
-    node.unmount();
+    await node.unmount();
   });
 
   it.each(['line', 'bar'] as const)('%s: empty and single-day marks stay valid', async (variant) => {
