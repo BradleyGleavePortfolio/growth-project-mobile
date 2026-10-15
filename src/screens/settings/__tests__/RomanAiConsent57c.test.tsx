@@ -110,7 +110,7 @@ describe('Settings > Roman and AI, client with a coach (owner 57c)', () => {
     const api = makeApi(status());
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-not_allowed'));
-    expect(api.getStatus).toHaveBeenCalledWith();
+    expect(api.getStatus).toHaveBeenCalledWith({ crisis: false });
     expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
     expect(AI_CONSENT_PARAGRAPH.endsWith(AI_CONSENT_SAFETY_EXCEPTION)).toBe(true);
     await fireEvent.press(r.getByTestId('roman-ai-allow'));

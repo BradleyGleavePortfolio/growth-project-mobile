@@ -202,7 +202,7 @@ describe('P0 for a client with no coach (W-CONSENT)', () => {
     expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
     expect(r.getByText(AI_CONSENT_CHECKBOX_LABEL)).toBeTruthy();
     expect(r.getByTestId('consent-footer').props.children).toBe('Nothing is sent until you continue.');
-    expect(api.getRomanConsent).toHaveBeenCalledWith(); // the coached copies, never ?variant=coach_free
+    expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: false }); // the coached copies, never ?variant=coach_free
     await agree(r, false);
     await waitFor(() => expect(api.save).toHaveBeenCalled());
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({

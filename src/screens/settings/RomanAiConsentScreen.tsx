@@ -65,6 +65,7 @@ import {
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
 import { withSafetyException } from '../../lib/ai/aiCoachless';
+import { useCrisisAlertNow } from '../../hooks/useFeatureFlags';
 import { SUPPORT_EMAIL } from '../../lib/consultation/copy';
 import { reportUnexpected } from '../../lib/consultation/report';
 import { shortReference } from '../../utils/correlation';
@@ -246,6 +247,9 @@ export default function RomanAiConsentScreen({
   // Owner 62x: a client with no coach has no access to Roman (no ledger read, no controls).
   const cachedUser = readUserCacheSync();
   const coachless = Boolean(cachedUser?.id && !cachedUser.coach_id);
+  // CRISIS-APP-COPY: the crisis-sentence copies are asked for, and follow an added exception, exactly while on.
+  const crisisAlert = useCrisisAlertNow();
+  const crisisOn = crisisAlert();
   const [view, setView] = useState<View_>({ phase: 'loading' });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -271,7 +275,7 @@ export default function RomanAiConsentScreen({
       if (stale()) return;
       setPendingWithdraw(false);
     }
-    const out = await api.getStatus();
+    const out = await api.getStatus({ crisis: crisisAlert() });
     if (stale()) return;
     if (out.kind === 'ok' && out.status) {
       const c = out.status.copy;
@@ -285,10 +289,10 @@ export default function RomanAiConsentScreen({
       if (differs) logger.warn('RomanAiConsent', 'server AI copy differs from the app copy for this version');
     }
     setView(toView(out));
-  }, [api, sessionUserId]);
+  }, [api, crisisAlert, sessionUserId]);
 
   // The copies on screen: the server's answer, else (while loading) this build's.
-  const family = view.phase === 'ready' ? romanFamilyOf(view.status) : romanFamily(false);
+  const family = view.phase === 'ready' ? romanFamilyOf(view.status) : romanFamily(false, crisisOn);
 
   useEffect(() => {
     if (!coachless) void load();
@@ -355,7 +359,7 @@ export default function RomanAiConsentScreen({
     ]);
   // Memory on: the server's v5 text is the confirmation, and its sha256 is what is granted.
   const confirmMemoryOn = (offer: AiConsentUpgradeCopy) =>
-    Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, withSafetyException(offer.paragraph.text), [
+    Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, withSafetyException(offer.paragraph.text, crisisOn), [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
       { text: ROMAN_AI_COPY.memoryOn, onPress: () => void act('allow', offer) },
     ]);
@@ -514,6 +518,7 @@ export default function RomanAiConsentScreen({
             (view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) ||
               (view.phase === 'ready' && allowCopyOf(view.status)?.paragraph.text) ||
               family.paragraph,
+            crisisOn,
           )}
         </Text>
         {renderState()}

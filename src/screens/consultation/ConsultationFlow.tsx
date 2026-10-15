@@ -65,6 +65,7 @@ import {
   readAiWithdrawalPending,
   romanBox2MemoryCopyOf,
   romanFamily,
+  romanFamilyOf,
   romanGrantBody,
   runAiLedgerWrite,
   withdrawRomanWithRetry,
@@ -169,6 +170,8 @@ export interface ConsultationFlowProps {
   coachName?: string | null;
   /** The client has no coach (no coach_id): copy that names a coach uses its coachless version. */
   coachless?: boolean;
+  /** `roman_crisis_alert` (CRISIS-APP-COPY): box 2 asks for the crisis-sentence copies (never with no coach). */
+  crisisAlert?: boolean;
   /** Called after "Show me around" on the plan reveal. */
   onFinished: (result: CompleteOnboardingResponse) => void;
   api?: ConsultationApi;
@@ -216,6 +219,7 @@ export default function ConsultationFlow({
   firstName,
   coachName,
   coachless = false,
+  crisisAlert = false,
   onFinished,
   api = defaultApi,
   now: nowFn = () => new Date(),
@@ -298,6 +302,12 @@ export default function ConsultationFlow({
   /** R11-C2B: the server's client-ai-v5 copy box 2 shows and grants, or null for the pinned v4 text. */
   const [aiMemory, setAiMemory] = useState<AiConsentUpgradeCopy | null>(null);
   const aiMemoryRef = useRef<AiConsentUpgradeCopy | null>(null);
+  /** CRISIS-APP-COPY: what the last read asked for, and the copies box 2 shows and grants (v8 / v9 when answered). */
+  const crisisNow = useRef(false);
+  crisisNow.current = crisisAlert && !coachless;
+  const aiAsked = useRef<boolean | null>(null);
+  const aiFamily = useRef(romanFamily(false));
+  const [aiCrisis, setAiCrisis] = useState(false);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
   const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
   /** Each box 2 notice is shown once per load, however often a retry fails. */
@@ -701,12 +711,17 @@ export default function ConsultationFlow({
   async function refreshAiFromLedger(gen: number) {
     try {
       // W-CONSENT: a client with no coach reads (and box 2 grants) the coached copies too.
-      const out = await api.getRomanConsent();
-      if (!aiLive(gen)) return;
+      const crisis = crisisNow.current;
+      aiAsked.current = crisis;
+      const out = await api.getRomanConsent({ crisis });
+      if (!aiLive(gen) || aiAsked.current !== crisis) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, romanFamily(false));
+        const crisisCopy = romanFamilyOf(out.status) === romanFamily(false, true);
+        aiFamily.current = romanFamily(false, crisisCopy);
+        setAiCrisis(crisisCopy);
+        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, aiFamily.current);
         setAiMemory(aiMemoryRef.current);
-        setAiConfirmed(isLiveRomanGrant(out.status, romanFamily(false)), true);
+        setAiConfirmed(isLiveRomanGrant(out.status, aiFamily.current), true);
         reconcileAi(gen);
       }
     } catch {
@@ -715,6 +730,14 @@ export default function ConsultationFlow({
       if (gen === generation.current) markAiReady();
     }
   }
+
+  // The flag arrived (or changed) after the read and before any box 2 choice: read the copies again.
+  useEffect(() => {
+    if (aiAsked.current !== null && aiAsked.current !== crisisNow.current && aiWant.current === null) {
+      void refreshAiFromLedger(generation.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [crisisAlert]);
 
   /**
    * Queue one reconcile step (B-310-3, B-310-5). The step decides when it
@@ -758,7 +781,7 @@ export default function ConsultationFlow({
             grantRomanWithRetry(
               api.grantRomanConsent,
               () => aiLive(gen) && aiWant.current === true,
-              () => romanGrantBody(aiMemoryRef.current, romanFamily(false)),
+              () => romanGrantBody(aiMemoryRef.current, aiFamily.current),
             ),
           );
           if (!aiLive(gen)) return;
@@ -1263,7 +1286,7 @@ export default function ConsultationFlow({
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
         romanOverride={welcomeBackId === screen.id ? welcomeBackLine(screen.chapter) : null}
-        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, coachSharing }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, aiCrisis, coachSharing }}
       />
     );
   }

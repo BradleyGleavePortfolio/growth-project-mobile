@@ -24,9 +24,9 @@
  * A flag absent from the server map is treated as OFF (the schema permits any
  * string→boolean entries; missing keys default off here).
  */
-import { useEffect } from 'react';
+import { useCallback, useContext, useEffect } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { QueryClientContext, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import {
   featureFlagsApi,
   type FeatureFlagsResponse,
@@ -106,4 +106,17 @@ export function useFeatureFlags(): UseFeatureFlagsResult {
     data,
     refetch: query.refetch,
   };
+}
+
+/**
+ * `roman_crisis_alert` as useFeatureFlags reads it (absent, loading or failed = off, a failed refresh
+ * included; no QueryClient = off), read when called and without subscribing: which consent copies a
+ * one-shot ledger read asks for (CONSENT-CRISIS).
+ */
+export function useCrisisAlertNow(): () => boolean {
+  const qc = useContext(QueryClientContext);
+  return useCallback(() => {
+    const state = qc?.getQueryState<FeatureFlagsResponse>(featureFlagsKeys.all);
+    return state?.status !== 'error' && resolve(state?.data, 'roman_crisis_alert');
+  }, [qc]);
 }

@@ -9,14 +9,18 @@ import { COACHLESS_COPY, SCREENS, SCREENING_KEYS, TOTAL_CHAPTERS } from './defin
 import {
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
   CONSULT_CONSENT_COPY_VERSION,
+  CONSULT_CONSENT_CRISIS_COPY_VERSION,
+  CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
 } from './consentVersion';
 
-/** The P0 versions this build displays (owner 62 / 62y2: the coach-free one for a client with no coach). */
+/** The P0 versions this build displays (owner 62 / 62y2: the coach-free one; CRISIS-APP-COPY: v9 / v10). */
 const CURRENT_CONSENT_VERSIONS: readonly unknown[] = [
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_CRISIS_COPY_VERSION,
+  CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION,
 ];
 import type {
   AnswerValue,

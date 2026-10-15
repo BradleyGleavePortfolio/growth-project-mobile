@@ -183,7 +183,7 @@ const ROWS: Row[] = [
     check: () => {
       expect(withSafetyException(V5)).toBe(V7);
       expect(source('screens/settings/RomanAiConsentScreen.tsx')).toContain(
-        'Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, withSafetyException(offer.paragraph.text), [',
+        'Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, withSafetyException(offer.paragraph.text, crisisOn), [',
       );
     },
   },
