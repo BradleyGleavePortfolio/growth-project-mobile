@@ -30,7 +30,7 @@ import { SleepStagesCard } from '../../client/wearables/cards/SleepStagesCard';
 import { HrvTrendCard } from '../../client/wearables/cards/HrvTrendCard';
 import { SleepConsistencyCard } from '../../client/wearables/cards/SleepConsistencyCard';
 import { RECOVERY_PALETTE } from '../../client/wearables/recoveryTheme';
-import { brand, colors as palette } from '../../../theme/tokens';
+import { brand, colors as palette, gold } from '../../../theme/tokens';
 import { WearableInsightPanel } from './WearableInsightPanel';
 import {
   recoveryScore,
@@ -205,7 +205,7 @@ function AnomalyBand({ trend, colors }: { trend: TrendPoint[]; colors: ThemeColo
             localStyles.anomalyMarker,
             {
               left: `${markerPos * 100}%`,
-              backgroundColor: outOfBand ? palette.mutedGold : palette.forest,
+              backgroundColor: outOfBand ? gold[800] : palette.forest,
             },
           ]}
         />

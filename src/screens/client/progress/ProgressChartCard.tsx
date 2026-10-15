@@ -52,7 +52,7 @@ import {
   detectPersonalRecord,
   type ProgressPoint,
 } from './detectPersonalRecord';
-import { colors, spacing, typography, withAlpha } from '../../../theme/tokens';
+import { colors, gold, spacing, typography, withAlpha } from '../../../theme/tokens';
 import { logger } from '../../../utils/logger';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -273,6 +273,8 @@ export default function ProgressChartCard({
                       testID="progress-pr-flag"
                       points={starPoints(prPoint.x, prPoint.y, FLAG_SIZE / 2)}
                       fill={colors.mutedGold}
+                      stroke={gold[800]}
+                      strokeWidth={0.75}
                     />
                   </>
                 )}

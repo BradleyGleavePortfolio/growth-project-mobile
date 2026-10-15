@@ -130,6 +130,7 @@ import TgpLineChart from '../ui/charts/TgpLineChart';
 import TgpBarChart from '../ui/charts/TgpBarChart';
 import TgpAreaChart from '../ui/charts/TgpAreaChart';
 import TgpSparkline from '../ui/charts/TgpSparkline';
+import { brand, colors as palette, gold } from '../theme/tokens';
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -392,6 +393,26 @@ it.each([
 });
 
 // ─── charts/index.ts export surface ───────────────────────────────────────────
+
+it.each([
+  [palette.forest, palette.bone],
+  [palette.forest, palette.cream],
+  [brand[800], palette.cream],
+  [brand[400], palette.cream],
+  [palette.charcoal, palette.cream],
+  [brand[400], brand[100]],
+  [palette.forest, brand[100]],
+  [gold[800], brand[100]],
+  [gold[800], palette.cream],
+])('chart mark %s is at least 3:1 on %s', (mark, ground) => {
+  const luminance = (hex: string) => {
+    const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+  };
+  const pair = [luminance(mark), luminance(ground)].sort((a, b) => a - b);
+  expect((pair[1] + 0.05) / (pair[0] + 0.05)).toBeGreaterThanOrEqual(3);
+});
 
 describe('charts/index.ts — export surface', () => {
   it('exports TgpLineChart', () => {

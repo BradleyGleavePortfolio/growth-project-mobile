@@ -90,7 +90,7 @@ describe('ProgressChartCard — ED.4', () => {
     await layout(node);
 
     // The star remains, but no halo.
-    expect(node.getByTestId('progress-pr-flag')).toBeTruthy();
+    expect(node.getByTestId('progress-pr-flag').props.stroke).toBeTruthy();
     expect(node.queryByTestId('progress-pr-glow')).toBeNull();
 
     // VOICE — the exact romanPRDetected line.
