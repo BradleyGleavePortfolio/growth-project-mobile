@@ -22,7 +22,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { layout, typography } from '../../../theme/tokens';
+import { layout, spacing, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui';
 import { useTheme } from '../../../theme/useTheme';
 import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
@@ -191,7 +191,7 @@ export default function CommandCenterScreen({
                 <Text
                   style={[styles.tabLabel, { color: isActive ? sc.accentText : sc.textMuted }]}
                   numberOfLines={1}
-                  maxFontSizeMultiplier={1.2}
+                  maxFontSizeMultiplier={settingsGear ? 1.1 : 1.2}
                 >
                   {tab.label}
                 </Text>
@@ -212,11 +212,12 @@ const styles = StyleSheet.create({
   tabBarWrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  // COACHTABS: the gear ends the row, its glyph 15 pt from the edge like a header button.
-  // The labels keep at least 6 pt apart; at large text the row scrolls, as before.
+  // COACHTABS: the gear ends the row, its glyph 15 pt from the edge like a header button,
+  // and the row starts 16 pt in to match. With the labels capped at 110% (the bar's K4 cap)
+  // all five stay whole and at least 6 pt apart at 360 pt and any text size.
   tabBarWithGear: { flexDirection: 'row', alignItems: 'center' },
   tabScroll: { flex: 1 },
-  tabBarBeforeGear: { paddingRight: 0, gap: 6 },
+  tabBarBeforeGear: { paddingLeft: spacing.lg, paddingRight: 0, gap: 6 },
   gear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   // SHOTS-134B f: the five tabs share the content width (gutter to gutter) instead of
   // running off the right edge; it still scrolls at the largest text sizes.

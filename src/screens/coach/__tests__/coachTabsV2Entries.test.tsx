@@ -11,7 +11,7 @@ import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
 import { StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 
 const mockFlags = { coachTabsV2: true, coachCommunity: true };
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: () => true, getState: jest.fn(() => ({ index: 0 })) };
@@ -46,15 +46,21 @@ beforeEach(() => {
   mockNav.getState.mockReturnValue({ index: 0 });
 });
 
+// FIX721 (Opus B1): beside the gear the five labels cap at 110% (as the bar) so all stay whole at 360 pt.
+const caps = (v: Awaited<ReturnType<typeof render>>) =>
+  ['overview', 'at-risk', 'win-streaks', 'inbox', 'action-queue'].map((k) => within(v.getByTestId(`command-center-tab-${k}`)).getByText(/\w/).props.maxFontSizeMultiplier);
 it('Overview header: a 44 pt gear opens Settings with a soft haptic; flag off it is not there', async () => {
   const view = await render(<CommandCenterScreen />);
+  expect(caps(view)).toEqual([1.1, 1.1, 1.1, 1.1, 1.1]);
   const gear = view.getByLabelText('Settings');
   expect(StyleSheet.flatten(gear.props.style)).toMatchObject({ width: 44, height: 44 });
   await fireEvent.press(gear);
   expect(HapticService.softImpact).toHaveBeenCalledTimes(1);
   expect(mockNav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SettingsHome', pop: true });
   mockFlags.coachTabsV2 = false;
-  expect((await render(<CommandCenterScreen />)).queryByLabelText('Settings')).toBeNull();
+  const off = await render(<CommandCenterScreen />);
+  expect(off.queryByLabelText('Settings')).toBeNull();
+  expect(caps(off)).toEqual([1.2, 1.2, 1.2, 1.2, 1.2]);
 });
 
 it('Messages header: Community opens the Community stack only while both flags are on', async () => {
