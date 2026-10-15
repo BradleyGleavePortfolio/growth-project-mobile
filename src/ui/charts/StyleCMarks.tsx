@@ -51,6 +51,7 @@ function arc(c: number, r: number, from: number, sweep: number): string {
     const a = ((deg - 90) * Math.PI) / 180;
     return `${(c + r * Math.cos(a)).toFixed(2)} ${(c + r * Math.sin(a)).toFixed(2)}`;
   };
+  if (sweep >= 360) return `M${at(from)}A${r} ${r} 0 1 1 ${at(from + 180)}A${r} ${r} 0 1 1 ${at(from)}`;
   return `M${at(from)}A${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${at(from + sweep)}`;
 }
 
@@ -78,7 +79,7 @@ export function SegmentedRing({ segments, size, label, onDark, drawIndex, childr
   const thin = Math.max(1.5, size / 64);
   const r = (size - thick) / 2;
   const step = 360 / Math.max(segments.length, 1);
-  const sweep = segments.length > 1 ? step - GAP_DEG : 359.99;
+  const sweep = segments.length > 1 ? step - GAP_DEG : 360;
   const len = (Math.PI * r * sweep) / 180;
   return (
     <View
@@ -165,7 +166,7 @@ export function PeakStar({ size = 16, label, onDark, animate = false, testID }: 
   return (
     <Animated.View
       testID={testID} style={{ opacity: v }} accessible={!!label} accessibilityRole={label ? 'image' : undefined}
-      accessibilityLabel={label} accessibilityElementsHidden={!label} importantForAccessibility={label ? 'yes' : 'no-hide-descendants'}
+      accessibilityLabel={label} aria-hidden={!label}
     >
       <Svg width={size} height={size} viewBox="0 0 24 24">
         <Path testID="peak-star" d={STAR} fill={d.peak} stroke={onDark ? d.peak : d.peakInk} strokeWidth={1.5} strokeLinejoin="round" />

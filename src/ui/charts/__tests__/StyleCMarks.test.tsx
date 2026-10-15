@@ -53,7 +53,7 @@ describe('SegmentedRing', () => {
     const s = await render(<SegmentedRing segments={['done']} size={48} label="1 of 1 done" onDark />);
     const done = s.getByTestId('segment-0-done').props;
     expect(done.stroke).toBe(t.data.leaf);
-    expect(done.d).toMatch(/A21\.6 21\.6 0 1 1/);
+    expect(done.d.match(/A21\.6 21\.6 0 1 1/g)).toHaveLength(2); // a closed circle: two half arcs
     const dark = await render(<SegmentedRing segments={['planned', 'missed']} size={48} label="0 of 2 done" onDark />);
     expect(dark.getByTestId('segment-0-planned').props.stroke).toBe(t.data.plannedOnDark);
     expect(dark.getByTestId('segment-1-missed').props.stroke).toBe(t.data.missedOnDark);
