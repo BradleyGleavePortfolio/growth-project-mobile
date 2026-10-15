@@ -177,8 +177,12 @@ export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent,
 /** First message: one deep-forest hero card, then main's prompt. */
 export function StyleBFirstCard({ coachName }: { coachName: string }): React.ReactElement {
   const c = useB();
+  const fade = useRef(new Animated.Value(0)).current; // index section 5: the first card fades in (no movement)
+  useEffect(() => {
+    Animated.timing(fade, { toValue: 1, duration: 250, easing: Easing.bezier(...motion.easing.decel), useNativeDriver: true }).start();
+  }, [fade]);
   return (
-    <View style={s.first} testID="c3b-first">
+    <Animated.View style={[s.first, { opacity: fade }]} testID="c3b-first">
       <View style={[s.hero, { backgroundColor: c.mine }]}>
         <View style={s.heroTop}>
           <View style={[s.heroAvatar, { backgroundColor: c.onMine }]}>
@@ -189,7 +193,7 @@ export function StyleBFirstCard({ coachName }: { coachName: string }): React.Rea
         <Text accessibilityRole="header" style={[s.heroTitle, { color: c.onMine }]}>{`Say hello to ${coachName}`}</Text>
       </View>
       <Text style={[s.hint, { color: c.muted }]}>Start a conversation with your coach</Text>
-    </View>
+    </Animated.View>
   );
 }
 

@@ -8,7 +8,7 @@
 import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Alert, Animated, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, Animated, Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import api from '../../../services/api';
 import * as Clipboard from 'expo-clipboard';
@@ -78,6 +78,9 @@ const axiosErr = () => Object.assign(new Error('request failed'), { isAxiosError
 const flat = (el: { props: object }) => StyleSheet.flatten((el.props as { style?: StyleProp<ViewStyle> }).style) as unknown as Record<string, unknown>;
 const named = { data: { coach_id: 'coach-9', coach_name: 'Coach Nine' } };
 let alertSpy: jest.SpyInstance;
+const originalOS = Platform.OS; // menus as in MessagesScreenV2.test (the in-app sheet, not ActionSheetIOS)
+beforeAll(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' }));
+afterAll(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => originalOS }));
 
 beforeEach(() => {
   jest.clearAllMocks();
