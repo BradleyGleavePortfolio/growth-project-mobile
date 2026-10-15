@@ -10,6 +10,7 @@ import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet } from 'react-native';
+import { layout } from '../../../theme/tokens';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,71 @@ function makeNav() {
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
+});
+
+it('keeps the Day One onboarding action list at the 44pt touch minimum', async () => {
+  const targets = [
+    {
+      render: () => render(<WelcomeScreen navigation={makeNav() as never} />),
+      ids: ['day-one-welcome-cta'],
+    },
+    {
+      render: () => render(<CoachPairingScreen navigation={makeNav() as never} />),
+      ids: ['day-one-invite-submit', 'day-one-invite-skip', 'day-one-back'],
+    },
+    {
+      render: () => render(<GoalsScreen navigation={makeNav() as never} />),
+      ids: [
+        'day-one-goal-fitness',
+        'day-one-goal-business',
+        'day-one-goal-personal_growth',
+        'day-one-goal-relationships',
+        'day-one-goal-mental_health',
+        'day-one-goal-custom',
+        'day-one-goals-continue',
+        'day-one-goals-skip',
+        'day-one-back',
+      ],
+    },
+    {
+      render: () => render(<NotificationsScreen navigation={makeNav() as never} />),
+      ids: ['day-one-notifications-enable', 'day-one-notifications-skip', 'day-one-back'],
+    },
+    {
+      render: () => render(<CheckInTimeScreen navigation={makeNav() as never} />),
+      ids: [
+        'day-one-checkin-hour-up',
+        'day-one-checkin-hour-down',
+        'day-one-checkin-minute-up',
+        'day-one-checkin-minute-down',
+        'day-one-checkin-am',
+        'day-one-checkin-pm',
+        'day-one-checkin-continue',
+        'day-one-checkin-skip',
+        'day-one-back',
+      ],
+    },
+    {
+      render: () => render(<ReadyScreen navigation={makeNav() as never} />),
+      ids: ['day-one-ready-cta'],
+    },
+  ];
+
+  for (const { render: mount, ids } of targets) {
+    const view = await mount();
+    for (const id of ids) {
+      const style = StyleSheet.flatten(view.getByTestId(id).props.style);
+      expect(Math.max(Number(style.minHeight ?? 0), Number(style.height ?? 0))).toBeGreaterThanOrEqual(
+        layout.touchMin,
+      );
+      if (style.width != null || style.minWidth != null) {
+        expect(Math.max(Number(style.width ?? 0), Number(style.minWidth ?? 0))).toBeGreaterThanOrEqual(
+          layout.touchMin,
+        );
+      }
+    }
+    view.unmount();
+  }
 });
 
 // ─── Welcome ─────────────────────────────────────────────────────────────────
@@ -326,6 +392,13 @@ describe('NotificationsScreen', () => {
       <NotificationsScreen navigation={makeNav() as never} />,
     );
     expect(getByTestId('day-one-step-text').props.children).toBe('Step 4 of 5');
+  });
+
+  it('keeps notification skip at the shared minimum touch height', async () => {
+    const { getByTestId } = await render(
+      <NotificationsScreen navigation={makeNav() as never} />,
+    );
+    expect(StyleSheet.flatten(getByTestId('day-one-notifications-skip').props.style).minHeight).toBe(layout.touchMin);
   });
 
   it('navigates directly to Ready after permission grant', async () => {

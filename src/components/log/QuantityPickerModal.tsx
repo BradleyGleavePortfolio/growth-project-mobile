@@ -236,6 +236,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   unitChip: {
     minHeight: layout.touchMin,
+    minWidth: layout.touchMin,
     justifyContent: 'center',
     paddingHorizontal: 16,
     borderRadius: radius.chip,
