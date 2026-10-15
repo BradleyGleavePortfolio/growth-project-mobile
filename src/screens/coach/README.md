@@ -6,6 +6,8 @@ Credit-pack tier/custom choices, checkout retry, Done and Open checkout again ha
 
 Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs: Clients / Dashboard / Templates / Messages / Settings). The Settings tab is a nested stack — `SettingsHome → Billing → TrustCenter` — so child screens are reachable without leaving the tab. The coach surface is read-mostly — the source of truth for client data is the backend; these screens are dashboards over it.
 
+COACHTABS (`featureFlags.coachTabsV2`, default off): six tabs, Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from the gear at the end of the Overview header row (beside it the five inner labels start 16 pt in and grow to at most 110%, so all stay whole at 360 pt) and draws the coach Back; the Settings Money row and the Home Money card switch to the Money tab's root (`MoneyBack` hides there); the Settings booking rows open in the Calendar tab above its inbox. `CoachHoursScreen` (Hours and rules, the Calendar gear) repeats the four booking rows of Settings > Coach tools. `CommunityEntry` sits first in both Messages headers while `coachCommunity` is on. `ClientsListScreen` shows one Team row under its header for a Team Mode head coach, and `TeamManagementScreen` draws Back. See `src/navigation/README.md`.
+
 ## Purpose
 
 Meal-plan empty-state directions name the client’s **Meal plan** entry under More, not a Plan tab. After AI meal-plan approval, `ClientDetail` opens its coach-side Plan tab via `initialTab: 'mealplan'`, including on return to an already-mounted client detail.

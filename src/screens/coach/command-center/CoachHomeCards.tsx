@@ -23,13 +23,16 @@ export default function CoachHomeCards() {
   // screens. Without it a Settings stack that was never opened is built with
   // only the target screen, and the Settings tab can no longer reach sign
   // out or account deletion. Money opened from Home goes back to Home.
+  // COACHTABS: with the six tabs Money is a tab; the card switches to its root.
   const openMoney = useCallback(
     () =>
-      navigation.navigate("SettingsStack", {
-        screen: "CoachMoney",
-        params: { from: "home" },
-        initial: false,
-      }),
+      featureFlags.coachTabsV2
+        ? navigation.navigate("MoneyStack", { screen: "CoachMoney", pop: true })
+        : navigation.navigate("SettingsStack", {
+            screen: "CoachMoney",
+            params: { from: "home" },
+            initial: false,
+          }),
     [navigation],
   );
   const open = useCallback(
