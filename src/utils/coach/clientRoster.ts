@@ -14,6 +14,8 @@ export interface ClientActivity {
   /** YYYY-MM-DD, latest day across the shared slices; null when none. */
   lastActiveOn: string | null;
   checkInsToReview: number | null;
+  /** YYYY-MM-DD, latest shared workout day (UI-4 "workout done"); absent when unknown. */
+  lastWorkoutOn?: string;
 }
 
 export type RosterClient = User & { activity?: ClientActivity | null };
@@ -32,7 +34,15 @@ export function rosterActivityFromWire(raw: unknown): ClientActivity | null {
   const review = typeof a.check_ins_to_review === 'number' && Number.isFinite(a.check_ins_to_review)
     ? Math.max(0, Math.floor(a.check_ins_to_review))
     : null;
-  return { shared: a.shared === true, lastActiveOn: day, checkInsToReview: review };
+  const workout = typeof a.last_workout_on === 'string' && DAY_RE.test(a.last_workout_on.slice(0, 10))
+    ? a.last_workout_on.slice(0, 10)
+    : null;
+  return {
+    shared: a.shared === true,
+    lastActiveOn: day,
+    checkInsToReview: review,
+    ...(workout ? { lastWorkoutOn: workout } : {}),
+  };
 }
 
 export function rosterDisplayName(c: Pick<User, 'firstName' | 'lastName' | 'email'>): string {
