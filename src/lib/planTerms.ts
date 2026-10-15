@@ -239,7 +239,7 @@ export function planTerms(
   const cadence = cadenceCopy(pkg.interval ?? "month", pkg.intervalCount);
   const renewal =
     `Renews automatically at ${amount} ${cadence} until you cancel. ` +
-    "Cancel anytime in Membership; you keep the plan until the end of the period you paid for.";
+    "Cancel anytime in Your plans; you keep the plan until the end of the period you paid for.";
   if (pkg.trialDays > 0) {
     const pinned = trialEndsAt ?? pkg.trialEndsAt ?? null;
     const parsed = pinned ? new Date(pinned) : null;
