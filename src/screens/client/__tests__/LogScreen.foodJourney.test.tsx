@@ -1,13 +1,21 @@
 import React from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AxiosHeaders, type AxiosResponse } from 'axios';
 import LogScreen from '../LogScreen';
 import { foodApi, logApi, waterApi } from '../../../services/api';
 import { useClientStore } from '../../../store/clientStore';
 import type { MealType } from '../../../types';
+import Day1WinScreen from '../Day1WinScreen';
+import { firstWinApi } from '../../../services/firstWinApi';
 
-jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client' }) }));
+const mockUser: { id: string; coach_id?: string } = { id: 'client' };
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+jest.mock('../../../services/firstWinApi', () => ({
+  firstWinApi: { complete: jest.fn() },
+}));
+jest.mock('../../../lib/packagePromptGate', () => ({ shouldOfferPackagePrompt: async () => false }));
+jest.mock('../../../components/PackageSelectionSheet', () => () => null);
 jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
 jest.mock('../../../hooks/useNetworkStatus', () => ({
@@ -52,6 +60,7 @@ const ok: AxiosResponse = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  delete mockUser.coach_id;
   mockEntries = [];
   useClientStore.getState().reset();
   useClientStore.getState().setSelectedDate(mockDate);
@@ -93,6 +102,75 @@ afterEach(() => jest.restoreAllMocks());
 
 describe.each(['ios', 'android'] as const)('%s client food journey (real screen, store and portion math)', (os) => {
   beforeEach(() => jest.replaceProperty(Platform, 'OS', os));
+
+  it.each(['coachless', 'coached'])(
+    '%s first meal resumes the same search and success feedback, with no second note', async (client) => {
+      if (client === 'coached') mockUser.coach_id = 'coach';
+      jest.mocked(foodApi.search).mockResolvedValue({ ...ok, data: { results: [mockFood, mockBanana] } });
+      jest.mocked(firstWinApi.complete).mockResolvedValue({
+        ...ok, data: { completedAt: '2026-10-14', aiMessage: `Server note for ${client}.` },
+      });
+      function SavedMeal() {
+        const consumed = React.useRef(false);
+        const [noteVisible, setNoteVisible] = React.useState(false);
+        return <View>
+          <View style={{ display: noteVisible ? 'none' : 'flex' }}>
+            <LogScreen suspended={noteVisible} onSaved={() => {
+              if (consumed.current) return;
+              consumed.current = true;
+              setNoteVisible(true);
+            }} />
+          </View>
+          {noteVisible ? <Day1WinScreen savedWin="first_meal" onComplete={() => setNoteVisible(false)} /> : null}
+        </View>;
+      }
+      await render(<SavedMeal />);
+      expect(firstWinApi.complete).not.toHaveBeenCalled();
+      await fireEvent.press(screen.getAllByText('Add food')[2]);
+      await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'foods');
+      await fireEvent.press(await screen.findByText('Banana'));
+      await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
+      expect(await screen.findByText(`Server note for ${client}.`)).toBeTruthy();
+      expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
+      expect(firstWinApi.complete).toHaveBeenCalledTimes(1);
+      expect(firstWinApi.complete).toHaveBeenCalledWith('first_meal');
+      await fireEvent.press(screen.getByTestId('day1win-continue-button'));
+      expect(await screen.findByText('Added Banana.')).toBeTruthy();
+      expect(screen.getByText('Add to Dinner')).toBeTruthy();
+      expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('foods');
+      await fireEvent.press(screen.getByText('Rolled oats'));
+      await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
+      expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
+      expect(logApi.logFood).toHaveBeenCalledTimes(2);
+      expect(mockEntries.map((e) => e.meal_type)).toEqual(['dinner', 'dinner']);
+      expect(firstWinApi.complete).toHaveBeenCalledTimes(1);
+      await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+      expect(await screen.findByText('Rolled oats added to Dinner.')).toBeTruthy();
+    },
+  );
+
+  it.each(['manual', 'repeat'])('%s keeps its added-to line after the note is dismissed', async (flow) => {
+    const onSaved = jest.fn();
+    const view = await render(<LogScreen onSaved={onSaved} />);
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
+    if (flow === 'manual') {
+      await fireEvent.press(screen.getByText('Enter manually'));
+      await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Rolled oats');
+      for (const [index, value] of ['379', '13', '68', '6.5'].entries()) {
+        await fireEvent.changeText(screen.getAllByPlaceholderText('0')[index], value);
+      }
+      expect(screen.getByRole('button', { name: 'Log food' })).toBeEnabled();
+      await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
+    } else {
+      await fireEvent.press(await screen.findByRole('button', { name: /Repeat .*breakfast: add all 1 food/ }));
+    }
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    await view.rerender(<LogScreen onSaved={onSaved} suspended />);
+    await view.rerender(<LogScreen onSaved={onSaved} suspended={false} />);
+    expect(screen.getByText(flow === 'manual' ? 'Rolled oats added to Breakfast.' : '1 food added to Breakfast.')).toBeTruthy();
+    expect(logApi.logFood).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
 
   it('searches, picks a portion in one sheet, cancels back, adds, edits, deletes and repeats', async () => {
     const onSaved = jest.fn();

@@ -95,6 +95,7 @@ export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenPro
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [failureCount, setFailureCount] = useState(0);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   // Task 10: PackageSelectionSheet gate
   const [showPackageSheet, setShowPackageSheet] = useState(false);
   const requestedWin = useRef<WinType | null>(null);
@@ -129,10 +130,17 @@ export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenPro
     };
     void requestNote();
     return () => { mounted = false; };
-  }, [savedWin]);
+  }, [savedWin, retryAttempt]);
 
   const handleSelectWin = (winType: WinType) => {
-    if (!loading) onComplete(winType);
+    if (loading) return;
+    if (savedWin) {
+      // Retry the note for the already-saved action, never the logger.
+      requestedWin.current = null;
+      setRetryAttempt((n) => n + 1);
+    } else {
+      onComplete(winType);
+    }
   };
 
   // Check the 24h gate and package availability, then either show sheet or call onComplete.

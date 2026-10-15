@@ -6,6 +6,8 @@ The phone displays `response.data.aiMessage` verbatim, for coached and coachless
 
 Once completed the screen never appears again. If the API is unreachable at boot the screen is skipped and the client goes straight to the main app — it will be offered again on next boot until completed.
 
+After save, the navigator stays mounted but hidden behind the note. Continue (including package dismissal/payment) reveals the same logger, not Home: an open meal keeps its active slot, search and existing `Added …` feedback; manual/repeat saves keep their existing `added to …` line. The food sheet is temporarily hidden with `suspended`, not reset. No completion selection is re-armed.
+
 ---
 
 ## Screens
@@ -57,7 +59,7 @@ Day1WinScreen        ClientNavigator
 | Call | Endpoint | When | Response used |
 |------|----------|------|---------------|
 | `firstWinApi.getStatus()` | `GET /me/first-win/status` | Every student cold start (in `RootNavigator.bootstrapAuth`) | `completed` boolean to decide whether to show the win screen |
-| `firstWinApi.complete(winType)` | `POST /me/first-win/complete` | Once after the selected logger saves successfully | `aiMessage` displayed verbatim in the existing completion view; `completedAt` not used in UI |
+| `firstWinApi.complete(winType)` | `POST /me/first-win/complete` | Once after the selected logger saves successfully; another request only on an explicit retry after failure | `aiMessage` displayed verbatim in the existing completion view; `completedAt` not used in UI |
 
 `RootNavigator` holds the selected type and the committed user's id, accepts only its matching save, and consumes that selection before returning to the note. `ClientNavigator` forwards the success callbacks only while the logger is focused. No callback fires on validation failure, save failure, sheet cancellation, offline food enqueue, habit creation/deletion, habit unticking, or a daily check-in save. Search, manual food and a fully successful repeat meal count as a saved meal; a successful habit tick counts as `first_checkin`.
 
@@ -101,8 +103,10 @@ None. The AI message is generated on the backend; the mobile app just renders th
 | RTL: each card opens its logger with no request on tap | No premature completion |
 | RTL: `savedWin` requests once and displays exact server text | Save-to-note contract |
 | RTL: Continue calls onComplete without a target | Does not reopen the saved logger |
+| RTL: failed note → card tap → retry | Re-sends only the saved win; no callback to log again, no automatic retry on rerender |
+| RTL: two failed requests → Continue anyway | Existing escape path stays reachable within the same screen mount |
 
-CI also runs real-screen save callback assertions in the food journey, offline food, weigh-in and habit gate suites, plus the real root handoff in `rootNavigatorPackagePromptGate.test.tsx`.
+CI also runs real-screen save callback assertions in the food journey, offline food, weigh-in and habit gate suites, plus the real root handoff in `rootNavigatorPackagePromptGate.test.tsx`. Root tests assert the navigator is never unmounted during the saved note; real ClientNavigator tests assert sheet suspension forwarding. The food journey exercises real LogScreen + Day1WinScreen for coached/coachless fixtures on both platform settings: first food → note → Continue → same Dinner search and success feedback → second food, with exactly one completion request. Manual/repeat feedback retention is covered too.
 
 ---
 
@@ -110,4 +114,4 @@ CI also runs real-screen save callback assertions in the food journey, offline f
 
 - The `winType` is not yet emitted as a `ClientSignal` for PTM analytics. When retention dashboards are needed, the backend's `complete()` method can emit a Phase 1A signal of type `first_win` with `winType` in `metadata`.
 - An offline food enqueue is not a backend-confirmed log and requests no note. The client can save online later; adding a queue-completion note is outside this timing fix.
-- A failed note request keeps the existing connection alert and skip/retry-via-logger paths. No local note claims the save; the actual saved log remains on the server.
+- A failed note request keeps the existing connection alert, card-based retry and skip paths. Every card tap retries the already-saved win, never another logger; after two failures the existing Continue anyway path appears. No local note replaces the server note.
