@@ -2,7 +2,8 @@
  * RevolutGlowChart — legacy name for the shared line/bar scrubber.
  *
  * A draggable thumb scrubs across a timeline; the selected datum lifts above
- * a clean forest line or daily-total bars. No area, gradient or glow.
+ * a clean forest line or daily-total bars. No area, gradient or glow. The
+ * latest (or scrubbed) mark takes the gold flare, set apart by a gap or bone ring.
  *
  * Performance contract (#11 — NO jank):
  *   - The thumb position is driven by Reanimated SHARED VALUES on the
@@ -26,10 +27,9 @@
  * live outside the SVG and use the app's typography).
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, {
-  Circle,
   Path,
   Rect,
   Line as SvgLine,
@@ -43,7 +43,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, withAlpha } from '../../../../theme/tokens';
-import type { BucketTone } from '../wearablesTheme';
+import { CHART_FLARE as FLARE, type BucketTone } from '../wearablesTheme';
 import { smoothLinePath, type PathPoint } from './smoothPath';
 
 export interface GlowChartPoint {
@@ -98,6 +98,7 @@ export function RevolutGlowChart({
   // Tracks the last day-index we emitted to JS so we only cross-thread when the
   // snapped column actually changes (NOT every gesture frame).
   const lastIndex = useSharedValue(-1);
+  const [selected, setSelected] = useState<number | null>(null);
 
   const onLayout = useCallback(
     (e: LayoutChangeEvent) => {
@@ -123,6 +124,7 @@ export function RevolutGlowChart({
   const handleSelectIndex = useCallback(
     (index: number | null) => {
       if (index !== null) selectionHaptic();
+      setSelected(index);
       onSelect?.(index);
     },
     [onSelect],
@@ -227,6 +229,7 @@ export function RevolutGlowChart({
   }, [data, count, minY, rangeY, plotH, height, variant]);
   const linePath = useMemo(() => smoothLinePath(points), [points]);
   const baseline = variant === 'bar' ? (height - PAD_Y) / height * 100 : 99;
+  const flare = selected ?? count - 1;
 
   return (
     <View
@@ -252,7 +255,7 @@ export function RevolutGlowChart({
                   y={point.y}
                   width={60 / count}
                   height={baseline - point.y}
-                  fill={colors.forest}
+                  fill={i === flare ? FLARE : colors.forest}
                 />
               )) : count > 1 ? (
                 <Path
@@ -264,8 +267,6 @@ export function RevolutGlowChart({
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
                 />
-              ) : count === 1 ? (
-                <Circle cx={points[0].x} cy={points[0].y} r={1.6} fill={colors.forest} />
               ) : null}
               {/* baseline hairline */}
               <SvgLine
@@ -278,6 +279,12 @@ export function RevolutGlowChart({
                 vectorEffect="non-scaling-stroke"
               />
             </Svg>
+            {variant === 'line' && selected === null && count > 0 ? (
+              <View
+                testID="chart-latest-mark"
+                style={[styles.mark, { left: `${points[flare].x}%`, top: `${points[flare].y}%` }]}
+              />
+            ) : null}
           </View>
 
           {/* The draggable thumb. */}
@@ -289,7 +296,7 @@ export function RevolutGlowChart({
                 width: THUMB,
                 height: THUMB,
                 borderRadius: THUMB / 2,
-                backgroundColor: colors.forest,
+                backgroundColor: FLARE,
                 borderColor: colors.bone,
               },
               thumbStyle,
@@ -304,6 +311,7 @@ export function RevolutGlowChart({
 export default RevolutGlowChart;
 
 const THUMB = 12;
+const MARK = 10;
 
 const styles = StyleSheet.create({
   container: {
@@ -315,5 +323,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     borderWidth: 2,
+  },
+  mark: {
+    position: 'absolute',
+    width: MARK,
+    height: MARK,
+    borderRadius: MARK / 2,
+    marginLeft: -MARK / 2,
+    marginTop: -MARK / 2,
+    borderWidth: 2,
+    borderColor: colors.bone,
+    backgroundColor: FLARE,
   },
 });

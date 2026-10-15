@@ -14,22 +14,14 @@ import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../../theme/ThemeProvider';
 import { SrCard } from './SrCard';
 import { RECOVERY_PALETTE } from '../recoveryTheme';
-import { brand, colors as palette } from '../../../../theme/tokens';
-import { formatMinutes, type SleepStagesView, type SleepStageSlice } from '../recoveryData';
+import { STAGE_COLORS } from '../wearablesTheme';
+import { formatMinutes, type SleepStagesView } from '../recoveryData';
 
 export interface SleepStagesCardProps {
   stages: SleepStagesView | null;
   colors: ThemeColors;
   revealDelay?: number;
 }
-
-/** Token-only green stages; awake stays a quiet neutral. */
-const STAGE_COLORS: Record<SleepStageSlice['key'], string> = {
-  rem: palette.forest,
-  deep: brand[800],
-  light: brand[400],
-  awake: palette.charcoal,
-};
 
 export function SleepStagesCard({ stages, colors, revealDelay = 0 }: SleepStagesCardProps) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -65,7 +57,7 @@ export function SleepStagesCard({ stages, colors, revealDelay = 0 }: SleepStages
           <View style={styles.legend}>
             {stages.slices.map((slice) => (
               <View key={slice.key} style={styles.legendItem}>
-                <View style={[styles.dot, { backgroundColor: STAGE_COLORS[slice.key] }]} />
+                <View testID={`sleep-stage-dot-${slice.key}`} style={[styles.dot, { backgroundColor: STAGE_COLORS[slice.key] }]} />
                 <Text style={styles.legendLabel}>{slice.label}</Text>
                 <Text style={styles.legendValue}>{formatMinutes(slice.minutes)}</Text>
               </View>
@@ -89,6 +81,7 @@ function makeStyles(colors: ThemeColors) {
     headline: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
     bar: {
       flexDirection: 'row',
+      gap: 2,
       height: 14,
       borderRadius: 7,
       overflow: 'hidden',

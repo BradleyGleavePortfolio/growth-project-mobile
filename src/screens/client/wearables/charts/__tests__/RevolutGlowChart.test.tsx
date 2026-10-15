@@ -12,8 +12,10 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { RevolutGlowChart, type GlowChartPoint } from '../RevolutGlowChart';
+import { CHART_FLARE as FLARE } from '../../wearablesTheme';
 import { colors } from '../../../../../theme/tokens';
 
 const mockPan: {
@@ -158,6 +160,17 @@ describe('RevolutGlowChart', () => {
       <RevolutGlowChart data={DATA} tone="warm" variant={variant} reduceMotion={reduceMotion} onSelect={onSelect} />,
     );
     const paths = node.queryAllByTestId('Path');
+    // Gold flare on the latest mark at rest, on the scrubbed mark while held.
+    const expectFlare = (index: number | null) => {
+      if (variant === 'line') {
+        const mark = node.queryByTestId('chart-latest-mark');
+        if (index === null) expect(mark).toBeNull();
+        else expect(StyleSheet.flatten(mark?.props.style)).toMatchObject({ backgroundColor: FLARE, left: '100%' });
+        return;
+      }
+      node.getAllByTestId('Rect').forEach((bar, i) =>
+        expect(bar.props.fill).toBe(i === (index ?? DATA.length - 1) ? FLARE : colors.forest));
+    };
     if (variant === 'line') {
       expect(paths).toHaveLength(1);
       expect(paths[0].props.fill).toBe('none');
@@ -167,21 +180,25 @@ describe('RevolutGlowChart', () => {
       const bars = node.getAllByTestId('Rect');
       expect(bars).toHaveLength(DATA.length);
       bars.forEach((bar) => {
-        expect(bar.props.fill).toBe(colors.forest);
         expect(bar.props.height).toBeGreaterThan(0);
         expect(bar.props.y + bar.props.height).toBeCloseTo(node.getByTestId('Line').props.y1);
       });
     }
+    expectFlare(DATA.length - 1);
     await fireEvent(node.getByLabelText('Interactive trend chart'), 'layout', {
       nativeEvent: { layout: { width: 300, height: 120, x: 0, y: 0 } },
     });
     await act(() => {
       mockPan.begin?.({ x: 8 });
       mockPan.update?.({ x: 9 });
+    });
+    expectFlare(variant === 'bar' ? 0 : null);
+    await act(() => {
       mockPan.update?.({ x: 292 });
       mockPan.finalize?.();
     });
     expect(onSelect.mock.calls).toEqual([[0], [DATA.length - 1], [null]]);
+    expectFlare(DATA.length - 1);
     await node.unmount();
   });
 
@@ -190,6 +207,6 @@ describe('RevolutGlowChart', () => {
     expect(node.queryAllByTestId('Path')).toHaveLength(0);
     expect(node.queryAllByTestId('Rect')).toHaveLength(0);
     await node.rerender(<RevolutGlowChart data={DATA.slice(0, 1)} tone="cool" variant={variant} reduceMotion />);
-    expect(node.queryAllByTestId(variant === 'bar' ? 'Rect' : 'Circle')).toHaveLength(1);
+    expect(node.queryAllByTestId(variant === 'bar' ? 'Rect' : 'chart-latest-mark')).toHaveLength(1);
   });
 });

@@ -3,8 +3,12 @@
 This document defines when to use each chart variant, the theming rules, and performance notes for the TGP chart library (`src/ui/charts`).
 
 **Owner rule (10-15): lines or bars only.** No chart draws a filled area,
-gradient under a line, or glow. Use forest as the lead on the tan base; one
-token-sourced accent may mark a record. Keep scrub/tap inspection.
+gradient under a line, or glow. Use forest as the lead on the tan base; the
+gold flare (`CHART_FLARE`, gold 700) marks the latest or scrubbed mark or a
+record. Keep scrub/tap inspection. Colour-coded neighbours (sleep stages, the
+coach deviation band, a flare beside forest) touch at 3:1 or more, or sit apart
+on a card gap or ring with each mark 3:1 on the card; `tgpCharts.test.tsx`
+walks every such chart.
 
 ---
 
@@ -48,7 +52,8 @@ TgpLineChart for new continuous trends and TgpBarChart for daily totals.
 ### Wearable charts
 
 `RevolutGlowChart` is also a legacy name, not a visual treatment: forest
-line/bars and a plain tracking dot only, no area or halo. MetricDetailScreen
+line/bars, the latest bar or line end in the gold flare, and a gold tracking dot
+(bone ring) that moves the flare to the scrubbed day; no area or halo. MetricDetailScreen
 uses bars for day-bucketed sum metrics and a line for other readings;
 FitnessTrendCard uses bars for sum metrics (steps on Health & Fitness).
 HRV remains a line. Scrubbing still snaps once per day crossed and clears

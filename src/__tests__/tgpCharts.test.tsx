@@ -130,7 +130,8 @@ import TgpLineChart from '../ui/charts/TgpLineChart';
 import TgpBarChart from '../ui/charts/TgpBarChart';
 import TgpAreaChart from '../ui/charts/TgpAreaChart';
 import TgpSparkline from '../ui/charts/TgpSparkline';
-import { brand, colors as palette, gold } from '../theme/tokens';
+import { brand, colors as palette, gold, lightTokens } from '../theme/tokens';
+import { CHART_FLARE as FLARE, STAGE_COLORS } from '../screens/client/wearables/wearablesTheme';
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -381,9 +382,10 @@ it.each([
   'screens/coach/client-detail/SleepRecoveryTab.tsx',
   'screens/client/WorkoutScreen.tsx',
   'screens/coach/client-detail/WorkoutsTab.tsx',
+  'screens/client/wearables/charts/smoothPath.ts',
 ])('%s follows the no-area/no-gradient/no-glow rule', (file) => {
   const source = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
-  expect(source).not.toMatch(/areaPath|LinearGradient|fillOpacity|shadowRadius|progress-pr-glow|styles\.glow/);
+  expect(source).not.toMatch(/[aA]reaPath|LinearGradient|fillOpacity|shadowRadius|progress-pr-glow|styles\.glow/);
   if (file.endsWith('SleepStagesCard.tsx')) {
     expect(source).not.toMatch(/#[0-9a-f]{6}/i);
   }
@@ -394,17 +396,24 @@ it.each([
 
 // ─── charts/index.ts export surface ───────────────────────────────────────────
 
+// Rule: a chart that encodes categories by colour keeps neighbours apart. Marks
+// touch at 3:1, or sit apart on a card gap / ring with each mark 3:1 on it.
+// Rows walk every such chart: [chart, mark, what the mark touches].
 it.each([
-  [palette.forest, palette.bone],
-  [palette.forest, palette.cream],
-  [brand[800], palette.cream],
-  [brand[400], palette.cream],
-  [palette.charcoal, palette.cream],
-  [brand[400], brand[100]],
-  [palette.forest, brand[100]],
-  [gold[800], brand[100]],
-  [gold[800], palette.cream],
-])('chart mark %s is at least 3:1 on %s', (mark, ground) => {
+  ['single-series lines and bars', palette.forest, palette.bone],
+  ['single-series lines and bars', palette.forest, palette.cream],
+  ['latest or scrubbed flare, gapped bar or bone ring', FLARE, palette.bone],
+  ['latest or scrubbed flare, gapped bar or bone ring', FLARE, palette.cream],
+  ...Object.entries(STAGE_COLORS).map(([stage, mark]) => [`sleep stage ${stage}, 2 px card gap`, mark, palette.cream]),
+  ['coach deviation band on its track', brand[400], brand[100]],
+  ['coach marker on the track', palette.forest, brand[100]],
+  ['coach marker on the track', gold[800], brand[100]],
+  ['coach marker in its card ring', palette.forest, palette.cream],
+  ['coach marker in its card ring', gold[800], palette.cream],
+  ['record star edge', gold[800], palette.cream],
+  ['weekly volume, earlier weeks, gapped bars', lightTokens.textMuted, lightTokens.bgPrimary],
+  ['weekly volume, latest week, gapped bars', lightTokens.accent, lightTokens.bgPrimary],
+])('%s: %s is at least 3:1 on %s', (_chart, mark, ground) => {
   const luminance = (hex: string) => {
     const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
       .map((v) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -412,6 +421,10 @@ it.each([
   };
   const pair = [luminance(mark), luminance(ground)].sort((a, b) => a - b);
   expect((pair[1] + 0.05) / (pair[0] + 0.05)).toBeGreaterThanOrEqual(3);
+});
+
+it('sleep stages use four distinct tokens', () => {
+  expect(new Set(Object.values(STAGE_COLORS)).size).toBe(4);
 });
 
 describe('charts/index.ts — export surface', () => {
