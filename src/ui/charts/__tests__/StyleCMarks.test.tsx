@@ -117,9 +117,9 @@ describe('DayMark', () => {
 describe('PeakStar', () => {
   it('is hidden from screen readers beside words, and labelled when alone', async () => {
     const quiet = await render(<PeakStar testID="star" />);
-    const hidden = { includeHiddenElements: true };
-    expect(quiet.getByTestId('star', hidden).props).toEqual(expect.objectContaining({ accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' }));
-    expect(quiet.getByTestId('peak-star', hidden).props).toEqual(expect.objectContaining({ fill: t.data.peak, stroke: t.data.peakInk }));
+    expect(quiet.queryByTestId('star', { includeHiddenElements: false })).toBeNull();
+    const star = quiet.getByTestId('peak-star', { includeHiddenElements: true }).props;
+    expect([star.fill, star.stroke]).toEqual([t.data.peak, t.data.peakInk]);
     const alone = await render(<PeakStar label="New best" onDark />);
     expect(alone.getByLabelText('New best').props.accessibilityRole).toBe('image');
     expect(alone.getByTestId('peak-star').props.stroke).toBe(t.data.peak);
