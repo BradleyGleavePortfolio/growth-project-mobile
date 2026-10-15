@@ -45,10 +45,13 @@ export async function clientAgeConfirmed(
   saveDob: (dob: string) => Promise<void>,
 ): Promise<boolean> {
   if (confirmsMinClientAge(profile?.date_of_birth) || confirmsMinClientAge(profile?.dob)) return true;
-  const dob = await readMe().then(
-    (res) => (res?.data as { profile?: { date_of_birth?: unknown } | null } | null | undefined)?.profile?.date_of_birth,
-    () => undefined,
-  );
+  let dob: unknown;
+  try {
+    dob = ((await readMe())?.data as { profile?: { date_of_birth?: unknown } | null } | null | undefined)?.profile
+      ?.date_of_birth;
+  } catch {
+    dob = undefined;
+  }
   if (!confirmsMinClientAge(dob)) return false;
   // Not cached: the server is asked again on the next open.
   await saveDob(String(dob)).catch((err: unknown) => logger.warn('ageGate', 'date of birth not cached', err));
