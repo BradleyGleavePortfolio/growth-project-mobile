@@ -118,7 +118,7 @@ describe('pins', () => {
 });
 
 describe('box 2 shows and grants client-ai-v5 while the server says Roman memory is on', () => {
-  it('the v5 paragraph, unticked; one tick grants v5 with the server sha256 and P0 names consult-consent-v4', async () => {
+  it('the v5 paragraph, unticked; one tick grants v5 with the server sha256 and P0 names consult-consent-v6', async () => {
     const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: memoryOn() })) });
     const r = await toP0(api);
     await waitFor(() => expect(paragraph(r)).toBe(V5_PARAGRAPH));
@@ -134,7 +134,7 @@ describe('box 2 shows and grants client-ai-v5 while the server says Roman memory
     const first = api.save.mock.calls[0][0];
     expect(first.answers.P0).toMatchObject({
       agreed: true,
-      copy_version: 'consult-consent-v4',
+      copy_version: 'consult-consent-v6',
       text_sha256: CONSENT_MEMORY_COPY_SHA256,
     });
     expect(isConsentAnswerCurrent(first.answers.P0)).toBe(true);
@@ -159,7 +159,7 @@ describe("otherwise today's pinned v4 exactly", () => {
     ['memory_copy with another sha256', memoryOn({ memory_copy: { ...V5_COPY, sha256: AI_CONSENT_COPY_SHA256 } })],
     ['memory_copy of another version', memoryOn({ memory_copy: { ...V5_COPY, version: 'client-ai-v6' } })],
     ['memory_copy with another box label', memoryOn({ memory_copy: { ...V5_COPY, box_label: { text: 'Allow', sha256: sha('Allow') } } })],
-  ])('%s: v4 paragraph, v4 grant, P0 consult-consent-v3', async (_l, status) => {
+  ])('%s: v4 paragraph, v4 grant, P0 consult-consent-v5', async (_l, status) => {
     const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status })) });
     const r = await toP0(api);
     await waitFor(() => expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState?.disabled).toBeFalsy());
@@ -167,7 +167,7 @@ describe("otherwise today's pinned v4 exactly", () => {
     await tickBothAndContinue(r);
     await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
     expect(api.grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
-    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ copy_version: 'consult-consent-v3', text_sha256: CONSENT_COPY_SHA256 });
+    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ copy_version: 'consult-consent-v5', text_sha256: CONSENT_COPY_SHA256 });
   });
 
   it('a malformed memory_copy body parses to null', () => {
