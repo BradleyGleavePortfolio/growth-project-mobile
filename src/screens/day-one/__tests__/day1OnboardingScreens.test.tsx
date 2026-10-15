@@ -196,6 +196,7 @@ it.each(onboardingTouchTargetCases)(
 it('keeps the Goals save-recovery actions at the 44pt touch minimum', async () => {
   mockedSaveGoals.mockRejectedValueOnce(new Error('network'));
   const goalsError = await render(<GoalsScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(goalsError.getByTestId('day-one-goal-fitness')));
   await act(async () => fireEvent.press(goalsError.getByTestId('day-one-goals-continue')));
   await waitFor(() => expect(goalsError.getByTestId('day-one-goals-retry')).toBeTruthy());
   for (const id of ['day-one-goals-retry', 'day-one-goals-offline']) {
