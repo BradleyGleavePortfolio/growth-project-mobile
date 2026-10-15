@@ -821,7 +821,7 @@ export default function CoachNavigator() {
   );
   return (
     <FirstPaymentWowHost>
-    <CoachTeamEntryContext.Provider value={showTeamTab}>
+    <CoachTeamEntryContext.Provider value={tabsV2 && showTeamTab}>
     <Tab.Navigator
       initialRouteName={initialTab}
       // COACHTABS: Back from Settings, Community or Team returns to the tab the coach came from.

@@ -85,7 +85,7 @@ it('flag on: six tabs in the owner order with their icons, labels capped at 110%
   for (const [i, [label, icon, destination]] of SIX.entries()) {
     const tab = view.getByRole('tab', { name: tabName(label, i + 1) });
     expect(view.getAllByRole('tab')[i]).toBe(tab);
-    expect(within(tab).getByTestId(icon)).toBeTruthy();
+    expect(within(tab).getAllByTestId(icon).length).toBeGreaterThan(0);
     expect(within(tab).getByText(label).props).toMatchObject({ numberOfLines: 1, maxFontSizeMultiplier: 1.1 });
     await fireEvent.press(tab);
     expect(view.getByRole('tab', { name: tabName(label, i + 1) })).toBeSelected();

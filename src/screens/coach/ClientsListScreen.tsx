@@ -13,7 +13,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { CoachTeamEntryContext } from '../../navigation/coachTeamEntry';
-import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
@@ -192,7 +191,7 @@ export default function ClientsListScreen({ navigation }: Props) {
   const goToRiskBoard = () => navigation.navigate('RiskBoard');
   // COACHTABS (owner 10-15: "team is a switch to flip under clients in v1.1"):
   // with the six tabs Team is not a tab; a Team Mode head coach opens it here.
-  const teamEntry = useContext(CoachTeamEntryContext) && featureFlags.coachTabsV2;
+  const teamEntry = useContext(CoachTeamEntryContext);
 
   const emptyList = searchQuery ? (
     <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
