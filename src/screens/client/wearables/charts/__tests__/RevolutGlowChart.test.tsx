@@ -169,6 +169,7 @@ describe('RevolutGlowChart', () => {
       bars.forEach((bar) => {
         expect(bar.props.fill).toBe(colors.forest);
         expect(bar.props.height).toBeGreaterThan(0);
+        expect(bar.props.y + bar.props.height).toBeCloseTo(node.getByTestId('Line').props.y1);
       });
     }
     await fireEvent(node.getByLabelText('Interactive trend chart'), 'layout', {

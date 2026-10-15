@@ -226,6 +226,7 @@ export function RevolutGlowChart({
     return pts;
   }, [data, count, minY, rangeY, plotH, height, variant]);
   const linePath = useMemo(() => smoothLinePath(points), [points]);
+  const baseline = variant === 'bar' ? (height - PAD_Y) / height * 100 : 99;
 
   return (
     <View
@@ -269,9 +270,9 @@ export function RevolutGlowChart({
             {/* baseline hairline */}
             <SvgLine
               x1="0"
-              y1="99"
+              y1={baseline}
               x2="100"
-              y2="99"
+              y2={baseline}
               stroke={withAlpha(colors.ink, 0.06)}
               strokeWidth={0.5}
               vectorEffect="non-scaling-stroke"
