@@ -27,6 +27,7 @@ import {
   commandCenterApi,
   ActionQueueItem,
   isSafetyAlert,
+  safetyQuote,
 } from '../../../services/commandCenterApi';
 import AlertRow from '../../../components/command-center/AlertRow';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
@@ -146,13 +147,14 @@ export default function ActionQueueScreen({ onSelectClient, onOpenSafetyAlert }:
         }
         renderItem={({ item }) =>
           isSafetyAlert(item) ? (
-            // Owner 57w / 57x: one card style for both safety alerts. The
-            // client's own words stay out of analytics capture.
+            // Owner 57w / 57x: one card style for every safety alert. The
+            // client's own words stay out of analytics capture, and a crisis
+            // alert never shows them (#ROMAN-CRISIS-ALERT).
             <View ph-no-capture>
               <AlertRow
                 clientName={item.client_name}
                 message={item.message}
-                quote={item.quote}
+                quote={safetyQuote(item.alert_type, item.quote)}
                 hideClientName
                 onPress={() => onOpenSafetyAlert?.(item)}
                 onDismiss={() => handleDismiss(item.alert_id, item.client_name)}

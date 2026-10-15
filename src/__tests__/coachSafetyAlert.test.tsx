@@ -9,6 +9,9 @@
  *     the shared skeleton, then the alert with one warning haptic. An alert
  *     the coach can't read lands on Command Center > Actions, as before.
  *     Rows sent before 57d (CoachActionQueue) still open Actions.
+ *   - #ROMAN-CRISIS-ALERT: the crisis alert uses the same card and screen and
+ *     never shows the client's words; an alert type the app does not know is
+ *     handled as before.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -54,6 +57,7 @@ const URGENT_LINE = 'Urgent: Roman sent Jane Doe a medical safety reply. Check i
 const ED_LINE = 'Roman sent Sam Lee an eating-disorder safety reply. Check in with them →';
 const QUOTE = 'A persistent-vomiting message,\nwritten over two lines and long enough to be cut off on the card.';
 const SENT = '2026-10-12T16:41:00.000Z';
+const CRISIS_LINE = 'Roman sent Maya a crisis safety reply. Please check in with them today.';
 
 const urgent: ActionQueueItem = {
   alert_id: 'a1',
@@ -74,6 +78,16 @@ const ed: ActionQueueItem = {
   alert_type: 'roman_eating_disorder_reply',
   message: ED_LINE,
   quote: null,
+  sent_at: null,
+};
+const crisis: ActionQueueItem = {
+  ...urgent,
+  alert_id: 'a3',
+  client_id: 'client-3',
+  client_name: 'Maya Collins',
+  alert_type: 'roman_crisis_reply',
+  message: CRISIS_LINE,
+  quote: QUOTE, // never shown, even if a server ever sent one
   sent_at: null,
 };
 
@@ -104,6 +118,24 @@ describe('the safety alert card', () => {
     await fireEvent.press(getByText(ED_LINE));
     expect(onOpen).toHaveBeenCalledWith(ed);
   });
+
+  it('crisis: the same card with no quote; an unknown type is still an ordinary row', async () => {
+    const unknown = { ...urgent, alert_id: 'a4', client_id: 'client-4', alert_type: 'some_new_type', quote: null };
+    (commandCenterApi.getActionQueue as jest.Mock).mockResolvedValue({ data: { items: [crisis, unknown], total_pending: 2 } });
+    const onOpen = jest.fn();
+    const onSelectClient = jest.fn();
+    const { getAllByTestId, getByRole, queryByTestId, queryByText } = await render(
+      <ActionQueueScreen onOpenSafetyAlert={onOpen} onSelectClient={onSelectClient} />,
+    );
+    await waitFor(() => expect(getAllByTestId('command-center-safety-alert-row')).toHaveLength(1));
+    expect(queryByTestId('command-center-alert-quote')).toBeNull();
+    expect(queryByText(QUOTE.replace(/\s+/g, ' '))).toBeNull();
+    await fireEvent.press(getByRole('button', { name: CRISIS_LINE }));
+    expect(onOpen).toHaveBeenCalledWith(crisis);
+    expect(getAllByTestId('command-center-action-queue-row')).toHaveLength(1);
+    await fireEvent.press(getByRole('button', { name: /^Jane Doe\./ }));
+    expect(onSelectClient).toHaveBeenCalledWith('client-4', 'Jane Doe');
+  });
 });
 
 describe('the detail screen', () => {
@@ -133,7 +165,7 @@ describe('the detail screen', () => {
     expect(getByTestId('coach-safety-alert-sent').props.children).toBe(formatSentAt(SENT));
     expect(getByText(QUOTE)).toBeTruthy();
     expect(
-      getByText('Roman told them to contact their prescribing clinic today, and to call 911 if symptoms are severe.'),
+      getByText('Roman told them to contact their doctor or prescriber today, and to call 911 if symptoms are severe.'),
     ).toBeTruthy();
     await fireEvent.press(getByRole('button', { name: 'Message Jane' }));
     expect(navigation.navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-1', clientName: 'Jane Doe' });
@@ -166,6 +198,7 @@ describe('the detail screen', () => {
   it.each([
     ['the server will not give it (another coach, a deleted message)', () => Promise.reject(new Error('404'))],
     ['it is not a safety alert', () => Promise.resolve({ data: { ...urgent, alert_type: 'missed_checkins' } })],
+    ['it is a type this app does not know', () => Promise.resolve({ data: { ...urgent, alert_type: 'some_new_type' } })],
   ])('by id, when %s: Command Center > Actions, as before, with no new words', async (_label, reply) => {
     (commandCenterApi.getSafetyAlert as jest.Mock).mockImplementation(reply);
     const { navigation, tabs, utils } = await renderDetail({ alertId: 'a9' });
@@ -187,6 +220,33 @@ describe('the detail screen', () => {
     expect(getByText('Roman answered with eating-disorder safety guidance.')).toBeTruthy();
     expect(queryByTestId('coach-safety-alert-quote')).toBeNull();
     expect(getByRole('button', { name: 'Message Sam' })).toBeTruthy();
+  });
+
+  it('crisis: the approved line with the first name, never a quote, and Message {first name}', async () => {
+    const { navigation, utils } = await renderDetail({
+      alertType: 'roman_crisis_reply',
+      clientId: 'client-3',
+      clientName: 'Maya Collins',
+      quote: QUOTE,
+      sentAt: SENT,
+    });
+    const { getByText, getByTestId, queryByTestId, queryByText, getByRole } = utils;
+    expect(getByText('Maya Collins')).toBeTruthy();
+    expect(getByTestId('coach-safety-alert-summary').props.children).toBe(CRISIS_LINE);
+    expect(queryByTestId('coach-safety-alert-quote')).toBeNull();
+    expect(queryByText(QUOTE)).toBeNull();
+    await fireEvent.press(getByRole('button', { name: 'Message Maya' }));
+    expect(navigation.navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-3', clientName: 'Maya Collins' });
+    expect(HapticService.warning).toHaveBeenCalledTimes(1);
+  });
+
+  it('crisis by id: opens with no quote and the alert time when the server sends no sent time', async () => {
+    (commandCenterApi.getSafetyAlert as jest.Mock).mockResolvedValue({ data: { ...crisis, quote: null } });
+    const { tabs, utils } = await renderDetail({ alertId: 'a3' });
+    await waitFor(() => expect(utils.getByText(CRISIS_LINE)).toBeTruthy());
+    expect(utils.getByTestId('coach-safety-alert-sent').props.children).toBe(formatSentAt(SENT));
+    expect(utils.queryByTestId('coach-safety-alert-quote')).toBeNull();
+    expect(tabs.navigate).not.toHaveBeenCalled();
   });
 });
 

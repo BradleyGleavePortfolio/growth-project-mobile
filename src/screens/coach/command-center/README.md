@@ -56,6 +56,13 @@ All list screens support:
   to gutter; date and greeting stay on one line (short date when the long one does not fit); serif figures are lining
   (`lining-nums`), so a 1 never reads as I. Tests: `coachHomeCards134.test.tsx` (360x800 and 390x844).
 
+### Roman safety alerts (B-R1F, 57w, #ROMAN-CRISIS-ALERT)
+
+- `roman_urgent_reply`, `roman_eating_disorder_reply` and `roman_crisis_reply` share one Actions card (the server's
+  line, then the client's message on one muted line) and open `CoachSafetyAlertScreen`. A crisis alert never shows the
+  client's words, on the card or the screen (`safetyQuote`); its screen line is "Roman sent {first name} a crisis safety
+  reply. Please check in with them today." Any other type stays an ordinary row. Tests: `coachSafetyAlert.test.tsx`.
+
 ---
 
 ## Shared Components
