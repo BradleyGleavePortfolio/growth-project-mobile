@@ -51,7 +51,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { StyleBBubble, StyleBDayMark, StyleBFirstCard, StyleBHeader, StyleBLoading, StyleBQueued, dayB } from '../../components/messaging/StyleBThread';
 import { useMessageOutbox } from '../../hooks/useMessageOutbox';
-import { drainOutbox, isTransient, sendViaOutbox, settleOutbox, type OutboxEvent } from '../../services/messageOutbox';
+import { drainOutbox, isTransient, sendViaOutbox, settleOutbox, takeBackRefused, type OutboxEvent } from '../../services/messageOutbox';
 
 interface Message {
   id: string;
@@ -436,14 +436,18 @@ export default function MessagesScreen() {
     }
   };
   const outboxItems = useMessageOutbox(styleB ? currentUser?.id : null, onOutbox);
-  const retryOutbox = () => {
-    if (currentUser?.id) void drainOutbox(currentUser.id, true);
+  // A tap sends from the head again; on a message the server can never accept, it takes the text back to the composer.
+  const retryOutbox = (key?: string | null) => {
+    const uid = currentUser?.id;
+    const back = uid && key ? takeBackRefused(uid, key) : undefined;
+    if (back) setInputText((t) => (t ? `${t}\n${back.body}` : back.body));
+    else if (uid) void drainOutbox(uid, true);
   };
   const shown = useMemo(() => {
     let held = false;
     const rows = outboxItems.map((i): Message => {
       const state = i.failed ? 'failed' : online && !held ? 'sending' : 'waiting';
-      held ||= !!i.failed;
+      held ||= !!i.failed && !i.refused;
       const row = normalizeMessage({ id: `pending_${i.key}`, sender_id: currentUser?.id, body: i.body, client_message_id: i.key, created_at: i.createdAt }, currentUser?.id);
       return { ...row, pending: true, parent_message_id: i.replyToId, outbox: state };
     });
@@ -846,7 +850,7 @@ export default function MessagesScreen() {
                   animateIn={new Date(item.created_at).getTime() > (paintedUpTo.current ?? Infinity)}
                   reduceMotion={reduceMotion}
                   onLongPress={handleLongPress}
-                  onRetry={retryOutbox}
+                  onRetry={() => retryOutbox(item.v2?.client_message_id)}
                 />
               </View>
             );
@@ -919,7 +923,7 @@ export default function MessagesScreen() {
           onReport={handleOpenReport}
           onRetry={(m) => {
             const key = m.v2?.client_message_id;
-            if (styleB) retryOutbox();
+            if (styleB) retryOutbox(key);
             else if (key) void sendV2(m.body, key, actionTarget?.parent_message_id ?? null, m.id);
           }}
           muteOpen={muteMenu}

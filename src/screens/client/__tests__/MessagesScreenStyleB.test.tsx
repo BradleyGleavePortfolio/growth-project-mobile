@@ -5,6 +5,7 @@
  * renders under <Host />, the app-level drain ClientNavigator mounts, so it can be closed while the app stays open.
  */
 import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Alert, Animated, Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
@@ -113,13 +114,13 @@ const net = (state: typeof ON) => act(async () => NetInfo.__setState(state));
 const holdReached = () => waitFor(() => expect(release).not.toBeNull());
 const releaseHold = async () => { const r = release; release = null; await act(async () => r?.()); };
 const posted = (body: string) => posts.filter((p) => p.body === body).length;
-const keyOf = (body: string) => (JSON.parse(stored.get(OUTBOX) ?? '[]') as Array<{ key: string; body: string }>).find((i) => i.body === body)?.key;
+const keyOf = async (body: string) => (JSON.parse((await AsyncStorage.getItem(OUTBOX)) ?? '[]') as Array<{ key: string; body: string }>).find((i) => i.body === body)?.key;
 let alertSpy: jest.SpyInstance;
 const originalOS = Platform.OS; // menus as in MessagesScreenV2.test (the in-app sheet, not ActionSheetIOS)
 beforeAll(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' }));
 afterAll(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => originalOS }));
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
   NetInfo.__reset();
   mockFlags.messaging_core_v2 = true;
@@ -131,6 +132,7 @@ beforeEach(() => {
   ] });
   getMock.mockImplementation(async (url: string) => ({ data: url === '/messages/pins' ? { items: [] } : {} }));
   stored.clear();
+  await AsyncStorage.clear();
   posts.length = 0;
   delivered.length = 0;
   serve('ok');
@@ -246,7 +248,7 @@ describe('client MessagesScreen with c3StyleB ON', () => {
     await sendText(u, 'and saturday');
     expect(await u.findByText('2 messages send when you reconnect.')).toBeTruthy();
     expect(posted('and saturday')).toBe(0); // offline nothing gets past the first
-    const keys = [keyOf('see you friday'), keyOf('and saturday')];
+    const keys = await Promise.all([keyOf('see you friday'), keyOf('and saturday')]);
     serve('ok');
     await net(ON);
     await waitFor(() => expect(u.queryByText('Waiting to send')).toBeNull());
@@ -317,7 +319,7 @@ describe('R1: a message written offline survives leaving the thread and sends it
     await sendText(u, 'see you friday');
     await u.findByText('Waiting to send');
     await idle();
-    const key = keyOf('see you friday');
+    const key = await keyOf('see you friday');
     expect(key).toBeTruthy();
     if (how === 'restart') {
       await u.unmount(); // ClientNavigator gone: only the saved copy is left
@@ -337,7 +339,7 @@ describe('R1: a message written offline survives leaving the thread and sends it
     await net(OFF);
     await net(ON);
     expect(delivered).toEqual(['see you friday']);
-    expect(stored.get(OUTBOX)).toBe('[]');
+    expect(await AsyncStorage.getItem(OUTBOX)).toBe('[]');
   });
 });
 
@@ -422,6 +424,21 @@ describe('R2: every send goes through one ordered, keyed dispatcher', () => {
     expect(posts.every((p) => !!p.key && p.header === p.key)).toBe(true);
     expect(new Set(posts.map((p) => `${p.body}|${p.key}`)).size).toBe(written.length);
     expect(mockLegacySend).not.toHaveBeenCalled();
+  });
+});
+
+describe('R6: a message the server can never accept holds nothing', () => {
+  it('400: "second" goes, "first" is never repeated; its tap puts the text back in the composer', async () => {
+    serve('ok', 400);
+    const u = await render(<App />);
+    await ready(u);
+    await sendText(u, 'first');
+    await sendText(u, 'second');
+    await waitFor(() => expect(delivered).toEqual(['second']));
+    await fireEvent.press(u.getByLabelText('Not sent. Tap to send again'));
+    expect(u.getByLabelText('Message text').props.value).toBe('first');
+    expect(u.queryByLabelText(/Message: first/)).toBeNull();
+    expect(posted('first')).toBe(1);
   });
 });
 

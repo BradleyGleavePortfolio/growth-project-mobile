@@ -7,16 +7,16 @@
  * - Each message gets its client_message_id when it is written and keeps it, so every send and replay is one the
  *   server dedupes (POST /messages, messaging.service insertThreadMessage; the same route with v2 on or off).
  * - One message at a time, in the order written. One that fails stops the ones after it until the client taps it;
- *   a send made during a drain queues behind it.
- * - Saved per user under messages_thread_outbox_<id> (wiped at sign-out with the thread cache, authActions) and read
- *   back with the async storage API, so it survives leaving the thread and closing the app on the AsyncStorage shim.
+ *   a send made during a drain queues behind it. A refusal that can never be accepted does not hold the rest (refusal).
+ * - Saved per user as messages_thread_outbox_<id> in AsyncStorage, outside what sign-out wipes: it survives leaving the
+ *   thread, closing the app and signing out, and sends on that account's next sign-in. No other account reads or sends it.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { messagingV2Api, toMessagingError, type MessagingApiError, type ThreadMessage } from '../api/messagingV2Api';
 import { newClientMessageId } from '../components/messaging/threadV2';
 import { isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { readUserCacheSync } from '../lib/userCache';
-import { cacheStorage } from '../storage/mmkv';
 
 export interface OutboxItem {
   key: string;
@@ -25,6 +25,8 @@ export interface OutboxItem {
   createdAt: string;
   /** Not sent while online, or refused: it waits for a tap and holds the ones after it. */
   failed?: boolean;
+  /** Can never be accepted as written: it holds nothing, and a tap takes its text back to the composer. */
+  refused?: boolean;
 }
 
 export type OutboxEvent =
@@ -48,14 +50,25 @@ const listeners = new Set<Listener>();
 /** No answer, a server fault or a rate limit: the message may still go; anything else is a refusal. */
 export const isTransient = (e: MessagingApiError) => e.kind === 'network' || e.status >= 500 || e.status === 429;
 
+/**
+ * A refused send (backend src/messaging send path). 'retry': it can still go as written, so it keeps its place and holds
+ * the rest (no answer, 5xx, 429, 408, 401, 403 blocked, 409 NO_COACH_ASSIGNED). 'unquote': the quoted message was deleted
+ * (409 messaging.reply_target_unavailable), so it goes at once without it. 'permanent': any other 4xx (400, 404, 409 key reused).
+ */
+export function refusal(e: MessagingApiError): 'retry' | 'unquote' | 'permanent' {
+  if (e.code === 'messaging.reply_target_unavailable') return 'unquote';
+  const retry = e.kind === 'network' || e.status >= 500 || [401, 403, 408, 429].includes(e.status) || e.code === 'NO_COACH_ASSIGNED';
+  return retry ? 'retry' : 'permanent';
+}
+
 function commit(uid: string, next: OutboxItem[], event?: OutboxEvent): void {
   if (owner !== uid) return;
   items = next;
-  void cacheStorage.set(storageKey(uid), JSON.stringify(next)).catch(() => undefined);
+  void AsyncStorage.setItem(storageKey(uid), JSON.stringify(next)).catch(() => undefined);
   listeners.forEach((l) => l(items, event));
 }
 
-function parse(raw: string | undefined): OutboxItem[] {
+function parse(raw: string | null): OutboxItem[] {
   try {
     const list: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(list) ? list.filter((i) => typeof i?.key === 'string' && typeof i?.body === 'string') : [];
@@ -80,7 +93,7 @@ export function hydrateOutbox(uid: string): Promise<void> {
     items = [];
     ready = null;
   }
-  ready ??= cacheStorage.getStringAsync(storageKey(uid)).then((raw) => {
+  ready ??= AsyncStorage.getItem(storageKey(uid)).then((raw) => {
     if (owner !== uid) return;
     items = parse(raw);
     listeners.forEach((l) => l(items));
@@ -109,6 +122,13 @@ export async function sendViaOutbox(uid: string, body: string, replyToId: string
   await hydrateOutbox(uid);
   commit(uid, [...items, { key: newClientMessageId(), body, replyToId, createdAt: new Date().toISOString() }]);
   return drainOutbox(uid);
+}
+
+/** A refused message leaves the outbox and is returned, for its text to go back to the composer. */
+export function takeBackRefused(uid: string, key: string): OutboxItem | undefined {
+  const item = readOutbox(uid).find((i) => i.key === key && i.refused);
+  if (item) commit(uid, items.filter((i) => i !== item));
+  return item;
 }
 
 /** Drops messages a thread read shows the server already has, so a lost reply never leaves one holding the rest. */
@@ -142,7 +162,7 @@ export function drainOutbox(uid: string, manual = false): Promise<void> {
 
 async function sendInOrder(uid: string, manual: boolean): Promise<void> {
   while (owner === uid && readUserCacheSync()?.id === uid) {
-    const head = items[0];
+    const head = items.find((i) => !i.refused);
     if (!head || (head.failed && !manual)) return;
     try {
       const row = await messagingV2Api.sendMessage({ role: 'client' }, { body: head.body, clientMessageId: head.key, replyToId: head.replyToId });
@@ -151,6 +171,13 @@ async function sendInOrder(uid: string, manual: boolean): Promise<void> {
       const error = toMessagingError(err);
       if (error.kind === 'contract') {
         commit(uid, items.filter((i) => i.key !== head.key), { type: 'taken' });
+        continue;
+      }
+      const how = refusal(error);
+      if (how !== 'retry') {
+        const unquote = how === 'unquote' && !!head.replyToId;
+        const next = items.map((i) => (i.key !== head.key ? i : unquote ? { ...i, replyToId: null } : { ...i, failed: true, refused: true }));
+        commit(uid, next, unquote ? undefined : { type: 'stopped', error, manual });
         continue;
       }
       // Offline it keeps waiting for the signal; online, or refused, it waits for a tap.
