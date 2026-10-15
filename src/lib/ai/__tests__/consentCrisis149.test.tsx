@@ -38,7 +38,7 @@ jest.mock('../../../api/featureFlagsApi', () => ({ featureFlagsApi: { getFeature
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn(), captureErrorWithoutPii: jest.fn(), setSentryUser: jest.fn() }));
 jest.mock('../../analytics', () => ({ reset: jest.fn(), track: jest.fn() }));
-jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
+jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn(async () => undefined) }));
 let mockUser: { id: string; coach_id?: string } = { id: 'u1', coach_id: 'coach-1' };
 jest.mock('../../userCache', () => ({ readUserCacheSync: () => mockUser, readUserCache: async () => null, clearUserCache: async () => undefined }));
 jest.mock('../../../offline/sync/sync-engine', () => ({ deleteWorkoutLogsForUser: jest.fn(async () => 0) }));
