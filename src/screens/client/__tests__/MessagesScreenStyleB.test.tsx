@@ -209,7 +209,7 @@ describe('client MessagesScreen with c3StyleB ON', () => {
     await sendText(u, 'and saturday');
     expect(await u.findByText('2 messages send when you reconnect.')).toBeTruthy();
     postMock.mockImplementation(async (url: string, body: Record<string, unknown>) => ({ data: url === '/messages'
-      ? row({ id: 'srv-2', sender_id: 'client-1', body: body.body, client_message_id: body.client_message_id, created_at: new Date().toISOString() }) : {} }));
+      ? row({ id: `srv-${body.client_message_id}`, sender_id: 'client-1', body: body.body, client_message_id: body.client_message_id, created_at: new Date().toISOString() }) : {} }));
     await act(async () => NetInfo.__setState({ isConnected: true, isInternetReachable: true }));
     await waitFor(() => expect(u.queryByText('Waiting to send')).toBeNull());
     const keys = postMock.mock.calls.filter(([url]) => url === '/messages').map(([, b]) => (b as { client_message_id: string }).client_message_id);
