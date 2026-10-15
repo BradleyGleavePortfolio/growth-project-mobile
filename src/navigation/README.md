@@ -44,12 +44,16 @@ App.tsx mounts RootNavigator
    │     ├─ AsyncStorage.getItem('needs_role_selection') // gate after Google / codeless signup
    │     ├─ AsyncStorage.getItem('onboarding_complete')  // student-only
    │     │
-   │     └─► setAuthState('unauthenticated' | 'onboarding' | 'coach' | 'student')
+   │     └─► setAuthState('unauthenticated' | 'onboarding' | 'age_check' | 'coach' | 'student')
+   │
+   ├─► onAgeConfirmationRequired ─► 'age_check'        // a 403 AGE_CONFIRMATION_REQUIRED in the client app
    │
    ├─► authEvents.onAuthChange ─► bootstrapAuth        // re-runs on logout / login emit
    │
    └─► useNetworkStatus ─► flushFoodLogQueue() on offline → online
 ```
+
+Age gate (AGEGATE16, owner #C8-UNDER18-B): every client confirms 16 or older before the client app. A client past setup whose cached profile has no 16+ `date_of_birth` is checked once against `GET /auth/me` (`lib/ageGate.clientAgeConfirmed`); a server date is cached, no date opens `'age_check'` (`screens/consultation/AgeCheckScreen`, the consultation's own B2 question and under-16 stop screen), and saving it re-runs `bootstrapAuth`. No answer from the server opens the app as before; the backend refuses client routes with 403 `AGE_CONFIRMATION_REQUIRED`, which `services/api` reports and which moves `'student'`, `'package_prompt'` or `'day1win'` to `'age_check'`. Setup (`'onboarding'`, which asks B2 itself), coaches and owners are never interrupted.
 
 Deep links are parsed by `linking` in `RootNavigator`:
 

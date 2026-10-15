@@ -89,6 +89,7 @@ import {
 import { Alert, Platform } from 'react-native';
 import { nativeBuildNumber, purchasePolicyHeader } from '../config/purchaseSurfaces';
 import type { SignupPolicyResponse } from '../lib/signupPolicy';
+import { AGE_CONFIRMATION_REQUIRED, reportAgeConfirmationRequired } from '../lib/ageGate';
 import {
   AccountChangedError,
   assertBindingMatches,
@@ -448,6 +449,17 @@ api.interceptors.response.use(
       });
       error.message = LOCKED_DUNNING_MESSAGE;
       return Promise.reject(error);
+    }
+
+    // AGEGATE16: a client who has not confirmed 16 or older is refused on
+    // client routes; RootNavigator opens the age step (lib/ageGate). A refusal
+    // from a retired sign-in (B-352-1) is dropped.
+    if (
+      error.response.status === 403 &&
+      (error.response.data as { code?: unknown } | undefined)?.code === AGE_CONFIRMATION_REQUIRED &&
+      (dunningGenerationOf(error.config) ?? 0) === dunningLockoutStore.currentGeneration()
+    ) {
+      reportAgeConfirmationRequired();
     }
 
     // 402 — entitlement required. Emit an event so the EntitlementProvider
