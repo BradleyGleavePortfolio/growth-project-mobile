@@ -171,10 +171,10 @@ describe('RevolutGlowChart', () => {
         expect(bar.props.height).toBeGreaterThan(0);
       });
     }
-    fireEvent(node.getByLabelText('Interactive trend chart'), 'layout', {
+    await fireEvent(node.getByLabelText('Interactive trend chart'), 'layout', {
       nativeEvent: { layout: { width: 300, height: 120, x: 0, y: 0 } },
     });
-    act(() => {
+    await act(() => {
       mockPan.begin?.({ x: 8 });
       mockPan.update?.({ x: 9 });
       mockPan.update?.({ x: 292 });

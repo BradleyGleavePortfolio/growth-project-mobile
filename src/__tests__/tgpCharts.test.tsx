@@ -378,6 +378,9 @@ it.each([
 ])('%s follows the no-area/no-gradient/no-glow rule', (file) => {
   const source = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
   expect(source).not.toMatch(/areaPath|LinearGradient|fillOpacity|shadowRadius|progress-pr-glow|styles\.glow/);
+  if (file.endsWith('SleepStagesCard.tsx')) {
+    expect(source).not.toMatch(/#[0-9a-f]{6}/i);
+  }
 });
 
 // ─── charts/index.ts export surface ───────────────────────────────────────────

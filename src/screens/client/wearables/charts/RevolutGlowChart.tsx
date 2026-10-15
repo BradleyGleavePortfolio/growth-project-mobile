@@ -133,10 +133,10 @@ export function RevolutGlowChart({
     (x: number): number => {
       'worklet';
       if (count <= 1) return 0;
-      if (variant === 'bar') {
-        return Math.min(count - 1, Math.max(0, Math.floor(x / Math.max(1, width.value) * count)));
-      }
       const usable = Math.max(1, width.value - PAD_X * 2);
+      if (variant === 'bar') {
+        return Math.min(count - 1, Math.max(0, Math.floor((x - PAD_X) / usable * count)));
+      }
       const ratio = Math.min(1, Math.max(0, (x - PAD_X) / usable));
       return Math.round(ratio * (count - 1));
     },
@@ -148,9 +148,8 @@ export function RevolutGlowChart({
       'worklet';
       if (count === 0) return;
       const usable = Math.max(1, width.value - PAD_X * 2);
-      const x = variant === 'bar'
-        ? (index + 0.5) / count * width.value
-        : PAD_X + (count <= 1 ? 0 : (index / (count - 1)) * usable);
+      const ratio = variant === 'bar' ? (index + 0.5) / count : count <= 1 ? 0.5 : index / (count - 1);
+      const x = PAD_X + ratio * usable;
       const value = data[index]?.value ?? minY;
       const y = PAD_Y + plotH - ((value - minY) / rangeY) * plotH;
       // Restrained tracking; instant when reduce-motion is on.
@@ -237,6 +236,7 @@ export function RevolutGlowChart({
     >
       <GestureDetector gesture={pan}>
         <View style={StyleSheet.absoluteFill}>
+          <View pointerEvents="none" style={{ marginHorizontal: PAD_X, height: '100%' }}>
           <Svg
             width="100%"
             height="100%"
@@ -277,6 +277,7 @@ export function RevolutGlowChart({
               vectorEffect="non-scaling-stroke"
             />
           </Svg>
+          </View>
 
           {/* The draggable thumb. */}
           <Animated.View

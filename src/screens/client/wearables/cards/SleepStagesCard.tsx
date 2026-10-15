@@ -14,6 +14,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../../theme/ThemeProvider';
 import { SrCard } from './SrCard';
 import { RECOVERY_PALETTE } from '../recoveryTheme';
+import { brand, colors as palette } from '../../../../theme/tokens';
 import { formatMinutes, type SleepStagesView, type SleepStageSlice } from '../recoveryData';
 
 export interface SleepStagesCardProps {
@@ -22,12 +23,12 @@ export interface SleepStagesCardProps {
   revealDelay?: number;
 }
 
-/** Cool stage colours — all within the indigo→slate family, never alarming. */
+/** Token-only green stages; awake stays a quiet neutral. */
 const STAGE_COLORS: Record<SleepStageSlice['key'], string> = {
-  rem: '#6E5BB8', // indigo-violet
-  deep: '#3F4A7A', // deep indigo
-  light: '#8E96BE', // slate-indigo
-  awake: '#C7CBDA', // pale slate
+  rem: palette.forest,
+  deep: brand[800],
+  light: brand[400],
+  awake: palette.charcoal,
 };
 
 export function SleepStagesCard({ stages, colors, revealDelay = 0 }: SleepStagesCardProps) {
