@@ -7,7 +7,8 @@
   "build": {
     "development": {
       "env": {
-        "EXPO_PUBLIC_FF_TEAM_MODE": "false"
+        "EXPO_PUBLIC_FF_TEAM_MODE": "false",
+        "EXPO_PUBLIC_FF_CLIENT_HOME_RINGS": "false"
       },
       "developmentClient": true,
       "distribution": "internal",
@@ -27,6 +28,7 @@
       },
       "env": {
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
+        "EXPO_PUBLIC_FF_CLIENT_HOME_RINGS": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "0",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
@@ -44,6 +46,7 @@
       "prebuildCommand": "prebuild --no-install",
       "env": {
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
+        "EXPO_PUBLIC_FF_CLIENT_HOME_RINGS": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "0",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
@@ -66,6 +69,7 @@
       "environment": "production",
       "env": {
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
+        "EXPO_PUBLIC_FF_CLIENT_HOME_RINGS": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
@@ -94,6 +98,7 @@
       },
       "env": {
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
+        "EXPO_PUBLIC_FF_CLIENT_HOME_RINGS": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true"
       }
