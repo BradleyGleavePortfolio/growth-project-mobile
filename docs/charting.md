@@ -59,6 +59,18 @@ This document defines when to use each chart variant, the theming rules, and per
 
 ---
 
+### Style C v2 marks (`StyleCMarks.tsx`)
+
+`SegmentedRing` (one segment per planned session: done thick, planned thin, missed dashed, 10° gaps, centre content from the caller), `DayMark` (done disc with a check, today thick ring, planned thin ring, missed dashed ring, rest number only) and `PeakStar` (gold.300 star, peakInk outline on light ground).
+
+**Rules:**
+- They read `semanticColors.data`; pass `onDark` on `surface.masthead` or `surface.forestBand`.
+- The caller passes every spoken label (approved wording only). `PeakStar` without a label is hidden from screen readers, so use it beside the words.
+- Motion: `drawIndex` draws that segment in 300 ms (decel) with one `success()` haptic; Reduce Motion shows it whole with a 150 ms fade. `animate` on DayMark and PeakStar is a 200 ms fade, instant with Reduce Motion. No scale, bounce or glow.
+- DayMark numbers cap at 130% text so a seven-day strip fits 360 pt; the label carries the date.
+
+---
+
 ## Theming rules
 
 All chart wrappers read colors from `useTheme().colors` (ThemeProvider). This ensures they automatically adapt to free/founder tier overrides and any future dark-mode support.

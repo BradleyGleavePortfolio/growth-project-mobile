@@ -66,6 +66,7 @@ When the toggle changes:
 | `EditProfileScreen` | `success()` | Profile saved successfully |
 | `EditProfileScreen` | `error()` | Profile save API failure |
 | `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
+| `ui/charts` `SegmentedRing` | `success()` | A week segment draws in (`drawIndex`, Send to Sam), once; the screen does not fire a second one. Not on a screen yet (C1V2-C3/C5) |
 
 ## Architecture
 
