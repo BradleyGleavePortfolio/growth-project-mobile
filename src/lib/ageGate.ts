@@ -75,6 +75,7 @@ export function reportAgeConfirmationRequired(): void {
 }
 
 let waiting: Array<(confirmed: boolean) => void> = [];
+let subscribed = false;
 
 /**
  * services/api: a request refused for age waits here while the age step is
@@ -82,6 +83,11 @@ let waiting: Array<(confirmed: boolean) => void> = [];
  * changed first.
  */
 export function waitForAgeConfirmation(): Promise<boolean> {
+  // Subscribed on first use, not at import (keeps module load side-effect free).
+  if (!subscribed) {
+    subscribed = true;
+    authEvents.onAuthChange(() => settleAgeConfirmation(false));
+  }
   return new Promise((resolve) => waiting.push(resolve));
 }
 
@@ -91,5 +97,3 @@ export function settleAgeConfirmation(confirmed: boolean): void {
   waiting = [];
   for (const resolve of settled) resolve(confirmed);
 }
-
-authEvents.onAuthChange(() => settleAgeConfirmation(false));
