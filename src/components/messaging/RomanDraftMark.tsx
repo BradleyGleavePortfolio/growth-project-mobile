@@ -42,9 +42,9 @@ export const RomanDraftMark = React.forwardRef<View, {
 });
 
 const styles = StyleSheet.create({
-  target: { position: 'absolute', width: 44, height: 44, bottom: -18 },
-  own: { left: -16 },
-  incoming: { right: -16 },
+  target: { position: 'absolute', width: 44, height: 44, bottom: 0 },
+  own: { left: 0 },
+  incoming: { right: 0 },
   cutRing: {
     position: 'absolute', top: 18, left: 10, width: 24, height: 24,
     borderRadius: radius.chip, borderWidth: 2, borderColor: colors.bone,

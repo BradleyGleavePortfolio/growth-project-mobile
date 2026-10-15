@@ -112,7 +112,7 @@ beforeEach(() => {
 
 describe('client MessagesScreen with messaging_core_v2 ON', () => {
   it('the real client adapter marks each drafted coach message, not typed, voice or deleted rows', async () => {
-    featureFlags.romanDraftMark = true;
+    Object.defineProperty(featureFlags, 'romanDraftMark', { value: true });
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
     mockList.mockResolvedValue({ data: [
       row({ id: 'draft1', sender_id: 'coach-9', body: 'First draft', ai_draft_id: 'd1' }),
@@ -127,7 +127,7 @@ describe('client MessagesScreen with messaging_core_v2 ON', () => {
       await fireEvent.press(u.getAllByTestId('roman-draft-mark')[0]);
       expect(u.getByLabelText('Drafted by Roman')).toBeTruthy();
       expect(u.queryByText('Drafted with Roman')).toBeNull();
-    } finally { featureFlags.romanDraftMark = false; }
+    } finally { Object.defineProperty(featureFlags, 'romanDraftMark', { value: false }); }
   });
   it('groups timestamps without hiding Edited, and names never imply online presence', async () => {
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Coach Nine' } });

@@ -105,7 +105,7 @@ const sentRow = (body: Record<string, unknown>) => ({
 
 describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
   it('the real coach adapter marks each draft and keeps non-drafts unmarked', async () => {
-    featureFlags.romanDraftMark = true;
+    Object.defineProperty(featureFlags, 'romanDraftMark', { value: true });
     mockRows.push(
       row({ id: 'd1', sender_id: 'coach-1', body: 'First draft', ai_draft_id: 'draft1' }),
       row({ id: 'd2', sender_id: 'coach-1', body: 'Edited draft', ai_draft_id: 'draft2', edited_at: recent }),
@@ -117,7 +117,7 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
       await waitFor(() => expect(u.getAllByLabelText('Roman helped draft this message. You sent it.')).toHaveLength(2));
       await fireEvent.press(u.getAllByTestId('roman-draft-mark')[0]);
       expect(u.getByLabelText('Drafted by Roman')).toBeTruthy();
-    } finally { featureFlags.romanDraftMark = false; }
+    } finally { Object.defineProperty(featureFlags, 'romanDraftMark', { value: false }); }
   });
   it('parity: shared quiet parts retain back, contact, copy and reply cancellation', async () => {
     const u = await render(<ClientMessagesScreen />);

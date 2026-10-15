@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import {
   AccessibilityInfo, Animated, Easing, findNodeHandle, Modal, PanResponder,
-  Platform, Pressable, ScrollView, StyleSheet, Text, View,
+  Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -43,7 +43,7 @@ export function RomanDraftSheet({ context, onClose, onDismiss }: {
     motion(0).start(({ finished }) => {
       if (!finished) return;
       onClose();
-      if (Platform.OS !== 'ios') requestAnimationFrame(onDismiss);
+      requestAnimationFrame(onDismiss);
     });
   }, [motion, onClose, onDismiss]);
   const swipe = PanResponder.create({
@@ -52,7 +52,7 @@ export function RomanDraftSheet({ context, onClose, onDismiss }: {
   });
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={close} onDismiss={onDismiss}
+    <Modal testID="roman-draft-modal" visible transparent animationType="none" onRequestClose={close}
       statusBarTranslucent onAccessibilityEscape={close}>
       <View style={styles.container} accessibilityViewIsModal>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
@@ -89,11 +89,11 @@ export function RomanDraftSheet({ context, onClose, onDismiss }: {
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'flex-end' },
   scrim: { flex: 1, backgroundColor: lightTokens.overlay },
-  sheet: { maxHeight: '90%', backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
+  sheet: { maxHeight: '90%', backgroundColor: lightTokens.bgSurface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
   handleArea: { height: 32, alignItems: 'center', justifyContent: 'center' },
   handle: { width: 36, height: 4, borderRadius: radius.chip, backgroundColor: lightTokens.border },
   content: { paddingHorizontal: 24, paddingBottom: 6, gap: 16 },
   portrait: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: radius.chip, borderColor: colors.romanAccent },
-  title: { ...typography.h1, color: lightTokens.textPrimary },
+  title: { ...typography.h1, fontFamily: typography.h3.fontFamily, fontWeight: typography.h3.fontWeight, color: lightTokens.textPrimary },
   body: { ...typography.body, color: colors.charcoal },
 });

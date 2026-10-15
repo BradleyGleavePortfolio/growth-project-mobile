@@ -58,6 +58,7 @@ When the toggle changes:
 | Location | Method | Trigger |
 |---|---|---|
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
+| `messaging/MessageBubble` (Roman draft mark) | `selection()` | Reveal the draft line, open its explanation, or forward a long press to message actions (flag off by default) |
 | `ActiveWorkoutScreen` | `heavyImpact()` | Workout saved successfully |
 | `ActiveWorkoutScreen` | `error()` | Workout save failed |
 | `LogScreen` | `success()` | Food logged (search + manual flows) |
