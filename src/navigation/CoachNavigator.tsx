@@ -136,7 +136,7 @@ import { fetchUnreadCount } from '../services/notificationsApi';
 // The legacy CoachHomeScreen is preserved in the Clients stack as a sub-screen
 // so existing deep links and navigation.navigate() calls keep working.
 import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
-import { __USING_MOCK_DATA } from '../services/commandCenterApi';
+import { coachLandingTab } from './coachLanding';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
 // iMessage-grade DM — Apple App Review 1.2 compliance. ContactView lives in
@@ -799,16 +799,13 @@ export default function CoachNavigator() {
   // Team Mode stays hidden for launch even when an old roster still exists.
   const showTeamTab = featureFlags.teamMode &&
     teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
-  // Audit P0: while the Command Center API still ships only mock data
-  // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
-  // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
-  // screenshots) keep the CommandCenter landing surface.
   // COACHLAND (owner 10-15 "coaches land on overview/home page"): with the six
-  // tabs every coach opens on Overview. This is the one place the coach's first
-  // screen is picked: nothing saves navigation state or the last tab, and
-  // RootNavigator mounts this navigator afresh on cold start, sign-in and account switch.
+  // tabs every coach opens on Overview; off, real coaches open on Clients. This
+  // is the one place the coach's first screen is picked (coachLanding.ts, which
+  // also places the push ask): nothing saves navigation state or the last tab,
+  // and RootNavigator mounts this navigator afresh on cold start, sign-in and account switch.
   const tabsV2 = featureFlags.coachTabsV2;
-  const initialTab = __USING_MOCK_DATA || tabsV2 ? 'CommandCenter' : 'ClientsStack';
+  const initialTab = coachLandingTab();
   const programsLabel = featureFlags.mwbPrograms || tabsV2 ? 'Programs' : 'Templates';
   const clientsTab = (
     <Tab.Screen

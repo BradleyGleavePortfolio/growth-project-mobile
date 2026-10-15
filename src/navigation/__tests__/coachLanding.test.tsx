@@ -12,12 +12,17 @@
  * change), push taps (pushTapRouter, after mount) and the linking config (no
  * coach route). One table below walks each path, flag on and off, through the
  * real CoachNavigator, pushTapRouter and RootNavigator linking config.
+ *
+ * C-S-PUSH-3 (FIX728 B1): the screen a coach lands on carries the deferred push
+ * ask, asked once. coachLandingTab() is the one point: it picks the landing and
+ * places the ask on it (Overview's CoachHomeCards or ClientsListScreen, both real
+ * below). The second table walks it, flag on and off.
  */
 import React from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, type ParamListBase } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { act, render } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -26,8 +31,22 @@ const mockFlags = { mwbPrograms: true, coachTabsV2: true };
 jest.mock('../../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => ({ role: 'head_coach', hasSubCoaches: false }) }));
 jest.mock('../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ semanticColors: jest.requireActual('../../theme/tokens').lightTokens }),
+  useTheme: () => ({ semanticColors: jest.requireActual('../../theme/tokens').lightTokens, colors: new Proxy({}, { get: () => '#000000' }) }),
 }));
+// The real ClientsListScreen and the real Overview cards (CoachHomeCards) render; their data stays out.
+jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
+jest.mock('../../store/coachStore', () => ({
+  useCoachStore: () => ({
+    clients: [], isLoading: false, loadError: null, searchQuery: '', filterStatus: 'all',
+    loadClients: jest.fn(), setSearchQuery: jest.fn(), setFilterStatus: jest.fn(), getFilteredClients: () => [],
+  }),
+}));
+jest.mock('../../components/HapticPressable', () => jest.requireActual('react-native').Pressable);
+jest.mock('../../ui/skeletons', () => ({ SkeletonClientCard: () => null }));
+jest.mock('../../ui/empty-states', () => ({ EmptyStateNoClients: () => null, EmptyStateNoResults: () => null }));
+for (const card of ['setup/CoachSetupChecklist', 'money/MoneyHomeCard', 'brief/BriefHomeCard']) {
+  jest.doMock(`../../components/coach/${card}`, () => () => null);
+}
 jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   __esModule: true,
@@ -56,9 +75,16 @@ jest.mock('../../services/foodLogQueue', () => ({ flush: jest.fn() }));
 jest.mock('../../screenshots', () => ({ isScreenshotMode: () => false }));
 
 const navSource = fs.readFileSync(path.join(__dirname, '..', 'CoachNavigator.tsx'), 'utf8');
+// CommandCenterScreen hands Overview these cards as its header in every state (QA-COACH-HOME-131).
+const OverviewCards = () => {
+  const CoachHomeCards = require('../../screens/coach/command-center/CoachHomeCards').default;
+  return <CoachHomeCards />;
+};
 for (const match of navSource.matchAll(/^import (?!type\b)[^;]*? from '(\.\.\/screens\/[^']+)'/gm)) {
   const modulePath = match[1];
-  jest.doMock(`../${modulePath}`, () => ({ __esModule: true, default: () => <Text>{modulePath}</Text> }));
+  if (modulePath.endsWith('/ClientsListScreen')) continue;
+  const Stub = modulePath.endsWith('/CommandCenterScreen') ? OverviewCards : () => <Text>{modulePath}</Text>;
+  jest.doMock(`../${modulePath}`, () => ({ __esModule: true, default: Stub }));
 }
 jest.doMock('../../screens/coach/ed/FirstPaymentWowHost', () => ({
   __esModule: true, default: ({ children }: { children: React.ReactNode }) => children,
@@ -69,6 +95,8 @@ for (const name of ['ProgramsStackNavigator', 'CoachCommunityNavigator']) {
 const CoachNavigator = require('../CoachNavigator').default;
 const { linking } = require('../RootNavigator');
 const push = require('../../services/pushTapRouter');
+const { prefsStorage } = require('../../storage/mmkv');
+const { pushPrimerDismissedKey } = require('../../components/home/PushPermissionCard');
 
 const ref = createNavigationContainerRef<ParamListBase>();
 const SignedOut = createNativeStackNavigator();
@@ -99,7 +127,10 @@ const landed = () => {
   return [root.routes[root.index].name, ref.getCurrentRoute()?.name];
 };
 
-beforeEach(() => push.__resetPushTapRouterForTests());
+beforeEach(async () => {
+  push.__resetPushTapRouterForTests();
+  await prefsStorage.delete(pushPrimerDismissedKey('coach-1')); // a fresh install
+});
 
 const OVERVIEW = ['CommandCenter', 'CommandCenter'];
 const CLIENTS = ['ClientsStack', 'ClientsList'];
@@ -147,4 +178,38 @@ it.each(ROWS.flatMap(([name, run, on, off]) => [
   mockFlags.coachTabsV2 = flag === 'on';
   await run();
   expect(landed()).toEqual(expected);
+});
+
+// The ask's card reads its memory and the OS permission after mount.
+const settle = () => act(() => new Promise((r) => setTimeout(r, 10)));
+// How many push asks each landing candidate shows (Overview's cards, the rest is Clients).
+const asks = () => {
+  const all = screen.queryAllByTestId('push-permission-card').length;
+  const cards = screen.queryByTestId('coach-home-cards');
+  const overview = cards ? within(cards).queryAllByTestId('push-permission-card').length : 0;
+  return { CommandCenter: overview, ClientsStack: all - overview };
+};
+// [coachTabsV2, the landing that carries the ask, the other tab, which never asks]
+const ASK_ROWS = [['on', 'CommandCenter', 'ClientsStack'], ['off', 'ClientsStack', 'CommandCenter']] as const;
+it.each(ASK_ROWS)('push ask, coachTabsV2 %s: %s asks on a fresh install, %s never asks, and an answered ask stays answered', async (flag, landing, other) => {
+  mockFlags.coachTabsV2 = flag === 'on';
+  const view = await mount();
+  await settle();
+  expect(landed()[0]).toBe(landing);
+  expect(asks()[landing]).toBe(1);
+  expect(asks()[other]).toBe(0);
+  await step(() => ref.navigate(other));
+  await settle();
+  expect(asks()[other]).toBe(0); // no second ask on the other tab
+  await step(() => ref.navigate(landing));
+  await fireEvent.press(screen.getByTestId('push-permission-dismiss')); // answered: Not now
+  await settle();
+  expect(asks()).toEqual({ CommandCenter: 0, ClientsStack: 0 });
+  await view.rerender(tree(true, undefined, 1)); // reopened after the app was killed
+  await settle();
+  expect(landed()[0]).toBe(landing);
+  expect(asks()).toEqual({ CommandCenter: 0, ClientsStack: 0 });
+  await step(() => ref.navigate(other));
+  await settle();
+  expect(asks()).toEqual({ CommandCenter: 0, ClientsStack: 0 });
 });

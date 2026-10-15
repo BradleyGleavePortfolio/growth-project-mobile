@@ -13,6 +13,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { CoachTeamEntryContext } from '../../navigation/coachTeamEntry';
+import { coachLandingTab } from '../../navigation/coachLanding';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
@@ -263,10 +264,13 @@ export default function ClientsListScreen({ navigation }: Props) {
 
       {/* C-S-PUSH-3: the coach landing screen carries the same deferred push
           ask as client Home (once per account, dismissible, OS prompt only on
-          tap), so client messages and new-client alerts reach a fresh install. */}
-      <View style={styles.pushCardWrap}>
-        <PushPermissionCard audience="coach" />
-      </View>
+          tap), so client messages and new-client alerts reach a fresh install.
+          COACHLAND: only while Clients is the landing (coachTabsV2 off). */}
+      {coachLandingTab() === 'ClientsStack' ? (
+        <View style={styles.pushCardWrap}>
+          <PushPermissionCard audience="coach" />
+        </View>
+      ) : null}
 
       {/* Psych #2: Trust as Emotion — coach-side privacy context banner */}
       <View style={styles.privacyBanner}>
