@@ -64,9 +64,10 @@ This document defines when to use each chart variant, the theming rules, and per
 `SegmentedRing` (one segment per planned session: done thick, planned thin, missed dashed, 10° gaps, centre content from the caller), `DayMark` (done disc with a check, today thick ring, planned thin ring, missed dashed ring, rest number only) and `PeakStar` (gold.300 star, peakInk outline on light ground).
 
 **Rules:**
-- They read `semanticColors.data`; pass `onDark` on `surface.masthead` or `surface.forestBand`.
+- They read `semanticColors.data`; pass `onDark` on `surface.masthead`, the one dark surface they support. Not on `surface.forestBand`: plannedOnDark (2.89:1) and the missed number (4.19:1) fail there, so the rest band uses leaf marks only.
 - The caller passes every spoken label (approved wording only). `PeakStar` without a label is hidden from screen readers, so use it beside the words.
-- Motion: `drawIndex` draws that segment in 300 ms (decel) with one `success()` haptic; Reduce Motion shows it whole with a 150 ms fade. `animate` on DayMark and PeakStar is a 200 ms fade, instant with Reduce Motion. No scale, bounce or glow.
+- Motion: each new done `drawIndex` draws that segment in 300 ms (decel); Reduce Motion shows it whole with a 150 ms fade. With `animate`, each new DayMark state and the PeakStar's appearance is a 200 ms fade, instant with Reduce Motion. No scale, bounce or glow.
+- Haptics: the parts fire none. The Send to Sam handler that sets `drawIndex` fires `HapticService.success()` once, so the draw and the haptic are one confirmation and a re-mount does not buzz again.
 - DayMark numbers cap at 130% text so a seven-day strip fits 360 pt; the label carries the date.
 
 ---

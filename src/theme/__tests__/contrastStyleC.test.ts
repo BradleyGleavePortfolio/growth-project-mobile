@@ -48,8 +48,26 @@ const pairs = (t: SemanticTokens): Array<[string, string, string, number]> => [
   ]),
 ];
 
+// FIX718 B1: every on-dark mark and text role a part supports clears its bar
+// (marks 3:1, normal text 4.5:1) on every dark surface the contract names. The
+// ui/charts StyleCMarks `onDark` contract names surface.masthead only; on
+// surface.forestBand plannedOnDark (2.89) and the missed number (4.19) fail,
+// so the parts are not drawn there (the rest band uses leaf marks only).
+const onDark = (t: SemanticTokens): Array<[string, string, string, number]> =>
+  ([['masthead', t.surface.masthead]] as const).flatMap(([surface, bg]) => ([
+    ['done disc and today ring', t.data.leaf, MARK],
+    ['planned ring and arc', t.data.plannedOnDark, MARK],
+    ['missed ring and number', t.data.missedOnDark, TEXT],
+    ['today and planned number', t.textOnAccent, TEXT],
+    ['rest number', t.textOnMastheadMuted, TEXT],
+    ['star fill and outline', t.data.peak, MARK],
+  ] as const).map(([role, fg, min]): [string, string, string, number] => [`${surface}, ${role}`, fg, bg, min]));
+
 describe.each<[string, SemanticTokens]>([['light', lightTokens], ['dark', darkTokens]])('Style C v2 contrast, %s', (_scheme, t) => {
   it.each(pairs(t))('%s', (_pair, fg, bg, min) => {
+    expect(ratio(fg, bg)).toBeGreaterThanOrEqual(min);
+  });
+  it.each(onDark(t))('parts on dark: %s', (_pair, fg, bg, min) => {
     expect(ratio(fg, bg)).toBeGreaterThanOrEqual(min);
   });
 });

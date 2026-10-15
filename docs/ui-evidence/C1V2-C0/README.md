@@ -21,6 +21,8 @@ Motion (light, 390, 100%): [draw-in at 40 of 300 ms](web-motion-draw-40ms.png) s
 
 Each page shows, top to bottom: the masthead (`onDark`) with a seven-day strip in every DayMark state (done, missed, done, today, planned, rest, planned), a 120 pt ring whose third segment draws in, a 48 pt ring and a decorative star; then the page, a card, a sage card and the forest band with the light-ground marks, four history rings (4/4, 2/4 with a missed segment, 0/3, a one-session ring) and labelled stars.
 
+FIX718: the last row's ring on the forest band is no longer a supported pairing (its planned arc is 2.89:1, under 3:1); the parts take `onDark` on the masthead only. The fix round changed no drawn pixel on any supported pairing (event-keyed motion, no haptic in the parts, internal test IDs removed), so these renders stand.
+
 ## Measurements
 
-[measurements.jsonl](measurements.jsonl) has one line per capture (10): every part's size, role, label and `aria-hidden`, plus checks for parts off screen, page overflow, a DayMark number larger than its mark and clipped text. All 10 captures: no issues, no page errors, one success haptic per page (the drawing ring). DayMark is 36 x 36 at both text sizes; the decorative star is `aria-hidden`; labelled stars and rings are `img` with their label. The parts are not tappable, so the 44 pt rule does not apply to them.
+[measurements.jsonl](measurements.jsonl) has one line per capture (10): every part's size, role, label and `aria-hidden`, plus checks for parts off screen, page overflow, a DayMark number larger than its mark and clipped text. All 10 captures: no issues, no page errors, one success haptic per page (the drawing ring, before FIX718 moved the haptic to the Send handler). DayMark is 36 x 36 at both text sizes; the decorative star is `aria-hidden`; labelled stars and rings are `img` with their label. The parts are not tappable, so the 44 pt rule does not apply to them.
