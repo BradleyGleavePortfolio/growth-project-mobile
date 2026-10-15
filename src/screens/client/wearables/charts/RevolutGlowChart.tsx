@@ -238,23 +238,23 @@ export function RevolutGlowChart({
       <GestureDetector gesture={pan}>
         <View style={StyleSheet.absoluteFill}>
           <View pointerEvents="none" style={{ marginHorizontal: PAD_X, height: '100%' }}>
-          <Svg
-            width="100%"
-            height="100%"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            pointerEvents="none"
-          >
-            {variant === 'bar' ? points.map((point, i) => (
-              <Rect
-                key={i}
-                x={point.x - 30 / count}
-                y={point.y}
-                width={60 / count}
-                height={(height - PAD_Y) / height * 100 - point.y}
-                fill={colors.forest}
-              />
-            )) : count > 1 ? (
+            <Svg
+              width="100%"
+              height="100%"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              pointerEvents="none"
+            >
+              {variant === 'bar' ? points.map((point, i) => (
+                <Rect
+                  key={i}
+                  x={point.x - 30 / count}
+                  y={point.y}
+                  width={60 / count}
+                  height={baseline - point.y}
+                  fill={colors.forest}
+                />
+              )) : count > 1 ? (
                 <Path
                   d={linePath}
                   fill="none"
@@ -264,20 +264,20 @@ export function RevolutGlowChart({
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
                 />
-            ) : count === 1 ? (
-              <Circle cx={points[0].x} cy={points[0].y} r={1.6} fill={colors.forest} />
-            ) : null}
-            {/* baseline hairline */}
-            <SvgLine
-              x1="0"
-              y1={baseline}
-              x2="100"
-              y2={baseline}
-              stroke={withAlpha(colors.ink, 0.06)}
-              strokeWidth={0.5}
-              vectorEffect="non-scaling-stroke"
-            />
-          </Svg>
+              ) : count === 1 ? (
+                <Circle cx={points[0].x} cy={points[0].y} r={1.6} fill={colors.forest} />
+              ) : null}
+              {/* baseline hairline */}
+              <SvgLine
+                x1="0"
+                y1={baseline}
+                x2="100"
+                y2={baseline}
+                stroke={withAlpha(colors.ink, 0.06)}
+                strokeWidth={0.5}
+                vectorEffect="non-scaling-stroke"
+              />
+            </Svg>
           </View>
 
           {/* The draggable thumb. */}

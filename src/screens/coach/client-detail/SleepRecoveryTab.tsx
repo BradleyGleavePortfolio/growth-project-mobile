@@ -205,7 +205,7 @@ function AnomalyBand({ trend, colors }: { trend: TrendPoint[]; colors: ThemeColo
             localStyles.anomalyMarker,
             {
               left: `${markerPos * 100}%`,
-            backgroundColor: outOfBand ? palette.mutedGold : palette.forest,
+              backgroundColor: outOfBand ? palette.mutedGold : palette.forest,
             },
           ]}
         />
