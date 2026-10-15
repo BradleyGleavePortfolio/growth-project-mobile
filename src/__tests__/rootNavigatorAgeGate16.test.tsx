@@ -19,6 +19,7 @@ jest.mock('../services/secureStorage', () => ({
     }),
   },
 }));
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../services/authActions', () => ({ signOut: jest.fn(async () => {}) }));
 const mockMe = jest.fn();
 const mockProfileUpdate = jest.fn();
@@ -44,8 +45,9 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    // FIXAGE R4: the age step is a small stack (its account screens).
     NavigationContainer: ({ children }: { children: React.ReactNode }) =>
-      React.createElement(React.Fragment, null, children),
+      React.createElement(actual.NavigationContainer, null, children),
     createNavigationContainerRef: () => ({
       isReady: () => true,
       navigate: jest.fn(),

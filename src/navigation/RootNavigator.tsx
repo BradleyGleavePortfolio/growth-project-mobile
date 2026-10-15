@@ -79,7 +79,7 @@ type AuthState =
 import { emailVerifiedPath, fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache, patchUserCache } from '../lib/userCache';
 import { clientAgeConfirmed, onAgeConfirmationRequired } from '../lib/ageGate';
-import AgeCheckScreen from '../screens/consultation/AgeCheckScreen';
+import { AgeCheckNavigator } from '../screens/consultation/AgeCheckScreen';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
 import {
@@ -1048,8 +1048,9 @@ export default function RootNavigator() {
         // B14: the consultation for every new client; it has no skip-to-finish path.
         <ConsultationOnboardingNavigator />
       ) : authState === 'age_check' ? (
-        // AGEGATE16: the consultation's own date-of-birth question, once.
-        <AgeCheckScreen onConfirmed={() => authEvents.emit()} />
+        // AGEGATE16: the consultation's own date-of-birth question, once,
+        // with the ways out (FIXAGE R4).
+        <AgeCheckNavigator onConfirmed={() => authEvents.emit()} onSignOut={signOutFromLockout} />
       ) : authState === 'coach_wizard' ? (
         // New coach — onboarding wizard before full coach dashboard.
         <CoachWizardNavigator />

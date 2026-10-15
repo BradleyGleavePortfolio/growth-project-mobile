@@ -77,6 +77,8 @@ export interface QuestionScreenProps {
   onNext: (patch?: Answers, aiChoice?: boolean | null) => void;
   onBack: (() => void) | null;
   onFinishLater: (() => void) | null;
+  /** AGEGATE16 age step (FIXAGE R4): its ways out, under B2 and its stop screen. */
+  escape?: React.ReactNode;
   /** Prototype 42: Roman's welcome-back line replaces the chapter line on the first screen after a resume. */
   romanOverride?: string | null;
   /** P0 only: recording in progress, or why the last attempt failed. */
@@ -379,6 +381,7 @@ function DobBody(props: BodyProps) {
           <Text style={s.eyebrow}>{screen.eyebrow}</Text>
           <Headline style={{ marginTop: 16 }}>{`The Growth Project is for ages ${minAge} and up.`}</Headline>
           <Text style={[s.mutedSmall, { marginTop: 12 }]}>If the date was entered by mistake, go back and change it.</Text>
+          {props.escape}
         </View>
       </Frame>
     );
@@ -410,6 +413,7 @@ function DobBody(props: BodyProps) {
         </View>
       </View>
       {v.message && !under ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
+      {props.escape}
     </BodyFrame>
   );
 }

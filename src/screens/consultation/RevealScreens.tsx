@@ -229,13 +229,15 @@ export const ESCAPE_COPY = {
 
 export const CONSULT_SUPPORT_SUBJECT = 'Help with my consultation';
 
-function EscapeRow({ onSignOut }: { onSignOut?: () => void }) {
+/** FIXAGE R4: also the age step's way out; `children` are rows above support. */
+export function EscapeRow({ onSignOut, children }: { onSignOut?: () => void; children?: React.ReactNode }) {
   const { s, palette } = useConsultationStyles();
   // Sol B-324-1: if no email app opens, the address (selectable), Copy and
   // Try again show in place, not in a dismissible alert.
   const supportEmail = useSupportEmail(CONSULT_SUPPORT_SUBJECT);
   return (
     <View style={{ marginTop: 24 }} testID="consult-escape">
+      {children}
       <TextLink
         label={ESCAPE_COPY.support}
         role="link"

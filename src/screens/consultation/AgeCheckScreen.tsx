@@ -7,10 +7,18 @@
  * new wording. The chapter eyebrow is left off: this is not a chapter.
  * Continue saves only the date of birth (PUT /profile, the same field the
  * consultation fills) and opens the app; under 16 nothing is saved.
+ * FIXAGE R4: the question and the stop screen keep the ways out every
+ * refused client has (the consultation's escape row, and the payment
+ * lockout's data and deletion rows, which open the real screens).
  */
 import React, { useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import QuestionScreen from './QuestionScreen';
+import { EscapeRow } from './RevealScreens';
+import { TextLink } from '../../ui';
+import DeleteAccountScreen from '../settings/DeleteAccountScreen';
+import DataExportScreen from '../settings/DataExportScreen';
 import { screenById } from '../../lib/consultation/definitions';
 import type { Answers, ScreenDef } from '../../lib/consultation/types';
 import { profileApi } from '../../services/api';
@@ -22,7 +30,9 @@ import { settleAgeConfirmation } from '../../lib/ageGate';
 
 const AGE_SCREEN: ScreenDef = { ...(screenById('B2') as ScreenDef), eyebrow: undefined };
 
-export default function AgeCheckScreen({ onConfirmed }: { onConfirmed: () => void }) {
+type Exits = { onSignOut?: () => void; onOpenDataExport?: () => void; onOpenDeleteAccount?: () => void };
+
+export default function AgeCheckScreen({ onConfirmed, ...exits }: { onConfirmed: () => void } & Exits) {
   const [answers, setAnswers] = useState<Answers>({});
   const now = useMemo(() => new Date(), []);
   const saving = useRef(false);
@@ -65,6 +75,34 @@ export default function AgeCheckScreen({ onConfirmed }: { onConfirmed: () => voi
       onNext={(patch) => void save(patch)}
       onBack={null}
       onFinishLater={null}
+      escape={
+        <EscapeRow onSignOut={exits.onSignOut}>
+          {exits.onOpenDataExport ? <TextLink label="Download my data" onPress={exits.onOpenDataExport} testID="age-data-export" /> : null}
+          {exits.onOpenDeleteAccount ? <TextLink label="Delete my account" onPress={exits.onOpenDeleteAccount} testID="age-delete-account" /> : null}
+        </EscapeRow>
+      }
     />
+  );
+}
+
+const AgeStack = createNativeStackNavigator();
+
+/** RootNavigator's age step: the question plus the two account screens it opens. */
+export function AgeCheckNavigator({ onConfirmed, onSignOut }: { onConfirmed: () => void; onSignOut: () => void }) {
+  return (
+    <AgeStack.Navigator screenOptions={{ headerShown: false }}>
+      <AgeStack.Screen name="AgeCheck">
+        {({ navigation }) => (
+          <AgeCheckScreen
+            onConfirmed={onConfirmed}
+            onSignOut={onSignOut}
+            onOpenDataExport={() => navigation.navigate('DataExport')}
+            onOpenDeleteAccount={() => navigation.navigate('DeleteAccount')}
+          />
+        )}
+      </AgeStack.Screen>
+      <AgeStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      <AgeStack.Screen name="DataExport" component={DataExportScreen} />
+    </AgeStack.Navigator>
   );
 }
