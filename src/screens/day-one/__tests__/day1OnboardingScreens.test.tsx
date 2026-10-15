@@ -123,7 +123,9 @@ it('keeps the Day One onboarding action list at the 44pt touch minimum', async (
       ids: ['day-one-welcome-cta'],
     },
     {
-      render: () => render(<CoachPairingScreen navigation={makeNav() as never} />),
+      render: () => render(
+        <CoachPairingScreen navigation={makeNav() as never} route={{ params: {} } as never} />,
+      ),
       ids: ['day-one-invite-submit', 'day-one-invite-skip', 'day-one-back'],
     },
     {
