@@ -11,12 +11,15 @@
  *   - replies render a quoted parent stub above the bubble body
  *   - the long-press hold triggers a selection haptic
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
 import { typography, radius } from '../../theme/tokens';
+import { featureFlags } from '../../config/featureFlags';
+import { RomanDraftMark, type RomanDraftContext } from './RomanDraftMark';
+import { RomanDraftSheet, focusRomanControl } from './RomanDraftSheet';
 
 export interface BubbleMessage {
   id: string;
@@ -33,6 +36,7 @@ export interface BubbleMessage {
   deleted?: boolean;
   edited?: boolean;
   pinned?: boolean;
+  drafted?: boolean;
 }
 
 export interface MessageBubbleProps {
@@ -42,6 +46,7 @@ export interface MessageBubbleProps {
   showTimestamp?: boolean;
   onLongPress: (m: BubbleMessage) => void;
   onPressParent?: (parentId: string) => void;
+  draftContext?: RomanDraftContext;
 }
 
 export function MessageBubble({
@@ -51,19 +56,29 @@ export function MessageBubble({
   showTimestamp = true,
   onLongPress,
   onPressParent,
+  draftContext,
 }: MessageBubbleProps): React.ReactElement {
   const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-
-  const handleLongPress = (): void => {
-    HapticService.selection();
-    onLongPress(message);
-  };
-
+  const marked = featureFlags.romanDraftMark && message.drafted && !message.deleted && !!draftContext;
+  const [revealed, setRevealed] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const mark = useRef<View>(null);
   const formatTime = (iso: string): string => {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
     return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  };
+  const metadata = (showTimestamp || message.edited || message.pinned || message.pending) && <Text style={[styles.time, isMe && styles.timeMe]}>
+    {message.deleted ? '' : `${message.pinned ? 'Pinned  ' : ''}${message.edited ? 'Edited  ' : ''}`}
+    {showTimestamp ? formatTime(message.created_at) : ''}
+    {message.pending ? '  ' : ''}
+    {message.pending ? <Ionicons name="time-outline" size={10} color={colors.textMuted} /> : null}
+  </Text>;
+
+  const handleLongPress = (): void => {
+    HapticService.selection();
+    onLongPress(message);
   };
 
   return (
@@ -74,6 +89,7 @@ export function MessageBubble({
         message.pending ? styles.rowPending : undefined,
       ]}
     >
+      <View style={[styles.frame, marked && styles.markedFrame]}>
       <Pressable
         onLongPress={handleLongPress}
         delayLongPress={350}
@@ -87,6 +103,7 @@ export function MessageBubble({
         style={({ pressed }) => [
           styles.bubble,
           isMe ? styles.bubbleMe : styles.bubbleThem,
+          marked && styles.markedBubble,
           pressed && styles.bubblePressed,
         ]}
       >
@@ -122,15 +139,21 @@ export function MessageBubble({
         ) : (
           <Text style={[styles.body, isMe && styles.bodyMe]}>{message.body}</Text>
         )}
-        {(showTimestamp || message.edited || message.pinned || message.pending) && <Text style={[styles.time, isMe && styles.timeMe]}>
-          {message.deleted ? '' : `${message.pinned ? 'Pinned  ' : ''}${message.edited ? 'Edited  ' : ''}`}
-          {showTimestamp ? formatTime(message.created_at) : ''}
-          {message.pending ? '  ' : ''}
-          {message.pending ? (
-            <Ionicons name="time-outline" size={10} color={colors.textMuted} />
-          ) : null}
-        </Text>}
+        {!marked && metadata}
       </Pressable>
+      {marked && draftContext && <RomanDraftMark ref={mark} isMe={isMe} context={draftContext}
+        expanded={revealed} onPress={() => { HapticService.selection(); setRevealed(true); }}
+        onLongPress={handleLongPress} />}
+      </View>
+      {marked && revealed && <Pressable style={styles.disclosure} accessibilityRole="button"
+        accessibilityLabel="Drafted by Roman" accessibilityHint="Opens a short explanation."
+        onLongPress={handleLongPress} delayLongPress={350}
+        onPress={() => { HapticService.selection(); setSheet(true); }}>
+        <Text style={styles.disclosureText}>Drafted by Roman</Text>
+      </Pressable>}
+      {marked && metadata}
+      {marked && sheet && draftContext && <RomanDraftSheet context={draftContext}
+        onClose={() => setSheet(false)} onDismiss={() => focusRomanControl(mark.current)} />}
 
       {receipt ? <View style={styles.receiptWrap}>{receipt}</View> : null}
     </View>
@@ -143,9 +166,13 @@ const makeStyles = (colors: ThreadColors) =>
     rowRight: { alignItems: 'flex-end' },
     rowLeft: { alignItems: 'flex-start' },
     rowPending: { opacity: 1 },
+    frame: { maxWidth: '78%' },
+    markedFrame: { marginBottom: 18 },
+    markedBubble: { paddingBottom: 26 },
+    disclosure: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 14 },
+    disclosureText: { ...typography.bodySmall, color: colors.textMuted, fontStyle: 'italic', textDecorationLine: 'underline' },
 
     bubble: {
-      maxWidth: '78%',
       borderRadius: radius.card,
       minHeight: 44,
       paddingHorizontal: 14,

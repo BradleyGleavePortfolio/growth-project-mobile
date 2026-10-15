@@ -742,6 +742,11 @@ export default function MessagesScreen() {
               )}
               <MessageBubble
                 message={bubbleMsg}
+                draftContext={item.sender_role === 'coach' ? {
+                  coach: coachName.trim().split(/\s+/)[0] || 'Your coach',
+                  client: currentUser?.firstName || currentUser?.name?.split(' ')[0] || '',
+                  isSender: false,
+                } : undefined}
                 isMe={isMe}
                 receipt={receiptNode}
                 showTimestamp={showTimestamp}

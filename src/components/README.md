@@ -40,6 +40,15 @@ Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133):
 
 ### Roman (AI butler) identity
 
+`messaging/MessageBubble.tsx` places `RomanDraftMark` once for both coach/client threads.
+The shared row adapter reads existing `ai_draft_id`; typed, voice, client-authored and deleted
+messages have no mark. `EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK` defaults off in every build pending
+owner approval of the two-step screen reader hint. Tap the 24 pt mark (44 pt target) to reveal
+the italic underlined “Drafted by Roman”; tap that line for `RomanDraftSheet` (c06/k06).
+Long press still opens message actions. The sheet uses radius.sheet, a 250 ms slide or
+150 ms cross-fade under Reduce Motion, and closes with OK, backdrop, downward swipe or Back.
+No new read, write, draft lookup or permission change; the existing thread scope is unchanged.
+
 | File | What it does |
 | --- | --- |
 | `roman/RomanAvatar.tsx` | Roman's circular face avatar (neutral / smile / monogram fallback). |

@@ -112,6 +112,7 @@ export const ThreadMessageSchema = z.object({
   edited_at: isoString.nullable().optional(),
   pinned_at: isoString.nullable().optional(),
   client_message_id: z.string().nullable().optional(),
+  ai_draft_id: z.string().nullable().optional(),
   reply_to_id: z.string().nullable().optional(),
   reply_to: ReplyPreviewSchema.nullable().optional(),
   deleted: z.boolean().optional(),
