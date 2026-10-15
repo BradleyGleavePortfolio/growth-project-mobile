@@ -81,6 +81,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (Roman's client tour after the consultation). B40: must be \"true\" in every store and test profile (preview, production, clinic, clinic-apk); scripts/validate-app-config.js enforces it."
     },
+    "EXPO_PUBLIC_FF_COACH_AI_CREDITS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (CREDITBUILD-143: the coach \"Your AI credits.\" setup page and K8 row). Off in every profile until the Money page shows the AI pool (mobile #686)."
+    },
     "EXPO_PUBLIC_FF_COACH_BRIEF": {
       "kind": "flag",
       "default": "on in dev, off in release",
@@ -90,6 +95,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (CREDITBUILD-143: Roman's line N7 on the AI credit screens). Off until backend #971 (no daily Roman limit for coaches) is deployed."
     },
     "EXPO_PUBLIC_FF_COMMUNITY_ACKS": {
       "kind": "flag",

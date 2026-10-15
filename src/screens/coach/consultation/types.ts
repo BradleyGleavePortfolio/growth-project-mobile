@@ -4,6 +4,7 @@
  * renders, edits `answers` through `setAnswers` and calls `onNext`.
  */
 import type { CoachConsultAnswers, CoachProgress } from '../../../lib/coachConsultation/types';
+import type { CoachCredits } from '../../../components/coach/credits/useCoachCredits';
 
 export interface CoachStepProps {
   answers: CoachConsultAnswers;
@@ -24,4 +25,6 @@ export interface CoachStepProps {
   /** Completion in flight (the last step shows it on its button). A failed
    * completion is shown by the flow itself (problem screen with Try again). */
   completing: boolean;
+  /** A head coach's AI credit pool (KC page, K8 row); null or absent otherwise. */
+  credits?: CoachCredits | null;
 }
