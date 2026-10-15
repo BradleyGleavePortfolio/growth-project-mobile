@@ -18,6 +18,7 @@ import { patchUserCache } from '../../lib/userCache';
 import { errorMessage } from '../../types/common';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { logger } from '../../utils/logger';
+import { settleAgeConfirmation } from '../../lib/ageGate';
 
 const AGE_SCREEN: ScreenDef = { ...(screenById('B2') as ScreenDef), eyebrow: undefined };
 
@@ -48,6 +49,8 @@ export default function AgeCheckScreen({ onConfirmed }: { onConfirmed: () => voi
       logger.warn('AgeCheckScreen', 'date of birth not cached', err);
     }
     HapticService.success();
+    // FIXAGE R3: requests refused for age while this was open are sent again.
+    settleAgeConfirmation(true);
     onConfirmed();
   };
 

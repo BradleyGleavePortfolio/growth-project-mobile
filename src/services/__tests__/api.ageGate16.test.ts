@@ -1,9 +1,10 @@
 /**
- * AGEGATE16: the response interceptor reports a 403 AGE_CONFIRMATION_REQUIRED
- * (backend JwtAuthGuard, a client without a 16+ date of birth) so
- * RootNavigator opens the age step, still rejects the request as before,
- * leaves every other 403 alone, and drops a refusal from a retired sign-in
- * (B-352-1). Strategy mirrors api.lockedDunning.test.ts.
+ * AGEGATE16 / FIXAGE R3: the response interceptor reports a 403
+ * AGE_CONFIRMATION_REQUIRED (backend JwtAuthGuard, a client without a 16+
+ * date of birth) so RootNavigator opens the age step, holds the request until
+ * the age is confirmed (then sends it again) or the sign-in changes
+ * (AccountChangedError), leaves every other 403 alone, and drops a refusal
+ * from a retired sign-in (B-352-1). Strategy mirrors api.lockedDunning.test.ts.
  */
 type ErrorHandler = (error: unknown) => Promise<unknown>;
 type RequestHandler = (config: Record<string, unknown>) => Promise<Record<string, unknown>>;
@@ -40,13 +41,15 @@ jest.mock('../secureStorage', () => ({
 
 const axiosMock: {
   __instance: {
+    request: jest.Mock;
     interceptors: { request: { fulfilled: RequestHandler[] }; response: { rejected: ErrorHandler[] } };
   };
 } = jest.requireMock('axios');
 
 import '../api';
 import { dunningLockoutStore } from '../../entitlements/dunning/dunningLockoutStore';
-import { onAgeConfirmationRequired } from '../../lib/ageGate';
+import { onAgeConfirmationRequired, settleAgeConfirmation } from '../../lib/ageGate';
+import { isAccountChangedError } from '../accountBinding';
 import { authEvents } from '../../utils/authEvents';
 
 const send = (url = '/me/macros/current') => axiosMock.__instance.interceptors.request.fulfilled[0]({ url, headers: {} });
@@ -64,11 +67,25 @@ beforeEach(() => {
 afterEach(() => stop());
 
 describe('api response interceptor: AGE_CONFIRMATION_REQUIRED', () => {
-  it('reports it once and still rejects the request unchanged', async () => {
-    const err = refusal(await send(), { code: 'AGE_CONFIRMATION_REQUIRED', message: 'Age confirmation required' });
-    await expect(onRejected()(err)).rejects.toBe(err);
+  it('reports it once, holds the request and sends it again once the age is confirmed', async () => {
+    axiosMock.__instance.request.mockResolvedValueOnce({ data: 'targets' });
+    const config = await send();
+    const held = onRejected()(refusal(config, { code: 'AGE_CONFIRMATION_REQUIRED', message: 'Age confirmation required' }));
+    await Promise.resolve();
     expect(heard).toHaveBeenCalledTimes(1);
+    expect(axiosMock.__instance.request).not.toHaveBeenCalled();
+    settleAgeConfirmation(true);
+    await expect(held).resolves.toEqual({ data: 'targets' });
+    expect(axiosMock.__instance.request).toHaveBeenCalledWith(config);
     expect(dunningLockoutStore.isLocked()).toBe(false);
+  });
+
+  it('a held request stops with AccountChangedError when the sign-in changes first', async () => {
+    const held = onRejected()(refusal(await send(), { code: 'AGE_CONFIRMATION_REQUIRED' }));
+    authEvents.emit('logout');
+    const err = await held.catch((e: unknown) => e);
+    expect(isAccountChangedError(err)).toBe(true);
+    expect(String((err as Error).message)).not.toMatch(/Age confirmation required/);
   });
 
   it('ignores every other 403 and the same code on another status', async () => {
@@ -86,7 +103,8 @@ describe('api response interceptor: AGE_CONFIRMATION_REQUIRED', () => {
   it('a refusal for an account that has since signed out is dropped', async () => {
     const stale = refusal(await send(), { code: 'AGE_CONFIRMATION_REQUIRED' });
     authEvents.emit('logout');
-    await expect(onRejected()(stale)).rejects.toBe(stale);
+    const err = await onRejected()(stale).catch((e: unknown) => e);
+    expect(isAccountChangedError(err)).toBe(true);
     expect(heard).not.toHaveBeenCalled();
   });
 });

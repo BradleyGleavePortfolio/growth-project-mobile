@@ -10,6 +10,7 @@
  */
 import { screenById } from './consultation/definitions';
 import { logger } from '../utils/logger';
+import { authEvents } from '../utils/authEvents';
 
 export const AGE_CONFIRMATION_REQUIRED = 'AGE_CONFIRMATION_REQUIRED';
 
@@ -69,3 +70,23 @@ export function onAgeConfirmationRequired(listener: () => void): () => void {
 export function reportAgeConfirmationRequired(): void {
   for (const listener of [...listeners]) listener();
 }
+
+let waiting: Array<(confirmed: boolean) => void> = [];
+
+/**
+ * services/api: a request refused for age waits here while the age step is
+ * open. true: the age was confirmed, send it again; false: the sign-in
+ * changed first.
+ */
+export function waitForAgeConfirmation(): Promise<boolean> {
+  return new Promise((resolve) => waiting.push(resolve));
+}
+
+/** AgeCheckScreen settles with true after a saved 16+ date; any auth change with false. */
+export function settleAgeConfirmation(confirmed: boolean): void {
+  const settled = waiting;
+  waiting = [];
+  for (const resolve of settled) resolve(confirmed);
+}
+
+authEvents.onAuthChange(() => settleAgeConfirmation(false));
