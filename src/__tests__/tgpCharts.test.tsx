@@ -386,6 +386,9 @@ it.each([
   if (file.endsWith('SleepStagesCard.tsx')) {
     expect(source).not.toMatch(/#[0-9a-f]{6}/i);
   }
+  if (file.endsWith('SleepRecoveryTab.tsx')) {
+    expect(source.slice(source.indexOf('anomalyWrap:'))).not.toMatch(/#[0-9a-f]{6}/i);
+  }
 });
 
 // ─── charts/index.ts export surface ───────────────────────────────────────────

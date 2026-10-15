@@ -102,8 +102,8 @@ describe('RevolutGlowChart', () => {
   it('renders no gradient or filled area', async () => {
     const nodes = await renderTree(true);
     // RN-SVG maps the SVG `id` prop to the native `name` prop on the gradient,
-    // and a fill that references it carries `brushRef="chartFill"`. Assert the
-    // gradient exists AND is wired to a filled area path.
+    // and a fill that references it carries `brushRef="chartFill"`. Neither
+    // the gradient nor a filled area may remain.
     const gradient = nodes.find(
       (n) =>
         n.props?.id === 'chartFill' || n.props?.name === 'chartFill',
