@@ -3,7 +3,8 @@
  * coach-free text (the coached text with every coach sentence or clause removed, no new words), then
  * "Before you join a coach" (C3-S-84), led by C3-S-83, with the coached paragraph 4 and box 2
  * (client-ai-v6, so the grant covers Roman once a coach is linked), and the footer "Nothing is sent
- * until you continue.". P0 records consult-consent-v7-coach-free. A grant the server refuses (403
+ * until you continue.". P0 records that whole screen (FIX684: consult-consent-v8-coach-free, v9-coach-free
+ * with the server's memory paragraph; consentRecordShown.test.tsx). A grant the server refuses (403
  * ROMAN_REQUIRES_COACH) is quiet: unsaved, no notice. The coach-free box 2 copies stay known so a grant
  * recorded before 62y2 is still read with its own text.
  */
@@ -109,13 +110,22 @@ describe('coach-free copy (owner 62)', () => {
     expect(CONSENT_PARAGRAPHS_COACH_FREE.slice(0, 2)).toEqual(CONSENT_PARAGRAPHS.slice(0, 2));
   });
 
-  it('W-CONSENT: the coached Roman choice under C3-S-84 and C3-S-83; the P0 record stays v7-coach-free', () => {
+  it('W-CONSENT: the coached Roman choice under C3-S-84 and C3-S-83; the P0 record names that whole screen', () => {
+    const roman = ['Before you join a coach', consentScreenCopy(true).romanLead];
     expect(consentCopyText(undefined, true)).toBe(
-      [CONSENT_TITLE, ...CONSENT_PARAGRAPHS_COACH_FREE, CONSENT_CHECKBOX_LABEL_COACH_FREE, 'Nothing is sent until you continue.'].join('\n\n'),
+      [
+        CONSENT_TITLE,
+        ...CONSENT_PARAGRAPHS_COACH_FREE,
+        CONSENT_CHECKBOX_LABEL_COACH_FREE,
+        ...roman,
+        AI_CONSENT_PARAGRAPH,
+        AI_CONSENT_CHECKBOX_LABEL,
+        'Nothing is sent until you continue.',
+      ].join('\n\n'),
     );
     expect(CONSENT_FOOTER_COACH_FREE).toBe('Nothing is sent until you continue.');
     expect(sha(consentCopyText(undefined, true))).toBe(CONSENT_COACH_FREE_COPY_SHA256);
-    expect(CONSENT_COACH_FREE_COPY_SHA256).toBe('82dddf635ee262e30e8a69e7a4a39be3e1255470d70b12e42a757f7578ee95a3');
+    expect(CONSENT_COACH_FREE_COPY_SHA256).toBe('5369ee9c57412dd2233850a7cae2043a32645431ee3b3484a14c19b8c503c633');
     expect(consentScreenCopy(true)).toMatchObject({
       romanTitle: 'Before you join a coach',
       romanLead:
@@ -123,9 +133,10 @@ describe('coach-free copy (owner 62)', () => {
       aiParagraph: AI_CONSENT_PARAGRAPH,
       box2Label: AI_CONSENT_CHECKBOX_LABEL,
       footer: 'Nothing is sent until you continue.',
-      version: 'consult-consent-v7-coach-free',
-      memoryVersion: 'consult-consent-v7-coach-free',
+      version: 'consult-consent-v8-coach-free',
+      memoryVersion: 'consult-consent-v9-coach-free',
       sha256: CONSENT_COACH_FREE_COPY_SHA256,
+      memorySha256: '4a1e19730f3fab3b8a6a8119f5425cd3c0f6ed2f502d229d25dbb7fe5df35771',
     });
     expect(consentScreenCopy(false)).toMatchObject({ romanTitle: null, romanLead: null });
   });
@@ -207,7 +218,7 @@ describe('P0 for a client with no coach (W-CONSENT)', () => {
     await waitFor(() => expect(api.save).toHaveBeenCalled());
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({
       agreed: true,
-      copy_version: 'consult-consent-v7-coach-free',
+      copy_version: 'consult-consent-v8-coach-free',
       text_sha256: CONSENT_COACH_FREE_COPY_SHA256,
     });
     expect(api.grantRomanConsent).not.toHaveBeenCalled();
@@ -219,7 +230,7 @@ describe('P0 for a client with no coach (W-CONSENT)', () => {
     await agree(await toP0(api), true);
     await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
     expect(api.grantRomanConsent.mock.calls[0][0]).toMatchObject({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 });
-    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ copy_version: 'consult-consent-v7-coach-free' });
+    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ copy_version: 'consult-consent-v8-coach-free' });
     expect(alert).not.toHaveBeenCalled();
     alert.mockRestore();
   });

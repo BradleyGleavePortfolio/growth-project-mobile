@@ -8,6 +8,8 @@
 import { COACHLESS_COPY, SCREENS, SCREENING_KEYS, TOTAL_CHAPTERS } from './definitions';
 import {
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION,
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
 } from './consentVersion';
@@ -16,6 +18,9 @@ import {
 const CURRENT_CONSENT_VERSIONS: readonly unknown[] = [
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
+  // FIX684: v9-coach-free with memory; a stored v7-coach-free stays as it is (#CRISIS-OLD-CONSENT op 1).
+  CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION,
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
 ];
 import type {
@@ -225,7 +230,7 @@ export function validateScreen(screen: ScreenDef, answers: Answers, now: Date = 
 
 /**
  * True only for an affirmative P0 record that matches the copy version this
- * build displays (Sol A-03). Anything else (missing, malformed, not agreed,
+ * build displays (Sol A-03), or a stored v7-coach-free (FIX684). Anything else (missing, malformed, not agreed,
  * an older or newer copy version, an unreadable timestamp) is not consent:
  * the client is sent back to P0 with the box unticked.
  */
