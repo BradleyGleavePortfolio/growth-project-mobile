@@ -49,7 +49,7 @@ import { messagingV2Api, toMessagingError, type ThreadScope } from '../../api/me
 import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleBBubble, StyleBDayMark, StyleBFirstCard, StyleBHeader, StyleBLoading, dayB } from '../../components/messaging/StyleBThread';
+import { StyleBBubble, StyleBDayMark, StyleBFirstCard, StyleBHeader, StyleBLoading, StyleBQueued, dayB } from '../../components/messaging/StyleBThread';
 
 interface Message {
   id: string;
@@ -756,6 +756,7 @@ export default function MessagesScreen() {
         onScrollToIndexFailed={({ averageItemLength, index }) =>
           flatListRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true })
         }
+        ListFooterComponent={styleB ? <StyleBQueued count={visibleMessages.filter((m) => m.pending && m.queued).length} /> : undefined}
         ListHeaderComponent={
           hasMoreOlder && visibleMessages.length > 0 ? (
             <TouchableOpacity

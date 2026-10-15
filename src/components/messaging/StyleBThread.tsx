@@ -174,6 +174,17 @@ export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent,
   );
 }
 
+/** Offline with two or more waiting: C3-S-58 under them (a single one says "Waiting to send" on its own). */
+export function StyleBQueued({ count }: { count: number }): React.ReactElement | null {
+  const c = useB();
+  if (count < 2) return null;
+  return (
+    <View style={[s.queued, { backgroundColor: c.theirs }]}>
+      <Text style={[s.meta, { color: c.ink, marginTop: 0 }]}>{`${count} messages send when you reconnect.`}</Text>
+    </View>
+  );
+}
+
 /** First message: one deep-forest hero card, then main's prompt. */
 export function StyleBFirstCard({ coachName }: { coachName: string }): React.ReactElement {
   const c = useB();
@@ -238,6 +249,7 @@ const s = StyleSheet.create({
   meta: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, marginTop: 4, paddingHorizontal: 4, fontVariant: ['tabular-nums'] },
   status: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4 },
   retry: { minHeight: layout.touchMin },
+  queued: { alignSelf: 'flex-end', borderRadius: radius.chip, paddingHorizontal: 16, paddingVertical: 8, marginTop: 4 },
   first: { flex: 1, justifyContent: 'center', paddingVertical: 48, gap: 20 },
   hero: { borderRadius: radius.sheet, padding: 24, gap: 16 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 16 },

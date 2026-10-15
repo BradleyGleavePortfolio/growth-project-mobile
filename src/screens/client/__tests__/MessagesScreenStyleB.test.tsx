@@ -194,7 +194,7 @@ describe('client MessagesScreen with c3StyleB ON', () => {
     expect(u.getAllByLabelText(/Message: running late/)).toHaveLength(1);
   });
 
-  it('offline: the message waits ("Waiting to send", no alert, no haptic) and goes out once on reconnect', async () => {
+  it('offline: messages wait ("Waiting to send", C3-S-58 for two, no alert, no haptic) and go out once, in order, on reconnect', async () => {
     NetInfo.__setState({ isConnected: false, isInternetReachable: false });
     postMock.mockImplementation(async (url: string) => {
       if (url === '/messages') throw axiosErr();
@@ -208,14 +208,18 @@ describe('client MessagesScreen with c3StyleB ON', () => {
     expect(u.queryByText('Not sent. Tap to send again')).toBeNull();
     expect(alertSpy).not.toHaveBeenCalled();
     expect(HapticService.error).not.toHaveBeenCalled();
+    expect(u.queryByText(/messages send when you reconnect/)).toBeNull();
+    await sendText(u, 'and saturday');
+    expect(await u.findByText('2 messages send when you reconnect.')).toBeTruthy();
     postMock.mockImplementation(async (url: string, body: Record<string, unknown>) => ({ data: url === '/messages'
       ? row({ id: 'srv-2', sender_id: 'client-1', body: body.body, client_message_id: body.client_message_id, created_at: new Date().toISOString() }) : {} }));
     await act(async () => NetInfo.__setState({ isConnected: true, isInternetReachable: true }));
     await waitFor(() => expect(u.queryByText('Waiting to send')).toBeNull());
-    const sends = postMock.mock.calls.filter(([url]) => url === '/messages');
-    expect(sends).toHaveLength(2);
-    expect((sends[1][1] as { client_message_id: string }).client_message_id).toBe((sends[0][1] as { client_message_id: string }).client_message_id);
+    const keys = postMock.mock.calls.filter(([url]) => url === '/messages').map(([, b]) => (b as { client_message_id: string }).client_message_id);
+    expect(keys).toHaveLength(4);
+    expect(keys.slice(2)).toEqual(keys.slice(0, 2));
     expect(u.getAllByLabelText(/Message: see you friday/)).toHaveLength(1);
+    expect(u.queryByText(/messages send when you reconnect/)).toBeNull();
     expect(alertSpy).not.toHaveBeenCalled();
   });
 
