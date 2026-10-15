@@ -1,8 +1,9 @@
 /**
  * FinishJoining (B-PACKAGE-135) — Home's one-line mount. While a paid
  * coach-code join is unpaid it shows "Finish joining <coach first name>",
- * which opens the package screen again (JoinPackageHost). The row goes once
- * the account has a coach (the purchase attached it).
+ * which opens the package screen again (JoinPackageHost), marked resumed so
+ * the screen re-reads the saved join (FIX712). The row goes once the account
+ * has a coach (the purchase attached it).
  */
 import React, { useEffect, useState } from 'react';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -46,7 +47,7 @@ export default function FinishJoining() {
       <QuietRow
         label={`Finish joining ${coachNameOf(pending)}`}
         detail={pending.package.name || undefined}
-        onPress={() => showJoin(pending)}
+        onPress={() => showJoin(pending, true)}
         accessibilityHint="Opens the package and its payment"
         testID="finish-joining-row"
       />

@@ -127,6 +127,19 @@ describe('coach line copy (U2, FW-COACH)', () => {
 });
 
 describe('who can see your data, rendered (U2, FW-COACH)', () => {
+  it.each([
+    ['sharing loaded', () => consentBody([], false)],
+    ['sharing unavailable', () => new Error('offline')],
+  ])('shows the full approved Roman exception when %s', async (_name, answer) => {
+    mockUser = CLIENT;
+    serve(answer());
+    const screen = await renderScreen();
+    await screen.findByText(/^Your coach —/);
+    const line = screen.getByText(ROMAN_WITH_COACH);
+    expect(line.props.children).toBe(ROMAN_WITH_COACH);
+    expect(line.props.numberOfLines).toBeUndefined();
+  });
+
   it('a client whose coach gets workouts and food logs: the line names exactly those; the old fixed lines are gone', async () => {
     mockUser = CLIENT;
     serve(consentBody(['fitness.workouts', 'fitness.food_macros'], false));

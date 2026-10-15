@@ -92,6 +92,40 @@ afterEach(() => {
 
 const tree = () => <QueryClientProvider client={queryClient}><HabitsScreen /></QueryClientProvider>;
 
+it.each([undefined, 'coach-gate'])(
+  'Day One only hears a confirmed habit tick (coach=%s)', async (coachId) => {
+    mockCoachId = coachId;
+    const onSaved = jest.fn();
+    const r = await render(
+      <QueryClientProvider client={queryClient}><HabitsScreen onSaved={onSaved} /></QueryClientProvider>,
+    );
+    await r.findByText('Drink water');
+    expect(onSaved).not.toHaveBeenCalled();
+    // Opening and cancelling Add habit is not a saved tick.
+    await fireEvent.press(r.getByText('Add habit'));
+    await fireEvent.press(r.getByLabelText('Close new habit'));
+    expect(onSaved).not.toHaveBeenCalled();
+    mockLogHabit.mockRejectedValueOnce(new Error('Network Error'));
+    await fireEvent.press(r.getByText('Drink water'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    expect(onSaved).not.toHaveBeenCalled();
+    let resolve!: (value: unknown) => void;
+    mockLogHabit.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    await fireEvent.press(r.getByText('Drink water'));
+    expect(onSaved).not.toHaveBeenCalled();
+    await act(async () => resolve({ data: {} }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    mockGetLogs.mockResolvedValue({ data: [{ habit_id: 'water', completed: true, value: 1 }] });
+    await act(async () => queryClient.invalidateQueries({ queryKey: ['habits'] }));
+    await waitFor(() => expect(r.getByTestId('habit-row-water').props.accessibilityState.checked).toBe(true));
+    await fireEvent.press(r.getByText('Drink water'));
+    await waitFor(() => expect(mockLogHabit).toHaveBeenLastCalledWith('water', {
+      date: TODAY, completed: false, value: 0,
+    }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  },
+);
+
 async function openCheckIn() {
   const screen = await render(tree());
   await fireEvent.press(screen.getByText('Daily check-in'));

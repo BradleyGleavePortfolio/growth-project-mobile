@@ -395,6 +395,8 @@ export default function RootNavigator() {
     if (sessionUserId) analyticsIdentify(sessionUserId);
   }, [sessionUserId]);
   const pendingDay1Target = useRef<WinType | null>(null);
+  const selectedDay1Target = useRef<{ winType: WinType; userId: string } | null>(null);
+  const [day1SavedWin, setDay1SavedWin] = useState<{ winType: WinType; userId: string } | undefined>();
   // Deep-link replay state for the public accept-invite path. When a
   // signed-in user clicks an accept-invite URL we sign them out and then
   // navigate to AcceptInvite ONLY after authState flips to
@@ -912,46 +914,44 @@ export default function RootNavigator() {
     void bootstrapAuth();
   };
 
-  // Called by Day1WinScreen when the client completes the win OR skips.
-  // When `target` is set, the user just completed a win and wants to deep
-  // link into the matching logger; we stash it and route after the
-  // ClientNavigator mounts.
+  // A card starts logging, not completion. The matching confirmed save
+  // brings the client back to the existing Day One note surface.
   const handleDay1WinComplete = (target?: WinType) => {
     pendingDay1Target.current = target ?? null;
+    selectedDay1Target.current = target && sessionUserId ? { winType: target, userId: sessionUserId } : null;
+    setDay1SavedWin(undefined);
     setAuthStateNow('student');
   };
 
-  // After auth flips to 'student' and the navigator mounts, route the user
-  // into the logger that matches their selected Day 1 Win card.
-  useEffect(() => {
-    if (authState !== 'student' || !pendingDay1Target.current) return;
+  const handleDay1Saved = (winType: WinType) => {
+    if (selectedDay1Target.current?.winType !== winType || selectedDay1Target.current.userId !== sessionUserId) return;
+    setDay1SavedWin(selectedDay1Target.current);
+    selectedDay1Target.current = null;
+    setAuthStateNow('day1win');
+  };
+
+  // Route only once the real logger navigator is ready, including after
+  // the existing persisted-cache gate finishes restoring.
+  const flushPendingDay1Target = () => {
+    if (authState !== 'student' || !pendingDay1Target.current || !navigationRef.isReady()) return;
+    if (selectedDay1Target.current?.userId !== sessionUserId) return;
     const target = pendingDay1Target.current;
     pendingDay1Target.current = null;
-    // Two-frame delay lets ClientNavigator finish its first commit before
-    // we issue the imperative navigate — without it, navigationRef.isReady()
-    // can still be false on slower devices.
-    const t = setTimeout(() => {
-      if (!navigationRef.isReady()) return;
-      try {
-        // The container ref is typed with the loose root param map; we cast
-        // each call's args through `never` because the nested ClientNavigator
-        // tab params are not threaded into this module.
-        const nav = navigationRef as unknown as {
-          navigate: (name: string, params?: object) => void;
-        };
-        if (target === 'first_meal') {
-          nav.navigate('Log');
-        } else if (target === 'first_checkin') {
-          nav.navigate('Home', { screen: 'Habits' });
-        } else if (target === 'logged_first_weight') {
-          nav.navigate('MoreTab', { screen: 'Progress' });
-        }
-      } catch (err) {
-        logger.warn('RootNavigator', 'non-fatal', err);
+    try {
+      const nav = navigationRef as unknown as {
+        navigate: (name: string, params?: object) => void;
+      };
+      if (target === 'first_meal') {
+        nav.navigate('Log');
+      } else if (target === 'first_checkin') {
+        nav.navigate('Home', { screen: 'Habits' });
+      } else if (target === 'logged_first_weight') {
+        nav.navigate('MoreTab', { screen: 'Progress' });
       }
-    }, 50);
-    return () => clearTimeout(t);
-  }, [authState]);
+    } catch (err) {
+      logger.warn('RootNavigator', 'non-fatal', err);
+    }
+  };
 
   // iOS coach-managed gate action (audit #304 B1): the client's thread with
   // their coach lives on the Home stack and is free server-side.
@@ -981,14 +981,15 @@ export default function RootNavigator() {
   // a one-time interstitial, not a navigable screen. It is shown once, on
   // first student boot, then replaced by ClientNavigator.
   if (authState === 'day1win') {
-    return <Day1WinScreen onComplete={handleDay1WinComplete} />;
+    return <Day1WinScreen onComplete={handleDay1WinComplete}
+      savedWin={day1SavedWin && day1SavedWin.userId === sessionUserId ? day1SavedWin.winType : undefined} />;
   }
 
   return (
     <NavigationContainer
       ref={navigationRef}
-      onReady={() => flushPendingPushTap()}
-      onStateChange={() => { flushPendingPushTap(); }}
+      onReady={() => { flushPendingDay1Target(); flushPendingPushTap(); }}
+      onStateChange={() => { flushPendingDay1Target(); flushPendingPushTap(); }}
       linking={linking}
       theme={{
         ...DefaultTheme,
@@ -1048,7 +1049,7 @@ export default function RootNavigator() {
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
-            <ClientNavigator />
+            <ClientNavigator onDay1Saved={handleDay1Saved} />
           </DunningLockoutProvider>
           <PackageSelectionSheet
             visible
@@ -1078,7 +1079,7 @@ export default function RootNavigator() {
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
-            <ClientNavigator />
+            <ClientNavigator onDay1Saved={handleDay1Saved} />
           </DunningLockoutProvider>
         </EntitlementProvider>
       )}
