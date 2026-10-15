@@ -2,19 +2,25 @@
  * CRISIS-APP-COPY (owner op 1, 2026-10-15): wherever the app states the Roman
  * safety-reply exception, the approved crisis sentence follows it, exactly
  * while the server's FEATURE_ROMAN_CRISIS_ALERT is on (GET /me/feature-flags
- * roman_crisis_alert) and never while it is off.
+ * roman_crisis_alert) and never while it is off. FIX725: only a client with a
+ * coach reads it (never a coach account or a client with no coach), and a
+ * failed flag read is off even after an earlier true.
  *
  * LIST is every place in this repo (search-backed, see the CRISISAPP-M PR):
  * the Trust Center "Who can see your data" Roman bullet and the intro of Your
- * conversations with Roman. Each row renders the real screen with the flag off
- * and on. Off: the sentence is absent and the text is exactly today's. On: the
- * sentence is present exactly once, directly after the exception.
+ * conversations with Roman. Each place is walked for every account and every
+ * switch state through the real useFeatureFlags (server map -> hook -> helper
+ * -> screen). The sentence shows only for a client with a coach while the
+ * switch is on; every other row reads exactly today's text.
  */
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authEpoch } from '../../services/accountBinding';
+import { featureFlagsKeys } from '../../hooks/useFeatureFlags';
+import type { CurrentUser } from '../../hooks/useCurrentUser';
 import { ROMAN_CHATS_COPY } from '../../screens/settings/romanChatsCopy';
 import { ROMAN_CRISIS_TOLD_SENTENCE, ROMAN_SAFETY_EXCEPTION, withCrisisSentence } from '../romanCrisisSentence';
 
@@ -34,12 +40,10 @@ jest.mock('../../services/api', () => ({
 jest.mock('../../services/dataExportApi', () => ({ dataExportApi: { requestExport: jest.fn() } }));
 jest.mock('../../utils/haptics', () => ({ lightTap: jest.fn(), mediumTap: jest.fn(), warningTap: jest.fn(), selectionTap: jest.fn() }));
 jest.mock('../../utils/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn(), log: jest.fn() } }));
-// A client with a coach: both places state the exception.
-jest.mock('../../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'client-1', email: 'client@example.test', role: 'student', coach_id: 'coach-1' }),
-}));
-let mockCrisisOn = false;
-jest.mock('../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: mockCrisisOn } }) }));
+let mockUser: CurrentUser | null = null;
+jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+const mockGetFlags = jest.fn();
+jest.mock('../../api/featureFlagsApi', () => ({ featureFlagsApi: { getFeatureFlags: () => mockGetFlags() } }));
 
 const TrustCenterScreen = require('../../screens/TrustCenterScreen').default;
 const RomanConversationsScreen = require('../../screens/settings/RomanConversationsScreen').default;
@@ -49,21 +53,38 @@ const EXCEPTION =
 const TOLD =
   'If Roman sends you a crisis safety reply, your coach is told that it happened, but not what you wrote, so they can check in with you.';
 const count = (text: string, part: string) => text.split(part).length - 1;
+const flags = (on: boolean) => ({ flags: { roman_crisis_alert: on }, evaluated_at: '2026-10-15T00:00:00.000Z' });
+
+const ACCOUNTS: [label: string, user: CurrentUser, coached: boolean][] = [
+  ['client with a coach', { id: 'client-1', email: 'client@example.test', role: 'student', coach_id: 'coach-1' }, true],
+  ['client with no coach', { id: 'client-2', email: 'solo@example.test', role: 'student' }, false],
+  ['coach account', { id: 'coach-1', email: 'coach@example.test', role: 'coach' }, false],
+];
+type Switch = 'on' | 'off' | 'failed read';
+const SWITCHES: Switch[] = ['on', 'off', 'failed read'];
 
 const nav = { goBack: jest.fn(), navigate: jest.fn() };
-type Place = [label: string, read: () => Promise<string>, today: string];
-const LIST: Place[] = [
+/** Renders the real screen and returns a reader for the place's current text. */
+type Mount = (wrapper: React.ComponentType<{ children: React.ReactNode }>, user: CurrentUser) => Promise<() => string>;
+const ROMAN_BULLET = /^(Not your coach —|Your Roman conversations are kept until you delete them or your account)/;
+const LIST: [place: string, mount: Mount, today: (coached: boolean) => string][] = [
   [
     'Trust Center, Who can see your data',
-    async () => {
-      const screen = await render(<TrustCenterScreen navigation={nav} />);
-      return String((await screen.findByText(/^Not your coach —/)).props.children);
+    async (wrapper, user) => {
+      const screen = await render(<TrustCenterScreen navigation={nav} />, { wrapper });
+      const read = () => String(screen.getByText(ROMAN_BULLET).props.children);
+      // A coached client's line waits for the coach link read (it fails here, so the account's coach_id decides).
+      if (user.coach_id) await waitFor(() => expect(read()).toMatch(/^Not your coach —/));
+      return read;
     },
-    `Not your coach — your Roman conversations, which are kept until you delete them or your account. ${EXCEPTION}`,
+    (coached) =>
+      coached
+        ? `Not your coach — your Roman conversations, which are kept until you delete them or your account. ${EXCEPTION}`
+        : 'Your Roman conversations are kept until you delete them or your account',
   ],
   [
     'Your conversations with Roman, intro',
-    async () => {
+    async (wrapper, user) => {
       const api = {
         list: jest.fn(async () => ({ ok: true, value: { sessions: [], nextCursor: null } })),
         deleteOne: jest.fn(),
@@ -74,33 +95,48 @@ const LIST: Place[] = [
         <RomanConversationsScreen
           navigation={nav}
           api={api}
-          sessionUserId={() => 'client-1'}
-          captureBinding={async () => ({ subject: 'sub:client-1', epoch: authEpoch() })}
+          sessionUserId={() => user.id}
+          captureBinding={async () => ({ subject: `sub:${user.id}`, epoch: authEpoch() })}
         />,
+        { wrapper },
       );
       await waitFor(() => expect(screen.getByTestId('roman-chats-empty')).toBeTruthy());
-      return String(screen.getByTestId('roman-chats-intro').props.children);
+      return () => String(screen.getByTestId('roman-chats-intro').props.children);
     },
-    ROMAN_CHATS_COPY.intro,
+    // Main states the exception here for every account (m#723 K1 removes it for a coach and a client with no coach).
+    () => ROMAN_CHATS_COPY.intro,
   ],
 ];
-type Row = [label: string, on: boolean, read: () => Promise<string>, today: string];
-const ROWS: Row[] = LIST.flatMap(([label, read, today]): Row[] => [
-  [label, false, read, today],
-  [label, true, read, today],
-]);
+const ROWS = LIST.flatMap(([place, mount, today]) =>
+  ACCOUNTS.flatMap(([account, user, coached]) =>
+    SWITCHES.map((sw) => [place, account, sw, mount, user, today(coached), coached] as const),
+  ),
+);
 
-describe('the crisis sentence follows the Roman safety-reply exception (CRISIS-APP-COPY)', () => {
-  afterEach(() => {
-    mockCrisisOn = false;
-  });
+describe('the crisis sentence follows the Roman safety-reply exception (CRISIS-APP-COPY, FIX725)', () => {
+  it.each(ROWS)('%s, %s, switch %s', async (_place, _account, sw, mount, user, today, coached) => {
+    mockUser = user;
+    // 'failed read': the switch loaded true, then a refresh failed.
+    mockGetFlags.mockReset().mockResolvedValueOnce(flags(sw !== 'off')).mockRejectedValue(new Error('offline'));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const read = await mount(wrapper, user);
+    const shown = (on: boolean) => (on && coached ? today.replace(EXCEPTION, `${EXCEPTION} ${TOLD}`) : today);
 
-  it.each(ROWS)('%s, roman_crisis_alert on: %s', async (_label, on, read, today) => {
-    mockCrisisOn = on;
-    const text = await read();
-    expect(count(text, EXCEPTION)).toBe(1);
-    expect(count(text, TOLD)).toBe(on ? 1 : 0);
-    expect(text).toBe(on ? today.replace(EXCEPTION, `${EXCEPTION} ${TOLD}`) : today);
+    await waitFor(() => expect(qc.getQueryState(featureFlagsKeys.all)?.status).toBe('success'));
+    await waitFor(() => expect(read()).toBe(shown(sw !== 'off')));
+    if (sw === 'failed read') {
+      await act(async () => {
+        await qc.refetchQueries({ queryKey: featureFlagsKeys.all });
+      });
+      expect(qc.getQueryState(featureFlagsKeys.all)?.status).toBe('error');
+      await waitFor(() => expect(read()).toBe(today));
+    }
+    expect(count(read(), TOLD)).toBe(sw === 'on' && coached ? 1 : 0);
+    expect(count(read(), EXCEPTION)).toBe(today.includes(EXCEPTION) ? 1 : 0);
+    qc.clear();
   });
 
   it('the sentence is word for word the approved one; a text without the exception never gets it', () => {
@@ -123,5 +159,14 @@ describe('the crisis sentence follows the Roman safety-reply exception (CRISIS-A
       .sort();
     // romanCrisisSentence.ts holds the exception only to find it.
     expect(files).toEqual(['lib/romanCrisisSentence.ts', 'screens/settings/romanChatsCopy.ts', 'screens/trustCenterSharing.ts']);
+  });
+
+  it('only the two screens apply the sentence, both through the shared hook', () => {
+    const root = path.resolve(__dirname, '../..');
+    const uses = (f: string) => fs.readFileSync(path.join(root, f), 'utf8');
+    for (const f of ['screens/TrustCenterScreen.tsx', 'screens/settings/RomanConversationsScreen.tsx']) {
+      expect(uses(f)).toMatch(/useRomanCrisisSentence\(\)/);
+      expect(uses(f)).not.toMatch(/withCrisisSentence|roman_crisis_alert/);
+    }
   });
 });

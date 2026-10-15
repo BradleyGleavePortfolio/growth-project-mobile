@@ -94,7 +94,9 @@ export function useFeatureFlags(): UseFeatureFlagsResult {
     messaging_core_v2: resolve(data, 'messaging_core_v2'),
     coachless_home: resolve(data, 'coachless_home'),
     coach_payment_actions: resolve(data, 'coach_payment_actions'),
-    roman_crisis_alert: resolve(data, 'roman_crisis_alert'),
+    // A failed refresh reads off even after an earlier true (FIX725): while the
+    // read fails the app cannot tell that the coach-alert claim is still true.
+    roman_crisis_alert: !query.isError && resolve(data, 'roman_crisis_alert'),
   };
 
   return {
