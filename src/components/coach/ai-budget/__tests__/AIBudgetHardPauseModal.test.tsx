@@ -8,7 +8,9 @@
  */
 
 import React from 'react';
+import { Platform, StyleSheet } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
+import { layout } from '../../../../theme/tokens';
 
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(() => Promise.resolve()),
@@ -52,18 +54,28 @@ describe('AIBudgetHardPauseModal', () => {
     expect(getByTestId('ai-pack-option-9900')).toBeTruthy();
   });
 
-  it('close button fires onClose', async () => {
-    const onClose = jest.fn();
-    const { getByTestId } = await render(
-      <AIBudgetHardPauseModal
-        visible
-        budget={paused}
-        onClose={onClose}
-        onSelectPack={jest.fn()}
-      />,
-    );
-    await fireEvent.press(getByTestId('ai-hard-pause-close'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+  it.each(['ios', 'android'] as const)('%s: close button is at least 44 pt in both directions and fires onClose', async (os) => {
+    const originalOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
+    try {
+      const onClose = jest.fn();
+      const { getByTestId } = await render(
+        <AIBudgetHardPauseModal
+          visible
+          budget={paused}
+          onClose={onClose}
+          onSelectPack={jest.fn()}
+        />,
+      );
+      const close = getByTestId('ai-hard-pause-close');
+      expect(StyleSheet.flatten(close.props.style)).toMatchObject({
+        minWidth: layout.touchMin, minHeight: layout.touchMin,
+      });
+      await fireEvent.press(close);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS });
+    }
   });
 
   it('selecting a pack option fires onSelectPack with the correct cents', async () => {

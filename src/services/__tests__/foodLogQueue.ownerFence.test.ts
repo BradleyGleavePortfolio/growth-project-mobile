@@ -99,7 +99,7 @@ describe('foodLogQueue — owner captured from the real identity mirror', () => 
     await enqueue(searchEntry('a-1'));
     api.__logFood.mockResolvedValue({ data: {} });
     const res = await flush();
-    expect(res).toEqual({ flushed: 1, remaining: 0, dropped: 0 });
+    expect(res).toEqual({ flushed: 1, remaining: 0, parked: 0 });
     expect(await queueFor('user-A')).toEqual([]);
   });
 });

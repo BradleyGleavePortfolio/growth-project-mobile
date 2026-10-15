@@ -27,30 +27,30 @@ beforeEach(() => {
 
 describe('syncFoodLogQueue', () => {
   it('reloads the selected day after a food saved offline is sent', async () => {
-    mockFlush.mockResolvedValue({ flushed: 1, remaining: 0, dropped: 0 });
+    mockFlush.mockResolvedValue({ flushed: 1, remaining: 0, parked: 0 });
     await expect(syncFoodLogQueue()).resolves.toBe(1);
     expect(mockLoadDayData).toHaveBeenCalledWith('client-1', '2026-10-06');
   });
 
   it('does not reload when nothing was waiting', async () => {
-    mockFlush.mockResolvedValue({ flushed: 0, remaining: 0, dropped: 0 });
+    mockFlush.mockResolvedValue({ flushed: 0, remaining: 0, parked: 0 });
     await expect(syncFoodLogQueue()).resolves.toBe(0);
     expect(mockLoadDayData).not.toHaveBeenCalled();
   });
 
   it('does not reload when no one is signed in', async () => {
     mockUser = null;
-    mockFlush.mockResolvedValue({ flushed: 1, remaining: 0, dropped: 0 });
+    mockFlush.mockResolvedValue({ flushed: 1, remaining: 0, parked: 0 });
     await syncFoodLogQueue();
     expect(mockLoadDayData).not.toHaveBeenCalled();
   });
 
   it('shares one send between overlapping triggers (foreground and reconnect together)', async () => {
-    let finish: (v: { flushed: number; remaining: number; dropped: number }) => void = () => undefined;
+    let finish: (v: { flushed: number; remaining: number; parked: number }) => void = () => undefined;
     mockFlush.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     const a = syncFoodLogQueue();
     const b = syncFoodLogQueue();
-    finish({ flushed: 2, remaining: 0, dropped: 0 });
+    finish({ flushed: 2, remaining: 0, parked: 0 });
     await expect(Promise.all([a, b])).resolves.toEqual([2, 2]);
     expect(mockFlush).toHaveBeenCalledTimes(1);
   });

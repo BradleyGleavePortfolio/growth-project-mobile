@@ -65,6 +65,7 @@ When the toggle changes:
 | `EditProfileScreen` | `warning()` | DOB / weight validation error |
 | `EditProfileScreen` | `success()` | Profile saved successfully |
 | `EditProfileScreen` | `error()` | Profile save API failure |
+| `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
 
 ## Architecture
 

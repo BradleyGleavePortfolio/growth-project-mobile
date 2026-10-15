@@ -1,7 +1,7 @@
 // Phase 9: Bell icon + NotificationCenter added to CoachNavigator.
 // All existing routes preserved.
 import React, { useEffect, useState } from 'react';
-import { AppState, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { AppState, Platform, Pressable, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
@@ -66,6 +66,7 @@ import ClientReassignModal from '../screens/coach/ClientReassignModal';
 import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
 // S-REACH: coach read of a client's consultation answers (backend #607).
 import ClientConsultationScreen from '../screens/coach/ClientConsultationScreen';
+import CoachSafetyAlertScreen from '../screens/coach/CoachSafetyAlertScreen';
 import ClientPaymentsScreen from '../screens/coach/ClientPaymentsScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
@@ -145,14 +146,19 @@ import RomanConversationsScreen, { type RomanConversationParams } from '../scree
 import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../theme/ThemeProvider';
+import { typography } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCoachTeamStatus } from '../hooks/useCoachRoleType';
+
+// Match ClientNavigator: reclaim the tab button's 5 pt inset for one-line labels.
+const TAB_BUTTON_PADDING = 5;
 
 export type CoachTabParamList = {
   // Phase 8: Command Center replaces the old top-level Dashboard tab.
   // The 'Dashboard' name is kept in the param list so any existing
   // navigate('Dashboard') calls in the codebase don't break.
-  CommandCenter: undefined;
+  // B-R1F: a Roman safety alert push or inbox row opens the Actions tab.
+  CommandCenter: { tab?: 'action-queue' } | undefined;
   // R27: typed nested nav so navigate('ClientsStack', { screen: 'ClientsList' })
   // type-checks against ClientsStackParamList (mirrors SettingsStack below).
   // `| undefined` preserves existing no-arg navigate('ClientsStack') callers.
@@ -168,6 +174,15 @@ export type CoachTabParamList = {
   // Community v1-6 — only present in the param list / tab bar when
   // `featureFlags.coachCommunity` is true (registered conditionally below).
   CommunityStack: undefined;
+};
+
+/** One Roman safety alert as CoachSafetyAlert shows it (its action queue row). */
+export type SafetyAlertParams = {
+  alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply' | 'roman_crisis_reply';
+  clientId: string;
+  clientName: string;
+  quote: string | null;
+  sentAt: string;
 };
 
 export type ClientsStackParamList = {
@@ -196,6 +211,11 @@ export type ClientsStackParamList = {
   CoachMacrosReview:    { clientId: string; clientName: string };
   /** S-REACH: consultation answers, from client detail > Summary. */
   ClientConsultation:   { clientId: string; clientName?: string };
+  /**
+   * B-R1F: one Roman safety alert, from its card in the action queue. Owner
+   * 57d: or by id ({ alertId }) from its push or inbox row.
+   */
+  CoachSafetyAlert: SafetyAlertParams | { alertId: string };
   /** COACH-PAY-M-130: payments, refund, pause and cancel, from client detail > Summary (server flag coach_payment_actions). */
   ClientPayments:       { clientId: string; clientName?: string };
   /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */
@@ -404,6 +424,7 @@ function ClientsStackNavigator() {
         component={ClientConsultationScreen}
         options={{ headerShown: true, title: 'Consultation', headerBackTitle: 'Back' }}
       />
+      <ClientsStack.Screen name="CoachSafetyAlert" component={CoachSafetyAlertScreen} />
       {/* COACH-PAY-M-130: draws its own Back; entry shown only while the server flag is on. */}
       <ClientsStack.Screen name="ClientPayments" component={ClientPaymentsScreen} />
       <ClientsStack.Screen
@@ -616,8 +637,8 @@ function SettingsStackNavigator() {
  * TeamStackNavigator
  *
  * Phase 11 / Track 7. Scale+ tier gate is enforced inside TeamManagementScreen
- * so it is safe to mount for all coaches — non-Scale coaches see an upgrade
- * prompt rather than the roster.
+ * and the parent tab registers only with Team Mode on and a confirmed
+ * head coach whose roster includes a sub-coach.
  */
 function TeamStackNavigator() {
   return (
@@ -671,6 +692,7 @@ export default function CoachNavigator() {
   const { semanticColors: sc } = useTheme();
   const insets = useSafeAreaInsets();
   const unreadCount = useCoachUnreadPolling();
+  const unreadBadge = unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined;
   // P0-1: TeamStack must only mount for head coaches. Sub-coaches who land
   // on team-management surfaces hit `/sub-coaches` 403s the screen treats as
   // a permanent retry-error — a feature they don't own. The hook fails
@@ -682,7 +704,9 @@ export default function CoachNavigator() {
   // where it could only show the plan gate. The tab now mounts only for a
   // head coach (useCoachRoleType contract) whose roster already has a sub-coach.
   const teamStatus = useCoachTeamStatus();
-  const showTeamTab = teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
+  // Team Mode stays hidden for launch even when an old roster still exists.
+  const showTeamTab = featureFlags.teamMode &&
+    teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
   // Audit P0: while the Command Center API still ships only mock data
   // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
   // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
@@ -692,7 +716,7 @@ export default function CoachNavigator() {
     <FirstPaymentWowHost>
     <Tab.Navigator
       initialRouteName={initialTab}
-      screenOptions={{
+      screenOptions={({ route, navigation }) => ({
         headerShown: false,
         // REDO-COACH-133 (QA-COACH-128): the coach bar wears the client
         // chrome — bone page colour, one hairline, outline glyphs, 11 pt Inter
@@ -700,16 +724,32 @@ export default function CoachNavigator() {
         // routes are unchanged.
         tabBarActiveTintColor: sc.accentText,
         tabBarInactiveTintColor: sc.textMuted,
+        // A fitted label bypasses bottom-tabs' iOS string-label position.
+        // Keep the native tab role and the library's original position wording.
+        tabBarButton: Platform.OS === 'web' ? undefined : (props) => {
+          const { routes } = navigation.getState();
+          return (
+            <Pressable
+              {...props}
+              ref={props.ref as React.Ref<View>}
+              role="tab"
+              accessibilityRole="tab"
+              aria-label={Platform.OS === 'ios'
+                ? `${props['aria-label']}, tab, ${routes.findIndex(tab => tab.key === route.key) + 1} of ${routes.length}`
+                : props['aria-label']}
+            />
+          );
+        },
         tabBarLabel: ({ focused, color, children }) => (
           <Text
-            style={{
-              fontFamily: focused ? 'Inter_500Medium' : 'Inter_400Regular',
-              fontSize: 11,
-              lineHeight: 14,
-              fontWeight: focused ? '500' : '400',
-              color,
-            }}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            maxFontSizeMultiplier={1.3}
+            style={[
+              focused ? typography.tabLabelActive : typography.tabLabel,
+              { color, marginHorizontal: -TAB_BUTTON_PADDING, alignSelf: 'stretch', textAlign: 'center' },
+            ]}
           >
             {children}
           </Text>
@@ -722,7 +762,7 @@ export default function CoachNavigator() {
           paddingTop: 4,
           height: 60 + insets.bottom,
         },
-      }}
+      })}
       screenListeners={{
         tabPress: () => {
           HapticService.selection();
@@ -734,7 +774,8 @@ export default function CoachNavigator() {
         name="CommandCenter"
         component={CommandCenterScreen}
         options={{
-          tabBarLabel: 'Overview',
+          title: 'Overview',
+          tabBarAccessibilityLabel: 'Overview',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid-outline" size={size} color={color} />
           ),
@@ -744,7 +785,8 @@ export default function CoachNavigator() {
         name="ClientsStack"
         component={ClientsStackNavigator}
         options={{
-          tabBarLabel: 'Clients',
+          title: 'Clients',
+          tabBarAccessibilityLabel: 'Clients',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
           ),
@@ -758,7 +800,7 @@ export default function CoachNavigator() {
         name="Templates"
         component={featureFlags.mwbPrograms ? ProgramsStackNavigator : ProgramTemplatesScreen}
         options={{
-          tabBarLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
+          title: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
           tabBarAccessibilityLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
           tabBarIcon: ({ color, size }) => (
             <Ionicons
@@ -773,7 +815,10 @@ export default function CoachNavigator() {
         name="Messages"
         component={MessagesScreen}
         options={{
-          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+          tabBarAccessibilityLabel: unreadBadge !== undefined
+            ? `Messages, ${unreadBadge}`
+            : 'Messages',
+          tabBarBadge: unreadBadge,
           // Quiet forest count instead of the default red dot (no status hue).
           tabBarBadgeStyle: {
             backgroundColor: sc.accent,
@@ -794,7 +839,8 @@ export default function CoachNavigator() {
           name="TeamStack"
           component={TeamStackNavigator}
           options={{
-            tabBarLabel: 'Team',
+            title: 'Team',
+            tabBarAccessibilityLabel: 'Team',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="briefcase-outline" size={size} color={color} />
             ),
@@ -810,7 +856,8 @@ export default function CoachNavigator() {
           name="CommunityStack"
           component={CoachCommunityNavigator}
           options={{
-            tabBarLabel: 'Community',
+            title: 'Community',
+            tabBarAccessibilityLabel: 'Community',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-circle-outline" size={size} color={color} />
             ),
@@ -821,7 +868,8 @@ export default function CoachNavigator() {
         name="SettingsStack"
         component={SettingsStackNavigator}
         options={{
-          tabBarLabel: 'Settings',
+          title: 'Settings',
+          tabBarAccessibilityLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),

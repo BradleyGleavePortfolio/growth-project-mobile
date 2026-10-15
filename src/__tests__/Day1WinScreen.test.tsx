@@ -9,8 +9,8 @@
 //      accessibilityRole (doctrine requirement).
 //   3. Source-level: no forbidden tokens (emoji, confetti, trophy) present.
 //   4. Source-level: skip path calls onComplete without an API call.
-//   5. Integration: tapping a card calls firstWinApi.complete() and, on
-//      success, renders the completion view with the AI message.
+//   5. A card opens its logger with no completion request. A confirmed save
+//      requests the note once and displays the server's exact text.
 //
 // Pattern mirrors RiskBoardScreen.test.tsx — source-level reads for doctrine
 // guards, plus a light RTL mount for the interactive path.
@@ -188,7 +188,53 @@ describe('Day1WinScreen — RTL mount', () => {
     expect(mockComplete).not.toHaveBeenCalled();
   });
 
-  it('tapping a card calls firstWinApi.complete with the correct winType', async () => {
+  it.each(['first_meal', 'logged_first_weight', 'first_checkin'] as const)(
+    '%s opens the logger without requesting a note on tap', async (winType) => {
+      const onComplete = jest.fn();
+      const r = await render(<Day1WinScreen onComplete={onComplete} />);
+      await fireEvent.press(r.getByTestId(`day1win-card-${winType}`));
+      expect(onComplete).toHaveBeenCalledWith(winType);
+      expect(mockComplete).not.toHaveBeenCalled();
+      expect(r.queryByTestId('day1win-complete-view')).toBeNull();
+    },
+  );
+
+  it.each((['first_meal', 'logged_first_weight', 'first_checkin'] as const).flatMap(
+    (winType) => ['coachless', 'coached'].map((client) => ({ winType, client })),
+  ))(
+    '$client $winType requests once only after save and shows the exact server note', async ({ winType, client }) => {
+      await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
+        id: 'client-day1', role: 'student', name: 'Day One',
+        ...(client === 'coached' ? { coach_id: 'coach-day1' } : {}),
+      }));
+      const aiMessage = `Server note for ${client} ${winType}.`;
+      mockComplete.mockResolvedValueOnce({ data: { completedAt: '2026-10-14', aiMessage } });
+      const onComplete = jest.fn();
+      const r = await render(<Day1WinScreen onComplete={onComplete} savedWin={winType} />);
+      expect(await r.findByText(aiMessage)).toBeTruthy();
+      await r.rerender(<Day1WinScreen onComplete={onComplete} savedWin={winType} />);
+      expect(mockComplete).toHaveBeenCalledTimes(1);
+      expect(mockComplete).toHaveBeenCalledWith(winType);
+    },
+  );
+
+  it('set_first_goal is not a card on main and sends no completion request', async () => {
+    const r = await render(<Day1WinScreen onComplete={jest.fn()} />);
+    expect(r.queryByTestId('day1win-card-set_first_goal')).toBeNull();
+    expect(mockComplete).not.toHaveBeenCalled();
+  });
+
+  it('a failed note request never displays a locally invented note', async () => {
+    const { Alert } = jest.requireActual('react-native');
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockComplete.mockRejectedValueOnce(new Error('Network Error'));
+    const r = await render(<Day1WinScreen onComplete={jest.fn()} savedWin="first_meal" />);
+    await waitFor(() => expect(alert).toHaveBeenCalled());
+    expect(r.queryByTestId('day1win-complete-view')).toBeNull();
+    alert.mockRestore();
+  });
+
+  it('continue button after save enters the app without reopening the logger', async () => {
     mockComplete.mockResolvedValueOnce({
       data: {
         completedAt: '2026-05-07T12:00:00.000Z',
@@ -197,29 +243,9 @@ describe('Day1WinScreen — RTL mount', () => {
     });
 
     const onComplete = jest.fn();
-    const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
-
-    await waitFor(() => expect(getByTestId('day1win-card-first_checkin')).toBeTruthy());
-    await fireEvent.press(getByTestId('day1win-card-first_checkin'));
-    expect(mockComplete).toHaveBeenCalledWith('first_checkin');
-
-    await waitFor(() => {
-      expect(getByTestId('day1win-complete-view')).toBeTruthy();
-    });
-  });
-
-  it('continue button in completion view calls onComplete', async () => {
-    mockComplete.mockResolvedValueOnce({
-      data: {
-        completedAt: '2026-05-07T12:00:00.000Z',
-        aiMessage: 'Logging your first weight sets a baseline.',
-      },
-    });
-
-    const onComplete = jest.fn();
-    const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
-
-    await fireEvent.press(getByTestId('day1win-card-logged_first_weight'));
+    const { getByTestId } = await render(
+      <Day1WinScreen onComplete={onComplete} savedWin="first_checkin" />,
+    );
 
     await waitFor(() => {
       expect(getByTestId('day1win-complete-view')).toBeTruthy();
@@ -229,13 +255,11 @@ describe('Day1WinScreen — RTL mount', () => {
     // handleContinue → maybeShowPackageSheet is async (MMKV + api.get).
     await waitFor(() => {
       expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(onComplete).toHaveBeenCalledWith(undefined);
     });
   });
 
-  // FU-FIRSTRUN-126 (AUDIT-01-125 U-01-3): the win is recorded the moment a
-  // card is tapped, before anything is logged, and the check-in card lands on
-  // the habit list (there is no client check-in screen). The copy says what
-  // the tap does and never assumes a coach.
+  // The habits card keeps its approved wording and opens the habit list.
   it('the check-in card says it opens the habits, with no coach wording', async () => {
     const { getByText, queryByText } = await render(<Day1WinScreen onComplete={jest.fn()} />);
     await waitFor(() => expect(getByText("Check off today's habits")).toBeTruthy());
@@ -251,10 +275,8 @@ describe('Day1WinScreen — RTL mount', () => {
       },
     });
     const { getByTestId, getByText, queryByText } = await render(
-      <Day1WinScreen onComplete={jest.fn()} />,
+      <Day1WinScreen onComplete={jest.fn()} savedWin="first_meal" />,
     );
-    await waitFor(() => expect(getByTestId('day1win-card-first_meal')).toBeTruthy());
-    await fireEvent.press(getByTestId('day1win-card-first_meal'));
     await waitFor(() => {
       expect(getByTestId('day1win-complete-view')).toBeTruthy();
     });

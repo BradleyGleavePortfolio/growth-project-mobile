@@ -72,7 +72,7 @@ describe('presentJoinFrom', () => {
     expect(presentJoinFrom({ coach_id: null, already_attached: false, join: joinFixture() })).toBe(true);
     await settle();
     expect(seen).toHaveBeenCalled();
-    expect(takePresentedJoin()?.code).toBe('GP-BRADLEY');
+    expect(takePresentedJoin()).toEqual({ join: joinFixture(), resumed: false });
     expect(takePresentedJoin()).toBeNull(); // read once
     expect((await readPendingJoin())?.package.id).toBe('pkg-1');
     await clearPendingJoin();
@@ -82,7 +82,7 @@ describe('presentJoinFrom', () => {
 
   it('free: shown once, nothing kept; a replay of a done join is not shown again', async () => {
     expect(presentJoinFrom({ already_attached: false, invite_join: FREE })).toBe(true);
-    expect(takePresentedJoin()?.grant_mode).toBe('free');
+    expect(takePresentedJoin()?.join.grant_mode).toBe('free');
     expect(presentJoinFrom({ already_attached: true, join: FREE })).toBe(true);
     expect(takePresentedJoin()).toBeNull();
     await settle();

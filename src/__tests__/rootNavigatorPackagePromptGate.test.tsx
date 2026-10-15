@@ -7,6 +7,14 @@
  * native/network edges).
  */
 const mockSecure: Record<string, string | null> = {};
+const mockNavigate = jest.fn();
+let mockNavigationReady = true;
+let mockOnNavigationReady: () => void;
+let mockDay1Props: {
+  onComplete: (target?: import('../services/firstWinApi').WinType) => void;
+  savedWin?: import('../services/firstWinApi').WinType;
+};
+let mockClientProps: { onDay1Saved?: (target: import('../services/firstWinApi').WinType) => void };
 jest.mock('../services/secureStorage', () => ({
   secureStorage: {
     getItem: jest.fn(async (k: string) => mockSecure[k] ?? null),
@@ -39,11 +47,14 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
-    NavigationContainer: ({ children }: { children: React.ReactNode }) =>
-      React.createElement(React.Fragment, null, children),
+    NavigationContainer: ({ children, onReady }: { children: React.ReactNode; onReady: () => void }) => {
+      mockOnNavigationReady = onReady;
+      React.useEffect(() => { if (mockNavigationReady) onReady(); }, [onReady]);
+      return React.createElement(React.Fragment, null, children);
+    },
     createNavigationContainerRef: () => ({
-      isReady: () => true,
-      navigate: jest.fn(),
+      isReady: () => mockNavigationReady,
+      navigate: (...args: unknown[]) => mockNavigate(...args),
       resetRoot: jest.fn(),
       // S-DUNNING: the payment-lockout provider reads the focused route.
       getCurrentRoute: () => undefined,
@@ -80,7 +91,10 @@ jest.mock('../navigation/CoachNavigator', () => {
 jest.mock('../navigation/ClientNavigator', () => {
   const React = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
-  return () => React.createElement(Text, { testID: 'nav-client' }, 'client');
+  return (props: typeof mockClientProps) => {
+    mockClientProps = props;
+    return React.createElement(Text, { testID: 'nav-client' }, 'client');
+  };
 });
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
 jest.mock('../navigation/LeanOnboardingNavigator', () => () => null);
@@ -99,7 +113,10 @@ jest.mock('../api/clientPaymentsApi', () => ({
 jest.mock('../screens/client/Day1WinScreen', () => {
   const React = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
-  return () => React.createElement(Text, { testID: 'day1win' }, 'day1win');
+  return (props: typeof mockDay1Props) => {
+    mockDay1Props = props;
+    return React.createElement(Text, { testID: 'day1win' }, 'day1win');
+  };
 });
 jest.mock('../services/support/crisp.service', () => ({ initCrisp: jest.fn(), syncCrispIdentity: jest.fn() }));
 jest.mock('../hooks/useLeanOnboardingReconcile', () => ({ useLeanOnboardingReconcile: jest.fn() }));
@@ -127,7 +144,7 @@ jest.mock('../config/purchaseSurfaces', () => ({
   nonP2PPurchasesHidden: () => mockHidden,
 }));
 import React from 'react';
-import { render, cleanup } from '@testing-library/react-native';
+import { render, cleanup, act, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClientProvider } from '@tanstack/react-query';
 import RootNavigator from '../navigation/RootNavigator';
@@ -142,6 +159,8 @@ const STUDENT = {
 };
 
 beforeEach(async () => {
+  jest.clearAllMocks();
+  mockNavigationReady = true;
   await AsyncStorage.clear();
   queryClient.clear();
   for (const k of Object.keys(mockSecure)) delete mockSecure[k];
@@ -221,11 +240,76 @@ describe('RootNavigator Day 1 Win skip is remembered per user', () => {
     await r.findByTestId('day1win');
   });
 
+  it.each([
+    ['first_meal', 'Log', undefined],
+    ['first_checkin', 'Home', { screen: 'Habits' }],
+    ['logged_first_weight', 'MoreTab', { screen: 'Progress' }],
+  ] as const)('%s opens the real destination and returns only for its matching save', async (winType, route, params) => {
+    const r = await mount();
+    await r.findByTestId('day1win');
+    expect(mockDay1Props.savedWin).toBeUndefined();
+    await act(async () => mockDay1Props.onComplete(winType));
+    await r.findByTestId('nav-client');
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(route, ...(params ? [params] : [])));
+    const onSaved = mockClientProps.onDay1Saved!;
+    await act(async () => onSaved(winType === 'first_meal' ? 'first_checkin' : 'first_meal'));
+    expect(r.queryByTestId('day1win')).toBeNull();
+    await act(async () => onSaved(winType));
+    await r.findByTestId('day1win');
+    expect(mockDay1Props.savedWin).toBe(winType);
+    await act(async () => mockDay1Props.onComplete());
+    await r.findByTestId('nav-client');
+    await act(async () => onSaved(winType));
+    expect(r.queryByTestId('day1win')).toBeNull();
+    // Continue does not navigate back into the completed logger.
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the selected destination until the navigator is actually ready', async () => {
+    const r = await mount();
+    await r.findByTestId('day1win');
+    mockNavigationReady = false;
+    await act(async () => mockDay1Props.onComplete('first_meal'));
+    await r.findByTestId('nav-client');
+    await act(async () => mockOnNavigationReady());
+    expect(mockNavigate).not.toHaveBeenCalled();
+    mockNavigationReady = true;
+    await act(async () => mockOnNavigationReady());
+    expect(mockNavigate).toHaveBeenCalledWith('Log');
+    await act(async () => mockOnNavigationReady());
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
   it('this user skipped it: the app opens straight to Home', async () => {
     await AsyncStorage.setItem('prefs:onboarding.day1win_skipped_at:client-S', '2026-10-06T21:00:00.000Z');
     const r = await mount();
     await r.findByTestId('nav-client');
     expect(r.queryByTestId('day1win')).toBeNull();
+  });
+
+  it.each([false, true])('another client inherits neither the selected card nor its saved note (saved=%s)', async (saved) => {
+    const r = await mount();
+    await r.findByTestId('day1win');
+    await act(async () => mockDay1Props.onComplete('first_meal'));
+    await r.findByTestId('nav-client');
+    if (saved) {
+      await act(async () => mockClientProps.onDay1Saved?.('first_meal'));
+      await r.findByTestId('day1win');
+    }
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
+      ...STUDENT, id: 'client-B', name: 'Taylor',
+    }));
+    const { authEvents } = jest.requireMock('../utils/authEvents');
+    firstWinApi.getStatus.mockResolvedValue({ data: { completed: saved ? false : true } });
+    await act(async () => authEvents.onAuthChange.mock.calls[0][0]());
+    if (saved) {
+      await r.findByTestId('day1win');
+      expect(mockDay1Props.savedWin).toBeUndefined();
+    } else {
+      await r.findByTestId('nav-client');
+      await act(async () => mockClientProps.onDay1Saved?.('first_meal'));
+      expect(r.queryByTestId('day1win')).toBeNull();
+    }
   });
 
   it('a skip by another account on this phone does not apply', async () => {

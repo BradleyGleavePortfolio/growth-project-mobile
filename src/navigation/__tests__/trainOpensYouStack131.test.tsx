@@ -61,7 +61,8 @@ for (const match of navSource.matchAll(/^import (?!type\b)[^;]*? from '(\.\.\/sc
   const modulePath = match[1];
   if (modulePath === '../screens/client/WorkoutScreen') continue;
   jest.doMock(`../${modulePath}`, () => ({
-    __esModule: true, default: () => <Text testID="destination">{modulePath}</Text>,
+    __esModule: true, default: ({ onSaved }: { onSaved?: () => void }) =>
+      <Text testID="destination" onPress={onSaved}>{modulePath}</Text>,
   }));
 }
 jest.doMock('../CommunityNavigator', () => ({
@@ -120,5 +121,30 @@ describe('Train opens coach workouts above the You menu (m#542 B1 / B-542-SOL-13
     });
     await waitFor(() => expect(youStack(ref.getRootState() as StateLike)).toEqual(['MoreIndex']));
     expect(view.getByText(YOU_MENU)).toBeTruthy();
+  });
+});
+
+describe('Day One save callbacks through the real client navigator', () => {
+  it.each([
+    ['first_meal', 'Log', undefined, '../screens/client/LogScreen'],
+    ['first_checkin', 'Home', { screen: 'Habits' }, '../screens/client/HabitsScreen'],
+    ['logged_first_weight', 'MoreTab', { screen: 'Progress' }, '../screens/client/ProgressScreen'],
+  ] as const)('%s forwards its save only while focused', async (winType, tab, params, modulePath) => {
+    const ref = createNavigationContainerRef<Record<string, object | undefined>>();
+    const onDay1Saved = jest.fn();
+    const view = await render(
+      <NavigationContainer ref={ref}><ClientNavigator onDay1Saved={onDay1Saved} /></NavigationContainer>,
+    );
+    await act(async () => ref.navigate(tab, params));
+    const logger = await view.findByText(modulePath);
+    expect(onDay1Saved).not.toHaveBeenCalled();
+    const onSaved = logger.props.onPress;
+    await fireEvent.press(logger);
+    expect(onDay1Saved).toHaveBeenCalledTimes(1);
+    expect(onDay1Saved).toHaveBeenCalledWith(winType);
+    await act(async () => ref.navigate('Home', { screen: 'HomeMain' }));
+    await view.findByText('../screens/client/HomeScreen');
+    await act(async () => onSaved());
+    expect(onDay1Saved).toHaveBeenCalledTimes(1);
   });
 });

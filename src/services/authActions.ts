@@ -65,6 +65,8 @@ const ASYNC_SIGN_OUT_KEYS = [
   // Legacy global macro cache (no user suffix). Per-user macro_targets:<id>
   // keys are wiped via PER_USER_KEY_PREFIXES with the exact signing-out id.
   'macro_targets',
+  // Foods saved before the account was known: the next sign-in would adopt them.
+  'pending_food_logs_anonymous',
   'pending_email',
   'day_one_completed',
   // S14 (B-317-1): dormant Samsung Health cursor (provider-global, not read by
@@ -98,7 +100,6 @@ const ASYNC_SIGN_OUT_KEYS = [
 // per-user suffixed keys persist across sign-outs and a second user on the
 // same device inherits them (R15 / R16).
 const ASYNC_SIGN_OUT_PREFIXES = [
-  'pending_food_logs_',
   'gp_coach_bio_',
   // Per-user in-progress workout sessions (R15). The active workout
   // persistence layer keys entries as `active_workout_session:<userId>`;
@@ -139,6 +140,8 @@ const ASYNC_SIGN_OUT_PREFIXES = [
 const PER_USER_KEY_PREFIXES = [
   'fasting:scheduled_notification_id:', // FastingScreen — scheduled push id
   'macro_targets:', // useMacroTargets — per-user macro cache
+  // Offline food queue: another account's unsent foods stay on the phone.
+  'pending_food_logs_',
   // Per-coach Roman import-offer answer (UX-01 J0/J1), keyed
   // `import_offer_decision:<userId>`. Non-secret and readable only under the
   // owning coach's key, so — like macro_targets — only the signing-out coach's
@@ -309,9 +312,9 @@ async function resolveSigningOutUserId(explicit?: string | null): Promise<string
 
 /** What is still only on this phone for one account (SESSION-KEEP-130). */
 export interface UnsyncedLogs {
-  /** Finished workouts waiting to be sent, plus a workout still open. */
+  /** Finished workouts waiting to be sent or refused by the server, plus a workout still open. */
   workouts: number;
-  /** Foods saved offline. */
+  /** Foods saved offline, including any the server refused. */
   foods: number;
 }
 
@@ -320,9 +323,9 @@ const SIGN_OUT_SEND_TIMEOUT_MS = 4000;
 
 async function readUnsynced(userId: string): Promise<{ queued: number; open: number; foods: number }> {
   const [queued, open, foods] = await Promise.all([
-    countQueuedWorkouts(userId),
+    countQueuedWorkouts(userId, { includeParked: true }),
     AsyncStorage.getItem(activeWorkoutSessionKey(userId)),
-    foodQueueLength(),
+    foodQueueLength({ includeParked: true }),
   ]);
   return { queued, open: open ? 1 : 0, foods };
 }
