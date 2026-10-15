@@ -1,12 +1,17 @@
 /**
  * Style C v2 progress marks (MOCK-C1V2 index-v2 sections 4-7): the week ring,
  * the day mark and the personal-best star. They only draw: the caller passes
- * every spoken label, so no wording lives here. `onDark` means drawn on
- * surface.masthead, the one dark surface they support (on surface.forestBand
- * plannedOnDark and the missed number fall below 3:1 and 4.5:1). Motion stays
- * at 300 ms or less; Reduce Motion swaps the ring draw for a 150 ms fade and
- * the fades for an instant change. The parts fire no haptic: the screen that
- * sets `drawIndex` fires it. See docs/charting.md (Style C v2 marks).
+ * every spoken label, so no wording lives here. Grounds: light (page, white and
+ * sage cards) by default; `onDark` on surface.masthead (Today, Summary, the
+ * History "This week" card, the Best ever and star tiles); `onBand` on
+ * surface.forestBand (the rest band): the ring with done segments only, in leaf
+ * (4.98:1). Planned (2.89:1) and the missed number (4.19:1) fail on the band, so
+ * the ring's types refuse them there. Motion stays at 300 ms or less and plays
+ * once per real event: the caller passes `event` (one key per confirmation, e.g.
+ * the sent workout's id), and a key already played this session mounts drawn.
+ * Reduce Motion swaps the ring draw for a 150 ms fade and the fades for an
+ * instant change. The parts fire no haptic: the Send to Sam tap does. See
+ * docs/charting.md (Style C v2 marks).
  */
 import React, { useLayoutEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
@@ -33,22 +38,30 @@ function marks(t: SemanticTokens, onDark?: boolean) {
     : { done: d.forest, onDone: t.textOnAccent, planned: d.planned, missed: d.missed, text: t.textPrimary, muted: t.textMuted };
 }
 
+/** Events already played this session, by part, so a remount or a return mounts them drawn. */
+const played = new Set<string>();
+
 /**
- * 0 to 1 (decelerate) each time `event` takes a new non-null value, so a second
- * event on a mounted part plays too; Reduce Motion uses `rmMs`. A layout effect,
- * so the reset lands before paint and a draw that starts after mount never
- * flashes the finished mark first.
+ * 0 to 1 (decelerate) once per real event: the first part to get a new `event`
+ * key plays it (Reduce Motion: `rmMs`); a key already played shows at 1. A
+ * layout effect, so the reset lands before paint and never flashes the mark.
  */
-function useAppear(event: string | number | null, ms: number, rmMs: number) {
+function useAppear(part: string, event: string | undefined, ms: number, rmMs: number) {
   const reduce = useReduceMotion();
-  const v = useRef(new Animated.Value(event == null ? 1 : 0)).current;
+  const key = event == null ? null : `${part}:${event}`;
+  const v = useRef(new Animated.Value(key == null || played.has(key) ? 1 : 0)).current;
   useLayoutEffect(() => {
-    if (event == null) return;
+    if (key == null) return;
+    if (played.has(key)) {
+      v.setValue(1);
+      return;
+    }
+    played.add(key);
     v.setValue(0);
     Animated.timing(v, {
       toValue: 1, duration: reduce ? rmMs : ms, easing: Easing.bezier(...motion.easing.decel), useNativeDriver: false,
     }).start();
-  }, [event, reduce, ms, rmMs, v]);
+  }, [key, reduce, ms, rmMs, v]);
   return { v, reduce };
 }
 
@@ -61,24 +74,30 @@ function arc(c: number, r: number, from: number, sweep: number): string {
   return `M${at(from)}A${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${at(from + sweep)}`;
 }
 
-export interface SegmentedRingProps {
-  /** One segment per planned session, in week order, from 12 o'clock clockwise. */
-  segments: ReadonlyArray<SegmentState>;
+interface RingBase {
   size: number;
   /** Spoken summary, e.g. the "{n} of {total} done" wording once approved. */
   label: string;
-  onDark?: boolean;
-  /** The segment that just turned done draws in; each new index draws once. The screen fires the haptic. */
+  /** The segment that just turned done draws in, once per `event`. The Send to Sam tap fires the haptic. */
   drawIndex?: number;
+  /** The real event the draw confirms: one key per confirmation (e.g. the sent workout's id). */
+  event?: string;
   /** Centre content: the caller's own text. */
   children?: React.ReactNode;
   testID?: string;
 }
 
-export function SegmentedRing({ segments, size, label, onDark, drawIndex, children, testID }: SegmentedRingProps) {
-  const m = marks(useTheme().semanticColors, onDark);
+/** One segment per planned session, in week order, from 12 o'clock clockwise. */
+export type SegmentedRingProps = RingBase & (
+  | { segments: ReadonlyArray<SegmentState>; onDark?: boolean; onBand?: never }
+  /** surface.forestBand (the rest band): done segments only, in leaf. */
+  | { segments: ReadonlyArray<'done'>; onBand: true; onDark?: never }
+);
+
+export function SegmentedRing({ segments, size, label, onDark, onBand, drawIndex, event, children, testID }: SegmentedRingProps) {
+  const m = marks(useTheme().semanticColors, onDark || onBand);
   const drawn = drawIndex != null && segments[drawIndex] === 'done' ? drawIndex : null;
-  const { v, reduce } = useAppear(drawn, DRAW_MS, RM_FADE_MS);
+  const { v, reduce } = useAppear('ring', drawn == null ? undefined : event, DRAW_MS, RM_FADE_MS);
   const thick = size / 10;
   const thin = Math.max(1.5, size / 64);
   const r = (size - thick) / 2;
@@ -115,14 +134,14 @@ export interface DayMarkProps {
   /** Spoken label, e.g. "12, missed" once approved. */
   label: string;
   onDark?: boolean;
-  /** Each new state fades in over 200 ms (the done fill at Send to Sam); Reduce Motion: instant. */
-  animate?: boolean;
+  /** The real event that set this state (the done fill at Send to Sam): it fades in over 200 ms once; Reduce Motion: instant. */
+  event?: string;
   testID?: string;
 }
 
-export function DayMark({ state, day, label, onDark, animate = false, testID }: DayMarkProps) {
+export function DayMark({ state, day, label, onDark, event, testID }: DayMarkProps) {
   const m = marks(useTheme().semanticColors, onDark);
-  const { v } = useAppear(animate ? state : null, FADE_MS, 0);
+  const { v } = useAppear('day', event, FADE_MS, 0);
   const w = state === 'today' ? 3 : 1.5;
   const ring = state === 'today' ? m.done : state === 'planned' ? m.planned : m.missed;
   return (
@@ -159,14 +178,14 @@ export interface PeakStarProps {
   /** Spoken label when the star stands alone ("New best" once approved). Omit it when words sit beside the star. */
   label?: string;
   onDark?: boolean;
-  /** Fade in over 200 ms, no scale or bounce; Reduce Motion: instant. */
-  animate?: boolean;
+  /** The new best it marks: fades in over 200 ms once, no scale or bounce; Reduce Motion: instant. */
+  event?: string;
   testID?: string;
 }
 
-export function PeakStar({ size = 16, label, onDark, animate = false, testID }: PeakStarProps) {
+export function PeakStar({ size = 16, label, onDark, event, testID }: PeakStarProps) {
   const d = useTheme().semanticColors.data;
-  const { v } = useAppear(animate ? 1 : null, FADE_MS, 0);
+  const { v } = useAppear('star', event, FADE_MS, 0);
   return (
     <Animated.View
       testID={testID} style={{ opacity: v }} accessible={!!label} accessibilityRole={label ? 'image' : undefined}

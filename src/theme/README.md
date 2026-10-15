@@ -99,7 +99,7 @@ Reproduced from the header of `tokens.ts`. Required ratios: 4.5:1 body, 3:1 larg
 3. Solid colours only: no gradients, glow, shimmer or shadow on charts.
 4. One forest primary button per screen. Leaf is never a button colour.
 
-The `ui/charts` parts' `onDark` marks are for `surface.masthead` only; on `surface.forestBand` plannedOnDark (2.89) and missedOnDark as text (4.19) fail, so the rest band uses leaf marks only.
+The `ui/charts` parts draw on light ground by default, with `onDark` on `surface.masthead`, and with `onBand` on `surface.forestBand`: the ring's done segments only, in leaf (4.98). plannedOnDark (2.89) and missedOnDark as text (4.19) fail on the band, so the ring's types refuse them there.
 
 WCAG 2.x pairs, locked by `__tests__/contrastStyleC.test.ts` in both schemes (text 4.5:1, marks 3:1). `ink` is `colors.ink` in both schemes; charcoal on sage (8.91) is light only.
 

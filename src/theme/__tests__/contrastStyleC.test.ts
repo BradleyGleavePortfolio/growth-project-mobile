@@ -48,26 +48,36 @@ const pairs = (t: SemanticTokens): Array<[string, string, string, number]> => [
   ]),
 ];
 
-// FIX718 B1: every on-dark mark and text role a part supports clears its bar
-// (marks 3:1, normal text 4.5:1) on every dark surface the contract names. The
-// ui/charts StyleCMarks `onDark` contract names surface.masthead only; on
-// surface.forestBand plannedOnDark (2.89) and the missed number (4.19) fail,
-// so the parts are not drawn there (the rest band uses leaf marks only).
-const onDark = (t: SemanticTokens): Array<[string, string, string, number]> =>
-  ([['masthead', t.surface.masthead]] as const).flatMap(([surface, bg]) => ([
-    ['done disc and today ring', t.data.leaf, MARK],
-    ['planned ring and arc', t.data.plannedOnDark, MARK],
-    ['missed ring and number', t.data.missedOnDark, TEXT],
-    ['today and planned number', t.textOnAccent, TEXT],
-    ['rest number', t.textOnMastheadMuted, TEXT],
-    ['star fill and outline', t.data.peak, MARK],
-  ] as const).map(([role, fg, min]): [string, string, string, number] => [`${surface}, ${role}`, fg, bg, min]));
+// FIX718B R1: each mark the picked C1 v2 design draws has a supported,
+// contrast-safe path on the surface where the design draws it. One row per part
+// role and ground (StyleCMarks.tsx header): light ground on the page and white
+// and sage cards; the on-dark roles on the masthead (Today, Summary, the History
+// "This week" card, the Best ever and star tiles); the leaf ring alone on the
+// rest band, where planned (2.89) and the missed number (4.19) are not drawn.
+type Role = readonly [string, string, number];
+const parts = (t: SemanticTokens): Array<[string, string, string, number]> => {
+  const light: Role[] = [
+    ['done disc, arc and today ring', t.data.forest, MARK], ['planned ring and arc', t.data.planned, MARK],
+    ['missed ring and number', t.data.missed, TEXT], ['today and planned number', t.textPrimary, TEXT],
+    ['rest number', t.textMuted, TEXT], ['star outline', t.data.peakInk, MARK],
+  ];
+  const dark: Role[] = [
+    ['done disc, arc and today ring', t.data.leaf, MARK], ['planned ring and arc', t.data.plannedOnDark, MARK],
+    ['missed ring and number', t.data.missedOnDark, TEXT], ['today and planned number', t.textOnAccent, TEXT],
+    ['rest number', t.textOnMastheadMuted, TEXT], ['star fill and outline', t.data.peak, MARK],
+  ];
+  const grounds: Array<[string, string, Role[]]> = [
+    ['page', t.bgPrimary, light], ['white card', t.bgSurface, light], ['sage card', t.surface.sage, light],
+    ['masthead', t.surface.masthead, dark], ['rest band', t.surface.forestBand, [['leaf ring', t.data.leaf, MARK]]],
+  ];
+  return grounds.flatMap(([ground, bg, roles]) => roles.map(([role, fg, min]): [string, string, string, number] => [`${ground}, ${role}`, fg, bg, min]));
+};
 
 describe.each<[string, SemanticTokens]>([['light', lightTokens], ['dark', darkTokens]])('Style C v2 contrast, %s', (_scheme, t) => {
   it.each(pairs(t))('%s', (_pair, fg, bg, min) => {
     expect(ratio(fg, bg)).toBeGreaterThanOrEqual(min);
   });
-  it.each(onDark(t))('parts on dark: %s', (_pair, fg, bg, min) => {
+  it.each(parts(t))('parts: %s', (_pair, fg, bg, min) => {
     expect(ratio(fg, bg)).toBeGreaterThanOrEqual(min);
   });
 });

@@ -1,11 +1,11 @@
-// Style C v2 marks: each DayMark state, ring segments, Reduce Motion path,
-// one animation per event with no haptic from the parts, and screen reader
-// labels. Label strings here are fixtures only. Svg parts are found by the
+// Style C v2 marks: each DayMark state, ring segments, the rest band's leaf-only
+// path, Reduce Motion, one animation per real event with no haptic from the
+// parts, and screen reader labels. Label strings here are fixtures only. Svg parts are found by the
 // mock's element name (Path, Circle).
 import React from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
 import { render } from '@testing-library/react-native';
-import { SegmentedRing, DayMark, PeakStar, type SegmentState } from '../StyleCMarks';
+import { SegmentedRing, DayMark, PeakStar, type DayState, type SegmentState } from '../StyleCMarks';
 import { lightTokens as t } from '../../../theme/tokens';
 import { HapticService } from '../../haptics/haptics.service';
 import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
@@ -60,15 +60,28 @@ describe('SegmentedRing', () => {
     expect(dark.getAllByTestId('Path').map((p) => p.props.stroke)).toEqual([t.data.plannedOnDark, t.data.missedOnDark]);
   });
 
+  // FIX718B R1: the rest band (surface.forestBand) draws only the leaf ring.
+  it('on the rest band: done segments in leaf; the types refuse planned and missed there', async () => {
+    const s = await render(<SegmentedRing segments={['done']} size={44} label="rest" onBand />);
+    expect(s.getByTestId('Path').props.stroke).toBe(t.data.leaf);
+    const refused = [
+      // @ts-expect-error planned (2.89:1) is not drawn on the rest band
+      <SegmentedRing key="p" segments={['done', 'planned']} size={44} label="rest" onBand />,
+      // @ts-expect-error missed (4.19:1 as a number) is not drawn on the rest band
+      <SegmentedRing key="m" segments={['missed']} size={44} label="rest" onBand />,
+    ];
+    expect(refused).toHaveLength(2);
+  });
+
   it('draws the new segment in 300 ms from undrawn', async () => {
-    const s = await render(<SegmentedRing segments={['done', 'done']} size={48} label="2 of 2 done" drawIndex={1} />);
+    const s = await render(<SegmentedRing segments={['done', 'done']} size={48} label="2 of 2 done" drawIndex={1} event="t1" />);
     expect(durations(timing)).toEqual([300]);
     expect(s.getAllByTestId('Path')[1].props.strokeDashoffset).toBeGreaterThan(0);
   });
 
   it('Reduce Motion: the full segment fades in over 150 ms instead', async () => {
     reduce.mockReturnValue(true);
-    const s = await render(<SegmentedRing segments={['done', 'planned']} size={48} label="1 of 2 done" drawIndex={0} />);
+    const s = await render(<SegmentedRing segments={['done', 'planned']} size={48} label="1 of 2 done" drawIndex={0} event="t2" />);
     expect(durations(timing)).toEqual([150]);
     expect(s.getAllByTestId('Path')[0].props.strokeDashoffset).toBeUndefined();
   });
@@ -115,13 +128,6 @@ describe('DayMark', () => {
     expect(s.queryByTestId('Circle')?.props.stroke).toBe(stroke);
     expect(StyleSheet.flatten(s.getByText('13').props.style).color).toBe(text);
   });
-
-  it('fades in over 200 ms, or at once with Reduce Motion', async () => {
-    await render(<DayMark state="done" day={12} label="12, done" animate />);
-    reduce.mockReturnValue(true);
-    await render(<DayMark state="done" day={12} label="12, done" animate />);
-    expect(durations(timing)).toEqual([200, 0]);
-  });
 });
 
 describe('PeakStar', () => {
@@ -134,40 +140,43 @@ describe('PeakStar', () => {
     expect(alone.getByLabelText('New best').props.accessibilityRole).toBe('image');
     expect(alone.getByTestId('Path').props.stroke).toBe(t.data.peak);
   });
-
-  it('fades in over 200 ms, or at once with Reduce Motion', async () => {
-    await render(<PeakStar animate />);
-    reduce.mockReturnValue(true);
-    await render(<PeakStar animate />);
-    expect(durations(timing)).toEqual([200, 0]);
-  });
 });
 
-// FIX718 B2: a newly done segment animates and gives its haptic as one
-// confirmation. Every change the parts react to (each useAppear caller) plays
-// once per event, an unchanged re-render does not replay, and the parts fire no
-// haptic: the Send to Sam handler that sets drawIndex fires the one success().
-const ring = (segments: SegmentState[], drawIndex?: number) => (
-  <SegmentedRing segments={segments} size={48} label="ring" drawIndex={drawIndex} />
+// FIX718B R2: returning to an already confirmed workout never replays its
+// confirmation. Each row walks one part: the first event plays once, the same
+// event after a remount mounts drawn and plays nothing, a new segment or day
+// state plays once; Reduce Motion keeps its timings. The parts fire no haptic:
+// the Send to Sam tap does.
+type Screen = Awaited<ReturnType<typeof render>>;
+const ring = (event?: string, drawIndex = 0, segments: SegmentState[] = ['done', 'done']) => (
+  <SegmentedRing segments={segments} size={48} label="ring" drawIndex={drawIndex} event={event} />
 );
-const day = (state: 'today' | 'done') => <DayMark state={state} day={12} label="12" animate />;
-describe('one animation per event, no haptic from the parts', () => {
-  it.each<[string, boolean, Array<React.ReactElement | 'remount'>, number[]]>([
-    ['ring: first draw after mount', false, [ring(['planned', 'planned']), ring(['done', 'planned'], 0)], [300]],
-    ['ring: sequential second segment on a mounted ring', false, [ring(['done', 'planned'], 0), ring(['done', 'done'], 1)], [300, 300]],
-    ['ring: re-mount mid-draw', false, [ring(['done', 'done'], 1), 'remount'], [300, 300]],
-    ['ring: Reduce Motion, first and second segment', true, [ring(['done', 'planned'], 0), ring(['done', 'done'], 1)], [150, 150]],
-    ['ring: a planned or missed index draws nothing', false, [ring(['done', 'planned', 'missed'], 1), ring(['done', 'planned', 'missed'], 2)], []],
-    ['DayMark: a new state on a mounted mark', false, [day('today'), day('done')], [200, 200]],
-    ['PeakStar: appears after mount', false, [<PeakStar key="s" />, <PeakStar key="s" animate />], [200]],
-  ])('%s', async (_case, rm, steps, want) => {
+const day = (state: DayState, event?: string) => <DayMark testID="m" state={state} day={12} label="12" event={event} />;
+const star = (event?: string) => <PeakStar testID="m" event={event} />;
+const ringShown = (s: Screen) => {
+  const p = s.getAllByTestId('Path')[0].props;
+  return p.opacity ?? (p.strokeDashoffset === 0 ? 1 : 0);
+};
+const fadeShown = (s: Screen) => StyleSheet.flatten(s.getByTestId('m', { includeHiddenElements: true }).props.style).opacity;
+describe('once per real event, no haptic from the parts', () => {
+  it.each<[string, boolean, Array<React.ReactElement | 'remount'>, number[], (s: Screen) => unknown]>([
+    ['ring', false, [ring(), ring('r1'), 'remount', ring('r2', 1)], [300, 300], ringShown],
+    ['ring, Reduce Motion', true, [ring(), ring('r3'), 'remount', ring('r4', 1)], [150, 150], ringShown],
+    ['ring: a planned or missed index plays nothing', false, [ring('r5', 1, ['done', 'planned']), ring('r6', 2, ['done', 'planned', 'missed'])], [], ringShown],
+    ['DayMark', false, [day('today'), day('done', 'd1'), 'remount', day('missed', 'd2')], [200, 200], fadeShown],
+    ['DayMark, Reduce Motion', true, [day('today'), day('done', 'd3'), 'remount', day('missed', 'd4')], [0, 0], fadeShown],
+    ['PeakStar', false, [star(), star('s1'), 'remount', star('s2')], [200, 200], fadeShown],
+    ['PeakStar, Reduce Motion', true, [star(), star('s3'), 'remount', star('s4')], [0, 0], fadeShown],
+  ])('%s', async (_case, rm, steps, want, shown) => {
     reduce.mockReturnValue(rm);
     let last = steps[0] as React.ReactElement;
     let s = await render(last);
     for (const step of steps.slice(1)) {
       if (step === 'remount') {
+        const plays = timing.mock.calls.length;
         await s.unmount();
         s = await render(last);
+        expect([timing.mock.calls.length, shown(s)]).toEqual([plays, 1]); // the seen event mounts drawn
       } else {
         await s.rerender(step);
         last = step;

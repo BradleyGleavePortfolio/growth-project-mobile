@@ -64,10 +64,10 @@ This document defines when to use each chart variant, the theming rules, and per
 `SegmentedRing` (one segment per planned session: done thick, planned thin, missed dashed, 10° gaps, centre content from the caller), `DayMark` (done disc with a check, today thick ring, planned thin ring, missed dashed ring, rest number only) and `PeakStar` (gold.300 star, peakInk outline on light ground).
 
 **Rules:**
-- They read `semanticColors.data`; pass `onDark` on `surface.masthead`, the one dark surface they support. Not on `surface.forestBand`: plannedOnDark (2.89:1) and the missed number (4.19:1) fail there, so the rest band uses leaf marks only.
+- They read `semanticColors.data`. Grounds: light (page, white and sage cards) by default; `onDark` on `surface.masthead` (Today, Summary, the History "This week" card, the Best ever and star tiles); `onBand` on `surface.forestBand` (the rest band): `SegmentedRing` with done segments only, in leaf (4.98:1). Planned (2.89:1) and the missed number (4.19:1) fail on the band, so the ring's types refuse them there, and DayMark and PeakStar are not drawn there.
 - The caller passes every spoken label (approved wording only). `PeakStar` without a label is hidden from screen readers, so use it beside the words.
-- Motion: each new done `drawIndex` draws that segment in 300 ms (decel); Reduce Motion shows it whole with a 150 ms fade. With `animate`, each new DayMark state and the PeakStar's appearance is a 200 ms fade, instant with Reduce Motion. No scale, bounce or glow.
-- Haptics: the parts fire none. The Send to Sam handler that sets `drawIndex` fires `HapticService.success()` once, so the draw and the haptic are one confirmation and a re-mount does not buzz again.
+- Motion plays once per real event. The caller passes `event`, one key per confirmation (e.g. the sent workout's id), from the tap that confirms it, never derived from stored data. The first time a part gets a new key it plays; a key already played this session mounts drawn, so returning to a confirmed workout never replays it. The ring draws its done `drawIndex` segment in 300 ms (decel); Reduce Motion shows it whole with a 150 ms fade. DayMark's new state and PeakStar fade in over 200 ms, instant with Reduce Motion. No scale, bounce or glow.
+- Haptics: the parts fire none. The Send to Sam tap that passes the `event` fires `HapticService.success()` once, so the draw and the haptic are one confirmation.
 - DayMark numbers cap at 130% text so a seven-day strip fits 360 pt; the label carries the date.
 
 ---
