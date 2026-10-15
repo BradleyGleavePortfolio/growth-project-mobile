@@ -91,6 +91,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_COACH_TABS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (COACHTABS: the six coach tabs)."
+    },
     "EXPO_PUBLIC_FF_COMMUNITY_ACKS": {
       "kind": "flag",
       "default": "off",

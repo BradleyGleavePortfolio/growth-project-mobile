@@ -58,6 +58,8 @@ When the toggle changes:
 | Location | Method | Trigger |
 |---|---|---|
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
+| `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
+| Overview gear, Calendar gear, Messages Community button (COACHTABS) | `softImpact()` | Opens Settings, Hours and rules, Community |
 | `ActiveWorkoutScreen` | `heavyImpact()` | Workout saved successfully |
 | `ActiveWorkoutScreen` | `error()` | Workout save failed |
 | `LogScreen` | `success()` | Food logged (search + manual flows) |
