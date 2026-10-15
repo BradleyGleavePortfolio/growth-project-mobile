@@ -35,9 +35,9 @@ afterEach(() => {
 });
 
 describe('SegmentedRing', () => {
-  it('draws one segment per session: done thick, planned thin, missed dashed', async () => {
+  it('draws one segment per session: done thick, planned thin, missed dashed; only a done segment draws in', async () => {
     const s = await render(
-      <SegmentedRing segments={['done', 'planned', 'missed']} size={160} label="1 of 3 done"><Text>1/3</Text></SegmentedRing>,
+      <SegmentedRing segments={['done', 'planned', 'missed']} size={160} label="1 of 3 done" drawIndex={1}><Text>1/3</Text></SegmentedRing>,
     );
     const [done, planned, missed] = ['segment-0-done', 'segment-1-planned', 'segment-2-missed'].map((id) => s.getByTestId(id).props);
     expect([done.stroke, done.strokeWidth, done.strokeDasharray]).toEqual([t.data.forest, 16, undefined]);

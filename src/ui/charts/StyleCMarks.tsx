@@ -71,10 +71,11 @@ export interface SegmentedRingProps {
 
 export function SegmentedRing({ segments, size, label, onDark, drawIndex, children, testID }: SegmentedRingProps) {
   const m = marks(useTheme().semanticColors, onDark);
-  const { v, reduce } = useAppear(drawIndex != null, DRAW_MS, RM_FADE_MS);
+  const drawing = drawIndex != null && segments[drawIndex] === 'done';
+  const { v, reduce } = useAppear(drawing, DRAW_MS, RM_FADE_MS);
   useEffect(() => {
-    if (drawIndex != null) void HapticService.success();
-  }, [drawIndex]);
+    if (drawing) void HapticService.success();
+  }, [drawing, drawIndex]);
   const thick = size / 10;
   const thin = Math.max(1.5, size / 64);
   const r = (size - thick) / 2;
@@ -93,7 +94,7 @@ export function SegmentedRing({ segments, size, label, onDark, drawIndex, childr
             stroke: m[s], strokeWidth: s === 'done' ? thick : thin,
             strokeDasharray: s === 'missed' ? [thin * 2, thin * 2] : undefined,
           };
-          if (i !== drawIndex || s !== 'done') return <Path key={i} {...seg} />;
+          if (!drawing || i !== drawIndex) return <Path key={i} {...seg} />;
           return reduce
             ? <AnimatedPath key={i} {...seg} opacity={v} />
             : <AnimatedPath key={i} {...seg} strokeDasharray={[len, len]} strokeDashoffset={v.interpolate({ inputRange: [0, 1], outputRange: [len, 0] })} />;
