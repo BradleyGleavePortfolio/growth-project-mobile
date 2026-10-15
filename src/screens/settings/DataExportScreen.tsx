@@ -827,6 +827,8 @@ export default function DataExportScreen() {
 
 const INCLUDED_DATA = [
   "Profile and account details",
+  "Onboarding answers",
+  "Calorie and macro targets",
   "Weight, food, and water logs",
   "Workout sessions",
   "Fasting windows",
@@ -837,6 +839,7 @@ const INCLUDED_DATA = [
   "Build Week progress",
   "Lesson completions",
   "Diagnostic submission results",
+  "Bloodwork panels and results",
   "Notification preferences",
   "Community wins you posted",
   "Recipes you created and recipes you saved",

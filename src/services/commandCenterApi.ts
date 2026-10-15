@@ -93,10 +93,34 @@ export interface ActionQueueItem {
     | 'no_message_exchange'
     | 'high_churn_risk'
     | 'build_week_gate'
-    | 'bloodwork_review';
+    | 'bloodwork_review'
+    | 'roman_urgent_reply'
+    | 'roman_eating_disorder_reply'
+    | 'roman_crisis_reply';
   message: string;          // plain English, generated server-side
   created_at: string;
   dismissed_at: string | null;
+  /**
+   * Roman safety alerts only (backend B-R1F): the client's message behind the
+   * alert, in full, and when they sent it. Null once the client deleted it.
+   */
+  quote?: string | null;
+  sent_at?: string | null;
+}
+
+export type SafetyAlertType = 'roman_urgent_reply' | 'roman_eating_disorder_reply' | 'roman_crisis_reply';
+
+const SAFETY_ALERT_TYPES: readonly string[] = ['roman_urgent_reply', 'roman_eating_disorder_reply', 'roman_crisis_reply'];
+
+export function isSafetyAlert(
+  item: ActionQueueItem,
+): item is ActionQueueItem & { alert_type: SafetyAlertType } {
+  return SAFETY_ALERT_TYPES.includes(item.alert_type);
+}
+
+/** Owner #ROMAN-CRISIS-ALERT: a crisis alert never shows the client's words. */
+export function safetyQuote(alertType: string, quote: string | null | undefined): string | null {
+  return alertType === 'roman_crisis_reply' ? null : quote ?? null;
 }
 
 export interface ActionQueueResponse {
@@ -335,6 +359,15 @@ export const commandCenterApi = {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_ACTION_QUEUE);
     return api.get<ActionQueueResponse>(`${BASE}/action-queue`);
   },
+
+  /**
+   * GET /coach/command-center/action-queue/:alertId
+   * Owner 57d: one Roman safety alert, as its queue row, for the client's
+   * current coach only (404 otherwise). Errors propagate: the caller falls
+   * back to the action queue.
+   */
+  getSafetyAlert: async (alertId: string): Promise<{ data: ActionQueueItem }> =>
+    api.get<ActionQueueItem>(`${BASE}/action-queue/${encodeURIComponent(alertId)}`),
 
   /**
    * GET /coach/command-center/ltv-metrics

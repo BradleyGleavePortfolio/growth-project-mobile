@@ -91,3 +91,35 @@ describe('U-A13-1: Coach Home rows open the right place', () => {
     expect(src).toMatch(/<Screen edges=\{\['top'\]\}/);
   });
 });
+
+describe('B-R1F: a Roman safety alert opens Actions, and its card opens the alert', () => {
+  it('a push or inbox row (tab: action-queue) lands on Actions; the card opens CoachSafetyAlert', async () => {
+    const item = {
+      alert_id: 'a1',
+      client_id: 'c-1',
+      client_name: 'Ana Lopez',
+      alert_type: 'roman_urgent_reply',
+      message: 'Urgent: Roman sent Ana Lopez a medical safety reply. Check in with them →',
+      created_at: '2026-10-12T16:41:02.000Z',
+      dismissed_at: null,
+      quote: 'A persistent-vomiting message.',
+      sent_at: '2026-10-12T16:41:00.000Z',
+    };
+    mockGet.mockImplementation(async (url: string) =>
+      url.endsWith('/action-queue') ? { data: { items: [item], total_pending: 1 } } : { data: {} },
+    );
+    const screen = await render(<CommandCenterScreen route={{ params: { tab: 'action-queue' } }} />);
+    await fireEvent.press(await screen.findByTestId('command-center-safety-alert-row'));
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', {
+      screen: 'CoachSafetyAlert',
+      params: {
+        alertType: 'roman_urgent_reply',
+        clientId: 'c-1',
+        clientName: 'Ana Lopez',
+        quote: 'A persistent-vomiting message.',
+        sentAt: '2026-10-12T16:41:00.000Z',
+      },
+      initial: false,
+    });
+  });
+});

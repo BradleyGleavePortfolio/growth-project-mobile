@@ -19,7 +19,7 @@ export const ROMAN_CHATS_COPY = {
   entryLabel: 'Your conversations with Roman',
   entryHint: 'See, open and delete your past conversations with Roman',
   intro:
-    'Your conversations with Roman are kept until you delete them or your account. Your coach never sees them. Deleting a conversation removes it for good.',
+    'Your conversations with Roman are kept until you delete them or your account. Your coach never sees them. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you. Deleting a conversation removes it for good.',
   empty: 'You have no conversations with Roman. Each day you talk with Roman, that conversation shows up here.',
   loading: 'Loading your conversations with Roman',
   loadingMore: 'Loading older conversations',

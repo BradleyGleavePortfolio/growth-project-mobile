@@ -85,13 +85,14 @@ const mockSettle = jest.fn(async (..._a: unknown[]) => undefined);
 const mockRelease = jest.fn(async (..._a: unknown[]) => undefined);
 const mockCountQueued = jest.fn(async (..._a: unknown[]) => 0);
 const mockPushQueued = jest.fn(async () => undefined);
+const mockTriggerSync = jest.fn(async () => undefined);
 jest.mock('../offline', () => ({
   queueWorkout: (...a: unknown[]) => mockQueueWorkout(...a),
   settleQueuedWorkout: (...a: unknown[]) => mockSettle(...a),
   releaseQueuedWorkout: (...a: unknown[]) => mockRelease(...a),
   countQueuedWorkouts: (...a: unknown[]) => mockCountQueued(...a),
   pushQueuedWorkouts: () => mockPushQueued(),
-  triggerSync: jest.fn(async () => undefined),
+  triggerSync: () => mockTriggerSync(),
   workoutSyncEvents: { on: jest.fn(), off: jest.fn() },
 }));
 
@@ -228,12 +229,13 @@ describe('Finish with no signal', () => {
     expect(mockMutate.mock.calls[0][0]).toEqual(queued.payload);
 
     // No signal: the request never got an answer.
+    const noAnswer = new Error('Network Error');
     await act(async () => {
-      capturedMutateOptions!.onError!(new Error('Network Error'));
+      capturedMutateOptions!.onError!(noAnswer);
       await Promise.resolve();
     });
 
-    expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`);
+    expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`, noAnswer);
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(alertTitles).toContain('Saved on this phone');
     expect(alertTitles).not.toContain('Workout not saved yet');
@@ -253,15 +255,16 @@ describe('Finish with no signal', () => {
     expect(mockTrack).toHaveBeenCalledWith('workout_completed');
   });
 
-  it('a server refusal parks the copy; Finish again re-queues the same workout', async () => {
+  it.each([400, 429])('a %i keeps the not-saved alert and hands the error to the engine; Finish again re-queues', async (status) => {
     const view = await render(<ActiveWorkoutScreen />);
     await waitFor(() => expect(view.getByText('Bench Press')).toBeTruthy());
     await finishOnce(view);
+    const err = Object.assign(new Error('HTTP error'), { response: { status, data: {} } });
     await act(async () => {
-      capturedMutateOptions!.onError!(Object.assign(new Error('Bad Request'), { response: { status: 400, data: {} } }));
+      capturedMutateOptions!.onError!(err);
       await Promise.resolve();
     });
-    expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`, { rejected: true });
+    expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`, err);
     expect(mockGoBack).not.toHaveBeenCalled();
     expect(alertTitles).toContain('Workout not saved yet');
 
@@ -269,6 +272,25 @@ describe('Finish with no signal', () => {
     expect(mockQueueWorkout).toHaveBeenCalledTimes(2);
     const keys = mockQueueWorkout.mock.calls.map((c) => (c[0] as { clientKey: string }).clientKey);
     expect(new Set(keys).size).toBe(1);
+  });
+
+  it('a set corrected after a 429 is queued at Finish again even when the first copy was already sent (B-662-1)', async () => {
+    const view = await render(<ActiveWorkoutScreen />);
+    await waitFor(() => expect(view.getByText('Bench Press')).toBeTruthy());
+    await finishOnce(view);
+    await act(async () => {
+      capturedMutateOptions!.onError!(Object.assign(new Error('HTTP 429'), { response: { status: 429, data: {} } }));
+      await Promise.resolve();
+    });
+    await fireEvent.changeText(view.getByTestId('set-weight-0-0'), '155');
+    // Meanwhile the background sync sent the first copy.
+    mockQueueWorkout.mockResolvedValueOnce({ id: 'q1', alreadySynced: true, serverId: null });
+    await finishOnce(view);
+
+    expect(mockQueueWorkout.mock.calls[1][0]).toMatchObject({ payload: { exercises: [{ weight_per_set: [155, 145] }] } });
+    expect(mockMutate).toHaveBeenCalledTimes(1); // never POSTed a second time
+    expect(mockTriggerSync).toHaveBeenCalled(); // sends the queued update now
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 
   it('a coach-assigned workout queues its completion with the workout', async () => {

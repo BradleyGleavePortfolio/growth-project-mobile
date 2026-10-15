@@ -95,7 +95,8 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
   beforeEach(() => jest.replaceProperty(Platform, 'OS', os));
 
   it('searches, picks a portion in one sheet, cancels back, adds, edits, deletes and repeats', async () => {
-    await render(<LogScreen />);
+    const onSaved = jest.fn();
+    await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), '60 g oats');
     await waitFor(() => expect(foodApi.search).toHaveBeenCalledWith('60 g oats', 50));
@@ -105,6 +106,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     // A single native sheet replaces search with the portion picker.
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
     await fireEvent.press(screen.getByText('Cancel'));
+    expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('60 g oats');
     expect(screen.queryByLabelText('Food quantity')).toBeNull();
     await fireEvent.press(screen.getByText('Rolled oats'));
@@ -120,6 +122,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(227.4);
     expect(screen.queryByLabelText('Food quantity')).toBeNull();
     expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
+    expect(onSaved).toHaveBeenCalledTimes(1);
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
 
     await fireEvent.press(screen.getByLabelText(/Rolled oats.*Tap to edit/));
@@ -156,17 +159,20 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     });
     expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(227.4);
     expect(await screen.findByText('1 food added to Breakfast.')).toBeTruthy();
+    expect(onSaved).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the entered portion after failure, then returns to search after saving', async () => {
     jest.mocked(logApi.logFood).mockRejectedValueOnce(new Error('Network Error'));
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    await render(<LogScreen />);
+    const onSaved = jest.fn();
+    await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(await screen.findByText('Rolled oats'));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '85');
     await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(alert).toHaveBeenCalledWith("Couldn't log food", expect.any(String));
+    expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Food quantity').props.value).toBe('85');
     expect(screen.getByLabelText('Portion unit g').props.accessibilityState.selected).toBe(true);
     expect(screen.getByTestId('food-search-sheet').props.visible).toBe(true);
@@ -174,6 +180,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
+    expect(onSaved).toHaveBeenCalledTimes(1);
     expect(screen.getByPlaceholderText('Search foods...')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
     expect(await screen.findByText('Rolled oats added to Breakfast.')).toBeTruthy();
@@ -208,7 +215,8 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
 
   it('retains browse tabs, retry, suggestions, clear, manual entry and close', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    await render(<LogScreen />);
+    const onSaved = jest.fn();
+    await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(screen.getByText('Frequent'));
     expect(screen.getByText('Most logged, last 7 days')).toBeTruthy();
@@ -228,15 +236,21 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '0');
     await fireEvent.press(screen.getByText('Log food'));
     expect(alert).toHaveBeenCalledWith('Missing info', 'Enter at least a food name and calories.');
+    expect(onSaved).not.toHaveBeenCalled();
     await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Lunch label');
     await fireEvent.changeText(screen.getByPlaceholderText('1'), '2');
     await fireEvent.changeText(screen.getByPlaceholderText('serving'), 'g');
+    jest.mocked(logApi.logFood).mockRejectedValueOnce(new Error('Network Error'));
     await fireEvent.press(screen.getByText('Log food'));
+    expect(onSaved).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('Log food'));
+    expect(onSaved).toHaveBeenCalledTimes(1);
     expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lunch label', serving_size_grams: 2 }));
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(screen.getByText('Enter manually'));
     await fireEvent.press(screen.getByText('Back to search'));
     await fireEvent.press(screen.getByRole('button', { name: 'Close food search' }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
   });
 

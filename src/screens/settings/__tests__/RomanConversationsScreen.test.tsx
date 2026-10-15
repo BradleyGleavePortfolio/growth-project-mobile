@@ -109,6 +109,29 @@ async function confirmDeleteAll(screen: Awaited<ReturnType<typeof render>>) {
 }
 
 describe('list', () => {
+  it.each(['loading', 'loaded', 'empty', 'error'] as const)(
+    '57c: %s shows the exact safety exception immediately after the coach-privacy sentence',
+    async (phase) => {
+      const outcome = phase === 'loading'
+        ? new Promise<RomanChatsOutcome<RomanChatPage>>(() => {})
+        : phase === 'error'
+          ? fail({ reason: 'offline' })
+          : page(phase === 'empty' ? [] : [A1]);
+      const screen = await renderScreen(makeApi({ list: jest.fn(async () => outcome) }));
+      if (phase === 'loaded') await screen.findByTestId('roman-chat-row-ca1');
+      if (phase === 'empty') await screen.findByTestId('roman-chats-empty');
+      if (phase === 'error') await screen.findByTestId('roman-chats-error');
+      if (phase === 'loading') expect(screen.getByTestId('roman-chats-loading')).toBeTruthy();
+      const expected =
+        'Your conversations with Roman are kept until you delete them or your account. Your coach never sees them. ' +
+        'One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you. ' +
+        'Deleting a conversation removes it for good.';
+      expect(ROMAN_CHATS_COPY.intro).toBe(expected);
+      expect(screen.getByTestId('roman-chats-intro').props.children).toBe(expected);
+      expect(screen.getByTestId('roman-chats-intro').props.numberOfLines).toBeUndefined();
+    },
+  );
+
   it('uses calm hairline rows and keeps Back reachable', async () => {
     const screen = await renderScreen(makeApi());
     expect((await screen.findByTestId('roman-chat-row-ca1')).props.style.backgroundColor).toBeUndefined();

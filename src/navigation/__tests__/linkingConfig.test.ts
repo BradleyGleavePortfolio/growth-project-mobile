@@ -64,6 +64,10 @@ function findRoute(
 }
 
 describe('RootNavigator linking config — behavioral routing (R26)', () => {
+  it.each(['guidance', 'AIGuide', 'ai-guide'])('has no legacy Guidance deep link: %s', (route) => {
+    expect(resolve(`tgp://${route}`)).toBeUndefined();
+  });
+
   it('declares both the custom-scheme prefix and the universal-link host', () => {
     expect(linking.prefixes).toEqual(
       expect.arrayContaining(['tgp://', `https://${INVITE_UNIVERSAL_HOST}`]),

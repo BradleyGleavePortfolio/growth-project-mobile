@@ -24,6 +24,7 @@ import {
   notificationsApi,
   deletionApi,
   AccountStatus,
+  practiceTypeApi,
 } from '../../services/api';
 import { helpUrl } from '../../config/env';
 import { featureFlags } from '../../config/featureFlags';
@@ -87,6 +88,27 @@ export default function SettingsScreen() {
   const [deletionBusy, setDeletionBusy] = useState(false);
 
   const userId = currentUser?.id || '';
+  const [bothPillars, setBothPillars] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const loadPractice = async () => {
+      setBothPillars(false);
+      if (!userId) return;
+      try {
+        const { data } = await practiceTypeApi.get();
+        if (alive) setBothPillars(data.practice_type === 'both');
+      } catch {
+        // Unknown practice: do not offer a route that may be unavailable.
+      }
+    };
+    void loadPractice();
+    const unsubscribe = navigation.addListener?.('focus', loadPractice);
+    return () => {
+      alive = false;
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [userId, navigation]);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -774,10 +796,7 @@ export default function SettingsScreen() {
         ) : null}
       </View>
 
-      {/* Stage 3 — cross-pillar federated coach surface. Settings row
-          enters the nested CrossPillarNavigator, which runs the
-          practice-selection flow on first open and the live dashboard
-          afterwards. */}
+      {bothPillars ? <>
       <Overline style={styles.sectionHeader}>Cross-pillar practice</Overline>
       <View style={styles.section}>
         <TouchableOpacity
@@ -798,6 +817,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      </> : null}
       <DangerZone
         accountStatus={accountStatus}
         accountStatusLoading={accountStatusLoading}

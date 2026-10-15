@@ -65,7 +65,6 @@ import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
-import AIGuideScreen from '../screens/client/AIGuideScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
 // Phase 7B — Transformation Timeline
 import TimelineScreen from '../screens/client/TimelineScreen';
@@ -158,6 +157,11 @@ import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
 import JoinPackageHost from '../components/join/JoinPackageHost';
+import type { WinType } from '../services/firstWinApi';
+
+interface Day1SaveProps {
+  onDay1Saved?: (winType: WinType) => void;
+}
 
 // B22/B24 (b#888) and B1 (owner ruling 10-08 23:5x, m#650): logging,
 // workouts, routines, habits, plans, fasting, macros and Roman guidance call
@@ -182,7 +186,6 @@ const ProtectedRoutineBuilderScreen = withProtectedScreen(RoutineBuilderScreen, 
 // behind the one-time community terms agreement too. Not OWN: community
 // feed, wins and leaderboard still need a package server-side.
 const ProtectedCommunityScreen = withProtectedScreen(withCommunityTerms(CommunityScreen));
-const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen, OWN);
 // Messages is deliberately NOT wrapped (audit #304 B1). Basic text DM with
 // the assigned coach is free server-side (client-messaging.controller.ts:
 // GET/POST /messages, /messages/read, /messages/unread-count carry no
@@ -291,7 +294,6 @@ export type MoreStackParamList = {
   RomanConversations: undefined;
   RomanConversation: RomanConversationParams;
   Preferences: undefined;
-  AIGuide:     undefined;
   Membership:  undefined;
   /** Phase 7B — Transformation Timeline */
   Timeline:    undefined;
@@ -422,7 +424,7 @@ function CalendarStackNavigator() {
   );
 }
 
-function HomeStackNavigator() {
+function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
   // The Home stack runs headerShown:false, so a headerRight bell here never
   // rendered (dead UI). The bell + "Message your coach" entry now live in the
   // Home screen body (components/home/HomeHeaderActions).
@@ -434,7 +436,11 @@ function HomeStackNavigator() {
       }}
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
-      <HomeStackNav.Screen name="Habits"                component={ProtectedHabitsScreen} options={backOnlyHeader()} />
+      <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
+        {({ navigation }) => <ProtectedHabitsScreen onSaved={() => {
+          if (navigation.isFocused()) onDay1Saved?.('first_checkin');
+        }} />}
+      </HomeStackNav.Screen>
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
       <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
       {/* The Messages header opens the coach contact card (Mute, Block User). */}
@@ -497,7 +503,7 @@ function WorkoutStackNavigator() {
 // Phase 7C: Leaderboard screens registered here.
 // Bloodwork: BloodworkEntry screen registered here.
 // Wave 11: Copilot + CommunityHub registered here (flags default OFF in prod).
-function MoreStackNavigator() {
+function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
   return (
     <MoreStackNav.Navigator
       screenOptions={{
@@ -516,7 +522,11 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
-      <MoreStackNav.Screen name="Progress"     component={ProgressScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="Progress" options={backOnlyHeader()}>
+        {({ navigation }) => <ProgressScreen onSaved={() => {
+          if (navigation.isFocused()) onDay1Saved?.('logged_first_weight');
+        }} />}
+      </MoreStackNav.Screen>
       <MoreStackNav.Screen name="Settings"     component={SettingsScreen} />
       <MoreStackNav.Screen name="AddCoachCode" component={AddCoachCodeScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
@@ -532,7 +542,6 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="RomanConversations" component={RomanConversationsScreen} />
       <MoreStackNav.Screen name="RomanConversation" component={RomanConversationScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
-      <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
       <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} options={backOnlyHeader()} />
@@ -668,7 +677,7 @@ const TUTORIAL_TABS = [
   ...(featureFlags.communityTab ? ['CommunityTab'] : []),
 ];
 
-export default function ClientNavigator() {
+export default function ClientNavigator({ onDay1Saved }: Day1SaveProps = {}) {
   const { semanticColors: sc } = useTheme();
   const insets = useSafeAreaInsets();
   // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
@@ -749,7 +758,6 @@ export default function ClientNavigator() {
     >
       <Tab.Screen
         name="Home"
-        component={HomeStackNavigator}
         options={{
           tabBarAccessibilityLabel: 'Home',
           title: 'Home',
@@ -757,7 +765,9 @@ export default function ClientNavigator() {
             <Ionicons name="home-outline" size={24} color={color} />
           ),
         }}
-      />
+      >
+        {() => <HomeStackNavigator onDay1Saved={onDay1Saved} />}
+      </Tab.Screen>
       <Tab.Screen
         name="WorkoutTab"
         component={WorkoutStackNavigator}
@@ -771,7 +781,6 @@ export default function ClientNavigator() {
       />
       <Tab.Screen
         name="Log"
-        component={ProtectedLogScreen}
         options={{
           tabBarAccessibilityLabel: 'Log food',
           title: 'Food',
@@ -779,7 +788,11 @@ export default function ClientNavigator() {
             <Ionicons name="restaurant-outline" size={24} color={color} />
           ),
         }}
-      />
+      >
+        {({ navigation }) => <ProtectedLogScreen onSaved={() => {
+          if (navigation.isFocused()) onDay1Saved?.('first_meal');
+        }} />}
+      </Tab.Screen>
       {/* S-SCHED Calendar tab — gated by featureFlags.clientCalendar (default
           OFF). Off: the tab, its routes and deep links do not register. */}
       {featureFlags.clientCalendar && (
@@ -797,7 +810,6 @@ export default function ClientNavigator() {
       )}
       <Tab.Screen
         name="MoreTab"
-        component={MoreStackNavigator}
         options={{
           tabBarAccessibilityLabel: 'Profile and more',
           title: 'You',
@@ -805,7 +817,9 @@ export default function ClientNavigator() {
             <Ionicons name="person-outline" size={24} color={color} />
           ),
         }}
-      />
+      >
+        {() => <MoreStackNavigator onDay1Saved={onDay1Saved} />}
+      </Tab.Screen>
       {/* v1-5 Community tab — gated by featureFlags.communityTab (default OFF).
           When the flag is OFF this <Tab.Screen> is not rendered, so the tab does
           not appear and the CommunityTab route (and its deep link) never

@@ -239,7 +239,7 @@ describe("entry and parity (COACH-PAY-M-130)", () => {
       clientName="Jane" nudgeSuccess={false} onOpenMessages={noop} onOpenNudge={noop} onOpenMacrosReview={noop}
       onOpenWorkoutBuilder={noop} onOpenPayments={onOpenPayments} colors={colors} styles={makeStyles(colors)} />
   );
-  const ACTIONS = ["Open messages", "Send nudge notification", "Review client macros", "Open workout builder"];
+  const ACTIONS = ["Open messages", "Send nudge notification", "Review client macros", "Open client workouts"];
 
   it("Summary keeps its four actions and adds Payments only when passed, never for a sub-coach", async () => {
     await render(tab());

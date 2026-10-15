@@ -68,7 +68,6 @@ import {
   purchasableFromCoachPackage,
   reconcileIntentTerms,
   saleKindOf,
-  trialFirstChargeDate,
   type PurchasablePackage,
   type SaleKind,
 } from "../lib/planTerms";
@@ -141,7 +140,6 @@ export interface UsePackagePurchaseOptions {
   shareToken?: string | null;
   /** B-PACKAGE-135: the coach code a client with no coach joins through (both intents). */
   joinCode?: string | null;
-  now?: () => Date;
 }
 
 export const PLAN_POLL_DELAYS_MS = [
@@ -502,20 +500,15 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         plan.currency || pkg.currency,
       );
       if (trial || plan.state === "trialing") {
+        // The server's date only (the plan, else the quote); never worked out.
         const date =
-          dateCopy(plan.trialEndsAt) ??
-          formatPlanDate(
-            trialFirstChargeDate(
-              pkg.trialDays,
-              (optsRef.current.now ?? (() => new Date()))(),
-            ),
-          );
+          dateCopy(plan.trialEndsAt) ?? dateCopy(pkg.quote?.firstChargeAt);
         return {
           kind: "trial",
           title: PACKAGE_PAYMENT_COPY.successTrialTitle,
           body: PACKAGE_PAYMENT_COPY.successBody(
             plan.packageName || pkg.name,
-            PACKAGE_PAYMENT_COPY.firstChargeOn(amount, date),
+            date ? PACKAGE_PAYMENT_COPY.firstChargeOn(amount, date) : null,
           ),
         };
       }
@@ -915,14 +908,27 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         };
         const cur = backendFieldOf(err, "currency");
         const iv = backendFieldOf(err, "interval");
+        const currency =
+          typeof cur === "string" && /^[a-z]{3}$/i.test(cur)
+            ? cur.toLowerCase()
+            : pkg.currency;
+        // BILLQUOTE-M: the body's today's charge is the no-trial one; the old
+        // quote no longer holds, so a trial or an unknown amount shows none.
+        const today = int("first_charge_cents", 0);
         const adopted: PurchasablePackage = {
           ...pkg,
           amountCents: fromBody,
           oneTimeCents: int("one_time_cents", 0) ?? pkg.oneTimeCents,
-          currency:
-            typeof cur === "string" && /^[a-z]{3}$/i.test(cur)
-              ? cur.toLowerCase()
-              : pkg.currency,
+          currency,
+          quote:
+            today !== null && pkg.trialDays === 0
+              ? {
+                  dueTodayCents: today,
+                  currency,
+                  firstChargeAt: null,
+                  trialEnd: null,
+                }
+              : null,
           interval:
             iv === "week" || iv === "month" || iv === "year"
               ? iv
@@ -1055,12 +1061,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       // the client saw. Any difference (trial no longer offered, today's
       // charge, one-time part, currency, cadence) is reviewed first; the
       // confirm replays the SAME key, so it is the same attempt.
-      const reconciled = reconcileIntentTerms(
-        pkg,
-        intent.plan,
-        intent.mode,
-        (optsRef.current.now ?? (() => new Date()))(),
-      );
+      const reconciled = reconcileIntentTerms(pkg, intent.plan, intent.mode);
       if (reconciled.inconsistent) {
         const n: PackagePaymentNotice = {
           cause: "intent_terms_inconsistent",
