@@ -217,7 +217,7 @@ describe('CoachAiSection', () => {
     const { findByTestId, getByText } = await renderWithNav(
       <CoachAiSection clientId="c1" clientName="Jane Doe" />,
     );
-    await waitFor(() => getByText('AI offline — owner action required'));
+    await waitFor(() => getByText('AI is temporarily unavailable. Try again later.'));
     const cta = await findByTestId('coach-ai-cta-workout');
     expect(cta.props.accessibilityState).toEqual(
       expect.objectContaining({ disabled: true }),
@@ -233,6 +233,24 @@ describe('CoachAiSection', () => {
     expect(cta.props.accessibilityState).toEqual(
       expect.objectContaining({ disabled: false }),
     );
+  });
+
+  it.each(['workout', 'meal', 'insight'])('%s explains service unavailability without operator instructions', async (mode) => {
+    mockedGet.mockResolvedValue(ok({ ready: true }));
+    mockedPost.mockRejectedValueOnce({ response: { status: 503, data: { error: 'ai_disabled' } } });
+    const screen = await renderWithNav(
+      <CoachAiSection clientId="c1" clientName="Test client" clientAllergies={[]} clientDietaryRestrictions={[]} />,
+    );
+    const cta = await screen.findByTestId(`coach-ai-cta-${mode}`);
+    await waitFor(() => expect(cta.props.accessibilityState.disabled).toBe(false));
+    await fireEvent.press(cta);
+    await fireEvent.press(screen.getByText('Generate'));
+    expect(await screen.findByText('AI is temporarily unavailable. Try again later.')).toBeTruthy();
+    expect(mockedPost).toHaveBeenCalledWith(
+      `/coach/ai/${mode === 'workout' ? 'workout-program' : mode === 'meal' ? 'meal-plan' : 'client-insight'}`,
+      expect.objectContaining({ clientId: 'c1' }), expect.any(Object),
+    );
+    expect(screen.queryByText(/owner action|API_KEY|status code/)).toBeNull();
   });
 });
 

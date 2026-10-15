@@ -38,6 +38,7 @@ jest.mock('../../../services/api', () => ({
   default: { post: jest.fn(), get: jest.fn(), delete: jest.fn() },
   profileApi: { get: jest.fn(async () => ({ data: {} })) },
   coachApi: { getClients: jest.fn(async () => ({ data: [] })) },
+  practiceTypeApi: { get: jest.fn(async () => ({ data: { practice_type: null } })) },
   notificationsApi: {
     getPreferences: jest.fn(async () => ({ data: {} })),
     updatePreferences: jest.fn(async () => ({ data: {} })),
@@ -123,6 +124,7 @@ jest.mock('../settings/BillingSection', () => ({ BillingSection: () => null }));
 jest.mock('../settings/DangerZone', () => ({ DangerZone: () => null }));
 
 import CoachSettings from '../SettingsScreen';
+import { practiceTypeApi } from '../../../services/api';
 import { AI_CREDITS_LOAD_FAILED, AI_CREDITS_USED_BY } from '../settings/AICreditsRow';
 
 const getClients = coachApi.getClients as jest.Mock;
@@ -171,6 +173,7 @@ function SettingsStack() {
   return (
     <Settings.Navigator screenOptions={{ headerShown: false }}>
       <Settings.Screen name="SettingsHome" component={CoachSettings} />
+      <Settings.Screen name="BothPillars" component={() => <Text>Cross pillar destination</Text>} />
     </Settings.Navigator>
   );
 }
@@ -202,9 +205,36 @@ beforeEach(() => {
   getClients.mockReset();
   getClients.mockImplementation(async () => ({ data: [] }));
   jest.replaceProperty(featureFlags, 'romanChat', false);
+  jest.mocked(practiceTypeApi.get).mockReset().mockResolvedValue({ data: { practice_type: null } } as Awaited<ReturnType<typeof practiceTypeApi.get>>);
 });
 
 afterEach(() => jest.restoreAllMocks());
+
+describe('Both pillars entry', () => {
+  it.each(['fitness_only', 'finance_only', null] as const)('hides the entry for %s', async (practice_type) => {
+    jest.mocked(practiceTypeApi.get).mockResolvedValue({ data: { practice_type } } as Awaited<ReturnType<typeof practiceTypeApi.get>>);
+    const screen = await mount();
+    await waitFor(() => expect(practiceTypeApi.get).toHaveBeenCalled());
+    expect(screen.queryByText('Both pillars view')).toBeNull();
+    expect(screen.queryByText('Cross-pillar practice')).toBeNull();
+  });
+
+  it('hides the entry while unknown or after a failed practice read', async () => {
+    jest.mocked(practiceTypeApi.get).mockRejectedValueOnce(new Error('Network Error'));
+    const screen = await mount();
+    expect(screen.queryByText('Both pillars view')).toBeNull();
+    await waitFor(() => expect(practiceTypeApi.get).toHaveBeenCalled());
+    expect(screen.queryByText('Both pillars view')).toBeNull();
+  });
+
+  it('opens the registered BothPillars route for a both practice', async () => {
+    jest.mocked(practiceTypeApi.get).mockResolvedValue({ data: { practice_type: 'both' } } as Awaited<ReturnType<typeof practiceTypeApi.get>>);
+    const screen = await mount();
+    await fireEvent.press(await screen.findByLabelText('Open the cross-pillar coach surface'));
+    expect(ref.getCurrentRoute()?.name).toBe('BothPillars');
+    expect(screen.getByText('Cross pillar destination')).toBeTruthy();
+  });
+});
 
 describe('Notification preferences row', () => {
   it('opens the coach NotificationPreferences screen, with the Clients list below it', async () => {
