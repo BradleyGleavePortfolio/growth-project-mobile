@@ -1,6 +1,6 @@
 // Round 3: "More" tab screen — houses destinations that used to be separate bottom tabs
 // (Recipes, Fasting, Community, Profile). Consolidation addresses iOS HIG 5-tab cap.
-// Every previously-reachable screen remains reachable via this list.
+// Legacy Guidance is retired; Roman is the only AI chat entry.
 
 import React, { useMemo } from 'react';
 import {
@@ -99,12 +99,12 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
 
 const MORE_ITEMS: MoreItem[] = [
   {
-    icon: 'chatbubble-ellipses-outline',
-    label: 'Guidance',
-    description: 'Open AI guidance',
+    icon: 'people-outline',
+    label: 'Community',
+    description: 'Connect with other members',
     section: 'Guidance and community',
-    target: { type: 'stack', screen: 'AIGuide' },
-    a11yHint: 'Opens AI guidance',
+    target: { type: 'stack', screen: 'Community' },
+    a11yHint: 'Opens the community feed',
   },
   {
     icon: 'ribbon-outline',
@@ -129,14 +129,6 @@ const MORE_ITEMS: MoreItem[] = [
     section: 'Food and preparation',
     target: { type: 'stack', screen: 'Fast' },
     a11yHint: 'Opens the fasting tracker',
-  },
-  {
-    icon: 'people-outline',
-    label: 'Community',
-    description: 'Connect with other members',
-    section: 'Guidance and community',
-    target: { type: 'stack', screen: 'Community' },
-    a11yHint: 'Opens the community feed',
   },
   {
     icon: 'person-outline',
@@ -209,7 +201,6 @@ const ROMAN_MORE_ITEM: MoreItem = {
   label: 'Roman',
   // Roman is not "your AI" — he is Roman, shared across surfaces (identity
   // spec). Prototype 67 (ROMAN-ROOM-133): the row says what Roman is for.
-  // The AI guidance row stays beside it (owner 16:20: keep button counts).
   description: 'Ask Roman about your plan and targets',
   section: 'Guidance and community',
   target: { type: 'stack', screen: 'RomanChat' },

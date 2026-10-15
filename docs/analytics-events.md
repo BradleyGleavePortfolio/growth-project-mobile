@@ -34,7 +34,11 @@ The following keys are **automatically stripped** from all event properties befo
 | Event | Constant | Properties |
 |---|---|---|
 | `app_opened` | `APP_OPENED` | `cold_start: boolean` |
-| `app_backgrounded` | `APP_BACKGROUNDED` | — |
+| `app_backgrounded` | `APP_BACKGROUNDED` | `app_version`, `build` |
+| `app_installed` | `APP_INSTALLED` | `app_version`, `build` |
+| `app_updated` | `APP_UPDATED` | `app_version`, `build`, `previous_version`, `previous_build` |
+
+The SDK's own lifecycle events stay off (its app-open event carries the opening link). Install and update are detected from the last version and build stored on the device (`gp_last_app_version`). No lifecycle event carries a link, token or screen text.
 
 ### Onboarding
 
@@ -127,6 +131,7 @@ The following keys are **automatically stripped** from all event properties befo
 | Event | File |
 |---|---|
 | `APP_OPENED` | `App.tsx` — initApp() |
+| `APP_INSTALLED`, `APP_UPDATED`, `APP_BACKGROUNDED` | `src/services/appLifecycleEvents.ts`, from `App.tsx` |
 | `LOGIN_COMPLETED` | `src/screens/auth/LoginScreen.tsx` |
 | `WORKOUT_COMPLETED` | `src/screens/client/ActiveWorkoutScreen.tsx` |
 | `MEAL_LOGGED` | `src/screens/client/LogScreen.tsx` |

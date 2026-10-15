@@ -15,7 +15,8 @@
  *       backend route). Receipt header (package name, amount paid,
  *       recurring next-charge) is reconciled from
  *       `clientPaymentsApi.getPurchases()` + `getPackages()` because the
- *       drops endpoint intentionally does not carry receipt fields.
+ *       drops endpoint intentionally does not carry receipt fields. The
+ *       amount paid is the purchase row's own amount_cents + currency.
  *
  * Sections:
  *   • Receipt header — package name, amount paid, "Next charge {date}"
@@ -105,9 +106,16 @@ function buildReceipt(
     ? packages.find((p) => p.id === purchase.package_id) ?? null
     : null;
   const packageName = packageNameOverride ?? pkg?.name ?? null;
-  const amountDisplay = pkg
-    ? formatCurrencyCents(Math.round(pkg.price * 100), pkg.currency)
-    : null;
+  // "{amount} paid" is what the server recorded for THIS purchase, never the
+  // package's current price. No recorded amount, or a trial that has charged
+  // nothing yet, shows no amount rather than a guessed one.
+  const amountDisplay =
+    purchase &&
+    Number.isInteger(purchase.amount_cents) &&
+    purchase.currency &&
+    purchase.status !== 'trialing'
+      ? formatCurrencyCents(purchase.amount_cents, purchase.currency)
+      : null;
   // `interval` on the CoachPackage is the source of truth for recurring vs
   // one_time (the purchase row carries the period_end but not the type).
   const recurring = !!pkg && pkg.type === 'recurring';
@@ -360,7 +368,7 @@ function PurchaseUnpackContent({
         <>
           <Text style={styles.sectionTitle}>Ready now</Text>
           <Text style={styles.sectionSub}>
-            Ready to use — tap to open.
+            Ready to use. Tap to open.
           </Text>
           {visible.unlocked.map((drop) => (
             <DropRow
