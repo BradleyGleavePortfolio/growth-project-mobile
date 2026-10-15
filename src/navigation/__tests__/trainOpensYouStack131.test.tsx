@@ -61,8 +61,8 @@ for (const match of navSource.matchAll(/^import (?!type\b)[^;]*? from '(\.\.\/sc
   const modulePath = match[1];
   if (modulePath === '../screens/client/WorkoutScreen') continue;
   jest.doMock(`../${modulePath}`, () => ({
-    __esModule: true, default: ({ onSaved }: { onSaved?: () => void }) =>
-      <Text testID="destination" onPress={onSaved}>{modulePath}</Text>,
+    __esModule: true, default: ({ onSaved, suspended }: { onSaved?: () => void; suspended?: boolean }) =>
+      <Text testID="destination" onPress={onSaved} accessibilityState={{ disabled: suspended }}>{modulePath}</Text>,
   }));
 }
 jest.doMock('../CommunityNavigator', () => ({
@@ -125,6 +125,19 @@ describe('Train opens coach workouts above the You menu (m#542 B1 / B-542-SOL-13
 });
 
 describe('Day One save callbacks through the real client navigator', () => {
+  it('suspends only the meal sheet while the saved note is visible', async () => {
+    const ref = createNavigationContainerRef<Record<string, object | undefined>>();
+    const view = await render(
+      <NavigationContainer ref={ref}><ClientNavigator day1NoteVisible /></NavigationContainer>,
+    );
+    await act(async () => ref.navigate('Log'));
+    expect((await view.findByText('../screens/client/LogScreen')).props.accessibilityState.disabled).toBe(true);
+    await view.rerender(
+      <NavigationContainer ref={ref}><ClientNavigator day1NoteVisible={false} /></NavigationContainer>,
+    );
+    expect(view.getByText('../screens/client/LogScreen').props.accessibilityState.disabled).toBe(false);
+  });
+
   it.each([
     ['first_meal', 'Log', undefined, '../screens/client/LogScreen'],
     ['first_checkin', 'Home', { screen: 'Habits' }, '../screens/client/HabitsScreen'],

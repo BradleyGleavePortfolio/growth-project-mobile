@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Linking, AppState } from 'react-native';
+import { Linking, AppState, View } from 'react-native';
 import { logger } from '../utils/logger';
 import { triggerSync as triggerWorkoutSync } from '../offline';
 import {
@@ -977,15 +977,17 @@ export default function RootNavigator() {
     return <StartupErrorScreen kind="device" onRetry={retryStartup} />;
   }
 
-  // Phase 7A: Day1WinScreen renders outside NavigationContainer because it is
-  // a one-time interstitial, not a navigable screen. It is shown once, on
-  // first student boot, then replaced by ClientNavigator.
-  if (authState === 'day1win') {
-    return <Day1WinScreen onComplete={handleDay1WinComplete}
-      savedWin={day1SavedWin && day1SavedWin.userId === sessionUserId ? day1SavedWin.winType : undefined} />;
+  const savedWin = day1SavedWin?.userId === sessionUserId ? day1SavedWin?.winType : undefined;
+  const showingSavedWin = authState === 'day1win' && !!savedWin;
+  // Initial selection needs no navigator. After a save, keep the logger
+  // mounted behind the note so Continue restores its meal and feedback.
+  if (authState === 'day1win' && !savedWin) {
+    return <Day1WinScreen onComplete={handleDay1WinComplete} />;
   }
 
   return (
+    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, display: showingSavedWin ? 'none' : 'flex' }}>
     <NavigationContainer
       ref={navigationRef}
       onReady={() => { flushPendingDay1Target(); flushPendingPushTap(); }}
@@ -1049,7 +1051,7 @@ export default function RootNavigator() {
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
-            <ClientNavigator onDay1Saved={handleDay1Saved} />
+            <ClientNavigator onDay1Saved={handleDay1Saved} day1NoteVisible={showingSavedWin} />
           </DunningLockoutProvider>
           <PackageSelectionSheet
             visible
@@ -1079,11 +1081,16 @@ export default function RootNavigator() {
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
-            <ClientNavigator onDay1Saved={handleDay1Saved} />
+            <ClientNavigator onDay1Saved={handleDay1Saved} day1NoteVisible={showingSavedWin} />
           </DunningLockoutProvider>
         </EntitlementProvider>
       )}
       </PersistedQueryCacheGate>
     </NavigationContainer>
+    </View>
+    {showingSavedWin ? (
+      <Day1WinScreen onComplete={handleDay1WinComplete} savedWin={savedWin} />
+    ) : null}
+    </View>
   );
 }

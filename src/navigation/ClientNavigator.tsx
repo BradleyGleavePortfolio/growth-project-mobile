@@ -162,6 +162,7 @@ import type { WinType } from '../services/firstWinApi';
 
 interface Day1SaveProps {
   onDay1Saved?: (winType: WinType) => void;
+  day1NoteVisible?: boolean;
 }
 
 // B22/B24 (b#888) and B1 (owner ruling 10-08 23:5x, m#650): logging,
@@ -678,7 +679,7 @@ const TUTORIAL_TABS = [
   ...(featureFlags.communityTab ? ['CommunityTab'] : []),
 ];
 
-export default function ClientNavigator({ onDay1Saved }: Day1SaveProps = {}) {
+export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1SaveProps = {}) {
   const { semanticColors: sc } = useTheme();
   const insets = useSafeAreaInsets();
   // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
@@ -790,7 +791,7 @@ export default function ClientNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           ),
         }}
       >
-        {({ navigation }) => <ProtectedLogScreen onSaved={() => {
+        {({ navigation }) => <ProtectedLogScreen suspended={day1NoteVisible} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_meal');
         }} />}
       </Tab.Screen>
