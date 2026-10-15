@@ -2,7 +2,7 @@
 
 **These are React Native Web renders, not iPhone or Android device proof.** Native Dynamic Type, VoiceOver and TalkBack, and physical haptics are not shown; check on a TestFlight build before C3 ships the parts on a screen.
 
-The gallery mounts the real `SegmentedRing`, `DayMark` and `PeakStar` from `src/ui/charts/StyleCMarks.tsx` at code commit `b06e28d6d4ce619fca3e90a3e3ef0b75cc646644` (file SHA-256 `badf3a5c0fbfcc8cedc9fb3b24b860895f5a9f06905efa8c1bd28f147c1c2e77`) with the real `lightTokens` and `darkTokens`. No screen uses the parts yet. Captions such as "Masthead", "Card", "2/4", "155 x 6 lb" and "BEST EVER" and the fixture labels are gallery text, not app wording.
+The gallery mounts the real `SegmentedRing`, `DayMark` and `PeakStar` from `src/ui/charts/StyleCMarks.tsx` at code commit `b3c1946a62eeae933193b7c5a05ea5fbc376f513` (file SHA-256 `d0197907ea58b05a50647cbeb3507c748f20fabe60981e8be1bb01ee43059ca8`) with the real `lightTokens` and `darkTokens`. No screen uses the parts yet. Captions such as "Masthead", "Card", "2/4", "155 x 6 lb" and "BEST EVER" and the fixture labels are gallery text, not app wording.
 
 ## Method
 
