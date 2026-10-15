@@ -212,11 +212,12 @@ const styles = StyleSheet.create({
   tabBarWrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  // COACHTABS: the gear ends the row; its glyph's right edge sits on the page gutter.
+  // COACHTABS: the gear ends the row, its glyph 15 pt from the edge like a header button.
+  // The labels keep at least 6 pt apart; at large text the row scrolls, as before.
   tabBarWithGear: { flexDirection: 'row', alignItems: 'center' },
   tabScroll: { flex: 1 },
-  tabBarBeforeGear: { paddingRight: 12 },
-  gear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: layout.gutter - 11 },
+  tabBarBeforeGear: { paddingRight: 0, gap: 6 },
+  gear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   // SHOTS-134B f: the five tabs share the content width (gutter to gutter) instead of
   // running off the right edge; it still scrolls at the largest text sizes.
   tabBar: {
