@@ -178,7 +178,7 @@ export type CoachTabParamList = {
 
 /** One Roman safety alert as CoachSafetyAlert shows it (its action queue row). */
 export type SafetyAlertParams = {
-  alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply';
+  alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply' | 'roman_crisis_reply';
   clientId: string;
   clientName: string;
   quote: string | null;

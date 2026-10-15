@@ -232,7 +232,7 @@ export default function ProgramEditorScreen({
   const promote = () => {
     Alert.alert(
       "Promote to a named regime?",
-      "Named regimes appear in the regime list for packages and the clinic. The program itself does not change.",
+      "Named regimes appear in the regime list for your packages. The program itself does not change.",
       [
         { text: "Not now", style: "cancel" },
         {
