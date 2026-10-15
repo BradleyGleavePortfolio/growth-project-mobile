@@ -7,7 +7,9 @@ import { useCoachStore } from '../store/coachStore';
 import { coachApi } from '../services/api';
 import type { Props } from '../screens/coach/client-detail/types';
 import { testColors } from '../screens/client/wearables/recoveryTestColors';
+import { HapticService } from '../ui/haptics/haptics.service';
 
+jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) =>
   jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, name) }));
 jest.mock('react-native', () => {
@@ -31,9 +33,24 @@ jest.mock('../config/featureFlags', () => ({ featureFlags: {} }));
 jest.mock('../services/api', () => ({ coachApi: {
   getClientSummary: jest.fn(), getClients: jest.fn(), archiveClient: jest.fn(), unarchiveClient: jest.fn(),
 } }));
-jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: () => null }));
+let mockShowSummary = false;
+jest.mock('../screens/coach/client-detail/SummaryTab', () => ({
+  SummaryTab: (props: object) => mockShowSummary
+    ? jest.requireActual('react').createElement(jest.requireActual('../screens/coach/client-detail/SummaryTab').SummaryTab, props)
+    : null,
+}));
+jest.mock('../screens/coach/client-detail/ConsultationSummaryCard', () => ({ ConsultationSummaryCard: () => null }));
+jest.mock('../hooks/useMacros', () => ({ useCurrentMacrosForClient: () => ({ data: null }) }));
+jest.mock('../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => ({}) }));
+jest.mock('../lib/money/headCoachRole', () => ({ useHeadCoachHandlesMoney: () => false }));
+jest.mock('../components/coach/CoachAiSection', () => ({ __esModule: true, default: () => null }));
+jest.mock('../components/coach/ai-entry/AdjustForClient', () => ({
+  AdjustForClientEntry: ({ onOpened }: { onOpened: (id: string) => void }) =>
+    jest.requireActual('react').createElement(jest.requireActual('react-native').Button, {
+      title: 'Open client copy', onPress: () => onOpened('copied-plan-test'),
+    }),
+}));
 jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: () => null }));
-jest.mock('../screens/coach/client-detail/WorkoutsTab', () => ({ WorkoutsTab: () => null }));
 jest.mock('../screens/coach/client-detail/MealPlanTab', () => ({ MealPlanTab: () => null }));
 jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: () => null }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => null }));
@@ -68,6 +85,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   archived = false;
   mockPaymentsOn = false;
+  mockShowSummary = false;
   useCoachStore.getState().reset();
   (coachApi.getClientSummary as jest.Mock).mockReset().mockResolvedValue({ data: summary });
   clients.mockReset().mockImplementation(async () => ({ data: [row()] }));
@@ -77,6 +95,19 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
+
+it('Summary Workouts opens this client Workouts tab and its builder path carries the client and copied plan', async () => {
+  mockShowSummary = true;
+  const view = await render(<ClientDetailScreen {...props} />);
+  await fireEvent.press(await view.findByLabelText('Open client workouts'));
+  expect(HapticService.selection).toHaveBeenCalledTimes(1);
+  expect(view.getByText('Recent workouts')).toBeTruthy();
+  expect(navigate).not.toHaveBeenCalled();
+  await fireEvent.press(view.getByText('Open client copy'));
+  expect(navigate).toHaveBeenCalledWith('CoachWorkoutBuilder', {
+    planId: 'copied-plan-test', openAi: true, clientId: 'client-test', clientName: 'Test client',
+  });
+});
 
 it('uses the roster archive status when the current summary has no client object', async () => {
   archived = true;
