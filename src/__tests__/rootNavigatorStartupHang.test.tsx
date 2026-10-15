@@ -29,6 +29,7 @@ jest.mock('../lib/startupTimebox', () => {
 const mockApiGet = jest.fn();
 jest.mock('../services/authActions', () => ({ signOut: jest.fn(async () => {}) }));
 jest.mock('../services/api', () => ({
+  authApi: { me: async () => ({ data: { profile: { date_of_birth: '1990-01-01' } } }) },
   __esModule: true,
   default: {
     get: (...args: unknown[]) => mockApiGet(...args),
