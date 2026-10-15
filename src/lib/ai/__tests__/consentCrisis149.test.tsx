@@ -17,7 +17,7 @@ import AiConsentSheet from '../../../components/ai/AiConsentSheet';
 import RomanAiConsentScreen from '../../../screens/settings/RomanAiConsentScreen';
 import ConsultationFlow, { type ConsultationApi } from '../../../screens/consultation/ConsultationFlow';
 import { ROMAN_CHATS_COPY } from '../../../screens/settings/romanChatsCopy';
-import { trustRomanLine } from '../../../screens/trustCenterSharing';
+import { trustCoachLine, trustRomanLine } from '../../../screens/trustCenterSharing';
 import { NOW } from '../../consultation/__fixtures__/consultFixtures';
 import { aiStatus, makeApi, resetStores } from '../../consultation/__fixtures__/flowHarness';
 import { isLiveRomanGrant, resetAiLedgerWritesForTests, romanFamily, romanFamilyOf, romanGrantBody } from '../../consultation/aiConsent';
@@ -297,6 +297,11 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
         'screens/settings/RomanConversationsScreen.tsx',
         'screens/trustCenterSharing.ts',
       ]);
+      // The other K1 / K2 texts state no coach promise, so no exception is added to them (and no sentence follows).
+      expect(filesWith(/clientPrivacyText\(/)).toEqual(['lib/ai/aiCoachless.ts', 'screens/TrustCenterScreen.tsx', 'screens/client/SettingsScreen.tsx', 'screens/settings/RomanConversationsScreen.tsx']);
+      for (const t of [ROMAN_CHATS_COPY.confirmAllBody, "Allow or withdraw Roman and your coach's AI tools using your information", `${trustCoachLine({ kind: 'unread' })}`]) {
+        expect(withSafetyException(t, true)).toBe(t);
+      }
       // Ledger readers: the three that show its text ask by the flag; the gate and the join offer read only liveness
       // (a live v8 / v9 grant reads its own copies under any ask) and open the sheet; the drain only withdraws.
       expect(filesWith(/api\/aiConsentApi'/)).toEqual([
