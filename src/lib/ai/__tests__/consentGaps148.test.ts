@@ -78,7 +78,7 @@ const ROWS: Row[] = [
       expect(clientPrivacyText(ROMAN_CHATS_COPY.intro, true)).toBe(
         'Your conversations with Roman are kept until you delete them or your account. Deleting a conversation removes it for good.',
       );
-      expect(source('screens/settings/RomanConversationsScreen.tsx')).toContain('{clientPrivacyText(ROMAN_CHATS_COPY.intro)}');
+      expect(source('screens/settings/RomanConversationsScreen.tsx')).toContain('{clientPrivacyText(crisisText(ROMAN_CHATS_COPY.intro))}');
     },
   },
   {

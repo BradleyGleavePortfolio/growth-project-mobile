@@ -45,6 +45,7 @@ import { track } from '../lib/analytics';
 import { dataExportApi } from '../services/dataExportApi';
 import { readCoachSharing } from '../api/coachSharingApi';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useRomanCrisisSentence } from '../lib/romanCrisisSentence';
 import { isCoachLikeRole } from '../lib/roleSelectionGate';
 import { trustCoachLine, trustRomanLine } from './trustCenterSharing';
 import { clientPrivacyText } from '../lib/ai/aiCoachless';
@@ -289,6 +290,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [exportBusy, setExportBusy] = useState(false);
   const user = useCurrentUser();
+  const crisisText = useRomanCrisisSentence();
   const userId = user?.id ?? null;
   const coachAccount = isCoachLikeRole(user?.role);
   const cachedCoach = Boolean(user?.coach_id);
@@ -481,7 +483,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <BulletItem text="You — always" />
           {coachLine ? <BulletItem text={coachLine} /> : null}
           <BulletItem text="Members of your community spaces — the content you choose to share there. If you opt in to a leaderboard, other clients of your coach can also see your display name and participation score." />
-          <BulletItem text={trustRomanLine(coachView)} />
+          <BulletItem text={crisisText(trustRomanLine(coachView))} />
           <BulletItem text="Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy" />
           <BulletItem text="Your data is never sold, and your health data is never used for advertising" />
 

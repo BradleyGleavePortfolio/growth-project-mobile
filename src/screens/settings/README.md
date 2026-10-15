@@ -98,6 +98,8 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 **Why:** owner decision 2026-10-01 20:32 and ruling OR-110-1. Roman chats are kept until the client deletes them or their account, and the box-2 consent copy (`client-ai-v4`) says exactly that, so every chat must be findable and deletable. Roman chats are never visible to coaches.
 
+**Crisis sentence (CRISISAPP-M, owner CRISIS-APP-COPY op 1):** the intro states the Roman safety-reply exception (57c). While the server's `FEATURE_ROMAN_CRISIS_ALERT` is on (`roman_crisis_alert` in `GET /me/feature-flags`, read through `useFeatureFlags`; absent, loading or failed = off), the approved crisis sentence follows it directly, for a client with a coach only (`useRomanCrisisSentence` in `src/lib/romanCrisisSentence.ts` decides from the account; a coach account and a client with no coach never get it; a failed refresh reads off even after an earlier true); while it is off the intro is exactly as before. The Trust Center Roman bullet does the same. Test: `src/lib/__tests__/romanCrisisSentence.test.tsx` (both places x three accounts x on, off, failed read).
+
 **Flow**
 
 1. The list (`useRomanChats.ts`) loads `GET /roman/sessions` (30 per page, newest first, keyset `cursor`), shows each chat's local start date and time and message count (coach-tool chats are labelled). Two chats can start on the same local date (the backend keeps one chat per UTC day), so the start time is on every row, the transcript title and the permanent-delete confirm (B-331-1); the confirm also names the message count and, for coach tools, where it happened (`chatIdentity`), and pages with "Show older conversations".

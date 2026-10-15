@@ -37,6 +37,7 @@ import { typography } from '../../theme/tokens';
 import type { RomanChatsApi, RomanChatSummary } from '../../api/romanChatsApi';
 import type { AccountBinding } from '../../services/accountBinding';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { useRomanCrisisSentence } from '../../lib/romanCrisisSentence';
 import { useRomanChats, type RomanChatsNotice } from './useRomanChats';
 import { clientPrivacyText } from '../../lib/ai/aiCoachless';
 import RomanChatsConfirmSheet from './RomanChatsConfirmSheet';
@@ -105,6 +106,7 @@ export default function RomanConversationsScreen({
   const allOpen = confirmAll !== null && binding !== null && confirmAll.binding === binding;
   const network = useNetworkStatus();
   const online = isEffectivelyOnline(network);
+  const crisisText = useRomanCrisisSentence();
   const wasOnline = useRef(online);
 
   // Back online after an offline load failure: read the list again.
@@ -215,7 +217,7 @@ export default function RomanConversationsScreen({
 
   const intro = (
     <Text style={styles.body} testID="roman-chats-intro">
-      {clientPrivacyText(ROMAN_CHATS_COPY.intro)}
+      {clientPrivacyText(crisisText(ROMAN_CHATS_COPY.intro))}
     </Text>
   );
 

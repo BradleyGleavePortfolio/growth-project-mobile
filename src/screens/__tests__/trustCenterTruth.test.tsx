@@ -32,6 +32,7 @@ jest.mock('../../services/dataExportApi', () => ({
 }));
 let mockUser: CurrentUser | null = null;
 jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+jest.mock('../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 
 const netinfo = jest.requireMock('@react-native-community/netinfo');
 const TrustCenterScreen = require('../TrustCenterScreen').default;
