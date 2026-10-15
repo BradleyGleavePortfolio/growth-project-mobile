@@ -1130,7 +1130,7 @@ const makeStyles = (colors: ThreadColors) => {
   },
   sendBtnDisabled: { backgroundColor: colors.disabledBg },
   // Style B (C3B-THREAD): no hairlines, a cream field on the bone page.
-  bChatList: { flexGrow: 1, paddingHorizontal: 16 },
+  bChatList: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: 16 },
   bInputBar: { borderTopWidth: 0, backgroundColor: colors.background, paddingTop: 8 },
   bChatInput: { backgroundColor: palette.cream, borderWidth: 0 },
   });

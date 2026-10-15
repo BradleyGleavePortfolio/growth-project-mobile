@@ -75,7 +75,7 @@ const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 const readAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 const row = (o: Record<string, unknown>) => ({ coach_id: 'coach-9', client_id: 'client-1', created_at: recent, ...o });
 const axiosErr = () => Object.assign(new Error('request failed'), { isAxiosError: true });
-const flat = (el: { props: { style: unknown } }) => StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
+const flat = (el: { props: object }) => StyleSheet.flatten((el.props as { style?: never }).style) as Record<string, unknown>;
 const named = { data: { coach_id: 'coach-9', coach_name: 'Coach Nine' } };
 let alertSpy: jest.SpyInstance;
 
