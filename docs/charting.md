@@ -2,6 +2,10 @@
 
 This document defines when to use each chart variant, the theming rules, and performance notes for the TGP chart library (`src/ui/charts`).
 
+**Owner rule (10-15): lines or bars only.** No chart draws a filled area,
+gradient under a line, or glow. Use forest as the lead on the tan base; one
+token-sourced accent may mark a record. Keep scrub/tap inspection.
+
 ---
 
 ## Chart variants
@@ -30,21 +34,27 @@ This document defines when to use each chart variant, the theming rules, and per
 - Absolute magnitude per category matters as much as relative differences.
 
 **When NOT to use it:**
-- Time-series data with many points — use TgpLineChart or TgpAreaChart.
+- Time-series data with many points — use TgpLineChart.
 - Inline cards — use TgpSparkline.
 
 ---
 
 ### TgpAreaChart
 
-**Use for:** Trends where the volume under the curve carries meaning (e.g. cumulative calories, step count accumulation).
+Legacy export retained for compatibility. It now draws an unfilled line and
+keeps its existing pan tooltip, axes, labels and empty state. Prefer
+TgpLineChart for new continuous trends and TgpBarChart for daily totals.
 
-**When to choose it:**
-- The "total area" metaphor reinforces the data story.
-- Pan gesture cross-hair is useful for exploration.
+### Wearable charts
 
-**When NOT to use it:**
-- Datasets where the filled region causes visual clutter (overlapping series).
+`RevolutGlowChart` is also a legacy name, not a visual treatment: forest
+line/bars and a plain tracking dot only, no area or halo. MetricDetailScreen
+uses bars for day-bucketed sum metrics and a line for other readings;
+FitnessTrendCard uses bars for sum metrics (steps on Health & Fitness).
+HRV remains a line. Scrubbing still snaps once per day crossed and clears
+the selected readout on release; Reduce Motion snaps the dot instantly.
+Heart and Body use the shared unfilled TgpSparkline in forest.
+ProgressChartCard keeps its forest line and one gold record star, with no halo.
 
 ---
 
@@ -56,6 +66,7 @@ This document defines when to use each chart variant, the theming rules, and per
 - No labels, no axes, no tooltips — purely momentum/direction cue.
 - Maximum width: 120 px. Recommended: 60–80 px.
 - Never use as a standalone chart; always pair with a numeric label adjacent to it.
+- A single unfilled line; no area behind it.
 
 ---
 
@@ -66,7 +77,6 @@ All chart wrappers read colors from `useTheme().colors` (ThemeProvider). This en
 | Element               | Token                      | Fallback value |
 |-----------------------|----------------------------|---------------|
 | Line / bar fill       | `colors.primary`           | `#2C4A36`     |
-| Area fill             | `colors.primaryPale`       | `#D6E4DA`     |
 | Grid lines            | `colors.border`            | `#B08D57`     |
 | Axis labels           | `colors.textMuted`         | `#B1A89F`     |
 | Tooltip background    | `#F5EFE4` (bone — hardcoded) | —           |
@@ -93,7 +103,7 @@ All chart components accept a `themeOverride?: Partial<ThemeColors>` prop for on
 
 **Upgrade path (when victory-native ships Skia-v2 support):**
 1. Run `npx expo install victory-native @shopify/react-native-skia`.
-2. Replace the `react-native-svg` render internals in each `Tgp*` wrapper with the equivalent Victory Native XL component (`CartesianChart`, `Line`, `Area`, `Bar`).
+2. Replace the `react-native-svg` render internals in each `Tgp*` wrapper with the equivalent Victory Native XL component (`CartesianChart`, `Line`, `Bar`), keeping the no-area/no-gradient/no-glow rule.
 3. The public props interface (`data`, `height`, `themeOverride`) stays identical — screens importing from `src/ui/charts` need no changes.
 4. Remove the `react-native-svg` fallback comments.
 

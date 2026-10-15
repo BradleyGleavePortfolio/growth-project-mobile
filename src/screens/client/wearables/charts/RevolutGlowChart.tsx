@@ -1,13 +1,11 @@
 /**
- * RevolutGlowChart — the glow-drag chart primitive (brief §4.2, _uiux_paper
- * "Revolut Playbook").
+ * RevolutGlowChart — legacy name for the shared line/bar scrubber.
  *
  * A draggable thumb scrubs across a timeline; the selected datum lifts above
- * the line with a soft glow. Reusable for both buckets via the `tone` prop
- * (`warm` = H&F clay/amber, `cool` = S&R forest).
+ * a clean forest line or daily-total bars. No area, gradient or glow.
  *
  * Performance contract (#11 — NO jank):
- *   - The thumb position + glow are driven by Reanimated SHARED VALUES on the
+ *   - The thumb position is driven by Reanimated SHARED VALUES on the
  *     UI thread via `useAnimatedStyle`. We do NOT call `setState` on every
  *     gesture frame — that would marshal a JS round-trip per finger movement
  *     and drop frames.
@@ -17,13 +15,13 @@
  *     total, not one per frame.
  *
  * Accessibility / reduce-motion (#50 graceful degradation):
- *   - `reduceMotion` (passed in) disables the glow shadow and the thumb's
- *     spring — the thumb snaps instantly. The chart STILL renders and stays
+ *   - `reduceMotion` (passed in) makes the thumb snap instantly.
+ *     The chart STILL renders and stays
  *     fully scrubbable; we never hide data behind an animation.
  *   - Haptic selection feedback fires on snap-to-day, gated behind an
  *     availability check so it fails closed on web (no throw).
  *
- * This primitive renders ONLY the line + thumb + glow. The caller supplies the
+ * This primitive renders ONLY the line/bars + thumb. The caller supplies the
  * data and renders its own header / selected-value readout (so the readout can
  * live outside the SVG and use the app's typography).
  */
@@ -32,10 +30,8 @@ import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, {
   Circle,
-  Defs,
-  LinearGradient,
   Path,
-  Stop,
+  Rect,
   Line as SvgLine,
 } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -43,13 +39,12 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, withAlpha } from '../../../../theme/tokens';
-import { toneTokens, type BucketTone } from '../wearablesTheme';
-import { smoothAreaPath, smoothLinePath, type PathPoint } from './smoothPath';
+import type { BucketTone } from '../wearablesTheme';
+import { smoothLinePath, type PathPoint } from './smoothPath';
 
 export interface GlowChartPoint {
   /** X position is implicit (even spacing by index); Y is the metric value. */
@@ -63,6 +58,8 @@ export interface RevolutGlowChartProps {
   readonly tone: BucketTone;
   readonly height?: number;
   readonly reduceMotion: boolean;
+  /** Bars for daily totals; lines for point-in-time and averaged metrics. */
+  readonly variant?: 'line' | 'bar';
   /**
    * Called when the scrubber snaps to a new day index. Index is into `data`.
    * `null` means the scrubber was released / there is no selection.
@@ -88,17 +85,16 @@ function selectionHaptic(): void {
 
 export function RevolutGlowChart({
   data,
-  tone,
   height = 120,
   reduceMotion,
+  variant = 'line',
   onSelect,
   accessibilityLabel = 'Interactive trend chart',
 }: RevolutGlowChartProps) {
-  const toneTk = toneTokens(tone);
   const width = useSharedValue(0);
   const thumbX = useSharedValue(0);
   const thumbY = useSharedValue(0);
-  const glowOpacity = useSharedValue(0);
+  const active = useSharedValue(0);
   // Tracks the last day-index we emitted to JS so we only cross-thread when the
   // snapped column actually changes (NOT every gesture frame).
   const lastIndex = useSharedValue(-1);
@@ -116,11 +112,11 @@ export function RevolutGlowChart({
       return { minY: 0, rangeY: 1, count: 0 };
     }
     const ys = data.map((d) => d.value);
-    const lo = Math.min(...ys);
-    const hi = Math.max(...ys);
+    const lo = variant === 'bar' ? 0 : Math.min(...ys);
+    const hi = variant === 'bar' ? Math.max(1, ...ys) : Math.max(...ys);
     const range = hi - lo || 1;
     return { minY: lo, rangeY: range, count: data.length };
-  }, [data]);
+  }, [data, variant]);
 
   const plotH = height - PAD_Y * 2;
 
@@ -137,11 +133,14 @@ export function RevolutGlowChart({
     (x: number): number => {
       'worklet';
       if (count <= 1) return 0;
+      if (variant === 'bar') {
+        return Math.min(count - 1, Math.max(0, Math.floor(x / Math.max(1, width.value) * count)));
+      }
       const usable = Math.max(1, width.value - PAD_X * 2);
       const ratio = Math.min(1, Math.max(0, (x - PAD_X) / usable));
       return Math.round(ratio * (count - 1));
     },
-    [count, width],
+    [count, width, variant],
   );
 
   const applyIndex = useCallback(
@@ -149,16 +148,18 @@ export function RevolutGlowChart({
       'worklet';
       if (count === 0) return;
       const usable = Math.max(1, width.value - PAD_X * 2);
-      const x = PAD_X + (count <= 1 ? 0 : (index / (count - 1)) * usable);
+      const x = variant === 'bar'
+        ? (index + 0.5) / count * width.value
+        : PAD_X + (count <= 1 ? 0 : (index / (count - 1)) * usable);
       const value = data[index]?.value ?? minY;
       const y = PAD_Y + plotH - ((value - minY) / rangeY) * plotH;
-      // Spring for polish; instant when reduce-motion is on.
+      // Restrained tracking; instant when reduce-motion is on.
       if (reduceMotion) {
         thumbX.value = x;
         thumbY.value = y;
       } else {
-        thumbX.value = withSpring(x, { damping: 18, stiffness: 220 });
-        thumbY.value = withSpring(y, { damping: 18, stiffness: 220 });
+        thumbX.value = withTiming(x, { duration: 120 });
+        thumbY.value = withTiming(y, { duration: 120 });
       }
       if (index !== lastIndex.value) {
         lastIndex.value = index;
@@ -177,6 +178,7 @@ export function RevolutGlowChart({
       lastIndex,
       handleSelectIndex,
       width,
+      variant,
     ],
   );
 
@@ -185,7 +187,7 @@ export function RevolutGlowChart({
       Gesture.Pan()
         .onBegin((e) => {
           'worklet';
-          glowOpacity.value = reduceMotion ? 0 : withTiming(0.6, { duration: 120 });
+          active.value = 1;
           applyIndex(indexForX(e.x));
         })
         .onUpdate((e) => {
@@ -194,51 +196,37 @@ export function RevolutGlowChart({
         })
         .onFinalize(() => {
           'worklet';
-          glowOpacity.value = reduceMotion ? 0 : withTiming(0, { duration: 200 });
+          active.value = 0;
           lastIndex.value = -1;
           runOnJS(handleSelectIndex)(null);
         }),
-    [applyIndex, indexForX, glowOpacity, reduceMotion, lastIndex, handleSelectIndex],
+    [applyIndex, indexForX, active, lastIndex, handleSelectIndex],
   );
 
   const thumbStyle = useAnimatedStyle(() => ({
+    opacity: active.value,
     transform: [
       { translateX: thumbX.value - THUMB / 2 },
       { translateY: thumbY.value - THUMB / 2 },
     ],
   }));
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-    transform: [
-      { translateX: thumbX.value - GLOW / 2 },
-      { translateY: thumbY.value - GLOW / 2 },
-    ],
-  }));
-
-  // Line + area paths in a 0..100 normalized coordinate space (the Svg uses
+  // Line/bars in a 0..100 normalized coordinate space (the Svg uses
   // viewBox="0 0 100 100" + preserveAspectRatio="none", so the path stretches
   // to the measured container width without us reading width.value on the JS
   // thread). `vectorEffect="non-scaling-stroke"` keeps the stroke crisp despite
-  // the non-uniform scale. We render a MONOTONE-CUBIC bezier (smoothPath) over
-  // a soft gradient area fill — the Revolut peak-moment treatment (Mobile
-  // Design Intel doc), replacing the prior tutorial-grade <Polyline>.
-  const { linePath, areaPath } = useMemo(() => {
-    if (count < 2) return { linePath: '', areaPath: '' };
+  // the non-uniform scale. The monotone line never invents an overshoot.
+  const points = useMemo(() => {
     const pts: PathPoint[] = data.map((d, i) => {
-      const xRatio = count <= 1 ? 0 : i / (count - 1);
+      const xRatio = variant === 'bar' ? (i + 0.5) / count : count <= 1 ? 0.5 : i / (count - 1);
       const x = xRatio * 100;
       const y =
         ((PAD_Y + plotH - ((d.value - minY) / rangeY) * plotH) / height) * 100;
       return { x, y };
     });
-    // Baseline at the chart bottom (matches the hairline at y=99) so the fill
-    // reads as area-under-the-curve rather than a floating ribbon.
-    return {
-      linePath: smoothLinePath(pts),
-      areaPath: smoothAreaPath(pts, 99),
-    };
-  }, [data, count, minY, rangeY, plotH, height]);
+    return pts;
+  }, [data, count, minY, rangeY, plotH, height, variant]);
+  const linePath = useMemo(() => smoothLinePath(points), [points]);
 
   return (
     <View
@@ -256,33 +244,28 @@ export function RevolutGlowChart({
             preserveAspectRatio="none"
             pointerEvents="none"
           >
-            <Defs>
-              {/* Soft top-down gradient: accent at 18% fading to fully
-                  transparent at the baseline (Revolut area treatment). */}
-              <LinearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={toneTk.accent} stopOpacity={0.18} />
-                <Stop offset="1" stopColor={toneTk.accent} stopOpacity={0} />
-              </LinearGradient>
-            </Defs>
-            {count > 1 && (
-              <>
-                {/* Gradient area UNDERNEATH the line. */}
-                <Path d={areaPath} fill="url(#chartFill)" stroke="none" />
-                {/* Smooth monotone-cubic line ON TOP. */}
+            {variant === 'bar' ? points.map((point, i) => (
+              <Rect
+                key={i}
+                x={point.x - 30 / count}
+                y={point.y}
+                width={60 / count}
+                height={(height - PAD_Y) / height * 100 - point.y}
+                fill={colors.forest}
+              />
+            )) : count > 1 ? (
                 <Path
                   d={linePath}
                   fill="none"
-                  stroke={toneTk.accent}
+                  stroke={colors.forest}
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
                 />
-              </>
-            )}
-            {count === 1 && (
-              <Circle cx="50" cy="50" r={1.6} fill={toneTk.accent} />
-            )}
+            ) : count === 1 ? (
+              <Circle cx={points[0].x} cy={points[0].y} r={1.6} fill={colors.forest} />
+            ) : null}
             {/* baseline hairline */}
             <SvgLine
               x1="0"
@@ -295,21 +278,6 @@ export function RevolutGlowChart({
             />
           </Svg>
 
-          {/* Glow halo behind the thumb (disabled under reduce-motion via opacity 0). */}
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.glow,
-              {
-                width: GLOW,
-                height: GLOW,
-                borderRadius: GLOW / 2,
-                backgroundColor: toneTk.glow,
-                shadowColor: toneTk.accent,
-              },
-              glowStyle,
-            ]}
-          />
           {/* The draggable thumb. */}
           <Animated.View
             pointerEvents="none"
@@ -319,7 +287,7 @@ export function RevolutGlowChart({
                 width: THUMB,
                 height: THUMB,
                 borderRadius: THUMB / 2,
-                backgroundColor: toneTk.accent,
+                backgroundColor: colors.forest,
                 borderColor: colors.bone,
               },
               thumbStyle,
@@ -334,7 +302,6 @@ export function RevolutGlowChart({
 export default RevolutGlowChart;
 
 const THUMB = 12;
-const GLOW = 34;
 
 const styles = StyleSheet.create({
   container: {
@@ -346,15 +313,5 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     borderWidth: 2,
-  },
-  glow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    // Soft glow per _uiux_paper: blur radius 18, opacity driven by glowStyle.
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 18,
-    elevation: 0,
   },
 });

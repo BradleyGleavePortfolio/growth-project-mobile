@@ -42,6 +42,7 @@ If a change in this repo would violate one of the rules below, the rule wins. Wh
 - Backgrounds: `bone` (`#F5EFE4`) is the global background. Cards sit on `cream` or `surface`. Never use `#000`; ink (`#1A1A18`) is the dark.
 - Single accent: forest (`#2C4A36`). Avoid neon greens (`#52B788`, `#2D6A4F`), terra-cottas, steel blues, and the rest of the legacy palette.
 - Shadows are capped at `shadows.lg` (12px radius, 8% opacity). No drop shadows above that.
+- Charts use lines or bars only: no filled areas, gradients under lines or glow. Daily totals use bars; continuous readings use lines. See [Charting conventions](charting.md).
 - Motion durations live in `motion.duration`. Default to `base = 400ms` with `decel` easing. Springs and `accelerate` easing are gone. Screen-level motion stays at 300 ms or less and respects Reduce Motion.
 
 ## 6. No global chrome, no floating widgets

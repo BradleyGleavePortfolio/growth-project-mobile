@@ -129,6 +129,7 @@ jest.mock('react-native-svg', () => {
 import TgpLineChart from '../ui/charts/TgpLineChart';
 import TgpBarChart from '../ui/charts/TgpBarChart';
 import TgpAreaChart from '../ui/charts/TgpAreaChart';
+import TgpSparkline from '../ui/charts/TgpSparkline';
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -298,16 +299,6 @@ describe('TgpBarChart — render output', () => {
 // ─── TgpAreaChart ─────────────────────────────────────────────────────────────
 
 describe('TgpAreaChart — render output', () => {
-  it('renders a filled area Path', async () => {
-    const { getAllByTestId } = await render(<TgpAreaChart data={SAMPLE} height={200} />);
-    const paths = getAllByTestId('Path');
-    expect(paths.length).toBeGreaterThan(0);
-    const area = paths[0];
-    expect(typeof area.props.d).toBe('string');
-    expect((area.props.d as string).length).toBeGreaterThan(0);
-    expect(area.props.fill).toBeTruthy();
-  });
-
   it('renders the line Polyline and one Circle per data point', async () => {
     const { getAllByTestId } = await render(<TgpAreaChart data={SAMPLE} height={200} />);
     expect(getAllByTestId('Polyline').length).toBe(1);
@@ -340,10 +331,6 @@ describe('TgpSparkline — source guards', () => {
     expect(SPARK_SRC).toMatch(/height\?.*number/);
   });
 
-  it('renders area fill for visual momentum', () => {
-    expect(SPARK_SRC).toMatch(/areaPath/);
-  });
-
   it('has accessibilityLabel', () => {
     expect(SPARK_SRC).toMatch(/accessibilityLabel/);
   });
@@ -352,6 +339,45 @@ describe('TgpSparkline — source guards', () => {
     expect(SPARK_SRC).not.toMatch(/yTicks/);
     expect(SPARK_SRC).not.toMatch(/SvgText/);
   });
+});
+
+// One rule across the exported chart family, including the legacy area name.
+it.each([
+  ['line', TgpLineChart],
+  ['bar', TgpBarChart],
+  ['legacy area', TgpAreaChart],
+  ['sparkline', TgpSparkline],
+])('%s draws only lines or bars, never a filled path', async (_name, Chart) => {
+  const node = await render(<Chart data={SAMPLE} height={100} />);
+  expect(node.queryAllByTestId('Path')).toHaveLength(0);
+  const lines = node.queryAllByTestId('Polyline');
+  lines.forEach((line) => expect(line.props.fill).toBe('none'));
+  expect(lines.length + node.queryAllByTestId('Rect').length).toBeGreaterThan(0);
+});
+
+// Search-backed full list: shared chart primitives, inline charts and callers.
+// Rendering tests above and in the feature suites prove the output; this table
+// prevents a filled path/gradient/halo from returning on an unmounted branch.
+it.each([
+  'ui/charts/TgpLineChart.tsx',
+  'ui/charts/TgpBarChart.tsx',
+  'ui/charts/TgpAreaChart.tsx',
+  'ui/charts/TgpSparkline.tsx',
+  'components/progress/WeightTrendChart.tsx',
+  'screens/client/progress/ProgressChartCard.tsx',
+  'screens/client/wearables/charts/RevolutGlowChart.tsx',
+  'screens/client/wearables/cards/HeartCard.tsx',
+  'screens/client/wearables/cards/BodyCard.tsx',
+  'screens/client/wearables/cards/HrvTrendCard.tsx',
+  'screens/client/wearables/cards/FitnessTrendCard.tsx',
+  'screens/client/wearables/cards/ActivityBars.tsx',
+  'screens/client/wearables/cards/SleepStagesCard.tsx',
+  'screens/client/wearables/MetricDetailScreen.tsx',
+  'screens/client/WorkoutScreen.tsx',
+  'screens/coach/client-detail/WorkoutsTab.tsx',
+])('%s follows the no-area/no-gradient/no-glow rule', (file) => {
+  const source = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
+  expect(source).not.toMatch(/areaPath|LinearGradient|fillOpacity|shadowRadius|progress-pr-glow|styles\.glow/);
 });
 
 // ─── charts/index.ts export surface ───────────────────────────────────────────
