@@ -82,14 +82,17 @@ function App({ start }: { start: boolean }) {
     <SignedOut.Navigator><SignedOut.Screen name="Login" component={LoginScreen} /></SignedOut.Navigator>
   );
 }
-const mount = (start = true, url?: string) => render(
+// A new `launch` key is a fresh process: the old container and its state are gone.
+const tree = (start = true, url?: string, launch = 0) => (
   <NavigationContainer
+    key={launch}
     ref={ref}
     linking={url ? { ...linking, getInitialURL: async () => url, subscribe: () => () => {} } : undefined}
   >
     <App start={start} />
-  </NavigationContainer>,
+  </NavigationContainer>
 );
+const mount = (start = true, url?: string) => render(tree(start, url));
 const step = (fn: () => void) => act(async () => fn());
 const landed = () => {
   const root = ref.getRootState();
@@ -107,8 +110,7 @@ const ROWS: [string, () => Promise<unknown>, string[], string[]][] = [
   ['return after the app was killed (it was on Messages)', async () => {
     const view = await mount();
     await step(() => ref.navigate('Messages'));
-    view.unmount();
-    await mount();
+    await view.rerender(tree(true, undefined, 1));
   }, OVERVIEW, CLIENTS],
   ['account switch (sign out on Messages, the next coach signs in)', async () => {
     await mount();
