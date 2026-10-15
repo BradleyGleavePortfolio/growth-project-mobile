@@ -57,7 +57,7 @@ export function RomanDraftSheet({ context, onClose, onDismiss }: {
       <View style={styles.container} accessibilityViewIsModal>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
           <Pressable testID="roman-draft-scrim" style={styles.scrim} onPress={close}
-            accessibilityRole="button" accessibilityLabel="OK" />
+            accessible={false} importantForAccessibility="no" />
         </Animated.View>
         <Animated.View testID="roman-draft-sheet" style={[styles.sheet, {
           paddingBottom: Math.max(insets.bottom, 24),

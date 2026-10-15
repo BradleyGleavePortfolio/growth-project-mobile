@@ -86,10 +86,11 @@ export function MessageBubble({
       style={[
         styles.row,
         isMe ? styles.rowRight : styles.rowLeft,
+        marked && (isMe ? styles.markedRowMe : styles.markedRowThem),
         message.pending ? styles.rowPending : undefined,
       ]}
     >
-      <View testID={marked ? 'roman-draft-frame' : undefined} style={[styles.frame, marked && styles.markedFrame]}>
+      <View testID={marked ? 'roman-draft-frame' : undefined} style={marked ? styles.markedFrame : styles.frame}>
       <Pressable
         onLongPress={handleLongPress}
         delayLongPress={350}
@@ -139,7 +140,7 @@ export function MessageBubble({
         ) : (
           <Text style={[styles.body, isMe && styles.bodyMe]}>{message.body}</Text>
         )}
-        {!marked && metadata}
+        {metadata}
       </Pressable>
       {marked && draftContext && <RomanDraftMark ref={mark} isMe={isMe} context={draftContext}
         expanded={revealed} onPress={() => { HapticService.selection(); setRevealed(true); }}
@@ -151,7 +152,6 @@ export function MessageBubble({
         onPress={() => { HapticService.selection(); setSheet(true); }}>
         <Text style={styles.disclosureText}>Drafted by Roman</Text>
       </Pressable>}
-      {marked && metadata && <View>{metadata}</View>}
       {marked && sheet && draftContext && <RomanDraftSheet context={draftContext}
         onClose={() => setSheet(false)} onDismiss={() => focusRomanControl(mark.current)} />}
 
@@ -167,7 +167,10 @@ const makeStyles = (colors: ThreadColors) =>
     rowLeft: { alignItems: 'flex-start' },
     rowPending: { opacity: 1 },
     frame: { maxWidth: '78%' },
-    // Keep the complete hit box inside its native parent's bounds, including below the bubble.
+    // The 22% inner gutter keeps a marked bubble at the same 78% limit as every other bubble;
+    // the frame's padding keeps the mark's complete hit box inside native bounds.
+    markedRowMe: { paddingLeft: '22%' },
+    markedRowThem: { paddingRight: '22%' },
     markedFrame: { paddingBottom: 18, paddingHorizontal: 16, marginHorizontal: -16 },
     markedBubble: { paddingBottom: 26, minWidth: 44 },
     disclosure: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 14 },

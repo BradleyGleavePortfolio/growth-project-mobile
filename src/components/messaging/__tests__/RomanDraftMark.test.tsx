@@ -1,6 +1,6 @@
 import React from 'react';
 import { Animated, PanResponder, StyleSheet, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import MessageBubble from '../MessageBubble';
 import { RomanDraftSheet } from '../RomanDraftSheet';
 import { ROMAN_DRAFT_HINT } from '../RomanDraftMark';
@@ -20,6 +20,7 @@ jest.mock('../../../ui/haptics/haptics.service', () => ({
 const context = { coach: 'Sam', client: 'Jordan', isSender: false };
 const setFlag = (value: boolean) => Object.defineProperty(featureFlags, 'romanDraftMark', { value });
 const base = { id: 'message', body: 'Keep the next run easy.', created_at: '2026-10-15T07:40:00Z' };
+const time = new RegExp(new Date(base.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
 const cases: Array<[string, Record<string, unknown>, boolean]> = [
   ['draft', { ai_draft_id: 'draft' }, true],
   ['edited draft', { ai_draft_id: 'draft', edited_at: '2026-10-15T07:41:00Z' }, true],
@@ -54,6 +55,9 @@ it.each([false, true])('walks every governed message path on side isMe=%s', asyn
     expect({ path: name, marked: Boolean(u.queryByTestId('roman-draft-mark')) }).toEqual({ path: name, marked: expected });
     if (expected) expect(u.getByTestId('roman-draft-mark').props.accessibilityHint).toBe(ROMAN_DRAFT_HINT);
     expect(u.queryByText('Drafted by Roman')).toBeNull();
+    // One placement for time, Edited and Pinned on every row, marked or not: inside the bubble, once.
+    expect(u.getAllByText(time)).toHaveLength(1);
+    expect(within(u.getByLabelText(/^Message/)).getByText(time)).toBeTruthy();
     await u.unmount();
   }
   setFlag(false);
@@ -70,7 +74,9 @@ it.each([false, true])('two taps reveal then explain, with long press forwarded 
   const mark = u.getByTestId('roman-draft-mark');
   expect(mark.props.accessibilityLabel).toBe(`Roman helped draft this message. ${isMe ? 'You' : 'Sam'} sent it.`);
   expect(StyleSheet.flatten(mark.props.style)).toMatchObject({ width: 44, height: 44, bottom: 0, [isMe ? 'left' : 'right']: 0 });
-  expect(StyleSheet.flatten(u.getByTestId('roman-draft-frame').props.style)).toMatchObject({ paddingBottom: 18, paddingHorizontal: 16 });
+  const frame = StyleSheet.flatten(u.getByTestId('roman-draft-frame').props.style);
+  expect(frame).toMatchObject({ paddingBottom: 18, paddingHorizontal: 16 });
+  expect(frame.maxWidth).toBeUndefined(); // the row's 22% gutter keeps the typed bubble's 78% limit
   expect(StyleSheet.flatten(u.getByTestId('roman-draft-ring', { includeHiddenElements: true }).props.style)).toMatchObject({ width: 24, height: 24, top: 18, left: 10 });
   expect(u.queryByRole('image', { name: 'Roman' })).toBeNull();
   await fireEvent(mark, 'longPress');
@@ -79,6 +85,7 @@ it.each([false, true])('two taps reveal then explain, with long press forwarded 
   await fireEvent.press(mark);
   const line = u.getByText('Drafted by Roman');
   expect(StyleSheet.flatten(line.props.style)).toMatchObject({ fontStyle: 'italic', textDecorationLine: 'underline' });
+  expect(within(u.getByLabelText(/^Message/)).getByText(time)).toBeTruthy();
   expect(u.queryByText('Drafted with Roman')).toBeNull();
   await fireEvent.press(u.getByLabelText('Drafted by Roman'));
   expect(u.getByRole('header', { name: 'Drafted with Roman' })).toBeTruthy();
@@ -101,6 +108,7 @@ it.each([false, true])('sheet motion, content and every dismissal (reduced=%s)',
     expect(StyleSheet.flatten(sheet.props.style)).toMatchObject({ borderTopLeftRadius: 24, paddingBottom: 34 });
     if (reduced) expect(StyleSheet.flatten(sheet.props.style).transform).toEqual([{ translateY: 0 }]);
     expect(u.getByText(/only while you allow AI help/)).toBeTruthy();
+    expect(u.getAllByLabelText('OK')).toHaveLength(1); // the scrim is not a second spoken OK
     if (path === 'ok' || path === 'scrim') await fireEvent.press(u.getByTestId(`roman-draft-${path}`));
     if (path === 'back') await fireEvent(u.getByTestId('roman-draft-modal'), 'requestClose');
     if (path === 'swipe') {
