@@ -29,6 +29,7 @@ jest.mock('../../api/featureFlagsApi', () => ({
     'messaging_core_v2',
     'coachless_home',
     'coach_payment_actions',
+    'roman_crisis_alert',
   ],
 }));
 
@@ -72,6 +73,7 @@ describe('useFeatureFlags — fail-safe OFF', () => {
       messaging_core_v2: false,
       coachless_home: false,
       coach_payment_actions: false,
+      roman_crisis_alert: false,
     });
   });
 
@@ -89,6 +91,7 @@ describe('useFeatureFlags — fail-safe OFF', () => {
       messaging_core_v2: false,
       coachless_home: false,
       coach_payment_actions: false,
+      roman_crisis_alert: false,
     });
   });
 });
@@ -115,6 +118,7 @@ describe('useFeatureFlags — server resolution', () => {
       messaging_core_v2: false,
       coachless_home: false,
       coach_payment_actions: false,
+      roman_crisis_alert: false,
     });
   });
 
@@ -155,6 +159,15 @@ describe('useFeatureFlags — server resolution', () => {
 
     await waitFor(() => expect(result.current.flags.coach_payment_actions).toBe(true));
     expect(result.current.flags.coachless_home).toBe(false);
+  });
+
+  it('reads roman_crisis_alert from the server map (crisis sentence, CRISISAPP-M)', async () => {
+    api.getFeatureFlags.mockResolvedValue(resp({ roman_crisis_alert: true }));
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(() => useFeatureFlags(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.flags.roman_crisis_alert).toBe(true));
+    expect(result.current.flags.coach_payment_actions).toBe(false);
   });
 
   it('surfaces a server-resolved coach flag without re-applying client role gating', async () => {

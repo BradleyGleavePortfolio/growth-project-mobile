@@ -27,6 +27,7 @@ jest.mock('../../services/api', () => ({
 }));
 // No account read here: the coach line is pinned in trustCenterTruth.test.tsx.
 jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => null }));
+jest.mock('../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 const mockRequestExport = jest.fn();
 jest.mock('../../services/dataExportApi', () => ({
   dataExportApi: { requestExport: (...a: unknown[]) => mockRequestExport(...a) },
