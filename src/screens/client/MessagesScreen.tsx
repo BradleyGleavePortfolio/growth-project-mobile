@@ -417,6 +417,7 @@ export default function MessagesScreen() {
       } else {
         // Refused for a reason the user can act on (blocked, quote gone, ...):
         // keep the typed text so nothing is lost.
+        if (styleB && pendingId) markUnsent(pendingId); // a refused replay stops waiting: tap to send again
         thread.report('Message not sent', err);
       }
     }

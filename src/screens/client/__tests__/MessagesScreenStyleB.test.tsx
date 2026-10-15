@@ -1,9 +1,6 @@
 /**
- * C3B-THREAD: the client's coach thread with featureFlags.c3StyleB ON (MOCK-C3
- * Style B, slice 1). Every state (thread, first, loading, failed, waiting,
- * read) and every pathway main has (contact, back, mute, copy, reply, report,
- * send, pins, load older, edit, delete, long-press Send again) still work.
- * The HTTP layer is mocked (services/api), as in MessagesScreenV2.test.
+ * C3B-THREAD: the client's thread with featureFlags.c3StyleB ON (MOCK-C3 Style B, slice 1): every state and every main
+ * pathway (contact, back, mute, copy, reply, report, send, pins, load older, edit, delete, Send again). HTTP is mocked.
  */
 import React from 'react';
 import * as fs from 'fs';
@@ -221,6 +218,18 @@ describe('client MessagesScreen with c3StyleB ON', () => {
     expect(u.getAllByLabelText(/Message: see you friday/)).toHaveLength(1);
     expect(u.queryByText(/messages send when you reconnect/)).toBeNull();
     expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('a replay the server refuses stops waiting: one alert, then a tap to send again', async () => {
+    NetInfo.__setState({ isConnected: false, isInternetReachable: false });
+    postMock.mockImplementation(async (url: string) => { if (url === '/messages') throw axiosErr(); return { data: {} }; });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText(/Message: from the coach/).then(() => sendText(u, 'see you friday'));
+    await u.findByText('Waiting to send');
+    postMock.mockImplementation(async (url: string) => { if (url === '/messages') throw Object.assign(axiosErr(), { response: { status: 403, data: {} } }); return { data: {} }; });
+    await act(async () => NetInfo.__setState({ isConnected: true, isInternetReachable: true }));
+    expect(await u.findByLabelText('Not sent. Tap to send again')).toBeTruthy();
+    expect(alertSpy).toHaveBeenCalledTimes(1);
   });
 
   it('a read that lands while the thread is open shows "Read {time}" with one success haptic', async () => {

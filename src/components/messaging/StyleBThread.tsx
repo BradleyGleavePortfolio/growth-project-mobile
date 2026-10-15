@@ -1,12 +1,8 @@
 /**
- * Style B "Focus" parts for the client's coach thread (C3B-THREAD, behind
- * featureFlags.c3StyleB; MOCK-C3 slice 1). The coach thread keeps
- * MessageBubble; nothing here is used by coach screens.
- *
- * Client bubbles are forest, the coach's are cream. A failed send is warm
- * (gold-brown line, never red) with a visible tap to send again; a message
- * written offline has a dashed edge and waits to send. New messages slide in
- * 250 ms on the decel curve; with Reduce Motion they fade in 150 ms instead.
+ * Style B "Focus" parts for the client's coach thread (C3B-THREAD, behind featureFlags.c3StyleB; MOCK-C3 slice 1). Coach
+ * screens keep MessageBubble. Client bubbles are forest, the coach's cream. A failed send is warm (gold line, never red)
+ * with a visible tap to send again; a message written offline has a dashed edge and waits. New messages slide in 250 ms
+ * on the decel curve; with Reduce Motion they fade in 150 ms instead.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, TouchableOpacity, View, type DimensionValue } from 'react-native';
