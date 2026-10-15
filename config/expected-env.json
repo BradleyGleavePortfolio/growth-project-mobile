@@ -66,6 +66,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key. On only for the preview and clinic-apk profiles (the directly installed Android test apps): credit packs open Stripe Checkout in the system browser on Android."
     },
+    "EXPO_PUBLIC_FF_C3_STYLE_B": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (client coach thread in Style B, C3B-THREAD). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT": {
       "kind": "flag",
       "default": "on in dev, off in release",
