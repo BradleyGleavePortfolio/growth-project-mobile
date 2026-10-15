@@ -451,7 +451,7 @@ describe('R3: offline is the calm state the mockup draws', () => {
 
 describe('R4: every message bubble is at least 44 x 44 pt', () => {
   it.each([['sent', true], ['waiting', true], ['failed', true], ['sent', false]] as const)('a one-letter "k" (%s, mine=%s)', async (state, isMe) => {
-    const u = await render(<StyleBBubble message={{ id: 'k', body: 'k', created_at: recent }} isMe={isMe} state={state} groupEnd onLongPress={jest.fn()} onRetry={jest.fn()} />);
+    const u = await render(<StyleBBubble message={{ id: 'k', body: 'k', created_at: recent }} isMe={isMe} state={state} groupEnd animateIn={false} reduceMotion onLongPress={jest.fn()} onRetry={jest.fn()} />);
     expect(flat(u.getByLabelText(/^Message: k\./))).toMatchObject({ minWidth: 44, minHeight: 44 });
   });
 });
