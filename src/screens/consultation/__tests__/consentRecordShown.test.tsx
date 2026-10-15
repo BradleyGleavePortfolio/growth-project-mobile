@@ -58,7 +58,7 @@ const MEMORY_COPY: AiConsentUpgradeCopy = {
 };
 
 /** Every string on screen from the P0 title to the Privacy Policy link, in display order. */
-function shownConsentText(r: ReturnType<typeof render>): string {
+function shownConsentText(r: Awaited<ReturnType<typeof render>>): string {
   const out: string[] = [];
   const walk = (n: unknown): void => {
     if (typeof n === 'string') out.push(n);
@@ -86,7 +86,7 @@ describe('FIX684: each P0 record rebuilds the screen shown (coached, no coach, e
   it.each(ROWS)('%s', async (_screen, noCoach, memory, version, pin) => {
     const status = memory ? aiStatus({ memory_on: true, memory_copy: MEMORY_COPY }) : aiStatus();
     const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status })) });
-    const r = render(
+    const r = await render(
       <ConsultationFlow
         userId="u1"
         firstName="Maya"
