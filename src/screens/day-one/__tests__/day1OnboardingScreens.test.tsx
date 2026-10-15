@@ -179,6 +179,42 @@ it('keeps the Day One onboarding action list at the 44pt touch minimum', async (
     }
     view.unmount();
   }
+
+  mockedSaveGoals.mockRejectedValueOnce(new Error('network'));
+  const goalsError = await render(<GoalsScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(goalsError.getByTestId('day-one-goals-continue')));
+  await waitFor(() => expect(goalsError.getByTestId('day-one-goals-retry')).toBeTruthy());
+  for (const id of ['day-one-goals-retry', 'day-one-goals-offline']) {
+    expect(StyleSheet.flatten(goalsError.getByTestId(id).props.style).minHeight).toBe(layout.touchMin);
+  }
+  goalsError.unmount();
+
+  mockedSaveCheckIn.mockRejectedValueOnce(new Error('network'));
+  const checkInError = await render(<CheckInTimeScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(checkInError.getByTestId('day-one-checkin-continue')));
+  await waitFor(() => expect(checkInError.getByTestId('day-one-checkin-retry')).toBeTruthy());
+  for (const id of ['day-one-checkin-retry', 'day-one-checkin-offline']) {
+    expect(StyleSheet.flatten(checkInError.getByTestId(id).props.style).minHeight).toBe(layout.touchMin);
+  }
+  checkInError.unmount();
+
+  mockedRegister.mockResolvedValueOnce({ granted: false });
+  const denied = await render(<NotificationsScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(denied.getByTestId('day-one-notifications-enable')));
+  await waitFor(() => expect(denied.getByTestId('day-one-notifications-continue')).toBeTruthy());
+  expect(
+    StyleSheet.flatten(denied.getByTestId('day-one-notifications-continue').props.style).minHeight,
+  ).toBe(layout.touchMin);
+  denied.unmount();
+
+  mockedComplete.mockRejectedValueOnce(new Error('network'));
+  const readyError = await render(<ReadyScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(readyError.getByTestId('day-one-ready-cta')));
+  await waitFor(() => expect(readyError.getByTestId('day-one-ready-offline')).toBeTruthy());
+  expect(
+    StyleSheet.flatten(readyError.getByTestId('day-one-ready-offline').props.style).minHeight,
+  ).toBe(layout.touchMin);
+  readyError.unmount();
 });
 
 // ─── Welcome ─────────────────────────────────────────────────────────────────
