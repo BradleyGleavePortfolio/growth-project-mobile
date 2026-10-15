@@ -24,6 +24,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   FlatList,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -219,20 +220,26 @@ export default function RomanConversationsScreen({
       {crisisText(ROMAN_CHATS_COPY.intro)}
     </Text>
   );
+  // Every state that is not the list scrolls in this one container (the list
+  // scrolls itself), so the intro and its 44 pt actions stay reachable at any
+  // width and text size, above the tab bar (FIX725R3).
+  const page = (children: React.ReactNode) => (
+    <ScrollView contentContainerStyle={styles.content} testID="roman-chats-page">
+      {children}
+    </ScrollView>
+  );
 
   function body(): React.ReactElement {
     if (phase === 'signed_out') {
-      return (
-        <View style={styles.content}>
-          <Text style={styles.body} testID="roman-chats-signed-out">
-            {ROMAN_CHATS_COPY.signedOutState}
-          </Text>
-        </View>
+      return page(
+        <Text style={styles.body} testID="roman-chats-signed-out">
+          {ROMAN_CHATS_COPY.signedOutState}
+        </Text>,
       );
     }
     if (phase === 'loading') {
-      return (
-        <View style={styles.content}>
+      return page(
+        <>
           {intro}
           {noticeView(notice)}
           <ActivityIndicator
@@ -240,12 +247,12 @@ export default function RomanConversationsScreen({
             accessibilityLabel={ROMAN_CHATS_COPY.loading}
             testID="roman-chats-loading"
           />
-        </View>
+        </>,
       );
     }
     if (phase === 'error' && loadFailure) {
-      return (
-        <View style={styles.content}>
+      return page(
+        <>
           {intro}
           {noticeView(notice)}
           <View style={styles.card} testID="roman-chats-error">
@@ -254,7 +261,7 @@ export default function RomanConversationsScreen({
             </Text>
             {actions(loadFailure, reload, 'roman-chats-error')}
           </View>
-        </View>
+        </>,
       );
     }
     const empty = chats.length === 0 && !hasMore;
