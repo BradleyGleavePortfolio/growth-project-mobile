@@ -148,7 +148,7 @@ async function pickDate(r: Awaited<ReturnType<typeof render>>) {
     ['wheel-dob-year', 70],
   ];
   for (const [id, row] of rows) {
-    await fireEvent(r.getByTestId(`${id}-scroll`), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: row * 44 } } });
+    await fireEvent(r.getByTestId(`${id}-scroll`, { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: row * 44 } } });
   }
 }
 const cached = async () => JSON.parse((await AsyncStorage.getItem('prefs:auth.user_data')) ?? '{}');

@@ -40,7 +40,7 @@ async function pickStartDate(r: Awaited<ReturnType<typeof render>>) {
     ['wheel-dob-year', 70],
   ];
   for (const [id, row] of rows) {
-    await fireEvent(r.getByTestId(`${id}-scroll`), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: row * 44 } } });
+    await fireEvent(r.getByTestId(`${id}-scroll`, { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: row * 44 } } });
   }
 }
 
@@ -86,8 +86,8 @@ describe('AgeCheckScreen', () => {
       expect([id, r.getByTestId(id).props.accessibilityValue, off()]).toEqual([id, undefined, true]);
     }
     await fireEvent.press(r.getByTestId('consult-continue'));
-    await fireEvent(r.getByTestId('wheel-dob-year-scroll'), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 70 * 44 } } });
-    await fireEvent(r.getByTestId('wheel-dob-month-scroll'), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 0 } } });
+    await fireEvent(r.getByTestId('wheel-dob-year-scroll', { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 70 * 44 } } });
+    await fireEvent(r.getByTestId('wheel-dob-month-scroll', { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 0 } } });
     expect(off()).toBe(true);
     expect(r.queryByTestId('consult-validation')).toBeNull();
     await fireEvent(r.getByTestId('wheel-dob-day'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });

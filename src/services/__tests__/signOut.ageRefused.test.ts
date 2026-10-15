@@ -105,28 +105,30 @@ afterEach(() => {
 
 describe('FIXAGE2 R5: Sign out never waits on the age step', () => {
   it.each(PLACES)('from %s: signs out at once while the server refuses for age', async (_place, run) => {
-    const held = refuse('/me/macros/current');
+    const held = refuse('/me/macros/current').catch((e: unknown) => e);
     await Promise.resolve();
     expect(heard).toHaveBeenCalledTimes(1);
     heard.mockReset();
 
     await run();
 
-    expect(isAccountChangedError(await held.catch((e: unknown) => e))).toBe(true);
+    expect(isAccountChangedError(await held)).toBe(true);
     expect(axiosMock.__instance.patch).toHaveBeenCalledWith('/users/me/push-token', { token: null });
     expect(heard).not.toHaveBeenCalled();
     expect(loggedOut).toHaveBeenCalledTimes(1);
 
     // The next sign-in: a refusal is held for the age step again.
     let settled = false;
-    const next = refuse('/me/macros/current').finally(() => {
-      settled = true;
-    });
+    const next = refuse('/me/macros/current')
+      .catch((e: unknown) => e)
+      .finally(() => {
+        settled = true;
+      });
     await Promise.resolve();
     await Promise.resolve();
     expect(heard).toHaveBeenCalledTimes(1);
     expect(settled).toBe(false);
     settleAgeConfirmation(false);
-    expect(isAccountChangedError(await next.catch((e: unknown) => e))).toBe(true);
+    expect(isAccountChangedError(await next)).toBe(true);
   });
 });

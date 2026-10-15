@@ -37,7 +37,7 @@ const STATES: Array<[string, (r: R) => Promise<void>]> = [
   ['the age step', async (r) => expect(r.getByTestId('consult-screen-B2')).toBeTruthy()],
   ['the under-16 stop screen', async (r) => {
     // FIXAGE2 R6: month and day are picked too (nothing starts chosen).
-    await fireEvent(r.getByTestId('wheel-dob-month-scroll'), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 0 } } });
+    await fireEvent(r.getByTestId('wheel-dob-month-scroll', { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 0 } } });
     for (const w of ['wheel-dob-day', 'wheel-dob-year']) {
       await fireEvent(r.getByTestId(w), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     }
