@@ -38,6 +38,7 @@ import type { RomanChatsApi, RomanChatSummary } from '../../api/romanChatsApi';
 import type { AccountBinding } from '../../services/accountBinding';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useRomanChats, type RomanChatsNotice } from './useRomanChats';
+import { clientPrivacyText } from '../../lib/ai/aiCoachless';
 import RomanChatsConfirmSheet from './RomanChatsConfirmSheet';
 import RomanChatsSupportAction from './RomanChatsSupportAction';
 import {
@@ -214,7 +215,7 @@ export default function RomanConversationsScreen({
 
   const intro = (
     <Text style={styles.body} testID="roman-chats-intro">
-      {ROMAN_CHATS_COPY.intro}
+      {clientPrivacyText(ROMAN_CHATS_COPY.intro)}
     </Text>
   );
 
@@ -366,7 +367,7 @@ export default function RomanConversationsScreen({
         visible={allOpen}
         typed
         title={ROMAN_CHATS_COPY.confirmAllTitle}
-        body={ROMAN_CHATS_COPY.confirmAllBody}
+        body={clientPrivacyText(ROMAN_CHATS_COPY.confirmAllBody)}
         confirmLabel={ROMAN_CHATS_COPY.deleteAll}
         onCancel={() => setConfirmAll(null)}
         onConfirm={() => {

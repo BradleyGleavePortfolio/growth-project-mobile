@@ -67,7 +67,7 @@ const NONE = 'Your coach — your consultation answers and data from connected d
 const OWNER_IF = 'If your coach uses the TGP owner account, that account sees your logs even when they are turned off in Coach sharing.';
 const OWNER =
   'Your coach — your consultation answers, data from connected devices, and your workouts, food logs, weigh-ins, check-ins and habits. Your coach uses the TGP owner account, which sees these logs even when they are turned off in Coach sharing.';
-const ROMAN_WITH_COACH = 'Not your coach — your Roman conversations, which are kept until you delete them or your account';
+const ROMAN_WITH_COACH = 'Not your coach — your Roman conversations, which are kept until you delete them or your account. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.';
 const ROMAN = 'Your Roman conversations are kept until you delete them or your account';
 const OLD_COACH_LINE = 'Your coach — your consultation answers, logs, check-ins and connected health data';
 const OLD_INFO_ROW = /Your answers and logs are shared with your coach/;

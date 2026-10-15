@@ -8,7 +8,7 @@
  * apostrophes so the R2a server copy hashes match). Paragraph 4's last
  * sentence is the client-ai-v4 retention line (owner 2026-10-01 20:32: Roman
  * chats are kept until the client deletes them or their account; backend
- * #635), which moved P0 to consult-consent-v3. Owner C-6a removed paragraph 3's clinic sentence
+ * #635), which moved P0 to consult-consent-v3. Owner C-6a removed paragraph 3's referral-partner sentence
  * (consult-consent-v5 / v6); owner 62 added the coach-free versions below; owner 57c added the
  * safety-reply exception to paragraph 4 (consult-consent-v7 / v8, client-ai-v6 / v7) and owner 62y2
  * took Roman out of the coach-free screen (consult-consent-v7-coach-free); W-CONSENT put the coached

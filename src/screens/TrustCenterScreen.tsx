@@ -47,6 +47,7 @@ import { readCoachSharing } from '../api/coachSharingApi';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { isCoachLikeRole } from '../lib/roleSelectionGate';
 import { trustCoachLine, trustRomanLine } from './trustCenterSharing';
+import { clientPrivacyText } from '../lib/ai/aiCoachless';
 import type { TrustCoachView } from './trustCenterSharing';
 import { trustCenterLinks } from './trustCenterLinks';
 import type { TrustCenterLink } from './trustCenterLinks';
@@ -113,10 +114,13 @@ const makeMetaStyles = (colors: ThemeColors) =>
 function BulletItem({ text }: { text: string }) {
   const { colors } = useTheme();
   const bulletStyles = useMemo(() => makeBulletStyles(colors), [colors]);
+  // K1 / K2: no coach sentence for a client with no coach; the 57c exception after a coached promise.
+  const shown = clientPrivacyText(text);
+  if (!shown) return null;
   return (
     <View style={bulletStyles.row}>
       <View style={bulletStyles.dot} />
-      <Text style={bulletStyles.text}>{text}</Text>
+      <Text style={bulletStyles.text}>{shown}</Text>
     </View>
   );
 }

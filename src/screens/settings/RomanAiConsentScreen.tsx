@@ -64,6 +64,7 @@ import {
   withdrawAiChoiceAs,
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
+import { withSafetyException } from '../../lib/ai/aiCoachless';
 import { SUPPORT_EMAIL } from '../../lib/consultation/copy';
 import { reportUnexpected } from '../../lib/consultation/report';
 import { shortReference } from '../../utils/correlation';
@@ -354,7 +355,7 @@ export default function RomanAiConsentScreen({
     ]);
   // Memory on: the server's v5 text is the confirmation, and its sha256 is what is granted.
   const confirmMemoryOn = (offer: AiConsentUpgradeCopy) =>
-    Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, offer.paragraph.text, [
+    Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, withSafetyException(offer.paragraph.text), [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
       { text: ROMAN_AI_COPY.memoryOn, onPress: () => void act('allow', offer) },
     ]);
@@ -509,9 +510,11 @@ export default function RomanAiConsentScreen({
         <Headline level="h1">{ROMAN_AI_COPY.title}</Headline>
         {renderStateRow()}
         <Text style={styles.body} testID="roman-ai-paragraph">
-          {(view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) ||
-            (view.phase === 'ready' && allowCopyOf(view.status)?.paragraph.text) ||
-            family.paragraph}
+          {withSafetyException(
+            (view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) ||
+              (view.phase === 'ready' && allowCopyOf(view.status)?.paragraph.text) ||
+              family.paragraph,
+          )}
         </Text>
         {renderState()}
         {notice ? (

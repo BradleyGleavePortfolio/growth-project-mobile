@@ -35,6 +35,7 @@ import { layout, radius, typography, withAlpha } from '../../theme/tokens';
 import { Headline, Overline, PrimaryButton, QuietRow, Screen, ScreenTopBar, TextLink } from '../../ui';
 import SettingsSection from './settings/SettingsSection';
 import { preferenceSaveFailureOf } from '../settings/notificationPreferenceErrors';
+import { clientPrivacyText } from '../../lib/ai/aiCoachless';
 
 // Same rules and wording as ResetPasswordScreen checkPassword and sign-up
 // (backend RegisterDto); first failure only. checkPassword is local to that
@@ -427,7 +428,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         {featureFlags.consultationOnboarding || featureFlags.romanChat ? (
           <SettingsSection title="Roman" id="roman">
             <QuietRow label="Roman and AI" onPress={() => navigation.navigate('RomanAiConsent')}
-              accessibilityHint="Allow or withdraw Roman and your coach's AI tools using your information"
+              accessibilityHint={clientPrivacyText("Allow or withdraw Roman and your coach's AI tools using your information") || undefined}
               testID="settings-roman-ai" />
           </SettingsSection>
         ) : null}

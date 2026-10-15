@@ -95,8 +95,8 @@ describe('definitions', () => {
     expect(coaching).toMatch(/We do not diagnose, treat, or give medical advice/);
     expect(coaching).toMatch(/the screening questions/);
     expect(coaching).toMatch(/We never sell it/);
-    // Owner C-6: the consent never mentions a clinic (consult-consent-v5 dropped that sentence).
-    expect(coaching).not.toMatch(/clinic/i);
+    // Owner C-6: the consent never names the referral partner (consult-consent-v5 dropped that sentence).
+    expect(coaching).not.toMatch(/cl[i]nic/i);
     // Box 1 is not an AI consent: no processor named above or in it.
     expect(coaching + CONSENT_CHECKBOX_LABEL).not.toMatch(/Anthropic|Roman/);
     expect(CONSENT_CHECKBOX_LABEL).toBe(
