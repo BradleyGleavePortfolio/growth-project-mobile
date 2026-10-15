@@ -124,10 +124,11 @@ describe('the safety alert card', () => {
     (commandCenterApi.getActionQueue as jest.Mock).mockResolvedValue({ data: { items: [crisis, unknown], total_pending: 2 } });
     const onOpen = jest.fn();
     const onSelectClient = jest.fn();
-    const { getAllByTestId, getByRole, queryByTestId, queryByText } = await render(
+    const { getAllByTestId, getByRole, getByText, queryByTestId, queryByText } = await render(
       <ActionQueueScreen onOpenSafetyAlert={onOpen} onSelectClient={onSelectClient} />,
     );
     await waitFor(() => expect(getAllByTestId('command-center-safety-alert-row')).toHaveLength(1));
+    expect(getByText(CRISIS_LINE).props.numberOfLines).toBe(0); // in full at any text size
     expect(queryByTestId('command-center-alert-quote')).toBeNull();
     expect(queryByText(QUOTE.replace(/\s+/g, ' '))).toBeNull();
     await fireEvent.press(getByRole('button', { name: CRISIS_LINE }));

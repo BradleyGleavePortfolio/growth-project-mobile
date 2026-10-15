@@ -149,11 +149,13 @@ export default function ActionQueueScreen({ onSelectClient, onOpenSafetyAlert }:
           isSafetyAlert(item) ? (
             // Owner 57w / 57x: one card style for every safety alert. The
             // client's own words stay out of analytics capture, and a crisis
-            // alert never shows them (#ROMAN-CRISIS-ALERT).
+            // alert never shows them (#ROMAN-CRISIS-ALERT). Line 1 shows in
+            // full at any text size (57w).
             <View ph-no-capture>
               <AlertRow
                 clientName={item.client_name}
                 message={item.message}
+                messageLines={0}
                 quote={safetyQuote(item.alert_type, item.quote)}
                 hideClientName
                 onPress={() => onOpenSafetyAlert?.(item)}

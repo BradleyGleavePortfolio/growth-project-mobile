@@ -59,7 +59,7 @@ All list screens support:
 ### Roman safety alerts (B-R1F, 57w, #ROMAN-CRISIS-ALERT)
 
 - `roman_urgent_reply`, `roman_eating_disorder_reply` and `roman_crisis_reply` share one Actions card (the server's
-  line, then the client's message on one muted line) and open `CoachSafetyAlertScreen`. A crisis alert never shows the
+  line in full at any text size, then the client's message on one muted line) and open `CoachSafetyAlertScreen`. A crisis alert never shows the
   client's words, on the card or the screen (`safetyQuote`); its screen line is "Roman sent {first name} a crisis safety
   reply. Please check in with them today." Any other type stays an ordinary row. Tests: `coachSafetyAlert.test.tsx`.
 
