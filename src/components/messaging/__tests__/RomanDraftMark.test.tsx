@@ -1,6 +1,6 @@
 import React from 'react';
 import { Animated, PanResponder, StyleSheet, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import MessageBubble from '../MessageBubble';
 import { RomanDraftSheet } from '../RomanDraftSheet';
 import { ROMAN_DRAFT_HINT } from '../RomanDraftMark';
@@ -71,7 +71,8 @@ it.each([false, true])('two taps reveal then explain, with long press forwarded 
   expect(mark.props.accessibilityLabel).toBe(`Roman helped draft this message. ${isMe ? 'You' : 'Sam'} sent it.`);
   expect(StyleSheet.flatten(mark.props.style)).toMatchObject({ width: 44, height: 44, bottom: 0, [isMe ? 'left' : 'right']: 0 });
   expect(StyleSheet.flatten(u.getByTestId('roman-draft-frame').props.style)).toMatchObject({ paddingBottom: 18, paddingHorizontal: 16 });
-  expect(StyleSheet.flatten(u.getByTestId('roman-draft-ring').props.style)).toMatchObject({ width: 24, height: 24, top: 18, left: 10 });
+  expect(StyleSheet.flatten(u.getByTestId('roman-draft-ring', { includeHiddenElements: true }).props.style)).toMatchObject({ width: 24, height: 24, top: 18, left: 10 });
+  expect(u.queryByRole('image', { name: 'Roman' })).toBeNull();
   await fireEvent(mark, 'longPress');
   expect(onLongPress).toHaveBeenCalledWith(message);
   expect(u.queryByText('Drafted by Roman')).toBeNull();
@@ -92,7 +93,8 @@ it.each([false, true])('sheet motion, content and every dismissal (reduced=%s)',
   mockReduced = reduced;
   for (const path of ['ok', 'scrim', 'back', 'swipe', 'escape']) {
     const onClose = jest.fn();
-    const u = await render(<RomanDraftSheet context={context} onClose={onClose} onDismiss={jest.fn()} />);
+    const onDismiss = jest.fn();
+    const u = await render(<RomanDraftSheet context={context} onClose={onClose} onDismiss={onDismiss} />);
     expect(Animated.timing).toHaveBeenLastCalledWith(expect.anything(),
       expect.objectContaining({ toValue: 1, duration: reduced ? 150 : 250, useNativeDriver: true }));
     const sheet = u.getByTestId('roman-draft-sheet');
@@ -109,6 +111,7 @@ it.each([false, true])('sheet motion, content and every dismissal (reduced=%s)',
     }
     if (path === 'escape') await fireEvent(sheet, 'accessibilityEscape');
     expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
     expect(Animated.timing).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ toValue: 0, duration: reduced ? 150 : 250 }));
     await u.unmount();
   }
