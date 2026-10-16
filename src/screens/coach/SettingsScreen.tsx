@@ -341,10 +341,15 @@ export default function SettingsScreen() {
     navigation.navigate('CoachConnect');
   };
   // S-COACH-MOB-2 — TGP Money replaces Earnings and Business metrics.
+  // COACHTABS: with the six tabs the row switches to the Money tab's root.
   const handleOpenMoney = () => {
     mediumTap();
-    navigation.navigate('CoachMoney');
+    if (featureFlags.coachTabsV2) navigation.navigate('MoneyStack', { screen: 'CoachMoney', pop: true });
+    else navigation.navigate('CoachMoney');
   };
+  // COACHTABS: with the six tabs the booking rows open in the Calendar tab, above its inbox.
+  const bookingTab = featureFlags.coachTabsV2 ? 'CalendarStack' : 'ClientsStack';
+  const bookingInitial = featureFlags.coachTabsV2 ? { initial: false, pop: true } : {};
 
   const handleOpenTrustCenter = () => {
     mediumTap();
@@ -422,9 +427,31 @@ export default function SettingsScreen() {
   };
   const permanentDate = formatPermanentDate(accountStatus?.permanentDeletionAt);
 
+  // COACHTABS: Settings opens from Overview's gear, so it draws the coach Back
+  // (arrow, 44 pt, under the status bar) and returns to the tab it came from.
+  const back = featureFlags.coachTabsV2 && navigation.canGoBack() ? (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={{ width: layout.touchMin, height: layout.touchMin, justifyContent: 'center', marginBottom: 4 }}
+      testID="settings-back"
+    >
+      <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={[styles.header, { paddingTop: insets.top + layout.statusBarGap + 12 }]} testID="settings-header">
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top + layout.statusBarGap + 12 },
+          back && { paddingTop: insets.top + layout.statusBarGap },
+        ]}
+        testID="settings-header"
+      >
+        {back}
         <Headline level="h1">Settings</Headline>
       </View>
 
@@ -618,7 +645,7 @@ export default function SettingsScreen() {
           style={styles.row}
           onPress={() => {
             mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachBookingInbox' });
+            navigation.navigate(bookingTab, { screen: 'CoachBookingInbox', ...bookingInitial });
           }}
           accessibilityRole="button"
           accessibilityLabel="Open booking inbox"
@@ -637,9 +664,10 @@ export default function SettingsScreen() {
               Alert.alert('Not signed in', 'Could not resolve your coach profile.');
               return;
             }
-            navigation.navigate('ClientsStack', {
+            navigation.navigate(bookingTab, {
               screen: 'CoachAvailabilityEditor',
               params: { coachId },
+              ...bookingInitial,
             });
           }}
           accessibilityRole="button"
@@ -656,7 +684,7 @@ export default function SettingsScreen() {
           colors={colors}
           onOpen={() => {
             mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachBookingOptions' });
+            navigation.navigate(bookingTab, { screen: 'CoachBookingOptions', ...bookingInitial });
           }}
         />
         {/* S-SCHED — appointment types clients book from, and time off. */}
@@ -664,9 +692,10 @@ export default function SettingsScreen() {
           style={styles.row}
           onPress={() => {
             mediumTap();
-            navigation.navigate('ClientsStack', {
+            navigation.navigate(bookingTab, {
               screen: 'CoachAppointmentTypes',
               params: currentUser?.id ? { coachId: currentUser.id } : undefined,
+              ...bookingInitial,
             });
           }}
           accessibilityRole="button"
@@ -682,7 +711,7 @@ export default function SettingsScreen() {
           style={styles.row}
           onPress={() => {
             mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachTimeOff' });
+            navigation.navigate(bookingTab, { screen: 'CoachTimeOff', ...bookingInitial });
           }}
           accessibilityRole="button"
           accessibilityLabel="Open time off"

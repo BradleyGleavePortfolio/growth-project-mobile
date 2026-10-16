@@ -19,8 +19,7 @@
  *   - Haptic scrubber: dragging the tracking dot fires Haptics.selectionAsync()
  *     on each data-point crossover (the RevolutGlowChart pattern — gated so it
  *     never throws on web; one JS call per column crossed, not per frame).
- *   - Auto-PR flag detection: the PR point (detectPersonalRecord) gets a star
- *     flag with a glow ring.
+ *   - Auto-PR flag detection: the PR point (detectPersonalRecord) gets a star.
  *   - Roman commentary on PR: when a PR is present, an inline Roman line
  *     (romanPRDetected) renders at the bottom with RomanAvatar beside it
  *     (FACE+VOICE invariant — the voice is never disembodied).
@@ -53,7 +52,7 @@ import {
   detectPersonalRecord,
   type ProgressPoint,
 } from './detectPersonalRecord';
-import { colors, spacing, typography, withAlpha } from '../../../theme/tokens';
+import { colors, gold, spacing, typography, withAlpha } from '../../../theme/tokens';
 import { logger } from '../../../utils/logger';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -267,26 +266,15 @@ export default function ProgressChartCard({
                   />
                 )}
 
-                {/* PR flag: glow ring + star at the record point. */}
+                {/* One accent star at the record point, without a halo. */}
                 {prPoint && (
                   <>
-                    <Circle
-                      testID="progress-pr-glow"
-                      cx={prPoint.x}
-                      cy={prPoint.y}
-                      r={11}
-                      fill={withAlpha(colors.mutedGold, 0.22)}
-                    />
-                    <Circle
-                      cx={prPoint.x}
-                      cy={prPoint.y}
-                      r={6}
-                      fill={withAlpha(colors.mutedGold, 0.4)}
-                    />
                     <Polygon
                       testID="progress-pr-flag"
                       points={starPoints(prPoint.x, prPoint.y, FLAG_SIZE / 2)}
                       fill={colors.mutedGold}
+                      stroke={gold[800]}
+                      strokeWidth={0.75}
                     />
                   </>
                 )}

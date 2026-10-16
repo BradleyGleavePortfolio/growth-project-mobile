@@ -51,7 +51,7 @@ export default function HeartCard({ rhrSeries, tone, onPress }: Props) {
               data={spark}
               width={110}
               height={36}
-              color={toneTk.accent}
+              color={colors.forest}
               accessibilityLabel="Resting heart rate trend"
             />
           )}

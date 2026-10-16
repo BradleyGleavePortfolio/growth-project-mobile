@@ -58,6 +58,8 @@ When the toggle changes:
 | Location | Method | Trigger |
 |---|---|---|
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
+| `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
+| Overview gear, Calendar gear, Messages Community button (COACHTABS) | `softImpact()` | Opens Settings, Hours and rules, Community |
 | `messaging/MessageBubble` (Roman draft mark) | `selection()` | Reveal the draft line, open its explanation, or forward a long press to message actions (flag off by default) |
 | `ActiveWorkoutScreen` | `heavyImpact()` | Workout saved successfully |
 | `ActiveWorkoutScreen` | `error()` | Workout save failed |
@@ -67,6 +69,10 @@ When the toggle changes:
 | `EditProfileScreen` | `success()` | Profile saved successfully |
 | `EditProfileScreen` | `error()` | Profile save API failure |
 | `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
+| `MessagesScreen` (client, `c3StyleB` on) | `softImpact()` | Send tapped |
+| `MessagesScreen` (client, `c3StyleB` on) | `error()` | A send fails while online (once; none while offline, the message waits) |
+| `MessagesScreen` (client, `c3StyleB` on) | `success()` | The coach's read lands while the thread is open |
+| Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
 
 ## Architecture
 
