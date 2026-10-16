@@ -79,10 +79,14 @@ export const CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v10' 
  * Owner 62 (Option 1, 2026-10-12): a client with no coach sees the coach-free P0 (the coached text
  * with every coach sentence or clause removed). Owner 62y2 (Option 1): without paragraph 4 and box 2
  * (no Roman choice), footer "Nothing is sent until you continue." (consult-consent-v7-coach-free).
- * W-CONSENT: that record stays; the screen asks the coached box 2 again, recorded by its grant.
+ * W-CONSENT asks the coached box 2 again under "Before you join a coach", so the record names that whole
+ * screen (FIX684): consult-consent-v8-coach-free, or v9-coach-free when box 2 shows the server's memory
+ * paragraph. A stored v7-coach-free record stays as it is (#CRISIS-OLD-CONSENT op 1: nobody is asked again).
  * The coach-free box 2 versions stay known so a grant recorded before is still read correctly.
  */
-export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v7-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v8-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION = 'consult-consent-v9-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION = 'consult-consent-v7-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_VERSION = 'client-ai-v4-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_MEMORY_VERSION = 'client-ai-v5-coach-free' as const;
 

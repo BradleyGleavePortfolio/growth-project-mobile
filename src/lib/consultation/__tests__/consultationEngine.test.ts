@@ -279,7 +279,8 @@ describe('validation', () => {
     const ok = { agreed: true, copy_version: CONSULT_CONSENT_COPY_VERSION, agreed_at: '2026-09-30T19:00:00.000Z' };
     expect(cur(ok)).toBe(true);
     // Owner 57c / 62y2: v7, v8 and v7-coach-free are current; earlier versions are stale.
-    for (const v of ['consult-consent-v8', 'consult-consent-v7-coach-free']) {
+    // FIX684: v8 / v9-coach-free (the coach-free screen with the Roman choice) too.
+    for (const v of ['consult-consent-v8', 'consult-consent-v7-coach-free', 'consult-consent-v8-coach-free', 'consult-consent-v9-coach-free']) {
       expect(cur({ ...ok, copy_version: v })).toBe(true);
     }
     for (const v of [
