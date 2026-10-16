@@ -16,7 +16,8 @@
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authEpoch } from '../../services/accountBinding';
 import { featureFlagsKeys } from '../../hooks/useFeatureFlags';
@@ -168,5 +169,82 @@ describe('the crisis sentence follows the Roman safety-reply exception (CRISIS-A
       expect(uses(f)).toMatch(/useRomanCrisisSentence\(\)/);
       expect(uses(f)).not.toMatch(/withCrisisSentence|roman_crisis_alert/);
     }
+  });
+});
+
+/**
+ * FIX725R3 (Sol B1 at 99119f5e). Rule: every state of a screen that gains the
+ * sentence keeps its text readable and its 44 pt actions reachable at any width
+ * and text size, above the real tab bar. Shared point: on Your conversations
+ * with Roman every state that is not the list renders in one ScrollView
+ * (`page`), the list scrolls itself; Trust & Privacy is one ScrollView. The
+ * table walks every state of both screens with the switch on for a client with
+ * a coach (the longest text), and taps each recovery action. Pixel positions at
+ * iPhone 390 / Android 360 and 100% / 130% are in the PR's render evidence.
+ */
+describe('every state that shows the sentence scrolls, so its text and actions stay reachable (FIX725R3)', () => {
+  const CHAT = { id: 'c1', surface: 'client', dayKey: '2026-10-02', messageCount: 4, startedAt: '2026-10-02T08:00:00.000Z', lastActivityAt: '2026-10-02T08:00:00.000Z' };
+  const listed = (sessions: unknown[]) => ({ ok: true, value: { sessions, nextCursor: null } });
+  const failsOnce = (failure: unknown) => jest.fn().mockResolvedValueOnce({ ok: false, failure }).mockResolvedValue(listed([]));
+  const coached = ACCOUNTS[0][1];
+  /** state | list read | signed in | testIDs that must sit in a scroll view | 44 pt actions | Try again reloads */
+  const STATES: [state: string, list: () => jest.Mock, signedIn: boolean, shown: string[], actions: string[], retry: boolean][] = [
+    ['loading', () => jest.fn(() => new Promise(() => {})), true, ['roman-chats-intro', 'roman-chats-loading'], [], false],
+    ['empty', () => jest.fn(async () => listed([])), true, ['roman-chats-intro', 'roman-chats-empty'], [], false],
+    ['list', () => jest.fn(async () => listed([CHAT])), true, ['roman-chats-intro', 'roman-chat-open-c1'], ['roman-chats-delete-all'], false],
+    ['error offline', () => failsOnce({ reason: 'offline' }), true, ['roman-chats-intro', 'roman-chats-error'], ['roman-chats-error-retry'], true],
+    [
+      'error server',
+      () => failsOnce({ reason: 'unexpected', status: 500, code: null, requestId: 'abcdef1234567890' }),
+      true,
+      ['roman-chats-intro', 'roman-chats-error'],
+      ['roman-chats-error-retry', 'roman-chats-error-support'],
+      true,
+    ],
+    ['signed out', () => jest.fn(), false, ['roman-chats-signed-out'], [], false],
+  ];
+  /** True when the host node sits inside a scroll view (RN's test renderer names its host RCTScrollView). */
+  type Node = { type: string; parent: Node | null };
+  const inScroll = (node: Node) => {
+    for (let n: Node | null = node; n; n = n.parent) if (n.type === 'RCTScrollView') return true;
+    return false;
+  };
+  const withFlagOn = () => {
+    mockUser = coached;
+    mockGetFlags.mockReset().mockResolvedValue(flags(true));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    return ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  };
+
+  it.each(STATES)('Your conversations with Roman, %s', async (_state, makeList, signedIn, shown, actions, retry) => {
+    const api = { list: makeList(), deleteOne: jest.fn(), deleteAll: jest.fn(), readMessages: jest.fn() };
+    const screen = await render(
+      <RomanConversationsScreen
+        navigation={nav}
+        api={api}
+        sessionUserId={() => (signedIn ? coached.id : null)}
+        captureBinding={async () => (signedIn ? { subject: `sub:${coached.id}`, epoch: authEpoch() } : null)}
+      />,
+      { wrapper: withFlagOn() },
+    );
+    for (const id of [...shown, ...actions]) expect(inScroll(await screen.findByTestId(id))).toBe(true);
+    if (shown.includes('roman-chats-intro')) {
+      await waitFor(() => expect(String(screen.getByTestId('roman-chats-intro').props.children)).toContain(TOLD));
+    }
+    for (const id of actions) expect(StyleSheet.flatten(screen.getByTestId(id).props.style).minHeight).toBeGreaterThanOrEqual(44);
+    if (retry) {
+      await fireEvent.press(screen.getByTestId('roman-chats-error-retry'));
+      expect(await screen.findByTestId('roman-chats-empty')).toBeTruthy();
+      expect(api.list).toHaveBeenCalledTimes(2);
+      expect(String(screen.getByTestId('roman-chats-intro').props.children)).toContain(TOLD);
+    }
+  });
+
+  it('Trust & Privacy: the Roman bullet and every action sit in its one ScrollView', async () => {
+    const screen = await render(<TrustCenterScreen navigation={nav} />, { wrapper: withFlagOn() });
+    await waitFor(() => expect(String(screen.getByText(ROMAN_BULLET).props.children)).toContain(TOLD));
+    const nodes = [screen.getByText(ROMAN_BULLET), screen.getByLabelText('Request data export'), screen.getByLabelText('Delete account')];
+    for (const id of ['trust-link-privacy', 'trust-link-consumer-health', 'trust-link-terms', 'trust-link-help']) nodes.push(screen.getByTestId(id));
+    for (const node of nodes) expect(inScroll(node)).toBe(true);
   });
 });

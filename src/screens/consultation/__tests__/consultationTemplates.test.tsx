@@ -54,12 +54,20 @@ describe('templates', () => {
     await waitFor(() => r.getByTestId('consult-screen-B2'));
     const year = r.getByTestId('wheel-dob-year');
     expect(year.props.accessibilityRole).toBe('adjustable');
-    expect(year.props.accessibilityValue).toEqual({ text: '1996' });
+    // FIXAGE2 R6: nothing is picked at first (the year rests at 1996).
+    expect(year.props.accessibilityValue).toBeUndefined();
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
     // Move the year to 2012 (age 14).
     for (let i = 0; i < 16; i += 1) {
       await fireEvent(r.getByTestId('wheel-dob-year'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     }
     expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: '2012' });
+    // A year alone is not a date: Continue stays off until month and day are picked.
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+    for (const w of ['wheel-dob-month', 'wheel-dob-day']) {
+      await fireEvent(r.getByTestId(w), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    }
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: false });
     // Prototype 45: Continue leads to a calm, final stop screen; nothing is sent.
     expect(r.queryByTestId('consult-validation')).toBeNull();
     await fireEvent.press(r.getByTestId('consult-continue'));

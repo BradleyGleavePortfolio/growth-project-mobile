@@ -71,7 +71,7 @@ export default function BodyCard({
               data={weightSpark}
               width={110}
               height={36}
-              color={toneTk.accent}
+              color={colors.forest}
               accessibilityLabel="Body weight trend"
             />
           )}

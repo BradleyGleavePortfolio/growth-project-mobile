@@ -103,7 +103,10 @@ describe('RomanJoinOfferHost (owner 62y2)', () => {
     await waitFor(() => r.getByTestId('roman-join-offer-allow'));
     await fireEvent.press(r.getByTestId('roman-join-offer-allow'));
     await waitFor(() => expect(r.queryByTestId('roman-join-offer')).toBeNull());
-    expect(api.grantRoman).toHaveBeenCalledWith(expect.objectContaining({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 }));
+    expect(api.grantRoman).toHaveBeenCalledWith(
+      expect.objectContaining({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 }),
+      { crisis: false },
+    );
     const out = await api.grantRoman.mock.results[0].value;
     expect(out.kind === 'ok' && isLiveRomanGrant(out.status)).toBe(true);
     expect(success).toHaveBeenCalledTimes(1);
@@ -158,7 +161,10 @@ describe('RomanJoinOfferHost (owner 62y2)', () => {
     await waitFor(() => r.getByTestId('roman-join-offer-allow'));
     await fireEvent.press(r.getByTestId('roman-join-offer-allow'));
     await waitFor(() => expect(r.queryByTestId('roman-join-offer')).toBeNull());
-    expect(api.grantRoman).toHaveBeenCalledWith(expect.objectContaining({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 }));
+    expect(api.grantRoman).toHaveBeenCalledWith(
+      expect.objectContaining({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 }),
+      { crisis: false },
+    );
     expect(success).toHaveBeenCalledTimes(1);
     await waitFor(async () => expect(await mark()).toBe('done'));
     success.mockRestore();

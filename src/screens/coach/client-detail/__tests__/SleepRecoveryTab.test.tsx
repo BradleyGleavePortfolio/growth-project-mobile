@@ -1,11 +1,11 @@
 /**
  * SleepRecoveryTab (coach) — the IDOR-safe 403 fallback is the headline test
- * (50-Failures #5). Also verifies: coach-only anomaly band + cohort comparison
- * render with data, and a non-403 error surfaces a retry (never swallowed, #36).
+ * (50-Failures #5). Also verifies: the coach-only anomaly band + client-only
+ * average render with data, and a non-403 error surfaces a retry (#36).
  */
 
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, StyleSheet } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import type {
   WearableSamplesResponse,
@@ -72,11 +72,14 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
       refetch: jest.fn(),
       error: new WearableSamplesError('forbidden', 403, 'WEARABLE_SAMPLES_FORBIDDEN'),
     });
-    const { getByTestId, getByText } = await render(
+    const { getByTestId, getByText, queryByTestId } = await render(
       <SleepRecoveryTab clientId="other-coach-client" colors={testColors} styles={styles} />,
     );
     expect(getByTestId('recovery-unavailable')).toBeTruthy();
     expect(getByText(/don't have access/i)).toBeTruthy();
+    expect(queryByTestId('sleep-stages-headline')).toBeNull();
+    expect(queryByTestId('hrv-copy')).toBeNull();
+    expect(queryByTestId('consistency-copy')).toBeNull();
   });
 
   it('also handles a plain { status: 403 } transport error gracefully', async () => {
@@ -92,6 +95,57 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
       <SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />,
     );
     expect(getByTestId('recovery-unavailable')).toBeTruthy();
+  });
+});
+
+describe('SleepRecoveryTab — factual sleep headline', () => {
+  it('uses the shared factual HRV and bedtime copy without a score', async () => {
+    mockUseWearableSamples.mockReturnValue({
+      data: resp([
+        { metric: 'HRV_MS', unit: 'ms', provider_used: 'OURA', sample_count: 3, samples: [s(60, 1), s(62, 2), s(40, 3)] },
+        { metric: 'SLEEP_ONSET_ISO', unit: 'min', provider_used: 'OURA', sample_count: 3, samples: [s(1320, 1), s(1350, 2), s(1335, 3)] },
+      ]),
+      isError: false,
+      isLoading: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      error: null,
+    });
+    const { getByTestId } = await render(
+      <SleepRecoveryTab clientId="client-1" colors={testColors} styles={styles} />,
+    );
+    expect(getByTestId('hrv-copy').props.children).toBe('Latest HRV reading: 40 ms');
+    expect(getByTestId('consistency-copy').props.children).toBe('Bedtimes span 30 min');
+    expect(mockUseWearableSamples).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'client-1' }),
+    );
+  });
+
+  it.each([
+    [180, '3h asleep'],
+    [420, '7h asleep'],
+    [0, 'Sleep stages appear once your tracker syncs a night'],
+  ])('shows %i minutes without judging the client night', async (minutes, expected) => {
+    mockUseWearableSamples.mockReturnValue({
+      data: resp([
+        { metric: 'SLEEP_LIGHT_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(minutes)] },
+        { metric: 'SLEEP_AWAKE_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(30)] },
+      ]),
+      isError: false,
+      isLoading: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      error: null,
+    });
+    const { getByTestId } = await render(
+      <SleepRecoveryTab clientId="client-1" colors={testColors} styles={styles} />,
+    );
+    const headline = getByTestId('sleep-stages-headline').props.children as string;
+    expect(headline).toBe(expected);
+    expect(headline).not.toMatch(/\b(solid|restorative|good|great|poor|short)\b/i);
+    expect(mockUseWearableSamples).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'client-1' }),
+    );
   });
 });
 
@@ -115,7 +169,7 @@ describe('SleepRecoveryTab — other errors (#36)', () => {
 });
 
 describe('SleepRecoveryTab — coach-only overlays', () => {
-  it('renders the anomaly band and cohort comparison when there is HRV data', async () => {
+  it('renders the anomaly band and the client-only average when there is HRV data', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([
         {
@@ -138,9 +192,13 @@ describe('SleepRecoveryTab — coach-only overlays', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = await render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
+    const { getByTestId, getByText } = await render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
     expect(getByTestId('coach-anomaly-band')).toBeTruthy();
+    // A card-surface ring keeps the marker apart from the band it sits on.
+    expect(StyleSheet.flatten(getByTestId('coach-anomaly-marker').props.style))
+      .toMatchObject({ borderWidth: 1, borderColor: testColors.surface });
     expect(getByTestId('coach-cohort-comparison')).toBeTruthy();
+    expect(getByText('Client average 38 ms')).toBeTruthy();
     expect(getByTestId('coach-recovery-tab')).toBeTruthy();
   });
 });

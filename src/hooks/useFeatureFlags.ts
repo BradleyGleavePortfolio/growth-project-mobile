@@ -15,7 +15,7 @@
  *   - Refetches on app foreground via an `AppState` listener (the RN equivalent
  *     of `refetchOnWindowFocus`), so a flag flipped server-side takes effect on
  *     the next resume rather than only on a cold start.
- *   - FAIL-SAFE: while loading or on error, every flag reads `false`. A failed
+ *   - FAIL-SAFE: while loading or after a failed first read, every flag reads `false`; a failed refresh keeps the last map except `roman_crisis_alert` (off). A failed
  *     flags fetch must NEVER enable a gated surface. The local static
  *     `featureFlags.*` build-time kill switch in `config/featureFlags.ts`
  *     remains the outer gate (it controls route REGISTRATION); this hook is the

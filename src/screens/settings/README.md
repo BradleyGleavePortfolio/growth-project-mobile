@@ -80,7 +80,7 @@ Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple c
 
 A client with no coach has no access to Roman. The screen shows the overline and title, the owner's sentence "You have no access to Roman, but may delete prior data here.", and one filled button, "Your conversations with Roman", which opens `RomanConversationsScreen` (its delete actions, and its empty state when there is nothing). No Allow, Withdraw or memory control and no `GET /me/ai-consent`; the server answers a grant from a client with no coach with 403 `ROMAN_REQUIRES_COACH`. Owner 57c: for a client with a coach the paragraph is `client-ai-v6` / `v7` (the safety-reply exception), read with `?variant=safety_exception`.
 
-CRISIS-APP-COPY (owner op 1): while `roman_crisis_alert` is on the screen reads `?variant=crisis_alert` (the `client-ai-v8` / `v9` texts, with the approved crisis sentence after the exception, when the server answers with them), and where it adds the exception for a live `client-ai-v4` / `v5` grant (the paragraph and the memory-on confirmation) the crisis sentence follows it. A live grant of another text reads its own text. Test: `src/lib/ai/__tests__/consentCrisis149.test.tsx`.
+CRISIS-APP-COPY (owner op 1): while `roman_crisis_alert` is on the screen reads `?variant=crisis_alert` (the `client-ai-v8` / `v9` texts, with the approved crisis sentence after the exception, when the server answers with them), and where it adds the exception for a live `client-ai-v4` / `v5` grant (the paragraph) the crisis sentence follows it. A live grant of another text reads its own text. FIXCONSENT (b#1047): every new choice (Allow, memory on, memory off) is made in the copies asked for, whatever is on file; the memory-on confirmation is the server's text as sent, and POST / DELETE send the same `?variant=`. Tests: `src/lib/ai/__tests__/consentCrisis149.test.tsx`, `consentAsked150.test.tsx`.
 
 ### RomanAiConsentScreen: prototype 74 look
 
@@ -100,7 +100,7 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 **Why:** owner decision 2026-10-01 20:32 and ruling OR-110-1. Roman chats are kept until the client deletes them or their account, and the box-2 consent copy (`client-ai-v4`) says exactly that, so every chat must be findable and deletable. Roman chats are never visible to coaches.
 
-**Crisis sentence (CRISISAPP-M, owner CRISIS-APP-COPY op 1):** the intro states the Roman safety-reply exception (57c). While the server's `FEATURE_ROMAN_CRISIS_ALERT` is on (`roman_crisis_alert` in `GET /me/feature-flags`, read through `useFeatureFlags`; absent, loading or failed = off), the approved crisis sentence follows it directly, for a client with a coach only (`useRomanCrisisSentence` in `src/lib/romanCrisisSentence.ts` decides from the account; a coach account and a client with no coach never get it; a failed refresh reads off even after an earlier true); while it is off the intro is exactly as before. The Trust Center Roman bullet does the same. Test: `src/lib/__tests__/romanCrisisSentence.test.tsx` (both places x three accounts x on, off, failed read).
+**Crisis sentence (CRISISAPP-M, owner CRISIS-APP-COPY op 1):** the intro states the Roman safety-reply exception (57c). While the server's `FEATURE_ROMAN_CRISIS_ALERT` is on (`roman_crisis_alert` in `GET /me/feature-flags`, read through `useFeatureFlags`; absent, loading or failed = off), the approved crisis sentence follows it directly, for a client with a coach only (`useRomanCrisisSentence` in `src/lib/romanCrisisSentence.ts` decides from the account; a coach account and a client with no coach never get it; a failed refresh reads off even after an earlier true); while it is off the intro is exactly as before. The Trust Center Roman bullet does the same. Every state that is not the list (loading, error, signed out) scrolls in one `ScrollView` (`page`), and the list scrolls itself, so the longer intro never pushes Try again or Contact support off a small phone at large text (FIX725R3). Test: `src/lib/__tests__/romanCrisisSentence.test.tsx` (both places x three accounts x on, off, failed read; and every state of both screens with the sentence on: in a scroll view, 44 pt actions, Try again reloads).
 
 **Flow**
 
@@ -133,9 +133,10 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 ### CoachSharingScreen
 
 `CoachSharingScreen.tsx` (Settings > Privacy > Coach sharing): four switches (Workouts, Food logs, Weigh-ins, Check-ins and
-habits), each saved at once via `POST /consent/grant | revoke`. Under them one line says connected devices (Apple Health,
-Health Connect) are not covered by the switches: the coach reads that data through the coach link only (backend
-`wearable-samples.service.ts`), and data already shared stays after a disconnect (FW-BODY B2). The **Connected devices** row
+habits), each saved at once via `POST /consent/grant | revoke`. Under them one line says weight and body fat from connected
+devices (Apple Health, Health Connect) follow Weigh-ins (backend `coach-sharing-gate.ts` `seesWeight`, WEIGHTWALL) and the
+coach reads the other device data through the coach link only (backend `wearable-samples.service.ts`), and it stays after a
+disconnect (FW-BODY B2). The **Connected devices** row
 opens `Connections` on the same More stack and shows where the More screen shows that row (iPhone, Health Connect builds,
 tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`. The Settings row shows only while the server says the
 client has a coach (`GET /consent/me`; 400 = none), read each time Settings comes into view (`useFocusEffect`); until the

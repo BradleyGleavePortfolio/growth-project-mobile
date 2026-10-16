@@ -1,10 +1,10 @@
 /**
- * smoothPath — pure SVG path builders for the Revolut glow chart line + area.
+ * smoothPath — pure SVG path builder for the shared chart line.
  *
  * The chart (RevolutGlowChart) is the VISCERAL PEAK of the H&F surface (Don
  * Norman first-50–200ms layer / peak-end rule, Mobile Design Intel doc). A raw
  * `<Polyline>` reads as "tutorial code"; the premium Revolut feel comes from a
- * smooth bezier line over a soft gradient area fill. These helpers are kept
+ * smooth bezier line (no area fill, owner ruling). These helpers are kept
  * PURE (no React, no SVG element creation) so the interpolation can be unit-
  * tested in isolation and called on every geometry change without allocation
  * surprises.
@@ -110,22 +110,4 @@ export function smoothLinePath(points: readonly PathPoint[]): string {
   }
 
   return d;
-}
-
-/**
- * Build the closed area path for the gradient fill: the smooth line, then down
- * to the baseline at the last x, across to the first x, and closed. `baselineY`
- * is the y of the chart's bottom in caller space. Returns `''` when there is
- * nothing to fill (fewer than 2 points).
- */
-export function smoothAreaPath(
-  points: readonly PathPoint[],
-  baselineY: number,
-): string {
-  const n = points.length;
-  if (n < 2) return '';
-  const line = smoothLinePath(points);
-  const lastX = points[n - 1].x;
-  const firstX = points[0].x;
-  return `${line} L ${f(lastX)} ${f(baselineY)} L ${f(firstX)} ${f(baselineY)} Z`;
 }

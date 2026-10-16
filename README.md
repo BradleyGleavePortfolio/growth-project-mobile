@@ -421,6 +421,8 @@ src/
 
 ## Navigation
 
+Coach tabs (COACHTABS, behind `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off): Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from a gear on Overview, Community from Messages and Team from Clients; every existing route and push target still lands. With it on, coaches open the app on Overview. Off, the coach bar and the Clients landing are unchanged. See `src/navigation/README.md`.
+
 New clients complete either LeanQ1–LeanQ6 or the available consultation. Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
 
 The current coach wizard keeps five setup routes. It respects top/bottom safe insets, and Back on a cold-resumed step replaces with the preceding route rather than doing nothing or cycling forward. Step 1 has no earlier setup route. Stripe configuration unavailability does not block Continue setup; the verification resend action shows its busy state and a live cooldown. See `src/navigation/README.md` and `src/screens/auth/README.md` (COACH-EDGES-132, agent 132).

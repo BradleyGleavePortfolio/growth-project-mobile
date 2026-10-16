@@ -13,12 +13,18 @@
  * server), and RootNavigator skips the Day-1 and Day-1 win gates while the
  * flag is on. The client lands in the app with Roman's tutorial pending
  * (queued by ConsultationFlow.finish via startClientTutorial).
+ *
+ * AGEDELETE (App Store 5.1.1(v)): a stack, so the under-16 stop and paused
+ * screens open the real Download my data and Delete my account screens, as
+ * the age step does (AgeCheckNavigator).
  */
 import React, { useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { useFeatureFlags } from '../hooks/useFeatureFlags';
 import ConsultationFlow from '../screens/consultation/ConsultationFlow';
+import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+import DataExportScreen from '../screens/settings/DataExportScreen';
 import type { CompleteOnboardingResponse } from '../api/consultationApi';
 import { authEvents } from '../utils/authEvents';
 import { logger } from '../utils/logger';
@@ -32,10 +38,10 @@ function firstNameOf(user: { firstName?: string; name?: string } | null): string
   return n ? n.split(/\s+/)[0] : null;
 }
 
+const Stack = createNativeStackNavigator();
+
 export default function ConsultationOnboardingNavigator() {
   const user = useCurrentUser();
-  // CRISIS-APP-COPY: P0 asks for the crisis-sentence copies while roman_crisis_alert is on (and re-asks when it arrives).
-  const crisisAlert = useFeatureFlags().flags.roman_crisis_alert;
 
   const onFinished = useCallback(async (_result: CompleteOnboardingResponse) => {
     try {
@@ -51,14 +57,23 @@ export default function ConsultationOnboardingNavigator() {
   if (!user) return null;
 
   return (
-    <ConsultationFlow
-      userId={user.id}
-      firstName={firstNameOf(user)}
-      coachName={null}
-      coachless={!user.coach_id}
-      crisisAlert={crisisAlert}
-      onFinished={onFinished}
-      onSignOut={() => void signOut(user.id)}
-    />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Consultation">
+        {({ navigation }) => (
+          <ConsultationFlow
+            userId={user.id}
+            firstName={firstNameOf(user)}
+            coachName={null}
+            coachless={!user.coach_id}
+            onFinished={onFinished}
+            onSignOut={() => void signOut(user.id)}
+            onOpenDataExport={() => navigation.navigate('DataExport')}
+            onOpenDeleteAccount={() => navigation.navigate('DeleteAccount')}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      <Stack.Screen name="DataExport" component={DataExportScreen} />
+    </Stack.Navigator>
   );
 }
