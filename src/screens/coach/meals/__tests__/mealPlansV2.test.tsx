@@ -1,12 +1,12 @@
-/** MEALBUILD: Programs > Meal plans, Meals and the meal editor, real hooks against a fake of backend main's routes. */
+/** MEALBUILD: Programs > Meal plans, Meals, the meal editor, the day-plan builder and Assign, real hooks against a fake of backend main's routes. */
 import React from 'react';
 import { Alert } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 type Row = Record<string, any>;
-const mockDb = { meals: [] as Row[], plans: [] as Row[], assignments: [] as Row[], fail: {} as Record<string, unknown> };
-const mockNav = { navigate: jest.fn(), goBack: jest.fn() };
+const mockDb = { meals: [] as Row[], plans: [] as Row[], assignments: [] as Row[], clients: [] as Row[], fail: {} as Record<string, unknown> };
+const mockNav = { navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn(), popTo: jest.fn() };
 let mockFlag = true;
 
 /** Backend main's coach meal routes: own rows only, archived rows hidden, DTO limits enforced. */
@@ -19,18 +19,29 @@ function mockRoute(method: string, url: string, body: Row = {}): Promise<{ data:
   const bad = ['calories_kcal', 'protein_g', 'carbs_g', 'fats_g'].some((k, i) => body[k] > [2000, 300, 400, 200][i]);
   const plan = (p: Row) => ({ ...p, slots: p.slots.map((s: Row) => ({ ...s, meal_template: mockDb.meals.find((m) => m.id === s.meal_template_id) })) });
   const no = (status: number, message: string) => Promise.reject({ response: { status, data: { message } } });
+  const p = live(mockDb.plans).find((x) => x.id === id);
+  const deadMeal = (body.slots ?? []).some((x: Row) => !live(mockDb.meals).some((m) => m.id === x.meal_template_id));
+  if (body.slots) body = { ...body, slots: body.slots.map((x: Row, i: number) => ({ id: `n${i}`, ...x })) };
   let data: unknown;
-  if (kind === 'meal-templates') {
+  if (kind === 'clients') data = { calories_kcal: 2100, protein_g: 160, carbs_g: 220, fats_g: 70 };
+  else if (kind === 'meal-templates') {
     if (method === 'GET') data = live(mockDb.meals);
     else if (bad) return no(400, 'Bad Request');
     else if (method === 'POST') mockDb.meals.push((data = { id: `m${mockDb.meals.length + 1}`, archived_at: null, ...body }) as Row);
     else if (!meal) return no(404, 'Meal template not found');
     else data = Object.assign(meal, method === 'DELETE' ? { archived_at: '2026-10-16T00:00:00.000Z' } : body);
-  } else if (sub === 'assignments') data = mockDb.assignments.filter((a) => a.daily_meal_plan_id === id);
-  else data = live(mockDb.plans).map(plan);
+  } else if (sub === 'assignments' && method === 'GET') data = mockDb.assignments.filter((a) => a.daily_meal_plan_id === id);
+  else if (id && !p) return no(404, 'Daily meal plan not found');
+  else if (sub === 'assignments') {
+    if (!mockDb.clients.some((c) => c.id === body.client_id)) return no(404, 'Client not found');
+    mockDb.assignments.push((data = { id: `a${mockDb.assignments.length}`, daily_meal_plan_id: id, ends_on: null, ...body }) as Row);
+  } else if (method === 'GET') data = p ? plan(p) : live(mockDb.plans).map(plan);
+  else if (deadMeal) return no(400, 'Meal template(s) not owned by coach');
+  else if (method === 'POST') mockDb.plans.push((data = { id: `p${mockDb.plans.length + 1}`, coach_id: 'coach', notes: null, archived_at: null, ...body }) as Row);
+  else data = plan(Object.assign(p as Row, body));
   return Promise.resolve({ data });
 }
-jest.mock('../../../../services/api', () => ({ __esModule: true, coachApi: {}, default: { get: (u: string) => mockRoute('GET', u),
+jest.mock('../../../../services/api', () => ({ __esModule: true, coachApi: { getClients: () => Promise.resolve({ data: mockDb.clients }) }, default: { get: (u: string) => mockRoute('GET', u),
   post: (u: string, b: Row) => mockRoute('POST', u, b), patch: (u: string, b: Row) => mockRoute('PATCH', u, b), delete: (u: string) => mockRoute('DELETE', u) } }));
 jest.mock('../../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../../config/featureFlags');
@@ -42,12 +53,17 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, use
 jest.mock('react-native-safe-area-context', () => ({ ...jest.requireActual('react-native-safe-area-context'), SafeAreaView: require('react-native').View }));
 jest.mock('../../../../components/coach/ai-entry/useAiEntryStatus', () => ({ useAiEntryStatus: () => ({ visible: false }) }));
 jest.mock('../../../../hooks/usePrograms', () => ({
+  ...jest.requireActual('../../../../hooks/usePrograms'),
   useProgramList: () => ({ data: { pages: [{ items: [], goal_tags: [] }] }, isLoading: false, isRefetching: false, error: null, refetch: jest.fn() }),
   useSavedWorkouts: () => ({ data: { pages: [{ items: [] }] }, isLoading: false, isRefetching: false, error: null, refetch: jest.fn() }),
 }));
 
 import ProgramsLibraryScreen from '../../programs/ProgramsLibraryScreen';
 import MealEditor from '../../CoachMealTemplatesScreen';
+import DayPlanBuilder from '../DayPlanBuilderScreen';
+import MealPicker from '../MealPickerScreen';
+import MealPlanAssign from '../MealPlanAssignScreen';
+import { toIsoDate } from '../../../../api/programsApi';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
 
 const meal = (id: string, name: string, k: number, p: number, c: number, f: number) =>
@@ -59,6 +75,9 @@ const haptic = (k: 'selection' | 'success' | 'error' | 'mediumImpact') => Haptic
 const mount = (ui: React.ReactElement) => render(<QueryClientProvider client={new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>{ui}</QueryClientProvider>);
 const editor = (mealId?: string) => mount(<MealEditor {...({ route: { params: { mealId } }, navigation: mockNav } as any)} />);
+const open = (C: React.ComponentType<any>, params?: Row) => mount(<C route={{ params }} navigation={mockNav} />);
+const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
+const chip = (n: number) => `${day(n).toLocaleDateString('en-US', { weekday: 'short' })} ${day(n).getDate()}`;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -70,6 +89,7 @@ beforeEach(() => {
     { id: 'p2', coach_id: 'coach', name: 'Rest day', notes: null, archived_at: null, slots: [slot('s3', 'm3', 'snack', 0)] },
   ];
   mockDb.assignments = [assign('p1', 'c1'), assign('p1', 'c3'), assign('p1', 'c2', '2020-01-31T00:00:00.000Z'), assign('p2', 'c1')];
+  mockDb.clients = [['c1', 'Maya Chen'], ['c2', 'Jordan Lee'], ['c3', 'Leo Park'], ['c4', 'Nina Shah']].map(([id, name]) => ({ id, name, email: `${id}@x.test` }));
   mockDb.fail = {};
 });
 afterEach(() => require('@react-native-community/netinfo').__reset());
@@ -90,6 +110,10 @@ it('Meal plans shows kcal, note, meals, protein and clients on each plan; Meals 
   expect(s.getByText('2 day plans · 3 meals · 2 clients on a plan')).toBeTruthy();
   expect(s.getByText('“Eat the bigger lunch on lifting days.”')).toBeTruthy();
   expect(s.getByText('2 meals · protein 76 g')).toBeTruthy();
+  await fireEvent.press(s.getByLabelText('Rest day, 220 kcal, 1 client'));
+  expect(mockNav.navigate).toHaveBeenLastCalledWith('DayPlanBuilder', { planId: 'p2' });
+  await fireEvent.press(s.getByTestId('plan-new'));
+  expect(mockNav.navigate).toHaveBeenLastCalledWith('DayPlanBuilder');
   await fireEvent.press(s.getByTestId('programs-tab-meals'));
   await fireEvent.press(await s.findByLabelText('Overnight oats, 420 kcal · P 24 · C 62 · F 9'));
   expect(mockNav.navigate).toHaveBeenLastCalledWith('MealEditor', { mealId: 'm1' });
@@ -152,4 +176,95 @@ it('loading, a failed load (one error haptic, Try again, Contact support), offli
   expect(await s.findByText('No day plans yet.')).toBeTruthy();
   await act(async () => require('@react-native-community/netinfo').__setState({ isConnected: false }));
   expect(s.getByText(/^You’re offline\. This is your list as of .+\. Saving needs a connection\.$/)).toBeTruthy();
+});
+
+it('a new day plan is named, created, then opens in the builder', async () => {
+  const s = await open(DayPlanBuilder);
+  expect(s.getByTestId('plan-create').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.changeText(s.getByLabelText('Day plan name'), 'Travel day');
+  await fireEvent.press(s.getByTestId('plan-create'));
+  await waitFor(() => expect(mockNav.setParams).toHaveBeenCalledWith({ planId: 'p3' }));
+  expect(mockDb.plans[2]).toMatchObject({ name: 'Travel day', slots: [] });
+  expect([haptic('mediumImpact').mock.calls.length, haptic('success').mock.calls.length]).toEqual([1, 1]);
+});
+
+it('the builder shows the day and its clients, saves the note, and opens Swap, Add a meal and Assign', async () => {
+  const s = await open(DayPlanBuilder, { planId: 'p1', assigned: 'Assigned to Jordan from Fri, Oct 16.' });
+  expect(await s.findByText('1,100')).toBeTruthy();
+  expect(s.getByText('Protein 76 g   Carbs 140 g   Fat 23 g')).toBeTruthy();
+  expect(await s.findByText('2 clients follow this plan')).toBeTruthy();
+  expect(s.getByText('Assigned to Jordan from Fri, Oct 16.')).toBeTruthy();
+  expect(s.getByText('Changes reach the 2 clients on this plan right away. Food they already logged stays as it was.')).toBeTruthy();
+  const note = s.getByLabelText('Your note on this plan, clients see it');
+  await fireEvent.changeText(note, 'Lunch is the big meal.');
+  await fireEvent(note, 'endEditing');
+  await waitFor(() => expect(mockDb.plans[0].notes).toBe('Lunch is the big meal.'));
+  expect(haptic('success')).toHaveBeenCalledTimes(1);
+  await fireEvent.press(s.getByLabelText('Swap lunch'));
+  expect(mockNav.navigate).toHaveBeenLastCalledWith('MealPicker', { planId: 'p1', index: 1 });
+  await fireEvent.press(s.getByTestId('plan-add'));
+  expect(mockNav.navigate).toHaveBeenLastCalledWith('MealPicker', { planId: 'p1' });
+  await fireEvent.press(s.getByTestId('plan-assign'));
+  expect(mockNav.navigate).toHaveBeenLastCalledWith('MealPlanAssign', { planId: 'p1' });
+});
+
+it('Swap, Add a meal and Remove save the slots; an archived meal says what to do', async () => {
+  const slots = () => mockDb.plans[0].slots.map((x: Row) => `${x.meal_template_id} ${x.slot_label} ${x.order}`);
+  let s = await open(MealPicker, { planId: 'p1', index: 1 });
+  expect(await s.findByText('Swap lunch')).toBeTruthy();
+  await fireEvent.press(await s.findByTestId('pick-m3'));
+  await waitFor(() => expect(slots()).toEqual(['m1 breakfast 0', 'm3 lunch 1']));
+  expect([mockNav.goBack.mock.calls.length, haptic('success').mock.calls.length]).toEqual([1, 1]);
+  await s.unmount();
+  s = await open(MealPicker, { planId: 'p1' });
+  await fireEvent.press(await s.findByLabelText('Snack'));
+  expect(haptic('selection')).toHaveBeenCalledTimes(1);
+  await fireEvent.press(await s.findByTestId('pick-m2'));
+  await waitFor(() => expect(slots()).toEqual(['m1 breakfast 0', 'm3 lunch 1', 'm2 snack 2']));
+  await s.unmount();
+  s = await open(MealPicker, { planId: 'p1', index: 0 });
+  await fireEvent.press(await s.findByText('Remove breakfast'));
+  await waitFor(() => expect(slots()).toEqual(['m3 lunch 0', 'm2 snack 1']));
+  await s.unmount();
+  mockDb.meals[2].archived_at = '2026-10-16T00:00:00.000Z';
+  s = await open(MealPicker, { planId: 'p1' });
+  await fireEvent.press(await s.findByTestId('pick-m1'));
+  expect(await s.findByText('A meal in this plan was archived. Swap it, then try again.')).toBeTruthy();
+  expect(haptic('error')).toHaveBeenCalledTimes(1);
+});
+
+it('Assign: dates, the target line with no verdict, then success back on the builder', async () => {
+  const s = await open(MealPlanAssign, { planId: 'p2' });
+  await fireEvent.press(await s.findByTestId('client-c2'));
+  expect(haptic('selection')).toHaveBeenCalledTimes(1);
+  expect(await s.findByText('Plan 220 · target 2,100 kcal')).toBeTruthy();
+  await fireEvent.press(s.getByLabelText('2 weeks'));
+  await fireEvent.press(s.getByTestId('assign-submit'));
+  await waitFor(() => expect(mockNav.popTo).toHaveBeenCalledWith('DayPlanBuilder',
+    { planId: 'p2', assigned: `Assigned to Jordan from ${day(0).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}.` }));
+  expect(mockDb.assignments[mockDb.assignments.length - 1]).toMatchObject({ daily_meal_plan_id: 'p2', client_id: 'c2', starts_on: toIsoDate(day(0)), ends_on: toIsoDate(day(13)) });
+  expect([haptic('mediumImpact').mock.calls.length, haptic('success').mock.calls.length]).toEqual([1, 1]);
+});
+
+it('Assign conflicts: same plan and same start day block, an overlap explains, a moved client and an archived plan say so', async () => {
+  mockDb.assignments.push({ ...assign('p2', 'c4'), starts_on: toIsoDate(day(2)) });
+  const s = await open(MealPlanAssign, { planId: 'p1' });
+  await fireEvent.press(await s.findByTestId('client-c1'));
+  expect(await s.findByText('Maya is already on Training day from Thu, Oct 1.')).toBeTruthy();
+  expect(s.getByTestId('assign-submit').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(s.getByTestId('client-c4'));
+  const from = day(2).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  expect(s.getByText(`Nina is on Rest day from ${from}. On days both plans cover, Nina sees the one that starts later.`)).toBeTruthy();
+  await fireEvent.press(s.getByLabelText(chip(2)));
+  expect(s.getByText(`Nina starts Rest day on ${from}. Pick another start date.`)).toBeTruthy();
+  expect(s.getByTestId('assign-submit').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(s.getByLabelText('Today'));
+  await fireEvent.press(s.getByTestId('client-c2'));
+  mockDb.clients = mockDb.clients.filter((c) => c.id !== 'c2');
+  await fireEvent.press(s.getByTestId('assign-submit'));
+  expect(await s.findByText('Jordan is no longer your client.')).toBeTruthy();
+  mockDb.plans[0].archived_at = '2026-10-16T00:00:00.000Z';
+  await fireEvent.press(s.getByTestId('assign-submit'));
+  expect(await s.findByText('This day plan was archived.')).toBeTruthy();
+  expect([haptic('error').mock.calls.length, mockNav.popTo.mock.calls.length]).toEqual([2, 0]);
 });

@@ -10,7 +10,7 @@ import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isConnectionFailure } from '../../../ui/states/QuietStates';
 import { toIsoDate } from '../../../api/programsApi';
-import type { DailyMealPlanAssignment, MealTemplate } from '../../../api/mealTemplatesApi';
+import type { DailyMealPlan, DailyMealPlanAssignment, MealTemplate, SlotLabel } from '../../../api/mealTemplatesApi';
 import type { ProgramsNav } from '../programs/types';
 
 export type ProgramsHalf = 'workouts' | 'plans' | 'meals';
@@ -30,6 +30,14 @@ export const clientsOn = (rows: DailyMealPlanAssignment[], today = toIsoDate(new
   new Set(rows.filter((a) => !a.ends_on || a.ends_on.slice(0, 10) >= today).map((a) => a.client_id));
 export const saveFailed = (err: unknown) => `That did not save. ${isConnectionFailure(err)
   ? 'Check your connection, then try again.' : 'Try again in a moment.'}`;
+export const httpStatus = (err: unknown) => (err as { response?: { status?: number } } | null)?.response?.status;
+/** The plan PATCH answers 400 when a slot's meal was archived (validateSlotTemplates). */
+export const planSaveFailed = (err: unknown) =>
+  httpStatus(err) === 400 ? 'A meal in this plan was archived. Swap it, then try again.' : saveFailed(err);
+export const SLOT_NAMES: Record<SlotLabel, string> = {
+  breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack', preworkout: 'Pre-workout', postworkout: 'Post-workout',
+};
+export const sortedSlots = (p: DailyMealPlan) => [...p.slots].sort((a, b) => a.order - b.order);
 
 export function Masthead({ title, sub, onBack, children }: { title: React.ReactNode; sub?: string; onBack?: () => void; children?: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
@@ -109,12 +117,32 @@ export const OfflineNote = ({ at }: { at: number }) => (
     { hour: 'numeric', minute: '2-digit' })}. Saving needs a connection.`}</Notice>
 );
 
-export function FirstCard({ title, body }: { title: string; body: string }) {
+export function FirstCard({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={[s.card, { backgroundColor: sc.surface.sage }]}>
       <Text accessibilityRole="header" style={[s.cardTitle, { color: sc.textPrimary }]}>{title}</Text>
       <Text style={[typography.body, { color: sc.textPrimary }]}>{body}</Text>
+      {children}
+    </View>
+  );
+}
+
+/** Masthead choice chips, one picked (cream fill, ink text); selection haptic. */
+export function Chips<T extends string | number>({ items, value, onChange, label }: { items: [T, string][]; value: T; onChange: (v: T) => void; label: string }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={s.chips}>
+      {items.map(([key, text]) => {
+        const on = key === value;
+        return (
+          <Pressable key={String(key)} accessibilityRole="radio" accessibilityLabel={text} accessibilityState={{ checked: on }}
+            onPress={() => { if (!on) { void HapticService.selection(); onChange(key); } }}
+            style={({ pressed }) => [s.chip, { borderColor: on ? sc.bgSurface : sc.data.plannedOnDark, backgroundColor: on ? sc.bgSurface : 'transparent' }, pressed && s.pressed]}>
+            <Text style={[on ? typography.bodyMd : typography.body, { color: on ? sc.textPrimary : sc.textOnAccent }]}>{text}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -130,6 +158,8 @@ export const mealStyles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent', borderRadius: radius.card, padding: 20, gap: 12 },
   cardTitle: { ...typography.h2, fontSize: 26, lineHeight: 33 },
   ghost: { height: 112 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  chip: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: 16, borderWidth: 1, borderRadius: radius.button },
   notice: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
 });
 const s = mealStyles;
