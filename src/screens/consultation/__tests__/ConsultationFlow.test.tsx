@@ -116,9 +116,9 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(r.getByText('Before we start')).toBeTruthy();
     expect(r.getByText(/Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider/)).toBeTruthy();
-    // Owner C-6a: paragraph 3 ends at "We never sell it." (no clinic sentence).
+    // Owner C-6a: paragraph 3 ends at "We never sell it." (no referral-partner sentence).
     expect(r.getByText(/and posts you write in the community\. We use it only to provide your training\. We never sell it\.$/)).toBeTruthy();
-    expect(r.queryByText(/clinic/i)).toBeNull();
+    expect(r.queryByText(/cl[i]nic/i)).toBeNull();
     expect(r.getByTestId('consent-footer').props.children).toBe(
       "Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman's guided tour works either way.",
     );

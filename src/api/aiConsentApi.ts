@@ -7,9 +7,13 @@
  *          ?variant=coach_free   the coach-free copies, for a client with no coach (owner 62)
  *          ?variant=safety_exception   otherwise: the coached copies with the safety-reply exception
  *                                (client-ai-v6 / v7, owner 57c); a live grant reads its own copies
+ *          ?variant=crisis_alert   asked instead exactly while `roman_crisis_alert` is on: v6 / v7 plus the
+ *                                crisis sentence (client-ai-v8 / v9, CRISIS-APP-COPY) while the server's switch is on
  *   POST   /me/ai-consent/roman  { version, copy_sha256?, platform?, app_version?, locale? }
  *                                grant (idempotent); 409 CONSENT_VERSION_MISMATCH
  *   DELETE /me/ai-consent/roman  withdraw (idempotent)
+ *          POST / DELETE with an ask send the same ?variant= as the GET (b#1047), so the status they
+ *          answer with offers the copies the screen shows; without one the server reads the copies on file
  *
  * All three answer with the same status body. 503 AI_CONSENT_UNAVAILABLE
  * while the ledger switch is off; 404 from a backend without it.
@@ -203,16 +207,23 @@ export function isLiveGrant(s: AiConsentStatusResponse | null | undefined, versi
   return s.version === version && s.current_version === version;
 }
 
+/**
+ * Which copies a call asks for. `coachFree`: a client with no coach (owner 62); `crisis`: `roman_crisis_alert`
+ * is on (CRISIS-APP-COPY); otherwise the owner 57c copies. A server before either ignores the query.
+ */
+export interface AiConsentAsk {
+  coachFree?: boolean;
+  crisis?: boolean;
+}
+
+const askParams = (opts?: AiConsentAsk) => ({
+  params: { variant: opts?.coachFree ? 'coach_free' : opts?.crisis ? 'crisis_alert' : 'safety_exception' },
+});
+
 export const aiConsentApi = {
-  /**
-   * `coachFree`: a client with no coach (owner 62); otherwise the owner 57c copies. A server before
-   * either ignores the query.
-   */
-  getStatus: async (opts?: { coachFree?: boolean }): Promise<AiConsentOutcome> => {
+  getStatus: async (opts?: AiConsentAsk): Promise<AiConsentOutcome> => {
     try {
-      const res = await api.get<unknown>('/me/ai-consent', {
-        params: { variant: opts?.coachFree ? 'coach_free' : 'safety_exception' },
-      });
+      const res = await api.get<unknown>('/me/ai-consent', askParams(opts));
       const status = parseStatus(res?.data);
       return status ? { kind: 'ok', status } : { kind: 'error', status: res?.status ?? null };
     } catch (err) {
@@ -220,18 +231,20 @@ export const aiConsentApi = {
     }
   },
 
-  grantRoman: async (body: GrantRomanConsentRequest): Promise<AiConsentOutcome> => {
+  grantRoman: async (body: GrantRomanConsentRequest, ask?: AiConsentAsk): Promise<AiConsentOutcome> => {
     try {
-      const res = await api.post<unknown>('/me/ai-consent/roman', body);
+      const url = '/me/ai-consent/roman';
+      const res = await (ask ? api.post<unknown>(url, body, askParams(ask)) : api.post<unknown>(url, body));
       return { kind: 'ok', status: parseStatus(res?.data) };
     } catch (err) {
       return failure(err);
     }
   },
 
-  withdrawRoman: async (): Promise<AiConsentOutcome> => {
+  withdrawRoman: async (ask?: AiConsentAsk): Promise<AiConsentOutcome> => {
     try {
-      const res = await api.delete<unknown>('/me/ai-consent/roman');
+      const url = '/me/ai-consent/roman';
+      const res = await (ask ? api.delete<unknown>(url, askParams(ask)) : api.delete<unknown>(url));
       return { kind: 'ok', status: parseStatus(res?.data) };
     } catch (err) {
       return failure(err);

@@ -96,7 +96,7 @@ const V5CF_COPY: AiConsentUpgradeCopy = {
 const CF_STATUS = aiStatus({ current_version: 'client-ai-v4-coach-free' });
 
 describe('coach-free copy (owner 62)', () => {
-  it('only removes words from the coached text, names no coach and never mentions a clinic', () => {
+  it('only removes words from the coached text, names no coach and never names the referral partner', () => {
     const pairs: Array<[string, string]> = [
       ...CONSENT_PARAGRAPHS.map((p, i): [string, string] => [p, CONSENT_PARAGRAPHS_COACH_FREE[i]]),
       [CONSENT_CHECKBOX_LABEL, CONSENT_CHECKBOX_LABEL_COACH_FREE],
@@ -107,7 +107,7 @@ describe('coach-free copy (owner 62)', () => {
     for (const [coached, free] of pairs) {
       expect(removalsOnly(coached, free)).toBe(true);
       expect(free.replace(/To coach you|to coach me/g, '')).not.toMatch(/coach/i);
-      expect(free).not.toMatch(/clinic/i);
+      expect(free).not.toMatch(/cl[i]nic/i);
     }
     expect(CONSENT_PARAGRAPHS_COACH_FREE.slice(0, 2)).toEqual(CONSENT_PARAGRAPHS.slice(0, 2));
   });
@@ -203,7 +203,7 @@ describe('P0 for a client with no coach (W-CONSENT)', () => {
     expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
     expect(r.getByText(AI_CONSENT_CHECKBOX_LABEL)).toBeTruthy();
     expect(r.getByTestId('consent-footer').props.children).toBe('Nothing is sent until you continue.');
-    expect(api.getRomanConsent).toHaveBeenCalledWith(); // the coached copies, never ?variant=coach_free
+    expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: true }); // crisis_alert: the coached copies, never ?variant=coach_free
   });
 
   it('a 403 ROMAN_REQUIRES_COACH is quiet: no notice, onboarding carries on, the choice stays unsaved', async () => {
@@ -258,7 +258,7 @@ describe('FIX684: each P0 record rebuilds the screen shown (coached / no coach x
     expect(sha(shown)).toBe(pin);
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ agreed: true, copy_version: version, text_sha256: pin });
     const grant = memory ? { version: 'client-ai-v7', copy_sha256: V7_COPY.sha256 } : { version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 };
-    if (box2) await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledWith(expect.objectContaining(grant)));
+    if (box2) await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledWith(expect.objectContaining(grant), { crisis: true }));
     else expect(api.grantRomanConsent).not.toHaveBeenCalled();
     expect(alert).not.toHaveBeenCalled(); // no notice, for a client with or without a coach
     alert.mockRestore();

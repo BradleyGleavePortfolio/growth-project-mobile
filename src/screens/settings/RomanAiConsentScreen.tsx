@@ -36,6 +36,11 @@
  * Prototype 74 (ROMAN-ROOM-133, presentation only): the shared src/ui Screen (real insets, so Android
  * clears the status bar), a "Privacy" overline over the serif title, Roman's portrait beside a one-line
  * on/off state, and rounded radius tokens. The consent wording, choices and ledger writes are unchanged.
+ *
+ * B-A (FIXCONSENT2, b#1047): a live grant is read with the copies on file; every new choice (Allow, memory
+ * on, memory off) is made in the copies this screen asks for (client-ai-v6 / v7; v8 / v9 while the crisis flag
+ * reads on), shown before it is sent
+ * exactly as it is recorded, and each POST / DELETE sends the GET's ask, so its answer reads like the GET's.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
@@ -62,8 +67,11 @@ import {
   romanFamilyOf,
   romanGrantBody,
   withdrawAiChoiceAs,
+  type RomanCopyFamily,
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
+import { withSafetyException } from '../../lib/ai/aiCoachless';
+import { useCrisisAlertNow } from '../../hooks/useFeatureFlags';
 import { SUPPORT_EMAIL } from '../../lib/consultation/copy';
 import { reportUnexpected } from '../../lib/consultation/report';
 import { shortReference } from '../../utils/correlation';
@@ -137,6 +145,7 @@ export const ROMAN_AI_COPY = {
 
 // Every check below uses the copies the server answered with (romanFamilyOf): client-ai-v6 / v7
 // (owner 57c), client-ai-v4 / v5 for a live grant of them, coach-free for one recorded before 62y2.
+// A new choice uses the copies asked for instead (memorySwitchOf, allowCopyOf, B-A).
 
 /** The server's v5 paragraph for a live client-ai-v5 (memory) grant, or null. */
 function memoryParagraphOf(status: AiConsentStatusResponse): string | null {
@@ -180,22 +189,30 @@ export function choiceOf(status: AiConsentStatusResponse): { choice: RomanAiChoi
  * for a live v4 grant while the server says memory is on and sends the pinned v5 copy (`memory_copy`,
  * or `upgrade` from a server before it); `onCopy` is what turning it on grants. The 10-06 server sent
  * `upgrade` without `memory_on`, so it shows nothing. No live grant shows nothing.
+ * B-A (b#1047): the live grant is read in its own family, but the new memory agreement must be
+ * the `asked` family's (the copies this screen asked for, crisis while the flag reads on), pinned and
+ * shown as sent; any other offer (a server before b#1047 offers the family on file) shows no switch.
  */
 export function memorySwitchOf(
   status: AiConsentStatusResponse,
+  asked: RomanCopyFamily,
 ): { on: boolean; onCopy: AiConsentUpgradeCopy | null } | null {
   if (isMemoryAllowed(status)) return { on: true, onCopy: null };
-  const family = romanFamilyOf(status);
-  const liveV4 = choiceOf(status).choice === 'allowed' && status.version === family.baseVersion;
+  const liveV4 = choiceOf(status).choice === 'allowed' && status.version === romanFamilyOf(status).baseVersion;
   if (!liveV4 || status.memory_on !== true) return null;
-  const onCopy = pinnedMemoryCopy(status.memory_copy, family) ?? pinnedMemoryCopy(status.upgrade, family);
+  const onCopy = pinnedMemoryCopy(status.memory_copy, asked) ?? pinnedMemoryCopy(status.upgrade, asked);
   return onCopy ? { on: false, onCopy } : null;
 }
 
-/** What Allow grants (not allowed / reconsent): the server's v5 copy while memory is on, else null (v4). */
-export function allowCopyOf(status: AiConsentStatusResponse): AiConsentUpgradeCopy | null {
+/** A new choice (not allowed / reconsent): made in the `asked` family, whatever is on file (B-A). */
+function isNewChoice(status: AiConsentStatusResponse): boolean {
   const { choice } = choiceOf(status);
-  return choice === 'not_allowed' || choice === 'reconsent' ? romanBox2MemoryCopyOf(status, romanFamilyOf(status)) : null;
+  return choice === 'not_allowed' || choice === 'reconsent';
+}
+
+/** What Allow grants on a new choice: the asked family's pinned memory copy while memory is on, else null (its base). */
+export function allowCopyOf(status: AiConsentStatusResponse, asked: RomanCopyFamily): AiConsentUpgradeCopy | null {
+  return isNewChoice(status) ? romanBox2MemoryCopyOf(status, asked) : null;
 }
 
 /** The heading: "Allowed" only for a live server grant (C-310-2). */
@@ -245,6 +262,12 @@ export default function RomanAiConsentScreen({
   // Owner 62x: a client with no coach has no access to Roman (no ledger read, no controls).
   const cachedUser = readUserCacheSync();
   const coachless = Boolean(cachedUser?.id && !cachedUser.coach_id);
+  // CRISIS-APP-COPY: the crisis-sentence copies are asked for, and follow an added exception, exactly while on.
+  const crisisAlert = useCrisisAlertNow();
+  const crisisOn = crisisAlert();
+  // B-A: every new choice is made in the copies asked for (crisis while the flag reads on), and each write
+  // sends the same ask (b#1047).
+  const asked = romanFamily(false, crisisOn);
   const [view, setView] = useState<View_>({ phase: 'loading' });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -270,7 +293,7 @@ export default function RomanAiConsentScreen({
       if (stale()) return;
       setPendingWithdraw(false);
     }
-    const out = await api.getStatus();
+    const out = await api.getStatus({ crisis: crisisAlert() });
     if (stale()) return;
     if (out.kind === 'ok' && out.status) {
       const c = out.status.copy;
@@ -284,17 +307,22 @@ export default function RomanAiConsentScreen({
       if (differs) logger.warn('RomanAiConsent', 'server AI copy differs from the app copy for this version');
     }
     setView(toView(out));
-  }, [api, sessionUserId]);
+  }, [api, crisisAlert, sessionUserId]);
 
   // The copies on screen: the server's answer, else (while loading) this build's.
-  const family = view.phase === 'ready' ? romanFamilyOf(view.status) : romanFamily(false);
+  const family = view.phase === 'ready' ? romanFamilyOf(view.status) : romanFamily(false, crisisOn);
 
   useEffect(() => {
     if (!coachless) void load();
   }, [coachless, load]);
 
   const act = useCallback(
-    async (kind: 'allow' | 'withdraw', offer: AiConsentUpgradeCopy | null = null, doneNotice: string | null = null) => {
+    async (
+      kind: 'allow' | 'withdraw',
+      offer: AiConsentUpgradeCopy | null = null,
+      doneNotice: string | null = null,
+      base: RomanCopyFamily = family,
+    ) => {
       if (busy) return;
       setBusy(true);
       setNotice(null);
@@ -307,9 +335,9 @@ export default function RomanAiConsentScreen({
         kind === 'allow'
           ? await grantAiChoiceAs(uid, sessionUserId, () =>
               // The offered copy: its version and the server's sha256 of exactly the text shown.
-              api.grantRoman(romanGrantBody(offer, family)),
+              api.grantRoman(romanGrantBody(offer, base), { crisis: crisisOn }),
             )
-          : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman());
+          : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman({ crisis: crisisOn }));
       if (!mounted.current) return;
       if (out === AI_LEDGER_NOT_SENT) {
         setBusy(false);
@@ -324,7 +352,8 @@ export default function RomanAiConsentScreen({
       setBusy(false);
       if (kind === 'allow' || out.kind === 'ok') setPendingWithdraw(false);
       if (out.kind === 'ok') {
-        if (out.status) setView({ phase: 'ready', status: out.status });
+        // B-A: the answer to a write that sent the GET's ask, read like the GET's (never one on file only).
+        if (out.status) setView(toView(out));
         else await load();
         if (doneNotice && !stale()) setNotice(doneNotice);
         return;
@@ -344,25 +373,26 @@ export default function RomanAiConsentScreen({
       await load();
       if (!stale()) setNotice(notice);
     },
-    [api, busy, family, load, sessionUserId],
+    [api, busy, crisisOn, family, load, sessionUserId],
   );
 
   const confirmAllow = (offer: AiConsentUpgradeCopy | null) =>
-    Alert.alert(ROMAN_AI_COPY.confirmAllowTitle, family.boxLabel.replace(/^Optional: /, ''), [
+    Alert.alert(ROMAN_AI_COPY.confirmAllowTitle, asked.boxLabel.replace(/^Optional: /, ''), [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
-      { text: ROMAN_AI_COPY.allow, onPress: () => void act('allow', offer) },
+      { text: ROMAN_AI_COPY.allow, onPress: () => void act('allow', offer, null, asked) },
     ]);
-  // Memory on: the server's v5 text is the confirmation, and its sha256 is what is granted.
+  // Memory on: the server's memory text of the asked family, as sent, is the confirmation, and its sha256 is what is granted.
   const confirmMemoryOn = (offer: AiConsentUpgradeCopy) =>
     Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, offer.paragraph.text, [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
       { text: ROMAN_AI_COPY.memoryOn, onPress: () => void act('allow', offer) },
     ]);
-  // Memory off: the v4 grant (Roman stays allowed and stops using his notes; R11-C2C keeps them).
+  // Memory off: the asked family's base grant (client-ai-v6, or v8 while the flag reads on), its exact paragraph shown before it is recorded
+  // (Roman stays allowed and stops using his notes; R11-C2C keeps them).
   const confirmMemoryOff = () =>
-    Alert.alert(ROMAN_AI_COPY.confirmMemoryOffTitle, ROMAN_AI_COPY.confirmMemoryOffBody, [
+    Alert.alert(ROMAN_AI_COPY.confirmMemoryOffTitle, `${ROMAN_AI_COPY.confirmMemoryOffBody}\n\n${asked.paragraph}`, [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
-      { text: ROMAN_AI_COPY.memoryOff, onPress: () => void act('allow', null, ROMAN_AI_COPY.memoryOffDone) },
+      { text: ROMAN_AI_COPY.memoryOff, onPress: () => void act('allow', null, ROMAN_AI_COPY.memoryOffDone, asked) },
     ]);
   const confirmWithdraw = () =>
     Alert.alert(ROMAN_AI_COPY.confirmWithdrawTitle, ROMAN_AI_COPY.confirmWithdrawBody, [
@@ -423,7 +453,7 @@ export default function RomanAiConsentScreen({
         <Text style={styles.head} accessibilityRole="header" testID="roman-ai-state">{head}</Text>
         <Text style={styles.body}>{line}</Text>
         {choice === 'not_allowed' || choice === 'reconsent'
-          ? button(ROMAN_AI_COPY.allow, () => confirmAllow(allowCopyOf(view.status)), 'roman-ai-allow')
+          ? button(ROMAN_AI_COPY.allow, () => confirmAllow(allowCopyOf(view.status, asked)), 'roman-ai-allow')
           : null}
         {withdrawable && pendingWithdraw ? (
           <Text style={styles.body} accessibilityLiveRegion="polite" testID="roman-ai-pending-withdraw">
@@ -452,7 +482,7 @@ export default function RomanAiConsentScreen({
 
   /** The "Roman's memory" switch at the very bottom (never during a pending "no"). */
   function renderMemorySwitch() {
-    const sw = view.phase === 'ready' && !pendingWithdraw ? memorySwitchOf(view.status) : null;
+    const sw = view.phase === 'ready' && !pendingWithdraw ? memorySwitchOf(view.status, asked) : null;
     if (!sw) return null;
     const onCopy = sw.onCopy;
     return (
@@ -509,9 +539,14 @@ export default function RomanAiConsentScreen({
         <Headline level="h1">{ROMAN_AI_COPY.title}</Headline>
         {renderStateRow()}
         <Text style={styles.body} testID="roman-ai-paragraph">
-          {(view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) ||
-            (view.phase === 'ready' && allowCopyOf(view.status)?.paragraph.text) ||
-            family.paragraph}
+          {view.phase === 'ready' && isNewChoice(view.status)
+            ? // B-A: a new choice shows the one pinned copy it grants, exactly (the asked family's).
+              (allowCopyOf(view.status, asked)?.paragraph.text ?? asked.paragraph)
+            : withSafetyException(
+                (view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) ||
+                  family.paragraph,
+                crisisOn,
+              )}
         </Text>
         {renderState()}
         {notice ? (
