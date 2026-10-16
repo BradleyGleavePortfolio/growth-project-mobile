@@ -12,7 +12,7 @@
 | Support | Support inbox, feature-gated tutorial resume/restart or disabled in-progress state |
 | About | Existing version and tagline |
 
-Sign out (SESSION-KEEP-130): before the confirm opens, one bounded try (4 s) sends the foods saved offline and the finished workouts still waiting on this phone. The confirm then names anything still unsent, for example "1 workout and 2 foods have not synced yet and will be removed from this phone.", and otherwise asks "Are you sure you want to sign out?" (`prepareSignOutConfirm` in `services/authActions.ts`; Profile uses the same confirm).
+Sign out (SESSION-KEEP-130): before the confirm opens, one bounded try (4 s) sends the foods saved offline, the finished workouts and the coach messages still waiting on this phone. The confirm then names anything still unsent, for example "1 workout and 2 foods have not synced yet and will be removed from this phone.", and otherwise asks "Are you sure you want to sign out?" (`prepareSignOutConfirm` in `services/authActions.ts`; Profile uses the same confirm).
 
 `ClientTutorialSetting` preserves the original tutorial store actions and parent Home navigation as a flat row within Support. It adds no separate Tutorial heading or filled card. It reads "Take the tour" until a tour has been completed, then "Take the tour again". The shared `TutorialSettingsRow` is unchanged.
 
