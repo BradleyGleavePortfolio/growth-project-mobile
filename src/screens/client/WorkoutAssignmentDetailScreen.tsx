@@ -2,8 +2,9 @@
  * WorkoutAssignmentDetailScreen — open a coach-assigned workout, review
  * the prescribed exercises, and start the live workout.
  *
- * Reads /assignments/:id (which includes the full WorkoutPlan), maps
- * the prescribed exercises into the ActiveWorkout session shape, then
+ * Reads /assignments/:id, takes the assignment's own prescription (the
+ * frozen snapshot when the server has one, K3FIX-SNAPSHOT), maps it into
+ * the ActiveWorkout session shape, then
  * navigates to ActiveWorkout. exercise_external_id is preserved so the
  * downstream write is not corrupted with empty ids.
  */
@@ -32,7 +33,7 @@ import {
   buildActiveWorkoutExercises,
   prettifyExerciseName,
 } from '../../utils/workout/buildActiveWorkout';
-import { overlayRomanAdjustedSets } from '../../utils/workout/romanAdjustedSets';
+import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
 
 type RouteParams = {
   WorkoutAssignmentDetail: { assignmentId: string };
@@ -77,25 +78,18 @@ export default function WorkoutAssignmentDetailScreen() {
     void refetch();
   }, [refetch]);
 
-  // B-ROMANADJ-125: set counts the coach approved from Roman's Action Queue
-  // are laid over the live plan by `order`, for the list and for Start. No
-  // field (older server) = the live plan exactly as before.
-  const overlay = useMemo(
-    () =>
-      overlayRomanAdjustedSets(
-        data?.workout_plan?.exercises ?? [],
-        data?.roman_adjusted_sets,
-      ),
-    [data],
-  );
+  // K3FIX-SNAPSHOT: one prescription for the rows, names, header and Start:
+  // the frozen snapshot when the server sends one, later live-plan edits
+  // ignored, with coach-approved Roman sets (B-ROMANADJ-125) laid over it.
+  const prescription = useMemo(() => (data ? assignmentPrescription(data) : null), [data]);
 
   // The plan stores only catalog ids (e.g. "0025" or "seed:push-001"). The
   // screen used to prettify the id, so a client saw "1. Exercise" or
   // "1. Push 001" instead of "Barbell Bench Press". Resolve the real names
   // from GET /exercises/:id; fall back to the prettified id while loading.
   const exerciseIds = useMemo(
-    () => (data?.workout_plan?.exercises ?? []).map((e) => e.exercise_external_id),
-    [data],
+    () => (prescription?.exercises ?? []).map((e) => e.exercise_external_id),
+    [prescription],
   );
   // Start waits while the names are still loading: the session copies the
   // names at Start, so starting early used to freeze "Push 001" / "Exercise"
@@ -109,15 +103,15 @@ export default function WorkoutAssignmentDetailScreen() {
   );
 
   const handleStart = useCallback(() => {
-    if (!data || namesLoading) return;
-    const exercises = buildActiveWorkoutExercises({ exercises: overlay.exercises }).map((e) => ({
+    if (!data || !prescription || namesLoading) return;
+    const exercises = buildActiveWorkoutExercises({ exercises: prescription.exercises }).map((e) => ({
       ...e,
       // Saved with the workout, shown in history and to the coach.
       exerciseName: exerciseNames[e.exerciseId] || e.exerciseName,
     }));
     const params = {
       routineId: data.workout_plan.id,
-      routineName: data.workout_plan.name,
+      routineName: prescription.name,
       exercises: JSON.stringify(exercises),
       assignmentId: data.id,
     };
@@ -139,13 +133,13 @@ export default function WorkoutAssignmentDetailScreen() {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (navigation as any).navigate('ActiveWorkout', params);
-  }, [data, navigation, exerciseNames, namesLoading, overlay]);
+  }, [data, navigation, exerciseNames, namesLoading, prescription]);
 
   if (isLoading) {
     return <SkeletonScreen count={5} />;
   }
 
-  if (isError || !data) {
+  if (isError || !data || !prescription) {
     // The old copy said "Pull to retry" on a screen that cannot be pulled.
     return (
       <Screen edges={['top']} scroll={false} centerContent>
@@ -163,8 +157,8 @@ export default function WorkoutAssignmentDetailScreen() {
     );
   }
 
-  const plan = data.workout_plan;
-  const sorted = [...overlay.exercises].sort((a, b) => a.order - b.order);
+  const plan = prescription;
+  const sorted = prescription.exercises;
   const isCompleted = !!data.completed_at;
   const actionLabel = canResume ? 'Resume workout' : 'Start workout';
 
@@ -197,9 +191,7 @@ export default function WorkoutAssignmentDetailScreen() {
       <Overline>{formatPlanType(plan.type)}</Overline>
       <Headline level="h1">{plan.name}</Headline>
       <Lede size="small" style={styles.tabular}>
-        {plan.duration_estimate_minutes
-          ? `About ${plan.duration_estimate_minutes} min · `
-          : ''}
+        {plan.durationMinutes ? `About ${plan.durationMinutes} min · ` : ''}
         {sorted.length} exercise{sorted.length === 1 ? '' : 's'}
       </Lede>
       {isCompleted ? (
@@ -215,7 +207,8 @@ export default function WorkoutAssignmentDetailScreen() {
         <Overline style={styles.listOverline}>Exercises</Overline>
         {sorted.map((ex, i) => (
           // TOUR-133: the tour's first-exercise beat spotlights the first row.
-          <TutorialTarget key={ex.id} id={i === 0 ? 'first-exercise' : undefined}>
+          // Keyed by `order`: frozen rows have no database id.
+          <TutorialTarget key={ex.order} id={i === 0 ? 'first-exercise' : undefined}>
           <View style={[styles.exerciseRow, { borderBottomColor: sc.border }]} testID={`assignment-row-${ex.order}`}>
             <Text style={[styles.index, { color: sc.textMuted }]} accessible={false} importantForAccessibility="no">
               {ex.order}
@@ -229,7 +222,7 @@ export default function WorkoutAssignmentDetailScreen() {
                 {ex.weight_lbs ? ` · ${ex.weight_lbs} lb` : ''}
                 {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
               </Text>
-              {overlay.adjustedOrders.has(ex.order) ? (
+              {plan.adjustedOrders.has(ex.order) ? (
                 <Text
                   style={[typography.bodySmall, { color: sc.accentText, marginTop: 2 }]}
                   testID={`assignment-adjusted-${ex.order}`}

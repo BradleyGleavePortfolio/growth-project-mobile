@@ -29,7 +29,7 @@ import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
-import { overlayRomanAdjustedSets } from '../../utils/workout/romanAdjustedSets';
+import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
 
 export default function ClientWorkoutViewerScreen() {
   const { semanticColors: sc } = useTheme();
@@ -153,11 +153,11 @@ function AssignmentCard({
   sc: SemanticTokens;
   onPress: () => void;
 }) {
-  const plan = a.workout_plan;
-  const exerciseIds = useMemo(() => plan.exercises.map((e) => e.exercise_external_id), [plan.exercises]);
+  // K3FIX-SNAPSHOT: the same prescription the detail screen shows and starts.
+  const plan = useMemo(() => assignmentPrescription(a), [a]);
+  const prescribed = plan.exercises;
+  const exerciseIds = useMemo(() => prescribed.map((e) => e.exercise_external_id), [prescribed]);
   const { names } = useExerciseNames(exerciseIds);
-  const prescribed = overlayRomanAdjustedSets(plan.exercises, a.roman_adjusted_sets).exercises
-    .sort((left, right) => left.order - right.order);
   return (
     <Pressable
       onPress={onPress}
@@ -178,11 +178,9 @@ function AssignmentCard({
       </View>
       <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
         {formatPlanType(plan.type)}
-        {plan.duration_estimate_minutes
-          ? ` • about ${plan.duration_estimate_minutes} min`
-          : ''}
+        {plan.durationMinutes ? ` • about ${plan.durationMinutes} min` : ''}
         {' • '}
-        {plan.exercises.length} exercise{plan.exercises.length === 1 ? '' : 's'}
+        {prescribed.length} exercise{prescribed.length === 1 ? '' : 's'}
       </Text>
       {a.completed_at && a.post_rpe !== null ? (
         <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
@@ -190,7 +188,7 @@ function AssignmentCard({
         </Text>
       ) : null}
       {prescribed.map((exercise, index) => (
-        <View key={exercise.id} style={styles.exerciseRow}>
+        <View key={exercise.order} style={styles.exerciseRow}>
           <Text style={[typography.bodySmall, { color: sc.textPrimary }]}>
             {names[exercise.exercise_external_id] || `Exercise ${index + 1}`}
           </Text>

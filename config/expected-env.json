@@ -226,6 +226,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Roman draft marks stay off by default; the operator switches them on once the backend gates in m#731 hold."
+    },
     "EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW": {
       "kind": "flag",
       "default": "off",
