@@ -30,6 +30,7 @@ import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
 import ClientTutorialSetting from './settings/ClientTutorialSetting';
 import { featureFlags } from '../../config/featureFlags';
 import { coachSharingCopy } from '../../components/coachSharing/coachSharingCopy';
+import { readCoachSharing } from '../../api/coachSharingApi';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { layout, radius, typography, withAlpha } from '../../theme/tokens';
 import { Headline, Overline, PrimaryButton, QuietRow, Screen, ScreenTopBar, TextLink } from '../../ui';
@@ -128,6 +129,19 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
     }
     return () => { mounted = false; };
   }, [currentUser?.id]);
+
+  // K1-14 (owner "hide until they have a coach"): the Coach sharing row shows only while the server says this
+  // client has a coach (GET /consent/me, the read Coach sharing makes; 400 = none). Read again when the account or
+  // its coach link changes (a join emits 'login'); a failed read keeps the last answer.
+  const [hasCoach, setHasCoach] = useState(false);
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let live = true;
+    void readCoachSharing().then((read) => {
+      if (live && read.kind !== 'error') setHasCoach(read.kind === 'ok');
+    });
+    return () => { live = false; };
+  }, [currentUser?.id, currentUser?.coach_id]);
 
   const checkInTime = checkInChoice?.userId === currentUser?.id ? checkInChoice?.time : null;
   const checkInLabel = checkInTime
@@ -415,8 +429,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           <QuietRow label="Trust & Privacy" detail="How your data is protected." onPress={() => navigation.navigate('TrustCenter')}
             accessibilityHint="Opens the Trust Center with security details and privacy controls" />
           {/* B-SHARE-127: which logs the coach can see (four toggles). */}
-          <QuietRow label={coachSharingCopy.settingsRow} onPress={() => navigation.navigate('CoachSharing')}
-            accessibilityHint={coachSharingCopy.settingsRowHint} testID="settings-coach-sharing" />
+          {hasCoach ? (
+            <QuietRow label={coachSharingCopy.settingsRow} onPress={() => navigation.navigate('CoachSharing')}
+              accessibilityHint={coachSharingCopy.settingsRowHint} testID="settings-coach-sharing" />
+          ) : null}
           {/* Apple 1.2: blocks can be seen and undone from Settings. */}
           <QuietRow label="Blocked users" onPress={() => navigation.navigate('BlockedUsers')}
             accessibilityHint="View and manage the users you have blocked" />
