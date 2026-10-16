@@ -77,7 +77,7 @@ async function expectDeleteAllBody(user: CurrentUser | null, body: string) {
   );
   await fireEvent.press(await view.findByTestId('roman-chats-delete-all'));
   expect(within(view.getByTestId('roman-chats-confirm-all')).getByText(body)).toBeTruthy();
-  view.unmount();
+  await view.unmount();
 }
 
 const NO_COACH_BODY =
@@ -127,7 +127,7 @@ const ROWS: { row: string; check: () => Promise<void> }[] = [
       await view.rerender(<SettingsScreen navigation={navigation} />);
       await settle();
       expect(row()).toBeTruthy();
-      view.unmount();
+      await view.unmount();
       server('none');
       expect((await settings()).row()).toBeNull();
     },
