@@ -5,7 +5,7 @@
  * status loads. A withdrawal that is not saved puts the switch back and says so.
  */
 import React, { useContext, useEffect, useState } from 'react';
-import { Switch, Text, View } from 'react-native';
+import { Pressable, Switch, Text, View } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
 import CoachAiConsentSheet from '../../../components/ai/CoachAiConsentSheet';
 import { AI_CONSENT_SHEET_COPY } from '../../../components/ai/AiConsentSheet';
@@ -44,21 +44,23 @@ export function CoachRomanSwitch({ colors, styles, api = coachAiConsentApi }: { 
     setOn(!saved);
     setFailed(!saved);
   };
+  const toggle = (next: boolean) => {
+    setFailed(false);
+    if (next) setAsking(true);
+    else void turnOff();
+  };
 
   return (
     <>
-      <View style={styles.row} testID="coach-settings-roman-ai">
+      {/* The whole row toggles (88 pt target); the Switch stays the one accessible element. */}
+      <Pressable style={styles.row} onPress={() => toggle(!on)} disabled={busy} accessible={false} testID="coach-settings-roman-ai">
         <View style={{ flex: 1 }}>
           <Text style={styles.rowLabel}>{COPY.switchLabel}</Text>
           <Text style={styles.rowSubLabel}>{COPY.switchHint}</Text>
         </View>
         <Switch
           value={on}
-          onValueChange={(next) => {
-            setFailed(false);
-            if (next) setAsking(true);
-            else void turnOff();
-          }}
+          onValueChange={toggle}
           disabled={busy}
           trackColor={{ false: colors.border, true: colors.primary }}
           thumbColor={colors.white}
@@ -68,7 +70,7 @@ export function CoachRomanSwitch({ colors, styles, api = coachAiConsentApi }: { 
           accessibilityState={{ checked: on, disabled: busy }}
           testID="coach-settings-roman-ai-switch"
         />
-      </View>
+      </Pressable>
       {failed ? (
         <Text style={[styles.rowSubLabel, { paddingHorizontal: 16, paddingBottom: 12 }]} accessibilityRole="alert" testID="coach-settings-roman-ai-failed">
           {AI_CONSENT_SHEET_COPY.unavailable}

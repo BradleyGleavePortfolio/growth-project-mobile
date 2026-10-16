@@ -172,10 +172,10 @@ describe('Settings > Privacy switch', () => {
     expect(api.withdraw).toHaveBeenCalledTimes(1);
   });
 
-  it('off after a withdrawal; on opens the request and Allow turns it on', async () => {
+  it('off after a withdrawal; a tap on the row opens the request and Allow turns it on', async () => {
     const api = makeApi('withdrawn');
     const r = await render(<CoachRomanSwitch colors={colors} styles={styles} api={api} />);
-    await fireEvent(await r.findByTestId('coach-settings-roman-ai-switch'), 'valueChange', true);
+    await fireEvent.press(await r.findByTestId('coach-settings-roman-ai'));
     expect(api.grant).not.toHaveBeenCalled();
     await fireEvent.press(await r.findByText(COPY.allow));
     await waitFor(() => expect(r.getByTestId('coach-settings-roman-ai-switch').props.value).toBe(true));
