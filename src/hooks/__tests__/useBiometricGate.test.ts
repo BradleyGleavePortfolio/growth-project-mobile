@@ -137,7 +137,10 @@ describe('useBiometricGate', () => {
       await waitFor(() => expect(result.current.status).toBe('unlocked'));
       let answer: (v: string) => void = () => undefined;
       const read = SecureStore.getItemAsync as jest.Mock;
-      read.mockClear().mockImplementationOnce(() => new Promise((r) => { answer = r; }));
+      read.mockClear();
+      if (status === 'checking') {
+        read.mockImplementationOnce(() => new Promise((r) => { answer = r; }));
+      }
       const sampledAt = Date.now();
       // Model 2 ms of setup between the old clock sample and background event.
       await act(async () => { await jest.advanceTimersByTimeAsync(2); });
