@@ -456,6 +456,11 @@ export default function ClientMessagesScreen() {
               )}
               <MessageBubble
                 message={bubbleMsg}
+                draftContext={isCoach ? {
+                  coach: currentUser?.firstName || currentUser?.name?.split(' ')[0] || 'Your coach',
+                  client: clientName.split(' ')[0],
+                  isSender: !!currentUser?.id && item.sender_id === currentUser.id,
+                } : undefined}
                 isMe={isCoach}
                 onLongPress={handleLongPress}
               />
