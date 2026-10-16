@@ -17,7 +17,7 @@ Weekly totals multiply food nutrition by recorded portions, read `protein_g`, an
 saved workout `weight_per_set × reps_per_set` volume before display rounding. Weekly
 and Workouts use `lb` captions. Food review formats the recorded eat day and meal label
 without changing portions, notes, targets or sharing states. Weekly disclosure,
-7/14/30-day food filters, feedback, meal plans, refresh and workout AI actions remain.
+7/14/30-day food filters, feedback, refresh and workout AI actions remain.
 Regression and action parity: `src/__tests__/coachWeekly131.test.tsx`.
 
 Timeline and Weekly have independent loading, failure and verified-empty states.

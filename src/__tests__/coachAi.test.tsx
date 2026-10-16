@@ -122,19 +122,6 @@ describe('coachAiApi', () => {
     );
   });
 
-  it('generateMealPlan() POSTs to /coach/ai/meal-plan with a long timeout', async () => {
-    mockedPost.mockResolvedValueOnce(ok({ draftId: 'd1' }));
-    await coachAiApi.generateMealPlan({ clientId: 'c1', days: 7 });
-    expect(mockedPost).toHaveBeenCalledWith(
-      '/coach/ai/meal-plan',
-      {
-        clientId: 'c1',
-        days: 7,
-      },
-      { timeout: 120000 },
-    );
-  });
-
   it('generateInsight() POSTs to /coach/ai/client-insight with a long timeout', async () => {
     mockedPost.mockResolvedValueOnce(ok({ draftId: 'd1' }));
     await coachAiApi.generateInsight({ clientId: 'c1', windowDays: 14 });
@@ -226,20 +213,22 @@ describe('CoachAiSection', () => {
 
   it('renders enabled CTAs when status returns ready=true', async () => {
     mockedGet.mockResolvedValueOnce(ok({ ready: true, modelUsed: 'claude-opus-4-7' }));
-    const { findByTestId } = await renderWithNav(
+    const { findByTestId, queryByTestId, queryByText } = await renderWithNav(
       <CoachAiSection clientId="c1" clientName="Jane Doe" />,
     );
-    const cta = await findByTestId('coach-ai-cta-meal');
-    expect(cta.props.accessibilityState).toEqual(
+    const cta = await findByTestId('coach-ai-cta-insight');
+    await waitFor(() => expect(cta.props.accessibilityState).toEqual(
       expect.objectContaining({ disabled: false }),
-    );
+    ));
+    expect(queryByTestId('coach-ai-cta-meal')).toBeNull();
+    expect(queryByText('Generate meal plan')).toBeNull();
   });
 
-  it.each(['workout', 'meal', 'insight'])('%s explains service unavailability without operator instructions', async (mode) => {
+  it.each(['workout', 'insight'])('%s explains service unavailability without operator instructions', async (mode) => {
     mockedGet.mockResolvedValue(ok({ ready: true }));
     mockedPost.mockRejectedValueOnce({ response: { status: 503, data: { error: 'ai_disabled' } } });
     const screen = await renderWithNav(
-      <CoachAiSection clientId="c1" clientName="Test client" clientAllergies={[]} clientDietaryRestrictions={[]} />,
+      <CoachAiSection clientId="c1" clientName="Test client" />,
     );
     const cta = await screen.findByTestId(`coach-ai-cta-${mode}`);
     await waitFor(() => expect(cta.props.accessibilityState.disabled).toBe(false));
@@ -247,40 +236,26 @@ describe('CoachAiSection', () => {
     await fireEvent.press(screen.getByText('Generate'));
     expect(await screen.findByText('AI is temporarily unavailable. Try again later.')).toBeTruthy();
     expect(mockedPost).toHaveBeenCalledWith(
-      `/coach/ai/${mode === 'workout' ? 'workout-program' : mode === 'meal' ? 'meal-plan' : 'client-insight'}`,
+      `/coach/ai/${mode === 'workout' ? 'workout-program' : 'client-insight'}`,
       expect.objectContaining({ clientId: 'c1' }), expect.any(Object),
     );
     expect(screen.queryByText(/owner action|API_KEY|status code/)).toBeNull();
   });
 });
 
-describe('CoachAiSection meal-plan body (AUDIT-14-125)', () => {
-  it('sends only the keys the backend allow-list accepts, with allergies inside notes', async () => {
-    // GenerateMealPlanDto (backend, forbidNonWhitelisted) accepts clientId,
-    // days and notes. Extra keys such as allergies or dietary_restrictions
-    // are refused with a 400, which failed every generation.
-    mockedGet.mockResolvedValue(ok({ ready: true, modelUsed: 'claude-opus-4-7' }));
-    mockedPost.mockResolvedValueOnce(ok({ draftId: 'm1', type: 'MEAL_PLAN', clientId: 'c1' }));
-    const { findByTestId, findByText } = await renderWithNav(
-      <CoachAiSection
-        clientId="c1"
-        clientName="Jane Doe"
-        clientAllergies={['peanuts']}
-        clientDietaryRestrictions={['gluten']}
-      />,
+describe('CoachAiSection pending drafts (MEALPLAN-RETIRE)', () => {
+  it('lists only drafts that open a screen, never an old free-form meal plan', async () => {
+    const row = { clientId: 'c1', status: 'PENDING_REVIEW', modelUsed: 'm', tokensIn: 0, tokensOut: 0, costCents: 0, createdAt: '2026-10-15T12:00:00Z' };
+    mockedGet
+      .mockResolvedValueOnce(ok({ ready: true }))
+      .mockResolvedValueOnce(ok([{ ...row, id: 'm1', type: 'MEAL_PLAN' }, { ...row, id: 'w1', type: 'WORKOUT_PROGRAM' }]));
+    const { findByTestId, findByText, queryByText } = await renderWithNav(
+      <CoachAiSection clientId="c1" clientName="Jane Doe" />,
     );
-    const cta = await findByTestId('coach-ai-cta-meal');
-    await waitFor(() =>
-      expect(cta.props.accessibilityState).toEqual(expect.objectContaining({ disabled: false })),
-    );
-    fireEvent.press(cta);
-    fireEvent.press(await findByText('Generate'));
-    await waitFor(() => expect(mockedPost).toHaveBeenCalled());
-    const [url, body] = mockedPost.mock.calls[0];
-    expect(url).toBe('/coach/ai/meal-plan');
-    expect(Object.keys(body).sort()).toEqual(['clientId', 'days', 'notes']);
-    expect(body.notes).toContain('Allergies: peanuts.');
-    expect(body.notes).toContain('Dietary restrictions: gluten.');
+    await fireEvent.press(await findByTestId('coach-ai-inbox-btn'));
+    expect(await findByText('Workout program')).toBeTruthy();
+    expect(queryByText('Meal plan')).toBeNull();
+    expect(mockedGet).toHaveBeenLastCalledWith('/coach/ai/drafts?clientId=c1&limit=20');
   });
 });
 

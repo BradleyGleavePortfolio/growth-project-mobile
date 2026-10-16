@@ -1,7 +1,7 @@
 /**
  * CoachAiSection — Coach AI v1 entry point on ClientDetailScreen.
  *
- * Renders three CTAs (workout / meal plan / insight). Each CTA opens a
+ * Renders two CTAs (workout / insight). Each CTA opens a
  * lightweight bottom-sheet modal to collect inputs, then POSTs to the
  * matching `/coach/ai/*` endpoint and hands the returned draftId off
  * to the appropriate draft screen.
@@ -40,7 +40,7 @@ const POLL_INTERVAL_MS = 10_000;
 const POLL_MAX_DURATION_MS = 120_000;
 const AI_UNAVAILABLE = 'AI is temporarily unavailable. Try again later.';
 
-type Mode = 'workout' | 'meal' | 'insight' | null;
+type Mode = 'workout' | 'insight' | null;
 
 const FOCUS_OPTIONS = ['Strength', 'Hypertrophy', 'Endurance', 'Mobility'] as const;
 const DAYS_PER_WEEK_OPTIONS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -49,16 +49,6 @@ const INSIGHT_WINDOWS = [7, 14, 30] as const;
 interface Props {
   clientId: string;
   clientName: string;
-  /**
-   * B14: Client safety context for the meal-plan generator. Always pass
-   * these from ClientDetailScreen so the AI request carries the user's
-   * stored allergies/restrictions. An undefined value means "not yet
-   * loaded" and the meal-plan CTA is disabled to prevent a generator
-   * call that misses safety constraints; an empty array means "loaded
-   * and the user has none".
-   */
-  clientAllergies?: string[];
-  clientDietaryRestrictions?: string[];
   /** AIB-6: the Workouts tab "Build a program with AI" entry asks for the program generator; handled once AI is ready. */
   openWorkoutRequest?: boolean;
   onWorkoutRequestHandled?: () => void;
@@ -67,8 +57,6 @@ interface Props {
 export default function CoachAiSection({
   clientId,
   clientName,
-  clientAllergies,
-  clientDietaryRestrictions,
   openWorkoutRequest,
   onWorkoutRequestHandled,
 }: Props) {
@@ -103,10 +91,6 @@ export default function CoachAiSection({
   const [daysPerWeek, setDaysPerWeek] = useState<number>(4);
   const [focus, setFocus] = useState<string | undefined>(undefined);
   const [workoutNotes, setWorkoutNotes] = useState<string>('');
-
-  // Meal plan form state
-  const [days, setDays] = useState<number>(7);
-  const [mealNotes, setMealNotes] = useState<string>('');
 
   // Insight form state
   const [windowDays, setWindowDays] = useState<number>(7);
@@ -143,7 +127,7 @@ export default function CoachAiSection({
     const pollInterval = setInterval(async () => {
       try {
         const res = await coachAiApi.listDrafts({ clientId: activeClientId, limit: 1 });
-        const drafts = res.data;
+        const drafts = res.data.filter(canOpenDraft);
         if (drafts.length > 0) {
           clearInterval(pollInterval);
           setTimeoutMessage(null);
@@ -174,7 +158,7 @@ export default function CoachAiSection({
     setInboxError(null);
     try {
       const res = await coachAiApi.listDrafts({ clientId, limit: 20 });
-      setInboxDrafts(res.data);
+      setInboxDrafts(res.data.filter(canOpenDraft));
     } catch (err) {
       setInboxError(errorMessage(err, 'Could not load pending drafts.'));
     } finally {
@@ -182,8 +166,8 @@ export default function CoachAiSection({
     }
   }, [clientId]);
 
-  // Navigate to the correct draft screen based on draft type. All three
-  // candidate routes (AIWorkoutDraft, AIMealPlanDraft, ClientInsight) accept
+  // Navigate to the correct draft screen based on draft type. Both
+  // candidate routes (AIWorkoutDraft, ClientInsight) accept
   // the same `{ draftId, clientId, clientName }` param shape per
   // ClientsStackParamList, so we can dispatch via a typed switch instead of
   // an `as any` cast — satisfies @typescript-eslint/no-explicit-any.
@@ -197,9 +181,6 @@ export default function CoachAiSection({
       switch (screen) {
         case 'AIWorkoutDraft':
           navigation.navigate('AIWorkoutDraft', params);
-          return;
-        case 'AIMealPlanDraft':
-          navigation.navigate('AIMealPlanDraft', params);
           return;
         case 'ClientInsight':
           navigation.navigate('ClientInsight', params);
@@ -245,67 +226,6 @@ export default function CoachAiSection({
         await fetchStatus();
       } else {
         setSubmitError(errorMessage(err, 'Could not generate program.'));
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSubmitMealPlan = async () => {
-    setSubmitError(null);
-    setSubmitRefusal(null);
-    setTimeoutMessage(null);
-    setReadyDraft(null);
-    // B14: refuse to generate a meal plan when we have not been told what the
-    // client's allergies are. `undefined` means the caller has not loaded the
-    // profile yet; the array semantics (empty = none, present = these) match
-    // profileCompletion.ts. This is the difference between "asked and said
-    // none" vs. "we never asked" — the latter is unsafe input for the AI.
-    if (clientAllergies === undefined || clientDietaryRestrictions === undefined) {
-      setSubmitError(
-        'Allergy and dietary info has not loaded yet. Reopen this client to retry.',
-      );
-      return;
-    }
-    setSubmitting(true);
-    try {
-      // Mirror safety fields into the user-facing notes so the LLM cannot
-      // miss them even if the backend prompt template forgets a field.
-      const composedNotes = [
-        mealNotes.trim() || null,
-        clientAllergies.length
-          ? `Allergies: ${clientAllergies.join(', ')}.`
-          : null,
-        clientDietaryRestrictions.length
-          ? `Dietary restrictions: ${clientDietaryRestrictions.join(', ')}.`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' ');
-      const res = await coachAiApi.generateMealPlan({
-        clientId,
-        days,
-        // The safety fields travel inside `notes` only: the backend body
-        // allow-list (GenerateMealPlanDto, forbidNonWhitelisted) refuses any
-        // other key with a 400, so sending them as their own keys failed
-        // every generation.
-        notes: composedNotes || undefined,
-      });
-      const draftId = res.data.draftId;
-      closeModal();
-      navigation.navigate('AIMealPlanDraft', { draftId, clientId, clientName });
-    } catch (err) {
-      const refusal = aiRefusalOf(err);
-      if (refusal) {
-        setSubmitRefusal(refusal);
-      } else if (isTimeoutError(err)) {
-        closeModal();
-        startBackgroundPoll(clientId);
-      } else if (isAiDisabledError(err)) {
-        setSubmitError(AI_UNAVAILABLE);
-        await fetchStatus();
-      } else {
-        setSubmitError(errorMessage(err, 'Could not generate meal plan.'));
       }
     } finally {
       setSubmitting(false);
@@ -382,16 +302,6 @@ export default function CoachAiSection({
             setMode('workout');
           }}
           testID="coach-ai-cta-workout"
-        />
-        <CoachAiCta
-          icon="restaurant-outline"
-          label="Generate meal plan"
-          disabled={!ready}
-          onPress={() => {
-            setSubmitError(null);
-            setMode('meal');
-          }}
-          testID="coach-ai-cta-meal"
         />
         <CoachAiCta
           icon="sparkles-outline"
@@ -578,63 +488,6 @@ export default function CoachAiSection({
         </View>
       </Modal>
 
-      {/* Meal plan modal */}
-      <Modal
-        visible={mode === 'meal'}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={closeModal}
-      >
-        <View style={styles.modalContainer}>
-          <ModalHeader title="Generate meal plan" onClose={closeModal} />
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            <Text style={styles.fieldLabel}>Days ({days})</Text>
-            <NumberStepper
-              value={days}
-              min={1}
-              max={14}
-              onChange={setDays}
-              testID="coach-ai-meal-days"
-            />
-
-            <Text style={styles.fieldLabel}>Notes (optional)</Text>
-            <TextInput
-              style={[styles.textInput, styles.multiline]}
-              placeholder="Dietary restrictions, calorie target, preferences…"
-              placeholderTextColor={colors.textMuted}
-              value={mealNotes}
-              onChangeText={setMealNotes}
-              multiline
-              maxLength={500}
-            />
-
-            {submitError ? <Text style={styles.formError}>{submitError}</Text> : null}
-            {submitRefusal ? (
-              <AiRefusalNotice
-                refusal={submitRefusal}
-                audience="coach"
-                surface="draft"
-                onRetry={() => void handleSubmitMealPlan()}
-                compact
-                testID="coach-ai-refusal"
-              />
-            ) : null}
-
-            <TouchableOpacity
-              style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
-              onPress={handleSubmitMealPlan}
-              disabled={submitting}
-              accessibilityRole="button"
-              accessibilityLabel="Generate meal plan"
-            >
-              <Text style={styles.submitBtnText}>
-                {submitting ? 'Generating…' : 'Generate'}
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </Modal>
-
       {/* Insight modal */}
       <Modal
         visible={mode === 'insight'}
@@ -696,18 +549,21 @@ export default function CoachAiSection({
 function draftTypeLabel(type: CoachAiDraftType): string {
   switch (type) {
     case 'WORKOUT_PROGRAM': return 'Workout program';
-    case 'MEAL_PLAN':       return 'Meal plan';
     case 'INSIGHT':         return 'Weekly insight';
     default:                return type;
   }
 }
 
+/** Old free-form MEAL_PLAN drafts have no screen (MEALPLAN-RETIRE), so they are not listed. */
+function canOpenDraft(draft: PendingDraftSummary): boolean {
+  return draftTypeToScreen(draft.type) !== null;
+}
+
 function draftTypeToScreen(
   type: CoachAiDraftType,
-): 'AIWorkoutDraft' | 'AIMealPlanDraft' | 'ClientInsight' | null {
+): 'AIWorkoutDraft' | 'ClientInsight' | null {
   switch (type) {
     case 'WORKOUT_PROGRAM': return 'AIWorkoutDraft';
-    case 'MEAL_PLAN':       return 'AIMealPlanDraft';
     case 'INSIGHT':         return 'ClientInsight';
     default:                return null;
   }
