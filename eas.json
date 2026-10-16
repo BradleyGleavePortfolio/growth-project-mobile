@@ -60,6 +60,13 @@
         "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true"
       }
     },
+    "testing": {
+      "extends": "production",
+      "channel": "testing",
+      "env": {
+        "EXPO_PUBLIC_FF_TEAM_MODE": "false"
+      }
+    },
     "clinic": {
       "extends": "production",
       "channel": "clinic",
@@ -104,6 +111,9 @@
       "ios": {
         "ascAppId": "6765847915"
       }
+    },
+    "testing": {
+      "extends": "production"
     },
     "clinic": {
       "extends": "production"
