@@ -38,6 +38,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
+  EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
   EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: process.env.EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE,
@@ -88,6 +89,15 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 export const featureFlags = {
   /** Team management stays hidden for launch, including in development. */
   teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),
+
+  /**
+   * COACHTABS: the coach bar becomes Overview, Programs, Money, Calendar,
+   * Messages, Clients. Settings opens from Overview, Community from Messages
+   * and Team from Clients. Default off; off, the bar is today's.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_TABS_V2
+   */
+  coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', false),
 
   // ─── Bloodwork ────────────────────────────────────────────────────────────
   /**

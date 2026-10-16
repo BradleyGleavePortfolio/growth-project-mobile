@@ -4,6 +4,7 @@
  * the "API contract (final)" section of #622.
  *
  *   GET    /me/ai-consent        status, current version, server copy
+ *          ?variant=coach_free   the coach-free copies, for a client with no coach (owner 62)
  *   POST   /me/ai-consent/roman  { version, copy_sha256?, platform?, app_version?, locale? }
  *                                grant (idempotent); 409 CONSENT_VERSION_MISMATCH
  *   DELETE /me/ai-consent/roman  withdraw (idempotent)
@@ -201,9 +202,12 @@ export function isLiveGrant(s: AiConsentStatusResponse | null | undefined, versi
 }
 
 export const aiConsentApi = {
-  getStatus: async (): Promise<AiConsentOutcome> => {
+  /** `coachFree`: a client with no coach (owner 62); a server before it ignores the query. */
+  getStatus: async (opts?: { coachFree?: boolean }): Promise<AiConsentOutcome> => {
     try {
-      const res = await api.get<unknown>('/me/ai-consent');
+      const res = opts?.coachFree
+        ? await api.get<unknown>('/me/ai-consent', { params: { variant: 'coach_free' } })
+        : await api.get<unknown>('/me/ai-consent');
       const status = parseStatus(res?.data);
       return status ? { kind: 'ok', status } : { kind: 'error', status: res?.status ?? null };
     } catch (err) {
