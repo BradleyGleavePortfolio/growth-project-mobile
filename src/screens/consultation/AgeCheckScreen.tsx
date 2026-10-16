@@ -15,7 +15,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import QuestionScreen from './QuestionScreen';
-import { CONSULT_SUPPORT_SUBJECT, ESCAPE_COPY, EscapeRow } from './RevealScreens';
+import { type AccountExits as Exits, CONSULT_SUPPORT_SUBJECT, ESCAPE_COPY, EscapeRow } from './RevealScreens';
 import { useConsultationStyles } from './components';
 import { TextLink } from '../../ui';
 import ActionMenu, { type ActionMenuOption } from '../../components/messaging/ActionMenu';
@@ -32,8 +32,6 @@ import { logger } from '../../utils/logger';
 import { settleAgeConfirmation } from '../../lib/ageGate';
 
 const AGE_SCREEN: ScreenDef = { ...(screenById('B2') as ScreenDef), eyebrow: undefined };
-
-type Exits = { onSignOut?: () => void; onOpenDataExport?: () => void; onOpenDeleteAccount?: () => void };
 
 const MENU: ActionMenuOption[] = [
   { key: 'export', label: 'Download my data', icon: 'download-outline' },
@@ -110,14 +108,7 @@ export default function AgeCheckScreen({ onConfirmed, ...exits }: { onConfirmed:
       onBack={null}
       onFinishLater={null}
       escape={(stopped) =>
-        stopped ? (
-          <EscapeRow onSignOut={exits.onSignOut}>
-            {exits.onOpenDataExport ? <TextLink label="Download my data" onPress={exits.onOpenDataExport} testID="age-data-export" /> : null}
-            {exits.onOpenDeleteAccount ? <TextLink label="Delete my account" onPress={exits.onOpenDeleteAccount} testID="age-delete-account" /> : null}
-          </EscapeRow>
-        ) : (
-          <AccountAndSupport {...exits} />
-        )
+        stopped ? <EscapeRow {...exits} /> : <AccountAndSupport {...exits} />
       }
     />
   );
