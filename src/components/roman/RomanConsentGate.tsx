@@ -8,23 +8,45 @@
  * Android back gesture) closes Roman calmly and the rest of the app works.
  * Nothing is sent to Anthropic until Allow. When the status cannot be read the
  * gate stays closed and the server's 403 ai_consent_required stays the safety
- * net (the inline refusal row). Coaches never see it.
+ * net (the inline refusal row).
+ *
+ * Coaches (COACH-AI-CONSENT, owner op 2 item 3): the gate wraps the coach room and reads the
+ * coach's own grant (GET /me/ai-consent/coach) once. Never asked, Not now or turned off shows the
+ * CAC-5 "Roman is off" state instead, whose button opens the same request (CoachAiConsentSheet);
+ * so does the server's typed refusal (403 coach_ai_consent_required), which the room reports
+ * through RomanCoachOffContext. After Allow the room opens afresh. A status that does not load
+ * leaves the room open; the server still refuses.
  */
-import React, { useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';
 import AiConsentSheet, { type AiConsentSheetApi } from '../ai/AiConsentSheet';
+import CoachAiConsentSheet from '../ai/CoachAiConsentSheet';
+import JoinCoachState from '../coachless/JoinCoachState';
 import defaultAiConsentApi from '../../api/aiConsentApi';
+import { coachAiConsentApi, type CoachAiConsentApi } from '../../api/coachAiConsentApi';
 import { isLiveRomanGrant } from '../../lib/consultation/aiConsent';
+import { COACH_AI_CONSENT_COPY } from '../../lib/ai/coachAiConsentCopy';
 import { logger } from '../../utils/logger';
+
+/** The coach room calls this when the server refuses with coach_ai_consent_required. */
+export const RomanCoachOffContext = createContext<(() => void) | null>(null);
 
 export interface RomanConsentGateProps {
   surface: 'client' | 'coach';
   /** Injected in tests. */
   api?: AiConsentSheetApi;
+  /** Coach surface: the room, shown while the coach's Roman is on. */
+  children?: React.ReactNode;
+  /** Injected in tests (coach surface). */
+  coachApi?: CoachAiConsentApi;
   testID?: string;
 }
 
-export default function RomanConsentGate({
+export default function RomanConsentGate(props: RomanConsentGateProps): React.ReactElement | null {
+  return props.surface === 'coach' ? <CoachRomanGate {...props} /> : <ClientRomanGate {...props} />;
+}
+
+function ClientRomanGate({
   surface,
   api = defaultAiConsentApi,
   testID = 'roman-consent-gate',
@@ -63,5 +85,47 @@ export default function RomanConsentGate({
       }}
       testID={testID}
     />
+  );
+}
+
+function CoachRomanGate({ children, coachApi = coachAiConsentApi, testID = 'roman-consent-gate' }: RomanConsentGateProps) {
+  const navigation = useContext(NavigationContext);
+  const [off, setOff] = useState(false);
+  const [asking, setAsking] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void coachApi.getStatus().then((out) => {
+      if (live && out.kind === 'ok' && !out.status.granted) setOff(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [coachApi]);
+
+  const markOff = useCallback(() => setOff(true), []);
+  if (!off) return <RomanCoachOffContext.Provider value={markOff}>{children}</RomanCoachOffContext.Provider>;
+  const { title, body, button } = COACH_AI_CONSENT_COPY.off;
+  return (
+    <>
+      <JoinCoachState
+        roman
+        title={title}
+        body={body}
+        action={{ label: button, onPress: () => setAsking(true) }}
+        onBack={navigation ? () => navigation.goBack() : undefined}
+        testID={`${testID}-off`}
+      />
+      <CoachAiConsentSheet
+        visible={asking}
+        api={coachApi}
+        onGranted={() => {
+          setAsking(false);
+          setOff(false);
+        }}
+        onClose={() => setAsking(false)}
+        testID={`${testID}-sheet`}
+      />
+    </>
   );
 }

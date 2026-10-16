@@ -191,7 +191,8 @@ export function parseStatus(body: unknown): AiConsentStatusResponse | null {
   };
 }
 
-function failure(err: unknown): AiConsentOutcome {
+/** The failure outcome of any consent ledger call (also the coach routes, coachAiConsentApi). */
+export function aiConsentFailure(err: unknown): Exclude<AiConsentOutcome, { kind: 'ok' }> {
   const status = statusOf(err);
   if (status === 404 || status === 503) return { kind: 'unavailable', status };
   const data = dataOf(err);
@@ -227,7 +228,7 @@ export const aiConsentApi = {
       const status = parseStatus(res?.data);
       return status ? { kind: 'ok', status } : { kind: 'error', status: res?.status ?? null };
     } catch (err) {
-      return failure(err);
+      return aiConsentFailure(err);
     }
   },
 
@@ -237,7 +238,7 @@ export const aiConsentApi = {
       const res = await (ask ? api.post<unknown>(url, body, askParams(ask)) : api.post<unknown>(url, body));
       return { kind: 'ok', status: parseStatus(res?.data) };
     } catch (err) {
-      return failure(err);
+      return aiConsentFailure(err);
     }
   },
 
@@ -247,7 +248,7 @@ export const aiConsentApi = {
       const res = await (ask ? api.delete<unknown>(url, askParams(ask)) : api.delete<unknown>(url));
       return { kind: 'ok', status: parseStatus(res?.data) };
     } catch (err) {
-      return failure(err);
+      return aiConsentFailure(err);
     }
   },
 };
