@@ -203,7 +203,7 @@ describe('P0 for a client with no coach (W-CONSENT)', () => {
     expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
     expect(r.getByText(AI_CONSENT_CHECKBOX_LABEL)).toBeTruthy();
     expect(r.getByTestId('consent-footer').props.children).toBe('Nothing is sent until you continue.');
-    expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: false }); // the coached copies, never ?variant=coach_free
+    expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: true }); // crisis_alert: the coached copies, never ?variant=coach_free
   });
 
   it('a 403 ROMAN_REQUIRES_COACH is quiet: no notice, onboarding carries on, the choice stays unsaved', async () => {
@@ -258,7 +258,7 @@ describe('FIX684: each P0 record rebuilds the screen shown (coached / no coach x
     expect(sha(shown)).toBe(pin);
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ agreed: true, copy_version: version, text_sha256: pin });
     const grant = memory ? { version: 'client-ai-v7', copy_sha256: V7_COPY.sha256 } : { version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 };
-    if (box2) await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledWith(expect.objectContaining(grant), { crisis: false }));
+    if (box2) await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledWith(expect.objectContaining(grant), { crisis: true }));
     else expect(api.grantRomanConsent).not.toHaveBeenCalled();
     expect(alert).not.toHaveBeenCalled(); // no notice, for a client with or without a coach
     alert.mockRestore();

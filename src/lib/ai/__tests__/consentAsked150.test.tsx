@@ -3,7 +3,8 @@
  * they were shown, in every family (consult, client-ai, coach-free), with roman_crisis_alert off and on. A live
  * grant is read with the copies on file; every new choice is made in the copies asked for, and each POST / DELETE
  * sends the same ask as the GET. The pins are rebuilt from the backend's text; the fake server answers as b#1047's
- * toStatus does for a client with a coach.
+ * toStatus does for a client with a coach. FIX745R1: P0 is driven through the real navigator and API client against
+ * backend main's age gate, and only the server knows the crisis switch.
  */
 import React from 'react';
 import { createHash } from 'crypto';
@@ -20,19 +21,20 @@ import {
 } from '../../../api/aiConsentApi';
 import { featureFlagsKeys } from '../../../hooks/useFeatureFlags';
 import RomanAiConsentScreen from '../../../screens/settings/RomanAiConsentScreen';
-import ConsultationFlow from '../../../screens/consultation/ConsultationFlow';
+import ConsultationOnboardingNavigator from '../../../navigation/ConsultationOnboardingNavigator';
 import { NOW } from '../../consultation/__fixtures__/consultFixtures';
-import { makeApi, resetStores } from '../../consultation/__fixtures__/flowHarness';
+import { resetStores } from '../../consultation/__fixtures__/flowHarness';
 import { resetAiLedgerWritesForTests, romanFamily } from '../../consultation/aiConsent';
 import { isConsentAnswerCurrent } from '../../consultation/engine';
 import * as copy from '../../consultation/copy';
 
-const mockHttp = { get: jest.fn(), post: jest.fn(), delete: jest.fn() };
+const mockHttp = { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() };
 jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: {
     get: (...a: unknown[]) => mockHttp.get(...a),
     post: (...a: unknown[]) => mockHttp.post(...a),
+    put: (...a: unknown[]) => mockHttp.put(...a),
     delete: (...a: unknown[]) => mockHttp.delete(...a),
   },
   usersApi: { updatePushToken: jest.fn(async () => ({ data: {} })) },
@@ -44,11 +46,14 @@ jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => tr
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn(), captureErrorWithoutPii: jest.fn(), setSentryUser: jest.fn() }));
 jest.mock('../../analytics', () => ({ reset: jest.fn(), track: jest.fn() }));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn(async () => undefined) }));
+/** The navigator's signed-in client (P0 rows); null elsewhere. */
+let mockUser: { id: string; coach_id?: string } | null = null;
 jest.mock('../../userCache', () => ({
-  readUserCacheSync: () => ({ id: 'u1', coach_id: 'coach-1' }),
-  readUserCache: async () => null,
+  readUserCacheSync: () => mockUser ?? { id: 'u1', coach_id: 'coach-1' },
+  readUserCache: async () => mockUser,
   clearUserCache: async () => undefined,
 }));
+jest.mock('../../../services/authActions', () => ({ signOut: jest.fn() }));
 jest.mock('../../../offline/sync/sync-engine', () => ({ deleteWorkoutLogsForUser: jest.fn(async () => 0) }));
 jest.mock('../../../services/queryClient', () => ({
   retireAndDrainIdentityPersistences: jest.fn(async () => undefined),
@@ -104,14 +109,14 @@ const variantOf = (o?: AiConsentAsk) => (o ? (o.coachFree ? 'coach_free' : o.cri
  */
 function server(on: boolean, held: string | null, memoryOn = true) {
   let row: { version: string; grant: boolean } | null = held ? { version: held, grant: true } : null;
-  const status = (o?: AiConsentAsk): AiConsentStatusResponse => {
-    const variant = variantOf(o);
+  /** The JSON body for ?variant= (null: none). */
+  const raw = (variant: string | null) => {
     const asked: Family = variant === 'crisis_alert' && on ? 'crisis' : 'coached';
     const granted = row?.grant === true;
     const family: Family = granted || !variant ? (row ? familyOf(row.version) : 'pre57c') : asked;
     const memory = !!row && granted && isMemory(row.version);
     const current = FAMILIES[family][memory ? 1 : 0];
-    return parseStatus({
+    return {
       purpose: 'client_ai_processing',
       processor: 'anthropic',
       granted,
@@ -126,21 +131,54 @@ function server(on: boolean, held: string | null, memoryOn = true) {
       upgrade: null,
       memory_on: memoryOn,
       memory_copy: memory ? null : copyOf(FAMILIES[variant ? asked : family][1]),
-    }) as AiConsentStatusResponse;
+    };
   };
+  /** POST: null (nothing written) unless the sha256 is the pin of that version's text. */
+  const grant = (body: GrantRomanConsentRequest, variant: string | null) => {
+    if (!TEXT[body.version] || body.copy_sha256 !== pinOf(body.version)) return null;
+    row = { version: body.version, grant: true };
+    return raw(variant);
+  };
+  const withdraw = (variant: string | null) => {
+    row = row && { version: row.version, grant: false };
+    return raw(variant);
+  };
+  const ok = (body: object): AiConsentOutcome => ({ kind: 'ok', status: parseStatus(body) as AiConsentStatusResponse });
   const api = {
-    getStatus: jest.fn(async (o?: AiConsentAsk): Promise<AiConsentOutcome> => ({ kind: 'ok', status: status(o) })),
+    getStatus: jest.fn(async (o?: AiConsentAsk): Promise<AiConsentOutcome> => ok(raw(variantOf(o)))),
     grantRoman: jest.fn(async (body: GrantRomanConsentRequest, o?: AiConsentAsk): Promise<AiConsentOutcome> => {
-      if (!TEXT[body.version] || body.copy_sha256 !== pinOf(body.version)) return { kind: 'version_mismatch' };
-      row = { version: body.version, grant: true };
-      return { kind: 'ok', status: status(o) };
+      const out = grant(body, variantOf(o));
+      return out ? ok(out) : { kind: 'version_mismatch' };
     }),
-    withdrawRoman: jest.fn(async (o?: AiConsentAsk): Promise<AiConsentOutcome> => {
-      row = row && { version: row.version, grant: false };
-      return { kind: 'ok', status: status(o) };
-    }),
+    withdrawRoman: jest.fn(async (o?: AiConsentAsk): Promise<AiConsentOutcome> => ok(withdraw(variantOf(o)))),
   };
-  return { api, recorded: () => row };
+  return { api, raw, grant, withdraw, recorded: () => row };
+}
+
+/** Backend main's pre-age allow list: the @AllowBeforeAgeConfirmed controllers (src/auth/README.md, AGEGATE16). */
+const PRE_AGE = /^\/(auth\/|me\/onboarding|me\/ai-consent|consent\/|profile|me\/delete-account|v1\/me\/data-export|users\/me\/push-token)/;
+const refusal = (status: number, code: string) => Object.assign(new Error(`HTTP ${status}`), { response: { status, data: { code } } });
+
+/** Backend main over HTTP: every other route answers 403 AGE_CONFIRMATION_REQUIRED (no date of birth yet). Returns the calls. */
+function backend(srv: ReturnType<typeof server>) {
+  const calls: string[] = [];
+  const answer = (method: 'get' | 'post' | 'put' | 'delete') => async (url: string, a?: unknown, b?: unknown) => {
+    calls.push(`${method.toUpperCase()} ${url}`);
+    if (!PRE_AGE.test(url)) throw refusal(403, 'AGE_CONFIRMATION_REQUIRED');
+    const config = (method === 'get' || method === 'delete' ? a : b) as { params?: { variant?: string } } | undefined;
+    const variant = config?.params?.variant ?? null;
+    if (url === '/me/ai-consent') return { status: 200, data: srv.raw(variant) };
+    if (url === '/me/ai-consent/roman') {
+      const data = method === 'post' ? srv.grant(a as GrantRomanConsentRequest, variant) : srv.withdraw(variant);
+      if (!data) throw refusal(409, 'CONSENT_VERSION_MISMATCH');
+      return { status: 200, data };
+    }
+    if (url === '/me/onboarding/consultation') return { status: 200, data: { saved_at: NOW.toISOString(), completed_chapters: [1] } };
+    return { status: 200, data: null };
+  };
+  for (const m of ['get', 'post', 'put', 'delete'] as const) mockHttp[m].mockReset().mockImplementation(answer(m));
+  mockGetFlags.mockReset().mockImplementation(() => answer('get')('/me/feature-flags'));
+  return calls;
 }
 
 function flagClient(on: boolean) {
@@ -162,6 +200,7 @@ const strings = (n: unknown): string[] =>
   typeof n === 'string' ? [n] : Array.isArray(n) ? n.flatMap(strings) : n && typeof n === 'object' ? strings((n as { children?: unknown }).children ?? null) : [];
 
 beforeEach(async () => {
+  mockUser = null;
   resetAiLedgerWritesForTests();
   await resetStores();
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -265,19 +304,22 @@ const P0: Array<[boolean, boolean, boolean, string, string]> = [
   [true, true, true, 'consult-consent-v11-coach-free', '3528b10d50d8e7bb67a3065b86ba2b5cf33f3891b8194be413c78f2519e3257f'],
 ];
 
-describe('FIXCONSENT: P0 records the screen shown and box 2 grants its text (no coach x switch x memory)', () => {
+describe('FIXCONSENT: P0 through the navigator asks the server, never the flag, and records the screen shown', () => {
   it.each(P0)('no coach %s, switch %s, memory %s: %s', async (coachless, on, memoryOn, version, pin) => {
+    mockUser = coachless ? { id: 'u1' } : { id: 'u1', coach_id: 'coach-1' };
     const srv = server(on, null, memoryOn);
-    const api = makeApi({ getRomanConsent: srv.api.getStatus, grantRomanConsent: srv.api.grantRoman, withdrawRomanConsent: srv.api.withdrawRoman });
+    const calls = backend(srv);
     const r = await render(
-      <ConsultationFlow userId="u1" firstName="Maya" coachless={coachless} crisisAlert={on} api={api} onFinished={jest.fn()} now={() => NOW} autoAdvanceMs={0} prepMinMs={0} />,
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ConsultationOnboardingNavigator />
+      </QueryClientProvider>,
     );
     await waitFor(() => r.getByTestId('consult-screen-W1'));
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     const box2 = FAMILIES[on ? 'crisis' : 'coached'][memoryOn ? 1 : 0];
     await waitFor(() => expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(TEXT[box2]));
-    expect(srv.api.getStatus).toHaveBeenCalledWith({ crisis: on });
+    expect(mockHttp.get).toHaveBeenCalledWith('/me/ai-consent', { params: { variant: 'crisis_alert' } });
     const out = strings(r.toJSON()); // every string from the P0 title to the Privacy Policy link, in display order
     const shown = out.slice(out.lastIndexOf(copy.CONSENT_TITLE, out.indexOf('Privacy Policy')), out.indexOf('Privacy Policy')).join('\n\n');
     await fireEvent.press(r.getByTestId('consent-checkbox'));
@@ -285,9 +327,15 @@ describe('FIXCONSENT: P0 records the screen shown and box 2 grants its text (no 
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     await waitFor(() => expect(srv.recorded()).toEqual({ version: box2, grant: true }));
-    expect(srv.api.grantRoman).toHaveBeenCalledWith(expect.objectContaining({ version: box2, copy_sha256: sha(`${TEXT[box2]}\n\n${B_LABEL}`) }), { crisis: on });
+    const grantBody = { version: box2, copy_sha256: sha(`${TEXT[box2]}\n\n${B_LABEL}`) };
+    expect(mockHttp.post).toHaveBeenCalledWith('/me/ai-consent/roman', expect.objectContaining(grantBody), { params: { variant: 'crisis_alert' } });
     expect(sha(shown)).toBe(pin);
-    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ agreed: true, copy_version: version, text_sha256: pin });
+    expect(mockHttp.put.mock.calls[0][0]).toBe('/me/onboarding/consultation');
+    expect(mockHttp.put.mock.calls[0][1].answers.P0).toMatchObject({ agreed: true, copy_version: version, text_sha256: pin });
+    // Before the date of birth, nothing outside backend main's allow list is asked (no GET /me/feature-flags).
+    expect(calls).toContain('GET /me/ai-consent');
+    expect(calls.filter((c) => !PRE_AGE.test(c.split(' ')[1]))).toEqual([]);
+    expect(mockGetFlags).not.toHaveBeenCalled();
   });
 
   it('the rows are every record a P0 screen can name', () => {

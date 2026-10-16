@@ -17,7 +17,6 @@
 import React, { useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { useFeatureFlags } from '../hooks/useFeatureFlags';
 import ConsultationFlow from '../screens/consultation/ConsultationFlow';
 import type { CompleteOnboardingResponse } from '../api/consultationApi';
 import { authEvents } from '../utils/authEvents';
@@ -34,8 +33,6 @@ function firstNameOf(user: { firstName?: string; name?: string } | null): string
 
 export default function ConsultationOnboardingNavigator() {
   const user = useCurrentUser();
-  // CRISIS-APP-COPY: P0 asks for the crisis-sentence copies while roman_crisis_alert is on (and re-asks when it arrives).
-  const crisisAlert = useFeatureFlags().flags.roman_crisis_alert;
 
   const onFinished = useCallback(async (_result: CompleteOnboardingResponse) => {
     try {
@@ -56,7 +53,6 @@ export default function ConsultationOnboardingNavigator() {
       firstName={firstNameOf(user)}
       coachName={null}
       coachless={!user.coach_id}
-      crisisAlert={crisisAlert}
       onFinished={onFinished}
       onSignOut={() => void signOut(user.id)}
     />
