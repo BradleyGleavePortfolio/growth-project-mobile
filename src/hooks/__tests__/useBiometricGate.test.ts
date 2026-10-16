@@ -141,11 +141,10 @@ describe('useBiometricGate', () => {
       if (status === 'checking') {
         read.mockImplementationOnce(() => new Promise((r) => { answer = r; }));
       }
-      const sampledAt = Date.now();
       // Model 2 ms of setup between the old clock sample and background event.
       await act(async () => { await jest.advanceTimersByTimeAsync(2); });
       await act(async () => listeners.forEach((fn) => fn('background')));
-      jest.setSystemTime(sampledAt + elapsed);
+      await act(async () => { await jest.advanceTimersByTimeAsync(elapsed); });
       await act(async () => listeners.forEach((fn) => fn('active')));
       expect(result.current.status).toBe(status);
       expect(read).toHaveBeenCalledTimes(authentications - 1);
