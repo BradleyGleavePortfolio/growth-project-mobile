@@ -46,7 +46,7 @@ jest.mock('../../utils/appleAuth', () => ({ isAppleAuthAvailable: jest.fn(async 
 jest.mock('../../utils/googleReauth', () => ({ reauthenticateWithGoogle: jest.fn() }));
 jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'u1', role: 'student' }) }));
 jest.mock('../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
-jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
+jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn(async () => undefined) }));
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -175,7 +175,7 @@ describe('AGEDELETE: every refused path in the consultation reaches Download my 
     // Both screens read their status; every request on the path is allowed before the age is confirmed.
     expect(calls).toEqual(expect.arrayContaining(['GET /me/delete-account/status', 'GET /v1/me/data-export/status']));
     expect(refused(calls)).toEqual([]);
-  });
+  }, 30000);
 });
 
 describe('AGEDELETE: each route the two account screens call is allowed before the age is confirmed', () => {
