@@ -18,6 +18,7 @@ it.each([
   ['coach list and create', /['"`]\/coach\/clients\/\$\{\w+\}\/meal-plans['"`]/],
   ['coach update and archive', /['"`]\/coach\/meal-plans\//],
   ['coach AI free-form meal plan', /['"`]\/coach\/ai\/meal-plan['"`]/],
+  ['client list and detail', /\(\s*['"`]\/meal-plans['"`/]/],
 ])('no app source calls the old %s endpoint', (_name, endpoint) => {
   expect(FILES.filter(([, src]) => endpoint.test(src)).map(([file]) => file)).toEqual([]);
   expect(FILES.length).toBeGreaterThan(100);
