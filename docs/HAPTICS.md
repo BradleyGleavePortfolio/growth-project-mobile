@@ -68,6 +68,9 @@ When the toggle changes:
 | `EditProfileScreen` | `success()` | Profile saved successfully |
 | `EditProfileScreen` | `error()` | Profile save API failure |
 | `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
+| `MessagesScreen` (client, `c3StyleB` on) | `softImpact()` | Send tapped |
+| `MessagesScreen` (client, `c3StyleB` on) | `error()` | A send fails while online (once; none while offline, the message waits) |
+| `MessagesScreen` (client, `c3StyleB` on) | `success()` | The coach's read lands while the thread is open |
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
 
 ## Architecture

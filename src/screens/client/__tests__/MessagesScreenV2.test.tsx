@@ -68,6 +68,7 @@ jest.mock('@react-navigation/native', () => {
 });
 
 import MessagesScreen from '../MessagesScreen';
+import { featureFlags } from '../../../config/featureFlags';
 
 const getMock = api.get as unknown as jest.Mock;
 const postMock = api.post as unknown as jest.Mock;
@@ -243,6 +244,10 @@ describe('client MessagesScreen with messaging_core_v2 ON', () => {
     await fireEvent.changeText(utils.getByLabelText('Message text'), 'running late');
     await fireEvent.press(utils.getByLabelText('Send message'));
     expect(await utils.findByText('Not sent. Long press to send again')).toBeTruthy();
+    // C3B-THREAD: c3StyleB is off by default, so main's thread is unchanged.
+    expect(featureFlags.c3StyleB).toBe(false);
+    expect(utils.queryByText('Not sent. Tap to send again')).toBeNull();
+    expect(utils.queryByTestId('c3b-header')).toBeNull();
     const first = postMock.mock.calls.find(([u]) => u === '/messages')!;
     const key = (first[1] as { client_message_id: string }).client_message_id;
     expect(first[2]).toMatchObject({ headers: { 'Idempotency-Key': key } });
