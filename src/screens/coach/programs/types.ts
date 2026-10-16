@@ -19,6 +19,7 @@ export type ProgramsStackParamList = {
   ProgramHistory: { programId: string };
   CoachWorkoutBuilder: { planId?: string; openAi?: boolean } | undefined;
   SupportInbox: undefined;
+  MealEditor: { mealId?: string } | undefined;
 };
 
 export type ProgramsNav = NativeStackNavigationProp<ProgramsStackParamList>;

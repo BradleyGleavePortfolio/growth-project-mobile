@@ -57,6 +57,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
+  EXPO_PUBLIC_FF_MEAL_PLANS_V2: process.env.EXPO_PUBLIC_FF_MEAL_PLANS_V2,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
   EXPO_PUBLIC_FF_MWB_PROGRAMS: process.env.EXPO_PUBLIC_FF_MWB_PROGRAMS,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
@@ -581,6 +582,8 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_C3_STYLE_B
    */
   c3StyleB: readFlag('EXPO_PUBLIC_FF_C3_STYLE_B', false),
+  /** MEALBUILD (MOCK-K5 C): Programs > Meal plans and Meals. Off; off, Programs is main's. env: EXPO_PUBLIC_FF_MEAL_PLANS_V2 */
+  mealPlansV2: readFlag('EXPO_PUBLIC_FF_MEAL_PLANS_V2', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
