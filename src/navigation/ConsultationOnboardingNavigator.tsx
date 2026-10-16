@@ -22,7 +22,6 @@ import React, { useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { useFeatureFlags } from '../hooks/useFeatureFlags';
 import ConsultationFlow from '../screens/consultation/ConsultationFlow';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 import DataExportScreen from '../screens/settings/DataExportScreen';
@@ -43,8 +42,6 @@ const Stack = createNativeStackNavigator();
 
 export default function ConsultationOnboardingNavigator() {
   const user = useCurrentUser();
-  // CRISIS-APP-COPY: P0 asks for the crisis-sentence copies while roman_crisis_alert is on (and re-asks when it arrives).
-  const crisisAlert = useFeatureFlags().flags.roman_crisis_alert;
 
   const onFinished = useCallback(async (_result: CompleteOnboardingResponse) => {
     try {
@@ -68,7 +65,6 @@ export default function ConsultationOnboardingNavigator() {
             firstName={firstNameOf(user)}
             coachName={null}
             coachless={!user.coach_id}
-            crisisAlert={crisisAlert}
             onFinished={onFinished}
             onSignOut={() => void signOut(user.id)}
             onOpenDataExport={() => navigation.navigate('DataExport')}

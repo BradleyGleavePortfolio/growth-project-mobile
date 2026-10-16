@@ -166,14 +166,19 @@ const defaultApi: ConsultationApi = {
  */
 export const AI_STATUS_WAIT_MS = 3000;
 
+/**
+ * CRISIS-APP-COPY / FIXCONSENT: every P0 ledger call asks crisis_alert, and box 2 follows the answer: client-ai-v8 / v9
+ * while the server's FEATURE_ROMAN_CRISIS_ALERT is on, v6 / v7 while it is off. P0 comes before the age step, where the
+ * server refuses GET /me/feature-flags (403 AGE_CONFIRMATION_REQUIRED), so the flow never reads the flag itself.
+ */
+const P0_ASK = { crisis: true } as const;
+
 export interface ConsultationFlowProps {
   userId: string | null;
   firstName?: string | null;
   coachName?: string | null;
   /** The client has no coach (no coach_id): copy that names a coach uses its coachless version. */
   coachless?: boolean;
-  /** `roman_crisis_alert` (CRISIS-APP-COPY): box 2 asks for the crisis-sentence copies (never with no coach). */
-  crisisAlert?: boolean;
   /** Called after "Show me around" on the plan reveal. */
   onFinished: (result: CompleteOnboardingResponse) => void;
   api?: ConsultationApi;
@@ -224,7 +229,6 @@ export default function ConsultationFlow({
   firstName,
   coachName,
   coachless = false,
-  crisisAlert = false,
   onFinished,
   api = defaultApi,
   now: nowFn = () => new Date(),
@@ -307,10 +311,7 @@ export default function ConsultationFlow({
   /** R11-C2B: the server's client-ai-v5 copy box 2 shows and grants, or null for the pinned v4 text. */
   const [aiMemory, setAiMemory] = useState<AiConsentUpgradeCopy | null>(null);
   const aiMemoryRef = useRef<AiConsentUpgradeCopy | null>(null);
-  /** CRISIS-APP-COPY: what the last read asked for, and the copies box 2 shows and grants (v8 / v9 when answered). */
-  const crisisNow = useRef(false);
-  crisisNow.current = crisisAlert && !coachless;
-  const aiAsked = useRef<boolean | null>(null);
+  /** CRISIS-APP-COPY: the copies box 2 shows and grants, as the server answered P0_ASK (v8 / v9 while its switch is on). */
   const aiFamily = useRef(romanFamily(false));
   const [aiCrisis, setAiCrisis] = useState(false);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
@@ -716,10 +717,8 @@ export default function ConsultationFlow({
   async function refreshAiFromLedger(gen: number) {
     try {
       // W-CONSENT: a client with no coach reads (and box 2 grants) the coached copies too.
-      const crisis = crisisNow.current;
-      aiAsked.current = crisis;
-      const out = await api.getRomanConsent({ crisis });
-      if (!aiLive(gen) || aiAsked.current !== crisis) return;
+      const out = await api.getRomanConsent(P0_ASK);
+      if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
         const crisisCopy = romanFamilyOf(out.status) === romanFamily(false, true);
         aiFamily.current = romanFamily(false, crisisCopy);
@@ -735,14 +734,6 @@ export default function ConsultationFlow({
       if (gen === generation.current) markAiReady();
     }
   }
-
-  // The flag arrived (or changed) after the read and before any box 2 choice: read the copies again.
-  useEffect(() => {
-    if (aiAsked.current !== null && aiAsked.current !== crisisNow.current && aiWant.current === null) {
-      void refreshAiFromLedger(generation.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [crisisAlert]);
 
   /**
    * Queue one reconcile step (B-310-3, B-310-5). The step decides when it
@@ -784,7 +775,7 @@ export default function ConsultationFlow({
           // and yes still being the latest choice (B-310-5).
           const result = await runAiLedgerWrite(() =>
             grantRomanWithRetry(
-              api.grantRomanConsent,
+              (body) => api.grantRomanConsent(body, P0_ASK),
               () => aiLive(gen) && aiWant.current === true,
               () => romanGrantBody(aiMemoryRef.current, aiFamily.current),
             ),
@@ -829,7 +820,10 @@ export default function ConsultationFlow({
         if (!aiLive(gen)) return;
         aiWithdrawRetryDue.current = false;
         const result = await runAiLedgerWrite(() =>
-          withdrawRomanWithRetry(api.withdrawRomanConsent, () => aiLive(gen) && aiWant.current === false),
+          withdrawRomanWithRetry(
+            () => api.withdrawRomanConsent(P0_ASK),
+            () => aiLive(gen) && aiWant.current === false,
+          ),
         );
         if (!aiLive(gen)) return;
         if (result === 'withdrawn') {
