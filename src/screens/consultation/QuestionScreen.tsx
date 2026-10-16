@@ -32,7 +32,6 @@ import {
 import {
   AI_CHOICE_UNKNOWN_LINE,
   AI_WITHDRAW_UNCONFIRMED_LINE,
-  CONSENT_FOOTER,
   consentScreenCopy,
   P8_COPY,
 } from '../../lib/consultation/copy';
@@ -604,7 +603,16 @@ function ConsentBody(props: BodyProps) {
         label={copy.box1Label}
         testID="consent-checkbox"
       />
-      <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
+      {/* W-CONSENT: a client with no coach is asked too, with why Roman waits for a coach. */}
+      {copy.romanTitle ? (
+        <>
+          <Headline level="h2" style={{ marginTop: 28 }} testID="consent-roman-title">
+            {copy.romanTitle}
+          </Headline>
+          <Text style={[s.body, { marginTop: 8 }]} testID="consent-roman-lead">{copy.romanLead}</Text>
+        </>
+      ) : null}
+      <Text style={[s.small, { marginTop: copy.romanTitle ? 12 : 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
         {aiMemory ? aiMemory.paragraph.text : copy.aiParagraph}
       </Text>
       <Checkbox
@@ -628,7 +636,7 @@ function ConsentBody(props: BodyProps) {
           {AI_WITHDRAW_UNCONFIRMED_LINE}
         </Text>
       ) : null}
-      <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{CONSENT_FOOTER}</Text>
+      <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{copy.footer}</Text>
       {/* C-8 (operator 2026-10-01): the Privacy Policy, below the two boxes.
           Not part of the consent text or its hash; opening it sends nothing. */}
       <TextLink label="Privacy Policy" onPress={openPrivacyPolicy} testID="consent-privacy-link" role="link" />

@@ -17,7 +17,11 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUs
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 3 }));
 const mockGet = jest.fn();
 const mockRomanChat = jest.fn(() => false);
-jest.mock('../../../config/featureFlags', () => ({ featureFlags: { get romanChat() { return mockRomanChat(); } } }));
+const mockStyleB = jest.fn(() => false);
+jest.mock('../../../config/featureFlags', () => ({ featureFlags: {
+  get romanChat() { return mockRomanChat(); },
+  get c3StyleB() { return mockStyleB(); },
+} }));
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (u: string) => mockGet(u) } }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: new Proxy({}, { get: () => '#000000' }), colors: new Proxy({}, { get: () => '#000000' }) }),
@@ -30,7 +34,7 @@ jest.mock('@expo/vector-icons', () => ({
 import HomeHeaderActions, { messageCoachLabel } from '../HomeHeaderActions';
 
 describe('HomeHeaderActions', () => {
-  beforeEach(() => { jest.clearAllMocks(); mockRomanChat.mockReturnValue(false); });
+  beforeEach(() => { jest.clearAllMocks(); mockRomanChat.mockReturnValue(false); mockStyleB.mockReturnValue(false); });
 
   it.each([false, true])('adds the Roman shortcut beside the coach entry only when chat is enabled: %s', async (enabled) => {
     mockRomanChat.mockReturnValue(enabled);
@@ -150,6 +154,44 @@ describe('HomeHeaderActions', () => {
     const { findByLabelText } = await render(<HomeHeaderActions />);
     expect(await findByLabelText('Message Bradley, 2 unread')).toBeTruthy();
     expect(mockGet).toHaveBeenCalledWith('/messages/unread-count');
+  });
+
+  // C3B-S2: with Style B and Roman chat on, every message entry opens the Messages list (HomeStack MessagesInbox).
+  it('Style B on: the coach entry and the Roman avatar both open the Messages list, labels unchanged', async () => {
+    mockStyleB.mockReturnValue(true);
+    mockRomanChat.mockReturnValue(true);
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    mockGet.mockImplementation(async (u: string) =>
+      u === '/messages/unread-count' ? { data: { total: 2 } } : { data: { name: 'Bradley Gleave' } },
+    );
+    const view = await render(<HomeHeaderActions />);
+    await fireEvent.press(await view.findByLabelText('Message Bradley, 2 unread'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('MessagesInbox');
+    await fireEvent.press(view.getByLabelText('Chat with Roman'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('MessagesInbox');
+    await fireEvent.press(view.getByTestId('home-notification-bell'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('NotificationCenter');
+    expect(mockNavigate).toHaveBeenCalledTimes(3);
+  });
+
+  it('Style B on, no coach: Ask Roman opens the Messages list (its no-coach state)', async () => {
+    mockStyleB.mockReturnValue(true);
+    mockRomanChat.mockReturnValue(true);
+    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    const view = await render(<HomeHeaderActions />);
+    expect(view.getByText('Ask Roman')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Chat with Roman'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('MessagesInbox');
+  });
+
+  it('Style B on but Roman chat off: no list of one, the coach entry still opens the thread', async () => {
+    mockStyleB.mockReturnValue(true);
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    mockGet.mockRejectedValue(new Error('404'));
+    const view = await render(<HomeHeaderActions />);
+    await fireEvent.press(view.getByTestId('home-message-coach'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('Messages');
+    expect(view.queryByTestId('home-roman-chat')).toBeNull();
   });
 
   it('HomeScreen mounts the actions and the deferred push card; ClientNavigator has no dead headerRight bell', () => {

@@ -505,6 +505,7 @@ describe('Style B motion and reach', () => {
     timing.mockRestore();
   });
 
+  // C3B-S2: Home's entry reads the flag to open the client Messages list (HomeHeaderActions.test).
   it('coach side unchanged: only the client thread reads c3StyleB or the Style B parts', () => {
     const src = path.resolve(__dirname, '../../..');
     const hits: string[] = [];
@@ -513,6 +514,6 @@ describe('Style B motion and reach', () => {
       if (e.isDirectory()) { if (e.name !== '__tests__') walk(f); } else if (/\.tsx?$/.test(e.name) && /c3StyleB|StyleBThread/.test(fs.readFileSync(f, 'utf8'))) hits.push(path.relative(src, f));
     });
     walk(src);
-    expect(hits.sort()).toEqual(['components/messaging/StyleBThread.tsx', 'config/featureFlags.ts', 'hooks/useMessageOutbox.ts', 'screens/client/MessagesScreen.tsx', 'services/messageOutbox.ts']);
+    expect(hits.sort()).toEqual(['components/home/HomeHeaderActions.tsx', 'components/messaging/StyleBThread.tsx', 'config/featureFlags.ts', 'hooks/useMessageOutbox.ts', 'screens/client/MessagesScreen.tsx', 'services/messageOutbox.ts']);
   });
 });

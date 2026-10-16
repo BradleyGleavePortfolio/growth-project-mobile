@@ -21,10 +21,11 @@ import { AI_CONSENT_VERSION } from '../../../lib/consultation/consentVersion';
 
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
 
+// The server's client-ai-v7 paragraph (the D1 v5 text with the owner 57c exception).
 const V5_PARAGRAPH =
-  "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Roman may keep notes and summaries about your training, preferences and circumstances to personalise his replies. Deleting a chat removes its messages but not these notes; deleting your account removes them. Roman may also learn your coach's methods, including from your coach's private session notes, and information about your training may help with that without identifying you. Roman never quotes those notes or shows you another client's information. Your coach never sees your conversations with Roman or his notes about you. Your conversations with Roman are kept until you delete them or delete your account.";
+  "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Roman may keep notes and summaries about your training, preferences and circumstances to personalise his replies. Deleting a chat removes its messages but not these notes; deleting your account removes them. Roman may also learn your coach's methods, including from your coach's private session notes, and information about your training may help with that without identifying you. Roman never quotes those notes or shows you another client's information. Your coach never sees your conversations with Roman or his notes about you. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you. Your conversations with Roman are kept until you delete them or delete your account.";
 const V5_COPY = {
-  version: 'client-ai-v5',
+  version: 'client-ai-v7',
   paragraph: { text: V5_PARAGRAPH, sha256: '768ae3451fd1fbd22c65fd7758b51604a9ee0696c6ae7fab694c8238a6584782' },
   box_label: { text: AI_CONSENT_CHECKBOX_LABEL, sha256: 'a'.repeat(64) },
   sha256: AI_CONSENT_MEMORY_COPY_SHA256,
@@ -52,8 +53,8 @@ function status(overrides: Partial<AiConsentStatusResponse> = {}): AiConsentStat
 const LIVE_V5 = status({
   granted: true,
   state: 'granted',
-  version: 'client-ai-v5',
-  current_version: 'client-ai-v5',
+  version: 'client-ai-v7',
+  current_version: 'client-ai-v7',
   copy: V5_COPY,
   memory_on: true,
 });
@@ -87,7 +88,7 @@ describe('AiConsentSheet grants Roman memory while the server offers it (R11-C2B
     expect(r.getByTestId('s-paragraph').props.children).toBe(V5_PARAGRAPH);
     await fireEvent.press(r.getByTestId('s-allow'));
     await waitFor(() => expect(onGranted).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v5', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256, platform });
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v7', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256, platform });
   });
 
   it.each([
