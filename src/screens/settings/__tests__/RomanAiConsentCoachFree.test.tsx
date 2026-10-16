@@ -15,7 +15,7 @@ import {
   AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
   AI_CONSENT_PARAGRAPH_COACH_FREE,
 } from '../../../lib/consultation/copy';
-import { resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
+import { resetAiLedgerWritesForTests, romanFamily } from '../../../lib/consultation/aiConsent';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
@@ -115,6 +115,8 @@ describe('Roman and AI, client with no coach (owner 62x)', () => {
   it('a coach-free grant recorded before 62x still reads with its own copies (pure helpers)', () => {
     const live = { ...LIVE_CF, memory_on: true, memory_copy: CF5_COPY };
     expect(choiceOf(live).choice).toBe('allowed');
-    expect(memorySwitchOf(live)).toEqual({ on: false, onCopy: CF5_COPY });
+    // B-A: turning memory on is a new choice, offered only in the copies asked for.
+    expect(memorySwitchOf(live, romanFamily(true))).toEqual({ on: false, onCopy: CF5_COPY });
+    expect(memorySwitchOf(live, romanFamily(false))).toBeNull();
   });
 });
