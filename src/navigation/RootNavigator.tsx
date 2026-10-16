@@ -43,7 +43,7 @@ import { DunningLockoutProvider } from '../entitlements/dunning/DunningLockoutPr
 // inside NavigationContainer around the per-auth-state navigator so the
 // container, its ref and the deep-link replay behaviour are untouched.
 import { PersistedQueryCacheGate } from '../services/PersistedQueryCacheGate';
-import api from '../services/api';
+import api, { authApi } from '../services/api';
 // Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
 import { initCrisp, syncCrispIdentity } from '../services/support/crisp.service';
 import { identify as analyticsIdentify } from '../lib/analytics';
@@ -65,6 +65,8 @@ type AuthState =
   | 'coach'
   | 'package_prompt'
   | 'student'
+  // AGEGATE16: a client with no date of birth on file confirms 16 or older once.
+  | 'age_check'
   // START-HANG-134 (B37): a startup read on this phone did not answer in time.
   | 'startup_error';
 
@@ -75,7 +77,9 @@ type AuthState =
 // for the reset-password path so the ResetPassword screen receives
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
 import { emailVerifiedPath, fragmentToQuery } from './deepLinkUtils';
-import { readUserCache, clearUserCache } from '../lib/userCache';
+import { readUserCache, clearUserCache, patchUserCache } from '../lib/userCache';
+import { clientAgeConfirmed, onAgeConfirmationRequired } from '../lib/ageGate';
+import { AgeCheckNavigator } from '../screens/consultation/AgeCheckScreen';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
 import {
@@ -437,6 +441,29 @@ export default function RootNavigator() {
     return unsubscribe;
   }, []);
 
+  // AGEGATE16: a client route refused for a missing age confirmation (the
+  // server rule) opens the age step from inside the client app. Setup and
+  // the coach app are never interrupted.
+  // FIXAGE2 R7: "a client whose latest known date of birth is not a confirmed
+  // 16+ date never enters the client app from a cache." The refusal is the
+  // latest answer: the cached date is cleared (so no cold start trusts it),
+  // and a client bootstrap past its age check commits nothing after it.
+  const clientPastAgeCheck = useRef(false);
+  useEffect(
+    () =>
+      onAgeConfirmationRequired(() => {
+        void readUserCache()
+          .then((u) => (u?.role === 'student' ? patchUserCache({ profile: { date_of_birth: null } }) : undefined))
+          .catch((err: unknown) => logger.warn('RootNavigator', 'cached date of birth not cleared', err));
+        const booting = clientPastAgeCheck.current;
+        if (booting) bootGuard.begin();
+        setAuthStateNow((s) =>
+          s === 'student' || s === 'package_prompt' || s === 'day1win' || (s === 'loading' && booting) ? 'age_check' : s,
+        );
+      }),
+    [],
+  );
+
   // Root-level deep-link guard.
   //
   // The React Navigation `linking` config above only routes URLs to screens
@@ -672,6 +699,7 @@ export default function RootNavigator() {
     // one (an auth event during a cold start, or Try again) commits nothing,
     // so a slow earlier run can never overwrite the newer outcome.
     const isLatest = bootGuard.begin();
+    clientPastAgeCheck.current = false;
     const setAuthState = (next: AuthState) => {
       if (isLatest()) setAuthStateNow(next);
     };
@@ -825,6 +853,20 @@ export default function RootNavigator() {
             (err: unknown) => logger.warn('RootNavigator', 'onboarding flag not saved', err),
           );
         }
+
+        // AGEGATE16 (owner #C8-UNDER18-B): every client confirms 16 or older
+        // before entering. A client past setup with no date of birth on file
+        // (any way in that skipped the consultation) is asked once.
+        const ageConfirmed = await clientAgeConfirmed(
+          user?.profile,
+          () => withStartupTimeout(authApi.me(), 'age check'),
+          (dob) => patchUserCache({ profile: { date_of_birth: dob } }),
+        );
+        if (!ageConfirmed) {
+          setAuthState('age_check');
+          return;
+        }
+        if (isLatest()) clientPastAgeCheck.current = true;
 
         // Consultation onboarding (flag on, Opus B-05): the consultation, its
         // plan reveal and Roman's tutorial replace the Day-1 flow and the
@@ -1021,6 +1063,10 @@ export default function RootNavigator() {
       ) : authState === 'onboarding' ? (
         // B14: the consultation for every new client; it has no skip-to-finish path.
         <ConsultationOnboardingNavigator />
+      ) : authState === 'age_check' ? (
+        // AGEGATE16: the consultation's own date-of-birth question, once,
+        // with the ways out (FIXAGE R4).
+        <AgeCheckNavigator onConfirmed={() => authEvents.emit()} onSignOut={signOutFromLockout} />
       ) : authState === 'coach_wizard' ? (
         // New coach — onboarding wizard before full coach dashboard.
         <CoachWizardNavigator />

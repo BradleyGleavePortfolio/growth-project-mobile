@@ -8,8 +8,9 @@
  * can still ask (status undetermined) and the user has not dismissed it.
  * Dismissal is stored per user (R15) in prefsStorage.
  *
- * C-S-PUSH-3: the coach app mounts the same card (audience="coach") at the top
- * of the Clients landing screen, so a fresh coach install also gets the ask
+ * C-S-PUSH-3: the coach app mounts the same card (audience="coach") on its
+ * landing screen (Clients, or Overview with coachTabsV2: navigation/coachLanding.ts),
+ * so a fresh coach install also gets the ask
  * and registers its token through the same path. Same per-user key, so it
  * shows once per account.
  */

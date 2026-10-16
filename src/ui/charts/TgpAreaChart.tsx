@@ -1,7 +1,7 @@
 /**
- * TgpAreaChart — Victory Native XL area chart wrapper.
+ * TgpAreaChart — legacy export, now an unfilled line chart.
  *
- * Renders a filled area chart (line + shaded region under the curve).
+ * The public name stays compatible; no area is drawn.
  * Supports pan gesture for interactive cross-hair tooltip.
  *
  * Props:
@@ -11,7 +11,6 @@
  *
  * Theming:
  *   Line stroke  → colors.primary
- *   Area fill    → colors.primaryPale (semi-transparent)
  *   Tooltip      → Colors.background / Colors.textPrimary / Colors.earningsAccent
  *
  * Performance:
@@ -22,7 +21,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
 import Svg, {
-  Path,
   Polyline,
   Line as SvgLine,
   Circle,
@@ -69,9 +67,9 @@ export default function TgpAreaChart({
   const plotW = W - PAD_L - PAD_R;
   const plotH = H - PAD_T - PAD_B;
 
-  const { toSvgX, toSvgY, linePts, areaPath, yTicks, xLabels } = useMemo(() => {
+  const { toSvgX, toSvgY, linePts, yTicks, xLabels } = useMemo(() => {
     if (data.length === 0) {
-      return { toSvgX: () => 0, toSvgY: () => 0, linePts: '', areaPath: '', yTicks: [], xLabels: [] };
+      return { toSvgX: () => 0, toSvgY: () => 0, linePts: '', yTicks: [], xLabels: [] };
     }
     const ys = data.map((d) => d.y);
     const xs = data.map((d) => d.x);
@@ -87,22 +85,11 @@ export default function TgpAreaChart({
 
     const pts = data.map((d) => `${toX(d.x)},${toY(d.y)}`).join(' ');
 
-    // Build filled area path: line across, then down to baseline, back to start
-    const first = data[0];
-    const last = data[data.length - 1];
-    const baseline = PAD_T + plotH;
-    let d = `M ${toX(first.x)},${baseline}`;
-    d += ` L ${toX(first.x)},${toY(first.y)}`;
-    data.forEach((pt) => {
-      d += ` L ${toX(pt.x)},${toY(pt.y)}`;
-    });
-    d += ` L ${toX(last.x)},${baseline} Z`;
-
     const ticks = [0, 1, 2, 3].map((i) => minY + (rangeY * i) / 3);
     const step = Math.max(1, Math.floor(data.length / 4));
     const xLbls = data.filter((_, i) => i % step === 0 || i === data.length - 1);
 
-    return { toSvgX: toX, toSvgY: toY, linePts: pts, areaPath: d, yTicks: ticks, xLabels: xLbls };
+    return { toSvgX: toX, toSvgY: toY, linePts: pts, yTicks: ticks, xLabels: xLbls };
   }, [data, plotW, plotH]);
 
   const panGesture = Gesture.Pan()
@@ -168,12 +155,6 @@ export default function TgpAreaChart({
               {Math.round(v)}
             </SvgText>
           ))}
-          {/* Filled area */}
-          <Path
-            d={areaPath}
-            fill={colors.primaryPale || Colors.primaryPale}
-            fillOpacity={0.5}
-          />
           {/* Line */}
           <Polyline
             points={linePts}
