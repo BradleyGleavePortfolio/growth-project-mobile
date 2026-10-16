@@ -22,6 +22,7 @@ import {
   AI_CONSENT_PRE57C_COPY_SHA256 as AI_CONSENT_COPY_SHA256,
   AI_CONSENT_PARAGRAPH_PRE57C as AI_CONSENT_PARAGRAPH,
   AI_CONSENT_SAFETY_EXCEPTION,
+  AI_CONSENT_COPY_SHA256 as COACHED_COPY_SHA256,
 } from '../../../lib/consultation/copy';
 // K2 (owner 57c): Settings shows a live client-ai-v4 grant's paragraph with the exception (client-ai-v6's words).
 const SHOWN_V4 = `${AI_CONSENT_PARAGRAPH} ${AI_CONSENT_SAFETY_EXCEPTION}`;
@@ -163,7 +164,8 @@ describe('RomanAiConsentScreen', () => {
     expect(api.grantRoman).not.toHaveBeenCalled();
     confirmLastAlert('Allow');
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    // B-A: a new choice is made in the copies asked for (client-ai-v6), with the GET's ask.
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: COACHED_COPY_SHA256, platform: 'ios' }, {});
   });
 
   it.each([404, 503])('endpoint %s: "unavailable right now", nothing recorded, retry reloads', async () => {

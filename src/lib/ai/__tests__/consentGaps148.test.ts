@@ -78,7 +78,7 @@ const ROWS: Row[] = [
       expect(clientPrivacyText(ROMAN_CHATS_COPY.intro, true)).toBe(
         'Your conversations with Roman are kept until you delete them or your account. Deleting a conversation removes it for good.',
       );
-      expect(source('screens/settings/RomanConversationsScreen.tsx')).toContain('{clientPrivacyText(ROMAN_CHATS_COPY.intro)}');
+      expect(source('screens/settings/RomanConversationsScreen.tsx')).toContain('{clientPrivacyText(crisisText(ROMAN_CHATS_COPY.intro))}');
     },
   },
   {
@@ -173,7 +173,8 @@ const ROWS: Row[] = [
     where: '148',
     check: () => {
       expect(withSafetyException(AI_CONSENT_PARAGRAPH_PRE57C)).toBe(AI_CONSENT_PARAGRAPH);
-      expect(source('screens/settings/RomanAiConsentScreen.tsx')).toMatch(/testID="roman-ai-paragraph">\s*\{withSafetyException\(/);
+      // B-A: a live grant's paragraph takes the exception; a new choice shows the asked copy exactly (it carries it).
+      expect(source('screens/settings/RomanAiConsentScreen.tsx')).toMatch(/testID="roman-ai-paragraph">[^<]*\? \/\/ B-A[^<]*: withSafetyException\(/);
     },
   },
   {
@@ -182,8 +183,9 @@ const ROWS: Row[] = [
     where: '148',
     check: () => {
       expect(withSafetyException(V5)).toBe(V7);
+      // B-A: the memory-on confirmation is the asked family's text (it carries the exception), as sent.
       expect(source('screens/settings/RomanAiConsentScreen.tsx')).toContain(
-        'Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, withSafetyException(offer.paragraph.text), [',
+        'Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, offer.paragraph.text, [',
       );
     },
   },

@@ -116,7 +116,7 @@ describe('Settings > Roman and AI, client with a coach (owner 57c)', () => {
     await fireEvent.press(r.getByTestId('roman-ai-allow'));
     confirmLastAlert(ROMAN_AI_COPY.allow);
     await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith(expect.objectContaining({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 }));
+    expect(api.grantRoman).toHaveBeenCalledWith(expect.objectContaining({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 }), {});
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
   });
 
@@ -128,6 +128,6 @@ describe('Settings > Roman and AI, client with a coach (owner 57c)', () => {
     await fireEvent.press(r.getByTestId('roman-ai-allow'));
     confirmLastAlert(ROMAN_AI_COPY.allow);
     await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith(expect.objectContaining({ version: 'client-ai-v7', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256 }));
+    expect(api.grantRoman).toHaveBeenCalledWith(expect.objectContaining({ version: 'client-ai-v7', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256 }), {});
   });
 });
