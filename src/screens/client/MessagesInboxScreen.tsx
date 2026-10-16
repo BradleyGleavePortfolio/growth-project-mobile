@@ -134,7 +134,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
       <>
         <Rise index={0}>
           <View style={[s.card, s.hero, { backgroundColor: sc.accent }]} testID="inbox-coach">
-            <Text style={[s.over, { color: gold[300] }]}>Your coach</Text>
+            <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
             <Text accessibilityRole="header" style={[s.heroTitle, { color: sc.textOnAccent }]}>No coach connected</Text>
             <Text style={[s.body, { color: sc.textOnAccent }]}>Messages open once you join a coach. Need help finding one? Contact support.</Text>
             <View style={s.actions}>
@@ -194,7 +194,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
                   : <Ionicons name="person-outline" size={24} color={sc.accent} />}
               </View>
               <View style={s.who}>
-                <Text style={[s.over, { color: gold[300] }]}>Your coach</Text>
+                <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
                 <Text style={[s.title, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
               </View>
               {coach.unread > 0 ? (

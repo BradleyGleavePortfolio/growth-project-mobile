@@ -16,7 +16,7 @@ colour, real background and contrast, clipped text, words split across lines, he
 errors; then the motion run and the tap routes). Measured where the column scrolls on the full-height page.
 
 Over all 20: every tap target 44 x 44 pt or more, no clipped text, no split words, no page errors, every text 4.5:1 or
-better (lowest 4.62:1, muted text on the cream card). Motion (coachless, 390): cards rise 16 pt and fade in about
+better (lowest 4.62:1, muted text on the cream card; the gold.200 "Your coach" on forest 7.21:1). Motion (coachless, 390): cards rise 16 pt and fade in about
 200 ms, staggered; with prefers-reduced-motion nothing moves (0 pt while visible) and they fade in about 120-140 ms (the
 150 ms timing, sampled per frame). Taps: Back -> goBack; coach card -> Messages; Roman card -> MoreTab RomanChat
 (initial: false); privacy line and Your conversations with Roman -> MoreTab RomanConversations (initial: false). Join a
