@@ -150,13 +150,14 @@ it('the file error names the client, keeps the masthead and Message, buzzes once
   expect(read).toHaveBeenCalledTimes(2);
 });
 
-it('This week loads with static placeholders, and a failed read offers Try again in place', async () => {
+it('while the file loads, the masthead keeps the name over static placeholders', async () => {
   read.mockImplementationOnce(() => new Promise(() => undefined));
-  const loading = await render(<ClientDetailScreen {...props} />);
-  expect(loading.getByLabelText("Loading Test's file")).toBeTruthy();
-  expect(loading.getByText('Test client')).toBeTruthy();
-  loading.unmount();
-  week.mockClear();
+  const view = await render(<ClientDetailScreen {...props} />);
+  expect(view.getByLabelText("Loading Test's file")).toBeTruthy();
+  expect(view.getByText('Test client')).toBeTruthy();
+});
+
+it('a failed This week read offers Try again in place', async () => {
   week.mockRejectedValueOnce(new Error('offline'));
   const view = await render(<ClientDetailScreen {...props} />);
   expect(await view.findByText("Test's file did not load. Check the connection and try again.")).toBeTruthy();

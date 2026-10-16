@@ -17,7 +17,6 @@ export type ThisWeekRead =
       food: { logged: number; average: number | null };
       target: number | null;
       checkIns: { count: number; toReview: number };
-      weighIns: number;
     };
 
 type Consent = { workouts?: boolean; food_macros?: boolean; body_metrics?: boolean; habits_progress?: boolean } | undefined;
@@ -54,7 +53,6 @@ export function useThisWeek(clientId: string, on: boolean) {
         food: foodWeek(meals, now),
         target: kcal,
         checkIns: checkInWeek((first.checkIns ?? []) as CheckInRow[], now),
-        weighIns: (first.weights ?? []).length,
       });
     } catch {
       if (mine === seq.current) setRead({ kind: 'error' });
