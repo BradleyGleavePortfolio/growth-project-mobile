@@ -1086,12 +1086,6 @@ export const lessonsApi = {
   getRecommended: () => api.get('/lessons/recommended'),
 };
 
-// Meal plans (client-facing, read-only).
-export const mealPlansApi = {
-  list: () => api.get('/meal-plans'),
-  get: (id: string) => api.get(`/meal-plans/${id}`),
-};
-
 // Daily check-ins. POST /check-ins upserts on `date`, so saving the same day
 // twice replaces the row rather than creating duplicates.
 export const checkInsApi = {

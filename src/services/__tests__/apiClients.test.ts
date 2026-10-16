@@ -37,7 +37,7 @@ const axiosMock = jest.requireMock('axios') as {
 
 // Must require AFTER the mock is installed.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { authApi, coachApi, messagesApi, nudgesApi, mealPlansApi, checkInsApi } = require('../api');
+const { authApi, coachApi, messagesApi, nudgesApi, checkInsApi } = require('../api');
 
 describe('new API wrappers', () => {
   beforeEach(() => {
@@ -171,17 +171,6 @@ describe('new API wrappers', () => {
       expect(axiosMock.__instance.get).toHaveBeenCalledWith(
         '/coach/clients/client-1/check-ins',
       );
-    });
-  });
-
-  describe('mealPlansApi (client side)', () => {
-    it('list calls GET /meal-plans', async () => {
-      await mealPlansApi.list();
-      expect(axiosMock.__instance.get).toHaveBeenCalledWith('/meal-plans');
-    });
-    it('get fetches a single plan by id', async () => {
-      await mealPlansApi.get('plan-123');
-      expect(axiosMock.__instance.get).toHaveBeenCalledWith('/meal-plans/plan-123');
     });
   });
 
