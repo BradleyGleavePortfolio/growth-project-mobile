@@ -5,7 +5,13 @@
  * runtime.
  */
 
-import type { AssignmentExercise } from '../../api/workoutBuilderApi';
+import type {
+  AssignmentExercise,
+  WorkoutPlanExercise,
+} from '../../api/workoutBuilderApi';
+
+/** A frozen assignment row or a live plan row (older replies). */
+type SeedRow = AssignmentExercise | WorkoutPlanExercise;
 
 export interface SessionExerciseSeed {
   exerciseId: string;
@@ -21,7 +27,7 @@ export interface SessionExerciseSeed {
 }
 
 export function buildActiveWorkoutExercises(
-  plan: { exercises: readonly AssignmentExercise[] },
+  plan: { exercises: readonly SeedRow[] },
 ): SessionExerciseSeed[] {
   return [...plan.exercises]
     .sort((a, b) => a.order - b.order)
@@ -30,7 +36,7 @@ export function buildActiveWorkoutExercises(
 
 // A frozen snapshot row has no plan-row id: it is left out, never made up,
 // and an empty catalog id falls back to an assignment-local key by order.
-function exerciseToSessionSeed(ex: AssignmentExercise): SessionExerciseSeed {
+function exerciseToSessionSeed(ex: SeedRow): SessionExerciseSeed {
   const id = ex.exercise_external_id
     || (ex.id ? `plan-exercise:${ex.id}` : `assignment-exercise:${ex.order}`);
   return {
