@@ -17,6 +17,11 @@
  *
  * The coach name comes from `GET /v1/clients/me/coach` (same endpoint as
  * CoachIntroductionBanner); any failure keeps the generic label.
+ *
+ * C3B-S2 (MOCK-C3 Style B, `featureFlags.c3StyleB`): with Roman chat on, the
+ * coach entry, the Roman avatar and "Ask Roman" all open the Messages list
+ * (HomeStack `MessagesInbox`), where the coach and Roman sit side by side.
+ * Flag off, or Roman chat off, every entry keeps its own destination.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -99,7 +104,10 @@ export default function HomeHeaderActions() {
       ? `Notifications, ${unreadCount > 99 ? '99+' : unreadCount} unread`
       : 'Notifications';
 
-  const openRoman = () => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false });
+  const toList = featureFlags.c3StyleB && featureFlags.romanChat;
+  const openMessages = () => navigation.navigate(toList ? 'MessagesInbox' : 'Messages');
+  const openRoman = () =>
+    toList ? navigation.navigate('MessagesInbox') : navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false });
   const hasCoach = !!coachId;
   // useCurrentUser reads the cache asynchronously (first render is null): choose
   // coach or Roman only once the user is known, so a coached client never sees
@@ -110,7 +118,7 @@ export default function HomeHeaderActions() {
     <View style={styles.row}>
       {hasCoach ? (
         <Pressable
-          onPress={() => navigation.navigate('Messages')}
+          onPress={openMessages}
           accessibilityRole="button"
           accessibilityLabel={messageLabel}
           testID="home-message-coach"
