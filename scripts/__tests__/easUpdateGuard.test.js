@@ -131,7 +131,8 @@ describe('eas-update-guard', () => {
 
     it('reads the clinic channel from eas.json with the production flags merged under the clinic flags', () => {
       const c = guard.loadChannels();
-      expect(Object.keys(c).sort()).toEqual(['clinic', 'clinic-apk', 'preview', 'production']);
+      expect(Object.keys(c)).toHaveLength(5);
+      expect(Object.keys(c)).toEqual(expect.arrayContaining(['preview', 'production', 'testing']));
       expect(c['clinic-apk']).toMatchObject({ profiles: ['clinic-apk'], environment: 'production' });
       expect(c['clinic-apk'].env).toEqual({ ...c.clinic.env, EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: 'true' });
       expect(c.clinic.environment).toBe('production');

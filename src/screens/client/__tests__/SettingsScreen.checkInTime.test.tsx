@@ -27,6 +27,9 @@ jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.f
 jest.mock('../../../components/BiometricUnlockSetting', () => () => null);
 jest.mock('../settings/ClientTutorialSetting', () => () => null);
 jest.mock('../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]),
+}));
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { consultationOnboarding: true, romanChat: true } }));
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: ({ name }: { name: string }) =>

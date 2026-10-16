@@ -89,7 +89,8 @@ const ROWS: Row[] = [
       expect(clientPrivacyText(ROMAN_CHATS_COPY.confirmAllBody, true)).toBe(
         'This permanently deletes every conversation you have had with Roman, from every day. It cannot be undone.',
       );
-      expect(source('screens/settings/RomanConversationsScreen.tsx')).toContain('body={clientPrivacyText(ROMAN_CHATS_COPY.confirmAllBody)}');
+      // CONSENT-K1 (owner "k1-5 - approved"): a client with no coach reads confirmAllBodyNoCoach instead (consentK1150.test).
+      expect(source('screens/settings/RomanConversationsScreen.tsx')).toContain(': clientPrivacyText(ROMAN_CHATS_COPY.confirmAllBody);');
     },
   },
   {
