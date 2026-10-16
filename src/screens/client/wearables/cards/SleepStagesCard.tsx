@@ -4,9 +4,8 @@
  * Bradley LAW: labels are PLAIN LANGUAGE ONLY — "REM", "Deep sleep",
  * "Light sleep", "Awake". No clinical sleep-stage codes anywhere.
  *
- * CALM framing: the headline reads as reassurance + context, never a bare score
- * (e.g. "Solid restorative night — 6h 48m asleep"), and a low value is never
- * coloured red.
+ * The headline reports time asleep only (e.g. "6h 48m asleep").
+ * Duration alone does not establish sleep quality.
  */
 
 import React, { useMemo } from 'react';
@@ -33,12 +32,12 @@ const STAGE_COLORS: Record<SleepStageSlice['key'], string> = {
 export function SleepStagesCard({ stages, colors, revealDelay = 0 }: SleepStagesCardProps) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  // Reassurance-first headline. Asleep = everything except "Awake".
+  // Asleep = everything except "Awake"; no quality judgment from duration.
   const asleepMin =
     stages?.slices.filter((s) => s.key !== 'awake').reduce((sum, s) => sum + s.minutes, 0) ?? 0;
   const headline =
     stages && asleepMin > 0
-      ? `Solid restorative night — ${formatMinutes(asleepMin)} asleep`
+      ? `${formatMinutes(asleepMin)} asleep`
       : "Sleep stages appear once your tracker syncs a night";
 
   return (
