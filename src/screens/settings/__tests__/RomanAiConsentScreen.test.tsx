@@ -164,7 +164,7 @@ describe('RomanAiConsentScreen', () => {
     expect(api.grantRoman).not.toHaveBeenCalled();
     confirmLastAlert('Allow');
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
-    // FIXCONSENT: a new choice is made in the copies asked for (client-ai-v6), with the same ask.
+    // B-A: a new choice is made in the copies asked for (client-ai-v6), with the GET's ask.
     expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: COACHED_COPY_SHA256, platform: 'ios' }, { crisis: false });
   });
 

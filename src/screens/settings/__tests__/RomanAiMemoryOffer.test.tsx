@@ -2,8 +2,8 @@
  * Settings > Privacy > Roman and AI: Roman memory on by default (R11-C2B, owner 2026-10-07 10:18).
  * A "Roman's memory" switch at the very bottom: ON for a client-ai-v5 grant; off grants the base copy
  * (Roman stays allowed); on grants the server's memory copy and sha256.
- * FIXCONSENT (b#1047): every new choice is made in the copies asked for (coached client-ai-v6 / v7 here),
- * whatever is on file, and the write sends the same ask.
+ * B-A (FIXCONSENT2, b#1047): every new choice is made in the copies asked for (coached client-ai-v6 / v7),
+ * whatever is on file, its exact text shown before it is sent, and the write sends the same ask.
  * R11-C2C (owner 2026-10-07 11:46): Roman's notes are deleted only with the account. No line says
  * that turning memory off deletes them, and there is no control that deletes notes.
  */
@@ -108,7 +108,7 @@ const V5_HOLDER = body({
   memory_on: true,
 });
 
-/** FIXCONSENT (b#1047): the copies this screen asks for (flag off), offered whatever is on file. */
+/** B-A (b#1047): the copies this screen asks for (flag off), offered whatever is on file; each write sends the GET's ask. */
 const COACHED = romanFamily(false);
 const ASK = { crisis: false };
 const V7_COPY = { ...V5_COPY, version: 'client-ai-v7', paragraph: { text: SHOWN_V5, sha256: V5_PARAGRAPH_SHA }, sha256: V7_COPY_SHA };
@@ -209,7 +209,8 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     await waitFor(() => r.getByTestId('roman-ai-memory-row'));
     await fireEvent(memorySwitch(r), 'valueChange', false);
     expect(lastAlert().title).toBe(ROMAN_AI_COPY.confirmMemoryOffTitle);
-    expect(lastAlert().message).toBe(ROMAN_AI_COPY.confirmMemoryOffBody);
+    // B-A: the client-ai-v6 paragraph this records is shown before it is sent, after the memory-off words.
+    expect(lastAlert().message).toBe(`${ROMAN_AI_COPY.confirmMemoryOffBody}\n\n${SHOWN_V4}`);
     // Cancel (or dismissing the alert) sends nothing.
     expect(lastAlert().buttons.map((b) => b.text)).toEqual([ROMAN_AI_COPY.cancel, ROMAN_AI_COPY.memoryOff]);
     expect(lastAlert().buttons[0].onPress).toBeUndefined();
@@ -227,7 +228,8 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     expect(memorySwitch(r).props.value).toBe(false);
     expect(r.getByTestId('roman-ai-state').props.children).toBe('Allowed');
     expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V4);
-    expect(lastAlert().message).not.toMatch(/delet/i);
+    // R11-C2C: the memory-off words never say the notes are deleted (the agreement text after them is about chats).
+    expect(lastAlert().message.replace(SHOWN_V4, '')).not.toMatch(/delet/i);
     expect(r.getByTestId('roman-ai-notice').props.children).not.toMatch(/delet/i);
     expect(r.queryByTestId(/notes?-delete|delete-notes?/)).toBeNull();
   });
