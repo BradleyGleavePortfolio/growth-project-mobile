@@ -29,9 +29,15 @@ jest.mock('../screens/client/wearables/cards/SrCard', () => ({
 
 afterEach(() => jest.restoreAllMocks());
 
+function copyText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') return Object.values(value).map(copyText).join('\n');
+  return '';
+}
+
 it('keeps all changed health copy, spoken labels and state alerts within C-6', async () => {
   const barred = /cl[i]nic|p[a]tient/i;
-  expect(JSON.stringify(Object.values(bloodworkCopy))).not.toMatch(barred);
+  expect(copyText(bloodworkCopy)).not.toMatch(barred);
 
   for (const [respiratoryRate, spo2, spo2NeedsAttention] of [
     [null, null, false], [13, 97, false], [14.2, 88, true],
