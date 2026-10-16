@@ -59,6 +59,7 @@ import ExerciseLibraryScreen from '../screens/client/ExerciseLibraryScreen';
 import ExerciseDetailScreen from '../screens/client/ExerciseDetailScreen';
 import NotificationsScreen from '../screens/client/NotificationsScreen';
 import MessagesScreen from '../screens/client/MessagesScreen';
+import MessagesInboxScreen from '../screens/client/MessagesInboxScreen';
 import EducationScreen from '../screens/client/EducationScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
@@ -216,6 +217,8 @@ export type HomeStackParamList = {
   NotificationPreferences: undefined;
   /** Coach contact card opened from the client Messages thread header. */
   ContactView: MoreStackParamList['ContactView'];
+  /** C3B-S2: the Messages list (coach and Roman), opened from Home while Style B is on. */
+  MessagesInbox: undefined;
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -445,6 +448,7 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       </HomeStackNav.Screen>
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
       <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
+      <HomeStackNav.Screen name="MessagesInbox"         component={MessagesInboxScreen} />
       {/* The Messages header opens the coach contact card (Mute, Block User). */}
       <HomeStackNav.Screen name="ContactView"           component={ContactView} />
       {/* Phase 9 — Notification center screens */}
