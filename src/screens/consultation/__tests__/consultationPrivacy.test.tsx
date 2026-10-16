@@ -442,7 +442,7 @@ describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, ne
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
     expect(api.save.mock.invocationCallOrder[0]).toBeLessThan(grantRomanConsent.mock.invocationCallOrder[0]);
-    expect(grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    expect(grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' }, { crisis: true });
     // Never on the intake: box 2 is not part of any PUT.
     for (const [body] of api.save.mock.calls) expect(JSON.stringify(body)).not.toMatch(/client-ai|anthropic/i);
     release({ kind: 'ok', status: null });

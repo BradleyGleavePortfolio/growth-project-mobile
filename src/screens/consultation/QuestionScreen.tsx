@@ -95,6 +95,8 @@ export interface QuestionScreenProps {
     aiUnconfirmed?: boolean;
     aiUnknown?: boolean;
     aiMemory?: AiConsentUpgradeCopy | null;
+    /** CRISIS-APP-COPY: the server answered with client-ai-v8 / v9, so P0 shows v8 and records v9 / v10. */
+    aiCrisis?: boolean;
     /** B-SHARE-GUEST-127: the coach-sharing sentence printed above P0 Continue (null: none). */
     coachSharing?: { version: string; coachName: string | null } | null;
   };
@@ -532,7 +534,7 @@ export function openPrivacyPolicy(): void {
 function ConsentBody(props: BodyProps) {
   const { answers, onNext, header, consent: state, ctx } = props;
   // Owner 62: a client with no coach sees (and records) the coach-free text.
-  const copy = consentScreenCopy(!!ctx?.coachless);
+  const copy = consentScreenCopy(!!ctx?.coachless, !!state?.aiCrisis);
   // Only a record matching this build's copy version counts (Sol A-03):
   // stale or malformed records render box 1 unticked.
   const already = isConsentAnswerCurrent(answers.P0);

@@ -24,9 +24,12 @@ import {
   AI_CONSENT_COACH_FREE_COPY_SHA256,
   AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
   AI_CONSENT_COPY_SHA256,
+  AI_CONSENT_CRISIS_COPY_SHA256,
+  AI_CONSENT_CRISIS_MEMORY_COPY_SHA256,
   AI_CONSENT_MEMORY_COPY_SHA256,
   AI_CONSENT_PARAGRAPH,
   AI_CONSENT_PARAGRAPH_COACH_FREE,
+  AI_CONSENT_PARAGRAPH_CRISIS,
   AI_CONSENT_PARAGRAPH_PRE57C,
   AI_CONSENT_PRE57C_COPY_SHA256,
   AI_CONSENT_PRE57C_MEMORY_COPY_SHA256,
@@ -34,6 +37,8 @@ import {
 import {
   AI_CONSENT_COACH_FREE_MEMORY_VERSION,
   AI_CONSENT_COACH_FREE_VERSION,
+  AI_CONSENT_CRISIS_MEMORY_VERSION,
+  AI_CONSENT_CRISIS_VERSION,
   AI_CONSENT_MEMORY_VERSION,
   AI_CONSENT_PRE57C_MEMORY_VERSION,
   AI_CONSENT_PRE57C_VERSION,
@@ -41,7 +46,8 @@ import {
 } from './consentVersion';
 
 /**
- * The box 2 copies a client sees: coached client-ai-v6 / v7 (owner 57c); client-ai-v4 / v5 for a client
+ * The box 2 copies a client sees: coached client-ai-v6 / v7 (owner 57c), or v8 / v9 when the server
+ * answers with them (CRISIS-APP-COPY, while its crisis switch is on); client-ai-v4 / v5 for a client
  * whose live grant is of them (the server answers with those copies); coach-free
  * (client-ai-v4-coach-free / v5-coach-free, owner 62) only for a grant recorded before owner 62y2.
  * `paragraph` and `boxLabel` are this build's base text; the memory paragraph always comes from the server.
@@ -66,6 +72,16 @@ const COACHED_FAMILY: RomanCopyFamily = {
   boxLabel: AI_CONSENT_CHECKBOX_LABEL,
 };
 
+const CRISIS_FAMILY: RomanCopyFamily = {
+  coachFree: false,
+  baseVersion: AI_CONSENT_CRISIS_VERSION,
+  baseSha256: AI_CONSENT_CRISIS_COPY_SHA256,
+  memoryVersion: AI_CONSENT_CRISIS_MEMORY_VERSION,
+  memorySha256: AI_CONSENT_CRISIS_MEMORY_COPY_SHA256,
+  paragraph: AI_CONSENT_PARAGRAPH_CRISIS,
+  boxLabel: AI_CONSENT_CHECKBOX_LABEL,
+};
+
 const PRE57C_FAMILY: RomanCopyFamily = {
   coachFree: false,
   baseVersion: AI_CONSENT_PRE57C_VERSION,
@@ -86,14 +102,15 @@ const COACH_FREE_FAMILY: RomanCopyFamily = {
   boxLabel: AI_CONSENT_CHECKBOX_LABEL_COACH_FREE,
 };
 
-/** The copies for a client with (false) or without (true) a coach. */
-export function romanFamily(coachFree: boolean | null | undefined): RomanCopyFamily {
-  return coachFree ? COACH_FREE_FAMILY : COACHED_FAMILY;
+/** The copies for a client with (false) or without (true) a coach; coached with `crisis`: v8 / v9. */
+export function romanFamily(coachFree: boolean | null | undefined, crisis = false): RomanCopyFamily {
+  return coachFree ? COACH_FREE_FAMILY : crisis ? CRISIS_FAMILY : COACHED_FAMILY;
 }
 
 /** The copies the server answered with, by its current version (coached v6 / v7 unless it names another). */
 export function romanFamilyOf(status: AiConsentStatusResponse | null | undefined): RomanCopyFamily {
   const v = status?.current_version;
+  if (v === AI_CONSENT_CRISIS_VERSION || v === AI_CONSENT_CRISIS_MEMORY_VERSION) return CRISIS_FAMILY;
   if (v === AI_CONSENT_PRE57C_VERSION || v === AI_CONSENT_PRE57C_MEMORY_VERSION) return PRE57C_FAMILY;
   return romanFamily(v === AI_CONSENT_COACH_FREE_VERSION || v === AI_CONSENT_COACH_FREE_MEMORY_VERSION);
 }
@@ -144,7 +161,7 @@ export function romanGrantBody(
  * copies count (box 2 on P0 shows that family's text); without it, any this build knows.
  */
 export function isLiveRomanGrant(status: AiConsentStatusResponse | null | undefined, family?: RomanCopyFamily): boolean {
-  return (family ? [family] : [COACHED_FAMILY, PRE57C_FAMILY, COACH_FREE_FAMILY]).some(
+  return (family ? [family] : [COACHED_FAMILY, CRISIS_FAMILY, PRE57C_FAMILY, COACH_FREE_FAMILY]).some(
     (f) => isLiveGrant(status, f.baseVersion) || isLiveGrant(status, f.memoryVersion),
   );
 }

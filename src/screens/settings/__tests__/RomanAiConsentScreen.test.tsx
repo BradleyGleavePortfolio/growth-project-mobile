@@ -165,7 +165,7 @@ describe('RomanAiConsentScreen', () => {
     confirmLastAlert('Allow');
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
     // B-A: a new choice is made in the copies asked for (client-ai-v6), with the GET's ask.
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: COACHED_COPY_SHA256, platform: 'ios' }, {});
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: COACHED_COPY_SHA256, platform: 'ios' }, { crisis: false });
   });
 
   it.each([404, 503])('endpoint %s: "unavailable right now", nothing recorded, retry reloads', async () => {

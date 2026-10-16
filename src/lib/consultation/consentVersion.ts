@@ -66,6 +66,16 @@ export const AI_CONSENT_PRE57C_MEMORY_VERSION = 'client-ai-v5' as const;
 export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v8' as const;
 
 /**
+ * CRISIS-APP-COPY (owner op 1, backend b#1041): client-ai-v6 / v7 and P0 v7 / v8 with the approved crisis
+ * sentence right after the exception. The app asks GET ?variant=crisis_alert exactly while the server's
+ * `roman_crisis_alert` flag is on, and shows (and records) these only when the server answers with them.
+ */
+export const AI_CONSENT_CRISIS_VERSION = 'client-ai-v8' as const;
+export const AI_CONSENT_CRISIS_MEMORY_VERSION = 'client-ai-v9' as const;
+export const CONSULT_CONSENT_CRISIS_COPY_VERSION = 'consult-consent-v9' as const;
+export const CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v10' as const;
+
+/**
  * Owner 62 (Option 1, 2026-10-12): a client with no coach sees the coach-free P0 (the coached text
  * with every coach sentence or clause removed). Owner 62y2 (Option 1): without paragraph 4 and box 2
  * (no Roman choice), footer "Nothing is sent until you continue." (consult-consent-v7-coach-free).
@@ -77,6 +87,9 @@ export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v8' as const
 export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v8-coach-free' as const;
 export const CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION = 'consult-consent-v9-coach-free' as const;
 export const CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION = 'consult-consent-v7-coach-free' as const;
+/** FIXCONSENT (b#1046): v8 / v9-coach-free with paragraph 4 of consult-consent-v9 / v10 (the crisis copies answered). */
+export const CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION = 'consult-consent-v10-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v11-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_VERSION = 'client-ai-v4-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_MEMORY_VERSION = 'client-ai-v5-coach-free' as const;
 
