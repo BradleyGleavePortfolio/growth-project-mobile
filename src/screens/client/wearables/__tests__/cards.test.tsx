@@ -66,16 +66,41 @@ describe('SleepStagesCard — plain language', () => {
     expect(getByText('Awake')).toBeTruthy();
   });
 
-  it('headline reads as reassurance + context (no jargon)', async () => {
+  it('headline reports time asleep, excluding awake minutes (no jargon)', async () => {
     const { getByTestId } = await render(<SleepStagesCard stages={stages} colors={testColors} />);
     const headline = getByTestId('sleep-stages-headline').props.children as string;
-    expect(headline).toMatch(/restorative night/);
+    expect(headline).toBe('6h 30m asleep');
     expect(headline).not.toMatch(CLINICAL_JARGON);
+  });
+
+  it.each([
+    [180, '3h asleep'],
+    [420, '7h asleep'],
+    [0, 'Sleep stages appear once your tracker syncs a night'],
+  ])('reports %i minutes without judging the night', async (minutes, expected) => {
+    const { getByTestId } = await render(
+      <SleepStagesCard
+        stages={{
+          totalMinutes: minutes + 30,
+          slices: [
+            { key: 'light', label: 'Light sleep', minutes, fraction: minutes / (minutes + 30) },
+            { key: 'awake', label: 'Awake', minutes: 30, fraction: 30 / (minutes + 30) },
+          ],
+        }}
+        colors={testColors}
+      />,
+    );
+    const headline = getByTestId('sleep-stages-headline').props.children as string;
+    expect(headline).toBe(expected);
+    expect(headline).not.toMatch(/\b(solid|restorative|good|great|poor|short)\b/i);
   });
 
   it('renders an empty bar with a value-first prompt when no stages', async () => {
     const { getByTestId } = await render(<SleepStagesCard stages={null} colors={testColors} />);
     expect(getByTestId('sleep-stages-empty-bar')).toBeTruthy();
+    expect(getByTestId('sleep-stages-headline').props.children).toBe(
+      'Sleep stages appear once your tracker syncs a night',
+    );
   });
 
   it('keeps neighbouring stages apart with a gap, and each legend dot matches its segment', async () => {

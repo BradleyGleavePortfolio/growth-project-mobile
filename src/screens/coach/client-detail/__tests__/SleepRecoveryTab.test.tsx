@@ -72,11 +72,12 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
       refetch: jest.fn(),
       error: new WearableSamplesError('forbidden', 403, 'WEARABLE_SAMPLES_FORBIDDEN'),
     });
-    const { getByTestId, getByText } = await render(
+    const { getByTestId, getByText, queryByTestId } = await render(
       <SleepRecoveryTab clientId="other-coach-client" colors={testColors} styles={styles} />,
     );
     expect(getByTestId('recovery-unavailable')).toBeTruthy();
     expect(getByText(/don't have access/i)).toBeTruthy();
+    expect(queryByTestId('sleep-stages-headline')).toBeNull();
   });
 
   it('also handles a plain { status: 403 } transport error gracefully', async () => {
@@ -92,6 +93,35 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
       <SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />,
     );
     expect(getByTestId('recovery-unavailable')).toBeTruthy();
+  });
+});
+
+describe('SleepRecoveryTab — factual sleep headline', () => {
+  it.each([
+    [180, '3h asleep'],
+    [420, '7h asleep'],
+    [0, 'Sleep stages appear once your tracker syncs a night'],
+  ])('shows %i minutes without judging the client night', async (minutes, expected) => {
+    mockUseWearableSamples.mockReturnValue({
+      data: resp([
+        { metric: 'SLEEP_LIGHT_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(minutes)] },
+        { metric: 'SLEEP_AWAKE_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(30)] },
+      ]),
+      isError: false,
+      isLoading: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      error: null,
+    });
+    const { getByTestId } = await render(
+      <SleepRecoveryTab clientId="client-1" colors={testColors} styles={styles} />,
+    );
+    const headline = getByTestId('sleep-stages-headline').props.children as string;
+    expect(headline).toBe(expected);
+    expect(headline).not.toMatch(/\b(solid|restorative|good|great|poor|short)\b/i);
+    expect(mockUseWearableSamples).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'client-1' }),
+    );
   });
 });
 
