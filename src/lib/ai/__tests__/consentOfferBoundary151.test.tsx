@@ -318,7 +318,7 @@ function ageGated() {
   const calls: string[] = [];
   for (const m of ['get', 'post', 'put', 'delete'] as const) {
     const ledger = mockHttp[m].getMockImplementation();
-    mockHttp[m].mockImplementation(async (url: string, ...rest: unknown[]) => {
+    mockHttp[m].mockReset().mockImplementation(async (url: string, ...rest: unknown[]) => {
       calls.push(`${m.toUpperCase()} ${url}`);
       if (!PRE_AGE.test(url)) throw Object.assign(new Error('HTTP 403'), { response: { status: 403, data: { code: 'AGE_CONFIRMATION_REQUIRED' } } });
       if (url === '/me/onboarding/consultation') return { status: 200, data: { saved_at: NOW.toISOString(), completed_chapters: [1] } };
