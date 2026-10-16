@@ -9,16 +9,19 @@ import { COACHLESS_COPY, SCREENS, SCREENING_KEYS, TOTAL_CHAPTERS } from './defin
 import {
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
   CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION,
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
 } from './consentVersion';
 
-/** The P0 versions this build displays (owner 62: the coach-free ones for a client with no coach). */
+/** The P0 versions this build displays (owner 62 / 62y2: the coach-free one for a client with no coach). */
 const CURRENT_CONSENT_VERSIONS: readonly unknown[] = [
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
-  CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  // FIX684: v9-coach-free with memory; a stored v7-coach-free stays as it is (#CRISIS-OLD-CONSENT op 1).
   CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
 ];
 import type {
   AnswerValue,

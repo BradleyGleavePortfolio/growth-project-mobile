@@ -259,7 +259,7 @@ describe('A-02 consent-first PUT (backend #607)', () => {
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
     const first = api.save.mock.calls[0][0];
     expect(Object.keys(first.answers)).toEqual(['P0']);
-    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v5', text_sha256: CONSENT_COPY_SHA256 });
+    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v7', text_sha256: CONSENT_COPY_SHA256 });
     expect(first.answers.P0.copy_version).toBe(CONSULT_CONSENT_COPY_VERSION);
     // Only backend #607 P0 keys: box 2 is never part of the intake answer.
     expect(Object.keys(first.answers.P0).sort()).toEqual(['agreed', 'agreed_at', 'copy_version', 'text_sha256']);
@@ -429,7 +429,7 @@ describe('A-03 consent matches the displayed copy, fails closed', () => {
 // ── D2 box 2 ─────────────────────────────────────────────────────────────────
 
 describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, never blocking', () => {
-  it('ticked: POST /me/ai-consent/roman after the P0 save, with client-ai-v4 and the box 2 copy hash; the flow does not wait', async () => {
+  it('ticked: POST /me/ai-consent/roman after the P0 save, with client-ai-v6 and the box 2 copy hash; the flow does not wait', async () => {
     let release: (v: unknown) => void = () => undefined;
     const grantRomanConsent = jest.fn(() => new Promise((res) => { release = res; }));
     const api = makeApi({ grantRomanConsent });
@@ -442,7 +442,7 @@ describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, ne
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
     expect(api.save.mock.invocationCallOrder[0]).toBeLessThan(grantRomanConsent.mock.invocationCallOrder[0]);
-    expect(grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    expect(grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
     // Never on the intake: box 2 is not part of any PUT.
     for (const [body] of api.save.mock.calls) expect(JSON.stringify(body)).not.toMatch(/client-ai|anthropic/i);
     release({ kind: 'ok', status: null });
