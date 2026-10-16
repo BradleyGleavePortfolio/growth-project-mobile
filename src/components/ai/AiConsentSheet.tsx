@@ -88,7 +88,7 @@ export interface AiConsentSheetProps {
    * first answer. Same ledger, same server wording; the title, the paired
    * same-size actions and the Privacy Policy link follow the prototype.
    */
-  variant?: 'default' | 'beforeAnswer';
+  variant?: 'default' | 'beforeAnswer' | 'afterJoin';
   testID?: string;
 }
 
@@ -120,6 +120,9 @@ type Phase =
 export const AI_CONSENT_SHEET_COPY = {
   title: 'Allow AI help',
   beforeAnswerTitle: 'Before Roman answers',
+  /** Owner 62y2: the one-time offer right after a client with no coach joins a coach. */
+  afterJoinTitle: 'Roman and AI',
+  afterJoinAllow: 'Allow',
   allowAndContinue: 'Allow and continue',
   privacyPolicy: 'Privacy Policy',
   coachNote:
@@ -170,6 +173,7 @@ export default function AiConsentSheet({
   testID = 'ai-consent-sheet',
 }: AiConsentSheetProps): React.ReactElement {
   const beforeAnswer = variant === 'beforeAnswer';
+  const afterJoin = variant === 'afterJoin';
   // The coach note is true only when a coach is attached (B-592-SOL-B-1). Read from
   // the signed-in user's cache (patched by CoachCodeSheet after a join), not a hook.
   const cachedUser = readUserCacheSync();
@@ -369,7 +373,13 @@ export default function AiConsentSheet({
             </ScrollView>
             <View style={beforeAnswer ? styles.pair : null} testID={`${testID}-actions`}>
               <PrimaryButton
-                label={beforeAnswer ? AI_CONSENT_SHEET_COPY.allowAndContinue : AI_CONSENT_SHEET_COPY.allow}
+                label={
+                  beforeAnswer
+                    ? AI_CONSENT_SHEET_COPY.allowAndContinue
+                    : afterJoin
+                      ? AI_CONSENT_SHEET_COPY.afterJoinAllow
+                      : AI_CONSENT_SHEET_COPY.allow
+                }
                 onPress={() => void allow()}
                 loading={saving}
                 style={[styles.primary, beforeAnswer && styles.pairItem]}
@@ -492,7 +502,11 @@ export default function AiConsentSheet({
           accessibilityViewIsModal
         >
           <Headline level="h2" style={styles.title}>
-            {beforeAnswer ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle : AI_CONSENT_SHEET_COPY.title}
+            {beforeAnswer
+              ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle
+              : afterJoin
+                ? AI_CONSENT_SHEET_COPY.afterJoinTitle
+                : AI_CONSENT_SHEET_COPY.title}
           </Headline>
           {renderBody()}
         </View>
