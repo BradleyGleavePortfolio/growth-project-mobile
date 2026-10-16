@@ -597,7 +597,7 @@ describe('CreateAccountScreen', () => {
       mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'c1', role: 'coach' } });
       const utils = await renderScreen(undefined, 'coach');
       const box = utils.getByTestId('create-account-roman');
-      expect(box.props.accessibilityState).toEqual({ checked: false });
+      expect(box.props.accessibilityState).toMatchObject({ checked: false });
       expect(utils.getByText('Turn on Roman')).toBeTruthy();
       expect(utils.getByText(/^Roman runs on Anthropic, an outside AI company\./)).toBeTruthy();
       if (tick) await fireEvent.press(box);

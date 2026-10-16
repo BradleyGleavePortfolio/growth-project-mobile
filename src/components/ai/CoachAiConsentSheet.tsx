@@ -36,8 +36,8 @@ export default function CoachAiConsentSheet({
   onClose,
   api = coachAiConsentApi,
   testID = 'coach-ai-consent-sheet',
-}: CoachAiConsentSheetProps): React.ReactElement {
-  const styles = makeStyles(useTheme().colors);
+}: CoachAiConsentSheetProps): React.ReactElement | null {
+  const { colors } = useTheme();
   const insets = useScreenInsets();
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -63,8 +63,10 @@ export default function CoachAiConsentSheet({
     } else logger.warn('CoachAiConsentSheet.grant', out.kind);
   };
 
+  if (!visible) return null;
+  const styles = makeStyles(colors);
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={saving ? () => undefined : failed ? close : notNow}>
+    <Modal visible transparent animationType="slide" onRequestClose={saving ? () => undefined : failed ? close : notNow}>
       <View style={styles.backdrop}>
         <View style={[styles.sheet, { paddingBottom: footerBottomPadding(insets.bottom) }]} testID={testID} accessibilityViewIsModal>
           <View style={styles.title}>
