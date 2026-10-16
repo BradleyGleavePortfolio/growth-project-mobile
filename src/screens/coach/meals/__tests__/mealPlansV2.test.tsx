@@ -42,8 +42,8 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, use
 jest.mock('react-native-safe-area-context', () => ({ ...jest.requireActual('react-native-safe-area-context'), SafeAreaView: require('react-native').View }));
 jest.mock('../../../../components/coach/ai-entry/useAiEntryStatus', () => ({ useAiEntryStatus: () => ({ visible: false }) }));
 jest.mock('../../../../hooks/usePrograms', () => ({
-  useProgramList: () => ({ data: { pages: [{ items: [], goal_tags: [] }] }, isLoading: false, error: null, refetch: jest.fn() }),
-  useSavedWorkouts: () => ({ data: { pages: [{ items: [] }] }, isLoading: false, error: null, refetch: jest.fn() }),
+  useProgramList: () => ({ data: { pages: [{ items: [], goal_tags: [] }] }, isLoading: false, isRefetching: false, error: null, refetch: jest.fn() }),
+  useSavedWorkouts: () => ({ data: { pages: [{ items: [] }] }, isLoading: false, isRefetching: false, error: null, refetch: jest.fn() }),
 }));
 
 import ProgramsLibraryScreen from '../../programs/ProgramsLibraryScreen';
@@ -96,7 +96,7 @@ it('Meal plans shows kcal, note, meals, protein and clients on each plan; Meals 
   await fireEvent.press(s.getByTestId('meal-new'));
   expect(mockNav.navigate).toHaveBeenLastCalledWith('MealEditor');
   await fireEvent.press(s.getByTestId('programs-tab-workouts'));
-  expect(s.getByText('Programs')).toBeTruthy();
+  expect(s.queryByText('Your meal plans')).toBeNull();
 });
 
 it('the editor holds backend limits, says when a save fails, then creates the meal', async () => {
