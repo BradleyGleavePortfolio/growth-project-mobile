@@ -8,8 +8,9 @@
  *   server dedupes (POST /messages, messaging.service insertThreadMessage; the same route with v2 on or off).
  * - One message at a time, in the order written. One that fails stops the ones after it until the client taps it;
  *   a send made during a drain queues behind it. A refusal that can never be accepted does not hold the rest (refusal).
- * - Saved per user as messages_thread_outbox_<id> in AsyncStorage, outside what sign-out wipes: it survives leaving the
- *   thread, closing the app and signing out, and sends on that account's next sign-in. No other account reads or sends it.
+ * - Saved per user as messages_thread_outbox_<id> in AsyncStorage: it survives leaving the thread and closing the app.
+ *   Sign-out handles it like the food and workout queues (authActions SESSION-KEEP-130): one bounded try to send, the
+ *   confirm names what is still unsent, then sign-out removes it, saved and in memory. Nothing waits across accounts.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
@@ -101,7 +102,7 @@ export function hydrateOutbox(uid: string): Promise<void> {
   return ready;
 }
 
-/** Sign-out or app close: forget the copy in memory; the saved list stays the only source. */
+/** Sign-out (before it removes the saved list) or another account: forget the copy in memory and fence its writes. */
 export function releaseOutbox(): void {
   owner = null;
   items = [];
@@ -109,6 +110,19 @@ export function releaseOutbox(): void {
 }
 
 export const readOutbox = (uid: string): OutboxItem[] => (owner === uid ? items : []);
+
+/** Messages saved for this account and not on the server yet, refused ones included (the sign-out confirm names them). */
+export async function outboxLength(uid: string): Promise<number> {
+  await hydrateOutbox(uid);
+  return readOutbox(uid).length;
+}
+
+/** Sign-out's one try (authActions.sendUnsyncedLogs): every message that can still go, in order, as written. */
+export async function sendOutboxBeforeSignOut(uid: string): Promise<void> {
+  await hydrateOutbox(uid);
+  commit(uid, items.map((i) => (i.refused ? i : { ...i, failed: false })));
+  return drainOutbox(uid);
+}
 
 export function subscribeOutbox(listener: Listener): () => void {
   listeners.add(listener);
