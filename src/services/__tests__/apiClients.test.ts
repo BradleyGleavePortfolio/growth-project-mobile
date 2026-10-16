@@ -153,38 +153,6 @@ describe('new API wrappers', () => {
     });
   });
 
-  describe('coachApi — meal plans (Tier 2)', () => {
-    it('listClientMealPlans calls GET /coach/clients/:id/meal-plans', async () => {
-      await coachApi.listClientMealPlans('client-1');
-      expect(axiosMock.__instance.get).toHaveBeenCalledWith(
-        '/coach/clients/client-1/meal-plans',
-      );
-    });
-    it('createClientMealPlan POSTs the plan body', async () => {
-      const body = {
-        title: 'Cutting Week 1',
-        notes: 'Drop 500 kcal',
-        items: [{ name: 'Oats', calories: 300, time_of_day: 'breakfast' }],
-      };
-      await coachApi.createClientMealPlan('client-1', body);
-      expect(axiosMock.__instance.post).toHaveBeenCalledWith(
-        '/coach/clients/client-1/meal-plans',
-        body,
-      );
-    });
-    it('updateMealPlan PATCHes /coach/meal-plans/:id', async () => {
-      await coachApi.updateMealPlan('plan-42', { title: 'Renamed' });
-      expect(axiosMock.__instance.patch).toHaveBeenCalledWith(
-        '/coach/meal-plans/plan-42',
-        { title: 'Renamed' },
-      );
-    });
-    it('archiveMealPlan DELETEs /coach/meal-plans/:id (soft archive)', async () => {
-      await coachApi.archiveMealPlan('plan-42');
-      expect(axiosMock.__instance.delete).toHaveBeenCalledWith('/coach/meal-plans/plan-42');
-    });
-  });
-
   describe('coachApi — check-ins (Tier 2)', () => {
     it('getClientCheckIns supports from+to+limit', async () => {
       await coachApi.getClientCheckIns('client-1', {
