@@ -6,7 +6,6 @@
  *
  *   GET  /coach/ai/status
  *   POST /coach/ai/workout-program
- *   POST /coach/ai/meal-plan
  *   POST /coach/ai/client-insight
  *   GET  /coach/ai/drafts/:draftId
  *   POST /coach/ai/drafts/:draftId/approve
