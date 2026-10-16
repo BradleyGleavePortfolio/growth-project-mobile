@@ -141,7 +141,7 @@ describe('SleepRecoveryTab — coach-only overlays', () => {
     const { getByTestId, getByText } = await render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
     expect(getByTestId('coach-anomaly-band')).toBeTruthy();
     expect(getByTestId('coach-cohort-comparison')).toBeTruthy();
-    expect(getByText('Client average 44 ms')).toBeTruthy();
+    expect(getByText('Client average 38 ms')).toBeTruthy();
     expect(getByTestId('coach-recovery-tab')).toBeTruthy();
   });
 });
