@@ -169,18 +169,6 @@ export interface GenerateWorkoutInput {
   notes?: string;
 }
 
-export interface GenerateMealPlanInput {
-  clientId: string;
-  /** 1-14 inclusive. */
-  days: number;
-  /**
-   * B14: the client's allergies and dietary restrictions are mirrored into
-   * `notes` by CoachAiSection. The backend body allow-list accepts only
-   * clientId, days and notes; any other key is refused with a 400.
-   */
-  notes?: string;
-}
-
 export interface GenerateInsightInput {
   clientId: string;
   /** Defaults to 7 server-side. */
