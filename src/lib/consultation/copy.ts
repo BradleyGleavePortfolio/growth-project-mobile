@@ -23,6 +23,8 @@ import type { Answers, MeasureAnswer } from './types';
 import {
   CONSENT_TITLE,
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_COPY_VERSION,
   CONSULT_CONSENT_CRISIS_COPY_VERSION,
@@ -160,6 +162,9 @@ export const AI_CONSENT_CRISIS_COPY_SHA256 = 'af4cc4fa55aa72cab8e7c6cdcee881d6ba
 export const AI_CONSENT_CRISIS_MEMORY_COPY_SHA256 = '16074f18ce0e985e35ba7cfb3f12233cd993159585a35759c4580a730ed3c9dd';
 export const CONSENT_CRISIS_COPY_SHA256 = '1daf2cde65d223686b4bd60f786b85866f93714176dcc8781ff94b4c9f0e30bf';
 export const CONSENT_CRISIS_MEMORY_COPY_SHA256 = '5f36acf2704699f1e7faa68d7c65b8b8ed1f1988d197774a61914b97f22ff512';
+/** FIXCONSENT (backend b#1046): the coach-free P0 screen with them (consult-consent-v10 / v11-coach-free). */
+export const CONSENT_COACH_FREE_CRISIS_COPY_SHA256 = 'b79c1f039e2832560593390b7b66a91f61b2e7be5eb55ef3509ecd7a100d7c4c';
+export const CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_SHA256 = '3528b10d50d8e7bb67a3065b86ba2b5cf33f3891b8194be413c78f2519e3257f';
 
 /**
  * The P0 screen a client sees and what its record names: `version` / `sha256` with this build's
@@ -168,8 +173,9 @@ export const CONSENT_CRISIS_MEMORY_COPY_SHA256 = '5f36acf2704699f1e7faa68d7c65b8
  * grant covers Roman once a coach is linked) under `romanTitle`, led by `romanLead`. Their P0 record
  * names that whole screen (consult-consent-v8-coach-free / v9-coach-free, FIX684); box 2 itself is also
  * recorded by the AI consent ledger grant with its own copy sha256, as box 2 always is.
- * `crisis` (CRISIS-APP-COPY): the server answered a client with a coach with client-ai-v8 / v9, so
- * paragraph 4 is v8's and the record is consult-consent-v9 / v10 (a client with no coach never asks).
+ * `crisis` (CRISIS-APP-COPY): the server answered with client-ai-v8 / v9, so paragraph 4 is v8's and the
+ * record is consult-consent-v9 / v10, or v10 / v11-coach-free for a client with no coach (FIXCONSENT: the
+ * crisis sentence follows the exception wherever it is stated).
  */
 export function consentScreenCopy(coachFree: boolean, crisis = false) {
   return coachFree
@@ -178,13 +184,13 @@ export function consentScreenCopy(coachFree: boolean, crisis = false) {
         box1Label: CONSENT_CHECKBOX_LABEL_COACH_FREE,
         romanTitle: CONSENT_ROMAN_COACH_FREE_TITLE,
         romanLead: CONSENT_ROMAN_COACH_FREE_LEAD,
-        aiParagraph: AI_CONSENT_PARAGRAPH,
+        aiParagraph: crisis ? AI_CONSENT_PARAGRAPH_CRISIS : AI_CONSENT_PARAGRAPH,
         box2Label: AI_CONSENT_CHECKBOX_LABEL,
         footer: CONSENT_FOOTER_COACH_FREE,
-        version: CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
-        sha256: CONSENT_COACH_FREE_COPY_SHA256,
-        memoryVersion: CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
-        memorySha256: CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
+        version: crisis ? CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION : CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+        sha256: crisis ? CONSENT_COACH_FREE_CRISIS_COPY_SHA256 : CONSENT_COACH_FREE_COPY_SHA256,
+        memoryVersion: crisis ? CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION : CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+        memorySha256: crisis ? CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_SHA256 : CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
       }
     : {
         paragraphs: CONSENT_PARAGRAPHS,

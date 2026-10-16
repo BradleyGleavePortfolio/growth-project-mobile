@@ -87,6 +87,9 @@ export const CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v10' 
 export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v8-coach-free' as const;
 export const CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION = 'consult-consent-v9-coach-free' as const;
 export const CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION = 'consult-consent-v7-coach-free' as const;
+/** FIXCONSENT (b#1046): v8 / v9-coach-free with paragraph 4 of consult-consent-v9 / v10 (the crisis copies answered). */
+export const CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION = 'consult-consent-v10-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v11-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_VERSION = 'client-ai-v4-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_MEMORY_VERSION = 'client-ai-v5-coach-free' as const;
 

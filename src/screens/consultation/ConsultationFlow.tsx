@@ -302,9 +302,12 @@ export default function ConsultationFlow({
   /** R11-C2B: the server's client-ai-v5 copy box 2 shows and grants, or null for the pinned v4 text. */
   const [aiMemory, setAiMemory] = useState<AiConsentUpgradeCopy | null>(null);
   const aiMemoryRef = useRef<AiConsentUpgradeCopy | null>(null);
-  /** CRISIS-APP-COPY: what the last read asked for, and the copies box 2 shows and grants (v8 / v9 when answered). */
+  /**
+   * CRISIS-APP-COPY: what the last read asked for, and the copies box 2 shows and grants (v8 / v9 when answered).
+   * FIXCONSENT: a client with no coach too, who sees the exception under "Before you join a coach".
+   */
   const crisisNow = useRef(false);
-  crisisNow.current = crisisAlert && !coachless;
+  crisisNow.current = crisisAlert;
   const aiAsked = useRef<boolean | null>(null);
   const aiFamily = useRef(romanFamily(false));
   const [aiCrisis, setAiCrisis] = useState(false);
@@ -779,7 +782,7 @@ export default function ConsultationFlow({
           // and yes still being the latest choice (B-310-5).
           const result = await runAiLedgerWrite(() =>
             grantRomanWithRetry(
-              api.grantRomanConsent,
+              (body) => api.grantRomanConsent(body, { crisis: aiAsked.current === true }),
               () => aiLive(gen) && aiWant.current === true,
               () => romanGrantBody(aiMemoryRef.current, aiFamily.current),
             ),
@@ -824,7 +827,10 @@ export default function ConsultationFlow({
         if (!aiLive(gen)) return;
         aiWithdrawRetryDue.current = false;
         const result = await runAiLedgerWrite(() =>
-          withdrawRomanWithRetry(api.withdrawRomanConsent, () => aiLive(gen) && aiWant.current === false),
+          withdrawRomanWithRetry(
+            () => api.withdrawRomanConsent({ crisis: aiAsked.current === true }),
+            () => aiLive(gen) && aiWant.current === false,
+          ),
         );
         if (!aiLive(gen)) return;
         if (result === 'withdrawn') {

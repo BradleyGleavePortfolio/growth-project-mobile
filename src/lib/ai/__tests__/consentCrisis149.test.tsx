@@ -202,12 +202,13 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
     },
   },
   {
-    row: 'Settings > Roman and AI, a live pre-57c grant: the exception it adds (paragraph, memory-on confirmation) is followed by the sentence',
+    row: 'Settings > Roman and AI, a live pre-57c grant: the exception it adds is followed by the sentence; memory on offers the copies asked for',
     check: async (on) => {
+      // b#1047: the offer follows the ask, so the confirmation is v7 / v9 as sent (consentAsked150 posts it).
       const v4 = live('client-ai-v4', {
         copy: copyOf('client-ai-v4', B_V4, copy.AI_CONSENT_PRE57C_COPY_SHA256),
         memory_on: true,
-        memory_copy: copyOf('client-ai-v5', B_V5, copy.AI_CONSENT_PRE57C_MEMORY_COPY_SHA256),
+        memory_copy: on ? copyOf('client-ai-v9', B_V9, PIN.v9) : copyOf('client-ai-v7', B_V7, copy.AI_CONSENT_MEMORY_COPY_SHA256),
       });
       const r = await settings(on, jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'ok', status: v4 })));
       await waitFor(() => r.getByTestId('roman-ai-allowed'));
@@ -258,13 +259,17 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
     },
   },
   {
-    row: 'a client with no coach and a coach account never ask for or see the crisis sentence',
+    row: 'a client with no coach sees it after the exception under "Before you join a coach" (FIXCONSENT); a coach account never',
     check: async (on) => {
-      expect(copy.consentScreenCopy(true, on)).toMatchObject({ aiParagraph: B_V6, version: 'consult-consent-v8-coach-free' });
+      expect(copy.consentScreenCopy(true, on)).toMatchObject({
+        aiParagraph: on ? B_V8 : B_V6,
+        version: on ? 'consult-consent-v10-coach-free' : 'consult-consent-v8-coach-free',
+        memoryVersion: on ? 'consult-consent-v11-coach-free' : 'consult-consent-v9-coach-free',
+      });
       const api = makeApi({ getRomanConsent: ledger(true) });
       const r = await toP0(api, on, true);
-      await waitFor(() => expect(r.paragraph()).toBe(B_V7));
-      expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: false });
+      await waitFor(() => expect(r.paragraph()).toBe(on ? B_V9 : B_V7));
+      expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: on });
       mockUser = { id: 'u1' };
       const sheet = { getStatus: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'unavailable', status: 503 })), grantRoman: jest.fn() };
       await render(withFlag(on, <AiConsentSheet visible onGranted={jest.fn()} onClose={jest.fn()} api={sheet} sessionUserId={() => 'u1'} />));

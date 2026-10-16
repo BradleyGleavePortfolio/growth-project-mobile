@@ -182,8 +182,9 @@ const ROWS: Row[] = [
     where: '148',
     check: () => {
       expect(withSafetyException(V5)).toBe(V7);
+      // FIXCONSENT: the memory-on confirmation is the asked family's text (it carries the exception), as sent.
       expect(source('screens/settings/RomanAiConsentScreen.tsx')).toContain(
-        'Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, withSafetyException(offer.paragraph.text, crisisOn), [',
+        'Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, offer.paragraph.text, [',
       );
     },
   },

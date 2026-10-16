@@ -127,11 +127,10 @@ describe('box 2 shows and grants client-ai-v5 while the server says Roman memory
     expect(r.getByText(AI_CONSENT_CHECKBOX_LABEL)).toBeTruthy();
     await tickBothAndContinue(r);
     await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
-    expect(api.grantRomanConsent).toHaveBeenCalledWith({
-      version: 'client-ai-v7',
-      copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256,
-      platform: 'ios',
-    });
+    expect(api.grantRomanConsent).toHaveBeenCalledWith(
+      { version: 'client-ai-v7', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256, platform: 'ios' },
+      { crisis: false },
+    );
     const first = api.save.mock.calls[0][0];
     expect(first.answers.P0).toMatchObject({
       agreed: true,
@@ -167,7 +166,7 @@ describe("otherwise today's pinned v4 exactly", () => {
     expect(paragraph(r)).toBe(AI_CONSENT_PARAGRAPH);
     await tickBothAndContinue(r);
     await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
-    expect(api.grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    expect(api.grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' }, { crisis: false });
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ copy_version: 'consult-consent-v7', text_sha256: CONSENT_COPY_SHA256 });
   });
 

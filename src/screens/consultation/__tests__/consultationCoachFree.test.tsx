@@ -258,7 +258,7 @@ describe('FIX684: each P0 record rebuilds the screen shown (coached / no coach x
     expect(sha(shown)).toBe(pin);
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ agreed: true, copy_version: version, text_sha256: pin });
     const grant = memory ? { version: 'client-ai-v7', copy_sha256: V7_COPY.sha256 } : { version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 };
-    if (box2) await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledWith(expect.objectContaining(grant)));
+    if (box2) await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledWith(expect.objectContaining(grant), { crisis: false }));
     else expect(api.grantRomanConsent).not.toHaveBeenCalled();
     expect(alert).not.toHaveBeenCalled(); // no notice, for a client with or without a coach
     alert.mockRestore();
