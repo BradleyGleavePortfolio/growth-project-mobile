@@ -402,11 +402,11 @@ const ENTRYPOINT_ONLY = [...collectImports(ROOT_MODULES).keys()]
  */
 // Cormorant Garamond left this list when the consultation started importing
 // its italic face for Roman's voice (CONSULT-PARITY-133).
+// expo-status-bar left when StatusBarBand began asking for light icons over a forest top (K1-OVERVIEW, agent 150).
 const ENTRYPOINT_ONLY_PACKAGES = [
   '@expo-google-fonts/inter',
   'expo',
   'expo-splash-screen',
-  'expo-status-bar',
   'react-native-get-random-values',
 ];
 
