@@ -42,6 +42,7 @@ import { SleepRecoveryTab } from './client-detail/SleepRecoveryTab';
 // Stream 2 — AskAi sheet for the four execution capabilities.
 import { AskAiActionSheet } from '../../components/coach/ai-execution/AskAiActionSheet';
 import { DisputePausedPlansCard } from '../../components/coach/DisputePausedPlansCard';
+import { ForestStatusBar } from '../../components/StatusBarBand';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { layout, radius, typography } from '../../theme/tokens';
@@ -50,9 +51,6 @@ import { FileHead, FileNotice, FilePlaceholders, FileTabs, MessageButton, ThisWe
 import { workoutWeek } from './client-detail/thisWeek';
 import { useThisWeek } from './client-detail/useThisWeek';
 import { HapticService } from '../../ui/haptics/haptics.service';
-
-/** K1-OVERVIEW: the Style C file opens on This week (K1-S-36). */
-const WEEK_TAB = { key: 'week' as TabKey, label: 'This week', icon: 'today-outline' as IoniconName };
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
   // S14 round 3: the coach wearable-prompts screen is reachable from this
@@ -109,10 +107,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
   const [activeTab, setActiveTab] = useState<TabKey>(route.params.initialTab ?? (styleC ? 'week' : 'summary'));
   const thisWeek = useThisWeek(clientId, styleC && activeTab === 'week');
-  const week = useMemo(
-    () => (styleC && workoutsShared ? workoutWeek(recentAssignments, new Date()) : null),
-    [styleC, workoutsShared, recentAssignments],
-  );
+  const week = styleC && workoutsShared ? workoutWeek(recentAssignments, new Date()) : null;
   // AIB-6: Workouts tab "Build a program with AI" opens the Coach AI program generator (Summary tab) once.
   const [aiProgramRequest, setAiProgramRequest] = useState(false);
   const clearAiProgramRequest = useCallback(() => setAiProgramRequest(false), []);
@@ -317,7 +312,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   };
 
   const tabs: { key: TabKey; label: string; icon: IoniconName }[] = [
-    ...(styleC ? [WEEK_TAB] : []),
+    ...(styleC ? [{ key: 'week', label: 'This week', icon: 'today-outline' } as const] : []), // K1-OVERVIEW, K1-S-36
     { key: 'summary', label: 'Summary', icon: 'pie-chart-outline' },
     { key: 'logs', label: 'Logs', icon: 'restaurant-outline' },
     { key: 'mealplan', label: 'Plan', icon: 'calendar-outline' },
@@ -375,7 +370,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       { text: 'Cancel', style: 'cancel' },
     ]);
   const openMessages = () => navigation.navigate('ClientMessages', { clientId, clientName });
-  const fileTop = <View style={{ height: insets.top, backgroundColor: sc.surface.masthead }} />;
   const fileHead = (rounded?: boolean) => (
     <FileHead
       name={clientName} onBack={() => navigation.goBack()} rounded={rounded}
@@ -387,8 +381,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
   if (styleC && ((isLoading && !refreshing) || (loadError && !profile))) {
     return (
-      <View style={styles.container} testID="client-detail">
-        {fileTop}
+      <View style={[styles.container, { paddingTop: insets.top }]} testID="client-detail">
+        <ForestStatusBar />
         <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
           {fileHead(true)}
           <View style={{ paddingHorizontal: layout.gutter }}>
@@ -451,10 +445,12 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   }
 
   return (
-    <View style={[styles.container, top, styleC && { paddingTop: 0 }]} testID="client-detail">
-      {styleC ? fileTop : null}
-      {/* Header (Style C: FileHead inside the scroll below) */}
-      {!styleC && <View style={styles.header}>
+    <View style={[styles.container, top, styleC && { paddingTop: insets.top }]} testID="client-detail">
+      {styleC ? <ForestStatusBar /> : null}
+      {/* Flag off: the old header, archive status and tab row. Style C draws its own inside the scroll below. */}
+      {!styleC ? (<>
+      {/* Header */}
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -500,16 +496,16 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             color={isArchived ? colors.warning : colors.textSecondary}
           />
         </TouchableOpacity>}
-      </View>}
+      </View>
 
-      {!styleC && archiveStatusError ? (
+      {archiveStatusError ? (
         <Text accessibilityRole="alert" style={[typography.body, { color: colors.textSecondary, marginHorizontal: 20, marginBottom: 12 }]}>
           {archiveStatusError}
         </Text>
       ) : null}
 
-      {/* Tabs (Style C: FileTabs, pinned in the scroll below) */}
-      {!styleC && <ScrollView
+      {/* Tabs */}
+      <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={[styles.tabScroll, { maxHeight: 52 }]}
@@ -529,7 +525,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>}
+      </ScrollView>
+      </>) : null}
 
       <ScrollView
         contentContainerStyle={styleC ? { paddingBottom: 24 } : styles.scrollContent}
@@ -541,7 +538,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       >
         {styleC ? fileHead() : null}
         {styleC ? <FileTabs tabs={tabs} active={activeTab} onTab={setActiveTab} /> : null}
-        <View style={styleC ? { paddingHorizontal: layout.gutter, paddingBottom: 76 } : undefined}>
+        <View style={styleC ? { paddingHorizontal: layout.gutter } : undefined}>
         {styleC && archiveStatusError ? (
           <Text accessibilityRole="alert" style={[typography.body, { color: colors.textSecondary, marginTop: 16 }]}>{archiveStatusError}</Text>
         ) : null}
@@ -551,9 +548,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           reloadKey={planReloadKey}
           colors={colors}
         />
-        {activeTab === 'week' && (
-          <ThisWeekBody first={first} read={thisWeek.read} week={week} onOpen={setActiveTab} onRetry={thisWeek.reload} />
-        )}
+        {activeTab === 'week' && <ThisWeekBody first={first} read={thisWeek.read} week={week} onOpen={setActiveTab} onRetry={thisWeek.reload} />}
         {activeTab === 'summary' && (
           <SummaryTab
             profile={profile}
@@ -712,7 +707,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         )}
         </View>
       </ScrollView>
-      {styleC && activeTab === 'week' ? message : null}
+      {styleC ? message : null}
 
       <PlanFormModal
         visible={showPlanModal}

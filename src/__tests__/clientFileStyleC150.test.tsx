@@ -1,13 +1,18 @@
 /** K1-OVERVIEW (agent 150): the Style C client file behind coachTabsV2; every tap lands somewhere real; flag off, unchanged. */
 import React from 'react';
-import { Alert } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
+import { STATUS_BAR_BONE, StatusBarBand } from '../components/StatusBarBand';
+import type { ClientsStackParamList } from '../navigation/CoachNavigator';
+import { lightTokens } from '../theme/tokens';
 import { useCoachStore } from '../store/coachStore';
 import { coachApi } from '../services/api';
 import { macrosApi } from '../api/macrosApi';
 import { weekStart } from '../screens/coach/client-detail/thisWeek';
-import type { Props } from '../screens/coach/client-detail/types';
 import { HapticService } from '../ui/haptics/haptics.service';
 import { getTodayString } from '../utils/date';
 import { featureFlags } from '../config/featureFlags';
@@ -15,13 +20,14 @@ import { featureFlags } from '../config/featureFlags';
 jest.mock('../config/featureFlags', () => ({ featureFlags: { coachTabsV2: true } }));
 const mockFlags = featureFlags as Record<string, boolean>;
 jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn(), mediumImpact: jest.fn(), error: jest.fn() } }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) =>
-  jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, name) }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../theme/ThemeProvider', () => ({ useTheme: () => ({
   colors: jest.requireActual('../screens/client/wearables/recoveryTestColors').testColors,
   tokens: jest.requireActual('../theme/tokens').default,
   semanticColors: jest.requireActual('../theme/tokens').lightTokens,
 }) }));
+jest.mock('expo-status-bar', () => ({ StatusBar: ({ style }: { style: string }) =>
+  jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, `icons-${style}`) }));
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-test' }) }));
 jest.mock('../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ isLoading: false, flags: {} }) }));
 jest.mock('../services/api', () => ({ coachApi: {
@@ -40,23 +46,39 @@ jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: mo
 jest.mock('../screens/coach/client-detail/MealPlanTab', () => ({ MealPlanTab: () => null }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => null }));
 jest.mock('../screens/coach/client-detail/SleepRecoveryTab', () => ({ SleepRecoveryTab: () => null }));
+jest.mock('../screens/coach/client-detail/WeeklySummaryTab', () => ({ WeeklySummaryTab: () => null }));
 jest.mock('../screens/coach/client-detail/PlanFormModal', () => ({ PlanFormModal: () => null }));
 jest.mock('../screens/coach/client-detail/NudgeModal', () => ({ NudgeModal: () => null }));
 jest.mock('../components/coach/ai-execution/AskAiActionSheet', () => ({ AskAiActionSheet: () => null }));
 jest.mock('../components/coach/DisputePausedPlansCard', () => ({ DisputePausedPlansCard: () => null }));
 
-const DAY = 86_400_000;
 const monday = weekStart(new Date()).getTime();
 const done = { scheduled_for: new Date(monday + 3_600_000).toISOString(), completed_at: new Date(monday + 7_200_000).toISOString() };
-const later = Array.from({ length: 20 }, (_, i) => ({ scheduled_for: new Date(monday + (8 + i) * DAY).toISOString(), completed_at: null }));
+const later = Array.from({ length: 20 }, (_, i) => ({ scheduled_for: new Date(monday + (8 + i) * 86_400_000).toISOString(), completed_at: null }));
 let summary: Record<string, unknown>;
 let timeline: Record<string, unknown>;
-const navigate = jest.fn();
-const goBack = jest.fn();
-const props = {
-  navigation: { navigate, goBack } as unknown as Props['navigation'],
-  route: { key: 'detail-test', name: 'ClientDetail', params: { clientId: 'client-test', clientName: 'Test client' } },
-} as unknown as Props;
+const params = { clientId: 'client-test', clientName: 'Test client' };
+const TABS = ['week', 'summary', 'logs', 'mealplan', 'progress', 'healthFitness', 'sleepRecovery', 'workouts', 'timeline', 'weekly'];
+// Every render is the app's real stack (Clients, the file, the thread) under the app's status band, on a 47 pt notch.
+const Stack = createNativeStackNavigator<ClientsStackParamList>();
+const ref = createNavigationContainerRef<ClientsStackParamList>();
+const file = () => (
+  <SafeAreaInsetsContext.Provider value={{ top: 47, bottom: 34, left: 0, right: 0 }}>
+    <NavigationContainer ref={ref} initialState={{ index: 1, routes: [{ name: 'ClientsList' }, { name: 'ClientDetail', params }] }}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="ClientsList">{() => null}</Stack.Screen>
+        <Stack.Screen name="ClientDetail" component={ClientDetailScreen} />
+        <Stack.Screen name="ClientMessages">{() => null}</Stack.Screen>
+      </Stack.Navigator>
+    </NavigationContainer>
+    <StatusBarBand />
+  </SafeAreaInsetsContext.Provider>
+);
+// B1 (FIXK1OV): the band's colour and whether it asks for light icons. Forest only while the Style C file is focused.
+const band = (v: Awaited<ReturnType<typeof render>>) =>
+  [StyleSheet.flatten(v.getByTestId('status-bar-band').props.style).backgroundColor, !!v.queryByText('icons-light')];
+const FOREST = [lightTokens.surface.masthead, true];
+const BONE = [STATUS_BAR_BONE, false];
 const read = coachApi.getClientSummary as jest.Mock;
 const week = coachApi.getClientTimeline as jest.Mock;
 
@@ -82,16 +104,17 @@ afterEach(() => jest.restoreAllMocks());
 
 it('flag off: the file is unchanged (Summary first, the old header, no masthead)', async () => {
   mockFlags.coachTabsV2 = false;
-  const view = await render(<ClientDetailScreen {...props} />);
+  const view = await render(file());
   expect(await view.findByText('summary-body')).toBeTruthy();
   expect(view.getByLabelText('Summary').props.accessibilityState).toEqual({ selected: true });
   expect(view.queryByTestId('file-masthead')).toBeNull();
   expect(view.queryByText('This week')).toBeNull();
   expect(week).not.toHaveBeenCalled();
+  expect(band(view)).toEqual(BONE);
 });
 
 it('flag on: opens on This week with the name, the ring, the day strip and the four cards', async () => {
-  const view = await render(<ClientDetailScreen {...props} />);
+  const view = await render(file());
   expect(await view.findByText('Logged 1 of 7 days · Average 500 kcal · target 2,100')).toBeTruthy();
   expect(view.getByLabelText('This week').props.accessibilityState).toEqual({ selected: true });
   expect(view.getByRole('header').props.children).toBe('Test client');
@@ -101,11 +124,13 @@ it('flag on: opens on This week with the name, the ring, the day strip and the f
   expect(view.getByText('1 this week · 1 to review')).toBeTruthy();
   expect(view.getByText('Message Test')).toBeTruthy();
   expect(view.queryByText('Clients choose what they share with you. Anything not shared stays private.')).toBeNull();
+  expect(view.getAllByRole('tab').map((t) => t.props.testID)).toEqual(TABS.map((k) => `file-tab-${k}`));
+  expect(band(view)).toEqual(FOREST);
 });
 
 it('the ring is left out when the 20 latest assignments may not hold this week', async () => {
   summary.recent_assignments = later;
-  const view = await render(<ClientDetailScreen {...props} />);
+  const view = await render(file());
   await view.findByText('1 this week · 1 to review');
   expect(view.queryByTestId('file-week')).toBeNull();
   expect(view.getByTestId('file-card-workouts')).toBeTruthy();
@@ -119,11 +144,10 @@ it.each<[string, string, (v: Awaited<ReturnType<typeof render>>) => void]>([
   ['Check-ins card', 'file-card-checkins', (v) => expect(v.getByText('timeline-body')).toBeTruthy()],
   ['Weigh-ins card', 'file-card-weighins', (v) => expect(v.getByText('progress-body')).toBeTruthy()],
   ['Summary tab', 'file-tab-summary', (v) => expect(v.getByText('summary-body')).toBeTruthy()],
-  ['Message Test', 'file-message', () => expect(navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-test', clientName: 'Test client' })],
-  ['Back', 'file-back', () => expect(goBack).toHaveBeenCalledTimes(1)],
+  ['Back', 'file-back', () => expect(ref.getCurrentRoute()?.name).toBe('ClientsList')],
   ['More', 'file-more', () => expect(jest.mocked(Alert.alert).mock.calls[0][2]?.map((b) => b.text)).toEqual(['Archive client', 'Cancel'])],
 ])('%s lands on its destination', async (_name, id, landed) => {
-  const view = await render(<ClientDetailScreen {...props} />);
+  const view = await render(file());
   await view.findByText('1 this week · 1 to review');
   await fireEvent.press(await view.findByTestId(id));
   landed(view);
@@ -131,7 +155,7 @@ it.each<[string, string, (v: Awaited<ReturnType<typeof render>>) => void]>([
 
 it('a switch that is off reads Not shared by {first} with a lock, and is not a button', async () => {
   timeline.consent = { workouts: true, food_macros: false, body_metrics: false, habits_progress: true };
-  const view = await render(<ClientDetailScreen {...props} />);
+  const view = await render(file());
   expect(await view.findByText('Clients choose what they share with you. Anything not shared stays private.')).toBeTruthy();
   expect(view.getAllByText('Not shared by Test')).toHaveLength(2);
   for (const id of ['file-card-food', 'file-card-weighins']) expect(view.getByTestId(id).props.accessibilityRole).toBeUndefined();
@@ -140,7 +164,7 @@ it('a switch that is off reads Not shared by {first} with a lock, and is not a b
 
 it('the file error names the client, keeps the masthead and Message, buzzes once, and Try again reloads', async () => {
   read.mockRejectedValueOnce(new Error('offline'));
-  const view = await render(<ClientDetailScreen {...props} />);
+  const view = await render(file());
   expect(await view.findByText("Test's file did not load. Check the connection and try again.")).toBeTruthy();
   expect(view.getByTestId('file-masthead')).toBeTruthy();
   expect(view.getByText('Message Test')).toBeTruthy();
@@ -152,16 +176,29 @@ it('the file error names the client, keeps the masthead and Message, buzzes once
 
 it('while the file loads, the masthead keeps the name over static placeholders', async () => {
   read.mockImplementationOnce(() => new Promise(() => undefined));
-  const view = await render(<ClientDetailScreen {...props} />);
+  const view = await render(file());
   expect(view.getByLabelText("Loading Test's file")).toBeTruthy();
   expect(view.getByText('Test client')).toBeTruthy();
+  expect(band(view)).toEqual(FOREST);
 });
 
 it('a failed This week read offers Try again in place', async () => {
   week.mockRejectedValueOnce(new Error('offline'));
-  const view = await render(<ClientDetailScreen {...props} />);
+  const view = await render(file());
   expect(await view.findByText("Test's file did not load. Check the connection and try again.")).toBeTruthy();
   await fireEvent.press(view.getByText('Try again'));
   expect(await view.findByText('1 this week · 1 to review')).toBeTruthy();
   expect(week).toHaveBeenCalledTimes(2);
+});
+
+// B2 (FIXK1OV): the old header's message icon is gone with the flag on, so Message {first} is pinned on every section.
+it.each(TABS)('Message stays pinned on the %s tab and opens the thread', async (key) => {
+  const view = await render(file());
+  await view.findByText('1 this week · 1 to review');
+  await fireEvent.press(view.getByTestId(`file-tab-${key}`));
+  expect(view.getByTestId(`file-tab-${key}`).props.accessibilityState).toEqual({ selected: true });
+  await fireEvent.press(view.getByTestId('file-message'));
+  expect([ref.getCurrentRoute(), band(view)]).toMatchObject([{ name: 'ClientMessages', params }, BONE]);
+  await act(async () => ref.goBack());
+  expect(band(view)).toEqual(FOREST);
 });
