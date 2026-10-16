@@ -5,7 +5,9 @@
  * - the coach reads consultation answers on the coach link alone
  *   (onboarding.service.ts canCoachRead), not through the switches;
  * - the coach reads connected-device data (Apple Health, Health Connect) on
- *   the coach link alone (coachSharingCopy.devicesNote);
+ *   the coach link alone, except weight and body fat, which follow Weigh-ins
+ *   (coachSharingCopy.devicesNote; the line below is unchanged, WEIGHTWALL
+ *   Owner item C);
  * - workouts, food logs, weigh-ins, check-ins and habits only while their
  *   switch is on, except a coach on the TGP owner account (owner_access),
  *   which sees them even when they are off.

@@ -21,8 +21,9 @@
  * with D2; it must become 'consult-consent-v3' with this copy) and rejects any other P0 with 409
  * consent_missing, so the two sides move together. Any change to the P0
  * text needs a new version here AND on the backend.
+ * v5 (owner C-6a, 2026-10-12): v3 without paragraph 3's clinic sentence.
  */
-export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v3' as const;
+export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v5' as const;
 
 // Title of the consent screen (P0). Lives here, a module with no imports, so
 // the screen definition (definitions.ts) and the hashed copy (copy.ts) share
@@ -48,10 +49,21 @@ export const AI_CONSENT_MEMORY_VERSION = 'client-ai-v5' as const;
 
 /**
  * R11-C2B (owner 10-07 10:18, Roman memory on by default): the P0 screen version when box 2 shows the
- * server's client-ai-v5 paragraph (backend consult-consent-v4: the v3 screen with that paragraph 4).
+ * server's client-ai-v5 paragraph (backend consult-consent-v6: the v5 screen with that paragraph 4;
+ * consult-consent-v4 before owner C-6a).
  * Otherwise P0 stays CONSULT_CONSENT_COPY_VERSION with today's v4 paragraph.
  */
-export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v4' as const;
+export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v6' as const;
+
+/**
+ * Owner 62 (Option 1, 2026-10-12): a client with no coach sees the coach-free P0 (the v5 / v6 text
+ * with every coach sentence or clause removed) and the coach-free box 2 copies. Same rules and scopes
+ * as the coached versions above; the backend accepts and pins all of them.
+ */
+export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v5-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION = 'consult-consent-v6-coach-free' as const;
+export const AI_CONSENT_COACH_FREE_VERSION = 'client-ai-v4-coach-free' as const;
+export const AI_CONSENT_COACH_FREE_MEMORY_VERSION = 'client-ai-v5-coach-free' as const;
 
 /** Personal-training waiver version that box 1 records (via the intake). */
 export const WAIVER_VERSION = 'pt-waiver-v1' as const;

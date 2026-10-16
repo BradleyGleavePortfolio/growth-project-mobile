@@ -6,7 +6,20 @@
  * unit-tested directly in `__tests__/consultationEngine.test.ts`.
  */
 import { COACHLESS_COPY, SCREENS, SCREENING_KEYS, TOTAL_CHAPTERS } from './definitions';
-import { CONSULT_CONSENT_COPY_VERSION, CONSULT_CONSENT_MEMORY_COPY_VERSION } from './consentVersion';
+import {
+  CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COPY_VERSION,
+  CONSULT_CONSENT_MEMORY_COPY_VERSION,
+} from './consentVersion';
+
+/** The P0 versions this build displays (owner 62: the coach-free ones for a client with no coach). */
+const CURRENT_CONSENT_VERSIONS: readonly unknown[] = [
+  CONSULT_CONSENT_COPY_VERSION,
+  CONSULT_CONSENT_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+];
 import type {
   AnswerValue,
   Answers,
@@ -222,8 +235,8 @@ export function isConsentAnswerCurrent(v: AnswerValue | undefined): boolean {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   const c = v as { agreed?: unknown; copy_version?: unknown; agreed_at?: unknown; text_sha256?: unknown };
   if (c.agreed !== true) return false;
-  // v4 = the same screen with the server's client-ai-v5 paragraph 4 (R11-C2B).
-  if (c.copy_version !== CONSULT_CONSENT_COPY_VERSION && c.copy_version !== CONSULT_CONSENT_MEMORY_COPY_VERSION) return false;
+  // v6 = the same screen with the server's client-ai-v5 paragraph 4 (R11-C2B).
+  if (!CURRENT_CONSENT_VERSIONS.includes(c.copy_version)) return false;
   if (typeof c.agreed_at !== 'string' || Number.isNaN(Date.parse(c.agreed_at))) return false;
   if (c.text_sha256 !== undefined && (typeof c.text_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(c.text_sha256))) return false;
   return true;
