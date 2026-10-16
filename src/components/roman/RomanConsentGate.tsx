@@ -90,20 +90,20 @@ function ClientRomanGate({
 
 function CoachRomanGate({ children, coachApi = coachAiConsentApi, testID = 'roman-consent-gate' }: RomanConsentGateProps) {
   const navigation = useContext(NavigationContext);
-  const [off, setOff] = useState(false);
+  // null while the first read is out (no flash of the room); an unreadable status keeps the room.
+  const [off, setOff] = useState<boolean | null>(null);
   const [asking, setAsking] = useState(false);
 
   useEffect(() => {
     let live = true;
-    void coachApi.getStatus().then((out) => {
-      if (live && out.kind === 'ok' && !out.status.granted) setOff(true);
-    });
+    void coachApi.getStatus().then((out) => live && setOff(out.kind === 'ok' && !out.status.granted));
     return () => {
       live = false;
     };
   }, [coachApi]);
 
   const markOff = useCallback(() => setOff(true), []);
+  if (off === null) return null;
   if (!off) return <RomanCoachOffContext.Provider value={markOff}>{children}</RomanCoachOffContext.Provider>;
   const { title, body, button } = COACH_AI_CONSENT_COPY.off;
   return (

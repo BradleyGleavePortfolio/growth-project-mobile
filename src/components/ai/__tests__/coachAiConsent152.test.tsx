@@ -141,8 +141,7 @@ describe('the coach Roman screen', () => {
   it('a granted coach gets the room; the typed refusal turns it into CAC-5', async () => {
     const api = makeApi('granted');
     const r = await render(<RomanConsentGate surface="coach" coachApi={api}><Room /></RomanConsentGate>);
-    await waitFor(() => expect(api.getStatus).toHaveBeenCalledTimes(1));
-    await fireEvent.press(r.getByText('room'));
+    await fireEvent.press(await r.findByText('room'));
     expect(await r.findByText('Roman is off')).toBeTruthy();
   });
 
