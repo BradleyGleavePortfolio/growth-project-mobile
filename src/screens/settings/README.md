@@ -107,7 +107,7 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 1. The list (`useRomanChats.ts`) loads `GET /roman/sessions` (30 per page, newest first, keyset `cursor`), shows each chat's local start date and time and message count (coach-tool chats are labelled). Two chats can start on the same local date (the backend keeps one chat per UTC day), so the start time is on every row, the transcript title and the permanent-delete confirm (B-331-1); the confirm also names the message count and, for coach tools, where it happened (`chatIdentity`), and pages with "Show older conversations".
 2. Open: `RomanConversationScreen` reads `GET /roman/sessions/:id/messages` (oldest first on screen, "Show earlier messages" pages back). Read only.
 3. Delete one: confirm sheet ("permanently deletes ... cannot be undone"), the row leaves at once, comes back in place if the server does not confirm. A 404 `ROMAN_SESSION_NOT_FOUND` on delete is the requested outcome (already gone). A repeat delete is a quiet 204 on the server.
-4. Delete all: confirm sheet plus typing `DELETE` (case-insensitive). The list empties at once; on failure the previous list comes back, and after a partial or unknown failure the list is re-read to show what is left.
+4. Delete all: confirm sheet plus typing `DELETE` (case-insensitive). A client with no coach reads "Your plan and your logs stay as they are." as its last sentence (owner K1-5). The list empties at once; on failure the previous list comes back, and after a partial or unknown failure the list is re-read to show what is left.
 5. The transcript screen tells the list a chat is gone through `romanChatsEvents.ts` (in memory, carries the owner id and the sign-in epoch).
 6. The live Roman chat (`useRomanChat`) stays mounted under these screens when its header opens them. A confirmed Delete (row or transcript) of the chat it holds, or Delete all, reaches it through `romanChatsEvents.ts` (`onGone`, `onErased`): it drops that chat (no erased text stays on screen) and opens a fresh one, and a send waits for the fresh chat, so nothing is sent to an erased chat (B-376-1).
 
@@ -138,7 +138,9 @@ devices (Apple Health, Health Connect) follow Weigh-ins (backend `coach-sharing-
 coach reads the other device data through the coach link only (backend `wearable-samples.service.ts`), and it stays after a
 disconnect (FW-BODY B2). The **Connected devices** row
 opens `Connections` on the same More stack and shows where the More screen shows that row (iPhone, Health Connect builds,
-tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`.
+tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`. The Settings row shows only while the server says the
+client has a coach (`GET /consent/me`; 400 = none), read each time Settings comes into view (`useFocusEffect`); until the
+first answer it follows the account's own coach link, and a failed read keeps the last answer (owner K1-14, "hide until they have a coach"; test `src/lib/ai/__tests__/consentK1150.test.tsx`).
 
 ## Notification categories (`NotificationPreferencesScreen.tsx`)
 
