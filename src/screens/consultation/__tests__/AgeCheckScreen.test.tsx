@@ -21,7 +21,7 @@ jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => tr
 
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import AgeCheckScreen from '../AgeCheckScreen';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { MIN_CLIENT_AGE, clientAgeConfirmed, confirmsMinClientAge } from '../../../lib/ageGate';
@@ -84,10 +84,10 @@ describe('AgeCheckScreen', () => {
     const off = () => r.getByTestId('consult-continue').props.accessibilityState?.disabled;
     for (const id of ['wheel-dob-month', 'wheel-dob-day', 'wheel-dob-year']) {
       expect([id, r.getByTestId(id).props.accessibilityValue, off()]).toEqual([id, undefined, true]);
+      // FIXAGE3 (Sol B2): every unpicked row is full-strength muted text (token AA contrast), none enlarged.
+      const looks = within(r.getByTestId(id)).getAllByText(/\S/, { includeHiddenElements: true }).map((t) => StyleSheet.flatten(t.props.style));
+      expect(new Set(looks.map((st) => `${st.opacity}/${st.fontSize}`))).toEqual(new Set(['1/20']));
     }
-    // FIXAGE3 (Sol B2): unpicked rows are full-strength muted text (token AA contrast), none enlarged.
-    const row = StyleSheet.flatten(r.getByText(String(START_YEAR), { includeHiddenElements: true }).props.style);
-    expect([row.opacity, row.fontSize]).toEqual([1, 20]);
     await fireEvent.press(r.getByTestId('consult-continue'));
     await fireEvent(r.getByTestId('wheel-dob-year-scroll', { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 70 * 44 } } });
     await fireEvent(r.getByTestId('wheel-dob-month-scroll', { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 0 } } });
