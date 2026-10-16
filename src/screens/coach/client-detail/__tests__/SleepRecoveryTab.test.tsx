@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, StyleSheet } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import type {
   WearableSamplesResponse,
@@ -140,6 +140,9 @@ describe('SleepRecoveryTab — coach-only overlays', () => {
     });
     const { getByTestId } = await render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
     expect(getByTestId('coach-anomaly-band')).toBeTruthy();
+    // A card-surface ring keeps the marker apart from the band it sits on.
+    expect(StyleSheet.flatten(getByTestId('coach-anomaly-marker').props.style))
+      .toMatchObject({ borderWidth: 1, borderColor: testColors.surface });
     expect(getByTestId('coach-cohort-comparison')).toBeTruthy();
     expect(getByTestId('coach-recovery-tab')).toBeTruthy();
   });

@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 import { RecoveryRingHero } from '../cards/RecoveryRingHero';
@@ -76,6 +76,15 @@ describe('SleepStagesCard — plain language', () => {
   it('renders an empty bar with a value-first prompt when no stages', async () => {
     const { getByTestId } = await render(<SleepStagesCard stages={null} colors={testColors} />);
     expect(getByTestId('sleep-stages-empty-bar')).toBeTruthy();
+  });
+
+  it('keeps neighbouring stages apart with a gap, and each legend dot matches its segment', async () => {
+    const { getByTestId, getByLabelText } = await render(<SleepStagesCard stages={stages} colors={testColors} />);
+    expect(StyleSheet.flatten(getByLabelText(/^Sleep stages:/).props.style).gap).toBe(2);
+    stages.slices.forEach(({ key }) => {
+      const fill = StyleSheet.flatten(getByTestId(`sleep-stage-${key}`).props.style).backgroundColor;
+      expect(StyleSheet.flatten(getByTestId(`sleep-stage-dot-${key}`).props.style).backgroundColor).toBe(fill);
+    });
   });
 });
 

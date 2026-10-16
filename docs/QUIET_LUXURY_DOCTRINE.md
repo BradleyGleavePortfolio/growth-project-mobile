@@ -43,6 +43,7 @@ If a change in this repo would violate one of the rules below, the rule wins. Wh
 - Single accent: forest (`#2C4A36`). Avoid neon greens (`#52B788`, `#2D6A4F`), terra-cottas, steel blues, and the rest of the legacy palette.
 - Style C v2 keeps forest as the only accent for actions. Leaf, fern and moss (`data.leaf`, `data.fern`, `data.moss`) are data colours, not accents, and never a button. Leaf and fern are never text or a lone mark on bone; moss draws marks, lines and chip edges on light ground (4.39:1 on bone) but is never text. gold.300 (`data.peak`) marks a personal best only, with a star and words. No gradients, glow, shimmer or shadow on charts. See `src/theme/README.md`.
 - Shadows are capped at `shadows.lg` (12px radius, 8% opacity). No drop shadows above that.
+- Charts use lines or bars only: no filled areas, gradients under lines or glow. Daily totals use bars; continuous readings use lines. See [Charting conventions](charting.md).
 - Motion durations live in `motion.duration`. Default to `base = 400ms` with `decel` easing. Springs and `accelerate` easing are gone. Screen-level motion stays at 300 ms or less and respects Reduce Motion.
 
 ## 6. No global chrome, no floating widgets

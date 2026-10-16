@@ -1,5 +1,11 @@
 # Client screens
 
+Chart contract (PEAKCHARTS): Health & Fitness, Sleep & Recovery, metric detail
+and Progress use lines or daily-total bars, never area fills, gradients or
+glow. Shared chart fixes cover the client screens and coach health embeds;
+all existing wording and readout interactions remain. See
+[charting conventions](../../../docs/charting.md).
+
 Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with labelled Home, Train, Food and You tabs, plus flag-gated Calendar and Community tabs (six in launch builds). Food is a single screen; the other tabs wrap nested navigators. The More index lives in `MoreStack`, reached from You, with cross-tab shortcuts to habits and exercises. There is no global floating chat widget; Roman is the only reachable AI chat. The legacy Guidance row and `AIGuide` route are retired (MED-01 / R3), while the screen and backend calls remain for later retirement.
 
 ## Purpose
