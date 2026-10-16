@@ -1,7 +1,7 @@
 import React from 'react';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import Colors from '../constants/colors';
@@ -42,7 +42,10 @@ jest.mock('../api/coachAi', () => ({
   },
 }));
 
-const styles = makeStyles(Colors as ThemeColors);
+const colors: ThemeColors = {
+  ...Colors, dark: Colors.textPrimary, gold: Colors.warning, orange: Colors.error,
+};
+const styles = makeStyles(colors);
 const flat = (style: unknown) => StyleSheet.flatten<ViewStyle & TextStyle>(style as StyleProp<ViewStyle & TextStyle>);
 const props = { clientId: 'c1', clientName: 'Maya Chen' };
 
@@ -74,7 +77,7 @@ it('Summary actions keep their existing destinations', async () => {
   ] as const;
   const v = await render(<SummaryTab {...props}
     profile={null} foodShared={false} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }}
-    nudgeSuccess={false} colors={Colors as ThemeColors} styles={styles}
+    nudgeSuccess={false} colors={colors} styles={styles}
     onOpenMessages={actions[0][1]} onOpenNudge={actions[1][1]}
     onOpenMacrosReview={actions[2][1]} onOpenWorkoutBuilder={actions[3][1]}
     onOpenAskAi={actions[4][1]}
@@ -104,9 +107,7 @@ it.each([
   const ratio = (luminance(styles.macroCard.backgroundColor) + 0.05) / (luminance(valueColor) + 0.05);
   expect(valueColor).toBe(Colors.primary);
   expect(ratio).toBeGreaterThanOrEqual(4.5);
-  expect(v.UNSAFE_getAllByType(View).some((node) =>
-    flat(node.props.style)?.backgroundColor === color,
-  )).toBe(true);
+  expect(v.container.queryAll((node) => flat(node.props.style)?.backgroundColor === color).length).toBeGreaterThan(0);
 });
 
 it('R5: the shared Pending AI drafts button is at least 44 pt and still opens the inbox', async () => {
@@ -119,7 +120,7 @@ it('R5: the shared Pending AI drafts button is at least 44 pt and still opens th
 });
 
 it('R6: every food-review period chip shares a 44 pt target and keeps selection working', async () => {
-  const v = await render(<FoodLogReviewSection clientId="c1" colors={Colors as ThemeColors} styles={styles} />);
+  const v = await render(<FoodLogReviewSection clientId="c1" colors={colors} styles={styles} />);
   for (const d of [7, 14, 30]) {
     const chip = v.getByLabelText(`Review the last ${d} days of food logs`);
     expect(flat(chip.props.style)).toMatchObject({
