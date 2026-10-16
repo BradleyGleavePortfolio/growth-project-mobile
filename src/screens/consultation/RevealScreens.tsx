@@ -229,15 +229,19 @@ export const ESCAPE_COPY = {
 
 export const CONSULT_SUPPORT_SUBJECT = 'Help with my consultation';
 
-/** FIXAGE R4: also the age step's way out; `children` are rows above support. */
-export function EscapeRow({ onSignOut, children }: { onSignOut?: () => void; children?: React.ReactNode }) {
+/** The ways out the host can open (FIXAGE R4; AGEDELETE: the consultation's stop and paused screens too). */
+export type AccountExits = { onSignOut?: () => void; onOpenDataExport?: () => void; onOpenDeleteAccount?: () => void };
+
+/** Download my data and Delete my account (when the host opens them) above support and sign out. */
+export function EscapeRow({ onSignOut, onOpenDataExport, onOpenDeleteAccount }: AccountExits) {
   const { s, palette } = useConsultationStyles();
   // Sol B-324-1: if no email app opens, the address (selectable), Copy and
   // Try again show in place, not in a dismissible alert.
   const supportEmail = useSupportEmail(CONSULT_SUPPORT_SUBJECT);
   return (
     <View style={{ marginTop: 24 }} testID="consult-escape">
-      {children}
+      {onOpenDataExport ? <TextLink label="Download my data" onPress={onOpenDataExport} testID="consult-data-export" /> : null}
+      {onOpenDeleteAccount ? <TextLink label="Delete my account" onPress={onOpenDeleteAccount} testID="consult-delete-account" /> : null}
       <TextLink
         label={ESCAPE_COPY.support}
         role="link"
@@ -300,13 +304,13 @@ export function CompleteProblemScreen({
 
 // ─── Paused ─────────────────────────────────────────────────────────────────
 
-export function PausedScreen({ ctx, onResume, onSignOut }: { ctx: CopyContext; onResume: () => void; onSignOut?: () => void }) {
+export function PausedScreen({ ctx, onResume, ...exits }: { ctx: CopyContext; onResume: () => void } & AccountExits) {
   const { s } = useConsultationStyles();
   return (
     <Frame testID="consult-paused" footer={<PrimaryButton label="Continue my consultation" onPress={onResume} testID="consult-resume" />}>
       <Headline style={{ marginTop: 48 }}>Your place is kept.</Headline>
       <RomanLine text={fillCopy(REVEAL_COPY.paused, ctx)} />
-      <EscapeRow onSignOut={onSignOut} />
+      <EscapeRow {...exits} />
     </Frame>
   );
 }
