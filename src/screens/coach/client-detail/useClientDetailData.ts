@@ -14,16 +14,12 @@ import {
   type WorkoutSession,
 } from './types';
 import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
-import type { AssignmentRow } from './thisWeek';
 
 export function useClientDetailData(clientId: string, colors: ThemeColors, coachId?: string) {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [foodShared, setFoodShared] = useState(true);
-  // K1-OVERVIEW: the This week ring reads the assignments and the workouts switch.
-  const [recentAssignments, setRecentAssignments] = useState<AssignmentRow[]>([]);
-  const [workoutsShared, setWorkoutsShared] = useState(true);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -80,8 +76,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       const data = res.data;
       if (data.error) return;
       setFoodShared(data.consent?.food_macros !== false);
-      setWorkoutsShared(data.consent?.workouts !== false);
-      setRecentAssignments(Array.isArray(data.recent_assignments) ? data.recent_assignments : []);
       // Set profile
       setProfile(data.profile ? {
         ...data.profile,
@@ -387,8 +381,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     foodLogs,
     totals,
     foodShared,
-    recentAssignments,
-    workoutsShared,
     weightLogs,
     workoutSessions,
     timeline,

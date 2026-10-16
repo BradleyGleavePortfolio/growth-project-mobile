@@ -4,7 +4,7 @@
  * day strip (StyleCMarks, onDark) and light text tabs with a leaf underline, pinned while the file scrolls.
  * A switch the client keeps off reads "Not shared by {first}" with a lock and is not a button.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -12,6 +12,7 @@ import { colors, layout, radius, typography } from '../../../theme/tokens';
 import { DayMark, SegmentedRing } from '../../../ui/charts/StyleCMarks';
 import { DAY_LABELS } from '../../client/habits/constants';
 import { HapticService } from '../../../ui/haptics/haptics.service';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { checkInLine, dayLabel, doneLine, foodLine, toGoLine, weekHeadline, workoutsLine, type WorkoutWeek } from './thisWeek';
 import type { ThisWeekRead } from './useThisWeek';
 import type { TabKey } from './types';
@@ -20,12 +21,12 @@ const CAP = 1.3;
 export const firstOf = (name: string) => name.trim().split(/\s+/)[0] || name;
 
 /**
- * The masthead above the tabs: Back, More, the name and, when known, the week. `onMore` is absent while the
- * archive status is unknown (never a dead button); `drawKey` draws the ring once per client per week;
- * `rounded`: no tabs below (loading, error), so the masthead rounds its own bottom.
+ * The masthead above the tabs: Back, More, the name ("Archived client" under it when archived) and, when known,
+ * the week. `onMore` is absent while the archive status is unknown (never a dead button); `drawKey` draws the
+ * ring once per client per week; `rounded`: no tabs below (loading, error), so the masthead rounds its own bottom.
  */
-export function FileHead({ name, onBack, onMore, week, drawKey, rounded }: {
-  name: string; onBack: () => void; onMore?: () => void; week?: WorkoutWeek | null; drawKey?: string; rounded?: boolean;
+export function FileHead({ name, onBack, onMore, week, drawKey, rounded, archived }: {
+  name: string; onBack: () => void; onMore?: () => void; week?: WorkoutWeek | null; drawKey?: string; rounded?: boolean; archived?: boolean;
 }) {
   const sc = useTheme().semanticColors;
   const light = { color: sc.textOnAccent };
@@ -44,6 +45,7 @@ export function FileHead({ name, onBack, onMore, week, drawKey, rounded }: {
         ) : null}
       </View>
       <Text accessibilityRole="header" maxFontSizeMultiplier={1.2} numberOfLines={2} style={[typography.h1, light]}>{name}</Text>
+      {archived ? <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted]}>Archived client</Text> : null}
       {week && week.total > 0 ? (
         <View testID="file-week">
           <View style={s.weekRow}>
@@ -74,18 +76,24 @@ export function FileHead({ name, onBack, onMore, week, drawKey, rounded }: {
   );
 }
 
-/** The light text tabs with a leaf underline, the bottom of the masthead. */
+/** The light text tabs with a leaf underline, the bottom of the masthead. The open tab scrolls into view. */
 export function FileTabs({ tabs, active, onTab }: { tabs: { key: TabKey; label: string }[]; active: TabKey; onTab: (k: TabKey) => void }) {
   const sc = useTheme().semanticColors;
+  const reduceMotion = useReducedMotion();
+  const row = useRef<ScrollView>(null);
+  const xs = useRef<Partial<Record<TabKey, number>>>({});
+  const show = (x: number, animated: boolean) => row.current?.scrollTo({ x: Math.max(0, x - layout.gutter), animated });
+  useEffect(() => { const x = xs.current[active]; if (x != null) show(x, !reduceMotion); }, [active, reduceMotion]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <View style={[s.tabsWrap, { backgroundColor: sc.surface.masthead }]}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
+      <ScrollView ref={row} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
         {tabs.map((t) => {
           const on = t.key === active;
           return (
             <Pressable
               key={t.key} accessibilityRole="tab" accessibilityLabel={t.label} accessibilityState={{ selected: on }}
               style={s.tab} testID={`file-tab-${t.key}`}
+              onLayout={(e) => { xs.current[t.key] = e.nativeEvent.layout.x; if (on) show(e.nativeEvent.layout.x, false); }}
               onPress={() => { if (!on) { HapticService.selection(); onTab(t.key); } }}
             >
               <Text maxFontSizeMultiplier={CAP} style={[typography.bodyMd, { color: on ? sc.textOnAccent : sc.textOnMastheadMuted }]}>{t.label}</Text>
@@ -127,11 +135,11 @@ export function FilePlaceholders({ first }: { first: string }) {
   );
 }
 
-/** The one forest primary, pinned: "Message {first}" (K1-S-29, approved wording). */
-export function MessageButton({ label, onPress, bottom }: { label: string; onPress: () => void; bottom: number }) {
+/** The one forest primary, pinned: "Message {first}" (K1-S-29, approved wording). The coach tab bar below owns the inset. */
+export function MessageButton({ label, onPress }: { label: string; onPress: () => void }) {
   const sc = useTheme().semanticColors;
   return (
-    <View style={[s.footer, { paddingBottom: bottom, backgroundColor: sc.bgPrimary }]}>
+    <View style={[s.footer, { backgroundColor: sc.bgPrimary }]} testID="file-footer">
       <Pressable
         onPress={() => { HapticService.mediumImpact(); onPress(); }}
         accessibilityRole="button" style={[s.primary, { backgroundColor: sc.surface.forestBand }]} testID="file-message"
@@ -170,15 +178,15 @@ export function FileCard({ card, first }: { card: WeekCard; first: string }) {
 }
 
 /** The This week tab: Workouts, Food, Check-ins and Weigh-ins, each opening its tab. */
-export function ThisWeekBody({ first, read, week, onOpen, onRetry }: {
-  first: string; read: ThisWeekRead; week?: WorkoutWeek | null; onOpen: (tab: TabKey) => void; onRetry: () => void;
+export function ThisWeekBody({ first, read, onOpen, onRetry }: {
+  first: string; read: ThisWeekRead; onOpen: (tab: TabKey) => void; onRetry: () => void;
 }) {
   const sc = useTheme().semanticColors;
   if (read.kind === 'loading') return <FilePlaceholders first={first} />;
   if (read.kind === 'error') return <FileNotice first={first} onRetry={onRetry} />;
   const { sharing } = read;
   const cards: WeekCard[] = [
-    { key: 'workouts', title: 'Workouts', shared: sharing.workouts, line: week && week.total > 0 ? workoutsLine(week) : null, onPress: () => onOpen('workouts') },
+    { key: 'workouts', title: 'Workouts', shared: sharing.workouts, line: workoutsLine(read.week), onPress: () => onOpen('workouts') },
     { key: 'food', title: 'Food', shared: sharing.food, line: foodLine(read.food, read.target), onPress: () => onOpen('logs') },
     { key: 'checkins', title: 'Check-ins', shared: sharing.checkIns, line: checkInLine(read.checkIns), onPress: () => onOpen('timeline') },
     { key: 'weighins', title: 'Weigh-ins', shared: sharing.weighIns, onPress: () => onOpen('progress') },
@@ -216,7 +224,7 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
   locked: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   placeholder: { height: 88 },
-  footer: { paddingHorizontal: layout.gutter, paddingTop: layout.footerTopGap },
+  footer: { paddingHorizontal: layout.gutter, paddingTop: layout.footerTopGap, paddingBottom: layout.gutter },
   primary: {
     minHeight: layout.buttonHeight, borderRadius: radius.button, flexDirection: 'row', gap: 10,
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16,

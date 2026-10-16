@@ -1,6 +1,6 @@
 /** K1-OVERVIEW (agent 150): the Style C client file behind coachTabsV2; every tap lands somewhere real; flag off, unchanged. */
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -8,13 +8,12 @@ import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { STATUS_BAR_BONE, StatusBarBand } from '../components/StatusBarBand';
 import type { ClientsStackParamList } from '../navigation/CoachNavigator';
-import { lightTokens } from '../theme/tokens';
+import { layout, lightTokens } from '../theme/tokens';
 import { useCoachStore } from '../store/coachStore';
 import { coachApi } from '../services/api';
 import { macrosApi } from '../api/macrosApi';
-import { weekStart } from '../screens/coach/client-detail/thisWeek';
 import { HapticService } from '../ui/haptics/haptics.service';
-import { getTodayString } from '../utils/date';
+import { bucketDateLocal, getTodayString } from '../utils/date';
 import { featureFlags } from '../config/featureFlags';
 
 jest.mock('../config/featureFlags', () => ({ featureFlags: { coachTabsV2: true } }));
@@ -31,7 +30,7 @@ jest.mock('expo-status-bar', () => ({ StatusBar: ({ style }: { style: string }) 
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-test' }) }));
 jest.mock('../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ isLoading: false, flags: {} }) }));
 jest.mock('../services/api', () => ({ coachApi: {
-  getClientSummary: jest.fn(), getClientTimeline: jest.fn(), getClients: jest.fn(), archiveClient: jest.fn(), unarchiveClient: jest.fn(),
+  getClientSummary: jest.fn(), getClientTimeline: jest.fn(), getClientWeek: jest.fn(), getClients: jest.fn(), archiveClient: jest.fn(), unarchiveClient: jest.fn(),
 } }));
 jest.mock('../api/macrosApi', () => ({ macrosApi: { currentForClient: jest.fn() } }));
 // A function declaration is hoisted with its body, so the factories below can use it.
@@ -52,11 +51,12 @@ jest.mock('../screens/coach/client-detail/NudgeModal', () => ({ NudgeModal: () =
 jest.mock('../components/coach/ai-execution/AskAiActionSheet', () => ({ AskAiActionSheet: () => null }));
 jest.mock('../components/coach/DisputePausedPlansCard', () => ({ DisputePausedPlansCard: () => null }));
 
-const monday = weekStart(new Date()).getTime();
-const done = { scheduled_for: new Date(monday + 3_600_000).toISOString(), completed_at: new Date(monday + 7_200_000).toISOString() };
-const later = Array.from({ length: 20 }, (_, i) => ({ scheduled_for: new Date(monday + (8 + i) * 86_400_000).toISOString(), completed_at: null }));
+const now = new Date();
+const monday = bucketDateLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7)));
+const today = `${getTodayString()}T00:00:00.000Z`;
 let summary: Record<string, unknown>;
 let timeline: Record<string, unknown>;
+let clientWeek: { week_start: string; today: string; shared: boolean; assignments: unknown[] };
 const params = { clientId: 'client-test', clientName: 'Test client' };
 const TABS = ['week', 'summary', 'logs', 'mealplan', 'progress', 'healthFitness', 'sleepRecovery', 'workouts', 'timeline', 'weekly'];
 // Every render is the app's real stack (Clients, the file, the thread) under the app's status band, on a 47 pt notch.
@@ -86,8 +86,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.coachTabsV2 = true;
   useCoachStore.getState().reset();
-  const today = `${getTodayString()}T00:00:00.000Z`;
-  summary = { client_name: 'Test client', profile: {}, today: {}, recent_assignments: [done], consent: { workouts: true } };
+  summary = { client_name: 'Test client', profile: {}, today: {}, consent: { workouts: true } };
+  clientWeek = { week_start: monday, today: getTodayString(), shared: true, assignments: [{ id: 'a1', day: monday, completed_at: today, skipped_at: null }] };
   timeline = {
     meals: [{ id: 'm1', date: today, quantity_multiplier: 1, food_item: { calories: 500 } }],
     checkIns: [{ date: today, reviewed_by_coach: false }], weights: [],
@@ -95,6 +95,7 @@ beforeEach(() => {
   };
   read.mockReset().mockImplementation(async () => ({ data: summary }));
   week.mockReset().mockImplementation(async () => ({ data: timeline }));
+  (coachApi.getClientWeek as jest.Mock).mockReset().mockImplementation(async () => ({ data: clientWeek }));
   (macrosApi.currentForClient as jest.Mock).mockReset().mockResolvedValue({ data: { calories_kcal: 2100 } });
   (coachApi.getClients as jest.Mock).mockReset().mockResolvedValue({ data: [{ id: 'client-test', name: 'Test client', role: 'student', archived_at: null }] });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -109,7 +110,7 @@ it('flag off: the file is unchanged (Summary first, the old header, no masthead)
   expect(view.getByLabelText('Summary').props.accessibilityState).toEqual({ selected: true });
   expect(view.queryByTestId('file-masthead')).toBeNull();
   expect(view.queryByText('This week')).toBeNull();
-  expect(week).not.toHaveBeenCalled();
+  for (const m of [week, coachApi.getClientWeek]) expect(m).not.toHaveBeenCalled();
   expect(band(view)).toEqual(BONE);
 });
 
@@ -123,18 +124,45 @@ it('flag on: opens on This week with the name, the ring, the day strip and the f
   expect(view.getByTestId('file-day-0').props.accessibilityLabel).toMatch(/^Mon \d+ done$/);
   expect(view.getByText('1 this week · 1 to review')).toBeTruthy();
   expect(view.getByText('Message Test')).toBeTruthy();
+  // B3 (Opus, FIX739): the coach tab bar under the file owns the 34 pt inset, so Message sits one gutter above it.
+  expect(StyleSheet.flatten(view.getByTestId('file-footer').props.style).paddingBottom).toBe(layout.gutter);
+  expect(coachApi.getClientWeek).toHaveBeenCalledWith('client-test');
   expect(view.queryByText('Clients choose what they share with you. Anything not shared stays private.')).toBeNull();
   expect(view.getAllByRole('tab').map((t) => t.props.testID)).toEqual(TABS.map((k) => `file-tab-${k}`));
   expect(band(view)).toEqual(FOREST);
 });
 
-it('the ring is left out when the 20 latest assignments may not hold this week', async () => {
-  summary.recent_assignments = later;
+// B1 (Opus, FIX739): the ring is the server's week, so a delivered program's later weeks cannot hide it.
+// Opus N1 and N4: an archived client with nothing planned this week reads both, with no ring.
+it('nothing planned and archived: no ring, the Workouts card and the masthead say so', async () => {
+  clientWeek.assignments = [];
+  (coachApi.getClients as jest.Mock).mockResolvedValue({ data: [{ id: 'client-test', name: 'Test client', role: 'student', archived_at: today }] });
+  const view = await render(file());
+  expect(await view.findByText('Nothing planned this week')).toBeTruthy();
+  expect(await view.findByText('Archived client')).toBeTruthy();
+  expect(view.queryByTestId('file-week')).toBeNull();
+});
+
+// B1 (GPT, FIX739): This week reads again each time it opens, so work done on another tab shows on return.
+it.each<[string, string, () => void, string]>([
+  ['a check-in marked reviewed', 'timeline', () => { timeline.checkIns = [{ date: today, reviewed_by_coach: true }]; }, '1 this week · 0 to review'],
+  ['a new calorie target', 'summary', () => { jest.mocked(macrosApi.currentForClient).mockResolvedValue({ data: { calories_kcal: 1900 } } as never); }, 'Logged 1 of 7 days · Average 500 kcal · target 1,900'],
+])('after %s on the %s tab, This week shows it on return', async (_name, tab, change, line) => {
   const view = await render(file());
   await view.findByText('1 this week · 1 to review');
-  expect(view.queryByTestId('file-week')).toBeNull();
-  expect(view.getByTestId('file-card-workouts')).toBeTruthy();
-  expect(view.queryByText(/ of \d+ done/)).toBeNull();
+  await fireEvent.press(view.getByTestId(`file-tab-${tab}`));
+  change();
+  await fireEvent.press(view.getByTestId('file-tab-week'));
+  expect(await view.findByText(line)).toBeTruthy();
+});
+
+// N1 (GPT, FIX739): the open tab scrolls into view, here after a card opens a tab off the right edge.
+it('the open tab scrolls into view', async () => {
+  const view = await render(file());
+  await view.findByText('1 this week · 1 to review');
+  await fireEvent(view.getByTestId('file-tab-workouts'), 'layout', { nativeEvent: { layout: { x: 600 } } });
+  await fireEvent.press(view.getByTestId('file-card-workouts'));
+  expect(ScrollView.prototype.scrollTo).toHaveBeenLastCalledWith({ x: 600 - layout.gutter, animated: true });
 });
 
 // Tap map: every tap lands somewhere real.

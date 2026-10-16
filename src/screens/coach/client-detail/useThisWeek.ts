@@ -1,17 +1,17 @@
 /**
- * K1-OVERVIEW — This week's reads: the timeline (meals, check-ins, weigh-ins, sharing flags) and the calorie
- * target. Meals come 100 a page; a full page still inside the seven days reads the next (at most 5 more).
+ * K1-OVERVIEW — This week's reads: the client's week (the masthead ring on every tab), the timeline's last 8 days
+ * (meals, check-ins, sharing) and the calorie target. A full page of meals inside the seven days reads the next (5 more at most).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
 import { macrosApi } from '../../../api/macrosApi';
-import { checkInWeek, foodWeek, needsNextMealPage, type CheckInRow, type MealRow } from './thisWeek';
+import { checkInWeek, foodWeek, needsNextMealPage, workoutWeek, type ClientWeek, type MealRow, type WorkoutWeek } from './thisWeek';
 
 export interface Sharing { workouts: boolean; food: boolean; weighIns: boolean; checkIns: boolean }
 export type ThisWeekRead =
   | { kind: 'loading' }
   | { kind: 'error' }
-  | { kind: 'ok'; sharing: Sharing; food: { logged: number; average: number | null }; target: number | null; checkIns: { count: number; toReview: number } };
+  | { kind: 'ok'; sharing: Sharing; week: WorkoutWeek | null; food: { logged: number; average: number | null }; target: number | null; checkIns: { count: number; toReview: number } };
 
 type Consent = { workouts?: boolean; food_macros?: boolean; body_metrics?: boolean; habits_progress?: boolean } | undefined;
 
@@ -21,45 +21,47 @@ export const sharingOf = (c: Consent): Sharing => ({
   weighIns: c?.body_metrics !== false, checkIns: c?.habits_progress !== false,
 });
 
-export function useThisWeek(clientId: string, on: boolean) {
+/** `on`: the Style C file is showing. `active`: This week is the open tab. */
+export function useThisWeek(clientId: string, on: boolean, active: boolean) {
   const [read, setRead] = useState<ThisWeekRead>({ kind: 'loading' });
   const seq = useRef(0);
 
-  const load = useCallback(async () => {
+  // `fresh` shows the placeholders first; a refresh keeps the cards on screen until the new read lands.
+  const load = useCallback(async (fresh: boolean) => {
     const mine = ++seq.current;
-    setRead({ kind: 'loading' });
-    const now = new Date();
+    if (fresh) setRead({ kind: 'loading' });
     try {
-      const target = macrosApi.currentForClient(clientId).then((r) => r.data?.calories_kcal ?? null, () => null);
-      const first = (await coachApi.getClientTimeline(clientId, 90)).data;
+      const [first, week, target] = await Promise.all([
+        coachApi.getClientTimeline(clientId, 8).then((r) => r.data),
+        coachApi.getClientWeek(clientId).then((r) => r.data as ClientWeek),
+        macrosApi.currentForClient(clientId).then((r) => r.data?.calories_kcal ?? null, () => null),
+      ]);
       if (!first || first.error) throw new Error('timeline');
       const meals: MealRow[] = [...(first.meals ?? [])];
       let page: MealRow[] = meals;
-      for (let more = 0; more < 5 && needsNextMealPage(page, now); more += 1) {
-        page = (await coachApi.getClientTimeline(clientId, 90, page[page.length - 1].id)).data?.meals ?? [];
+      for (let more = 0; more < 5 && needsNextMealPage(page, week.today); more += 1) {
+        page = (await coachApi.getClientTimeline(clientId, 8, page[page.length - 1].id)).data?.meals ?? [];
         meals.push(...page);
       }
-      const kcal = await target;
       if (mine !== seq.current) return;
       setRead({
-        kind: 'ok',
-        sharing: sharingOf(first.consent),
-        food: foodWeek(meals, now),
-        target: kcal,
-        checkIns: checkInWeek((first.checkIns ?? []) as CheckInRow[], now),
+        kind: 'ok', sharing: sharingOf(first.consent), week: workoutWeek(week), target,
+        food: foodWeek(meals, week.today), checkIns: checkInWeek(first.checkIns ?? [], week.week_start),
       });
     } catch {
       if (mine === seq.current) setRead({ kind: 'error' });
     }
   }, [clientId]);
 
-  // Once per client while the tab is open; Try again and pull-to-refresh call reload.
+  // The first read per client; then again each time This week opens, so a check-in marked reviewed or a target
+  // saved elsewhere in the file shows here at once. Try again and pull-to-refresh call retry and refresh.
   const loadedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!on || loadedFor.current === clientId) return;
+    if (!on || (!active && loadedFor.current === clientId)) return;
+    const fresh = loadedFor.current !== clientId;
     loadedFor.current = clientId;
-    void load();
-  }, [on, clientId, load]);
+    void load(fresh);
+  }, [on, active, clientId, load]);
 
-  return { read, reload: load };
+  return { read, retry: () => load(true), refresh: () => load(false) };
 }

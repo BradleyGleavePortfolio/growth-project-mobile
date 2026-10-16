@@ -46,9 +46,8 @@ import { ForestStatusBar } from '../../components/StatusBarBand';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { layout, radius, typography } from '../../theme/tokens';
-import { footerBottomPadding, useScreenInsets } from '../../ui';
+import { useScreenInsets } from '../../ui';
 import { FileHead, FileNotice, FilePlaceholders, FileTabs, MessageButton, ThisWeekBody, firstOf } from './client-detail/StyleCFile';
-import { workoutWeek } from './client-detail/thisWeek';
 import { useThisWeek } from './client-detail/useThisWeek';
 import { HapticService } from '../../ui/haptics/haptics.service';
 
@@ -75,8 +74,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     profile,
     totals,
     foodShared,
-    recentAssignments,
-    workoutsShared,
     weightLogs,
     workoutSessions,
     timeline,
@@ -106,8 +103,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   } = useClientDetailData(clientId, colors, currentUser?.id);
 
   const [activeTab, setActiveTab] = useState<TabKey>(route.params.initialTab ?? (styleC ? 'week' : 'summary'));
-  const thisWeek = useThisWeek(clientId, styleC && activeTab === 'week');
-  const week = styleC && workoutsShared ? workoutWeek(recentAssignments, new Date()) : null;
+  const thisWeek = useThisWeek(clientId, styleC, activeTab === 'week');
+  const week = thisWeek.read.kind === 'ok' ? thisWeek.read.week : null;
   // AIB-6: Workouts tab "Build a program with AI" opens the Coach AI program generator (Summary tab) once.
   const [aiProgramRequest, setAiProgramRequest] = useState(false);
   const clearAiProgramRequest = useCallback(() => setAiProgramRequest(false), []);
@@ -282,9 +279,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setPlanReloadKey((k) => k + 1);
-    await Promise.all([loadData(), loadArchiveStatus(true), styleC && activeTab === 'week' ? thisWeek.reload() : null]);
+    await Promise.all([loadData(), loadArchiveStatus(true), styleC ? thisWeek.refresh() : null]);
     setRefreshing(false);
-  }, [loadData, loadArchiveStatus, setRefreshing, styleC, activeTab, thisWeek]);
+  }, [loadData, loadArchiveStatus, setRefreshing, styleC, thisWeek]);
 
   const sendNudge = async () => {
     setNudgeError('');
@@ -372,14 +369,15 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const openMessages = () => navigation.navigate('ClientMessages', { clientId, clientName });
   const fileHead = (rounded?: boolean) => (
     <FileHead
-      name={clientName} onBack={() => navigation.goBack()} rounded={rounded}
+      name={clientName} onBack={() => navigation.goBack()} rounded={rounded} archived={isArchived === true}
       onMore={isArchived !== null && !archiveBusy ? openMore : undefined}
       week={rounded ? null : week} drawKey={week ? `${clientId}:${week.week}` : undefined}
     />
   );
-  const message = <MessageButton label={`Message ${first}`} onPress={openMessages} bottom={footerBottomPadding(insets.bottom)} />;
+  const message = <MessageButton label={`Message ${first}`} onPress={openMessages} />;
 
-  if (styleC && ((isLoading && !refreshing) || (loadError && !profile))) {
+  // The file waits for This week's read too, so the ring does not pop in under a drawn masthead.
+  if (styleC && ((isLoading && !refreshing) || thisWeek.read.kind === 'loading' || (loadError && !profile))) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]} testID="client-detail">
         <ForestStatusBar />
@@ -548,7 +546,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           reloadKey={planReloadKey}
           colors={colors}
         />
-        {activeTab === 'week' && <ThisWeekBody first={first} read={thisWeek.read} week={week} onOpen={setActiveTab} onRetry={thisWeek.reload} />}
+        {activeTab === 'week' && <ThisWeekBody first={first} read={thisWeek.read} onOpen={setActiveTab} onRetry={thisWeek.retry} />}
         {activeTab === 'summary' && (
           <SummaryTab
             profile={profile}

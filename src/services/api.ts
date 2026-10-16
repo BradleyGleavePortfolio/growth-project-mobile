@@ -874,6 +874,7 @@ export const coachApi = {
   unarchiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/unarchive`),
   getClientTimeline: (clientId: string, days?: number, mealsCursor?: string) =>
     api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}${mealsCursor ? `${days ? '&' : '?'}mealsCursor=${encodeURIComponent(mealsCursor)}` : ''}`),
+  getClientWeek: (clientId: string) => api.get(`/coach/clients/${clientId}/week`),
   getClientSummary: (clientId: string, date = getTodayString()) =>
     api.get(`/coach/clients/${clientId}/summary?date=${encodeURIComponent(date)}`),
   getGuidelines: (clientId: string) =>
