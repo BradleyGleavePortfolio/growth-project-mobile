@@ -19,6 +19,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const [foodShared, setFoodShared] = useState(true);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -74,6 +75,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       const res = await coachApi.getClientSummary(clientId, today);
       const data = res.data;
       if (data.error) return;
+      setFoodShared(data.consent?.food_macros !== false);
       // Set profile
       setProfile(data.profile ? {
         ...data.profile,
@@ -378,6 +380,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     profile,
     foodLogs,
     totals,
+    foodShared,
     weightLogs,
     workoutSessions,
     timeline,

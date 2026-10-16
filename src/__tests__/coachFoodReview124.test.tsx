@@ -43,6 +43,7 @@ function meal(id: string, date = '2026-10-05') {
 const reviewProps = { clientId: 'client-a', todayLogs: [], colors, styles };
 const summaryProps = {
   clientId: 'client-a', clientName: 'Client', profile: null,
+  foodShared: true,
   totals: { calories: 1100, protein: 80, carbs: 100, fat: 30 },
   nudgeSuccess: false, onOpenMessages: jest.fn(), onOpenNudge: jest.fn(),
   onOpenMacrosReview: jest.fn(), onOpenWorkoutBuilder: jest.fn(),
@@ -138,11 +139,11 @@ describe('FOOD-COACH-124 normal-day regressions', () => {
     expect(onOpenMealPlans).toHaveBeenCalledTimes(1);
   });
 
-  it('an empty week reads as no meals logged; there is no "not shared" card (SHARE-UNWIND)', async () => {
-    (api.get as jest.Mock).mockResolvedValue({ data: { meals: [] } });
+  it('distinguishes withheld food consent from no logged food', async () => {
+    (api.get as jest.Mock).mockResolvedValue({ data: { meals: [], consent: { food_macros: false } } });
     await render(<FoodLogReviewSection {...reviewProps} />);
-    await waitFor(() => expect(screen.getByText('No meals logged in the last 7 days.')).toBeTruthy());
-    expect(screen.queryByText(/not shared/)).toBeNull();
+    await waitFor(() => expect(screen.getByText('Food logs are not shared with this coach.')).toBeTruthy());
+    expect(screen.queryByText(/No meals logged/)).toBeNull();
   });
 
   it('does not display partial totals when a later page fails, and can retry', async () => {

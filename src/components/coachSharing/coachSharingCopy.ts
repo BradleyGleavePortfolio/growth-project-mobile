@@ -1,24 +1,17 @@
 /**
  * Client-facing copy for Settings > Privacy > Coach sharing (B-SHARE-127).
- * No switches (owner #SHARE-SIMPLE / #SHARE-JOIN): the page says what the
- * current coach sees and how new device data stops (a disconnect in
- * Connected devices, disconnectCopy.ts; or the phone's Health permissions,
- * as the join sentence W-SU-1 says). Android says Health Connect.
+ * No switches (owner #SHARE-SIMPLE / #SHARE-JOIN): each log shows what the
+ * server says the coach can read. Only existing strings; the intro, devices
+ * note and row hint wait for an owner wording ruling (PR #758 table).
  */
-import { Platform } from 'react-native';
-
-const health = () => (Platform.OS === 'android' ? 'Health Connect' : 'Apple Health');
-
 export const coachSharingCopy = {
   settingsRow: 'Coach sharing',
-  settingsRowHint: 'Opens what your coach can see',
-  intro: 'Your coach sees your workouts, food logs, weigh-ins, check-ins and habits.',
+  on: 'Shared',
+  off: 'Not shared',
   loading: 'Loading coach sharing',
   loadFailed: 'Coach sharing could not load. Check the connection and try again.',
   retry: 'Try again',
   noCoach: 'Coach sharing applies once a coach is connected to this account.',
-  devicesNote: () =>
-    `Your coach also sees data from ${health()} and other devices you connect. To stop new data, disconnect it in Connected devices or turn The Growth Project off in your phone's ${health()} permissions. Data already shared stays with your coach.`,
   devicesLink: 'Connected devices',
   devicesLinkHint: 'Opens your connected devices',
 } as const;

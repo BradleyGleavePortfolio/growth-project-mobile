@@ -132,11 +132,11 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 ### CoachSharingScreen
 
-`CoachSharingScreen.tsx` (Settings > Privacy > Coach sharing): no switches (owner #SHARE-SIMPLE / #SHARE-JOIN, backend
-#1061: workouts, food logs, weigh-ins, check-ins and habits always reach the current coach; the old `POST /consent/grant |
-revoke` toggles answer 410, and the one sharing switch is Roman and AI). It says what the coach sees and, under it, how new
-device data stops: a disconnect in Connected devices, or the phone's Apple Health permissions (Android: Health Connect);
-data already shared stays (FW-BODY B2). The **Connected devices** row
+`CoachSharingScreen.tsx` (Settings > Privacy > Coach sharing): no switches and no writes (owner #SHARE-SIMPLE /
+#SHARE-JOIN; the one sharing switch is Roman and AI). Each of Workouts, Food logs, Weigh-ins and Check-ins and habits reads
+Shared or Not shared as `GET /consent/me` says the coach can read it (`parseCoachSharing` folds in `owner_access`): with
+backend #1061 all four read Shared, and POST /consent/revoke returns 410 for the four removed sharing scopes (POST
+/consent/grant remains accepted); an older backend still reports a log the client turned off as Not shared. The **Connected devices** row
 opens `Connections` on the same More stack and shows where the More screen shows that row (iPhone, Health Connect builds,
 tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`. The Settings row shows only while the server says the
 client has a coach (`GET /consent/me`; 400 = none), read each time Settings comes into view (`useFocusEffect`); until the

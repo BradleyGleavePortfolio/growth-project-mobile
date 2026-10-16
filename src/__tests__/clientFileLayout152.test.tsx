@@ -32,7 +32,7 @@ jest.mock('../screens/coach/client-detail/ConsultationSummaryCard', () => ({
 }));
 jest.mock('../api/coachFoodReviewApi', () => ({
   ...jest.requireActual('../api/coachFoodReviewApi'),
-  loadCoachFoodReview: jest.fn(async () => ({ meals: [] })),
+  loadCoachFoodReview: jest.fn(async () => ({ meals: [], shared: true })),
 }));
 jest.mock('../api/coachAi', () => ({
   __esModule: true,
@@ -76,7 +76,7 @@ it('Summary actions keep their existing destinations', async () => {
     ['Ask AI to draft a check-in nudge', jest.fn()],
   ] as const;
   const v = await render(<SummaryTab {...props}
-    profile={null} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }}
+    profile={null} foodShared={false} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }}
     nudgeSuccess={false} colors={colors} styles={styles}
     onOpenMessages={actions[0][1]} onOpenNudge={actions[1][1]}
     onOpenMacrosReview={actions[2][1]} onOpenWorkoutBuilder={actions[3][1]}

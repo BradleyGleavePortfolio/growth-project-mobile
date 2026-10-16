@@ -50,7 +50,7 @@ function RealSummaryDataHarness() {
   />;
 }
 
-function respondWithSummary() {
+function respondWithFoodConsent(foodShared: boolean) {
   jest.mocked(coachApi.getClientSummary).mockResolvedValue({
     data: {
       client_name: 'Client',
@@ -65,19 +65,32 @@ function respondWithSummary() {
       weight_logs: [],
       recent_workouts: [],
       recent_assignments: [],
-      consent: { food_macros: true, body_metrics: true },
+      consent: { food_macros: foodShared, body_metrics: true },
     },
   } as never);
 }
 
-// SHARE-UNWIND (owner #SHARE-SIMPLE, backend #1061): food always reaches the
-// current coach, so the B-404-1 "not shared" card is gone with its switch.
-it('food with no logged intake retains the existing zero totals and comparison', async () => {
-  respondWithSummary();
+it('B-404-1: withheld food never appears as measured zero intake or a target percentage', async () => {
+  // Same real hook/response contract as the independent failing-head probe.
+  // Waiting for Profile works on both c916b2cf and the fix, so the old head
+  // fails on the nutrition assertion, not on setup or missing new copy.
+  respondWithFoodConsent(false);
+  await render(<RealSummaryDataHarness />);
+  await waitFor(() => expect(screen.getByText('Profile')).toBeTruthy());
+  expect(screen.queryByText('0% of daily target')).toBeNull();
+  expect(screen.queryByText('0')).toBeNull();
+  expect(screen.queryByText('0g')).toBeNull();
+  expect(screen.queryByText('Protein')).toBeNull();
+  expect(screen.getByText('Food logs are not shared with this coach.')).toBeTruthy();
+  expect(screen.getByText('Macros')).toBeTruthy();
+});
+
+it('shared food with no logged intake retains the existing zero totals and comparison', async () => {
+  respondWithFoodConsent(true);
   await render(<RealSummaryDataHarness />);
   await waitFor(() => expect(screen.getByText('0% of daily target')).toBeTruthy());
   expect(screen.getByText('0')).toBeTruthy();
   expect(screen.getAllByText('0g')).toHaveLength(3);
   expect(screen.getByText('/ 2200 kcal')).toBeTruthy();
-  expect(screen.queryByText(/not shared/)).toBeNull();
+  expect(screen.queryByText('Food logs are not shared with this coach.')).toBeNull();
 });

@@ -272,14 +272,6 @@ export default function ClientsListScreen({ navigation }: Props) {
         </View>
       ) : null}
 
-      {/* Psych #2: Trust as Emotion — coach-side privacy context banner */}
-      <View style={styles.privacyBanner}>
-        <Ionicons name="shield-checkmark-outline" size={16} color={colors.textSecondary} style={{ marginTop: 1 }} />
-        <Text style={styles.privacyBannerText}>
-          You see your clients' workouts, food logs, weigh-ins and check-ins while you coach them.
-        </Text>
-      </View>
-
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
@@ -603,21 +595,6 @@ const makeStyles = (colors: ThemeColors) =>
   },
   loader: {
     marginTop: 40,
-  },
-  // Psych #2: Trust as Emotion
-  privacyBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginHorizontal: 24,
-    marginBottom: 8,
-  },
-  privacyBannerText: {
-    ...typography.bodySmall,
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary,
   },
   errorContainer: {
     flex: 1,
