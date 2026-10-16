@@ -147,6 +147,7 @@ import { withCommunityTerms } from '../components/community/CommunityTermsGate';
 // unless featureFlags.clientTutorial is on.
 import TutorialHost from '../components/tutorial/TutorialHost';
 import { useAiWithdrawalDrain } from '../hooks/useAiWithdrawalDrain';
+import { useMessageOutboxDrain } from '../hooks/useMessageOutbox';
 import { setTutorialRoute } from '../tutorial/tutorialStore';
 import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
 import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
@@ -161,6 +162,7 @@ import type { WinType } from '../services/firstWinApi';
 
 interface Day1SaveProps {
   onDay1Saved?: (winType: WinType) => void;
+  day1NoteVisible?: boolean;
 }
 
 // B22/B24 (b#888) and B1 (owner ruling 10-08 23:5x, m#650): logging,
@@ -677,12 +679,14 @@ const TUTORIAL_TABS = [
   ...(featureFlags.communityTab ? ['CommunityTab'] : []),
 ];
 
-export default function ClientNavigator({ onDay1Saved }: Day1SaveProps = {}) {
+export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1SaveProps = {}) {
   const { semanticColors: sc } = useTheme();
   const insets = useSafeAreaInsets();
   // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
   // has not confirmed yet is sent when the app opens.
   useAiWithdrawalDrain();
+  // C3B-THREAD-R1: Style B messages written offline send from here, thread open or not.
+  useMessageOutboxDrain();
   // Latest tab-screen navigation object, captured from screenListeners, so
   // the tutorial overlay (which sits outside the navigator) can offer
   // "Take me there" for screens behind a menu.
@@ -789,7 +793,7 @@ export default function ClientNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           ),
         }}
       >
-        {({ navigation }) => <ProtectedLogScreen onSaved={() => {
+        {({ navigation }) => <ProtectedLogScreen suspended={day1NoteVisible} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_meal');
         }} />}
       </Tab.Screen>

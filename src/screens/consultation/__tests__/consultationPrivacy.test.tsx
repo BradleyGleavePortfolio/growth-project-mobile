@@ -259,7 +259,7 @@ describe('A-02 consent-first PUT (backend #607)', () => {
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
     const first = api.save.mock.calls[0][0];
     expect(Object.keys(first.answers)).toEqual(['P0']);
-    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v3', text_sha256: CONSENT_COPY_SHA256 });
+    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v5', text_sha256: CONSENT_COPY_SHA256 });
     expect(first.answers.P0.copy_version).toBe(CONSULT_CONSENT_COPY_VERSION);
     // Only backend #607 P0 keys: box 2 is never part of the intake answer.
     expect(Object.keys(first.answers.P0).sort()).toEqual(['agreed', 'agreed_at', 'copy_version', 'text_sha256']);

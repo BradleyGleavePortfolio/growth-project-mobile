@@ -15,7 +15,7 @@
  *   - Refetches on app foreground via an `AppState` listener (the RN equivalent
  *     of `refetchOnWindowFocus`), so a flag flipped server-side takes effect on
  *     the next resume rather than only on a cold start.
- *   - FAIL-SAFE: while loading or on error, every flag reads `false`. A failed
+ *   - FAIL-SAFE: while loading or after a failed first read, every flag reads `false`; a failed refresh keeps the last map except `roman_crisis_alert` (off). A failed
  *     flags fetch must NEVER enable a gated surface. The local static
  *     `featureFlags.*` build-time kill switch in `config/featureFlags.ts`
  *     remains the outer gate (it controls route REGISTRATION); this hook is the
@@ -94,6 +94,9 @@ export function useFeatureFlags(): UseFeatureFlagsResult {
     messaging_core_v2: resolve(data, 'messaging_core_v2'),
     coachless_home: resolve(data, 'coachless_home'),
     coach_payment_actions: resolve(data, 'coach_payment_actions'),
+    // A failed refresh reads off even after an earlier true (FIX725): while the
+    // read fails the app cannot tell that the coach-alert claim is still true.
+    roman_crisis_alert: !query.isError && resolve(data, 'roman_crisis_alert'),
   };
 
   return {

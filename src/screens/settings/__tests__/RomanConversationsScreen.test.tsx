@@ -26,6 +26,7 @@ import type {
 } from '../../../api/romanChatsApi';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
+jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 jest.mock('../../../utils/haptics', () => ({ lightTap: jest.fn(), mediumTap: jest.fn(), warningTap: jest.fn(), selectionTap: jest.fn() }));
 jest.mock('../../../utils/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn(), log: jest.fn() } }));
 jest.mock('../../../theme/ThemeProvider', () => ({

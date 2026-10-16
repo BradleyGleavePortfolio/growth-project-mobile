@@ -59,6 +59,7 @@ import {
   grantAiChoiceAs,
   isAmbiguousWriteOutcome,
   romanBox2MemoryCopyOf,
+  romanFamilyOf,
   romanGrantBody,
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
@@ -204,7 +205,8 @@ export default function AiConsentSheet({
   const readyFrom = useCallback(
     (status: AiConsentStatusResponse): Phase => {
       // Roman memory on by default (owner 10-07 10:18): the same Roman consent, with the v5 text.
-      const memory = romanBox2MemoryCopyOf(status);
+      // Owner 62: the copies of the family the server answered with (coach-free for a client with no coach).
+      const memory = romanBox2MemoryCopyOf(status, romanFamilyOf(status));
       const copy = memory ? { paragraph: memory.paragraph.text, label: memory.box_label.text } : serverCopyOf(status);
       if (!copy) {
         // A status without the wording for its current version cannot be
@@ -230,7 +232,7 @@ export default function AiConsentSheet({
     const uid = sessionRef.current();
     loadedFor.current = uid;
     setPhase({ kind: 'loading' });
-    const out = await api.getStatus();
+    const out = coachless ? await api.getStatus({ coachFree: true }) : await api.getStatus();
     // Stale: the sheet closed, or the session that asked has ended.
     if (!active.current || !isSession(uid)) return;
     if (out.kind === 'unavailable') return setPhase({ kind: 'unavailable' });
@@ -244,7 +246,7 @@ export default function AiConsentSheet({
     const status = out.status;
     if (isLiveGrant(status, status.current_version)) return setPhase({ kind: 'already_on' });
     setPhase(readyFrom(status));
-  }, [api, isSession, readyFrom, reportUnknown]);
+  }, [api, coachless, isSession, readyFrom, reportUnknown]);
 
   useEffect(() => {
     if (visible) void load();
@@ -261,7 +263,7 @@ export default function AiConsentSheet({
       // Never read the ledger under another session, and never act on it.
       if (!active.current || !isSession(uid)) return;
       setPhase({ kind: 'checking' });
-      const check = await api.getStatus();
+      const check = coachless ? await api.getStatus({ coachFree: true }) : await api.getStatus();
       if (!active.current || !isSession(uid)) return;
       if (check.kind === 'ok' && check.status) {
         const st = check.status;
@@ -285,7 +287,7 @@ export default function AiConsentSheet({
       });
       setPhase({ kind: 'unconfirmed', reference });
     },
-    [api, isSession, onGranted, readyFrom, reportUnknown],
+    [api, coachless, isSession, onGranted, readyFrom, reportUnknown],
   );
 
   const allow = useCallback(async () => {

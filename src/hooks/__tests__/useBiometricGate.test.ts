@@ -132,11 +132,14 @@ describe('useBiometricGate', () => {
     await waitFor(() => expect(result.current.status).toBe('unlocked'));
     let answer: (v: string) => void = () => undefined;
     (SecureStore.getItemAsync as jest.Mock).mockImplementationOnce(() => new Promise((r) => { answer = r; }));
-    const now = Date.now();
-    await act(async () => listeners.forEach((fn) => fn('background')));
-    const clock = jest.spyOn(Date, 'now').mockReturnValue(now + BACKGROUND_TIMEOUT_MS + 1);
-    await act(async () => listeners.forEach((fn) => fn('active')));
-    clock.mockRestore();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    try {
+      await act(async () => listeners.forEach((fn) => fn('background')));
+      clock.mockReturnValue(1_000_000 + BACKGROUND_TIMEOUT_MS + 1);
+      await act(async () => listeners.forEach((fn) => fn('active')));
+    } finally {
+      clock.mockRestore();
+    }
     expect(result.current.status).toBe('checking');
     await act(async () => answer('true'));
     await waitFor(() => expect(result.current.status).toBe('unlocked'));

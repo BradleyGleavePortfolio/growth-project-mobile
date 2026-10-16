@@ -151,6 +151,7 @@ const PER_USER_KEY_PREFIXES = [
   // the desktop extension connection. Swept via the exported constant so the
   // literal lives in one place.
   IMPORT_OFFER_DECISION_KEY_PREFIX,
+  // Not here on purpose: messages_thread_outbox_<id> (services/messageOutbox) sends on that account's next sign-in.
 ];
 
 // Belt-and-braces wipe for the cacheStorage MMKV namespace. clearAllStorage()

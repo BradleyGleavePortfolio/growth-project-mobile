@@ -50,7 +50,7 @@ import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 
-export default function LogScreen({ onSaved }: { onSaved?: () => void }) {
+export default function LogScreen({ onSaved, suspended = false }: { onSaved?: () => void; suspended?: boolean }) {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useScreenInsets();
@@ -650,7 +650,7 @@ export default function LogScreen({ onSaved }: { onSaved?: () => void }) {
       </Screen>
 
       <FoodSearchModal
-        visible={modalVisible}
+        visible={modalVisible && !suspended}
         activeMealType={activeMealType}
         addedFoodName={addedFoodName}
         onClose={() => {

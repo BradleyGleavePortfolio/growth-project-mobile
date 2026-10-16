@@ -93,7 +93,8 @@ describe('definitions', () => {
     expect(coaching).toMatch(/We do not diagnose, treat, or give medical advice/);
     expect(coaching).toMatch(/the screening questions/);
     expect(coaching).toMatch(/We never sell it/);
-    expect(coaching).toMatch(/the clinic does not see it/);
+    // Owner C-6: the consent never mentions a clinic (consult-consent-v5 dropped that sentence).
+    expect(coaching).not.toMatch(/clinic/i);
     // Box 1 is not an AI consent: no processor named above or in it.
     expect(coaching + CONSENT_CHECKBOX_LABEL).not.toMatch(/Anthropic|Roman/);
     expect(CONSENT_CHECKBOX_LABEL).toBe(
@@ -130,11 +131,11 @@ describe('definitions', () => {
     }
   });
 
-  it('versions are bound: consult-consent-v3 with client-ai-v4 and pt-waiver-v1', () => {
-    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v3');
+  it('versions are bound: consult-consent-v5 with client-ai-v4 and pt-waiver-v1', () => {
+    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v5');
     expect(AI_CONSENT_VERSION).toBe('client-ai-v4');
     expect(CONSENT_BINDING).toEqual({
-      copy_version: 'consult-consent-v3',
+      copy_version: 'consult-consent-v5',
       ai_consent_version: 'client-ai-v4',
       waiver_version: 'pt-waiver-v1',
     });
@@ -151,7 +152,7 @@ describe('definitions', () => {
     expect(sha(AI_CONSENT_CHECKBOX_LABEL)).toBe('77da153df7f06a045e1abbbb83b771f8a33941d47268e276becc6b4ffe5e5eba');
     // If this fails, the copy changed: bump CONSULT_CONSENT_COPY_VERSION (and
     // AI_CONSENT_VERSION for paragraph 4 / box 2) and re-pin with the new text.
-    expect(CONSENT_COPY_SHA256).toBe('79ceeb6b8316ee9e3f583fe678e2463584c6dda4c93b5c95746dfe5c52ef31c9');
+    expect(CONSENT_COPY_SHA256).toBe('926b4ec8abe6d003798b44d720f625aa69871f59b4963cc5ec39f8599c2255fa');
     expect(AI_CONSENT_COPY_SHA256).toBe('fbf821401d4313c6a301a6cc08d3870bb117c293fbb970e321bf87f49abe34f4');
   });
 
@@ -267,6 +268,12 @@ describe('validation', () => {
     const cur = (v: unknown) => isConsentAnswerCurrent(v as never);
     const ok = { agreed: true, copy_version: CONSULT_CONSENT_COPY_VERSION, agreed_at: '2026-09-30T19:00:00.000Z' };
     expect(cur(ok)).toBe(true);
+    // Owner 62 / C-6a: v5 and v6, and their coach-free versions, are current; v3 and v4 are stale.
+    for (const v of ['consult-consent-v6', 'consult-consent-v5-coach-free', 'consult-consent-v6-coach-free']) {
+      expect(cur({ ...ok, copy_version: v })).toBe(true);
+    }
+    expect(cur({ ...ok, copy_version: 'consult-consent-v3' })).toBe(false);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v4' })).toBe(false);
     expect(cur({ ...ok, copy_version: 'consult-consent-v0' })).toBe(false);
     expect(cur({ ...ok, copy_version: 'consult-consent-v1' })).toBe(false); // the single-box copy
     expect(cur({ ...ok, text_sha256: CONSENT_COPY_SHA256 })).toBe(true);

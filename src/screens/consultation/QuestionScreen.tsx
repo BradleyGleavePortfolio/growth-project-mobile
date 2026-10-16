@@ -30,17 +30,10 @@ import {
   validateScreen,
 } from '../../lib/consultation/engine';
 import {
-  AI_CONSENT_CHECKBOX_LABEL,
-  AI_CONSENT_PARAGRAPH,
   AI_CHOICE_UNKNOWN_LINE,
   AI_WITHDRAW_UNCONFIRMED_LINE,
-  CONSENT_CHECKBOX_LABEL,
-  CONSENT_COPY_SHA256,
   CONSENT_FOOTER,
-  CONSENT_MEMORY_COPY_SHA256,
-  CONSENT_PARAGRAPHS,
-  CONSULT_CONSENT_COPY_VERSION,
-  CONSULT_CONSENT_MEMORY_COPY_VERSION,
+  consentScreenCopy,
   P8_COPY,
 } from '../../lib/consultation/copy';
 import {
@@ -94,7 +87,7 @@ export interface QuestionScreenProps {
    * check it; box 2 stays optional and untouched sends nothing.
    * `aiMemory` (R11-C2B): the server's client-ai-v5 copy box 2 shows instead
    * of the pinned v4 paragraph (same label, same tick, still unticked by
-   * default); the P0 record then names consult-consent-v4.
+   * default); the P0 record then names consult-consent-v6 (or v6-coach-free).
    */
   consent?: {
     error: 'version_mismatch' | null;
@@ -538,7 +531,9 @@ export function openPrivacyPolicy(): void {
 }
 
 function ConsentBody(props: BodyProps) {
-  const { answers, onNext, header, consent: state } = props;
+  const { answers, onNext, header, consent: state, ctx } = props;
+  // Owner 62: a client with no coach sees (and records) the coach-free text.
+  const copy = consentScreenCopy(!!ctx?.coachless);
   // Only a record matching this build's copy version counts (Sol A-03):
   // stale or malformed records render box 1 unticked.
   const already = isConsentAnswerCurrent(answers.P0);
@@ -562,13 +557,13 @@ function ConsentBody(props: BodyProps) {
   const consent = useMemo<ConsentAnswer>(
     () => ({
       agreed: true,
-      copy_version: aiMemory ? CONSULT_CONSENT_MEMORY_COPY_VERSION : CONSULT_CONSENT_COPY_VERSION,
+      copy_version: aiMemory ? copy.memoryVersion : copy.version,
       agreed_at: new Date().toISOString(),
-      text_sha256: aiMemory ? CONSENT_MEMORY_COPY_SHA256 : CONSENT_COPY_SHA256,
+      text_sha256: aiMemory ? copy.memorySha256 : copy.sha256,
     }),
     // agreed_at is taken when box 1 is ticked; the version follows the box 2 text shown.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [checked, aiMemory],
+    [checked, aiMemory, copy.version],
   );
   const blocked = error === 'version_mismatch';
   return (
@@ -600,17 +595,17 @@ function ConsentBody(props: BodyProps) {
         </>
       }
     >
-      {CONSENT_PARAGRAPHS.map((p) => (
+      {copy.paragraphs.map((p) => (
         <Text key={p} style={[s.small, { marginBottom: 12 }]}>{p}</Text>
       ))}
       <Checkbox
         checked={checked}
         onToggle={() => setChecked((c) => !c)}
-        label={CONSENT_CHECKBOX_LABEL}
+        label={copy.box1Label}
         testID="consent-checkbox"
       />
       <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
-        {aiMemory ? aiMemory.paragraph.text : AI_CONSENT_PARAGRAPH}
+        {aiMemory ? aiMemory.paragraph.text : copy.aiParagraph}
       </Text>
       <Checkbox
         checked={aiChecked}
@@ -618,7 +613,7 @@ function ConsentBody(props: BodyProps) {
           aiTouched.current = true;
           setAiChecked((c) => !c);
         }}
-        label={AI_CONSENT_CHECKBOX_LABEL}
+        label={copy.box2Label}
         disabled={!aiReady}
         hint={aiReady ? undefined : 'Checking your saved choice'}
         testID="consent-ai-checkbox"

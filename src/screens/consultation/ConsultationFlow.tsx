@@ -65,6 +65,7 @@ import {
   markAiWithdrawalPending,
   readAiWithdrawalPending,
   romanBox2MemoryCopyOf,
+  romanFamily,
   romanGrantBody,
   runAiLedgerWrite,
   withdrawRomanWithRetry,
@@ -704,12 +705,13 @@ export default function ConsultationFlow({
    */
   async function refreshAiFromLedger(gen: number) {
     try {
-      const out = await api.getRomanConsent();
+      // Owner 62: a client with no coach is offered (and box 2 grants) the coach-free copies.
+      const out = coachless ? await api.getRomanConsent({ coachFree: true }) : await api.getRomanConsent();
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status);
+        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, romanFamily(coachless));
         setAiMemory(aiMemoryRef.current);
-        setAiConfirmed(isLiveRomanGrant(out.status), true);
+        setAiConfirmed(isLiveRomanGrant(out.status, romanFamily(coachless)), true);
         reconcileAi(gen);
       }
     } catch {
@@ -761,7 +763,7 @@ export default function ConsultationFlow({
             grantRomanWithRetry(
               api.grantRomanConsent,
               () => aiLive(gen) && aiWant.current === true,
-              () => romanGrantBody(aiMemoryRef.current),
+              () => romanGrantBody(aiMemoryRef.current, romanFamily(coachless)),
             ),
           );
           if (!aiLive(gen)) return;

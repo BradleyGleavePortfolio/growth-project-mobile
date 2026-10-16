@@ -14,7 +14,12 @@ let mockDay1Props: {
   onComplete: (target?: import('../services/firstWinApi').WinType) => void;
   savedWin?: import('../services/firstWinApi').WinType;
 };
-let mockClientProps: { onDay1Saved?: (target: import('../services/firstWinApi').WinType) => void };
+let mockClientProps: {
+  onDay1Saved?: (target: import('../services/firstWinApi').WinType) => void;
+  day1NoteVisible?: boolean;
+};
+const mockClientMounted = jest.fn();
+const mockClientUnmounted = jest.fn();
 jest.mock('../services/secureStorage', () => ({
   secureStorage: {
     getItem: jest.fn(async (k: string) => mockSecure[k] ?? null),
@@ -94,6 +99,10 @@ jest.mock('../navigation/ClientNavigator', () => {
   const { Text } = jest.requireActual('react-native');
   return (props: typeof mockClientProps) => {
     mockClientProps = props;
+    React.useEffect(() => {
+      mockClientMounted();
+      return () => mockClientUnmounted();
+    }, []);
     return React.createElement(Text, { testID: 'nav-client' }, 'client');
   };
 });
@@ -193,6 +202,7 @@ describe('RootNavigator 24h package prompt is fail closed', () => {
     mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true, entitlement_active: true } });
     const r = await mount();
     await r.findByTestId('nav-client');
+    expect(mockClientMounted).toHaveBeenCalledTimes(1);
     expect(r.queryByTestId('package-prompt')).toBeNull();
     expect(mockGetEntitlement).toHaveBeenCalled();
   });
@@ -258,8 +268,14 @@ describe('RootNavigator Day 1 Win skip is remembered per user', () => {
     await act(async () => onSaved(winType));
     await r.findByTestId('day1win');
     expect(mockDay1Props.savedWin).toBe(winType);
+    expect(mockClientProps.day1NoteVisible).toBe(true);
+    expect(mockClientUnmounted).not.toHaveBeenCalled();
+    expect(r.queryByTestId('nav-client')).toBeNull();
     await act(async () => mockDay1Props.onComplete());
     await r.findByTestId('nav-client');
+    expect(mockClientProps.day1NoteVisible).toBe(false);
+    expect(mockClientMounted).toHaveBeenCalledTimes(1);
+    expect(mockClientUnmounted).not.toHaveBeenCalled();
     await act(async () => onSaved(winType));
     expect(r.queryByTestId('day1win')).toBeNull();
     // Continue does not navigate back into the completed logger.

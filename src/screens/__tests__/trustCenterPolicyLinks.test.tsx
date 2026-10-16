@@ -82,6 +82,7 @@ jest.mock('../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'client-1', email: 'client@example.test', role: 'student', coach_id: 'coach-1' }),
 }));
+jest.mock('../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
