@@ -50,7 +50,7 @@ import { useMealPlanToday } from '../../hooks/useMealTemplates';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import HapticPressable from '../../components/HapticPressable';
 import LogPlannedMealButton, { plannedMealFromSlot } from '../../components/mealplan/LogPlannedMealButton';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 
@@ -287,6 +287,6 @@ function makeStyles(sc: SemanticTokens) {
     slotRow: { gap: spacing.xs, paddingVertical: spacing.md,
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
     retry: { minHeight: 44, paddingHorizontal: spacing.lg, alignSelf: 'flex-start',
-      justifyContent: 'center', borderRadius: 4, backgroundColor: sc.accent },
+      justifyContent: 'center', borderRadius: radius.button, backgroundColor: sc.accent },
   });
 }

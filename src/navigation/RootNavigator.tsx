@@ -278,7 +278,7 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
           },
           ...(isScreenshotMode()
             ? {
-                Plan: 'plan',
+                ClientDailyMealPlan: 'plan',
                 Recipes: 'recipes',
                 Progress: 'progress',
                 Fast: 'fast',
