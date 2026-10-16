@@ -19,20 +19,14 @@ import type { TabKey } from './types';
 const CAP = 1.3;
 export const firstOf = (name: string) => name.trim().split(/\s+/)[0] || name;
 
-interface HeadProps {
-  name: string;
-  onBack: () => void;
-  /** Absent while the archive status is unknown: never a dead button. */
-  onMore?: () => void;
-  week?: WorkoutWeek | null;
-  /** The ring's draw key: once per client per week. */
-  drawKey?: string;
-  /** No tabs below (loading, error): the masthead rounds its own bottom. */
-  rounded?: boolean;
-}
-
-/** The masthead above the tabs: Back, More, the name and, when known, the week. */
-export function FileHead({ name, onBack, onMore, week, drawKey, rounded }: HeadProps) {
+/**
+ * The masthead above the tabs: Back, More, the name and, when known, the week. `onMore` is absent while the
+ * archive status is unknown (never a dead button); `drawKey` draws the ring once per client per week;
+ * `rounded`: no tabs below (loading, error), so the masthead rounds its own bottom.
+ */
+export function FileHead({ name, onBack, onMore, week, drawKey, rounded }: {
+  name: string; onBack: () => void; onMore?: () => void; week?: WorkoutWeek | null; drawKey?: string; rounded?: boolean;
+}) {
   const sc = useTheme().semanticColors;
   const light = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
@@ -151,32 +145,26 @@ export function MessageButton({ label, onPress, bottom }: { label: string; onPre
 
 export interface WeekCard { key: string; title: string; line?: string | null; shared: boolean; onPress: () => void }
 
-/** One This week card: a button to its tab, or a locked line when not shared. */
+/** One This week card: a button to its tab, or (not shared) a locked line that is not a button. */
 export function FileCard({ card, first }: { card: WeekCard; first: string }) {
   const sc = useTheme().semanticColors;
-  const body = (
-    <View style={s.flex}>
-      <Text maxFontSizeMultiplier={CAP} style={[typography.h4, { color: sc.textPrimary }]}>{card.title}</Text>
-      {card.shared ? (
-        card.line ? <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, { color: sc.textMuted }]}>{card.line}</Text> : null
-      ) : (
-        <View style={s.locked}>
-          <Ionicons name="lock-closed-outline" size={16} color={sc.textMuted} />
-          <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, s.flex, { color: sc.textMuted }]}>{`Not shared by ${first}`}</Text>
-        </View>
-      )}
-    </View>
-  );
-  if (!card.shared) {
-    return <View accessible style={[s.card, { backgroundColor: sc.bgSurface }]} testID={`file-card-${card.key}`}>{body}</View>;
-  }
   return (
     <Pressable
-      onPress={() => { HapticService.selection(); card.onPress(); }}
-      accessibilityRole="button" style={[s.card, s.row, { backgroundColor: sc.bgSurface }]} testID={`file-card-${card.key}`}
+      onPress={card.shared ? () => { HapticService.selection(); card.onPress(); } : undefined}
+      accessibilityRole={card.shared ? 'button' : undefined} style={[s.card, s.row, { backgroundColor: sc.bgSurface }]} testID={`file-card-${card.key}`}
     >
-      {body}
-      <Ionicons name="chevron-forward" size={20} color={sc.textMuted} />
+      <View style={s.flex}>
+        <Text maxFontSizeMultiplier={CAP} style={[typography.h4, { color: sc.textPrimary }]}>{card.title}</Text>
+        {card.shared ? (
+          card.line ? <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, { color: sc.textMuted }]}>{card.line}</Text> : null
+        ) : (
+          <View style={s.locked}>
+            <Ionicons name="lock-closed-outline" size={16} color={sc.textMuted} />
+            <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, s.flex, { color: sc.textMuted }]}>{`Not shared by ${first}`}</Text>
+          </View>
+        )}
+      </View>
+      {card.shared ? <Ionicons name="chevron-forward" size={20} color={sc.textMuted} /> : null}
     </Pressable>
   );
 }

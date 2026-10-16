@@ -1,7 +1,4 @@
-/**
- * K1-OVERVIEW — the This week model. The ring is drawn only when the
- * summary's 20 latest assignments provably hold the whole week.
- */
+/** K1-OVERVIEW — the This week model. The ring is drawn only when the summary's 20 latest assignments hold the whole week. */
 import {
   checkInLine, checkInWeek, dayLabel, foodLine, foodWeek, needsNextMealPage, toGoLine,
   weekHeadline, workoutWeek, workoutsLine, type AssignmentRow, type MealRow,
@@ -60,11 +57,7 @@ describe('food, check-ins and paging', () => {
   });
 
   it('counts this week\'s check-ins and the ones waiting for review', () => {
-    const c = checkInWeek([
-      { date: '2026-10-14T00:00:00.000Z', reviewed_by_coach: false },
-      { date: '2026-10-12T00:00:00.000Z', reviewed_by_coach: true },
-      { date: '2026-10-11T00:00:00.000Z', reviewed_by_coach: false },
-    ], NOW);
-    expect(checkInLine(c)).toBe('2 this week · 1 to review');
+    const ci = (date: string, reviewed: boolean) => ({ date: `${date}T00:00:00.000Z`, reviewed_by_coach: reviewed });
+    expect(checkInLine(checkInWeek([ci('2026-10-14', false), ci('2026-10-12', true), ci('2026-10-11', false)], NOW))).toBe('2 this week · 1 to review');
   });
 });

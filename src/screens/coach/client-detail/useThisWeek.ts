@@ -11,13 +11,7 @@ export interface Sharing { workouts: boolean; food: boolean; weighIns: boolean; 
 export type ThisWeekRead =
   | { kind: 'loading' }
   | { kind: 'error' }
-  | {
-      kind: 'ok';
-      sharing: Sharing;
-      food: { logged: number; average: number | null };
-      target: number | null;
-      checkIns: { count: number; toReview: number };
-    };
+  | { kind: 'ok'; sharing: Sharing; food: { logged: number; average: number | null }; target: number | null; checkIns: { count: number; toReview: number } };
 
 type Consent = { workouts?: boolean; food_macros?: boolean; body_metrics?: boolean; habits_progress?: boolean } | undefined;
 
