@@ -705,13 +705,13 @@ export default function ConsultationFlow({
    */
   async function refreshAiFromLedger(gen: number) {
     try {
-      // Owner 62: a client with no coach is offered (and box 2 grants) the coach-free copies.
-      const out = coachless ? await api.getRomanConsent({ coachFree: true }) : await api.getRomanConsent();
+      // W-CONSENT: a client with no coach reads (and box 2 grants) the coached copies too.
+      const out = await api.getRomanConsent();
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, romanFamily(coachless));
+        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, romanFamily(false));
         setAiMemory(aiMemoryRef.current);
-        setAiConfirmed(isLiveRomanGrant(out.status, romanFamily(coachless)), true);
+        setAiConfirmed(isLiveRomanGrant(out.status, romanFamily(false)), true);
         reconcileAi(gen);
       }
     } catch {
@@ -763,7 +763,7 @@ export default function ConsultationFlow({
             grantRomanWithRetry(
               api.grantRomanConsent,
               () => aiLive(gen) && aiWant.current === true,
-              () => romanGrantBody(aiMemoryRef.current, romanFamily(coachless)),
+              () => romanGrantBody(aiMemoryRef.current, romanFamily(false)),
             ),
           );
           if (!aiLive(gen)) return;
@@ -792,7 +792,9 @@ export default function ConsultationFlow({
           setAiWant(null);
           if (result === 'unavailable') return; // ledger off: skipped silently
           logger.warn('ConsultationFlow', `optional AI choice not recorded (${result}); left for Settings`);
-          noticeOnce('grant', AI_GRANT_NOTICE);
+          // W-CONSENT: a client with no coach is asked again once they join one (RomanJoinOfferHost), so
+          // a refusal (403 ROMAN_REQUIRES_COACH from a server that does not store it yet) stays quiet, unsaved.
+          if (!coachless) noticeOnce('grant', AI_GRANT_NOTICE);
           return;
         }
         // No: nothing can be on file (no confirmed grant, no grant attempted

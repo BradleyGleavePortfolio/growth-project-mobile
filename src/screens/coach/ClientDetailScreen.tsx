@@ -506,7 +506,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.tabScroll, { maxHeight: 52 }]}
+        style={styles.tabScroll}
         contentContainerStyle={[styles.tabRow, { gap: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border }]}
       >
         {tabs.map((tab) => (

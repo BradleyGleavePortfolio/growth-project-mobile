@@ -1,5 +1,7 @@
 # Coach screens
 
+Client-file layout: the shared tab scroller keeps its intrinsic height without shrinking; Summary and food-review action pills wrap into readable rows with 44 pt minimum height. Macro values use forest text on cream, retaining the existing macro bar colours. Food-review period chips and the Pending AI drafts action have 44 pt minimum targets. Copy, routes and data access are unchanged (UIFIX-R2R6).
+
 DEADFIX1: the client Summary Workouts shortcut selects that client's Workouts tab with a selection haptic, reusing the saved-workout copy and explicit assignment flow rather than saving an unassigned library plan. Explicit non-AI builder save failures always show the same plain workout error; no server sentence passes through. Coach AI unavailability never asks the coach to configure the service. Settings reads the existing practice-type endpoint and offers Both pillars only for `both`; cross-pillar failures pair their existing title with non-repeating recovery copy, not transport diagnostics. No data or authorization contracts change.
 
 Credit-pack tier/custom choices, checkout retry, Done and Open checkout again have at least 44 pt targets and grow with larger text. Filled actions use `radius.button`; their purchase gates, amounts and checkout handlers are unchanged.
