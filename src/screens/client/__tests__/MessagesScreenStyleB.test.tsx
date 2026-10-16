@@ -289,10 +289,12 @@ describe('Style B motion and reach', () => {
 
   it('coach side unchanged: only the client thread reads c3StyleB or the Style B parts', () => {
     const src = path.resolve(__dirname, '../../..');
+    // C3B-S2: Home's entry reads the flag to open the client Messages list (tested in HomeHeaderActions.test).
+    const clientEntries = ['components/home/HomeHeaderActions.tsx'];
     const hits: string[] = [];
     const walk = (dir: string) => fs.readdirSync(dir, { withFileTypes: true }).forEach((e) => {
       const f = path.join(dir, e.name);
-      if (e.isDirectory()) { if (e.name !== '__tests__') walk(f); } else if (/\.tsx?$/.test(e.name) && /c3StyleB|StyleBThread/.test(fs.readFileSync(f, 'utf8'))) hits.push(path.relative(src, f));
+      if (e.isDirectory()) { if (e.name !== '__tests__') walk(f); } else if (/\.tsx?$/.test(e.name) && !clientEntries.includes(path.relative(src, f)) && /c3StyleB|StyleBThread/.test(fs.readFileSync(f, 'utf8'))) hits.push(path.relative(src, f));
     });
     walk(src);
     expect(hits.sort()).toEqual(['components/messaging/StyleBThread.tsx', 'config/featureFlags.ts', 'screens/client/MessagesScreen.tsx']);

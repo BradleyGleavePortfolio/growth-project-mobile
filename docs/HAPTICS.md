@@ -72,6 +72,7 @@ When the toggle changes:
 | `MessagesScreen` (client, `c3StyleB` on) | `error()` | A send fails while online (once; none while offline, the message waits) |
 | `MessagesScreen` (client, `c3StyleB` on) | `success()` | The coach's read lands while the thread is open |
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
+| `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |
 
 ## Architecture
 
