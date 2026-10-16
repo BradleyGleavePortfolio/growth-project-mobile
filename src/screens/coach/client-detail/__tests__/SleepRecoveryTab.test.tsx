@@ -1,7 +1,7 @@
 /**
  * SleepRecoveryTab (coach) — the IDOR-safe 403 fallback is the headline test
- * (50-Failures #5). Also verifies: coach-only anomaly band + cohort comparison
- * render with data, and a non-403 error surfaces a retry (never swallowed, #36).
+ * (50-Failures #5). Also verifies: the coach-only anomaly band + client-only
+ * average render with data, and a non-403 error surfaces a retry (#36).
  */
 
 import React from 'react';
@@ -145,7 +145,7 @@ describe('SleepRecoveryTab — other errors (#36)', () => {
 });
 
 describe('SleepRecoveryTab — coach-only overlays', () => {
-  it('renders the anomaly band and cohort comparison when there is HRV data', async () => {
+  it('renders the anomaly band and the client-only average when there is HRV data', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([
         {
@@ -168,12 +168,13 @@ describe('SleepRecoveryTab — coach-only overlays', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = await render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
+    const { getByTestId, getByText } = await render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
     expect(getByTestId('coach-anomaly-band')).toBeTruthy();
     // A card-surface ring keeps the marker apart from the band it sits on.
     expect(StyleSheet.flatten(getByTestId('coach-anomaly-marker').props.style))
       .toMatchObject({ borderWidth: 1, borderColor: testColors.surface });
     expect(getByTestId('coach-cohort-comparison')).toBeTruthy();
+    expect(getByText('Client average 38 ms')).toBeTruthy();
     expect(getByTestId('coach-recovery-tab')).toBeTruthy();
   });
 });
