@@ -2,6 +2,7 @@ import React from 'react';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { StyleSheet, View } from 'react-native';
+import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import Colors from '../constants/colors';
 import { layout } from '../theme/tokens';
@@ -42,7 +43,7 @@ jest.mock('../api/coachAi', () => ({
 }));
 
 const styles = makeStyles(Colors as ThemeColors);
-const flat = (style: unknown) => StyleSheet.flatten(style as never);
+const flat = (style: unknown) => StyleSheet.flatten<ViewStyle & TextStyle>(style as StyleProp<ViewStyle & TextStyle>);
 const props = { clientId: 'c1', clientName: 'Maya Chen' };
 
 beforeEach(() => jest.clearAllMocks());
@@ -99,7 +100,7 @@ it.each([
   ['Fat', Colors.fat],
 ])('R4: %s values meet 4.5:1 on their actual cream surface, preserving the bar colour', async (label, color) => {
   const v = await render(<MacroCard label={label} color={color} value={42} target={100} unit="g" />);
-  const valueColor = flat(v.getByText('42g').props.style).color;
+  const valueColor = flat(v.getByText('42g').props.style).color as string;
   const ratio = (luminance(styles.macroCard.backgroundColor) + 0.05) / (luminance(valueColor) + 0.05);
   expect(valueColor).toBe(Colors.primary);
   expect(ratio).toBeGreaterThanOrEqual(4.5);
