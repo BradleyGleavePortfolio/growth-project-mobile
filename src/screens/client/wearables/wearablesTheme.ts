@@ -14,12 +14,18 @@
  * the app and never introduce a raw off-palette hex.
  */
 
-import { brand, colors, gold, withAlpha } from '../../../theme/tokens';
+import { brand, colors, gold, neutral, withAlpha } from '../../../theme/tokens';
 import type { IoniconName } from '../../../types/common';
 import type {
   WearableMetricBucket,
   WearableMetricType,
 } from '../../../api/wearablesSamplesApi';
+
+/** Owner's "other colour flare": the latest or scrubbed chart mark. */
+export const CHART_FLARE = gold[700];
+
+/** Sleep-stage fills, REM in the flare; each 3:1 on the card, 2 px gap apart. */
+export const STAGE_COLORS = { rem: CHART_FLARE, deep: brand[800], light: brand[500], awake: neutral[600] } as const;
 
 /** Animation timing for the shell bucket cross-fade (brief §1.4: 200ms). */
 export const SHELL_CROSSFADE_MS = 200;

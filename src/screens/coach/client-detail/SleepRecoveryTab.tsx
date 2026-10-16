@@ -30,6 +30,7 @@ import { SleepStagesCard } from '../../client/wearables/cards/SleepStagesCard';
 import { HrvTrendCard } from '../../client/wearables/cards/HrvTrendCard';
 import { SleepConsistencyCard } from '../../client/wearables/cards/SleepConsistencyCard';
 import { RECOVERY_PALETTE } from '../../client/wearables/recoveryTheme';
+import { brand, colors as palette, gold } from '../../../theme/tokens';
 import { WearableInsightPanel } from './WearableInsightPanel';
 import {
   recoveryScore,
@@ -204,7 +205,7 @@ function AnomalyBand({ trend, colors }: { trend: TrendPoint[]; colors: ThemeColo
             localStyles.anomalyMarker,
             {
               left: `${markerPos * 100}%`,
-              backgroundColor: outOfBand ? RECOVERY_PALETTE.attention : RECOVERY_PALETTE.accent,
+              backgroundColor: outOfBand ? gold[800] : palette.forest,
             },
           ]}
         />
@@ -253,7 +254,7 @@ function makeStyles(colors: ThemeColors) {
     anomalyTrack: {
       height: 10,
       borderRadius: 5,
-      backgroundColor: RECOVERY_PALETTE.track,
+      backgroundColor: brand[100],
       overflow: 'visible',
       justifyContent: 'center',
     },
@@ -261,15 +262,17 @@ function makeStyles(colors: ThemeColors) {
       position: 'absolute',
       top: 2,
       bottom: 2,
-      backgroundColor: '#C9CEE6',
+      backgroundColor: brand[400],
       borderRadius: 4,
     },
     anomalyMarker: {
       position: 'absolute',
-      width: 4,
+      width: 6,
       height: 16,
-      borderRadius: 2,
-      marginLeft: -2,
+      borderRadius: 3,
+      marginLeft: -3,
+      borderWidth: 1,
+      borderColor: colors.surface,
     },
     cohortWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 4 },
     cohortText: { fontSize: 12, color: colors.textSecondary, flex: 1 },
