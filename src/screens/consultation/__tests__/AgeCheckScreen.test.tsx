@@ -20,7 +20,7 @@ jest.mock('../../../lib/userCache', () => ({
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import AgeCheckScreen from '../AgeCheckScreen';
 import { HapticService } from '../../../ui/haptics/haptics.service';
@@ -85,6 +85,9 @@ describe('AgeCheckScreen', () => {
     for (const id of ['wheel-dob-month', 'wheel-dob-day', 'wheel-dob-year']) {
       expect([id, r.getByTestId(id).props.accessibilityValue, off()]).toEqual([id, undefined, true]);
     }
+    // FIXAGE3 (Sol B2): unpicked rows are full-strength muted text (token AA contrast), none enlarged.
+    const row = StyleSheet.flatten(r.getByText(String(START_YEAR), { includeHiddenElements: true }).props.style);
+    expect([row.opacity, row.fontSize]).toEqual([1, 20]);
     await fireEvent.press(r.getByTestId('consult-continue'));
     await fireEvent(r.getByTestId('wheel-dob-year-scroll', { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 70 * 44 } } });
     await fireEvent(r.getByTestId('wheel-dob-month-scroll', { includeHiddenElements: true }), 'momentumScrollEnd', { nativeEvent: { contentOffset: { y: 0 } } });

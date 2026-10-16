@@ -26,9 +26,9 @@ jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => tr
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 
 import React from 'react';
-import { Alert, type AlertButton } from 'react-native';
+import { ActionSheetIOS, Alert, Linking, type AlertButton } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { AgeCheckNavigator } from '../AgeCheckScreen';
 import { signOut } from '../../../services/authActions';
 
@@ -50,22 +50,36 @@ const STATES: Array<[string, (r: R) => Promise<void>]> = [
 ];
 
 let alert: jest.SpyInstance;
+let sheet: jest.SpyInstance;
 beforeEach(() => {
   (signOut as jest.Mock).mockClear();
   alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation(() => undefined);
+  jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
 });
 afterEach(() => jest.restoreAllMocks());
 
-it.each(STATES)('from %s: Sign out signs out; Download my data and Delete my account open the real screens', async (state, reach) => {
+it.each(STATES)('from %s: every way out arrives (support, Sign out, Download my data, Delete my account)', async (state, reach) => {
   const r = await render(
     <NavigationContainer>
       <AgeCheckNavigator onConfirmed={jest.fn()} onSignOut={() => void signOut()} />
     </NavigationContainer>,
   );
   await reach(r);
-  expect(r.getByText('Contact support')).toBeTruthy();
-  expect(r.getByText('Download my data')).toBeTruthy();
-  await fireEvent.press(r.getByTestId('consult-sign-out'));
+  // FIXAGE3 R9: the question shows one "Account and support" link (its rows in the
+  // shared action sheet); the stop screen keeps the four rows.
+  const asked = state === 'the age step';
+  expect([!!r.queryByTestId('age-account-support'), !!r.queryByTestId('consult-sign-out')]).toEqual([asked, !asked]);
+  const choose = async (label: string, testID: string) => {
+    if (!asked) return fireEvent.press(r.getByTestId(testID));
+    await fireEvent.press(r.getByTestId('age-account-support'));
+    const [{ options }, pick] = sheet.mock.calls.at(-1) as [{ options: string[] }, (i: number) => void];
+    expect(options).toEqual(['Download my data', 'Delete my account', 'Contact support', 'Sign out', 'Cancel']);
+    await act(async () => pick(options.indexOf(label)));
+  };
+  await choose('Contact support', 'consult-support');
+  expect(Linking.openURL).toHaveBeenCalledWith(expect.stringMatching(/^mailto:/));
+  await choose('Sign out', 'consult-sign-out');
   const [title, body, buttons] = alert.mock.calls[0] as [string, string, AlertButton[]];
   expect([title, body]).toEqual([
     'Sign out?',
@@ -73,11 +87,11 @@ it.each(STATES)('from %s: Sign out signs out; Download my data and Delete my acc
   ]);
   buttons.find((b) => b.text === 'Sign out')?.onPress?.();
   expect(signOut).toHaveBeenCalledTimes(1);
-  await fireEvent.press(r.getByTestId('age-data-export'));
+  await choose('Download my data', 'age-data-export');
   await r.findByTestId('data-export-screen');
   await fireEvent.press(r.getByLabelText('Go back'));
   await r.findByTestId(state === 'the age step' ? 'consult-screen-B2' : 'consult-screen-UNDER_AGE');
-  await fireEvent.press(r.getByTestId('age-delete-account'));
+  await choose('Delete my account', 'age-delete-account');
   await r.findByText('Delete account');
   await fireEvent.press(r.getByLabelText('Go back'));
   expect(r.getByTestId(state === 'the age step' ? 'consult-screen-B2' : 'consult-screen-UNDER_AGE')).toBeTruthy();

@@ -468,8 +468,9 @@ const ROW_H = 44;
 /**
  * Prototype T-D wheels: the selected value at full ink, its neighbours
  * fading with distance (B2, B3, B4). FIXAGE2 R6: `value` null is a wheel
- * nothing was picked on yet: it rests at `anchor` with every row faded, and
- * the first scroll or adjust picks a row (even the anchor's).
+ * nothing was picked on yet: it rests at `anchor` with every row the same
+ * (muted, full strength, so AA contrast; FIXAGE3), and the first scroll or
+ * adjust picks a row (even the anchor's).
  */
 export function wheelOpacity(distance: number): number {
   const d = Math.abs(distance);
@@ -552,7 +553,7 @@ export function Wheel<T extends string | number>({
       >
         {values.map((v, i) => (
           <View key={String(v)} style={s.wheelRow}>
-            <Text style={[s.wheelText, { opacity: unset ? 0.3 : wheelOpacity(i - idx) }, !unset && i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
+            <Text style={[s.wheelText, { opacity: unset ? 1 : wheelOpacity(i - idx) }, !unset && i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
           </View>
         ))}
       </ScrollView>

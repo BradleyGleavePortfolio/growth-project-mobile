@@ -12,11 +12,14 @@
  * lockout's data and deletion rows, which open the real screens).
  */
 import React, { useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import QuestionScreen from './QuestionScreen';
-import { EscapeRow } from './RevealScreens';
+import { CONSULT_SUPPORT_SUBJECT, ESCAPE_COPY, EscapeRow } from './RevealScreens';
+import { useConsultationStyles } from './components';
 import { TextLink } from '../../ui';
+import ActionMenu, { type ActionMenuOption } from '../../components/messaging/ActionMenu';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 import DeleteAccountScreen from '../settings/DeleteAccountScreen';
 import DataExportScreen from '../settings/DataExportScreen';
 import { screenById } from '../../lib/consultation/definitions';
@@ -31,6 +34,37 @@ import { settleAgeConfirmation } from '../../lib/ageGate';
 const AGE_SCREEN: ScreenDef = { ...(screenById('B2') as ScreenDef), eyebrow: undefined };
 
 type Exits = { onSignOut?: () => void; onOpenDataExport?: () => void; onOpenDeleteAccount?: () => void };
+
+const MENU: ActionMenuOption[] = [
+  { key: 'export', label: 'Download my data', icon: 'download-outline' },
+  { key: 'delete', label: 'Delete my account', icon: 'trash-outline', destructive: true },
+  { key: 'support', label: ESCAPE_COPY.support, icon: 'mail-outline' },
+  { key: 'signOut', label: ESCAPE_COPY.signOut, icon: 'log-out-outline' },
+];
+
+/** FIXAGE3 R9 (#AGE-R9-LABEL): the question's one way out, opening the four rows (training 6.2: five actions). */
+function AccountAndSupport(exits: Exits) {
+  const [open, setOpen] = useState(false);
+  const { s, palette } = useConsultationStyles();
+  const support = useSupportEmail(CONSULT_SUPPORT_SUBJECT);
+  const run: Record<string, (() => void) | undefined> = {
+    export: exits.onOpenDataExport,
+    delete: exits.onOpenDeleteAccount,
+    support: () => void support.open(),
+    signOut: exits.onSignOut && (() =>
+      Alert.alert(ESCAPE_COPY.signOutTitle, ESCAPE_COPY.signOutBody, [
+        { text: ESCAPE_COPY.cancel, style: 'cancel' },
+        { text: ESCAPE_COPY.signOut, style: 'destructive', onPress: exits.onSignOut },
+      ])),
+  };
+  return (
+    <View style={{ marginTop: 24 }}>
+      <TextLink label="Account and support" onPress={() => setOpen(true)} testID="age-account-support" />
+      <SupportEmailFallback handle={support} textStyle={s.body} linkColor={palette.accentText} testID="consult-support-fallback" />
+      <ActionMenu visible={open} options={MENU.filter((o) => run[o.key])} onSelect={(key) => run[key]?.()} onClose={() => setOpen(false)} />
+    </View>
+  );
+}
 
 export default function AgeCheckScreen({ onConfirmed, ...exits }: { onConfirmed: () => void } & Exits) {
   const [answers, setAnswers] = useState<Answers>({});
@@ -75,11 +109,15 @@ export default function AgeCheckScreen({ onConfirmed, ...exits }: { onConfirmed:
       onNext={(patch) => void save(patch)}
       onBack={null}
       onFinishLater={null}
-      escape={
-        <EscapeRow onSignOut={exits.onSignOut}>
-          {exits.onOpenDataExport ? <TextLink label="Download my data" onPress={exits.onOpenDataExport} testID="age-data-export" /> : null}
-          {exits.onOpenDeleteAccount ? <TextLink label="Delete my account" onPress={exits.onOpenDeleteAccount} testID="age-delete-account" /> : null}
-        </EscapeRow>
+      escape={(stopped) =>
+        stopped ? (
+          <EscapeRow onSignOut={exits.onSignOut}>
+            {exits.onOpenDataExport ? <TextLink label="Download my data" onPress={exits.onOpenDataExport} testID="age-data-export" /> : null}
+            {exits.onOpenDeleteAccount ? <TextLink label="Delete my account" onPress={exits.onOpenDeleteAccount} testID="age-delete-account" /> : null}
+          </EscapeRow>
+        ) : (
+          <AccountAndSupport {...exits} />
+        )
       }
     />
   );
