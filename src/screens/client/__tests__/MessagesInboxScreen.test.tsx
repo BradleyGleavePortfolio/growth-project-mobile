@@ -74,7 +74,7 @@ const http = (failing: string[] = []) => mockGet.mockImplementation(async (u: st
   return { data: ROUTES[u] };
 });
 const flat = (el: { props: object }) => StyleSheet.flatten((el.props as { style?: StyleProp<ViewStyle> }).style) as unknown as Record<string, unknown>;
-const COACH_LABEL = 'Sam Carter, your coach, 2 unread. Yes, move it to Friday.';
+const COACH_LABEL = 'Sam, your coach, 2 unread. Yes, move it to Friday.';
 const ROMAN_LABEL = 'Roman, your assistant, 36 left today';
 
 async function show() {
@@ -100,7 +100,7 @@ describe('Messages list, client with a coach', () => {
     expect(await u.findByLabelText(COACH_LABEL)).toBeTruthy();
     expect(u.getByRole('header', { name: 'Messages' })).toBeTruthy();
     expect(u.getByText('Your coach')).toBeTruthy();
-    expect(u.getByText('Sam Carter')).toBeTruthy();
+    expect(u.getByText('Sam')).toBeTruthy();
     expect(u.getByText('S')).toBeTruthy();
     expect(u.getByTestId('inbox-unread')).toBeTruthy();
     expect(u.getByText('2')).toBeTruthy();
@@ -130,8 +130,8 @@ describe('Messages list, client with a coach', () => {
 
   it.each([
     ['/v1/clients/me/coach', 'Your coach, 2 unread. Yes, move it to Friday.', ROMAN_LABEL],
-    ['/messages/unread-count', 'Sam Carter, your coach. Yes, move it to Friday.', ROMAN_LABEL],
-    ['inbox', 'Sam Carter, your coach, 2 unread', ROMAN_LABEL],
+    ['/messages/unread-count', 'Sam, your coach. Yes, move it to Friday.', ROMAN_LABEL],
+    ['inbox', 'Sam, your coach, 2 unread', ROMAN_LABEL],
     ['/me/roman/usage', COACH_LABEL, 'Roman, your assistant'],
   ])('a failed %s hides only its own part', async (failed, coachLabel, romanLabel) => {
     http([failed]);
@@ -173,7 +173,7 @@ describe('Messages list, client with a coach', () => {
     mockInbox.mockResolvedValue({ items: [thread({ unread_count: 0, last_message: { ...thread().last_message!, is_mine: true, preview: 'Thanks' } })], next_cursor: null, total_unread: 0 });
     mockGet.mockImplementation(async (url: string) => ({ data: url === '/messages/unread-count' ? { total: 0 } : ROUTES[url] }));
     await act(async () => mockRefocus());
-    expect(await u.findByLabelText('Sam Carter, your coach. You: Thanks')).toBeTruthy();
+    expect(await u.findByLabelText('Sam, your coach. You: Thanks')).toBeTruthy();
     expect(u.queryByTestId('inbox-unread')).toBeNull();
   });
 
@@ -181,7 +181,7 @@ describe('Messages list, client with a coach', () => {
     mockFlags.messaging_core_v2 = false;
     mockRoman.mockReturnValue(false);
     const { u } = await show();
-    expect(await u.findByLabelText('Sam Carter, your coach, 2 unread')).toBeTruthy();
+    expect(await u.findByLabelText('Sam, your coach, 2 unread')).toBeTruthy();
     expect(mockInbox).not.toHaveBeenCalled();
     expect(mockGet).not.toHaveBeenCalledWith('/me/roman/usage');
     expect(u.queryByTestId('inbox-roman')).toBeNull();

@@ -102,6 +102,7 @@ function Rise({ index, children }: { index: number; children: React.ReactNode })
   const reduce = useReducedMotion();
   const enter = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    // Runs again if the setting is read after mount: the 150 ms fade replaces the rise (nothing has moved yet).
     Animated.timing(enter, {
       toValue: 1,
       duration: reduce ? 150 : 250,
@@ -109,9 +110,7 @@ function Rise({ index, children }: { index: number; children: React.ReactNode })
       easing: Easing.bezier(...motion.easing.decel),
       useNativeDriver: true,
     }).start();
-    // Once per mount: a card rises when it first appears.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enter, index, reduce]);
   const lift = reduce ? 0 : enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] });
   return <Animated.View testID={`inbox-rise-${index}`} style={{ opacity: enter, transform: [{ translateY: lift }] }}>{children}</Animated.View>;
 }
@@ -135,7 +134,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
       <>
         <Rise index={0}>
           <View style={[s.card, s.hero, { backgroundColor: sc.accent }]} testID="inbox-coach">
-            <Text style={[s.over, { color: sc.textOnMastheadMuted }]}>Your coach</Text>
+            <Text style={[s.over, { color: gold[300] }]}>Your coach</Text>
             <Text accessibilityRole="header" style={[s.heroTitle, { color: sc.textOnAccent }]}>No coach connected</Text>
             <Text style={[s.body, { color: sc.textOnAccent }]}>Messages open once you join a coach. Need help finding one? Contact support.</Text>
             <View style={s.actions}>
@@ -181,22 +180,22 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
       </View>
     );
   } else {
-    const who = coach.name ?? 'Message your coach'; // Home's label when the name is unknown
+    const first = firstName(coach.name); // first name, as Home's "Message Sam"
     const unread = coach.unread > 99 ? '99+' : String(coach.unread);
-    const coachLabel = `${coach.name ? `${coach.name}, your coach` : 'Your coach'}${coach.unread > 0 ? `, ${unread} unread` : ''}${coach.preview ? `. ${coach.preview}` : ''}`;
-    const privacy = `${firstName(coach.name) ?? 'Your coach'} never sees this chat, with one safety exception.`;
+    const coachLabel = `${first ? `${first}, your coach` : 'Your coach'}${coach.unread > 0 ? `, ${unread} unread` : ''}${coach.preview ? `. ${coach.preview}` : ''}`;
+    const privacy = `${first ?? 'Your coach'} never sees this chat, with one safety exception.`;
     body = (
       <>
         <Rise index={0}>
           <Pressable onPress={tap(() => navigation.navigate('Messages'))} accessibilityRole="button" accessibilityLabel={coachLabel} testID="inbox-coach" style={({ pressed }) => [s.card, s.hero, { backgroundColor: sc.accent }, pressed && s.pressed]}>
             <View style={s.top}>
               <View style={[s.mono, { backgroundColor: sc.textOnAccent }]}>
-                {coach.name ? <Text style={[s.monoText, { color: sc.accent }]}>{coach.name.charAt(0).toUpperCase()}</Text>
+                {first ? <Text style={[s.monoText, { color: sc.accent }]}>{first.charAt(0).toUpperCase()}</Text>
                   : <Ionicons name="person-outline" size={24} color={sc.accent} />}
               </View>
               <View style={s.who}>
-                <Text style={[s.over, { color: sc.textOnMastheadMuted }]}>Your coach</Text>
-                <Text style={[s.heroTitle, { color: sc.textOnAccent }]}>{who}</Text>
+                <Text style={[s.over, { color: gold[300] }]}>Your coach</Text>
+                <Text style={[s.heroTitle, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
               </View>
               {coach.unread > 0 ? (
                 <View style={[s.unread, { borderColor: gold[300] }]} testID="inbox-unread">
@@ -263,7 +262,7 @@ const s = StyleSheet.create({
   monoText: { ...typography.h2 },
   ringed: { borderWidth: 2, borderRadius: radius.chip, padding: 2 },
   unread: { minWidth: layout.touchMin, minHeight: layout.touchMin, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
-  unreadText: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular', fontVariant: ['tabular-nums'] },
+  unreadText: { ...typography.h3, fontVariant: ['tabular-nums'] },
   preview: { ...typography.body, fontSize: 17, lineHeight: 26 },
   left: { alignItems: 'flex-end' },
   count: { ...typography.h1, fontVariant: ['tabular-nums'] },
@@ -276,5 +275,5 @@ const s = StyleSheet.create({
   actionText: { ...typography.bodyMd, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', minHeight: layout.rowMinHeight, paddingVertical: 12 },
   rowText: { ...typography.body, flex: 1 },
-  privacy: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, paddingHorizontal: 12, justifyContent: 'center' },
+  privacy: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, paddingHorizontal: 4, justifyContent: 'center' },
 });
