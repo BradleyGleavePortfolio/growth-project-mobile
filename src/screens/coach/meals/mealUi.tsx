@@ -1,6 +1,6 @@
 /** MEALBUILD (MOCK-K5 Style C): the meal-plan screens' masthead, tabs, numbers and states (Style C roles, theme/README). */
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -129,10 +129,10 @@ export function FirstCard({ title, body, children }: { title: string; body: stri
 }
 
 /** Masthead choice chips, one picked (cream fill, ink text); selection haptic. */
-export function Chips<T extends string | number>({ items, value, onChange, label }: { items: [T, string][]; value: T; onChange: (v: T) => void; label: string }) {
+export function Chips<T extends string | number>({ items, value, onChange, label, scroll }: { items: [T, string][]; value: T; onChange: (v: T) => void; label: string; scroll?: boolean }) {
   const { semanticColors: sc } = useTheme();
-  return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={s.chips}>
+  const row = (
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[s.chips, scroll && s.oneRow]}>
       {items.map(([key, text]) => {
         const on = key === value;
         return (
@@ -145,6 +145,7 @@ export function Chips<T extends string | number>({ items, value, onChange, label
       })}
     </View>
   );
+  return scroll ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.bleed} contentContainerStyle={s.bleedPad}>{row}</ScrollView> : row;
 }
 
 export const mealStyles = StyleSheet.create({
@@ -158,7 +159,8 @@ export const mealStyles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent', borderRadius: radius.card, padding: 20, gap: 12 },
   cardTitle: { ...typography.h2, fontSize: 26, lineHeight: 33 },
   ghost: { height: 112 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }, oneRow: { flexWrap: 'nowrap' },
+  bleed: { marginHorizontal: -layout.gutter }, bleedPad: { paddingHorizontal: layout.gutter },
   chip: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: 16, borderWidth: 1, borderRadius: radius.button },
   notice: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
 });

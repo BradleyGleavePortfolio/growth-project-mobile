@@ -71,9 +71,10 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
   return (
     <Screen edges={['bottom']} contentStyle={styles.content} footer={
       <PrimaryButton label={client ? `Assign to ${first}` : 'Assign to a client'} haptic={false} disabled={!client || !p || !!same || !!tie}
+        accessibilityHint={client ? undefined : 'Pick a client first'}
         loading={assign.isPending} onPress={() => void submit()} testID="assign-submit" />}>
       <Masthead title="Assign to a client" sub={p ? `${p.name} · ${num(kcal)} kcal a day` : undefined} onBack={() => navigation.goBack()}>
-        <Chips label="Starts" items={startChips} value={start} onChange={setStart} />
+        <Chips label="Starts" items={startChips} value={start} onChange={setStart} scroll />
         <Chips label="Ends" items={ENDS} value={weeks} onChange={setWeeks} />
         <Text style={[typography.body, styles.range, { color: sc.textOnAccent }]}>{`From ${fmt(starts)}${ends ? ` to ${fmt(ends)}` : ', no end date'}`}</Text>
       </Masthead>
