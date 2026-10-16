@@ -4,10 +4,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors, layout, radius, typography } from '../../../theme/tokens';
+import { colors, gold, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui/layout/Screen';
 import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
-import { Skeleton } from '../../../ui/skeletons/Skeleton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isConnectionFailure } from '../../../ui/states/QuietStates';
 import { toIsoDate } from '../../../api/programsApi';
@@ -71,11 +70,15 @@ export function ProgramsTabs({ value, onChange, onDark = false }: { value: Progr
   );
 }
 
-export const Loading = ({ label }: { label: string }) => (
-  <View accessible accessibilityLabel={label} style={s.stack}>
-    {[0, 1, 2].map((i) => <Skeleton key={i} width="100%" height={112} borderRadius={radius.card} />)}
-  </View>
-);
+/** K5 C loading: static card placeholders (no shimmer); the reader hears the label once. */
+export function Loading({ label }: { label: string }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <View accessible accessibilityLabel={label} style={s.stack}>
+      {[0, 1, 2].map((i) => <View key={i} style={[s.card, s.ghost, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} />)}
+    </View>
+  );
+}
 
 /** K5 error: a cream card, a Cormorant line, Try again (the one filled button), Contact support. One error haptic. */
 export function LoadFailed({ title, error, onRetry, retrying }: { title: string; error: unknown; onRetry: () => void; retrying?: boolean }) {
@@ -95,7 +98,7 @@ export function LoadFailed({ title, error, onRetry, retrying }: { title: string;
 
 /** Gold-ground note (offline, conflicts); ink text on the fixed light ground in both schemes. */
 export const Notice = ({ icon, children }: { icon: keyof typeof Ionicons.glyphMap; children: React.ReactNode }) => (
-  <View accessibilityLiveRegion="polite" style={[s.notice, { backgroundColor: colors.warningBg }]}>
+  <View accessibilityLiveRegion="polite" style={[s.notice, { backgroundColor: colors.warningBg, borderColor: gold[200] }]}>
     <Ionicons name={icon} size={20} color={colors.warningInk} />
     <Text style={[typography.bodySmall, s.fill, { color: colors.ink }]}>{children}</Text>
   </View>
@@ -126,6 +129,7 @@ export const mealStyles = StyleSheet.create({
   pressed: { opacity: 0.6 }, stack: { gap: 12 }, fill: { flex: 1 },
   card: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent', borderRadius: radius.card, padding: 20, gap: 12 },
   cardTitle: { ...typography.h2, fontSize: 26, lineHeight: 33 },
-  notice: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: radius.card },
+  ghost: { height: 112 },
+  notice: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
 });
 const s = mealStyles;
