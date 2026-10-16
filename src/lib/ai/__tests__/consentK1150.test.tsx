@@ -1,33 +1,36 @@
 /**
  * CONSENT-K1 (agent 150): the owner's K1 rulings on the consent screens, one table.
  * Owner (10-15, verbatim): "k1-14 - hide until they have a coach" / "k1-12-13 - keep both" / "k1-5 - approved".
- * K1-14: Settings shows the Coach sharing row only while the server says the client has a coach (GET /consent/me).
+ * K1-14: Settings shows the Coach sharing row only while the server says the client has a coach (GET /consent/me), read
+ *   each time Settings comes into view; the same mounted Settings follows a link gained, a link lost and a network recovery.
  * K1-12 / K1-13: "Before you join a coach" and the device line stay as approved.
  * K1-5: a client with no coach reads "Your plan and your logs stay as they are." in the delete-all confirmation.
  */
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { act, fireEvent, render, within } from '@testing-library/react-native';
-import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { NavigationContainer, createNavigationContainerRef, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import SettingsScreen from '../../../screens/client/SettingsScreen';
 import RomanConversationsScreen from '../../../screens/settings/RomanConversationsScreen';
 import { ROMAN_CHATS_COPY } from '../../../screens/settings/romanChatsCopy';
 import { consentScreenCopy } from '../../consultation/copy';
-import { clearUserCache, setUserCache } from '../../userCache';
+import { clearUserCache, patchUserCache, setUserCache } from '../../userCache';
+import { authEvents } from '../../../utils/authEvents';
+import { notificationsApi } from '../../../services/api';
 import { authEpoch } from '../../../services/accountBinding';
 import type { CurrentUser } from '../../../hooks/useCurrentUser';
 import type { RomanChatsApi } from '../../../api/romanChatsApi';
 
 const mockGet = jest.fn();
-let mockUser: CurrentUser = { id: 'client-1', email: 'a@example.invalid' };
 jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: { get: (...a: unknown[]) => mockGet(...a) },
   profileApi: { update: jest.fn(async () => ({})) },
   notificationsApi: { updatePreferences: jest.fn(async () => ({})), getPreferences: jest.fn(async () => ({ data: {} })) },
 }));
-jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 jest.mock('../../../screens/day-one/answers', () => ({ readDayOneAnswers: jest.fn(async () => null) }));
 jest.mock('../../../services/authActions', () => ({ signOut: jest.fn(), refreshProfile: jest.fn(), prepareSignOutConfirm: jest.fn(async () => null) }));
@@ -35,7 +38,6 @@ jest.mock('../../../hooks/useBiometricGate', () => ({
   isBiometricSupportedOnDevice: jest.fn(async () => false), getBiometricOptIn: jest.fn(async () => false), setBiometricOptIn: jest.fn(async () => {}),
 }));
 jest.mock('../../../screens/client/settings/ClientTutorialSetting', () => () => null);
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 jest.mock('../../../utils/haptics', () => ({ lightTap: jest.fn(), mediumTap: jest.fn(), warningTap: jest.fn(), successTap: jest.fn(), selectionTap: jest.fn() }));
@@ -56,11 +58,47 @@ const server = (coach: 'yes' | 'none' | 'down') =>
 /** Lets the server read finish (a macrotask, after every pending promise). */
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
-async function settings() {
-  const view = await render(<SettingsScreen navigation={navigation} />);
+const CLIENT: CurrentUser = { id: 'client-1', email: 'a@example.invalid', role: 'student' };
+const COACHED: CurrentUser = { ...CLIENT, coach_id: 'coach-1' };
+
+// The client app's shape: Settings sits on the You tab's stack and stays mounted while the client visits another tab
+// or opens a screen over it (ClientNavigator More stack).
+const Tabs = createBottomTabNavigator();
+const More = createNativeStackNavigator();
+const nav = createNavigationContainerRef<ParamListBase>();
+const Plain = () => null;
+const YouTab = () => (
+  <More.Navigator screenOptions={{ headerShown: false }}>
+    <More.Screen name="MoreHome" component={Plain} />
+    <More.Screen name="Settings" component={SettingsScreen} />
+    <More.Screen name="AddCoachCode" component={Plain} />
+    <More.Screen name="CoachSharing" component={Plain} />
+  </More.Navigator>
+);
+const go = async (name: string, params?: object) => {
+  await act(async () => { nav.navigate(name, params); });
   await settle();
+};
+
+/** Opens Settings for `user` and waits for the server read; `reads` counts GET /consent/me so far. */
+async function settings(user: CurrentUser) {
+  await setUserCache(user);
+  const view = await render(
+    <NavigationContainer ref={nav}>
+      <Tabs.Navigator screenOptions={{ headerShown: false }}>
+        <Tabs.Screen name="You" component={YouTab} />
+        <Tabs.Screen name="Food" component={Plain} />
+      </Tabs.Navigator>
+    </NavigationContainer>,
+  );
+  await go('You', { screen: 'Settings' });
+  const reads = async (n: number) => {
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(n));
+    await settle();
+  };
+  await reads(1);
   const privacy = () => within(view.getByTestId('settings-section-privacy'));
-  return { view, privacy, row: () => view.queryByTestId('settings-coach-sharing') };
+  return { view, privacy, reads, row: () => view.queryByTestId('settings-coach-sharing') };
 }
 
 /** Opens the delete-all confirmation of Your conversations with Roman for `user` and checks its body. */
@@ -83,12 +121,20 @@ async function expectDeleteAllBody(user: CurrentUser | null, body: string) {
 const NO_COACH_BODY =
   'This permanently deletes every conversation you have had with Roman, from every day. It cannot be undone. Your plan and your logs stay as they are.';
 
+/** B1 (Sol, LS-K1C): blur and refocus the same mounted Settings; every focus reads once, nothing else polls. */
+const FOCUS: { name: string; user: CurrentUser; first: 'yes' | 'none' | 'down'; shown: boolean; next: 'yes' | 'none'; after: boolean }[] = [
+  { name: 'link lost on the server: the row goes on return', user: COACHED, first: 'yes', shown: true, next: 'none', after: false },
+  { name: 'link gained outside the app: the row comes on return', user: CLIENT, first: 'none', shown: false, next: 'yes', after: true },
+  { name: 'network recovery, no coach link cached: the row comes on return', user: CLIENT, first: 'down', shown: false, next: 'yes', after: true },
+  { name: 'network recovery, coached: the row shows from the coach link, then follows the server', user: COACHED, first: 'down', shown: true, next: 'none', after: false },
+];
+
 const ROWS: { row: string; check: () => Promise<void> }[] = [
   {
     row: 'K1-14: a client with no coach (server 400) sees no Coach sharing row; the rest of Privacy and data stays',
     check: async () => {
       server('none');
-      const { privacy, row } = await settings();
+      const { privacy, row } = await settings(CLIENT);
       expect(row()).toBeNull();
       for (const label of ['Trust & Privacy', 'Blocked users', 'My data']) expect(privacy().getByText(label)).toBeTruthy();
       expect(privacy().queryByText('Coach sharing')).toBeNull();
@@ -97,49 +143,60 @@ const ROWS: { row: string; check: () => Promise<void> }[] = [
   {
     row: 'K1-14: a client with a coach sees the row, and it opens Coach sharing',
     check: async () => {
-      mockUser = { ...mockUser, coach_id: 'coach-1' };
       server('yes');
-      const { view, row } = await settings();
+      const { view, row } = await settings(COACHED);
       expect(row()).toBeTruthy();
       await fireEvent.press(view.getByLabelText('Coach sharing'));
-      expect(navigation.navigate).toHaveBeenLastCalledWith('CoachSharing');
+      await waitFor(() => expect(nav.getCurrentRoute()?.name).toBe('CoachSharing'));
     },
   },
   {
-    row: 'K1-14: the server decides, not the cached coach link',
+    row: 'K1-14: the server decides over the cached coach link, both ways',
     check: async () => {
-      mockUser = { ...mockUser, coach_id: 'coach-stale' };
       server('none');
-      expect((await settings()).row()).toBeNull();
-      mockUser = { id: 'client-1', email: 'a@example.invalid' };
+      const stale = await settings({ ...CLIENT, coach_id: 'coach-stale' });
+      expect(stale.row()).toBeNull();
+      await stale.view.unmount();
+      mockGet.mockClear();
       server('yes');
-      expect((await settings()).row()).toBeTruthy();
+      expect((await settings(CLIENT)).row()).toBeTruthy();
     },
   },
+  ...FOCUS.map(({ name, user, first, shown, next, after }) => ({
+    row: `K1-14 on return to the same Settings (another tab): ${name}`,
+    check: async () => {
+      server(first);
+      const { reads, row } = await settings(user);
+      expect(!!row()).toBe(shown);
+      await go('Food');
+      server(next);
+      await go('You');
+      await reads(2);
+      expect(!!row()).toBe(after);
+      expect(notificationsApi.getPreferences).toHaveBeenCalledTimes(1); // the same Settings, never remounted
+    },
+  })),
   {
-    row: 'K1-14: joining a coach shows it on the next read (the join updates the account), leaving hides it on the next open',
+    row: 'K1-14: joining with Add a coach code shows the row back on Settings',
     check: async () => {
       server('none');
-      const { view, row } = await settings();
+      const { reads, row } = await settings(CLIENT);
       expect(row()).toBeNull();
+      await go('AddCoachCode');
       server('yes');
-      mockUser = { ...mockUser, coach_id: 'coach-1' };
-      await view.rerender(<SettingsScreen navigation={navigation} />);
-      await settle();
+      await act(async () => { await patchUserCache({ coach_id: 'coach-1' }); authEvents.emit('login'); });
+      await act(async () => { nav.goBack(); });
+      await reads(2);
       expect(row()).toBeTruthy();
-      await view.unmount();
-      server('none');
-      expect((await settings()).row()).toBeNull();
     },
   },
   {
     row: 'K1-14: a failed read shows no row and no error; the read is the caller\u2019s own (GET /consent/me, no ids sent)',
     check: async () => {
       server('down');
-      const { view, row } = await settings();
+      const { view, row } = await settings(CLIENT);
       expect(row()).toBeNull();
       expect(view.queryByText(/could not load/i)).toBeNull();
-      expect(mockGet).toHaveBeenCalledWith('/consent/me');
       expect(mockGet.mock.calls.every((c) => c.length === 1 && c[0] === '/consent/me')).toBe(true);
     },
   },
@@ -184,7 +241,6 @@ const ROWS: { row: string; check: () => Promise<void> }[] = [
 describe('the owner K1 rulings on the consent screens (CONSENT-K1)', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockUser = { id: 'client-1', email: 'a@example.invalid' };
     await clearUserCache();
   });
 

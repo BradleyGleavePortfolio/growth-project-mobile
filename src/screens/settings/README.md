@@ -138,8 +138,8 @@ Health Connect) are not covered by the switches: the coach reads that data throu
 `wearable-samples.service.ts`), and data already shared stays after a disconnect (FW-BODY B2). The **Connected devices** row
 opens `Connections` on the same More stack and shows where the More screen shows that row (iPhone, Health Connect builds,
 tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`. The Settings row shows only while the server says the
-client has a coach (`GET /consent/me`; 400 = none), read when Settings opens and again when the account's coach link changes;
-a failed read keeps the last answer (owner K1-14, "hide until they have a coach"; test `src/lib/ai/__tests__/consentK1150.test.tsx`).
+client has a coach (`GET /consent/me`; 400 = none), read each time Settings comes into view (`useFocusEffect`); until the
+first answer it follows the account's own coach link, and a failed read keeps the last answer (owner K1-14, "hide until they have a coach"; test `src/lib/ai/__tests__/consentK1150.test.tsx`).
 
 ## Notification categories (`NotificationPreferencesScreen.tsx`)
 

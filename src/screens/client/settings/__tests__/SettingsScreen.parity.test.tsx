@@ -56,6 +56,7 @@ jest.mock('../../../../tutorial/tutorialStore', () => ({
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ getParent: () => ({ navigate: mockParentNavigate }) }),
+  useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]),
 }));
 jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: { get consultationOnboarding() { return mockRomanEnabled; },

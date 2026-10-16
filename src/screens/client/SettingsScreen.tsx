@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -31,7 +31,7 @@ import ClientTutorialSetting from './settings/ClientTutorialSetting';
 import { featureFlags } from '../../config/featureFlags';
 import { coachSharingCopy } from '../../components/coachSharing/coachSharingCopy';
 import { readCoachSharing } from '../../api/coachSharingApi';
-import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useFocusEffect, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { layout, radius, typography, withAlpha } from '../../theme/tokens';
 import { Headline, Overline, PrimaryButton, QuietRow, Screen, ScreenTopBar, TextLink } from '../../ui';
 import SettingsSection from './settings/SettingsSection';
@@ -130,18 +130,20 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
     return () => { mounted = false; };
   }, [currentUser?.id]);
 
-  // K1-14 (owner "hide until they have a coach"): the Coach sharing row shows only while the server says this
-  // client has a coach (GET /consent/me, the read Coach sharing makes; 400 = none). Read again when the account or
-  // its coach link changes (a join emits 'login'); a failed read keeps the last answer.
-  const [hasCoach, setHasCoach] = useState(false);
-  useEffect(() => {
-    if (!currentUser?.id) return;
+  // K1-14 (owner "hide until they have a coach"): the Coach sharing row follows the server (GET /consent/me, the read
+  // Coach sharing makes; 400 = none), read each time Settings comes into view (back from Add a coach code, another tab
+  // or screen). Until the first answer it follows the account's own coach link, as Trust Center does; a failed read
+  // keeps the last answer.
+  const [serverHasCoach, setServerHasCoach] = useState<boolean | null>(null);
+  const hasCoach = serverHasCoach ?? !!currentUser?.coach_id;
+  useFocusEffect(useCallback(() => {
+    if (!currentUser?.id) return undefined;
     let live = true;
     void readCoachSharing().then((read) => {
-      if (live && read.kind !== 'error') setHasCoach(read.kind === 'ok');
+      if (live && read.kind !== 'error') setServerHasCoach(read.kind === 'ok');
     });
     return () => { live = false; };
-  }, [currentUser?.id, currentUser?.coach_id]);
+  }, [currentUser?.id]));
 
   const checkInTime = checkInChoice?.userId === currentUser?.id ? checkInChoice?.time : null;
   const checkInLabel = checkInTime
