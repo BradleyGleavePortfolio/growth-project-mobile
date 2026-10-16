@@ -40,8 +40,9 @@ App Review.
 - Builds and submissions: expo.dev → the-growth-project → tgp-health-and-wellness → Builds (profile `testing`).
 - Updates: expo.dev → the same project → Updates → channel `testing`. On the phone an update downloads on one launch and applies
   on the next cold start.
-- TestFlight: version 99.0.0; internal testers install the newest build. A failed submission leaves the build on expo.dev
-  only (later runs still send it updates): fix the cause shown there, then `eas submit --profile testing --platform ios --id
+- TestFlight: version 99.0.0; internal testers install the newest build. It is the same app as the App Store one, so it
+  replaces it on that phone (reinstall from the App Store to go back). A failed submission leaves the build on expo.dev only
+  (later runs still send it updates): fix the cause shown there, then `eas submit --profile testing --platform ios --id
   <build id>`.
 
 ## The EAS Free build limit
