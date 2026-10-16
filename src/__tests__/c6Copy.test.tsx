@@ -9,8 +9,15 @@ import { RespirationCard } from '../screens/client/wearables/cards/RespirationCa
 import { testColors } from '../screens/client/wearables/recoveryTestColors';
 import type { BloodworkReviewQueueItem, BloodworkReviewState } from '../types/bloodwork';
 
+jest.mock('react', () => {
+  const actual = jest.requireActual('react');
+  return { ...actual, useState: jest.fn(actual.useState) };
+});
 jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: jest.requireActual('../screens/client/wearables/recoveryTestColors').testColors }),
+  useTheme: () => ({
+    colors: jest.requireActual('../screens/client/wearables/recoveryTestColors').testColors,
+    semanticColors: jest.requireActual('../theme/tokens').lightTokens,
+  }),
 }));
 jest.mock('../config/featureFlags', () => ({ isFeatureEnabled: () => true }));
 jest.mock('../components/HapticPressable', () => ({
@@ -62,7 +69,10 @@ it('keeps all changed health copy, spoken labels and state alerts within C-6', a
     submittedAt: '2026-10-15T12:00:00Z', reviewState,
     flaggedMarkerCount: 0, hasUnreviewedAIDraft: false,
   }));
-  jest.spyOn(React, 'useState').mockImplementationOnce(() => [items, jest.fn()]);
+  const useState = jest.requireActual<typeof import('react')>('react').useState;
+  jest.mocked(React.useState).mockImplementation((initial?: unknown) =>
+    useState(Array.isArray(initial) && initial.length === 0 ? items : initial),
+  );
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const queue = await render(<BloodworkReviewQueueScreen />);
   expect(queue.getByText('Doctor referral')).toBeTruthy();
