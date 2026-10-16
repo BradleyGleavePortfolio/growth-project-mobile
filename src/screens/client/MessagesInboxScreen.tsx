@@ -195,7 +195,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
               </View>
               <View style={s.who}>
                 <Text style={[s.over, { color: gold[300] }]}>Your coach</Text>
-                <Text style={[s.heroTitle, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
+                <Text style={[s.title, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
               </View>
               {coach.unread > 0 ? (
                 <View style={[s.unread, { borderColor: gold[300] }]} testID="inbox-unread">
@@ -252,16 +252,17 @@ const s = StyleSheet.create({
   card: { borderRadius: radius.card, padding: 20, gap: 12 },
   hero: { borderRadius: radius.sheet },
   pressed: { opacity: 0.85 },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   who: { flex: 1, gap: 4 },
   shrink: { flexShrink: 1 },
   over: { ...typography.eyebrow, lineHeight: 16 },
   heroTitle: { ...typography.h1 },
   title: { ...typography.h2 },
-  mono: { width: 52, height: 52, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
+  mono: { width: 48, height: 48, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   monoText: { ...typography.h2 },
   ringed: { borderWidth: 2, borderRadius: radius.chip, padding: 2 },
-  unread: { minWidth: layout.touchMin, minHeight: layout.touchMin, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
+  // A badge, not a tap target (the whole card is): 40 pt as drawn, so a long first name keeps its line.
+  unread: { minWidth: 40, minHeight: 40, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
   unreadText: { ...typography.h3, fontVariant: ['tabular-nums'] },
   preview: { ...typography.body, fontSize: 17, lineHeight: 26 },
   left: { alignItems: 'flex-end' },

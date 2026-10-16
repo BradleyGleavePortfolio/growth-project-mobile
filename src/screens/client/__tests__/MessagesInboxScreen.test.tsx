@@ -112,7 +112,7 @@ describe('Messages list, client with a coach', () => {
     expect(u.getByText('left today')).toBeTruthy();
     expect(u.getByText('Ask Roman anything.')).toBeTruthy();
     expect(u.getByLabelText('Sam never sees this chat, with one safety exception.')).toBeTruthy();
-    expect(flat(u.getByTestId('inbox-unread'))).toMatchObject({ borderColor: '#D4B96B', minWidth: 44, minHeight: 44 });
+    expect(flat(u.getByTestId('inbox-unread'))).toMatchObject({ borderColor: '#D4B96B', minWidth: 40, minHeight: 40 });
   });
 
   it('every tap lands on a real screen, with a selection haptic on each row', async () => {
