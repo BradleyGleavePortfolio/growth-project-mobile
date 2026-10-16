@@ -82,10 +82,10 @@ function PlanCard({ plan, clients, onPress }: { plan: DailyMealPlan; clients?: n
       </View>
       {plan.notes ? <Text style={[styles.note, { color: sc.textPrimary }]}>{`“${plan.notes}”`}</Text> : null}
       <View style={styles.row}>
-        <View style={styles.row} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <View style={styles.dashes} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
           {plan.slots.slice(0, 8).map((x) => <View key={x.id} style={[styles.dash, { backgroundColor: sc.data.moss }]} />)}
         </View>
-        <Text style={[typography.bodySmall, ms.fill, { color: sc.textMuted }]}>
+        <Text style={[typography.bodySmall, styles.grow, { color: sc.textMuted }]}>
           {`${count(plan.slots.length, 'meal', 'meals')} · protein ${num(t.protein_g)} g`}
         </Text>
         {people ? <Text style={[typography.bodySmall, styles.people, { color: sc.accentText }]}>{people}</Text> : null}
@@ -95,11 +95,11 @@ function PlanCard({ plan, clients, onPress }: { plan: DailyMealPlan; clients?: n
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 12 }, plan: { gap: 8 },
+  content: { gap: 12 }, plan: { gap: 8, padding: 16 }, grow: { flexGrow: 1 }, dashes: { flexDirection: 'row', gap: 4 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
-  nums: { fontVariant: ['tabular-nums'] },
+  nums: { fontVariant: ['lining-nums', 'tabular-nums'] },
   note: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 19, lineHeight: 25 },
-  dash: { width: 18, height: 6, borderRadius: radius.chip },
+  dash: { width: 14, height: 6, borderRadius: radius.chip },
   people: { fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
   meal: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16 },
 });
