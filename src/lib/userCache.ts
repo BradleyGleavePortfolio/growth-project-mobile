@@ -178,6 +178,12 @@ export async function setUserCache(user: CurrentUser): Promise<void> {
 export async function patchUserCache(patch: Partial<CurrentUser>): Promise<void> {
   if (!hydrated) await readUserCache();
   const existing = mirror;
+  // FIXAGE2 R7: the profile keeps one date of birth under both names (the
+  // server's date_of_birth and Edit Profile's dob), so a new date never
+  // leaves an older one behind for the age decision (lib/ageGate).
+  const p = patch.profile as { date_of_birth?: unknown; dob?: unknown } | undefined;
+  const dob = p?.date_of_birth !== undefined ? p.date_of_birth : p?.dob;
+  if (p && dob !== undefined) patch = { ...patch, profile: { ...p, date_of_birth: dob, dob } as CurrentUser['profile'] };
   const merged: CurrentUser = existing
     ? {
         ...existing,

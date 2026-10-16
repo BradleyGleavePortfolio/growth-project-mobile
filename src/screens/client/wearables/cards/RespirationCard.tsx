@@ -33,7 +33,7 @@ export function RespirationCard({ respiration, colors, revealDelay = 0 }: Respir
   const copy = !hasAny
     ? "Breathing and blood-oxygen appear once your tracker syncs overnight"
     : spo2NeedsAttention
-      ? `Your overnight readings are in. Blood oxygen has been dipping a little lower than usual — it may be worth mentioning to your clinician next time you chat.`
+      ? `Your overnight readings are in. Blood oxygen has been dipping a little lower than usual — it may be worth mentioning to your doctor next time you chat.`
       : 'Your breathing and blood oxygen look settled through the night';
 
   const spo2Color = spo2NeedsAttention ? RECOVERY_PALETTE.attention : colors.textPrimary;
