@@ -95,7 +95,7 @@ it('advertised version: the sentence names the coach and every sign-up sends the
   mockPolicy.mockResolvedValue({ data: { ...PRODUCTION, coach_sharing_notice: V1 } });
   const r = await signUpEverywhere(true);
   expect(r.notice).toBe(
-    'Joining shares your workouts, food logs, weigh-ins and check-ins with Bradley. Change this any time in Settings > Privacy.',
+    "Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Bradley. You can stop new Apple Health data in your phone's Apple Health permissions.",
   );
   expect(r.email).toMatchObject({ invite_code: 'GP-TEST1', coach_sharing_notice: V1 });
   expect(r.google).toMatchObject({ inviteCode: 'GP-TEST1', coachSharingNotice: V1 });

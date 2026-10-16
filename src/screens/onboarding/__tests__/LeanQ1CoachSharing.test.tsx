@@ -23,7 +23,7 @@ import LeanQ1GoalScreen from '../LeanQ1GoalScreen';
 
 const V1 = 'coach_sharing_join_v1';
 const SENTENCE =
-  'Joining shares your workouts, food logs, weigh-ins and check-ins with Alex Rivera. Change this any time in Settings > Privacy.';
+  "Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Alex Rivera. You can stop new Apple Health data in your phone's Apple Health permissions.";
 
 type Nav = React.ComponentProps<typeof LeanQ1GoalScreen>['navigation'];
 

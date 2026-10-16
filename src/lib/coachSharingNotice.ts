@@ -1,22 +1,26 @@
 /**
- * Coach sharing at join (B-SHARE-127). Every screen where a client joins a
- * coach prints one sentence directly above the button they already tap and
- * sends its version as `coach_sharing_notice` on the same request; the
- * backend records the four fitness shares inside the link only then
- * (backend #827). Shown and sent only when GET /auth/signup-policy
- * advertises exactly this version, so against the current production
- * backend nothing is shown or sent and joining is unchanged.
+ * Coach sharing at join (B-SHARE-127, SHARE-UNWIND). Every screen where a
+ * client joins a coach prints one sentence directly above the button they
+ * already tap and sends its version as `coach_sharing_notice` on the same
+ * request. Workouts, food logs, weigh-ins and check-ins always reach the
+ * current coach (owner #SHARE-SIMPLE / #SHARE-JOIN, backend #1061); the
+ * sentence says so, and names connected Apple Health / Health Connect data.
+ * Shown and sent only when GET /auth/signup-policy advertises exactly this
+ * version; otherwise nothing is shown or sent and joining is unchanged.
  */
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { authApi } from '../services/api';
 import { logger } from '../utils/logger';
 
 /** Names the sentence below. A new wording needs a new version on both sides. */
 export const COACH_SHARING_NOTICE_VERSION = 'coach_sharing_join_v1';
 
+/** W-SU-1 (owner #SHARE-JOIN op 1): Android says Health Connect where iPhone says Apple Health. */
 export function coachSharingNoticeText(coachName?: string | null): string {
   const who = coachName && coachName.trim() ? coachName.trim() : 'your coach';
-  return `Joining shares your workouts, food logs, weigh-ins and check-ins with ${who}. Change this any time in Settings > Privacy.`;
+  const health = Platform.OS === 'android' ? 'Health Connect' : 'Apple Health';
+  return `Joining shares your workouts, food logs, weigh-ins, check-ins and any ${health} data you connect with ${who}. You can stop new ${health} data in your phone's ${health} permissions.`;
 }
 
 /** This build's version when the policy body advertises it on the field this build sends; otherwise null. */

@@ -147,7 +147,7 @@ it('paid: the sharing sentence sits above Continue to payment; once me() shows t
   mockMe.mockResolvedValue({ data: { id: 'u-1', coach_id: 'coach-1' } });
   const ui = await render(<JoinPackageScreen join={PAID} onClose={onClose} />);
   const notice = await ui.findByTestId('coach-sharing-notice');
-  expect(notice.props.children).toMatch(/^Joining shares your workouts, food logs, weigh-ins and check-ins with Bradley\./);
+  expect(notice.props.children).toMatch(/^Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Bradley\./);
   await act(async () => {
     fireEvent.press(ui.getByTestId('join-package-pay'));
   });

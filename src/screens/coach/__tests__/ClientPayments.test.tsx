@@ -325,7 +325,7 @@ describe("entry and parity (COACH-PAY-M-130)", () => {
   const colors = {} as ThemeColors;
   const noop = () => undefined;
   const tab = (onOpenPayments?: () => void) => (
-    <SummaryTab profile={null} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }} foodShared={false} clientId="client-1"
+    <SummaryTab profile={null} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }} clientId="client-1"
       clientName="Jane" nudgeSuccess={false} onOpenMessages={noop} onOpenNudge={noop} onOpenMacrosReview={noop}
       onOpenWorkoutBuilder={noop} onOpenPayments={onOpenPayments} colors={colors} styles={makeStyles(colors)} />
   );

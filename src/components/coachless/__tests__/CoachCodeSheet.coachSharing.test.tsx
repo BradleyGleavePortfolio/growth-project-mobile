@@ -21,7 +21,7 @@ import { resetCoachSharingNoticeForTests } from '../../../lib/coachSharingNotice
 
 const COACH = { id: 'coach-1', name: 'Alex Rivera', photo_url: null, business_name: null, bio: null };
 const SENTENCE =
-  'Joining shares your workouts, food logs, weigh-ins and check-ins with Alex Rivera. Change this any time in Settings > Privacy.';
+  "Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Alex Rivera. You can stop new Apple Health data in your phone's Apple Health permissions.";
 
 const REDEEMED = { status: 'attached', already_attached: false, coach: COACH, next: { featured_package: null, packages_available: 0 }, grant: null, replayed: false };
 
