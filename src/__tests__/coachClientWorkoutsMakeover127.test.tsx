@@ -43,16 +43,15 @@ jest.mock('../services/api', () => ({ coachApi: {
 const mockDetail = {
   profile: {}, totals: {}, foodShared: true, workoutSessions: [], weightLogs: [], timeline: [], weekSummaries: [],
   timelineLoading: false, timelineError: null as string | null, weeklyLoading: false, weeklyError: null as string | null,
-  isLoading: false, refreshing: false, isArchived: false, serverMealPlans: [],
+  isLoading: false, refreshing: false, isArchived: false,
   loadData: jest.fn(async () => undefined), loadTimeline: jest.fn(), loadWeeklySummaries: jest.fn(),
-  loadServerMealPlans: jest.fn(), setIsArchived: jest.fn(), setRefreshing: jest.fn(),
+  setIsArchived: jest.fn(), setRefreshing: jest.fn(),
   loadArchiveStatus: jest.fn(async () => undefined),
 };
 jest.mock('../screens/coach/client-detail/useClientDetailData', () => ({ useClientDetailData: () => mockDetail }));
 jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: ({ openWorkoutRequest }: { openWorkoutRequest: boolean }) =>
   jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, openWorkoutRequest ? 'AI generator requested' : 'Summary content') }));
 jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Logs content') }));
-jest.mock('../screens/coach/client-detail/MealPlanTab', () => ({ MealPlanTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Plan content') }));
 jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Progress content') }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Fitness content') }));
 jest.mock('../screens/coach/client-detail/SleepRecoveryTab', () => ({ SleepRecoveryTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Recovery content') }));
@@ -63,7 +62,6 @@ const mockWeeklyTab = jest.fn((_props: { days: number; loading?: boolean; error?
 jest.mock('../screens/coach/client-detail/TimelineTab', () => ({ TimelineTab: (props: Parameters<typeof mockTimelineTab>[0]) => mockTimelineTab(props) }));
 jest.mock('../screens/coach/client-detail/WeeklySummaryTab', () => ({ WeeklySummaryTab: (props: Parameters<typeof mockWeeklyTab>[0]) => mockWeeklyTab(props) }));
 jest.mock('../screens/coach/client-detail/DateRangeSelector', () => ({ DateRangeSelector: () => null }));
-jest.mock('../screens/coach/client-detail/PlanFormModal', () => ({ PlanFormModal: () => null }));
 jest.mock('../screens/coach/client-detail/NudgeModal', () => ({ NudgeModal: () => null }));
 jest.mock('../components/coach/DisputePausedPlansCard', () => ({ DisputePausedPlansCard: () => null }));
 jest.mock('../components/coach/ai-execution/AskAiActionSheet', () => ({ AskAiActionSheet: () => null }));
@@ -83,17 +81,16 @@ const screenProps = (navigate: Props['navigation']['navigate'], goBack: Props['n
 beforeEach(() => { jest.clearAllMocks(); jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); });
 afterEach(() => jest.restoreAllMocks());
 
-it('honors the meal-plan destination on mount and on return to the same client', async () => {
+it('honors the Workouts destination on mount and on return to the same client', async () => {
   const props = screenProps(jest.fn(), jest.fn());
-  const mealProps: Props = { ...props, route: { ...props.route,
-    params: { ...props.route.params, initialTab: 'mealplan' } } };
-  const s = await render(<ClientDetailScreen {...mealProps} />);
-  expect(s.getByText('Plan content')).toBeTruthy();
-  expect(mockDetail.loadServerMealPlans).toHaveBeenCalled();
+  const workoutProps: Props = { ...props, route: { ...props.route,
+    params: { ...props.route.params, initialTab: 'workouts' } } };
+  const s = await render(<ClientDetailScreen {...workoutProps} />);
+  expect(s.getByRole('tab', { name: 'Workouts' }).props.accessibilityState).toEqual({ selected: true });
   await s.rerender(<ClientDetailScreen {...props} />);
   expect(s.getByText('Summary content')).toBeTruthy();
-  await s.rerender(<ClientDetailScreen {...mealProps} />);
-  expect(s.getByText('Plan content')).toBeTruthy();
+  await s.rerender(<ClientDetailScreen {...workoutProps} />);
+  expect(s.getByRole('tab', { name: 'Workouts' }).props.accessibilityState).toEqual({ selected: true });
 });
 
 it('uses the honest weekly fallback, hairline rows, and preserves all recorded details', async () => {
@@ -146,18 +143,17 @@ it('shows only real same-exercise strength points, and only with at least two', 
   expect(s.getByText('Bench press · top recorded load (lb)')).toBeTruthy();
 });
 
-it('preserves all nine tab destinations and both AI actions, including client-copy navigation', async () => {
+it('preserves all eight tab destinations and both AI actions, including client-copy navigation', async () => {
   const navigate = jest.fn(); const goBack = jest.fn();
   const props = screenProps(navigate, goBack);
   const s = await render(<ClientDetailScreen {...props} />);
-  for (const label of ['Summary', 'Logs', 'Plan', 'Progress', 'Fitness', 'Recovery', 'Timeline', 'Weekly']) {
+  for (const label of ['Summary', 'Logs', 'Progress', 'Fitness', 'Recovery', 'Timeline', 'Weekly']) {
     await fireEvent.press(s.getByText(label));
     expect(s.getByText(`${label} content`)).toBeTruthy();
     expect(s.getByRole('tab', { name: label })).toHaveStyle({ minWidth: 44, minHeight: 48 });
   }
   expect(mockDetail.loadTimeline).toHaveBeenCalledWith(90);
   expect(mockDetail.loadWeeklySummaries).toHaveBeenCalledWith(90);
-  expect(mockDetail.loadServerMealPlans).toHaveBeenCalled();
   await fireEvent.press(s.getByText('Workouts'));
   expect(s.getByRole('tab', { name: 'Workouts' }).props.accessibilityState).toEqual({ selected: true });
   expect(s.getByRole('tab', { name: 'Workouts' })).toHaveStyle({ borderBottomWidth: 2, borderRadius: 0, backgroundColor: testColors.background });

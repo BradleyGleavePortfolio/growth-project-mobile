@@ -51,11 +51,9 @@ jest.mock('../components/coach/ai-entry/AdjustForClient', () => ({
     }),
 }));
 jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: () => null }));
-jest.mock('../screens/coach/client-detail/MealPlanTab', () => ({ MealPlanTab: () => null }));
 jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: () => null }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => null }));
 jest.mock('../screens/coach/client-detail/SleepRecoveryTab', () => ({ SleepRecoveryTab: () => null }));
-jest.mock('../screens/coach/client-detail/PlanFormModal', () => ({ PlanFormModal: () => null }));
 jest.mock('../screens/coach/client-detail/NudgeModal', () => ({ NudgeModal: () => null }));
 jest.mock('../components/coach/ai-execution/AskAiActionSheet', () => ({ AskAiActionSheet: () => null }));
 jest.mock('../components/coach/DisputePausedPlansCard', () => ({ DisputePausedPlansCard: () => null }));

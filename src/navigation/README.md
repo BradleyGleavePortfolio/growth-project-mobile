@@ -36,7 +36,7 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 
 `CoachMealTemplates` is intentionally unregistered: it had no navigation caller or deep-link entry. The meal-template API and hooks remain; daily meal plans, client Meal plan, workout builder and invites keep their existing routes (MEAL-TEMPLATES-ROUTE-132).
 
-`ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts' | 'mealplan'`. Omission opens Summary; AI meal-plan approval requests `mealplan`, and route updates also select that tab on an already-mounted screen.
+`ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts'`. Omission opens Summary, and route updates also select the tab on an already-mounted screen.
 
 ```
 App.tsx mounts RootNavigator

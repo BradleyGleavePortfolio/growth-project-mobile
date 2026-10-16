@@ -224,7 +224,7 @@ export default function AIMealPlanDraftScreen() {
           {
             text: 'OK',
             onPress: () =>
-              navigation.navigate('ClientDetail', { clientId, clientName, initialTab: 'mealplan' }),
+              navigation.navigate('ClientDetail', { clientId, clientName }),
           },
         ],
       );
