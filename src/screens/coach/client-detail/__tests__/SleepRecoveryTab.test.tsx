@@ -78,6 +78,8 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
     expect(getByTestId('recovery-unavailable')).toBeTruthy();
     expect(getByText(/don't have access/i)).toBeTruthy();
     expect(queryByTestId('sleep-stages-headline')).toBeNull();
+    expect(queryByTestId('hrv-copy')).toBeNull();
+    expect(queryByTestId('consistency-copy')).toBeNull();
   });
 
   it('also handles a plain { status: 403 } transport error gracefully', async () => {
@@ -97,6 +99,28 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
 });
 
 describe('SleepRecoveryTab — factual sleep headline', () => {
+  it('uses the shared factual HRV and bedtime copy without a score', async () => {
+    mockUseWearableSamples.mockReturnValue({
+      data: resp([
+        { metric: 'HRV_MS', unit: 'ms', provider_used: 'OURA', sample_count: 3, samples: [s(60, 1), s(62, 2), s(40, 3)] },
+        { metric: 'SLEEP_ONSET_ISO', unit: 'min', provider_used: 'OURA', sample_count: 3, samples: [s(1320, 1), s(1350, 2), s(1335, 3)] },
+      ]),
+      isError: false,
+      isLoading: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      error: null,
+    });
+    const { getByTestId } = await render(
+      <SleepRecoveryTab clientId="client-1" colors={testColors} styles={styles} />,
+    );
+    expect(getByTestId('hrv-copy').props.children).toBe('Latest HRV reading: 40 ms');
+    expect(getByTestId('consistency-copy').props.children).toBe('Bedtimes span 30 min');
+    expect(mockUseWearableSamples).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'client-1' }),
+    );
+  });
+
   it.each([
     [180, '3h asleep'],
     [420, '7h asleep'],
