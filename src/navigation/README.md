@@ -6,6 +6,8 @@ Coach tab labels use the same one-line Inter tokens and fitting props as client 
 
 COACHTABS (`featureFlags.coachTabsV2`, `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off; off, the bar is today's): the coach bar is Overview, Programs, Money, Calendar, Messages, Clients (owner 10-15). Money (`MoneyStack`) is the Settings routes opening on `CoachMoney`, with no Back on its root. Calendar (`CalendarStack`) is `CoachBookingInbox`, with Hours and rules (`CoachHours`: availability, booking options, appointment types, time off) under its 44 pt gear until the K5 calendar lands. Settings, Community and Team stay registered tab routes with their bar items hidden, so every `navigate()` and push target still lands. They open from Overview's 44 pt gear, a Community button in the Messages header (only with `coachCommunity`) and one Team row at the top of Clients (`coachTeamEntry.ts`, Team Mode head coaches only). While one is open, the tab that holds its entry stays selected and a tap on it goes back there; `backBehavior: 'history'` sends Back to the tab the coach came from. Labels grow to at most 110% (K4). Tests: `__tests__/coachTabsV2.test.tsx`, `screens/coach/__tests__/coachTabsV2Entries.test.tsx`.
 
+COACHLAND (owner 10-15 "coaches land on overview/home page"): with `coachTabsV2` on, every coach opens on Overview (`CommandCenter`) on cold start, sign-in, reopening after the app was killed and account switch; flag off, real coaches still open on Clients. `coachLanding.ts` (`coachLandingTab()`, CoachNavigator's `initialTab`) is the only place the coach's first screen is picked, and the coach's deferred push ask (C-S-PUSH-3) renders on that screen only (Overview's `CoachHomeCards` or `ClientsListScreen`): nothing saves navigation state or the last tab, the linking config has no coach route, and `RootNavigator` mounts `CoachNavigator` afresh for each signed-in coach. Push taps still open their own target after it mounts. Test: `__tests__/coachLanding.test.tsx`.
+
 React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navigator is mounted based on auth + onboarding state, and owns the deep-link configuration that all `tgp://` and `https://app.trygrowthproject.com` URLs flow through.
 
 ## Purpose
@@ -46,12 +48,16 @@ App.tsx mounts RootNavigator
    │     ├─ AsyncStorage.getItem('needs_role_selection') // gate after Google / codeless signup
    │     ├─ AsyncStorage.getItem('onboarding_complete')  // student-only
    │     │
-   │     └─► setAuthState('unauthenticated' | 'onboarding' | 'coach' | 'student')
+   │     └─► setAuthState('unauthenticated' | 'onboarding' | 'age_check' | 'coach' | 'student')
+   │
+   ├─► onAgeConfirmationRequired ─► 'age_check'        // a 403 AGE_CONFIRMATION_REQUIRED in the client app
    │
    ├─► authEvents.onAuthChange ─► bootstrapAuth        // re-runs on logout / login emit
    │
    └─► useNetworkStatus ─► flushFoodLogQueue() on offline → online
 ```
+
+Age gate (AGEGATE16, owner #C8-UNDER18-B): every client confirms 16 or older before the client app. A client past setup whose cached profile has no 16+ `date_of_birth` is checked once against `GET /auth/me` (`lib/ageGate.clientAgeConfirmed`); a server date is cached, no date opens `'age_check'` (`screens/consultation/AgeCheckScreen`, the consultation's own B2 question and under-16 stop screen), and saving it re-runs `bootstrapAuth`. No answer from the server (failed, timed out or unusable) opens `'age_check'` too, never the app (FIXAGE R2); the backend refuses client routes with 403 `AGE_CONFIRMATION_REQUIRED`, which `services/api` reports and which moves `'student'`, `'package_prompt'` or `'day1win'` to `'age_check'`. Setup (`'onboarding'`, which asks B2 itself), coaches and owners are never interrupted. FIXAGE2 R7: the cache lets a client in only if every cached date (`date_of_birth`, legacy `dob`) is 16+; `patchUserCache` writes one date under both names; a refusal clears the cached date and, during a cold start past the age check, wins over that run (`bootGuard.begin()`). FIXAGE2 R5: `signOut()` first calls `releaseAgeHolds()`, so no Sign out waits on the age step. `AgeCheckNavigator` (AgeCheck, DeleteAccount, DataExport) keeps every way out: on the question one "Account and support" link opens the shared `ActionMenu` sheet (Download my data, Delete my account, Contact support, Sign out); the stop screen shows those four rows (FIXAGE3 R9).
 
 Deep links are parsed by `linking` in `RootNavigator`:
 

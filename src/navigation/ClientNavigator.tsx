@@ -148,6 +148,7 @@ import { withCommunityTerms } from '../components/community/CommunityTermsGate';
 // unless featureFlags.clientTutorial is on.
 import TutorialHost from '../components/tutorial/TutorialHost';
 import { useAiWithdrawalDrain } from '../hooks/useAiWithdrawalDrain';
+import { useMessageOutboxDrain } from '../hooks/useMessageOutbox';
 import { setTutorialRoute } from '../tutorial/tutorialStore';
 import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
 import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
@@ -688,6 +689,8 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
   // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
   // has not confirmed yet is sent when the app opens.
   useAiWithdrawalDrain();
+  // C3B-THREAD-R1: Style B messages written offline send from here, thread open or not.
+  useMessageOutboxDrain();
   // Latest tab-screen navigation object, captured from screenListeners, so
   // the tutorial overlay (which sits outside the navigator) can offer
   // "Take me there" for screens behind a menu.
