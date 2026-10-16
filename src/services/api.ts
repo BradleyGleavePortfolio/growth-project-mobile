@@ -851,8 +851,9 @@ export const coachApi = {
   },
   archiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/archive`),
   unarchiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/unarchive`),
-  getClientTimeline: (clientId: string, days?: number) =>
-    api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}`),
+  // mealsCursor: the next page of meals (the server sends 100 a page).
+  getClientTimeline: (clientId: string, days?: number, mealsCursor?: string) =>
+    api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}${mealsCursor ? `${days ? '&' : '?'}mealsCursor=${encodeURIComponent(mealsCursor)}` : ''}`),
   getClientSummary: (clientId: string, date = getTodayString()) =>
     api.get(`/coach/clients/${clientId}/summary?date=${encodeURIComponent(date)}`),
   getGuidelines: (clientId: string) =>
