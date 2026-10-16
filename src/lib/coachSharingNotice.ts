@@ -13,8 +13,8 @@ import { Platform } from 'react-native';
 import { authApi } from '../services/api';
 import { logger } from '../utils/logger';
 
-/** Names the sentence below. A new wording needs a new version on both sides. */
-export const COACH_SHARING_NOTICE_VERSION = 'coach_sharing_join_v1';
+/** Names the sentence below (v2 = W-SU-1, backend #1061). A new wording needs a new version on both sides. */
+export const COACH_SHARING_NOTICE_VERSION = 'coach_sharing_join_v2';
 
 /** W-SU-1 (owner #SHARE-JOIN op 1): Android says Health Connect where iPhone says Apple Health. */
 export function coachSharingNoticeText(coachName?: string | null): string {

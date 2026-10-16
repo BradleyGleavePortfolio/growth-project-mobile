@@ -21,7 +21,7 @@ jest.mock('../../../lib/finalizeLeanOnboarding', () => ({ finalizeLeanOnboarding
 
 import LeanQ1GoalScreen from '../LeanQ1GoalScreen';
 
-const V1 = 'coach_sharing_join_v1';
+const V2 = 'coach_sharing_join_v2';
 const SENTENCE =
   "Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Alex Rivera. You can stop new Apple Health data in your phone's Apple Health permissions.";
 
@@ -41,16 +41,16 @@ beforeEach(() => {
 
 describe('coach sharing on the first lean onboarding screen', () => {
   it('prints the sentence naming the coach; choosing a goal records it once', async () => {
-    mockRead.mockResolvedValue({ version: V1, coachName: 'Alex Rivera' });
+    mockRead.mockResolvedValue({ version: V2, coachName: 'Alex Rivera' });
     const navigate = await renderQ1();
     expect(await screen.findByText(SENTENCE)).toBeTruthy();
-    expect(mockRead).toHaveBeenCalledWith(V1);
+    expect(mockRead).toHaveBeenCalledWith(V2);
     expect(mockAccept).not.toHaveBeenCalled();
 
     await fireEvent.press(screen.getByText('Build muscle'));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('LeanQ2'));
     expect(mockAccept).toHaveBeenCalledTimes(1);
-    expect(mockAccept).toHaveBeenCalledWith(V1);
+    expect(mockAccept).toHaveBeenCalledWith(V2);
 
     await fireEvent.press(screen.getByText('Maintain'));
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(2));

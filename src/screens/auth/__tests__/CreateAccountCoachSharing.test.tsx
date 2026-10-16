@@ -41,7 +41,7 @@ import CreateAccountScreen from '../CreateAccountScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 import { resetCoachSharingNoticeForTests } from '../../../lib/coachSharingNotice';
 
-const V1 = 'coach_sharing_join_v1';
+const V2 = 'coach_sharing_join_v2';
 const PRODUCTION = { invite_code_required: false, providers: ['email', 'google', 'apple'] };
 const fakeNav = <T extends object>(): T => new Proxy({}, { get: () => jest.fn() }) as T;
 
@@ -92,12 +92,12 @@ it('current production policy: no sentence, and no sign-up sends the notice', as
 });
 
 it('advertised version: the sentence names the coach and every sign-up sends the version', async () => {
-  mockPolicy.mockResolvedValue({ data: { ...PRODUCTION, coach_sharing_notice: V1 } });
+  mockPolicy.mockResolvedValue({ data: { ...PRODUCTION, coach_sharing_notice: V2 } });
   const r = await signUpEverywhere(true);
   expect(r.notice).toBe(
     "Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Bradley. You can stop new Apple Health data in your phone's Apple Health permissions.",
   );
-  expect(r.email).toMatchObject({ invite_code: 'GP-TEST1', coach_sharing_notice: V1 });
-  expect(r.google).toMatchObject({ inviteCode: 'GP-TEST1', coachSharingNotice: V1 });
-  expect(r.apple).toMatchObject({ inviteCode: 'GP-TEST1', coachSharingNotice: V1 });
+  expect(r.email).toMatchObject({ invite_code: 'GP-TEST1', coach_sharing_notice: V2 });
+  expect(r.google).toMatchObject({ inviteCode: 'GP-TEST1', coachSharingNotice: V2 });
+  expect(r.apple).toMatchObject({ inviteCode: 'GP-TEST1', coachSharingNotice: V2 });
 });

@@ -66,9 +66,9 @@ it('current production policy: no sentence on the sheet and the old redeem body'
 
 it('advertised version: the sentence names the coach above Join and the version rides on the redeem', async () => {
   mockPolicy.mockResolvedValue({
-    data: { coach_sharing_notice: 'coach_sharing_join_v1', coach_sharing_notice_field: 'coach_sharing_notice' },
+    data: { coach_sharing_notice: 'coach_sharing_join_v2', coach_sharing_notice_field: 'coach_sharing_notice' },
   });
   await renderSheet();
   expect(await screen.findByText(SENTENCE)).toBeTruthy();
-  expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP', coach_sharing_notice: 'coach_sharing_join_v1' });
+  expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP', coach_sharing_notice: 'coach_sharing_join_v2' });
 });

@@ -39,7 +39,7 @@ jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: {},
-  authApi: { me: () => mockMe(), getSignupPolicy: async () => ({ data: { coach_sharing_notice: 'coach_sharing_join_v1' } }) },
+  authApi: { me: () => mockMe(), getSignupPolicy: async () => ({ data: { coach_sharing_notice: 'coach_sharing_join_v2' } }) },
 }));
 const mockAccept = jest.fn(async (_v: string) => true);
 jest.mock('../../../api/coachSharingApi', () => ({ acceptFirstSignInSharing: (v: string) => mockAccept(v) }));
@@ -157,6 +157,6 @@ it('paid: the sharing sentence sits above Continue to payment; once me() shows t
     fireEvent.press(ui.getByTestId('payment-continue'));
   });
   await waitFor(() => expect(mockAccept).toHaveBeenCalledTimes(1));
-  expect(mockAccept).toHaveBeenCalledWith('coach_sharing_join_v1');
+  expect(mockAccept).toHaveBeenCalledWith('coach_sharing_join_v2');
   expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'coach-1' });
 });

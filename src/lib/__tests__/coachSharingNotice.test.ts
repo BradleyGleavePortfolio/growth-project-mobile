@@ -18,8 +18,8 @@ import { claimPendingInviteCode } from '../pendingInviteCode';
 import { pairWithCoach } from '../../screens/day-one/api';
 
 const { get, post } = (jest.requireMock('axios') as { __instance: { get: jest.Mock; post: jest.Mock } }).__instance;
-const V1 = 'coach_sharing_join_v1';
-const SENT = { invite_code: 'GP-A', coach_sharing_notice: V1 };
+const V2 = 'coach_sharing_join_v2';
+const SENT = { invite_code: 'GP-A', coach_sharing_notice: V2 };
 
 beforeEach(() => {
   notice.resetCoachSharingNoticeForTests();
@@ -29,9 +29,9 @@ beforeEach(() => {
 
 it('shows the sentence only for the version and field this build knows', async () => {
   expect(notice.noticeVersionFromPolicy({ invite_code_required: true, providers: ['email'] })).toBeNull();
-  expect(notice.noticeVersionFromPolicy({ coach_sharing_notice: V1, coach_sharing_notice_field: 'coach_sharing_notice' })).toBe(V1);
-  expect(notice.noticeVersionFromPolicy({ coach_sharing_notice: 'coach_sharing_join_v2' })).toBeNull();
-  expect(notice.noticeVersionFromPolicy({ coach_sharing_notice: V1, coach_sharing_notice_field: 'other' })).toBeNull();
+  expect(notice.noticeVersionFromPolicy({ coach_sharing_notice: V2, coach_sharing_notice_field: 'coach_sharing_notice' })).toBe(V2);
+  expect(notice.noticeVersionFromPolicy({ coach_sharing_notice: 'coach_sharing_join_v1' })).toBeNull();
+  expect(notice.noticeVersionFromPolicy({ coach_sharing_notice: V2, coach_sharing_notice_field: 'other' })).toBeNull();
   expect(notice.coachSharingNoticeText(' ')).toContain('with your coach.');
 });
 
@@ -54,9 +54,9 @@ it('prints the approved join sentence W-SU-1 word for word, Health Connect on An
 it('reads the policy once per run and again after a failed read', async () => {
   get.mockRejectedValueOnce(new Error('offline'));
   await expect(notice.loadCoachSharingNotice()).resolves.toBeNull();
-  get.mockResolvedValueOnce({ data: { coach_sharing_notice: V1 } });
-  await expect(notice.loadCoachSharingNotice()).resolves.toBe(V1);
-  await expect(notice.loadCoachSharingNotice()).resolves.toBe(V1);
+  get.mockResolvedValueOnce({ data: { coach_sharing_notice: V2 } });
+  await expect(notice.loadCoachSharingNotice()).resolves.toBe(V2);
+  await expect(notice.loadCoachSharingNotice()).resolves.toBe(V2);
   expect(get).toHaveBeenCalledTimes(2);
   expect(get).toHaveBeenCalledWith('/auth/signup-policy');
 });
@@ -64,21 +64,21 @@ it('reads the policy once per run and again after a failed read', async () => {
 it('every join request carries the field only with a version (and, for sign-in, a code)', async () => {
   await authApi.attachInviteCode('GP-A');
   expect(post).toHaveBeenLastCalledWith('/auth/attach-invite-code', { invite_code: 'GP-A' });
-  await authApi.attachInviteCode('GP-A', V1);
+  await authApi.attachInviteCode('GP-A', V2);
   expect(post).toHaveBeenLastCalledWith('/auth/attach-invite-code', SENT);
-  await claimPendingInviteCode('GP-A', V1);
+  await claimPendingInviteCode('GP-A', V2);
   expect(post).toHaveBeenLastCalledWith('/auth/attach-invite-code', SENT);
-  await pairWithCoach(' GP-A ', V1);
+  await pairWithCoach(' GP-A ', V2);
   expect(post).toHaveBeenLastCalledWith('/auth/attach-invite-code', SENT);
   await pairWithCoach('GP-A', null);
   expect(post).toHaveBeenLastCalledWith('/auth/attach-invite-code', { invite_code: 'GP-A' });
 
-  await authApi.googleAuth('TOK', 'GP-A', undefined, V1);
+  await authApi.googleAuth('TOK', 'GP-A', undefined, V2);
   expect(post).toHaveBeenLastCalledWith('/auth/google', { token: 'TOK', ...SENT });
-  await authApi.googleAuth('TOK', undefined, undefined, V1);
+  await authApi.googleAuth('TOK', undefined, undefined, V2);
   expect(post).toHaveBeenLastCalledWith('/auth/google', { token: 'TOK' });
 
-  expect(buildAppleAuthBody({ identityToken: 'T', inviteCode: 'GP-A', coachSharingNotice: V1 })).toEqual({ token: 'T', ...SENT });
+  expect(buildAppleAuthBody({ identityToken: 'T', inviteCode: 'GP-A', coachSharingNotice: V2 })).toEqual({ token: 'T', ...SENT });
   expect(buildAppleAuthBody({ identityToken: 'T', inviteCode: 'GP-A' })).toEqual({ token: 'T', invite_code: 'GP-A' });
-  expect(buildAppleAuthBody({ identityToken: 'T', coachSharingNotice: V1 })).toEqual({ token: 'T' });
+  expect(buildAppleAuthBody({ identityToken: 'T', coachSharingNotice: V2 })).toEqual({ token: 'T' });
 });

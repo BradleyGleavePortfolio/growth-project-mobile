@@ -19,7 +19,7 @@ jest.mock('../../../services/sentry', () => ({
 }));
 jest.mock('../../../tutorial/tutorialStore', () => ({ startClientTutorial: jest.fn(() => true) }));
 
-const V1 = 'coach_sharing_join_v1';
+const V2 = 'coach_sharing_join_v2';
 const SENTENCE =
   "Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Alex Rivera. You can stop new Apple Health data in your phone's Apple Health permissions.";
 
@@ -46,7 +46,7 @@ describe('coach sharing on the consultation agreement (P0)', () => {
   it('prints the sentence above Continue and records it on that Continue, once', async () => {
     const accept = jest.fn(async () => true);
     const api = makeApi({
-      getCoachSharingNotice: jest.fn(async () => ({ version: V1, coachName: 'Alex Rivera' })),
+      getCoachSharingNotice: jest.fn(async () => ({ version: V2, coachName: 'Alex Rivera' })),
       acceptCoachSharingNotice: accept,
     });
     await seedLocal({}, 'P0');
@@ -60,7 +60,7 @@ describe('coach sharing on the consultation agreement (P0)', () => {
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     expect(accept).toHaveBeenCalledTimes(1);
-    expect(accept).toHaveBeenCalledWith(V1);
+    expect(accept).toHaveBeenCalledWith(V2);
 
     // Back to P0 and Continue again: recorded once only.
     await fireEvent.press(r.getByTestId('consult-back'));

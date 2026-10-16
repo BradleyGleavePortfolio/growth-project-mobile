@@ -15,7 +15,7 @@ import {
 } from '../coachSharingFirstSignIn';
 import { coachSharingNoticeText } from '../coachSharingNotice';
 
-const V1 = 'coach_sharing_join_v1';
+const V2 = 'coach_sharing_join_v2';
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -29,21 +29,21 @@ describe('first-sign-in coach sharing', () => {
 
   it('an account linked outside the app that has not decided: the sentence names the coach', async () => {
     mockGet.mockResolvedValue({
-      data: { applies: true, notice_version: V1, coach_id: 'coach-a', coach_name: ' Alex Rivera ' },
+      data: { applies: true, notice_version: V2, coach_id: 'coach-a', coach_name: ' Alex Rivera ' },
     });
     const notice = await readFirstSignInCoachSharing();
-    expect(notice).toEqual({ version: V1, coachName: 'Alex Rivera' });
+    expect(notice).toEqual({ version: V2, coachName: 'Alex Rivera' });
     expect(coachSharingNoticeText(notice?.coachName)).toBe(
       "Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Alex Rivera. You can stop new Apple Health data in your phone's Apple Health permissions.",
     );
   });
 
   it('already decided, no coach, another version, or a failed read: nothing to print', async () => {
-    mockGet.mockResolvedValueOnce({ data: { applies: false, notice_version: V1, coach_id: 'coach-a', coach_name: 'A' } });
+    mockGet.mockResolvedValueOnce({ data: { applies: false, notice_version: V2, coach_id: 'coach-a', coach_name: 'A' } });
     await expect(readFirstSignInCoachSharing()).resolves.toBeNull();
-    mockGet.mockResolvedValueOnce({ data: { applies: false, notice_version: V1, coach_id: null, coach_name: null } });
+    mockGet.mockResolvedValueOnce({ data: { applies: false, notice_version: V2, coach_id: null, coach_name: null } });
     await expect(readFirstSignInCoachSharing()).resolves.toBeNull();
-    mockGet.mockResolvedValueOnce({ data: { applies: true, notice_version: 'coach_sharing_join_v2', coach_id: 'c', coach_name: 'A' } });
+    mockGet.mockResolvedValueOnce({ data: { applies: true, notice_version: 'coach_sharing_join_v1', coach_id: 'c', coach_name: 'A' } });
     await expect(readFirstSignInCoachSharing()).resolves.toBeNull();
     mockGet.mockRejectedValueOnce({ response: { status: 503 } });
     await expect(readFirstSignInCoachSharing()).resolves.toBeNull();
@@ -52,9 +52,9 @@ describe('first-sign-in coach sharing', () => {
 
   it('the tap under the sentence sends its version and reports the record', async () => {
     mockPost.mockResolvedValueOnce({ data: { coach_sharing_granted: true, coach_id: 'coach-a' } });
-    await expect(acceptFirstSignInCoachSharing(V1)).resolves.toBe(true);
-    expect(mockPost).toHaveBeenCalledWith('/consent/coach-sharing-notice', { coach_sharing_notice: V1 });
+    await expect(acceptFirstSignInCoachSharing(V2)).resolves.toBe(true);
+    expect(mockPost).toHaveBeenCalledWith('/consent/coach-sharing-notice', { coach_sharing_notice: V2 });
     mockPost.mockRejectedValueOnce({ response: { status: 500 } });
-    await expect(acceptFirstSignInCoachSharing(V1)).resolves.toBe(false);
+    await expect(acceptFirstSignInCoachSharing(V2)).resolves.toBe(false);
   });
 });
