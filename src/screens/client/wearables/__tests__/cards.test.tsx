@@ -147,7 +147,7 @@ describe('RespirationCard — soft clinician-referral suffix', () => {
       />,
     );
     const copy = getByTestId('respiration-copy').props.children as string;
-    expect(copy).toMatch(/clinician/i);
+    expect(copy).toMatch(/doctor/i);
     // NEVER medicalize: no diagnosis nouns.
     expect(copy).not.toMatch(/\b(apnea|insomnia|arrhythmia|disorder)\b/i);
     expect(getByTestId('respiration-attention')).toBeTruthy();
