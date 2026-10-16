@@ -21,6 +21,8 @@
  * screen self-renders its header, so it is mounted with `headerShown: false`.
  */
 import React from 'react';
+import { Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CommunityTermsGate from '../components/community/CommunityTermsGate';
 import { Colors } from '../theme';
@@ -63,7 +65,24 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
       <CoachCommunityStack.Screen
         name="CoachCommunityHome"
         component={CoachCommunityHomeScreen}
-        options={{ title: 'Community' }}
+        options={({ navigation }) => ({
+          title: 'Community',
+          // COACHTABS: with the six tabs Community opens from Messages, so its
+          // first page has a Back (44 pt) to the tab the coach came from.
+          ...(featureFlags.coachTabsV2 ? {
+            headerLeft: () => (
+              <Pressable
+                onPress={() => navigation.goBack()}
+                style={{ width: 44, height: 44, justifyContent: 'center' }}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                testID="community-back"
+              >
+                <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+              </Pressable>
+            ),
+          } : {}),
+        })}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityInbox"

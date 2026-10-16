@@ -32,6 +32,7 @@ jest.mock('../../../api/romanApi', () => {
   };
 });
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
+jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 jest.mock('../../../utils/haptics', () => ({
   lightTap: jest.fn(),
   mediumTap: jest.fn(),

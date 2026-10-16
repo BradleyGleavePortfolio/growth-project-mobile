@@ -331,6 +331,7 @@ export default function MetricDetailScreen() {
           <RevolutGlowChart
             data={chartData}
             tone={tone}
+            variant={meta.summary === 'sum' && perDay ? 'bar' : 'line'}
             reduceMotion={reduceMotion}
             onSelect={setSelectedIndex}
             accessibilityLabel={`${title} trend over the last ${WINDOW_DAYS} days`}

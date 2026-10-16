@@ -11,6 +11,7 @@ import React, { useEffect, useMemo } from 'react';
 import { ActionSheetIOS, Modal, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
 
 export interface ActionMenuOption {
   key: string;
@@ -93,8 +94,8 @@ const makeStyles = (colors: ThemeColors) =>
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
     sheet: {
       backgroundColor: colors.surface,
-      borderTopLeftRadius: 16,
-      borderTopRightRadius: 16,
+      borderTopLeftRadius: radius.sheet,
+      borderTopRightRadius: radius.sheet,
       paddingTop: 8,
       paddingBottom: 36,
       paddingHorizontal: 8,

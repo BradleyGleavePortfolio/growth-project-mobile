@@ -19,6 +19,7 @@
  */
 import { anyScreeningYes, ageOn } from './engine';
 import type { Answers, MeasureAnswer } from './types';
+import { ROMAN_SAFETY_EXCEPTION } from '../romanCrisisSentence';
 import {
   CONSENT_TITLE,
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
@@ -52,9 +53,8 @@ export const CONSENT_CHECKBOX_LABEL =
 export const AI_CONSENT_PARAGRAPH_PRE57C =
   "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Only your own data is used, never another client's, and never your coach's private notes. Your conversations with Roman are private from your coach and are kept until you delete them or delete your account.";
 
-/** Owner 57c: the same sentence as the privacy page, added to paragraph 4. */
-export const AI_CONSENT_SAFETY_EXCEPTION =
-  'One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.';
+/** Owner 57c: the same sentence as the privacy page, added to paragraph 4 (one literal, lib/romanCrisisSentence). */
+export const AI_CONSENT_SAFETY_EXCEPTION = ROMAN_SAFETY_EXCEPTION;
 
 /** Paragraph 4 (client-ai-v6): shown above box 2, and again in Settings > Privacy > Roman and AI. */
 export const AI_CONSENT_PARAGRAPH = `${AI_CONSENT_PARAGRAPH_PRE57C} ${AI_CONSENT_SAFETY_EXCEPTION}`;

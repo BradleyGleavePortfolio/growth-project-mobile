@@ -46,8 +46,9 @@
  * There is no skip-to-finish path: the only way out is the plan reveal,
  * which is reached only through a successful complete call.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, View } from 'react-native';
+import { NavigationContext } from '@react-navigation/native';
 import {
   consultationApi,
   CompleteOnboardingResponse,
@@ -116,6 +117,7 @@ import { AnalyticsExcluded, palette, STEP_MS } from './components';
 import {
   CompleteProblem,
   CompleteProblemScreen,
+  EscapeRow,
   MacroRevealScreen,
   PausedScreen,
   PlanRevealScreen,
@@ -178,6 +180,9 @@ export interface ConsultationFlowProps {
   prepMinMs?: number;
   /** Sign out from the problem and paused screens (operator C-310-3). Hidden when absent. */
   onSignOut?: () => void;
+  /** AGEDELETE (App Store 5.1.1(v)): the account screens, from the under-16 stop and paused screens. */
+  onOpenDataExport?: () => void;
+  onOpenDeleteAccount?: () => void;
 }
 
 type Phase = 'loading' | 'question' | 'summary' | 'preparing' | 'macro' | 'plan' | 'paused' | 'problem';
@@ -221,7 +226,7 @@ export default function ConsultationFlow({
   now: nowFn = () => new Date(),
   autoAdvanceMs = STEP_MS,
   prepMinMs = 900,
-  onSignOut,
+  ...exits
 }: ConsultationFlowProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [screenId, setScreenId] = useState<string>('W1');
@@ -1036,10 +1041,12 @@ export default function ConsultationFlow({
     return phase !== 'macro';
   }, [clearTimer, phase, setPhaseBoth, showScreen]);
 
+  // AGEDELETE: Android back closes an account screen opened over the flow (the navigator's back), never a question under it.
+  const navigation = useContext(NavigationContext);
   useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => onBack());
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => (navigation?.isFocused() === false ? false : onBack()));
     return () => sub.remove();
-  }, [onBack]);
+  }, [navigation, onBack]);
 
   const onFinishLater = useCallback(() => {
     clearTimer();
@@ -1223,7 +1230,7 @@ export default function ConsultationFlow({
           reference={problemRef}
           onAction={onProblemAction}
           onBack={() => setPhaseBoth('summary')}
-          onSignOut={onSignOut}
+          onSignOut={exits.onSignOut}
         />
       );
     }
@@ -1236,7 +1243,7 @@ export default function ConsultationFlow({
             showScreen(id);
             if (id !== 'W1' && id !== 'P0') setWelcomeBackId(id);
           }}
-          onSignOut={onSignOut}
+          {...exits}
         />
       );
     }
@@ -1264,6 +1271,7 @@ export default function ConsultationFlow({
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
         romanOverride={welcomeBackId === screen.id ? welcomeBackLine(screen.chapter) : null}
         consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, coachSharing }}
+        escape={(stopped) => (stopped ? <EscapeRow {...exits} /> : null)}
       />
     );
   }

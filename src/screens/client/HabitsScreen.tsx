@@ -190,7 +190,7 @@ export default function HabitsScreen({ onSaved }: { onSaved?: () => void }) {
   const handleDelete = (habit: HabitView) => {
     Alert.alert(
       'Delete habit',
-      `Are you sure you want to delete "${habit.name}"? This will remove the habit and all its history.`,
+      `Remove ${habit.name}? Its history stays.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

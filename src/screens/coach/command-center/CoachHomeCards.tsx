@@ -11,6 +11,8 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import MoneyHomeCard from "../../../components/coach/money/MoneyHomeCard";
 import BriefHomeCard from "../../../components/coach/brief/BriefHomeCard";
 import { featureFlags } from "../../../config/featureFlags";
+import PushPermissionCard from "../../../components/home/PushPermissionCard";
+import { coachLandingTab } from "../../../navigation/coachLanding";
 import CoachSetupChecklist, {
   type ChecklistTarget,
 } from "../../../components/coach/setup/CoachSetupChecklist";
@@ -23,13 +25,16 @@ export default function CoachHomeCards() {
   // screens. Without it a Settings stack that was never opened is built with
   // only the target screen, and the Settings tab can no longer reach sign
   // out or account deletion. Money opened from Home goes back to Home.
+  // COACHTABS: with the six tabs Money is a tab; the card switches to its root.
   const openMoney = useCallback(
     () =>
-      navigation.navigate("SettingsStack", {
-        screen: "CoachMoney",
-        params: { from: "home" },
-        initial: false,
-      }),
+      featureFlags.coachTabsV2
+        ? navigation.navigate("MoneyStack", { screen: "CoachMoney", pop: true })
+        : navigation.navigate("SettingsStack", {
+            screen: "CoachMoney",
+            params: { from: "home" },
+            initial: false,
+          }),
     [navigation],
   );
   const open = useCallback(
@@ -73,6 +78,11 @@ export default function CoachHomeCards() {
   );
   return (
     <View testID="coach-home-cards">
+      {/* C-S-PUSH-3 + COACHLAND: Overview is the landing (coachTabsV2 on), so
+          it carries the coach's deferred push ask, in Home's hairline look. */}
+      {coachLandingTab() === "CommandCenter" ? (
+        <PushPermissionCard audience="coach" presentation="section" />
+      ) : null}
       <CoachSetupChecklist onOpen={open} />
       {featureFlags.coachBrief ? <BriefHomeCard onOpen={openBrief} /> : null}
       <MoneyHomeCard
