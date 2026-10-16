@@ -152,7 +152,7 @@ const GUTTERS: Array<[string, string[]]> = [
   ['MessagesScreen.tsx', ['header', 'searchContainer', 'listContent']],
   ['ClientMessagesScreen.tsx', ['chatHeader', 'chatList', 'inputBar', 'errorBanner']],
   ['RiskBoardScreen.tsx', ['header', 'filterRow', 'listContent']],
-  ['client-detail/styles.ts', ['header', 'tabRow', 'scrollContent', 'planModalHeader', 'planModalContent']],
+  ['client-detail/styles.ts', ['header', 'tabRow', 'scrollContent']],
 ];
 const block = (src: string, key: string) => {
   const m = src.match(new RegExp(`\\b${key}:\\s*\\{([^{}]*)\\}`));
