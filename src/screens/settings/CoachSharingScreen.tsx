@@ -4,8 +4,9 @@
  * /consent/grant | revoke and goes back with a specific line on failure).
  * Rows say "Shared" / "Not shared" in words. The owner-account line is
  * hidden only when the server says owner_access: false (B-451-1). Under the
- * switches, one line says connected devices are not covered by them, with the
- * Connected devices row (FW-BODY B2).
+ * switches, one line says device weight and body fat follow Weigh-ins and the
+ * other device data is not covered by them, with the Connected devices row
+ * (FW-BODY B2, WEIGHTWALL).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';

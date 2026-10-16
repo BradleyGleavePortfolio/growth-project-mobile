@@ -40,6 +40,7 @@ React hooks shared across screens. Two flavours: thin `useQuery` / `useMutation`
 | File | What it does |
 | --- | --- |
 | `useNetworkStatus.ts` | NetInfo wrapper + `isEffectivelyOnline` helper. Source of truth for `OfflineBanner` and the food-log queue flush. |
+| `useMessageOutbox.ts` | Style B messages outbox (`featureFlags.c3StyleB`, C3B-THREAD-R1). `useMessageOutboxDrain` (ClientNavigator) sends waiting messages on open, on reconnect and on return to the foreground, thread open or not; `useMessageOutbox` is the thread's live view of it. |
 | `usePressFeedback.ts` | Animated press feedback (scale + opacity) for taps that don't otherwise haptic. |
 | `useFirstWinCelebration.ts` | One-shot orchestrator for the first-win modal — locks behind AsyncStorage so it only ever shows once. |
 

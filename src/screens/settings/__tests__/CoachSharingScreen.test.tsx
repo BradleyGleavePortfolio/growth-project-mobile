@@ -100,9 +100,9 @@ it('a failed load offers a retry; no coach says so', async () => {
   expect(screen.queryByTestId('coach-sharing-devices')).toBeNull();
 });
 
-describe('connected devices are outside the switches (FW-BODY B2)', () => {
+describe('connected devices: weight and body fat follow Weigh-ins, the rest is outside the switches (FW-BODY B2, WEIGHTWALL)', () => {
   const DEVICES =
-    'Connected devices, such as Apple Health and Health Connect, are not covered by these switches. Your coach can see the data they bring in, and data already shared stays with your coach after you disconnect.';
+    'Weight and body fat from connected devices, such as Apple Health and Health Connect, follow Weigh-ins. Your coach can see the other data they bring in, and it stays with your coach after you disconnect.';
   const originalOS = Platform.OS;
   const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
   afterEach(() => {

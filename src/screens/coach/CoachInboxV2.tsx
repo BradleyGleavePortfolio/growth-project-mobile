@@ -51,6 +51,7 @@ import {
 } from '../../api/messagingV2Api';
 import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
 import { CommunityReportsEntry } from './CommunityReportsEntry';
+import { CommunityEntry } from './CommunityEntry';
 
 const FALLBACK_POLL_MS = 60000;
 const PAGE_LIMIT = 50;
@@ -318,6 +319,7 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
         <View style={styles.headerRow}>
           <Text style={styles.title}>Messages</Text>
           <View style={styles.headerEntries}>
+            <CommunityEntry />
             <CommunityReportsEntry />
             <BroadcastsEntry />
           </View>
