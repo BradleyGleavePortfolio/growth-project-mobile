@@ -193,7 +193,7 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
   {
     row: 'Settings > Roman and AI, a live pre-57c grant: the exception it adds is followed by the sentence; memory on offers the copies asked for',
     check: async (on) => {
-      // b#1047: the offer follows the ask, so the confirmation is v7 / v9 as sent (consentAsked150 posts it).
+      // b#1047: the offer follows the ask, so the confirmation is v7 / v9 as sent (consentOfferBoundary151 posts it).
       const v4 = live('client-ai-v4', {
         copy: copyOf('client-ai-v4', B_V4, copy.AI_CONSENT_PRE57C_COPY_SHA256),
         memory_on: true,

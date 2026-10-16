@@ -115,7 +115,7 @@ describe('Roman and AI, client with no coach (owner 62x)', () => {
   it('a coach-free grant recorded before 62x still reads with its own copies (pure helpers)', () => {
     const live = { ...LIVE_CF, memory_on: true, memory_copy: CF5_COPY };
     expect(choiceOf(live).choice).toBe('allowed');
-    // FIXCONSENT: turning memory on is a new choice, offered only in the copies asked for.
+    // B-A: turning memory on is a new choice, offered only in the copies asked for.
     expect(memorySwitchOf(live, romanFamily(true))).toEqual({ on: false, onCopy: CF5_COPY });
     expect(memorySwitchOf(live, romanFamily(false))).toBeNull();
   });

@@ -10,6 +10,7 @@ import React from 'react';
 import { createHash } from 'crypto';
 import { Alert, type AlertButton } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   aiConsentApi,
@@ -20,7 +21,7 @@ import {
   type GrantRomanConsentRequest,
 } from '../../../api/aiConsentApi';
 import { featureFlagsKeys } from '../../../hooks/useFeatureFlags';
-import RomanAiConsentScreen from '../../../screens/settings/RomanAiConsentScreen';
+import RomanAiConsentScreen, { ROMAN_AI_COPY } from '../../../screens/settings/RomanAiConsentScreen';
 import ConsultationOnboardingNavigator from '../../../navigation/ConsultationOnboardingNavigator';
 import { NOW } from '../../consultation/__fixtures__/consultFixtures';
 import { resetStores } from '../../consultation/__fixtures__/flowHarness';
@@ -285,8 +286,11 @@ describe('FIXCONSENT: Settings records every new choice against the text shown, 
       expect(srv.recorded()).toEqual({ version: body.version, grant: true });
       // The answer is shown at once, and it is the recorded text.
       await waitFor(() => expect(paragraph(r)).toBe(TEXT[body.version]));
-      // What the choice was made against: the memory-on confirmation, the paragraph above Allow, or (memory off) what shows next.
-      const shown = step === 'memory on' ? confirmation : step === 'allow' ? before : paragraph(r);
+      // B-A (FIXCONSENT2): what was presented BEFORE the write, never the text shown after it: the memory-on
+      // confirmation, the paragraph above Allow, or the agreement text after the memory-off words.
+      const off = `${ROMAN_AI_COPY.confirmMemoryOffBody}\n\n`;
+      if (step === 'memory off') expect(confirmation.startsWith(off)).toBe(true);
+      const shown = step === 'memory on' ? confirmation : step === 'allow' ? before : confirmation.slice(off.length);
       expect(body.copy_sha256).toBe(sha(`${shown}\n\n${B_LABEL}`));
     }
   });
@@ -311,7 +315,9 @@ describe('FIXCONSENT: P0 through the navigator asks the server, never the flag, 
     const calls = backend(srv);
     const r = await render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <ConsultationOnboardingNavigator />
+        <NavigationContainer>
+          <ConsultationOnboardingNavigator />
+        </NavigationContainer>
       </QueryClientProvider>,
     );
     await waitFor(() => r.getByTestId('consult-screen-W1'));
