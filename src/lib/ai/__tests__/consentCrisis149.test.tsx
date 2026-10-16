@@ -260,7 +260,7 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
   {
     row: 'a client with no coach and a coach account never ask for or see the crisis sentence',
     check: async (on) => {
-      expect(copy.consentScreenCopy(true, on)).toMatchObject({ aiParagraph: B_V6, version: 'consult-consent-v7-coach-free' });
+      expect(copy.consentScreenCopy(true, on)).toMatchObject({ aiParagraph: B_V6, version: 'consult-consent-v8-coach-free' });
       const api = makeApi({ getRomanConsent: ledger(true) });
       const r = await toP0(api, on, true);
       await waitFor(() => expect(r.paragraph()).toBe(B_V7));
