@@ -50,6 +50,8 @@ import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkSta
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { StyleBBubble, StyleBDayMark, StyleBFirstCard, StyleBHeader, StyleBLoading, StyleBQueued, dayB } from '../../components/messaging/StyleBThread';
+import { useMessageOutbox } from '../../hooks/useMessageOutbox';
+import { drainOutbox, isTransient, sendViaOutbox, settleOutbox, takeBackRefused, type OutboxEvent } from '../../services/messageOutbox';
 
 interface Message {
   id: string;
@@ -62,8 +64,8 @@ interface Message {
   parent_message_id?: string | null;
   /** messaging v2 (flag ON); absent on legacy rows. */
   v2?: ThreadV2Fields;
-  /** Style B outbox (device only): the send failed while the phone was offline; it goes out on reconnect. */
-  queued?: boolean;
+  /** Style B: a row from the outbox (services/messageOutbox), not on the server yet. */
+  outbox?: 'sending' | 'waiting' | 'failed';
 }
 
 const CLIENT_SCOPE: ThreadScope = { role: 'client' };
@@ -94,8 +96,6 @@ export default function MessagesScreen() {
   // C3B-THREAD: Style B thread (MOCK-C3 slice 1). Off: main's thread, unchanged.
   const styleB = featureFlags.c3StyleB;
   const online = isEffectivelyOnline(useNetworkStatus());
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
   const reduceMotion = useReducedMotion();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +186,7 @@ export default function MessagesScreen() {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
       const list = normalizeList(res.data, currentUser?.id);
+      if (styleB && currentUser?.id) settleOutbox(currentUser.id, list.map((m) => m.v2?.client_message_id));
       setMessages((prev) => mergeById(list, reconcilePending(prev, list)));
       setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
@@ -212,7 +213,7 @@ export default function MessagesScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.id, loadCoachReview]);
+  }, [currentUser?.id, loadCoachReview, styleB]);
 
   const onThreadChanged = useCallback(() => {
     void load();
@@ -293,28 +294,30 @@ export default function MessagesScreen() {
     if (!text || sending) return;
     setSending(true);
     Keyboard.dismiss();
-    if (styleB) void HapticService.softImpact();
     const reply = replyTarget;
+    if (styleB && currentUser?.id) {
+      // C3B-THREAD-R1: every Style B send goes through the outbox, in order, with its own key.
+      void HapticService.softImpact();
+      setInputText('');
+      setReplyTarget(null);
+      setSending(false);
+      void sendViaOutbox(currentUser.id, text, reply?.id ?? null);
+      return;
+    }
     if (thread.enabled) {
       await sendV2(text, newClientMessageId(), reply?.id ?? null);
       setSending(false);
       return;
     }
-    await sendLegacy(text, reply?.id ?? null);
-  };
-
-  // Legacy send. Style B passes pendingId to send a failed bubble again (it
-  // has no key, so it goes as a new message and the bubble is dropped).
-  const sendLegacy = async (text: string, replyId: string | null, pendingId?: string, auto = false) => {
     try {
       let created: Message;
-      if (replyId) {
+      if (reply) {
         // Reply path — pass parent_message_id so backend can record the thread
         // once the field is wired through. Until then we keep the parent
         // reference locally so the bubble renders the quoted preview.
         const res = await messagesModerationApi.sendReply({
           body: text,
-          parent_message_id: replyId,
+          parent_message_id: reply.id,
         });
         created = {
           id: res.id,
@@ -323,19 +326,17 @@ export default function MessagesScreen() {
           body: res.body,
           created_at: res.created_at,
           read_at: null,
-          parent_message_id: res.parent_message_id ?? replyId,
+          parent_message_id: res.parent_message_id ?? reply.id,
         };
       } else {
         const res = await messagesApi.send(text);
         created = normalizeMessage(res.data, currentUser?.id);
       }
-      if (!pendingId) {
-        setInputText('');
-        setReplyTarget(null);
-      }
+      setInputText('');
+      setReplyTarget(null);
       const uid = currentUser?.id;
       setMessages((prev) => {
-        const next = mergeById(prev.filter((m) => m.id !== pendingId), [created]);
+        const next = mergeById(prev, [created]);
         if (uid) cacheStorage.set(cacheKeyFor(uid), JSON.stringify(next));
         return next;
       });
@@ -344,11 +345,7 @@ export default function MessagesScreen() {
       const code = errorCode(err);
       if (errorStatus(err) === 409 || code === 'NO_COACH_ASSIGNED') {
         setNoCoach(true);
-      } else if (pendingId) {
-        markUnsent(pendingId);
-        if (!auto) Alert.alert('Message not sent', toMessagingError(err).userMessage);
       } else {
-        if (styleB && onlineRef.current) void HapticService.error();
         const pendingMsg: Message = {
           id: `pending_${Date.now()}`,
           sender_role: 'client',
@@ -356,8 +353,7 @@ export default function MessagesScreen() {
           created_at: new Date().toISOString(),
           read_at: null,
           pending: true,
-          parent_message_id: replyId,
-          ...(styleB ? { queued: !onlineRef.current } : {}),
+          parent_message_id: reply?.id ?? null,
         };
         const uid = currentUser?.id;
         setMessages((prev) => {
@@ -376,7 +372,7 @@ export default function MessagesScreen() {
 
   // v2 idempotent send: the device key is kept on a failed (pending) bubble,
   // so "Send again" replays the same key and can never post a duplicate.
-  const sendV2 = async (text: string, key: string, replyToId: string | null, pendingId?: string, auto = false) => {
+  const sendV2 = async (text: string, key: string, replyToId: string | null, pendingId?: string) => {
     const uid = currentUser?.id;
     const persist = (next: Message[]) => {
       if (uid) cacheStorage.set(cacheKeyFor(uid), JSON.stringify(next));
@@ -404,73 +400,72 @@ export default function MessagesScreen() {
         void load();
       } else if (e.kind === 'network' || e.status >= 500 || e.status === 429) {
         if (pendingId) {
-          if (styleB) markUnsent(pendingId);
-          if (!auto) Alert.alert('Message not sent', e.userMessage);
+          Alert.alert('Message not sent', e.userMessage);
           return;
         }
-        if (styleB && onlineRef.current) void HapticService.error();
         const pendingMsg = normalizeMessage({ id: `pending_${key}`, sender_id: uid, sender_role: 'client', body: text, client_message_id: key }, uid);
-        const outbox = styleB ? { queued: !onlineRef.current } : {};
-        setMessages((prev) => persist([...prev, { ...pendingMsg, pending: true, parent_message_id: replyToId, ...outbox }]));
+        setMessages((prev) => persist([...prev, { ...pendingMsg, pending: true, parent_message_id: replyToId }]));
         setInputText('');
         setReplyTarget(null);
       } else {
         // Refused for a reason the user can act on (blocked, quote gone, ...):
         // keep the typed text so nothing is lost.
-        if (styleB && pendingId) markUnsent(pendingId); // a refused replay stops waiting: tap to send again
         thread.report('Message not sent', err);
       }
     }
   };
 
-  // Style B: a failed or waiting bubble after a retry fails. Offline it keeps
-  // waiting; online it shows "Not sent. Tap to send again" (one error haptic).
-  const markUnsent = (id: string) => {
-    const queued = !onlineRef.current;
-    if (!queued) void HapticService.error();
-    const uid = currentUser?.id;
-    setMessages((prev) => {
-      const next = prev.map((m) => (m.id === id ? { ...m, queued } : m));
-      if (uid) cacheStorage.set(cacheKeyFor(uid), JSON.stringify(next));
-      return next;
-    });
-  };
-
-  // Style B retry (tap, or the reconnect replay): a keyed bubble replays its
-  // key, so it can never post twice; one attempt per bubble at a time.
-  const retrying = useRef(new Set<string>());
-  const retryPending = async (m: Message, auto = false) => {
-    if (retrying.current.has(m.id)) return;
-    retrying.current.add(m.id);
-    try {
-      const key = m.v2?.client_message_id;
-      if (key) await sendV2(m.body, key, m.parent_message_id ?? null, m.id, auto);
-      else await sendLegacy(m.body, m.parent_message_id ?? null, m.id, auto);
-    } finally {
-      retrying.current.delete(m.id);
+  // Style B outbox (services/messageOutbox): rows not on the server yet sit under the thread. The first that failed
+  // holds the ones after it; offline they wait for the signal, which the app-level drain sends thread open or not.
+  const onOutbox = (ev: OutboxEvent) => {
+    if (ev.type === 'taken') void load();
+    else if (ev.type === 'sent') {
+      const uid = currentUser?.id;
+      const created = normalizeMessage(ev.row, uid);
+      setMessages((prev) => {
+        const next = mergeById(prev, [created]);
+        if (uid) cacheStorage.set(cacheKeyFor(uid), JSON.stringify(next));
+        return next;
+      });
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    } else if (ev.error.code === 'NO_COACH_ASSIGNED') setNoCoach(true);
+    else if (!isTransient(ev.error)) thread.report('Message not sent', ev.error);
+    else if (online) {
+      void HapticService.error(); // once per failure while online
+      if (ev.manual) Alert.alert('Message not sent', ev.error.userMessage);
     }
   };
+  const outboxItems = useMessageOutbox(styleB ? currentUser?.id : null, onOutbox);
+  // A tap sends from the head again; on a message the server can never accept, it takes the text back to the composer.
+  const retryOutbox = (key?: string | null) => {
+    const uid = currentUser?.id;
+    const back = uid && key ? takeBackRefused(uid, key) : undefined;
+    if (back) setInputText((t) => (t ? `${t}\n${back.body}` : back.body));
+    else if (uid) void drainOutbox(uid, true);
+  };
+  const shown = useMemo(() => {
+    let held = false;
+    const rows = outboxItems.map((i): Message => {
+      const state = i.failed ? 'failed' : online && !held ? 'sending' : 'waiting';
+      held ||= !!i.failed && !i.refused;
+      const row = normalizeMessage({ id: `pending_${i.key}`, sender_id: currentUser?.id, body: i.body, client_message_id: i.key, created_at: i.createdAt }, currentUser?.id);
+      return { ...row, pending: true, parent_message_id: i.replyToId, outbox: state };
+    });
+    return rows.length ? [...messages, ...rows] : messages;
+  }, [messages, outboxItems, online, currentUser?.id]);
 
-  // Style B outbox: messages written offline go out once, in order, when the
-  // connection is back (the thread is open; cached bubbles survive a restart).
-  const replaying = useRef(false);
+  // Offline is the calm state the mockup draws: no load error while offline, and one reload when the signal returns.
+  const wasOnline = useRef(online);
   useEffect(() => {
-    if (!styleB || !online || replaying.current) return;
-    const queue = messages.filter((m) => m.pending && m.queued);
-    if (queue.length === 0) return;
-    replaying.current = true;
-    void (async () => {
-      for (const m of queue) await retryPending(m, true);
-      replaying.current = false;
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [styleB, online, messages]);
+    if (styleB && online && !wasOnline.current) void load();
+    wasOnline.current = online;
+  }, [styleB, online, load]);
 
   // ─── Long-press action handlers ────────────────────────────────────────────
   const handleLongPress = useCallback((m: BubbleMessage) => {
-    const found = messages.find((x) => x.id === m.id);
+    const found = shown.find((x) => x.id === m.id);
     setActionTarget(found ?? null);
-  }, [messages]);
+  }, [shown]);
 
   const handleReply = useCallback(() => {
     if (!actionTarget) return;
@@ -526,8 +521,8 @@ export default function MessagesScreen() {
 
   // Defence-in-depth filter — strip blocked senders before render.
   const visibleMessages = useMemo(
-    () => filterOutBlocked(messages, blockedIds),
-    [messages, blockedIds],
+    () => filterOutBlocked(shown, blockedIds),
+    [shown, blockedIds],
   );
 
   // Style B: "Read {time}" sits under the newest read client message; a read
@@ -728,7 +723,7 @@ export default function MessagesScreen() {
         <PinnedBar pins={thread.pins} onOpen={(id) => jumpToMessage(flatListRef.current, visibleMessages, id)} />
       ) : null}
 
-      {error ? (
+      {error && (online || !styleB) ? (
         <TouchableOpacity style={styles.errorBanner} onPress={load} accessibilityRole="button" accessibilityLabel="Retry loading messages">
           <Text style={styles.errorBannerText}>{error}</Text>
         </TouchableOpacity>
@@ -750,14 +745,14 @@ export default function MessagesScreen() {
       <FlatList
         ref={flatListRef}
         data={visibleMessages}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => (styleB && item.v2?.client_message_id) || item.id}
         contentContainerStyle={[styles.chatList, styleB && styles.bChatList]}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         onScrollToIndexFailed={({ averageItemLength, index }) =>
           flatListRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true })
         }
-        ListFooterComponent={styleB ? <StyleBQueued count={visibleMessages.filter((m) => m.pending && m.queued).length} /> : undefined}
+        ListFooterComponent={styleB && !online ? <StyleBQueued count={visibleMessages.filter((m) => m.outbox === 'waiting').length} /> : undefined}
         ListHeaderComponent={
           hasMoreOlder && visibleMessages.length > 0 ? (
             <TouchableOpacity
@@ -853,14 +848,14 @@ export default function MessagesScreen() {
                 <StyleBBubble
                   message={bubbleMsg}
                   isMe={isMe}
-                  state={item.pending ? (item.queued ? 'waiting' : 'failed') : 'sent'}
+                  state={item.outbox === 'failed' || item.outbox === 'waiting' ? item.outbox : 'sent'}
                   groupEnd={showTimestamp}
                   readAt={item.id === lastReadId ? item.read_at : null}
                   showSent={index === lastClientMsgIdx && !item.pending && !item.read_at}
                   animateIn={new Date(item.created_at).getTime() > (paintedUpTo.current ?? Infinity)}
                   reduceMotion={reduceMotion}
                   onLongPress={handleLongPress}
-                  onRetry={() => void retryPending(item)}
+                  onRetry={() => retryOutbox(item.v2?.client_message_id)}
                   draftContext={draftContext}
                 />
               </View>
@@ -935,7 +930,8 @@ export default function MessagesScreen() {
           onReport={handleOpenReport}
           onRetry={(m) => {
             const key = m.v2?.client_message_id;
-            if (key) void sendV2(m.body, key, actionTarget?.parent_message_id ?? null, m.id);
+            if (styleB) retryOutbox(key);
+            else if (key) void sendV2(m.body, key, actionTarget?.parent_message_id ?? null, m.id);
           }}
           muteOpen={muteMenu}
           onMuteClose={() => setMuteMenu(false)}
