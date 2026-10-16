@@ -181,6 +181,8 @@ export default function AiConsentSheet({
   const coachless = Boolean(cachedUser?.id && !cachedUser.coach_id);
   // CRISIS-APP-COPY: ask for the crisis-sentence copies exactly while roman_crisis_alert is on.
   const crisisAlert = useCrisisAlertNow();
+  // The copies the sheet asks for; its grant sends the same ask (b#1047).
+  const ask = useCallback(() => (coachless ? { coachFree: true } : { crisis: crisisAlert() }), [coachless, crisisAlert]);
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   // Presentation (ROMAN-ROOM-133, operator 17:16): the sheet clears the
@@ -239,7 +241,7 @@ export default function AiConsentSheet({
     const uid = sessionRef.current();
     loadedFor.current = uid;
     setPhase({ kind: 'loading' });
-    const out = await api.getStatus(coachless ? { coachFree: true } : { crisis: crisisAlert() });
+    const out = await api.getStatus(ask());
     // Stale: the sheet closed, or the session that asked has ended.
     if (!active.current || !isSession(uid)) return;
     if (out.kind === 'unavailable') return setPhase({ kind: 'unavailable' });
@@ -253,7 +255,7 @@ export default function AiConsentSheet({
     const status = out.status;
     if (isLiveGrant(status, status.current_version)) return setPhase({ kind: 'already_on' });
     setPhase(readyFrom(status));
-  }, [api, coachless, crisisAlert, isSession, readyFrom, reportUnknown]);
+  }, [api, ask, isSession, readyFrom, reportUnknown]);
 
   useEffect(() => {
     if (visible) void load();
@@ -270,7 +272,7 @@ export default function AiConsentSheet({
       // Never read the ledger under another session, and never act on it.
       if (!active.current || !isSession(uid)) return;
       setPhase({ kind: 'checking' });
-      const check = await api.getStatus(coachless ? { coachFree: true } : { crisis: crisisAlert() });
+      const check = await api.getStatus(ask());
       if (!active.current || !isSession(uid)) return;
       if (check.kind === 'ok' && check.status) {
         const st = check.status;
@@ -294,7 +296,7 @@ export default function AiConsentSheet({
       });
       setPhase({ kind: 'unconfirmed', reference });
     },
-    [api, coachless, crisisAlert, isSession, onGranted, readyFrom, reportUnknown],
+    [api, ask, isSession, onGranted, readyFrom, reportUnknown],
   );
 
   const allow = useCallback(async () => {
@@ -315,6 +317,7 @@ export default function AiConsentSheet({
               ...(status.copy?.sha256 ? { copy_sha256: status.copy.sha256 } : {}),
               platform: platformTag(),
             },
+        ask(),
       ),
     );
     if (!active.current) return;
@@ -337,7 +340,7 @@ export default function AiConsentSheet({
     // Possibly written: no reply, 408/409/5xx, or a success without a
     // readable live grant (null or other status).
     await reconcile(uid, version, out.kind === 'error' ? out.requestId : null);
-  }, [api, isSession, onGranted, phase, reconcile, reportUnknown, sessionUserId]);
+  }, [api, ask, isSession, onGranted, phase, reconcile, reportUnknown, sessionUserId]);
 
   /** "Already on" retries only for the account whose status was shown. */
   const retryAlreadyOn = useCallback(() => {

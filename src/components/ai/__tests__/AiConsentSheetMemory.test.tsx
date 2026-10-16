@@ -88,7 +88,7 @@ describe('AiConsentSheet grants Roman memory while the server offers it (R11-C2B
     expect(r.getByTestId('s-paragraph').props.children).toBe(V5_PARAGRAPH);
     await fireEvent.press(r.getByTestId('s-allow'));
     await waitFor(() => expect(onGranted).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v7', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256, platform });
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v7', copy_sha256: AI_CONSENT_MEMORY_COPY_SHA256, platform }, { crisis: false });
   });
 
   it.each([
@@ -102,6 +102,6 @@ describe('AiConsentSheet grants Roman memory while the server offers it (R11-C2B
     expect(r.getByTestId('s-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
     await fireEvent.press(r.getByTestId('s-allow'));
     await waitFor(() => expect(onGranted).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: AI_CONSENT_VERSION, copy_sha256: AI_CONSENT_COPY_SHA256, platform });
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: AI_CONSENT_VERSION, copy_sha256: AI_CONSENT_COPY_SHA256, platform }, { crisis: false });
   });
 });
