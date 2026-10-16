@@ -840,6 +840,11 @@ export default function MessagesScreen() {
             read_at: item.read_at,
             ...bubbleV2Fields(item.v2, currentUser?.id, parent),
           };
+          const draftContext = item.sender_role === 'coach' ? {
+            coach: coachName.trim().split(/\s+/)[0] || 'Your coach',
+            client: currentUser?.firstName || currentUser?.name?.split(' ')[0] || '',
+            isSender: false,
+          } : undefined;
 
           if (styleB) {
             return (
@@ -856,6 +861,7 @@ export default function MessagesScreen() {
                   reduceMotion={reduceMotion}
                   onLongPress={handleLongPress}
                   onRetry={() => void retryPending(item)}
+                  draftContext={draftContext}
                 />
               </View>
             );
@@ -878,11 +884,7 @@ export default function MessagesScreen() {
               )}
               <MessageBubble
                 message={bubbleMsg}
-                draftContext={item.sender_role === 'coach' ? {
-                  coach: coachName.trim().split(/\s+/)[0] || 'Your coach',
-                  client: currentUser?.firstName || currentUser?.name?.split(' ')[0] || '',
-                  isSender: false,
-                } : undefined}
+                draftContext={draftContext}
                 isMe={isMe}
                 receipt={receiptNode}
                 showTimestamp={showTimestamp}

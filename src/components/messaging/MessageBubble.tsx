@@ -11,15 +11,13 @@
  *   - replies render a quoted parent stub above the bubble body
  *   - the long-press hold triggers a selection haptic
  */
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
 import { typography, radius } from '../../theme/tokens';
-import { featureFlags } from '../../config/featureFlags';
-import { RomanDraftMark, type RomanDraftContext } from './RomanDraftMark';
-import { RomanDraftSheet, focusRomanControl } from './RomanDraftSheet';
+import { RomanDraftFrame, romanMarked, romanMarkedBubble, type RomanDraftContext } from './RomanDraftMark';
 
 export interface BubbleMessage {
   id: string;
@@ -60,25 +58,17 @@ export function MessageBubble({
 }: MessageBubbleProps): React.ReactElement {
   const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const marked = featureFlags.romanDraftMark && message.drafted && !message.deleted && !!draftContext;
-  const [revealed, setRevealed] = useState(false);
-  const [sheet, setSheet] = useState(false);
-  const mark = useRef<View>(null);
-  const formatTime = (iso: string): string => {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  };
-  const metadata = (showTimestamp || message.edited || message.pinned || message.pending) && <Text style={[styles.time, isMe && styles.timeMe]}>
-    {message.deleted ? '' : `${message.pinned ? 'Pinned  ' : ''}${message.edited ? 'Edited  ' : ''}`}
-    {showTimestamp ? formatTime(message.created_at) : ''}
-    {message.pending ? '  ' : ''}
-    {message.pending ? <Ionicons name="time-outline" size={10} color={colors.textMuted} /> : null}
-  </Text>;
+  const marked = romanMarked(message, draftContext);
 
   const handleLongPress = (): void => {
     HapticService.selection();
     onLongPress(message);
+  };
+
+  const formatTime = (iso: string): string => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   };
 
   return (
@@ -86,11 +76,10 @@ export function MessageBubble({
       style={[
         styles.row,
         isMe ? styles.rowRight : styles.rowLeft,
-        marked && (isMe ? styles.markedRowMe : styles.markedRowThem),
         message.pending ? styles.rowPending : undefined,
       ]}
     >
-      <View testID={marked ? 'roman-draft-frame' : undefined} style={marked ? styles.markedFrame : styles.frame}>
+      <RomanDraftFrame marked={marked} isMe={isMe} context={draftContext} width={78} inset={14} onLongPress={handleLongPress}>
       <Pressable
         onLongPress={handleLongPress}
         delayLongPress={350}
@@ -104,7 +93,7 @@ export function MessageBubble({
         style={({ pressed }) => [
           styles.bubble,
           isMe ? styles.bubbleMe : styles.bubbleThem,
-          marked && styles.markedBubble,
+          marked && romanMarkedBubble,
           pressed && styles.bubblePressed,
         ]}
       >
@@ -140,20 +129,16 @@ export function MessageBubble({
         ) : (
           <Text style={[styles.body, isMe && styles.bodyMe]}>{message.body}</Text>
         )}
-        {metadata}
+        {(showTimestamp || message.edited || message.pinned || message.pending) && <Text style={[styles.time, isMe && styles.timeMe]}>
+          {message.deleted ? '' : `${message.pinned ? 'Pinned  ' : ''}${message.edited ? 'Edited  ' : ''}`}
+          {showTimestamp ? formatTime(message.created_at) : ''}
+          {message.pending ? '  ' : ''}
+          {message.pending ? (
+            <Ionicons name="time-outline" size={10} color={colors.textMuted} />
+          ) : null}
+        </Text>}
       </Pressable>
-      {marked && draftContext && <RomanDraftMark ref={mark} isMe={isMe} context={draftContext}
-        expanded={revealed} onPress={() => { HapticService.selection(); setRevealed(true); }}
-        onLongPress={handleLongPress} />}
-      </View>
-      {marked && revealed && <Pressable style={styles.disclosure} accessibilityRole="button"
-        accessibilityLabel="Drafted by Roman" accessibilityHint="Opens a short explanation."
-        onLongPress={handleLongPress} delayLongPress={350}
-        onPress={() => { HapticService.selection(); setSheet(true); }}>
-        <Text style={styles.disclosureText}>Drafted by Roman</Text>
-      </Pressable>}
-      {marked && sheet && draftContext && <RomanDraftSheet context={draftContext}
-        onClose={() => setSheet(false)} onDismiss={() => focusRomanControl(mark.current)} />}
+      </RomanDraftFrame>
 
       {receipt ? <View style={styles.receiptWrap}>{receipt}</View> : null}
     </View>
@@ -166,15 +151,6 @@ const makeStyles = (colors: ThreadColors) =>
     rowRight: { alignItems: 'flex-end' },
     rowLeft: { alignItems: 'flex-start' },
     rowPending: { opacity: 1 },
-    frame: { maxWidth: '78%' },
-    // The 22% inner gutter keeps a marked bubble at the same 78% limit as every other bubble;
-    // the frame's padding keeps the mark's complete hit box inside native bounds.
-    markedRowMe: { paddingLeft: '22%' },
-    markedRowThem: { paddingRight: '22%' },
-    markedFrame: { paddingBottom: 18, paddingHorizontal: 16, marginHorizontal: -16 },
-    markedBubble: { paddingBottom: 26, minWidth: 44 },
-    disclosure: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 14 },
-    disclosureText: { ...typography.bodySmall, color: colors.textMuted, fontStyle: 'italic', textDecorationLine: 'underline' },
 
     bubble: {
       borderRadius: radius.card,

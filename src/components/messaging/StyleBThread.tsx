@@ -12,6 +12,7 @@ import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { useTheme } from '../../theme/ThemeProvider';
 import { colors as palette, gold, layout, motion, radius, typography, withAlpha } from '../../theme/tokens';
 import type { BubbleMessage } from './MessageBubble';
+import { RomanDraftFrame, romanMarked, romanMarkedBubble, type RomanDraftContext } from './RomanDraftMark';
 
 export type SendState = 'sent' | 'failed' | 'waiting';
 
@@ -96,10 +97,17 @@ export interface StyleBBubbleProps {
   reduceMotion: boolean;
   onLongPress: (m: BubbleMessage) => void;
   onRetry: () => void;
+  /** ROMANMARK: the coach's rows carry it; a drafted one gets the Roman mark (RomanDraftFrame). */
+  draftContext?: RomanDraftContext;
 }
 
-export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent, animateIn, reduceMotion, onLongPress, onRetry }: StyleBBubbleProps): React.ReactElement {
+export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent, animateIn, reduceMotion, onLongPress, onRetry, draftContext }: StyleBBubbleProps): React.ReactElement {
   const c = useB();
+  const marked = romanMarked(message, draftContext);
+  const longPress = () => {
+    HapticService.selection();
+    onLongPress(message);
+  };
   const failed = isMe && state === 'failed';
   const waiting = isMe && state === 'waiting';
   const filled = isMe && !failed && !waiting;
@@ -121,12 +129,10 @@ export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent,
 
   return (
     <Animated.View testID={`c3b-row-${message.id}`} style={[isMe ? s.right : s.left, { marginBottom: groupEnd ? 16 : 4, opacity: enter, transform: [{ translateY: lift }] }]}>
+      <RomanDraftFrame marked={marked} isMe={isMe} context={draftContext} width={80} inset={16} onLongPress={longPress}>
       <Pressable
         onPress={failed ? onRetry : undefined}
-        onLongPress={() => {
-          HapticService.selection();
-          onLongPress(message);
-        }}
+        onLongPress={longPress}
         delayLongPress={350}
         accessibilityRole="button"
         accessibilityLabel={message.deleted
@@ -139,6 +145,7 @@ export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent,
           failed && [s.edge, { borderColor: c.warmEdge }],
           waiting && [s.edge, s.dashed, { borderColor: c.muted }],
           filled && groupEnd && s.tail,
+          marked && romanMarkedBubble,
           pressed && s.pressed,
         ]}
       >
@@ -151,6 +158,7 @@ export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent,
           ? <Text style={[s.body, s.deleted, { color: filled ? c.onMine : c.muted }]}>Message deleted</Text>
           : <Text style={[s.body, { color: text }]}>{message.body}</Text>}
       </Pressable>
+      </RomanDraftFrame>
       {!failed && !waiting && meta ? <Text style={[s.meta, { color: c.muted }]}>{meta}</Text> : null}
       {waiting ? (
         <View style={s.status}>
@@ -233,7 +241,7 @@ const s = StyleSheet.create({
   day: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', textAlign: 'center', marginTop: 8, marginBottom: 16 },
   right: { alignItems: 'flex-end' },
   left: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '80%', minHeight: layout.touchMin, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'center' },
+  bubble: { minHeight: layout.touchMin, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'center' },
   tail: { borderBottomRightRadius: radius.control },
   edge: { borderWidth: 1 },
   dashed: { borderStyle: 'dashed' },

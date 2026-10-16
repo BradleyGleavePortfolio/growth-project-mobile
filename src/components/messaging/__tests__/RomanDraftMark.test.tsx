@@ -2,6 +2,7 @@ import React from 'react';
 import { Animated, PanResponder, StyleSheet, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import MessageBubble from '../MessageBubble';
+import { StyleBBubble, timeB } from '../StyleBThread';
 import { RomanDraftSheet } from '../RomanDraftSheet';
 import { ROMAN_DRAFT_HINT } from '../RomanDraftMark';
 import { bubbleV2Fields, readThreadV2Fields } from '../threadV2';
@@ -66,6 +67,31 @@ it.each([false, true])('walks every governed message path on side isMe=%s', asyn
   expect(u.queryByTestId('roman-draft-mark')).toBeNull();
 });
 
+it('walks the same paths through the C3 Style B client bubble: the mark, and the time outside every bubble alike', async () => {
+  const timeOutside = new RegExp(timeB(base.created_at));
+  const styleB = (message: Parameters<typeof StyleBBubble>[0]['message'], ctx?: typeof context) => render(
+    <StyleBBubble message={message} isMe={false} state="sent" groupEnd animateIn={false} reduceMotion={false}
+      onLongPress={jest.fn()} onRetry={jest.fn()} draftContext={ctx} />);
+  for (const [name, row, expected] of cases) {
+    const message = { ...base, ...bubbleV2Fields(readThreadV2Fields(row), 'client', null) };
+    const u = await styleB(message, row.sender_role === 'client' ? undefined : context);
+    expect({ path: name, marked: Boolean(u.queryByTestId('roman-draft-mark')) }).toEqual({ path: name, marked: expected });
+    expect(u.getAllByText(timeOutside)).toHaveLength(1);
+    expect(within(u.getByLabelText(/^Message/)).queryByText(timeOutside)).toBeNull();
+    await u.unmount();
+  }
+  const u = await styleB({ ...base, drafted: true }, context);
+  expect(StyleSheet.flatten(u.getByTestId('roman-draft-mark').props.style)).toMatchObject({ width: 44, height: 44, right: 0 });
+  expect(StyleSheet.flatten(u.getByLabelText(/^Message/).props.style)).toMatchObject({ paddingBottom: 26, paddingHorizontal: 16 });
+  await fireEvent.press(u.getByTestId('roman-draft-mark'));
+  await fireEvent.press(u.getByLabelText('Drafted by Roman'));
+  expect(u.getByText(/Sam chose to send it to you/)).toBeTruthy();
+  setFlag(false);
+  await u.rerender(<StyleBBubble message={{ ...base, drafted: true }} isMe={false} state="sent" groupEnd animateIn={false}
+    reduceMotion={false} onLongPress={jest.fn()} onRetry={jest.fn()} draftContext={context} />);
+  expect(u.queryByTestId('roman-draft-mark')).toBeNull();
+});
+
 it.each([false, true])('two taps reveal then explain, with long press forwarded on side %s', async (isMe) => {
   const onLongPress = jest.fn();
   const message = { ...base, drafted: true };
@@ -94,6 +120,10 @@ it.each([false, true])('two taps reveal then explain, with long press forwarded 
   await fireEvent.press(u.getByTestId('roman-draft-ok'));
   expect(u.queryByText('Drafted with Roman')).toBeNull();
   expect(u.getByTestId('roman-draft-mark').props.accessibilityState).toEqual({ expanded: true });
+  // A second tap on the mark is never dead: it folds the line away again.
+  await fireEvent.press(u.getByTestId('roman-draft-mark'));
+  expect(u.queryByText('Drafted by Roman')).toBeNull();
+  expect(u.getByTestId('roman-draft-mark').props.accessibilityState).toEqual({ expanded: false });
 });
 
 it.each([false, true])('sheet motion, content and every dismissal (reduced=%s)', async (reduced) => {

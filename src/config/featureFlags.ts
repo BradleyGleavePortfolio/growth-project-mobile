@@ -88,7 +88,7 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 
 /** Centralised, typed flag map. Add new flags here as new surfaces land. */
 export const featureFlags = {
-  /** ROMANMARK: off in every build until the owner approves the two-step S-03 hint. */
+  /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
   romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
   /** Team management stays hidden for launch, including in development. */
   teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),

@@ -40,13 +40,14 @@ Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133):
 
 ### Roman (AI butler) identity
 
-`messaging/MessageBubble.tsx` places `RomanDraftMark` once for both coach/client threads.
-The shared row adapter reads existing `ai_draft_id`; typed, voice, client-authored and deleted
-messages have no mark. `EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK` defaults off in every build pending
-owner approval of the two-step screen reader hint. Tap the 24 pt mark (44 pt target) to reveal
-the italic underlined “Drafted by Roman”; tap that line for `RomanDraftSheet` (c06/k06).
-Long press still opens message actions. The sheet uses radius.sheet, a 250 ms slide or
-150 ms cross-fade under Reduce Motion, and closes with OK, backdrop, downward swipe or Back.
+`messaging/RomanDraftMark.tsx` owns the Roman draft mark for every thread bubble: `romanMarked` is the one
+eligibility rule and `RomanDraftFrame` wraps the bubble in `MessageBubble.tsx` (both threads) and in the client's
+C3 Style B `StyleBThread.tsx`. The shared row adapter reads existing `ai_draft_id`; typed, voice, client-authored
+and deleted messages have no mark. `EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK` defaults off in every build. Tap the 24 pt
+mark (44 pt target) to show the italic underlined “Drafted by Roman”, tap it again to fold the line away; tap the
+line for `RomanDraftSheet` (c06/k06). Times stay where each thread puts them for every row. Long press still opens
+message actions. The sheet uses radius.sheet, a 250 ms slide or 150 ms cross-fade under Reduce Motion, and closes
+with OK, backdrop, downward swipe or Back.
 No new read, write, draft lookup or permission change; the existing thread scope is unchanged.
 
 | File | What it does |

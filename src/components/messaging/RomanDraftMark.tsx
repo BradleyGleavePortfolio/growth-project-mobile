@@ -1,7 +1,11 @@
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from '../roman/RomanAvatar';
-import { colors, radius } from '../../theme/tokens';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { useTheme } from '../../theme/ThemeProvider';
+import { colors, radius, typography } from '../../theme/tokens';
+import { featureFlags } from '../../config/featureFlags';
+import { RomanDraftSheet, focusRomanControl } from './RomanDraftSheet';
 
 export interface RomanDraftContext {
   coach: string;
@@ -9,9 +13,14 @@ export interface RomanDraftContext {
   isSender: boolean;
 }
 
-/** S-03 is pending owner approval. Keep romanDraftMark off until approved. */
+/** ROMANMARK-S-03, the owner's new two-step hint (#ROMANMARK-S03 "new hint", 10-15). */
 export const ROMAN_DRAFT_HINT =
   'Shows “Drafted by Roman”. Tap that line to open a short explanation.';
+
+/** The one eligibility rule for every thread bubble: a drafted, not deleted message, in a thread that names its coach. */
+export function romanMarked(m: { drafted?: boolean; deleted?: boolean }, context?: RomanDraftContext): context is RomanDraftContext {
+  return featureFlags.romanDraftMark && !!m.drafted && !m.deleted && !!context;
+}
 
 export const RomanDraftMark = React.forwardRef<View, {
   isMe: boolean;
@@ -41,7 +50,55 @@ export const RomanDraftMark = React.forwardRef<View, {
   );
 });
 
+/**
+ * Wraps one thread bubble (MessageBubble or the C3 Style B bubble): the mark on its bottom inner corner, the faint
+ * "Drafted by Roman" line under it, and the sheet. `width` is the bubble's max width in percent of the row; a marked
+ * bubble keeps that limit through the inner gutter, and the frame's padding keeps the 44 pt target inside native bounds.
+ * `inset` is the bubble's side padding, so the line starts under the text. Unmarked, it is only the max-width box.
+ */
+export function RomanDraftFrame({ marked, isMe, context, width, inset, onLongPress, children }: {
+  marked: boolean;
+  isMe: boolean;
+  context?: RomanDraftContext;
+  width: number;
+  inset: number;
+  onLongPress: () => void;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const muted = useTheme().semanticColors.textMuted;
+  const [revealed, setRevealed] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const mark = useRef<View>(null);
+  if (!marked || !context) return <View style={{ maxWidth: `${width}%` }}>{children}</View>;
+  return (
+    <>
+      <View style={[styles.gutter, isMe ? { paddingLeft: `${100 - width}%`, alignItems: 'flex-end' } : { paddingRight: `${100 - width}%`, alignItems: 'flex-start' }]}>
+        <View testID="roman-draft-frame" style={styles.frame}>
+          {children}
+          <RomanDraftMark ref={mark} isMe={isMe} context={context} expanded={revealed}
+            onPress={() => { HapticService.selection(); setRevealed((v) => !v); }} onLongPress={onLongPress} />
+        </View>
+      </View>
+      {revealed ? (
+        <Pressable style={[styles.line, { paddingHorizontal: inset }]} accessibilityRole="button" accessibilityLabel="Drafted by Roman"
+          accessibilityHint="Opens a short explanation." onLongPress={onLongPress} delayLongPress={350}
+          onPress={() => { HapticService.selection(); setSheet(true); }}>
+          <Text style={[styles.lineText, { color: muted }]}>Drafted by Roman</Text>
+        </Pressable>
+      ) : null}
+      {sheet ? <RomanDraftSheet context={context} onClose={() => setSheet(false)} onDismiss={() => focusRomanControl(mark.current)} /> : null}
+    </>
+  );
+}
+
+/** Added to a marked bubble: room under the text for the 44 pt target, never a target narrower than itself. */
+export const romanMarkedBubble = { paddingBottom: 26, minWidth: 44 } as const;
+
 const styles = StyleSheet.create({
+  gutter: { alignSelf: 'stretch' },
+  frame: { paddingBottom: 18, paddingHorizontal: 16, marginHorizontal: -16 },
+  line: { minHeight: 44, minWidth: 44, justifyContent: 'center' },
+  lineText: { ...typography.bodySmall, fontStyle: 'italic', textDecorationLine: 'underline' },
   target: { position: 'absolute', width: 44, height: 44, bottom: 0 },
   own: { left: 0 },
   incoming: { right: 0 },
