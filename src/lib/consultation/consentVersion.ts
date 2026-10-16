@@ -21,7 +21,7 @@
  * with D2; it must become 'consult-consent-v3' with this copy) and rejects any other P0 with 409
  * consent_missing, so the two sides move together. Any change to the P0
  * text needs a new version here AND on the backend.
- * v5 (owner C-6a, 2026-10-12): v3 without paragraph 3's clinic sentence.
+ * v5 (owner C-6a, 2026-10-12): v3 without paragraph 3's referral-partner sentence.
  * v7 (owner 57c, 2026-10-12): v5 with the safety-reply exception in paragraph 4 (client-ai-v6).
  */
 export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v7' as const;

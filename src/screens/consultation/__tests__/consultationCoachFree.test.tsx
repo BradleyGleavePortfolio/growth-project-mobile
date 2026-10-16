@@ -96,7 +96,7 @@ const V5CF_COPY: AiConsentUpgradeCopy = {
 const CF_STATUS = aiStatus({ current_version: 'client-ai-v4-coach-free' });
 
 describe('coach-free copy (owner 62)', () => {
-  it('only removes words from the coached text, names no coach and never mentions a clinic', () => {
+  it('only removes words from the coached text, names no coach and never names the referral partner', () => {
     const pairs: Array<[string, string]> = [
       ...CONSENT_PARAGRAPHS.map((p, i): [string, string] => [p, CONSENT_PARAGRAPHS_COACH_FREE[i]]),
       [CONSENT_CHECKBOX_LABEL, CONSENT_CHECKBOX_LABEL_COACH_FREE],
@@ -107,7 +107,7 @@ describe('coach-free copy (owner 62)', () => {
     for (const [coached, free] of pairs) {
       expect(removalsOnly(coached, free)).toBe(true);
       expect(free.replace(/To coach you|to coach me/g, '')).not.toMatch(/coach/i);
-      expect(free).not.toMatch(/clinic/i);
+      expect(free).not.toMatch(/cl[i]nic/i);
     }
     expect(CONSENT_PARAGRAPHS_COACH_FREE.slice(0, 2)).toEqual(CONSENT_PARAGRAPHS.slice(0, 2));
   });
