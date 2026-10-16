@@ -67,6 +67,31 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('SleepRecoveryScreen', () => {
+  it.each([
+    [180, '3h asleep'],
+    [420, '7h asleep'],
+    [0, 'Sleep stages appear once your tracker syncs a night'],
+  ])('shows a factual sleep headline for %i minutes', async (minutes, expected) => {
+    mockUseWearableSamples.mockReturnValue({
+      data: resp([
+        { metric: 'SLEEP_LIGHT_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(minutes)] },
+        { metric: 'SLEEP_AWAKE_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(30)] },
+      ]),
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      error: null,
+    });
+    const { getByTestId } = await render(<SleepRecoveryScreen />);
+    const headline = getByTestId('sleep-stages-headline').props.children as string;
+    expect(headline).toBe(expected);
+    expect(headline).not.toMatch(/\b(solid|restorative|good|great|poor|short)\b/i);
+    expect(mockUseWearableSamples).toHaveBeenCalledWith(
+      expect.not.objectContaining({ clientId: expect.anything() }),
+    );
+  });
+
   it('renders the empty state (NOT a spinner) when there is no data', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([]),

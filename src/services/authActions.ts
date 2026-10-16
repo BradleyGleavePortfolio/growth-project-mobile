@@ -41,6 +41,7 @@ import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
 import { DAY1_ANSWERS_KEY_PREFIX } from '../screens/day-one/answers';
+import { releaseAgeHolds } from '../lib/ageGate';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = [
@@ -409,6 +410,9 @@ export async function signOut(userId?: string | null, opts: SignOutOptions = {})
   // no new native page, record type, upload or progress write starts after
   // the person taps Log out (the `logout` event below comes much later).
   stopOnDeviceHealthWork();
+  // FIXAGE2 R5: nothing sign-out sends, and no request already held, waits on
+  // the age step (lib/ageGate).
+  releaseAgeHolds();
   // Sol B-362-7: health grants and progress leave through their own chain.
   const healthStateRetired = retireOnDeviceStateAtSignOut();
   try {

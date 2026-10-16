@@ -11,6 +11,8 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import MoneyHomeCard from "../../../components/coach/money/MoneyHomeCard";
 import BriefHomeCard from "../../../components/coach/brief/BriefHomeCard";
 import { featureFlags } from "../../../config/featureFlags";
+import PushPermissionCard from "../../../components/home/PushPermissionCard";
+import { coachLandingTab } from "../../../navigation/coachLanding";
 import CoachSetupChecklist, {
   type ChecklistTarget,
 } from "../../../components/coach/setup/CoachSetupChecklist";
@@ -76,6 +78,11 @@ export default function CoachHomeCards() {
   );
   return (
     <View testID="coach-home-cards">
+      {/* C-S-PUSH-3 + COACHLAND: Overview is the landing (coachTabsV2 on), so
+          it carries the coach's deferred push ask, in Home's hairline look. */}
+      {coachLandingTab() === "CommandCenter" ? (
+        <PushPermissionCard audience="coach" presentation="section" />
+      ) : null}
       <CoachSetupChecklist onOpen={open} />
       {featureFlags.coachBrief ? <BriefHomeCard onOpen={openBrief} /> : null}
       <MoneyHomeCard

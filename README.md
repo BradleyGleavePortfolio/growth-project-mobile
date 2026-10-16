@@ -421,7 +421,7 @@ src/
 
 ## Navigation
 
-Coach tabs (COACHTABS, behind `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off): Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from a gear on Overview, Community from Messages and Team from Clients; every existing route and push target still lands. Off, the coach bar is unchanged. See `src/navigation/README.md`.
+Coach tabs (COACHTABS, behind `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off): Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from a gear on Overview, Community from Messages and Team from Clients; every existing route and push target still lands. With it on, coaches open the app on Overview. Off, the coach bar and the Clients landing are unchanged. See `src/navigation/README.md`.
 
 New clients complete either LeanQ1–LeanQ6 or the available consultation. Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
 

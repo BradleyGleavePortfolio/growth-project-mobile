@@ -34,6 +34,7 @@ const mockGet = jest.fn(async (url: string) => {
   return { data: { is_complete: true } };
 });
 jest.mock('../services/api', () => ({
+  authApi: { me: async () => ({ data: { profile: { date_of_birth: '1990-01-01' } } }) },
   __esModule: true,
   default: {
     get: (url: string) => mockGet(url),
