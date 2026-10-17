@@ -1,6 +1,6 @@
 # Consultation onboarding (consult-v1)
 
-The full personal-training consultation a new client completes before their first day: Roman's welcome, a single "I agree" box straight after it, eight chapters of questions, the readiness screening, a summary, and the macro and plan reveals. It replaces the lean flow when `featureFlags.consultationOnboarding` is on.
+The full personal-training consultation a new client completes before their first day: Roman's welcome, a single "I agree" box straight after it, eight chapters of questions, the readiness screening, a summary, and the macro and plan reveals. Every new client gets it (RootNavigator B14); the unmounted lean flow it replaced was deleted (ONBQ-TILES).
 
 ## Rollout and rollback
 
@@ -9,9 +9,7 @@ The full personal-training consultation a new client completes before their firs
 | `consultationOnboarding` | `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` | off in every general build (not `isDev`) | on, via the `clinic` profile in `eas.json` |
 | `consultTilesV2` | `EXPO_PUBLIC_FF_CONSULT_TILES_V2` | off in every build | off; no profile sets it (see Quiet Tiles) |
 
-`RootNavigator` mounts `ConsultationOnboardingNavigator` for `authState === 'onboarding'` when the flag is on, and `LeanOnboardingNavigator` when it is off. Rollback is the flag; no code path changes for flag-off builds.
-
-The lean flow's skip-to-finish path (LeanQ2 "Skip, I'll set this later" calling `finalizeLeanOnboarding`) is not reachable with the flag on. The consultation can only finish from the plan reveal, which is reached only after a successful `POST /me/onboarding/complete`.
+`RootNavigator` mounts `ConsultationOnboardingNavigator` for `authState === 'onboarding'` for every new client (B14). The consultation can only finish from the plan reveal, which is reached only after a successful `POST /me/onboarding/complete`.
 
 ## Quiet Tiles (`consultTilesV2`, ONBQ-TILES)
 
