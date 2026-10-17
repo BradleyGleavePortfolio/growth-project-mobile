@@ -51,6 +51,7 @@ it('44 pt targets: Availability steppers reach 44 with hitSlop, the Clients filt
   const avail = read('screens/coach/CoachAvailabilityEditorScreen.tsx');
   expect(avail.match(/hitSlop=\{4\}\n\s*style=\{\[styles\.stepBtn,/g)).toHaveLength(4);
   expect(avail).toMatch(/stepBtn: \{[^}]*width: 36,\s*height: 36,/);
+  expect(avail).toMatch(/windowRow: \{\s*flexDirection: 'row',[^}]*flexWrap: 'wrap',/);
   expect(read('screens/coach/ClientsListScreen.tsx')).toMatch(/filterChip: \{\s*paddingHorizontal: 8,\s*minHeight: 44,\s*minWidth: 44,/);
 });
 

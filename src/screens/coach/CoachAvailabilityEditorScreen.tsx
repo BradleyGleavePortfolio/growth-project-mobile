@@ -362,6 +362,8 @@ const styles = StyleSheet.create({
   },
   windowRow: {
     flexDirection: 'row',
+    // Two steppers and Remove are wider than a 360-390 pt card: Remove wraps.
+    flexWrap: 'wrap',
     alignItems: 'center',
     marginTop: spacing.sm,
   },
