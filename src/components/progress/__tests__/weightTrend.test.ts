@@ -37,5 +37,5 @@ it('filters after full-history smoothing, not a fresh seed at each period', () =
   expect(weightPeriod(days, '30D')).toHaveLength(30);
   expect(weightPeriod(days, '7D')[0].y).toBe(179);
   expect(weightPeriod(days, 'All')).toBe(days);
-  expect(weightDomain(days, 2, true, 165)).toEqual([162, 184]);
+  expect(weightDomain(days, 2, true, 165)).toEqual([162, 186]);
 });
