@@ -37,7 +37,7 @@ import {
 } from '../services/accountBinding';
 import { supportReferenceOf } from '../utils/correlation';
 import type { RomanMessage, RomanSurface } from './romanApi';
-import { RomanSafetyActionsWireSchema, toSafetyActions } from './romanSafetyActions';
+import { RomanSafetyActionsWireSchema, safetyActionsConfig, toSafetyActions } from './romanSafetyActions';
 
 /** Backend default and maximum page size (roman.constants.ts). */
 export const ROMAN_CHATS_PAGE_LIMIT = 30;
@@ -283,6 +283,7 @@ export const romanChatsApi: RomanChatsApi = {
       const res = await api.get<unknown>(`/roman/sessions/${encodeURIComponent(id)}/messages`, {
         ...config,
         params: pageParams(opts),
+        ...safetyActionsConfig(),
       });
       const parsed = RomanTranscriptPageSchema.safeParse(res?.data);
       if (!parsed.success) return { ok: false, failure: drift(res) };

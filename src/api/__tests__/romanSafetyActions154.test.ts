@@ -17,6 +17,12 @@ jest.mock('../../services/api', () => ({
 jest.mock('../../services/secureStorage', () => ({
   secureStorage: { getItem: jest.fn(async () => 'test-token') },
 }));
+const mockFlag = { on: false };
+jest.mock('../../config/featureFlags', () => {
+  const actual = jest.requireActual('../../config/featureFlags');
+  const featureFlags = Object.defineProperty({ ...actual.featureFlags }, 'crisisActions', { get: () => mockFlag.on, enumerable: true });
+  return { ...actual, featureFlags };
+});
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const api = require('../../services/api').default as { get: jest.Mock };
@@ -27,7 +33,10 @@ const wire = (over: Record<string, unknown> = {}) => ({
   id: 'cm1', role: 'roman', content: 'Fixed reply.', interrupted: false, createdAt: '2026-10-17T08:00:00.000Z', ...over,
 });
 
-beforeEach(() => api.get.mockReset());
+beforeEach(() => {
+  api.get.mockReset();
+  mockFlag.on = false;
+});
 
 it('keeps known codes once each in a fixed order and drops the rest', () => {
   expect(toSafetyActions(undefined)).toBeUndefined();
@@ -94,4 +103,28 @@ it('transcript: the same marker maps on the read-only chat, and its absence chan
   if (!out.ok) return;
   expect(out.value.messages[0].safetyActions).toEqual(['call_988', 'text_988']);
   expect(out.value.messages[1]).not.toHaveProperty('safetyActions');
+});
+
+describe('the app asks for the marker (backend #1075 header) only with the flag on', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it.each([[false], [true]])('flag on: %s', async (on) => {
+    mockFlag.on = on;
+    const asked = on ? { 'x-roman-safety-actions': '1' } : undefined;
+    api.get.mockResolvedValue({ status: 200, data: { messages: [], nextCursor: null } });
+    await listMessages(SESSION, { limit: 10 });
+    expect(api.get.mock.calls[0][1].headers).toEqual(asked);
+    await romanChatsApi.readMessages({ subject: 'sub:user-a', epoch: authEpoch() }, SESSION);
+    expect(api.get.mock.calls[1][1].headers).toEqual(asked);
+    const live = jest.fn<Promise<Response>, [string, RequestInit]>(async () => ({
+      ok: true, status: 200, headers: { get: () => null },
+      text: async () => 'data: {"type":"done","text":"x","messageId":"cm5","interrupted":false}\n\n',
+    }) as unknown as Response);
+    global.fetch = live as unknown as typeof fetch;
+    await sendMessage(SESSION, 'hello');
+    expect((live.mock.calls[0][1].headers as Record<string, string>)['x-roman-safety-actions']).toBe(on ? '1' : undefined);
+  });
 });

@@ -65,7 +65,13 @@ import api from '../services/api';
 import { env } from '../config/env';
 import { secureStorage } from '../services/secureStorage';
 import { logger } from '../utils/logger';
-import { RomanSafetyActionsWireSchema, toSafetyActions, type RomanSafetyAction } from './romanSafetyActions';
+import {
+  RomanSafetyActionsWireSchema,
+  safetyActionsConfig,
+  safetyActionsHeaders,
+  toSafetyActions,
+  type RomanSafetyAction,
+} from './romanSafetyActions';
 import { captureError } from '../services/sentry';
 import { romanRequiresCoachFromHttp, romanRequiresCoachOf } from '../lib/ai/romanRequiresCoach';
 import {
@@ -382,6 +388,7 @@ export async function listMessages(
   try {
     const res = await api.get(`/roman/sessions/${encodeURIComponent(sessionId)}/messages`, {
       params,
+      ...safetyActionsConfig(),
     });
     const parsed = RomanWireMessagePageSchema.safeParse(res.data);
     if (!parsed.success) {
@@ -510,6 +517,7 @@ export async function sendMessage(
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...safetyActionsHeaders(),
       },
       body: JSON.stringify({ content }),
       signal: controller.signal,
