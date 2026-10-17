@@ -168,6 +168,10 @@ it.each(['empty', 'not_configured'])('ClientPackages connected client retains ga
   }
   const r = await render(<ClientPackagesScreen />);
   expect(await r.findByText('No self-serve plans yet')).toBeTruthy();
+  // BILLFIX1 (agent 144): full stops, no em dash.
+  expect(r.getByText(
+    'Your coach handles access directly. Message them to start or change a plan. No payment is taken inside the app until they enable it.',
+  )).toBeTruthy();
   expect(r.getByText('Message your coach')).toBeTruthy();
   expect(r.queryByText(TITLE)).toBeNull();
 });

@@ -32,12 +32,14 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
+  EXPO_PUBLIC_FF_C3_STYLE_B: process.env.EXPO_PUBLIC_FF_C3_STYLE_B,
   EXPO_PUBLIC_FF_CLIENT_CALENDAR: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR,
   EXPO_PUBLIC_FF_CLIENT_HOME_RINGS: process.env.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
+  EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
   EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: process.env.EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE,
@@ -63,6 +65,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ROMAN_CHAT: process.env.EXPO_PUBLIC_FF_ROMAN_CHAT,
   EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE,
   EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL: process.env.EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL,
+  EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK: process.env.EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK,
   EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW: process.env.EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW,
   EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH: process.env.EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH,
   EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE,
@@ -86,8 +89,19 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 
 /** Centralised, typed flag map. Add new flags here as new surfaces land. */
 export const featureFlags = {
+  /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
+  romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
   /** Team management stays hidden for launch, including in development. */
   teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),
+
+  /**
+   * COACHTABS: the coach bar becomes Overview, Programs, Money, Calendar,
+   * Messages, Clients. Settings opens from Overview, Community from Messages
+   * and Team from Clients. Default off; off, the bar is today's.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_TABS_V2
+   */
+  coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', false),
 
   // ─── Bloodwork ────────────────────────────────────────────────────────────
   /**
@@ -386,9 +400,9 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
   mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
-  // UI-1 (owner 10-09, V1_1_UI_SPEC): the rings and tiles client Home. Off in
-  // every eas.json profile until the owner switches it on in its own PR; off
-  // renders today's Home unchanged.
+  // UI-1 (owner 10-09, V1_1_UI_SPEC; v1 since owner 10-17 "home-v1"): the rings
+  // and tiles client Home. Default off and set by no eas.json profile until the
+  // owner switches it on in its own PR; off renders today's Home unchanged.
   //
   // env: EXPO_PUBLIC_FF_CLIENT_HOME_RINGS
   clientHomeRings: readFlag('EXPO_PUBLIC_FF_CLIENT_HOME_RINGS', false),
@@ -566,6 +580,17 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS
    */
   wearableAiInsights: readFlag('EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS', false),
+
+  // ─── C3B-THREAD — client coach thread in Style B "Focus" ─────────────────
+  /**
+   * The client's coach thread drawn as MOCK-C3 Style B (owner pick: "I like c3
+   * option b"): bubbles, a visible tap to send a failed message again,
+   * "Waiting to send" while offline, and the coach's read time. OFF
+   * UNCONDITIONALLY; with it off the thread is exactly main's.
+   *
+   * env: EXPO_PUBLIC_FF_C3_STYLE_B
+   */
+  c3StyleB: readFlag('EXPO_PUBLIC_FF_C3_STYLE_B', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

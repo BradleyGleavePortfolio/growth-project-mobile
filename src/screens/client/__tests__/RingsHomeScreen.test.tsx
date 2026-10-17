@@ -103,10 +103,11 @@ beforeEach(() => {
   ]);
 });
 
-it('the flag is off in every eas.json profile, so merging changes nothing for users', () => {
+it('no build profile switches the flag on and it defaults off, so merging changes nothing for users', () => {
   const eas = require('../../../../eas.json') as { build: Record<string, { env?: Record<string, string> }> };
   for (const [name, profile] of Object.entries(eas.build)) {
-    expect([name, profile.env?.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS]).toEqual([name, 'false']);
+    const value = String(profile.env?.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS ?? '').trim().toLowerCase();
+    expect([name, ['1', 'true', 'yes', 'on'].includes(value)]).toEqual([name, false]);
   }
   expect(jest.requireActual('../../../config/featureFlags').featureFlags.clientHomeRings).toBe(false);
 });
@@ -184,7 +185,7 @@ it.each([
   expect(await screen.findByLabelText('Train, — workouts, This week')).toBeTruthy();
 });
 
-it('coachless: Roman shown locked in the header, never opens Roman, Join a coach under the dials', async () => {
+it('coachless: Roman locked in the header opens his lock screen, not a chat; Join a coach under the dials', async () => {
   mockUser.coach_id = '';
   mockAssignments.mockResolvedValue([]);
   mockHistory.mockResolvedValue({ data: [{ date: weekStart }] });
@@ -197,8 +198,19 @@ it('coachless: Roman shown locked in the header, never opens Roman, Join a coach
   expect(screen.queryByLabelText('Chat with Roman')).toBeNull();
   expect(screen.queryByText(/^Message /)).toBeNull();
   expect(screen.getAllByTestId('roman-locked-avatar')).toHaveLength(2); // header and Roman's line
+  // RomanChatScreen renders the lock (JoinCoachState) for a client with no coach before any session opens.
   await fireEvent.press(screen.getByLabelText('Roman. Opens with a coach'));
-  expect(mockNavigate).not.toHaveBeenCalled();
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'RomanChat', initial: false });
+});
+
+it('coachless with Roman chat off: no Roman at all, the same as a coached client, and no dead tap', async () => {
+  mockUser.coach_id = ''; mockRomanChat = false;
+  mockAssignments.mockResolvedValue([]);
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Open Train')).toBeTruthy();
+  expect(screen.queryByLabelText('Roman. Opens with a coach')).toBeNull();
+  expect(screen.queryByText('Opens with a coach')).toBeNull();
+  expect(screen.getByTestId('home-leading-empty')).toBeTruthy();
 });
 
 it('a failed day read shows the quiet error with Try again and dashes, not zero totals', async () => {

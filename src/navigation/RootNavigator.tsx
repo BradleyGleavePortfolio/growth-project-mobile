@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Linking, AppState } from 'react-native';
+import { Linking, AppState, View } from 'react-native';
 import { logger } from '../utils/logger';
 import { triggerSync as triggerWorkoutSync } from '../offline';
 import {
@@ -43,7 +43,7 @@ import { DunningLockoutProvider } from '../entitlements/dunning/DunningLockoutPr
 // inside NavigationContainer around the per-auth-state navigator so the
 // container, its ref and the deep-link replay behaviour are untouched.
 import { PersistedQueryCacheGate } from '../services/PersistedQueryCacheGate';
-import api from '../services/api';
+import api, { authApi } from '../services/api';
 // Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
 import { initCrisp, syncCrispIdentity } from '../services/support/crisp.service';
 import { identify as analyticsIdentify } from '../lib/analytics';
@@ -65,6 +65,8 @@ type AuthState =
   | 'coach'
   | 'package_prompt'
   | 'student'
+  // AGEGATE16: a client with no date of birth on file confirms 16 or older once.
+  | 'age_check'
   // START-HANG-134 (B37): a startup read on this phone did not answer in time.
   | 'startup_error';
 
@@ -75,7 +77,9 @@ type AuthState =
 // for the reset-password path so the ResetPassword screen receives
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
 import { emailVerifiedPath, fragmentToQuery } from './deepLinkUtils';
-import { readUserCache, clearUserCache } from '../lib/userCache';
+import { readUserCache, clearUserCache, patchUserCache } from '../lib/userCache';
+import { clientAgeConfirmed, onAgeConfirmationRequired } from '../lib/ageGate';
+import { AgeCheckNavigator } from '../screens/consultation/AgeCheckScreen';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
 import {
@@ -395,6 +399,8 @@ export default function RootNavigator() {
     if (sessionUserId) analyticsIdentify(sessionUserId);
   }, [sessionUserId]);
   const pendingDay1Target = useRef<WinType | null>(null);
+  const selectedDay1Target = useRef<{ winType: WinType; userId: string } | null>(null);
+  const [day1SavedWin, setDay1SavedWin] = useState<{ winType: WinType; userId: string } | undefined>();
   // Deep-link replay state for the public accept-invite path. When a
   // signed-in user clicks an accept-invite URL we sign them out and then
   // navigate to AcceptInvite ONLY after authState flips to
@@ -434,6 +440,29 @@ export default function RootNavigator() {
     const unsubscribe = authEvents.onAuthChange(bootstrapAuth);
     return unsubscribe;
   }, []);
+
+  // AGEGATE16: a client route refused for a missing age confirmation (the
+  // server rule) opens the age step from inside the client app. Setup and
+  // the coach app are never interrupted.
+  // FIXAGE2 R7: "a client whose latest known date of birth is not a confirmed
+  // 16+ date never enters the client app from a cache." The refusal is the
+  // latest answer: the cached date is cleared (so no cold start trusts it),
+  // and a client bootstrap past its age check commits nothing after it.
+  const clientPastAgeCheck = useRef(false);
+  useEffect(
+    () =>
+      onAgeConfirmationRequired(() => {
+        void readUserCache()
+          .then((u) => (u?.role === 'student' ? patchUserCache({ profile: { date_of_birth: null } }) : undefined))
+          .catch((err: unknown) => logger.warn('RootNavigator', 'cached date of birth not cleared', err));
+        const booting = clientPastAgeCheck.current;
+        if (booting) bootGuard.begin();
+        setAuthStateNow((s) =>
+          s === 'student' || s === 'package_prompt' || s === 'day1win' || (s === 'loading' && booting) ? 'age_check' : s,
+        );
+      }),
+    [],
+  );
 
   // Root-level deep-link guard.
   //
@@ -670,6 +699,7 @@ export default function RootNavigator() {
     // one (an auth event during a cold start, or Try again) commits nothing,
     // so a slow earlier run can never overwrite the newer outcome.
     const isLatest = bootGuard.begin();
+    clientPastAgeCheck.current = false;
     const setAuthState = (next: AuthState) => {
       if (isLatest()) setAuthStateNow(next);
     };
@@ -824,6 +854,20 @@ export default function RootNavigator() {
           );
         }
 
+        // AGEGATE16 (owner #C8-UNDER18-B): every client confirms 16 or older
+        // before entering. A client past setup with no date of birth on file
+        // (any way in that skipped the consultation) is asked once.
+        const ageConfirmed = await clientAgeConfirmed(
+          user?.profile,
+          () => withStartupTimeout(authApi.me(), 'age check'),
+          (dob) => patchUserCache({ profile: { date_of_birth: dob } }),
+        );
+        if (!ageConfirmed) {
+          setAuthState('age_check');
+          return;
+        }
+        if (isLatest()) clientPastAgeCheck.current = true;
+
         // Consultation onboarding (flag on, Opus B-05): the consultation, its
         // plan reveal and Roman's tutorial replace the Day-1 flow and the
         // Day-1 win, so a client who finished it goes straight to the app.
@@ -912,46 +956,44 @@ export default function RootNavigator() {
     void bootstrapAuth();
   };
 
-  // Called by Day1WinScreen when the client completes the win OR skips.
-  // When `target` is set, the user just completed a win and wants to deep
-  // link into the matching logger; we stash it and route after the
-  // ClientNavigator mounts.
+  // A card starts logging, not completion. The matching confirmed save
+  // brings the client back to the existing Day One note surface.
   const handleDay1WinComplete = (target?: WinType) => {
     pendingDay1Target.current = target ?? null;
+    selectedDay1Target.current = target && sessionUserId ? { winType: target, userId: sessionUserId } : null;
+    setDay1SavedWin(undefined);
     setAuthStateNow('student');
   };
 
-  // After auth flips to 'student' and the navigator mounts, route the user
-  // into the logger that matches their selected Day 1 Win card.
-  useEffect(() => {
-    if (authState !== 'student' || !pendingDay1Target.current) return;
+  const handleDay1Saved = (winType: WinType) => {
+    if (selectedDay1Target.current?.winType !== winType || selectedDay1Target.current.userId !== sessionUserId) return;
+    setDay1SavedWin(selectedDay1Target.current);
+    selectedDay1Target.current = null;
+    setAuthStateNow('day1win');
+  };
+
+  // Route only once the real logger navigator is ready, including after
+  // the existing persisted-cache gate finishes restoring.
+  const flushPendingDay1Target = () => {
+    if (authState !== 'student' || !pendingDay1Target.current || !navigationRef.isReady()) return;
+    if (selectedDay1Target.current?.userId !== sessionUserId) return;
     const target = pendingDay1Target.current;
     pendingDay1Target.current = null;
-    // Two-frame delay lets ClientNavigator finish its first commit before
-    // we issue the imperative navigate — without it, navigationRef.isReady()
-    // can still be false on slower devices.
-    const t = setTimeout(() => {
-      if (!navigationRef.isReady()) return;
-      try {
-        // The container ref is typed with the loose root param map; we cast
-        // each call's args through `never` because the nested ClientNavigator
-        // tab params are not threaded into this module.
-        const nav = navigationRef as unknown as {
-          navigate: (name: string, params?: object) => void;
-        };
-        if (target === 'first_meal') {
-          nav.navigate('Log');
-        } else if (target === 'first_checkin') {
-          nav.navigate('Home', { screen: 'Habits' });
-        } else if (target === 'logged_first_weight') {
-          nav.navigate('MoreTab', { screen: 'Progress' });
-        }
-      } catch (err) {
-        logger.warn('RootNavigator', 'non-fatal', err);
+    try {
+      const nav = navigationRef as unknown as {
+        navigate: (name: string, params?: object) => void;
+      };
+      if (target === 'first_meal') {
+        nav.navigate('Log');
+      } else if (target === 'first_checkin') {
+        nav.navigate('Home', { screen: 'Habits' });
+      } else if (target === 'logged_first_weight') {
+        nav.navigate('MoreTab', { screen: 'Progress' });
       }
-    }, 50);
-    return () => clearTimeout(t);
-  }, [authState]);
+    } catch (err) {
+      logger.warn('RootNavigator', 'non-fatal', err);
+    }
+  };
 
   // iOS coach-managed gate action (audit #304 B1): the client's thread with
   // their coach lives on the Home stack and is free server-side.
@@ -977,18 +1019,21 @@ export default function RootNavigator() {
     return <StartupErrorScreen kind="device" onRetry={retryStartup} />;
   }
 
-  // Phase 7A: Day1WinScreen renders outside NavigationContainer because it is
-  // a one-time interstitial, not a navigable screen. It is shown once, on
-  // first student boot, then replaced by ClientNavigator.
-  if (authState === 'day1win') {
+  const savedWin = day1SavedWin?.userId === sessionUserId ? day1SavedWin?.winType : undefined;
+  const showingSavedWin = authState === 'day1win' && !!savedWin;
+  // Initial selection needs no navigator. After a save, keep the logger
+  // mounted behind the note so Continue restores its meal and feedback.
+  if (authState === 'day1win' && !savedWin) {
     return <Day1WinScreen onComplete={handleDay1WinComplete} />;
   }
 
   return (
+    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, display: showingSavedWin ? 'none' : 'flex' }}>
     <NavigationContainer
       ref={navigationRef}
-      onReady={() => flushPendingPushTap()}
-      onStateChange={() => { flushPendingPushTap(); }}
+      onReady={() => { flushPendingDay1Target(); flushPendingPushTap(); }}
+      onStateChange={() => { flushPendingDay1Target(); flushPendingPushTap(); }}
       linking={linking}
       theme={{
         ...DefaultTheme,
@@ -1018,6 +1063,10 @@ export default function RootNavigator() {
       ) : authState === 'onboarding' ? (
         // B14: the consultation for every new client; it has no skip-to-finish path.
         <ConsultationOnboardingNavigator />
+      ) : authState === 'age_check' ? (
+        // AGEGATE16: the consultation's own date-of-birth question, once,
+        // with the ways out (FIXAGE R4).
+        <AgeCheckNavigator onConfirmed={() => authEvents.emit()} onSignOut={signOutFromLockout} />
       ) : authState === 'coach_wizard' ? (
         // New coach — onboarding wizard before full coach dashboard.
         <CoachWizardNavigator />
@@ -1048,7 +1097,7 @@ export default function RootNavigator() {
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
-            <ClientNavigator />
+            <ClientNavigator onDay1Saved={handleDay1Saved} day1NoteVisible={showingSavedWin} />
           </DunningLockoutProvider>
           <PackageSelectionSheet
             visible
@@ -1078,11 +1127,16 @@ export default function RootNavigator() {
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
-            <ClientNavigator />
+            <ClientNavigator onDay1Saved={handleDay1Saved} day1NoteVisible={showingSavedWin} />
           </DunningLockoutProvider>
         </EntitlementProvider>
       )}
       </PersistedQueryCacheGate>
     </NavigationContainer>
+    </View>
+    {showingSavedWin ? (
+      <Day1WinScreen onComplete={handleDay1WinComplete} savedWin={savedWin} />
+    ) : null}
+    </View>
   );
 }

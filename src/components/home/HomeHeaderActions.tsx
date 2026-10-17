@@ -16,11 +16,17 @@
  * on, and stays empty otherwise.
  *
  * `layout="rings"` (UI-1 rings Home): a coachless client sees Roman locked
- * ("Opens with a coach", status only) instead of "Ask Roman" (139-15), and a
- * coached client's Roman avatar moves to "Ask Roman" under Roman's line.
+ * ("Opens with a coach") instead of "Ask Roman" (139-15). The tap opens Roman's
+ * existing lock screen (Join a coach), never a chat (owner 10-17: no dead tap).
+ * A coached client's Roman avatar moves to "Ask Roman" under Roman's line.
  *
  * The coach name comes from `GET /v1/clients/me/coach` (same endpoint as
  * CoachIntroductionBanner); any failure keeps the generic label.
+ *
+ * C3B-S2 (MOCK-C3 Style B, `featureFlags.c3StyleB`): with Roman chat on, the
+ * coach entry, the Roman avatar and "Ask Roman" all open the Messages list
+ * (HomeStack `MessagesInbox`), where the coach and Roman sit side by side.
+ * Flag off, or Roman chat off, every entry keeps its own destination.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -116,7 +122,10 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
       ? `Notifications, ${unreadCount > 99 ? '99+' : unreadCount} unread`
       : 'Notifications';
 
-  const openRoman = () => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false });
+  const toList = featureFlags.c3StyleB && featureFlags.romanChat;
+  const openMessages = () => navigation.navigate(toList ? 'MessagesInbox' : 'Messages');
+  const openRoman = () =>
+    toList ? navigation.navigate('MessagesInbox') : navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false });
   const hasCoach = !!coachId;
   // useCurrentUser reads the cache asynchronously (first render is null): choose
   // coach or Roman only once the user is known, so a coached client never sees
@@ -129,7 +138,7 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
     <View style={[styles.row, rings && styles.ringsRow]}>
       {hasCoach ? (
         <Pressable
-          onPress={() => navigation.navigate('Messages')}
+          onPress={openMessages}
           accessibilityRole="button"
           accessibilityLabel={messageLabel}
           testID="home-message-coach"
@@ -144,15 +153,15 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
           </Text>
           <NotificationBadge count={unreadMessages} />
         </Pressable>
-      ) : userKnown && rings ? (
-        <View style={styles.message} testID="home-roman-locked-header" accessible
-          accessibilityLabel="Roman. Opens with a coach">
+      ) : userKnown && rings && featureFlags.romanChat ? (
+        <Pressable onPress={openRoman} accessibilityRole="button" accessibilityLabel="Roman. Opens with a coach"
+          testID="home-roman-locked-header" style={({ pressed }) => [styles.message, { opacity: pressed ? 0.85 : 1 }]}>
           <LockedRomanAvatar />
           <View style={styles.lockedText}>
             <Text style={[typography.bodyMd, styles.lockedName, { color: sc.textPrimary }]}>Roman</Text>
             <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Opens with a coach</Text>
           </View>
-        </View>
+        </Pressable>
       ) : userKnown && featureFlags.romanChat ? (
         <Pressable
           onPress={openRoman}

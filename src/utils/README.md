@@ -51,6 +51,7 @@ Helpers used across the app. The rule of thumb: if a piece of logic is reused by
 | `nutrition.ts` | TDEE / macro target math. Pure functions, fully unit-tested. |
 | `weekUtils.ts` | Week-bucket helpers shared by Progress and Report. |
 | `log/*` | Small helpers used by the Log screen — `mapFoodItem`, `macros`, `types`. |
+| `workout/assignmentPrescription.ts` | The one rule for a coach assignment's name, type and rows (K3FIX-SNAPSHOT): the server's top-level `exercises` (frozen snapshot rows, even an empty list) and `snapshot` name/type; only a reply without `exercises` falls back to the live plan. Coach-approved Roman sets are laid over it. Duration stays the live plan's estimate (no snapshot field). Used by the assignment list, detail/Start, Home, Train and the plan card. |
 
 ## Data flow
 

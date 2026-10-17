@@ -179,7 +179,7 @@ export function SummaryTab({
           style={styles.actionPill}
           onPress={onOpenWorkoutBuilder}
           accessibilityRole="button"
-          accessibilityLabel="Open workout builder"
+          accessibilityLabel="Open client workouts"
         >
           <Ionicons name="barbell-outline" size={18} color={colors.primary} />
           <Text style={styles.actionPillText}>Workouts</Text>

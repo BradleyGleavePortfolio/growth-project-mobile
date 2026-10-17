@@ -1,10 +1,10 @@
 // Phase 9: Bell icon + NotificationCenter added to CoachNavigator.
 // All existing routes preserved.
 import React, { useEffect, useState } from 'react';
-import { AppState, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { AppState, Platform, Pressable, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { BottomTabBar, createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import type { NavigatorScreenParams } from '@react-navigation/native';
+import { CommonActions, type NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { coachApi } from '../services/api';
 import { logger } from '../utils/logger';
@@ -66,6 +66,7 @@ import ClientReassignModal from '../screens/coach/ClientReassignModal';
 import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
 // S-REACH: coach read of a client's consultation answers (backend #607).
 import ClientConsultationScreen from '../screens/coach/ClientConsultationScreen';
+import CoachSafetyAlertScreen from '../screens/coach/CoachSafetyAlertScreen';
 import ClientPaymentsScreen from '../screens/coach/ClientPaymentsScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
@@ -83,6 +84,8 @@ import CoachAppointmentTypesScreen from '../screens/coach/CoachAppointmentTypesS
 import CoachTimeOffScreen from '../screens/coach/CoachTimeOffScreen';
 // S-AVAIL-122 — booking options (notice, window, buffers, daily maximum).
 import CoachBookingOptionsScreen from '../screens/coach/CoachBookingOptionsScreen';
+// COACHTABS — Hours and rules, under the Calendar tab's gear.
+import CoachHoursScreen from '../screens/coach/CoachHoursScreen';
 import CoachBroadcastsScreen from '../screens/coach/broadcasts/CoachBroadcastsScreen';
 // M-FEATURED-123 — owner-only featured coach editor (Settings > Owner).
 import FeaturedCoachEditorScreen from '../screens/coach/featured/FeaturedCoachEditorScreen';
@@ -109,6 +112,7 @@ const GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate(CreditPackCheckoutS
 // shell so the §2.6 celebration can overlay any tab when the coach's first
 // payment INSERT lands (flag-gated; MMKV once-only).
 import FirstPaymentWowHost from '../screens/coach/ed/FirstPaymentWowHost';
+import CoachAiConsentHost from '../components/ai/CoachAiConsentHost';
 import CoachSetupScreen from '../screens/coach/setup/CoachSetupScreen';
 // Stream 2 — Coach AI execution drafts inbox (draft.client_message,
 // draft.assign_workout, draft.assign_meal_plan, draft.send_notification).
@@ -133,7 +137,7 @@ import { fetchUnreadCount } from '../services/notificationsApi';
 // The legacy CoachHomeScreen is preserved in the Clients stack as a sub-screen
 // so existing deep links and navigation.navigate() calls keep working.
 import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
-import { __USING_MOCK_DATA } from '../services/commandCenterApi';
+import { coachLandingTab } from './coachLanding';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
 // iMessage-grade DM — Apple App Review 1.2 compliance. ContactView lives in
@@ -145,14 +149,20 @@ import RomanConversationsScreen, { type RomanConversationParams } from '../scree
 import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../theme/ThemeProvider';
+import { typography } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCoachTeamStatus } from '../hooks/useCoachRoleType';
+import { CoachTeamEntryContext } from './coachTeamEntry';
+
+// Match ClientNavigator: reclaim the tab button's 5 pt inset for one-line labels.
+const TAB_BUTTON_PADDING = 5;
 
 export type CoachTabParamList = {
   // Phase 8: Command Center replaces the old top-level Dashboard tab.
   // The 'Dashboard' name is kept in the param list so any existing
   // navigate('Dashboard') calls in the codebase don't break.
-  CommandCenter: undefined;
+  // B-R1F: a Roman safety alert push or inbox row opens the Actions tab.
+  CommandCenter: { tab?: 'action-queue' } | undefined;
   // R27: typed nested nav so navigate('ClientsStack', { screen: 'ClientsList' })
   // type-checks against ClientsStackParamList (mirrors SettingsStack below).
   // `| undefined` preserves existing no-arg navigate('ClientsStack') callers.
@@ -164,10 +174,23 @@ export type CoachTabParamList = {
   // navigate('SettingsStack', ... as never) as the only way to deep-link
   // into a settings sub-screen, which silently broke when names changed.
   SettingsStack: NavigatorScreenParams<SettingsStackParamList> | undefined;
+  // COACHTABS (featureFlags.coachTabsV2): the Money tab (the Settings routes,
+  // opening on Money) and the Calendar tab (today's booking screens).
+  MoneyStack: NavigatorScreenParams<SettingsStackParamList> | undefined;
+  CalendarStack: NavigatorScreenParams<CalendarStackParamList> | undefined;
   TeamStack: undefined;
   // Community v1-6 — only present in the param list / tab bar when
   // `featureFlags.coachCommunity` is true (registered conditionally below).
   CommunityStack: undefined;
+};
+
+/** One Roman safety alert as CoachSafetyAlert shows it (its action queue row). */
+export type SafetyAlertParams = {
+  alertType: 'roman_urgent_reply' | 'roman_eating_disorder_reply' | 'roman_crisis_reply';
+  clientId: string;
+  clientName: string;
+  quote: string | null;
+  sentAt: string;
 };
 
 export type ClientsStackParamList = {
@@ -196,6 +219,11 @@ export type ClientsStackParamList = {
   CoachMacrosReview:    { clientId: string; clientName: string };
   /** S-REACH: consultation answers, from client detail > Summary. */
   ClientConsultation:   { clientId: string; clientName?: string };
+  /**
+   * B-R1F: one Roman safety alert, from its card in the action queue. Owner
+   * 57d: or by id ({ alertId }) from its push or inbox row.
+   */
+  CoachSafetyAlert: SafetyAlertParams | { alertId: string };
   /** COACH-PAY-M-130: payments, refund, pause and cancel, from client detail > Summary (server flag coach_payment_actions). */
   ClientPayments:       { clientId: string; clientName?: string };
   /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */
@@ -307,10 +335,17 @@ export type TeamStackParamList = {
   ClientReassign: { clientId: string; clientName: string; fromSubCoachId: string };
 };
 
+/** COACHTABS — the Calendar tab: the booking inbox, Hours and rules, and today's four booking settings screens. */
+export type CalendarStackParamList = Pick<
+  ClientsStackParamList,
+  'CoachBookingInbox' | 'CoachAvailabilityEditor' | 'CoachBookingOptions' | 'CoachAppointmentTypes' | 'CoachTimeOff'
+> & { CoachHours: undefined };
+
 const Tab = createBottomTabNavigator<CoachTabParamList>();
 const ClientsStack = createNativeStackNavigator<ClientsStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 const TeamStack = createNativeStackNavigator<TeamStackParamList>();
+const CalendarStack = createNativeStackNavigator<CalendarStackParamList>();
 
 // ─── Phase 9: unread count polling for the coach bell icon ───────────────────
 
@@ -404,6 +439,7 @@ function ClientsStackNavigator() {
         component={ClientConsultationScreen}
         options={{ headerShown: true, title: 'Consultation', headerBackTitle: 'Back' }}
       />
+      <ClientsStack.Screen name="CoachSafetyAlert" component={CoachSafetyAlertScreen} />
       {/* COACH-PAY-M-130: draws its own Back; entry shown only while the server flag is on. */}
       <ClientsStack.Screen name="ClientPayments" component={ClientPaymentsScreen} />
       <ClientsStack.Screen
@@ -511,9 +547,10 @@ function ClientsStackNavigator() {
   );
 }
 
-function SettingsStackNavigator() {
+function SettingsStackNavigator({ initialRouteName }: { initialRouteName?: keyof SettingsStackParamList }) {
   return (
     <SettingsStack.Navigator
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: Colors.background },
@@ -613,6 +650,83 @@ function SettingsStackNavigator() {
 }
 
 /**
+ * COACHTABS — the Money tab: its own copy of the Settings routes, opening on
+ * Money, so every screen Money opens (charges, packages, setup, credit packs)
+ * stays in this tab and Back stays inside it.
+ */
+function MoneyStackNavigator() {
+  return <SettingsStackNavigator initialRouteName="CoachMoney" />;
+}
+
+/**
+ * COACHTABS — the Calendar tab: today's booking screens until the K5 calendar
+ * lands. They draw their own titles, so the native header carries only Back
+ * (and, on the inbox, the gear to Hours and rules) and keeps the safe area.
+ */
+function CalendarStackNavigator() {
+  return (
+    <CalendarStack.Navigator
+      screenOptions={{
+        headerShown: true,
+        headerTitle: '',
+        headerBackTitle: 'Back',
+        headerShadowVisible: false,
+        headerStyle: { backgroundColor: Colors.background },
+        headerTintColor: Colors.textPrimary,
+        contentStyle: { backgroundColor: Colors.background },
+      }}
+    >
+      <CalendarStack.Screen
+        name="CoachBookingInbox"
+        component={CoachBookingInboxScreen}
+        options={({ navigation }) => ({
+          headerRight: () => (
+            <Pressable
+              onPress={() => {
+                HapticService.softImpact();
+                navigation.navigate('CoachHours');
+              }}
+              style={styles.headerGear}
+              accessibilityRole="button"
+              accessibilityLabel="Hours and rules"
+              testID="calendar-hours-button"
+            >
+              <Ionicons name="settings-outline" size={22} color={Colors.textPrimary} />
+            </Pressable>
+          ),
+        })}
+      />
+      <CalendarStack.Screen name="CoachHours" component={CoachHoursScreen} />
+      <CalendarStack.Screen name="CoachAvailabilityEditor" component={CoachAvailabilityEditorScreen} />
+      <CalendarStack.Screen name="CoachBookingOptions" component={CoachBookingOptionsScreen} />
+      <CalendarStack.Screen name="CoachAppointmentTypes" component={CoachAppointmentTypesScreen} />
+      <CalendarStack.Screen name="CoachTimeOff" component={CoachTimeOffScreen} />
+    </CalendarStack.Navigator>
+  );
+}
+
+/**
+ * COACHTABS — Settings, Community and Team stay registered tab routes, so
+ * every navigate() and push target still lands, but they open from an entry
+ * (Overview's gear, Messages, Clients) instead of the bar. While one is open
+ * the tab that holds its entry stays selected, and a tap on it goes back there.
+ */
+const ENTRY_TAB: Partial<Record<keyof CoachTabParamList, keyof CoachTabParamList>> = {
+  SettingsStack: 'CommandCenter',
+  CommunityStack: 'Messages',
+  TeamStack: 'ClientsStack',
+};
+const entryTabOf = (name: string): keyof CoachTabParamList | undefined =>
+  featureFlags.coachTabsV2 ? ENTRY_TAB[name as keyof CoachTabParamList] : undefined;
+
+function EntryTabBar(props: BottomTabBarProps) {
+  const { state } = props;
+  const entry = entryTabOf(state.routes[state.index].name);
+  const index = entry ? state.routes.findIndex((r) => r.name === entry) : -1;
+  return <BottomTabBar {...props} state={index >= 0 ? { ...state, index } : state} />;
+}
+
+/**
  * TeamStackNavigator
  *
  * Phase 11 / Track 7. Scale+ tier gate is enforced inside TeamManagementScreen
@@ -671,6 +785,7 @@ export default function CoachNavigator() {
   const { semanticColors: sc } = useTheme();
   const insets = useSafeAreaInsets();
   const unreadCount = useCoachUnreadPolling();
+  const unreadBadge = unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined;
   // P0-1: TeamStack must only mount for head coaches. Sub-coaches who land
   // on team-management surfaces hit `/sub-coaches` 403s the screen treats as
   // a permanent retry-error — a feature they don't own. The hook fails
@@ -685,33 +800,72 @@ export default function CoachNavigator() {
   // Team Mode stays hidden for launch even when an old roster still exists.
   const showTeamTab = featureFlags.teamMode &&
     teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
-  // Audit P0: while the Command Center API still ships only mock data
-  // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
-  // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
-  // screenshots) keep the CommandCenter landing surface.
-  const initialTab = __USING_MOCK_DATA ? 'CommandCenter' : 'ClientsStack';
+  // COACHLAND (owner 10-15 "coaches land on overview/home page"): with the six
+  // tabs every coach opens on Overview; off, real coaches open on Clients. This
+  // is the one place the coach's first screen is picked (coachLanding.ts, which
+  // also places the push ask): nothing saves navigation state or the last tab,
+  // and RootNavigator mounts this navigator afresh on cold start, sign-in and account switch.
+  const tabsV2 = featureFlags.coachTabsV2;
+  const initialTab = coachLandingTab();
+  const programsLabel = featureFlags.mwbPrograms || tabsV2 ? 'Programs' : 'Templates';
+  const clientsTab = (
+    <Tab.Screen
+      name="ClientsStack"
+      component={ClientsStackNavigator}
+      options={{
+        title: 'Clients',
+        tabBarAccessibilityLabel: 'Clients',
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name="people-outline" size={size} color={color} />
+        ),
+      }}
+    />
+  );
   return (
     <FirstPaymentWowHost>
+    <CoachTeamEntryContext.Provider value={tabsV2 && showTeamTab}>
     <Tab.Navigator
       initialRouteName={initialTab}
-      screenOptions={{
+      // COACHTABS: Back from Settings, Community or Team returns to the tab the coach came from.
+      backBehavior={tabsV2 ? 'history' : undefined}
+      tabBar={tabsV2 ? EntryTabBar : undefined}
+      screenOptions={({ route, navigation }) => ({
         headerShown: false,
+        ...(entryTabOf(route.name) ? { tabBarItemStyle: { display: 'none' as const } } : {}),
         // REDO-COACH-133 (QA-COACH-128): the coach bar wears the client
         // chrome — bone page colour, one hairline, outline glyphs, 11 pt Inter
         // labels (medium when focused) and a selection haptic. Tabs, order and
         // routes are unchanged.
         tabBarActiveTintColor: sc.accentText,
         tabBarInactiveTintColor: sc.textMuted,
+        // A fitted label bypasses bottom-tabs' iOS string-label position.
+        // Keep the native tab role and the library's original position wording.
+        tabBarButton: Platform.OS === 'web' ? undefined : (props) => {
+          // COACHTABS: count only the tabs on the bar, not the entry routes.
+          const routes = navigation.getState().routes.filter((tab) => !entryTabOf(tab.name));
+          return (
+            <Pressable
+              {...props}
+              ref={props.ref as React.Ref<View>}
+              role="tab"
+              accessibilityRole="tab"
+              aria-label={Platform.OS === 'ios'
+                ? `${props['aria-label']}, tab, ${routes.findIndex(tab => tab.key === route.key) + 1} of ${routes.length}`
+                : props['aria-label']}
+            />
+          );
+        },
         tabBarLabel: ({ focused, color, children }) => (
           <Text
-            style={{
-              fontFamily: focused ? 'Inter_500Medium' : 'Inter_400Regular',
-              fontSize: 11,
-              lineHeight: 14,
-              fontWeight: focused ? '500' : '400',
-              color,
-            }}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            // COACHTABS (K4): six labels fit at 360 pt when they grow to at most 110%.
+            maxFontSizeMultiplier={tabsV2 ? 1.1 : 1.3}
+            style={[
+              focused ? typography.tabLabelActive : typography.tabLabel,
+              { color, marginHorizontal: -TAB_BUTTON_PADDING, alignSelf: 'stretch', textAlign: 'center' },
+            ]}
           >
             {children}
           </Text>
@@ -724,34 +878,31 @@ export default function CoachNavigator() {
           paddingTop: 4,
           height: 60 + insets.bottom,
         },
-      }}
-      screenListeners={{
+      })}
+      screenListeners={({ navigation, route }) => ({
         tabPress: () => {
           HapticService.selection();
+          // COACHTABS: the selected tab under an open entry route goes back to itself.
+          const { routes, index } = navigation.getState();
+          if (entryTabOf(routes[index].name) === route.name) {
+            navigation.dispatch(CommonActions.navigate(route.name, route.params));
+          }
         },
-      }}
+      })}
     >
       {/* Phase 8: Command Center is the new home tab. */}
       <Tab.Screen
         name="CommandCenter"
         component={CommandCenterScreen}
         options={{
-          tabBarLabel: 'Overview',
+          title: 'Overview',
+          tabBarAccessibilityLabel: 'Overview',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid-outline" size={size} color={color} />
           ),
         }}
       />
-      <Tab.Screen
-        name="ClientsStack"
-        component={ClientsStackNavigator}
-        options={{
-          tabBarLabel: 'Clients',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
-          ),
-        }}
-      />
+      {!tabsV2 && clientsTab}
       {/* S-MWB — EXPO_PUBLIC_FF_MWB_PROGRAMS: the Programs library (build once,
           assign to many, add to packages) replaces the hard-coded Templates
           tab. The route name stays "Templates" so existing links keep working;
@@ -760,22 +911,48 @@ export default function CoachNavigator() {
         name="Templates"
         component={featureFlags.mwbPrograms ? ProgramsStackNavigator : ProgramTemplatesScreen}
         options={{
-          tabBarLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
-          tabBarAccessibilityLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
+          title: programsLabel,
+          tabBarAccessibilityLabel: programsLabel,
           tabBarIcon: ({ color, size }) => (
             <Ionicons
-              name={featureFlags.mwbPrograms ? 'barbell-outline' : 'document-text-outline'}
+              name={programsLabel === 'Programs' ? 'barbell-outline' : 'document-text-outline'}
               size={size}
               color={color}
             />
           ),
         }}
       />
+      {/* COACHTABS (owner 10-15): Money is today's Money page as a tab root; Calendar is today's booking screens. */}
+      {tabsV2 && (
+        <Tab.Screen
+          name="MoneyStack"
+          component={MoneyStackNavigator}
+          options={{
+            title: 'Money',
+            tabBarAccessibilityLabel: 'Money',
+            tabBarIcon: ({ color, size }) => <Ionicons name="logo-usd" size={size} color={color} />,
+          }}
+        />
+      )}
+      {tabsV2 && (
+        <Tab.Screen
+          name="CalendarStack"
+          component={CalendarStackNavigator}
+          options={{
+            title: 'Calendar',
+            tabBarAccessibilityLabel: 'Calendar',
+            tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" size={size} color={color} />,
+          }}
+        />
+      )}
       <Tab.Screen
         name="Messages"
         component={MessagesScreen}
         options={{
-          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+          tabBarAccessibilityLabel: unreadBadge !== undefined
+            ? `Messages, ${unreadBadge}`
+            : 'Messages',
+          tabBarBadge: unreadBadge,
           // Quiet forest count instead of the default red dot (no status hue).
           tabBarBadgeStyle: {
             backgroundColor: sc.accent,
@@ -788,6 +965,7 @@ export default function CoachNavigator() {
           ),
         }}
       />
+      {tabsV2 && clientsTab}
       {/* P0-1 + Phase 11 / Track 7 — Team tab. Scale+ tier gate enforced
           in-screen, role gate enforced here: sub-coaches and unresolved
           sessions never see the tab. */}
@@ -796,7 +974,8 @@ export default function CoachNavigator() {
           name="TeamStack"
           component={TeamStackNavigator}
           options={{
-            tabBarLabel: 'Team',
+            title: 'Team',
+            tabBarAccessibilityLabel: 'Team',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="briefcase-outline" size={size} color={color} />
             ),
@@ -812,7 +991,8 @@ export default function CoachNavigator() {
           name="CommunityStack"
           component={CoachCommunityNavigator}
           options={{
-            tabBarLabel: 'Community',
+            title: 'Community',
+            tabBarAccessibilityLabel: 'Community',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-circle-outline" size={size} color={color} />
             ),
@@ -823,18 +1003,28 @@ export default function CoachNavigator() {
         name="SettingsStack"
         component={SettingsStackNavigator}
         options={{
-          tabBarLabel: 'Settings',
+          title: 'Settings',
+          tabBarAccessibilityLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />
     </Tab.Navigator>
+    {/* COACH-AI-CONSENT: asked once over coach Home, when the server says never asked. */}
+    <CoachAiConsentHost />
+    </CoachTeamEntryContext.Provider>
     </FirstPaymentWowHost>
   );
 }
 
 const styles = StyleSheet.create({
+  headerGear: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bellButton: {
     marginRight: 16,
     padding: 4,

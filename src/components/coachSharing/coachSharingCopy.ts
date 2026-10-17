@@ -17,12 +17,14 @@ export const coachSharingCopy = {
   retry: 'Try again',
   noCoach: 'Coach sharing applies once a coach is connected to this account.',
   /**
-   * FW-BODY B2: a coach reads Apple Health and Health Connect data whatever the
-   * switches say (backend wearable-samples.service.ts assertCoachOwnsClient checks
-   * the coach link only), and a disconnect keeps what came in (disconnectCopy.ts).
+   * FW-BODY B2 / WEIGHTWALL: device weight and body fat follow the Weigh-ins
+   * switch (backend coach-sharing-gate.ts seesWeight, used by the device trend,
+   * insight, macros and AI-draft reads); a coach reads the other Apple Health and
+   * Health Connect data on the coach link only, and a disconnect keeps what came
+   * in (disconnectCopy.ts).
    */
   devicesNote:
-    'Connected devices, such as Apple Health and Health Connect, are not covered by these switches. Your coach can see the data they bring in, and data already shared stays with your coach after you disconnect.',
+    'Weight and body fat from connected devices, such as Apple Health and Health Connect, follow Weigh-ins. Your coach can see the other data they bring in, and it stays with your coach after you disconnect.',
   devicesLink: 'Connected devices',
   devicesLinkHint: 'Opens your connected devices',
 } as const;
