@@ -77,6 +77,12 @@ When the toggle changes:
 | `MessagesScreen` (client, `c3StyleB` on) | `success()` | The coach's read lands while the thread is open |
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
 | `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |
+| `WelcomeScreen` (`firstRunV2` on) | `mediumImpact()` | Get started |
+| `LoginScreen` (`firstRunV2` on) | `error()` | A sign-in failure is shown (once per failure) |
+| `LoginScreen`, `CreateAccountScreen`, `ResetPasswordScreen` (`firstRunV2` on) | `selection()` | Show or hide password |
+| `RoleChoice` tiles (`firstRunV2` on) | `selection()` | A role tile is picked |
+| `ForgotPasswordScreen` (`firstRunV2` on) | `softImpact()` | The reset request is submitted (the forest card shows) |
+| `ResetPasswordScreen` (`firstRunV2` on) | `success()` | The new password is saved |
 
 ## Architecture
 

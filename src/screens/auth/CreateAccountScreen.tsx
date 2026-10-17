@@ -90,6 +90,8 @@ import {
 } from '../../lib/coachSignupAttempt';
 import { layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import ResendVerificationLink from './ResendVerificationLink';
+import { authStyleB, RoundBack, styleBFieldStyles } from './AuthStyleB';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar, TextLink } from '../../ui';
 import { Checkbox } from '../consultation/components';
 import { coachAiConsentApi, markCoachAskedAtSignUp } from '../../api/coachAiConsentApi';
@@ -182,7 +184,10 @@ function canonicalEmailFrom(data: unknown, submitted: string): string {
 
 export default function CreateAccountScreen({ navigation, route }: Props) {
   const { semanticColors: colors = lightTokens } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  // C7 Style B (firstRunV2): the same form drawn as field cards; see codeAfterSignUp below.
+  const v2 = authStyleB();
+  const bField = useMemo(() => styleBFieldStyles(colors), [colors]);
+  const styles = useMemo(() => (v2 ? { ...makeStyles(colors), ...bField } : makeStyles(colors)), [colors, v2, bField]);
   // Sol B-324-1: "Request access" opens the one support inbox; if no email
   // app opens, the address, Copy and Try again are shown under the hint.
   const requestAccessEmail = useSupportEmail('Request access to The Growth Project');
@@ -223,6 +228,12 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [requireInviteCode, setRequireInviteCode] = useState(
     () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
   );
+  // MOCKUP3 C7 index-b-join section 7: with firstRunV2 on, the code is asked
+  // right after sign-up (RoleSelection) only while a policy answer from the
+  // server says it is optional. No answer, a code-required policy, or a code
+  // in hand (join link, or typed before the answer came) keeps today's field.
+  const codeAfterSignUp = v2 && !requireInviteCode && getLastKnownSignupPolicy()?.inviteCodeRequired === false;
+  const hideCode = codeAfterSignUp && !arrivedWithCode && !hasTypedCode;
   // Google is hidden until the server advertises it in `providers`.
   const [googleEnabled, setGoogleEnabled] = useState(
     () => getLastKnownSignupPolicy()?.googleEnabled === true,
@@ -1168,7 +1179,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     return (
       <Screen
         testID="create-account-role"
-        header={<ScreenTopBar onBack={leaveCreateAccount} testID="role-choice-back" />}
+        header={v2 ? <RoundBack onBack={leaveCreateAccount} testID="role-choice-back" /> : <ScreenTopBar onBack={leaveCreateAccount} testID="role-choice-back" />}
         footer={
           <>
             <PrimaryButton
@@ -1177,6 +1188,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               disabled={!roleDraft}
               testID="role-choice-continue"
             />
+            {codeAfterSignUp ? null : (
             <TextLink
               label="I have an invite code"
               tone="ink"
@@ -1191,6 +1203,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               }}
               testID="role-choice-invite-code"
             />
+            )}
           </>
         }
       >
@@ -1204,13 +1217,19 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             </View>
           ) : null}
           <RoleChoice
+            variant={v2 ? 'tiles' : 'rows'}
             selected={roleDraft}
             onSelect={(role) => {
               setRoleDraft(role);
               setError('');
             }}
           />
-          {roleDraft === 'client' ? (
+          {codeAfterSignUp && roleDraft !== 'coach' ? (
+            <Text style={styles.roleNote} testID="role-choice-code-after-sign-up">
+              Have a code from your coach? You enter it right after you sign up.
+            </Text>
+          ) : null}
+          {!codeAfterSignUp && roleDraft === 'client' ? (
             <Text style={styles.roleNote} testID="role-choice-coachless-note">
               No coach code yet? You can add one after you sign up.
             </Text>
@@ -1291,7 +1310,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   return (
     <Screen
       testID="create-account-register"
-      header={<ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
+      header={v2 ? <RoundBack onBack={backFromRegister} testID="create-account-back" /> : <ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
       footer={<>{keyboardOpen ? null : footerContent}</>}
     >
         <View style={styles.header}>
@@ -1418,6 +1437,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               onPress={handleAppleSignup}
               label="CONTINUE"
               cornerRadius={radius.button}
+              style={v2 ? { height: layout.buttonHeight } : undefined}
               onAvailable={() => setAppleShown(true)}
             />
             {googleEnabled ? (
@@ -1446,7 +1466,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {isCoachSignup ? null : (
+        {isCoachSignup || hideCode ? null : (
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>
               {requireInviteCode ? 'INVITE CODE' : 'INVITE CODE (OPTIONAL)'}
@@ -1560,7 +1580,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               style={[styles.input, styles.passwordInput]}
               value={password}
               onChangeText={setPassword}
-              placeholder="Min 8 chars, 1 upper, 1 number, 1 special"
+              placeholder={v2 ? undefined : 'Min 8 chars, 1 upper, 1 number, 1 special'}
               placeholderTextColor={colors.textMuted}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
@@ -1570,7 +1590,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               textContentType="newPassword"
             />
             <TouchableOpacity
-              onPress={() => setShowPassword((v) => !v)}
+              onPress={() => {
+                if (v2) void HapticService.selection();
+                setShowPassword((v) => !v);
+              }}
               style={styles.eyeBtn}
               accessibilityRole="button"
               accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
@@ -1583,6 +1606,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               />
             </TouchableOpacity>
           </View>
+          {v2 ? <Text style={bField.cardHint}>Minimum 8 characters, 1 uppercase, 1 number, 1 special</Text> : null}
         </View>
 
         <View style={styles.inputGroup}>

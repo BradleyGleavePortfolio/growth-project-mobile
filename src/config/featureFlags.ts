@@ -54,6 +54,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS,
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
+  EXPO_PUBLIC_FF_FIRST_RUN_V2: process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2,
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
@@ -584,6 +585,19 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_C3_STYLE_B
    */
   c3StyleB: readFlag('EXPO_PUBLIC_FF_C3_STYLE_B', false),
+
+  // ─── C7 Style B — sign-in and first run (MOCKUP3/C7, index-b-join) ───────
+  /**
+   * Slice 1: Welcome, Sign in, role choice, Create account, Forgot and Reset
+   * password drawn in Style B. Create account drops the code field only while
+   * the signup policy says the code is optional and no code came with the
+   * screen; the code is asked right after sign-up (RoleSelection). Every
+   * sign-in, sign-up and reset request is unchanged. OFF by default; with it
+   * off every auth screen is exactly main's.
+   *
+   * env: EXPO_PUBLIC_FF_FIRST_RUN_V2
+   */
+  firstRunV2: readFlag('EXPO_PUBLIC_FF_FIRST_RUN_V2', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
