@@ -198,10 +198,9 @@ function App() {
       if (isScreenshotMode()) {
         // Skip analytics in screenshot mode — it can throw modal UI on top of
         // the screen we are trying to capture. Seed AsyncStorage so
-        // RootNavigator routes the demo user straight into ClientNavigator.
-        // The local SQLite database is also skipped: none of the
-        // marketing-target screens (Home / Log / Plan / Recipes / Progress /
-        // Fast) read from it, and the web build of expo-sqlite needs
+        // ScreenshotNavigator then selects the frame's client/coach identity.
+        // Skip local SQLite initialization; these frames use the API fixtures
+        // and route-provided workout. The web build of expo-sqlite needs
         // cross-origin-isolation that the dev server does not set, which
         // would hang the boot.
         await seedDemoUser();

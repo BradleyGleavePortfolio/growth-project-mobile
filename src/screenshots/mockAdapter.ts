@@ -18,6 +18,7 @@ import type {
 } from 'axios';
 import api from '../services/api';
 import { isScreenshotMode } from './mode';
+import type { LtvMetrics } from '../components/command-center/CoachLtvDashboard';
 import {
   DEMO_AUTH_ME,
   DEMO_COMMUNITY_FEED,
@@ -124,6 +125,8 @@ const ROUTES: Route[] = [
   { method: 'GET', pattern: /^\/v1\/clients\/me\/coach$/, handler: () => ({ id: DEMO_USER.coach_id, name: 'Sam Carter' }) },
   { method: 'GET', pattern: /^\/coach\/team\/members$/, handler: () => [{ id: DEMO_USER.coach_id, role: 'head_coach' }] },
   { method: 'GET', pattern: /^\/notifications\/unread-count$/, handler: () => ({ count: 0 }) },
+  { method: 'GET', pattern: /^\/coach\/messages\/unread-count$/, handler: () => ({ count: 0 }) },
+  { method: 'GET', pattern: /^\/me\/ai-consent\/coach$/, handler: () => ({ granted: true, state: 'granted', asked: true }) },
   { method: 'GET', pattern: /^\/me\/feature-flags$/, handler: () => ({ flags: {}, evaluated_at: new Date().toISOString() }) },
   { method: 'GET', pattern: /^\/community\/me$/, handler: () => ({
     feature_flag_state: 'enabled', workspace_id: null, membership: null,
@@ -150,7 +153,19 @@ const ROUTES: Route[] = [
   }) },
   { method: 'GET', pattern: /^\/coach\/command-center\/at-risk$/, handler: () => ({ items: [], total_at_risk: 0 }) },
   { method: 'GET', pattern: /^\/coach\/connect\/payouts/, handler: () => ({ payouts: [] }) },
-  { method: 'GET', pattern: /^\/coach\/command-center\/ltv-metrics$/, handler: () => ({ active_client_count: 14, churn_rate_pct: 0, mrr_30d_ago_cents: 260000 }) },
+  { method: 'GET', pattern: /^\/coach\/command-center\/ltv-metrics$/, handler: () => ({
+    active_client_count: 14, churn_rate_pct: 0, mrr_30d_ago_cents: 260000,
+    mrr_cents: 300000, mrr_label: '$3,000', mrr_trend: 'up',
+    revenue_per_client_month_cents: 21429, revenue_per_client_month_label: '$214',
+    avg_client_lifespan_months: 6, lifespan_is_estimate: true,
+    estimated_ltv_cents: 128574, estimated_ltv_label: '$1,286',
+    net_revenue_retention_pct: 100, nrr_is_stub: true,
+    projected_annual_revenue_cents: 3600000, projected_annual_revenue_label: '$36,000',
+    zero_churn_streak_months: 0, all_time_peak_rpcm_cents: 0, all_time_peak_rpcm_label: '',
+    is_new_rpcm_record: false, ltv_cac_ratio: null,
+    next_milestone: { clients_needed: 0, mrr_target_cents: 300000, mrr_target_label: '$3,000' },
+    currency: 'usd', computed_at: new Date().toISOString(),
+  } satisfies LtvMetrics) },
   { method: 'GET', pattern: /^\/coach\/connect\/status$/, handler: () => ({
     state: 'active', account_id: 'demo-connect', charges_enabled: true, payouts_enabled: true, details_submitted: true,
   }) },

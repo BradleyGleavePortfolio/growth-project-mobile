@@ -54,7 +54,7 @@ function profileEnv(name) {
         const errors = [];
         page.on('pageerror', (error) => { errors.push(error.message); console.error(error.message); });
         page.on('console', (message) => {
-          if (message.text().includes('[screenshot mock]')) errors.push(message.text());
+          if (message.type() === 'error' || message.text().includes('[screenshot mock]')) errors.push(message.text());
         });
         await page.addInitScript(() => {
           const RealDate = Date;
@@ -72,6 +72,7 @@ function profileEnv(name) {
           await page.evaluate(() => document.fonts.ready);
           await page.waitForTimeout(Number(process.env.SCREENSHOT_SETTLE_MS || 1500));
           if (errors.length) throw new Error(errors.join('\n'));
+          await page.getByTestId(`screenshot-${target.slug}`).waitFor({ timeout: 1000 });
           const png = await page.screenshot({ path: path.join(dir, `${target.slug}.png`), animations: 'disabled' });
           if (png.readUInt32BE(16) !== size.width || png.readUInt32BE(20) !== size.height) {
             throw new Error(`Wrong PNG size: ${target.slug}`);
