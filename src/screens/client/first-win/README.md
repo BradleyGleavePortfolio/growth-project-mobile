@@ -8,6 +8,8 @@ Once completed the screen never appears again. If the API is unreachable at boot
 
 After save, the navigator stays mounted but hidden behind the note. Continue (including package dismissal/payment) reveals the same logger, not Home: an open meal keeps its active slot, search and existing `Added …` feedback; manual/repeat saves keep their existing `added to …` line. The food sheet is temporarily hidden with `suspended`, not reset. No completion selection is re-armed.
 
+Skip and Continue anyway use the shared `layout.touchMin` (44 pt) minimum. The completion Continue target remains 52 pt.
+
 ---
 
 ## Screens
@@ -105,6 +107,7 @@ None. The AI message is generated on the backend; the mobile app just renders th
 | RTL: Continue calls onComplete without a target | Does not reopen the saved logger |
 | RTL: failed note → card tap → retry | Re-sends only the saved win; no callback to log again, no automatic retry on rerender |
 | RTL: two failed requests → Continue anyway | Existing escape path stays reachable within the same screen mount |
+| Touch-target regression | Skip and Continue anyway use `layout.touchMin`; completion Continue remains at least 44 pt |
 
 CI also runs real-screen save callback assertions in the food journey, offline food, weigh-in and habit gate suites, plus the real root handoff in `rootNavigatorPackagePromptGate.test.tsx`. Root tests assert the navigator is never unmounted during the saved note; real ClientNavigator tests assert sheet suspension forwarding. The food journey exercises real LogScreen + Day1WinScreen for coached/coachless fixtures on both platform settings: first food → note → Continue → same Dinner search and success feedback → second food, with exactly one completion request. Manual/repeat feedback retention is covered too.
 
