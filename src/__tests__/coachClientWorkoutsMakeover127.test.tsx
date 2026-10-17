@@ -41,7 +41,7 @@ jest.mock('../services/api', () => ({ coachApi: {
   archiveClient: (...a: unknown[]) => mockArchive(...a), unarchiveClient: (...a: unknown[]) => mockUnarchive(...a),
 } }));
 const mockDetail = {
-  profile: {}, totals: {}, foodShared: true, workoutSessions: [], weightLogs: [], timeline: [], weekSummaries: [],
+  profile: {}, totals: {}, workoutSessions: [], weightLogs: [], timeline: [], weekSummaries: [],
   timelineLoading: false, timelineError: null as string | null, weeklyLoading: false, weeklyError: null as string | null,
   isLoading: false, refreshing: false, isArchived: false, serverMealPlans: [],
   loadData: jest.fn(async () => undefined), loadTimeline: jest.fn(), loadWeeklySummaries: jest.fn(),

@@ -1,10 +1,10 @@
 /**
- * Settings > Privacy > Coach sharing: which logs the current coach can read.
- * Owner #SHARE-SIMPLE / #SHARE-JOIN: there are no switches here (the one
- * sharing switch is Roman and AI) and nothing is written. Each row shows what
- * GET /consent/me says (400 = no coach): with backend #1061 every log reads
- * Shared; an older backend still reports a log the client turned off as Not
- * shared, so the page never claims more than the coach can read.
+ * Settings > Privacy > Coach sharing: what the current coach sees. Owner
+ * #SHARE-SIMPLE / #SHARE-JOIN: workouts, food logs, weigh-ins, check-ins and
+ * habits always reach the current coach, so there are no switches here (the
+ * one sharing switch is Roman and AI). GET /consent/me says whether there is
+ * a coach (400 = none). Where connected devices exist, one line says how new
+ * device data stops, with the Connected devices row.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -15,7 +15,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { isAndroidHealthConnectEnabled } from '../../config/healthConnect';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { radius } from '../../theme/tokens';
-import { COACH_SHARING_LABELS, COACH_SHARING_SCOPES, readCoachSharing } from '../../api/coachSharingApi';
+import { readCoachSharing } from '../../api/coachSharingApi';
 import type { CoachSharingRead } from '../../api/coachSharingApi';
 import { coachSharingCopy as copy } from '../../components/coachSharing/coachSharingCopy';
 
@@ -63,21 +63,10 @@ export default function CoachSharingScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.card}>
-            {COACH_SHARING_SCOPES.map((scope, i) => (
-              <View key={scope}>
-                {i > 0 ? <View style={styles.divider} /> : null}
-                <View style={styles.row} accessible>
-                  <Text style={styles.rowLabel}>{COACH_SHARING_LABELS[scope]}</Text>
-                  <Text style={styles.caption} testID={`coach-sharing-state-${scope}`}>
-                    {load.state.shared[scope] ? copy.on : copy.off}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.body} testID="coach-sharing-intro">{copy.intro}</Text>
           {showsConnectedDevices() ? (
             <View testID="coach-sharing-devices">
+              <Text style={styles.caption}>{copy.devicesNote()}</Text>
               <HapticPressable
                 intent="light"
                 style={styles.link}
@@ -104,12 +93,10 @@ function makeStyles(c: ThemeColors) {
     container: { flex: 1, backgroundColor: c.background },
     content: { padding: 24, paddingBottom: 48, gap: 16 },
     card: { borderWidth: 1, borderColor: c.border, borderRadius: radius.card, padding: 16, gap: 12, backgroundColor: c.surface },
-    row: { minHeight: 52, justifyContent: 'center', gap: 2 },
     rowLabel: { fontFamily: 'Inter_500Medium', fontSize: 15, color: c.textPrimary },
     body: { ...text, fontSize: 15, lineHeight: 22 },
     caption: { ...text, fontSize: 13, lineHeight: 19, color: c.textSecondary },
-    divider: { height: 1, backgroundColor: c.divider, marginBottom: 12 },
-    link: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginTop: 8 },
+    link: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border },
     button: { minHeight: 44, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border },
     buttonText: { fontFamily: 'Inter_500Medium', fontSize: 15, color: c.textPrimary },
   });

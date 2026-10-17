@@ -430,10 +430,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         <SettingsSection title="Privacy and data" id="privacy">
           <QuietRow label="Trust & Privacy" detail="How your data is protected." onPress={() => navigation.navigate('TrustCenter')}
             accessibilityHint="Opens the Trust Center with security details and privacy controls" />
-          {/* B-SHARE-127: which logs the coach can read (read only, SHARE-UNWIND). */}
+          {/* B-SHARE-127: which logs the coach can see (four toggles). */}
           {hasCoach ? (
             <QuietRow label={coachSharingCopy.settingsRow} onPress={() => navigation.navigate('CoachSharing')}
-              testID="settings-coach-sharing" />
+              accessibilityHint={coachSharingCopy.settingsRowHint} testID="settings-coach-sharing" />
           ) : null}
           {/* Apple 1.2: blocks can be seen and undone from Settings. */}
           <QuietRow label="Blocked users" onPress={() => navigation.navigate('BlockedUsers')}
