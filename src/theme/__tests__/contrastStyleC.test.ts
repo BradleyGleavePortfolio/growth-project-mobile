@@ -22,6 +22,14 @@ const pairs = (t: SemanticTokens): Array<[string, string, string, number]> => [
   ['masthead, missed ring and number', t.data.missedOnDark, t.surface.masthead, TEXT],
   ['masthead, gold label and star', t.data.peak, t.surface.masthead, TEXT],
   ['masthead, planned arcs and rings', t.data.plannedOnDark, t.surface.masthead, MARK],
+  ['weight trend', t.data.trend, t.surface.masthead, MARK],
+  ['weight trend across range', t.data.trend, t.data.range, MARK],
+  ['weight reading', t.data.weighIn, t.surface.masthead, MARK],
+  ['weight reading across range', t.data.weighIn, t.data.range, MARK],
+  ['weight goal label', t.data.goal, t.surface.masthead, TEXT],
+  ['weight goal across range', t.data.goal, t.data.range, MARK],
+  ['weight pending ring', t.data.pending, t.surface.masthead, MARK],
+  ['weight empty frame', t.data.frameOnDark, t.surface.masthead, MARK],
   ['masthead, error card edge', colors.warningBg, t.surface.masthead, MARK],
   ['forest band, primary text', t.textOnAccent, t.surface.forestBand, TEXT],
   ['forest band, secondary text', t.textOnMastheadMuted, t.surface.forestBand, TEXT],
@@ -93,5 +101,15 @@ it('keeps the index-v2 section 4 light values', () => {
     leaf: '#A3C46A', fern: '#7FA653', moss: '#4E7A3F', forest: '#2C4A36', deep: '#1C3023', peak: '#D4B96B',
     peakInk: '#6B4F1A', planned: '#857F75', plannedOnDark: '#6E9479', missed: '#6B675F', missedOnDark: '#B1A89F',
     trackLight: '#E6DFD3',
+    trend: '#A3C46A', range: '#3A5C46', weighIn: '#B8CCBF', goal: '#D4B96B',
+    frameOnDark: '#6E9479', pending: '#A3C46A',
   });
+});
+
+it.each([lightTokens, darkTokens])('keeps all six weight roles as aliases', (t) => {
+  expect(t.data.trend).toBe(t.data.leaf);
+  expect(t.data.pending).toBe(t.data.trend);
+  expect(t.data.weighIn).toBe(t.textOnMastheadMuted);
+  expect(t.data.goal).toBe(t.data.peak);
+  expect(t.data.frameOnDark).toBe(t.data.plannedOnDark);
 });
