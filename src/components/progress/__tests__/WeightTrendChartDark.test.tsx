@@ -10,6 +10,16 @@ jest.mock('../../../config/featureFlags', () => ({ featureFlags: { clientProgres
 const mockFlags = jest.requireMock('../../../config/featureFlags').featureFlags as { clientProgressV2: boolean };
 jest.mock('../../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn() } }));
 jest.mock('../../../screens/client/wearables/components/useReduceMotion', () => ({ useReduceMotion: () => true }));
+// Assert the resolved SVG layer props before native brush conversion.
+jest.mock('react-native-svg', () => {
+  const mockReact = require('react');
+  const { View, Text } = require('react-native');
+  const mark = ({ children, ...props }: { children?: React.ReactNode }) =>
+    mockReact.createElement(View, props, children);
+  const label = ({ children, ...props }: { children?: React.ReactNode }) =>
+    mockReact.createElement(Text, props, children);
+  return { __esModule: true, default: mark, Circle: mark, Line: mark, Path: mark, Polyline: mark, Rect: mark, Text: label };
+});
 // Keep the real chart, layers and assistive actions. Expose only the gesture callbacks.
 let mockGesture: Record<string, (e?: { x: number }) => void> = {};
 jest.mock('react-native-gesture-handler', () => ({

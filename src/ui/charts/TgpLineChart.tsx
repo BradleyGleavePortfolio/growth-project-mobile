@@ -146,8 +146,6 @@ export default function TgpLineChart({
   // ── Pan gesture: find nearest data point and show tooltip ──────────────────
   const panGesture = Gesture.Pan()
     .runOnJS(true)
-    .activateAfterLongPress(plot ? 180 : 0)
-    .onStart((evt) => selectAt(evt.x))
     .onUpdate((evt) => {
       if (plot) { selectAt(evt.x); return; }
       if (data.length === 0) return;
@@ -172,8 +170,10 @@ export default function TgpLineChart({
         label: xFormatter ? xFormatter(nearest.x) : String(Math.round(nearest.x)),
       });
     })
-    .onEnd(() => setTooltip(null))
-    .onFinalize(() => { if (plot) select(null); });
+    .onEnd(() => setTooltip(null));
+  if (plot) {
+    panGesture.activateAfterLongPress(180).onStart((evt) => selectAt(evt.x)).onFinalize(() => select(null));
+  }
 
   if (!data.length || (!plot && data.length < 2)) {
     return (
