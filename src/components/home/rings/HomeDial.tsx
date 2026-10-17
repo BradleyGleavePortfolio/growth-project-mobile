@@ -16,6 +16,9 @@ export const DIAL_SIZE = 92;
 const R = 40;
 const STROKE = 7;
 const C = 2 * Math.PI * R;
+/** The ring is a fixed 92 pt, so the number and unit inside it grow to 115% at most: at 130% text they
+ *  would run into the ring. The label and the line under the dial grow with the phone's text size. */
+export const RING_TEXT_MAX = 1.15;
 
 export interface HomeDialProps {
   label: string;
@@ -55,12 +58,17 @@ export default function HomeDial({ label, view, onPress, accessibilityLabel, tes
         <View style={styles.centre} pointerEvents="none">
           <Text
             style={[prompt ? styles.prompt : styles.number, { color: prompt ? sc.accentText : sc.textPrimary }]}
-            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1.3}
+            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={RING_TEXT_MAX}
           >
             {view.value}
           </Text>
           {view.unit ? (
-            <Text style={[styles.unit, { color: sc.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{view.unit}</Text>
+            <Text
+              style={[styles.unit, { color: sc.textMuted }]}
+              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={RING_TEXT_MAX}
+            >
+              {view.unit}
+            </Text>
           ) : null}
         </View>
       </View>
