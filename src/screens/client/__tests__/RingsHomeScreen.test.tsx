@@ -16,13 +16,12 @@ const mockDay = {
   foodLogs: [], dailyTotals: { calories: 1030 }, waterOz: 0, selectedDate: getTodayString(), hasLoadedDay: true,
   loadDayData: jest.fn(), loadProfile: jest.fn(), isLoading: false, loadError: null as string | null,
 };
-jest.mock('../../../config/featureFlags', () => ({
-  featureFlags: {
-    ...jest.requireActual('../../../config/featureFlags').featureFlags,
-    clientHomeRings: true,
-    get romanChat() { return mockRomanChat; },
-  },
-}));
+jest.mock('../../../config/featureFlags', () => {
+  // A getter in the object literal would be read once by the spread helper; define it after.
+  const flags = { ...jest.requireActual('../../../config/featureFlags').featureFlags, clientHomeRings: true };
+  Object.defineProperty(flags, 'romanChat', { get: () => mockRomanChat });
+  return { featureFlags: flags };
+});
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => ({ calories: 1850, protein: 150, carbs: 200, fat: 60 }) }));
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
@@ -99,6 +98,10 @@ it('coached: three dials with their own numbers and one forest button', async ()
   expect(screen.getByLabelText('Food, 820 kcal left, 1,030 of 1,850')).toBeTruthy();
   expect(screen.getByLabelText('Train, 1 of 2 workouts, This week')).toBeTruthy();
   expect(screen.queryByText('Opens with a coach')).toBeNull();
+  // The ring is a fixed 92 pt: its number and unit stop at 115% text; the label under it keeps growing.
+  expect(screen.getByText('820').props.maxFontSizeMultiplier).toBe(1.15);
+  expect(screen.getByText('kcal left').props.maxFontSizeMultiplier).toBe(1.15);
+  expect(screen.getByText('Food').props.maxFontSizeMultiplier).toBeUndefined();
   await fireEvent.press(screen.getByLabelText('Start Full Body A'));
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
     screen: 'WorkoutAssignmentDetail', initial: false, params: { assignmentId: 'a2' },
@@ -222,6 +225,7 @@ it('coachless: Roman locked in the header opens his lock screen, not a chat; Joi
 it('coachless with Roman chat off: no Roman at all, the same as a coached client, and no dead tap', async () => {
   mockUser.coach_id = ''; mockRomanChat = false;
   mockAssignments.mockResolvedValue([]);
+  mockHistory.mockResolvedValue({ data: [{ date: weekStart }] });
   await render(<HomeScreen />);
   expect(await screen.findByLabelText('Open Train')).toBeTruthy();
   expect(screen.queryByLabelText('Roman. Opens with a coach')).toBeNull();
