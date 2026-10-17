@@ -43,9 +43,10 @@ export const makeStyles = (colors: ThemeColors) =>
     marginTop: 4,
   },
   msgIconBtn: {
-    width: 38, height: 38, borderRadius: radius.chip, backgroundColor: colors.primaryPale,
+    width: layout.touchMin, height: layout.touchMin, borderRadius: radius.chip, backgroundColor: colors.primaryPale,
     justifyContent: 'center', alignItems: 'center',
   },
+  textAction: { minHeight: layout.touchMin, minWidth: layout.touchMin, justifyContent: 'center', alignItems: 'center' },
   tabScroll: { flexGrow: 0, flexShrink: 0, marginBottom: 16 },
   tabRow: { paddingHorizontal: layout.gutter, gap: 8 },
   tab: {
@@ -227,7 +228,6 @@ export const makeStyles = (colors: ThemeColors) =>
   sessionDate: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   completedText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.success },
-  inProgressText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.warning },
   sessionStats: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   sessionStat: {
     flex: 1, backgroundColor: colors.background, borderRadius: radius.card, padding: 10, alignItems: 'center',

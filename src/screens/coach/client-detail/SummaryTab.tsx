@@ -92,7 +92,7 @@ export function SummaryTab({
             : calTarget > 0 ? `${calPct}% of daily target` : 'No daily target available'}
         </Text>
         {currentTarget.isError ? (
-          <TouchableOpacity onPress={() => void currentTarget.refetch()} accessibilityRole="button">
+          <TouchableOpacity style={styles.textAction} onPress={() => void currentTarget.refetch()} accessibilityRole="button">
             <Text style={styles.actionPillText}>Retry target</Text>
           </TouchableOpacity>
         ) : null}
