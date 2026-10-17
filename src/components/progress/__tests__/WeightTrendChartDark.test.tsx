@@ -88,13 +88,21 @@ it('day-by-day assistive actions reach the same chip as hold and drag, with one 
   expect(v.queryByTestId('weight-touch-chip')).toBeNull();
 });
 it('all three 44 pt tabs change the real selected period', async () => {
-  const onChange = jest.fn();
-  const v = await render(<PeriodTabs variant="dark" value="All" onChange={onChange} />);
-  for (const [label, value] of [['Week', '7D'], ['Month', '30D'], ['All', 'All']]) {
+  function PeriodChart() {
+    const [value, setValue] = React.useState<'7D' | '30D' | '90D' | 'All'>('All');
+    return <>
+      <PeriodTabs variant="dark" value={value} onChange={setValue} />
+      <WeightTrendChart variant="dark" data={data} through={6 * D}
+        period={value === '90D' ? 'All' : value} goal={{ value: 165 }} />
+    </>;
+  }
+  const v = await render(<PeriodChart />);
+  for (const [label, goalVisible] of [['Week', false], ['Month', true], ['All', true]] as const) {
     const tab = v.getByRole('tab', { name: label });
     expect(StyleSheet.flatten(tab.props.style)).toMatchObject({ minHeight: 44, minWidth: 44 });
     await fireEvent.press(tab);
-    expect(onChange).toHaveBeenLastCalledWith(value);
+    expect(v.getByRole('tab', { name: label, selected: true })).toBeTruthy();
+    expect(!!v.queryByTestId('weight-goal-line')).toBe(goalVisible);
   }
 });
 it('flag off preserves the legacy chart and all four legacy period tabs', async () => {
