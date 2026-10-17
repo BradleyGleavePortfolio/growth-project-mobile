@@ -191,6 +191,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key. On only for builds offered solely on the US App Store (credit packs open Stripe Checkout in the system browser)."
     },
+    "EXPO_PUBLIC_FF_MEAL_PLANS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (coach Programs > Meal plans and the day-plan builder, MEALBUILD). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_MWB_AUTOSAVE": {
       "kind": "flag",
       "default": "off",
