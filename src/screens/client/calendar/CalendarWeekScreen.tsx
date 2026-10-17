@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BookableCoach, CoachingSession } from '../../../api/schedulingApi';
 import type { ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilderApi';
 import { checkInsApi } from '../../../services/api';
-import { useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
+import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { useMyWorkoutAssignments } from '../../../hooks/useWorkoutBuilder';
 import { useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -20,7 +20,7 @@ import { formatDayLabel, formatRange, formatTime, zonesDiffer } from '../../../c
 import { addDays, bucketDateLocal, getLocalWeekStart, getTodayString } from '../../../utils/date';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors, radius, spacing, typography } from '../../../theme/tokens';
+import { colors, layout, radius, spacing, typography } from '../../../theme/tokens';
 import { PrimaryButton, Screen, TextLink } from '../../../ui';
 import { QuietLoading } from '../../../ui/states/QuietStates';
 import { HapticService } from '../../../ui/haptics/haptics.service';
@@ -34,6 +34,7 @@ export type CalendarWeekData = {
   sessions: CoachingSession[];
   workouts: ClientWorkoutAssignmentWithPlan[];
   checkIns: CheckIn[];
+  descriptions?: Record<string, string>;
   loading: boolean;
   failed: boolean;
   refreshing: boolean;
@@ -49,6 +50,7 @@ export default function CalendarWeekScreen({ navigation }: Props) {
   const sessions = useMySessions();
   const past = usePastSessions();
   const workouts = useMyWorkoutAssignments();
+  const types = useBookableTypes(coaches.data?.[0]?.coach_id);
   const from = getLocalWeekStart();
   const to = addDays(from, 6);
   const checkIns = useQuery<CheckIn[]>({
@@ -66,6 +68,7 @@ export default function CalendarWeekScreen({ navigation }: Props) {
     sessions: [...(sessions.data ?? []), ...(past.data?.pages.flat() ?? [])],
     workouts: workouts.data ?? [],
     checkIns: checkIns.data ?? [],
+    descriptions: Object.fromEntries((types.data ?? []).filter((t) => t.description).map((t) => [t.id, t.description!])),
     loading: queries.some((q) => q.isPending && q.fetchStatus === 'fetching'),
     failed: queries.some((q) => q.isError),
     refreshing: queries.some((q) => q.isRefetching),
@@ -92,6 +95,9 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   const reduced = useReducedMotion();
   const fade = useRef(new Animated.Value(1)).current;
   const { fontScale } = useWindowDimensions();
+  useEffect(() => {
+    if (data.failed && !data.offline) void HapticService.error();
+  }, [data.failed, data.offline]);
   useEffect(() => {
     fade.setValue(0);
     const animation = Animated.timing(fade, { toValue: 1, duration: reduced ? 150 : 200, useNativeDriver: true });
@@ -126,6 +132,9 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
         <Text style={[styles.sessionTitle, ink]}>{s.title}</Text>
         <Text style={body}>{dayLabel(sessionDay(s))}{coachClock ? ` · ${coachClock}` : name ? ` · With ${name}` : ''}</Text>
         <Text style={body}>{statusLabel(s.status)}</Text>
+        {hero && s.session_type_id && data.descriptions?.[s.session_type_id] ? (
+          <Text style={[styles.coachWords, ink]}>{data.descriptions[s.session_type_id]}</Text>
+        ) : null}
       </Pressable>
     );
   };
@@ -229,9 +238,10 @@ const styles = StyleSheet.create({
   overline: { ...typography.label, lineHeight: 18, marginBottom: spacing.md },
   session: { borderRadius: radius.card, borderLeftWidth: 3, borderLeftColor: colors.camel, padding: spacing.lg, marginBottom: spacing.lg, minHeight: 44 },
   sessionTitle: { ...typography.h2 },
+  coachWords: { ...typography.h3, fontStyle: 'italic', marginTop: spacing.md },
   daySection: { marginTop: spacing.lg },
   date: { ...typography.h3, marginBottom: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.md, minHeight: 56 },
   rowText: { flex: 1, minWidth: 0 },
-  footer: { marginHorizontal: -spacing.xl, marginBottom: -spacing.xl, padding: spacing.xl },
+  footer: { marginHorizontal: -spacing.xl, marginBottom: -spacing.xl, marginTop: -layout.footerTopGap, padding: spacing.xl },
 });

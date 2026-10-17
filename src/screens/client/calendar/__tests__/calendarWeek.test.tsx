@@ -20,7 +20,7 @@ jest.mock('../../../../hooks/useNetworkStatus', () => ({
 jest.mock('../../../../services/sentry', () => ({ captureError: jest.fn() }));
 jest.mock('../../../../api/schedulingApi', () => ({
   ...jest.requireActual('../../../../api/schedulingApi'),
-  schedulingApi: { listMyCoaches: jest.fn(), listMySessions: jest.fn() },
+  schedulingApi: { listMyCoaches: jest.fn(), listMySessions: jest.fn(), listSessionTypes: jest.fn() },
 }));
 jest.mock('../../../../api/workoutBuilderApi', () => ({
   workoutBuilderApi: { listMyAssignments: jest.fn() },
@@ -31,7 +31,7 @@ jest.mock('../../../../services/api', () => ({
   checkInsApi: { list: jest.fn() },
 }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({
-  HapticService: { softImpact: jest.fn(), selection: jest.fn() },
+  HapticService: { softImpact: jest.fn(), selection: jest.fn(), error: jest.fn() },
 }));
 import { schedulingApi } from '../../../../api/schedulingApi';
 import { workoutBuilderApi } from '../../../../api/workoutBuilderApi';
@@ -92,11 +92,12 @@ it('every week day selects a real agenda; notification, booking and own workout 
 });
 
 it('next session opens real detail even if outside this week, without duplicating pages', () => {
-  const next = { ...session, start_at: `${addDays(today, 10)}T12:00:00`, end_at: `${addDays(today, 10)}T12:30:00` };
-  const r = page({ sessions: [next, next] });
+  const next = { ...session, session_type_id: 'type-own', start_at: `${addDays(today, 10)}T12:00:00`, end_at: `${addDays(today, 10)}T12:30:00` };
+  const r = page({ sessions: [next, next], descriptions: { 'type-own': 'The coach’s actual session description.' } });
   fireEvent.press(r.getByTestId('week-next-session-own'));
   expect(openSession).toHaveBeenCalledWith('session-own');
   expect(r.getAllByTestId('week-next-session-own')).toHaveLength(1);
+  expect(r.getByText('The coach’s actual session description.')).toBeTruthy();
 });
 
 it('coachless clients keep workouts, saved check-ins, today entry and notifications without a lock', () => {
