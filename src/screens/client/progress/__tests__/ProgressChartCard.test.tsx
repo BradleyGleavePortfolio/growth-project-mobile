@@ -2,7 +2,7 @@
  * ProgressChartCard — ED.4 component contract.
  *
  * Pins:
- *   1. PR detection renders the flag (star) + glow ring on the record point.
+ *   1. PR detection renders one star on the record point, without a halo.
  *   2. Roman commentary renders the romanPRDetected line beside RomanAvatar
  *      (FACE+VOICE invariant — face + voice in the same tree).
  *   3. The haptic scrubber fires Haptics.selectionAsync() on a data-point
@@ -78,7 +78,7 @@ beforeEach(() => {
 });
 
 describe('ProgressChartCard — ED.4', () => {
-  it('renders the PR flag + glow and the Roman commentary (FACE+VOICE)', async () => {
+  it('renders the PR star without glow and the Roman commentary (FACE+VOICE)', async () => {
     const node = await render(
       <ProgressChartCard
         data={PR_SERIES}
@@ -89,9 +89,9 @@ describe('ProgressChartCard — ED.4', () => {
     );
     await layout(node);
 
-    // PR flag + glow on the record point.
-    expect(node.getByTestId('progress-pr-flag')).toBeTruthy();
-    expect(node.getByTestId('progress-pr-glow')).toBeTruthy();
+    // The star remains, but no halo.
+    expect(node.getByTestId('progress-pr-flag').props.stroke).toBeTruthy();
+    expect(node.queryByTestId('progress-pr-glow')).toBeNull();
 
     // VOICE — the exact romanPRDetected line.
     const prText = node.getByTestId('progress-pr-text');

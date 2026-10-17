@@ -32,6 +32,7 @@ jest.mock('../../services/dataExportApi', () => ({
 }));
 let mockUser: CurrentUser | null = null;
 jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+jest.mock('../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 
 const netinfo = jest.requireMock('@react-native-community/netinfo');
 const TrustCenterScreen = require('../TrustCenterScreen').default;
@@ -67,7 +68,7 @@ const NONE = 'Your coach — your consultation answers and data from connected d
 const OWNER_IF = 'If your coach uses the TGP owner account, that account sees your logs even when they are turned off in Coach sharing.';
 const OWNER =
   'Your coach — your consultation answers, data from connected devices, and your workouts, food logs, weigh-ins, check-ins and habits. Your coach uses the TGP owner account, which sees these logs even when they are turned off in Coach sharing.';
-const ROMAN_WITH_COACH = 'Not your coach — your Roman conversations, which are kept until you delete them or your account';
+const ROMAN_WITH_COACH = 'Not your coach — your Roman conversations, which are kept until you delete them or your account. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.';
 const ROMAN = 'Your Roman conversations are kept until you delete them or your account';
 const OLD_COACH_LINE = 'Your coach — your consultation answers, logs, check-ins and connected health data';
 const OLD_INFO_ROW = /Your answers and logs are shared with your coach/;
@@ -127,6 +128,19 @@ describe('coach line copy (U2, FW-COACH)', () => {
 });
 
 describe('who can see your data, rendered (U2, FW-COACH)', () => {
+  it.each([
+    ['sharing loaded', () => consentBody([], false)],
+    ['sharing unavailable', () => new Error('offline')],
+  ])('shows the full approved Roman exception when %s', async (_name, answer) => {
+    mockUser = CLIENT;
+    serve(answer());
+    const screen = await renderScreen();
+    await screen.findByText(/^Your coach —/);
+    const line = screen.getByText(ROMAN_WITH_COACH);
+    expect(line.props.children).toBe(ROMAN_WITH_COACH);
+    expect(line.props.numberOfLines).toBeUndefined();
+  });
+
   it('a client whose coach gets workouts and food logs: the line names exactly those; the old fixed lines are gone', async () => {
     mockUser = CLIENT;
     serve(consentBody(['fitness.workouts', 'fitness.food_macros'], false));

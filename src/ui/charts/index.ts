@@ -16,6 +16,7 @@
  *   TgpBarChart    — Vertical bar chart with tap tooltip
  *   TgpAreaChart   — Filled area chart with pan tooltip
  *   TgpSparkline   — Inline micro-chart for card surfaces
+ *   SegmentedRing, DayMark, PeakStar — Style C v2 week and best marks
  */
 
 export { default as TgpLineChart }  from './TgpLineChart';
@@ -29,6 +30,9 @@ export type { TgpAreaChartProps }   from './TgpAreaChart';
 
 export { default as TgpSparkline }  from './TgpSparkline';
 export type { TgpSparklineProps }   from './TgpSparkline';
+
+export { SegmentedRing, DayMark, PeakStar } from './StyleCMarks';
+export type { SegmentedRingProps, DayMarkProps, PeakStarProps, SegmentState, DayState } from './StyleCMarks';
 
 // Re-export the shared data type used by all chart variants
 export type { ChartDataPoint }      from './TgpLineChart';

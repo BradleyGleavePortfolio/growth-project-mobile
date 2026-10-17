@@ -4,7 +4,7 @@
 // Wraps POST /me/first-win/complete and GET /me/first-win/status.
 //
 // The status endpoint is called on every student cold start by RootNavigator.
-// The complete endpoint is called once when the client taps a win-card action.
+// The complete endpoint is called only after the selected logger saves.
 
 import api from './api';
 

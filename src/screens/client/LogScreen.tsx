@@ -50,7 +50,7 @@ import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 
-export default function LogScreen() {
+export default function LogScreen({ onSaved, suspended = false }: { onSaved?: () => void; suspended?: boolean }) {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useScreenInsets();
@@ -326,6 +326,7 @@ export default function LogScreen() {
       setSelectedFood(null);
       setAddedFoodName(selectedFood.name);
       setSavedMessage(`${selectedFood.name} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
+      onSaved?.();
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -369,6 +370,7 @@ export default function LogScreen() {
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'manual' });
       setModalVisible(false);
       setSavedMessage(`${manualFields.foodName.trim()} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
+      onSaved?.();
     } catch (err) {
       console.error('LogScreen: handleManualLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -415,6 +417,7 @@ export default function LogScreen() {
         track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'repeat_meal' });
         setModalVisible(false);
         setSavedMessage(`${added} ${added === 1 ? 'food' : 'foods'} added to ${target}.`);
+        onSaved?.();
       } else {
         HapticService.error();
         Alert.alert(
@@ -647,7 +650,7 @@ export default function LogScreen() {
       </Screen>
 
       <FoodSearchModal
-        visible={modalVisible}
+        visible={modalVisible && !suspended}
         activeMealType={activeMealType}
         addedFoodName={addedFoodName}
         onClose={() => {

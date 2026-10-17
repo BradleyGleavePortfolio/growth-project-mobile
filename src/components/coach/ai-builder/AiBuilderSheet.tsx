@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import CoachExerciseName from '../workout-builder/CoachExerciseName';
+import AiRefusalNotice from '../../ai/AiRefusalNotice';
 import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
 import { AI_BUILDER_INJURY_AREAS, AI_BUILDER_INSTRUCTION_MAX, AI_BUILDER_QUICK_ACTIONS, type AiBuilderChange, type AiBuilderInjuryArea, type AiBuilderQuickAction } from '../../../api/aiBuilderApi';
 import { layout, radius, spacing, typography, type SemanticTokens } from '../../../theme/tokens';
@@ -83,7 +84,9 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc, clientF
     Animated.spring(pop, { ...AI_SPRING, toValue: 1 }).start();
   }, [n, p, pop, reduceMotion]);
 
+  const lastAsk = useRef<[AiBuilderQuickAction?, AiBuilderInjuryArea?]>([]); // asked again after Allow (CAC-5)
   const send = (quickAction?: AiBuilderQuickAction, injuryArea?: AiBuilderInjuryArea) => {
+    lastAsk.current = [quickAction, injuryArea];
     const instruction = text.trim() || (quickAction ? QUICK_ACTIONS[quickAction].instruction : '');
     if (!instruction) return;
     setInjuryPicker(false);
@@ -155,7 +158,9 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc, clientF
                 <ActivityIndicator color={sc.accentText} accessibilityLabel={ai.stages[ai.stage]} />
               </View>
             ) : null}
-            {ai.error ? line('ai-builder-error', ai.error, true) : null}
+            {ai.romanOff ? (
+              <AiRefusalNotice refusal={{ kind: 'coach_consent_required' }} audience="coach" surface="draft" onRetry={() => send(...lastAsk.current)} compact testID="ai-builder-roman-off" />
+            ) : ai.error ? line('ai-builder-error', ai.error, true) : null}
             {p ? (
               <View testID="ai-builder-review">
                 <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{p.summary}</Text>

@@ -30,17 +30,9 @@ import {
   validateScreen,
 } from '../../lib/consultation/engine';
 import {
-  AI_CONSENT_CHECKBOX_LABEL,
-  AI_CONSENT_PARAGRAPH,
   AI_CHOICE_UNKNOWN_LINE,
   AI_WITHDRAW_UNCONFIRMED_LINE,
-  CONSENT_CHECKBOX_LABEL,
-  CONSENT_COPY_SHA256,
-  CONSENT_FOOTER,
-  CONSENT_MEMORY_COPY_SHA256,
-  CONSENT_PARAGRAPHS,
-  CONSULT_CONSENT_COPY_VERSION,
-  CONSULT_CONSENT_MEMORY_COPY_VERSION,
+  consentScreenCopy,
   P8_COPY,
 } from '../../lib/consultation/copy';
 import {
@@ -77,6 +69,8 @@ export interface QuestionScreenProps {
   onNext: (patch?: Answers, aiChoice?: boolean | null) => void;
   onBack: (() => void) | null;
   onFinishLater: (() => void) | null;
+  /** AGEGATE16 age step (FIXAGE R4): its ways out, under B2 and on its stop screen. */
+  escape?: (stopped: boolean) => React.ReactNode;
   /** Prototype 42: Roman's welcome-back line replaces the chapter line on the first screen after a resume. */
   romanOverride?: string | null;
   /** P0 only: recording in progress, or why the last attempt failed. */
@@ -92,7 +86,7 @@ export interface QuestionScreenProps {
    * check it; box 2 stays optional and untouched sends nothing.
    * `aiMemory` (R11-C2B): the server's client-ai-v5 copy box 2 shows instead
    * of the pinned v4 paragraph (same label, same tick, still unticked by
-   * default); the P0 record then names consult-consent-v4.
+   * default); the P0 record then names consult-consent-v6 (or v6-coach-free).
    */
   consent?: {
     error: 'version_mismatch' | null;
@@ -101,6 +95,8 @@ export interface QuestionScreenProps {
     aiUnconfirmed?: boolean;
     aiUnknown?: boolean;
     aiMemory?: AiConsentUpgradeCopy | null;
+    /** CRISIS-APP-COPY: the server answered with client-ai-v8 / v9, so P0 shows v8 and records v9 / v10. */
+    aiCrisis?: boolean;
     /** B-SHARE-GUEST-127: the coach-sharing sentence printed above P0 Continue (null: none). */
     coachSharing?: { version: string; coachName: string | null } | null;
   };
@@ -355,22 +351,29 @@ function parseIso(v: unknown): { y: number; m: number; d: number } | null {
 function DobBody(props: BodyProps) {
   const { screen, answers, now, onAnswer, onNext, header } = props;
   const parsed = parseIso(answers.B2);
-  const [y, setY] = useState(parsed?.y ?? now.getFullYear() - 30);
-  const [m, setM] = useState(parsed?.m ?? now.getMonth() + 1);
-  const [d, setD] = useState(parsed?.d ?? Math.min(28, now.getDate()));
-  const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  // FIXAGE2 R6: "only a date the client actually chose is ever saved as
+  // their date of birth." No wheel starts chosen (a saved answer excepted);
+  // there is no date, and Continue stays off, until all three are picked.
+  const [y, setY] = useState<number | null>(parsed?.y ?? null);
+  const [m, setM] = useState<number | null>(parsed?.m ?? null);
+  const [d, setD] = useState<number | null>(parsed?.d ?? null);
+  const isoOf = (ny: number | null, nm: number | null, nd: number | null) =>
+    ny && nm && nd ? `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}` : undefined;
+  const iso = isoOf(y, m, d);
   const draft = { ...answers, B2: iso };
   const v = validateScreen(screen, draft, now);
   // Prototype 45: an age under 16 leads to a calm, final stop screen (no
   // form, nothing saved) whose only action returns to the wheels.
   const minAge = screen.validation?.ageRange?.min ?? 16;
-  const age = ageOn(iso, now);
+  const age = iso ? ageOn(iso, now) : NaN;
   const under = !Number.isNaN(age) && age < minAge;
   const [stopped, setStopped] = useState(false);
   if (stopped) {
     return (
       <Frame
-        onBack={() => setStopped(false)}
+        // FIXAGE2 R9: no top-bar Back; "Change my date of birth" is the same
+        // action, so the stop screen shows five actions (training 6.2).
+        onBack={null}
         onFinishLater={null}
         footer={<PrimaryButton label="Change my date of birth" onPress={() => setStopped(false)} testID="consult-under-age-change" />}
         testID="consult-screen-UNDER_AGE"
@@ -379,12 +382,15 @@ function DobBody(props: BodyProps) {
           <Text style={s.eyebrow}>{screen.eyebrow}</Text>
           <Headline style={{ marginTop: 16 }}>{`The Growth Project is for ages ${minAge} and up.`}</Headline>
           <Text style={[s.mutedSmall, { marginTop: 12 }]}>If the date was entered by mistake, go back and change it.</Text>
+          {props.escape?.(true)}
         </View>
       </Frame>
     );
   }
-  const commit = (ny = y, nm = m, nd = d) =>
-    onAnswer('B2', `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`);
+  const commit = (ny: number | null, nm: number | null, nd: number | null) => {
+    const next = isoOf(ny, nm, nd);
+    if (next) onAnswer('B2', next);
+  };
   return (
     <BodyFrame
       props={props}
@@ -392,24 +398,29 @@ function DobBody(props: BodyProps) {
       footer={
         <PrimaryButton
           label="Continue"
-          disabled={!v.valid && !under}
-          onPress={() => (under ? setStopped(true) : onNext({ B2: iso }))}
+          disabled={!iso || (!v.valid && !under)}
+          onPress={() => {
+            if (!iso) return;
+            if (under) setStopped(true);
+            else onNext({ B2: iso });
+          }}
           testID="consult-continue"
         />
       }
     >
       <View style={s.wheels}>
         <View style={[s.wheelCol, { flex: 1.6 }]}>
-          <Wheel label="Birth month" values={MONTHS} value={MONTHS[m - 1]} onChange={(x) => { const nm = MONTHS.indexOf(x) + 1; setM(nm); commit(y, nm, d); }} testID="wheel-dob-month" />
+          <Wheel label="Birth month" values={MONTHS} value={m ? MONTHS[m - 1] : null} anchor={MONTHS[now.getMonth()]} onChange={(x) => { const nm = MONTHS.indexOf(x) + 1; setM(nm); commit(y, nm, d); }} testID="wheel-dob-month" />
         </View>
         <View style={[s.wheelCol, { flex: 0.8 }]}>
-          <Wheel label="Birth day" values={range(1, 31)} value={d} onChange={(x) => { setD(x); commit(y, m, x); }} testID="wheel-dob-day" />
+          <Wheel label="Birth day" values={range(1, 31)} value={d} anchor={Math.min(28, now.getDate())} onChange={(x) => { setD(x); commit(y, m, x); }} testID="wheel-dob-day" />
         </View>
         <View style={s.wheelCol}>
-          <Wheel label="Birth year" values={range(now.getFullYear() - 100, now.getFullYear() - 10)} value={y} onChange={(x) => { setY(x); commit(x, m, d); }} testID="wheel-dob-year" />
+          <Wheel label="Birth year" values={range(now.getFullYear() - 100, now.getFullYear() - 10)} value={y} anchor={now.getFullYear() - 30} onChange={(x) => { setY(x); commit(x, m, d); }} testID="wheel-dob-year" />
         </View>
       </View>
-      {v.message && !under ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
+      {iso && v.message && !under ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
+      {props.escape?.(false)}
     </BodyFrame>
   );
 }
@@ -521,7 +532,9 @@ export function openPrivacyPolicy(): void {
 }
 
 function ConsentBody(props: BodyProps) {
-  const { answers, onNext, header, consent: state } = props;
+  const { answers, onNext, header, consent: state, ctx } = props;
+  // Owner 62: a client with no coach sees (and records) the coach-free text.
+  const copy = consentScreenCopy(!!ctx?.coachless, !!state?.aiCrisis);
   // Only a record matching this build's copy version counts (Sol A-03):
   // stale or malformed records render box 1 unticked.
   const already = isConsentAnswerCurrent(answers.P0);
@@ -545,13 +558,13 @@ function ConsentBody(props: BodyProps) {
   const consent = useMemo<ConsentAnswer>(
     () => ({
       agreed: true,
-      copy_version: aiMemory ? CONSULT_CONSENT_MEMORY_COPY_VERSION : CONSULT_CONSENT_COPY_VERSION,
+      copy_version: aiMemory ? copy.memoryVersion : copy.version,
       agreed_at: new Date().toISOString(),
-      text_sha256: aiMemory ? CONSENT_MEMORY_COPY_SHA256 : CONSENT_COPY_SHA256,
+      text_sha256: aiMemory ? copy.memorySha256 : copy.sha256,
     }),
     // agreed_at is taken when box 1 is ticked; the version follows the box 2 text shown.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [checked, aiMemory],
+    [checked, aiMemory, copy.version],
   );
   const blocked = error === 'version_mismatch';
   return (
@@ -583,17 +596,26 @@ function ConsentBody(props: BodyProps) {
         </>
       }
     >
-      {CONSENT_PARAGRAPHS.map((p) => (
+      {copy.paragraphs.map((p) => (
         <Text key={p} style={[s.small, { marginBottom: 12 }]}>{p}</Text>
       ))}
       <Checkbox
         checked={checked}
         onToggle={() => setChecked((c) => !c)}
-        label={CONSENT_CHECKBOX_LABEL}
+        label={copy.box1Label}
         testID="consent-checkbox"
       />
-      <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
-        {aiMemory ? aiMemory.paragraph.text : AI_CONSENT_PARAGRAPH}
+      {/* W-CONSENT: a client with no coach is asked too, with why Roman waits for a coach. */}
+      {copy.romanTitle ? (
+        <>
+          <Headline level="h2" style={{ marginTop: 28 }} testID="consent-roman-title">
+            {copy.romanTitle}
+          </Headline>
+          <Text style={[s.body, { marginTop: 8 }]} testID="consent-roman-lead">{copy.romanLead}</Text>
+        </>
+      ) : null}
+      <Text style={[s.small, { marginTop: copy.romanTitle ? 12 : 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
+        {aiMemory ? aiMemory.paragraph.text : copy.aiParagraph}
       </Text>
       <Checkbox
         checked={aiChecked}
@@ -601,7 +623,7 @@ function ConsentBody(props: BodyProps) {
           aiTouched.current = true;
           setAiChecked((c) => !c);
         }}
-        label={AI_CONSENT_CHECKBOX_LABEL}
+        label={copy.box2Label}
         disabled={!aiReady}
         hint={aiReady ? undefined : 'Checking your saved choice'}
         testID="consent-ai-checkbox"
@@ -616,7 +638,7 @@ function ConsentBody(props: BodyProps) {
           {AI_WITHDRAW_UNCONFIRMED_LINE}
         </Text>
       ) : null}
-      <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{CONSENT_FOOTER}</Text>
+      <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{copy.footer}</Text>
       {/* C-8 (operator 2026-10-01): the Privacy Policy, below the two boxes.
           Not part of the consent text or its hash; opening it sends nothing. */}
       <TextLink label="Privacy Policy" onPress={openPrivacyPolicy} testID="consent-privacy-link" role="link" />

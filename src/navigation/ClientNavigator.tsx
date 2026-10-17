@@ -59,6 +59,7 @@ import ExerciseLibraryScreen from '../screens/client/ExerciseLibraryScreen';
 import ExerciseDetailScreen from '../screens/client/ExerciseDetailScreen';
 import NotificationsScreen from '../screens/client/NotificationsScreen';
 import MessagesScreen from '../screens/client/MessagesScreen';
+import MessagesInboxScreen from '../screens/client/MessagesInboxScreen';
 import EducationScreen from '../screens/client/EducationScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
@@ -147,6 +148,7 @@ import { withCommunityTerms } from '../components/community/CommunityTermsGate';
 // unless featureFlags.clientTutorial is on.
 import TutorialHost from '../components/tutorial/TutorialHost';
 import { useAiWithdrawalDrain } from '../hooks/useAiWithdrawalDrain';
+import { useMessageOutboxDrain } from '../hooks/useMessageOutbox';
 import { setTutorialRoute } from '../tutorial/tutorialStore';
 import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
 import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
@@ -157,6 +159,13 @@ import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
 import JoinPackageHost from '../components/join/JoinPackageHost';
+import RomanJoinOfferHost from '../components/ai/RomanJoinOfferHost';
+import type { WinType } from '../services/firstWinApi';
+
+interface Day1SaveProps {
+  onDay1Saved?: (winType: WinType) => void;
+  day1NoteVisible?: boolean;
+}
 
 // B22/B24 (b#888) and B1 (owner ruling 10-08 23:5x, m#650): logging,
 // workouts, routines, habits, plans, fasting, macros and Roman guidance call
@@ -209,6 +218,8 @@ export type HomeStackParamList = {
   NotificationPreferences: undefined;
   /** Coach contact card opened from the client Messages thread header. */
   ContactView: MoreStackParamList['ContactView'];
+  /** C3B-S2: the Messages list (coach and Roman), opened from Home while Style B is on. */
+  MessagesInbox: undefined;
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -419,7 +430,7 @@ function CalendarStackNavigator() {
   );
 }
 
-function HomeStackNavigator() {
+function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
   // The Home stack runs headerShown:false, so a headerRight bell here never
   // rendered (dead UI). The bell + "Message your coach" entry now live in the
   // Home screen body (components/home/HomeHeaderActions).
@@ -431,9 +442,14 @@ function HomeStackNavigator() {
       }}
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
-      <HomeStackNav.Screen name="Habits"                component={ProtectedHabitsScreen} options={backOnlyHeader()} />
+      <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
+        {({ navigation }) => <ProtectedHabitsScreen onSaved={() => {
+          if (navigation.isFocused()) onDay1Saved?.('first_checkin');
+        }} />}
+      </HomeStackNav.Screen>
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
       <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
+      <HomeStackNav.Screen name="MessagesInbox"         component={MessagesInboxScreen} />
       {/* The Messages header opens the coach contact card (Mute, Block User). */}
       <HomeStackNav.Screen name="ContactView"           component={ContactView} />
       {/* Phase 9 — Notification center screens */}
@@ -494,7 +510,7 @@ function WorkoutStackNavigator() {
 // Phase 7C: Leaderboard screens registered here.
 // Bloodwork: BloodworkEntry screen registered here.
 // Wave 11: Copilot + CommunityHub registered here (flags default OFF in prod).
-function MoreStackNavigator() {
+function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
   return (
     <MoreStackNav.Navigator
       screenOptions={{
@@ -513,7 +529,11 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
-      <MoreStackNav.Screen name="Progress"     component={ProgressScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="Progress" options={backOnlyHeader()}>
+        {({ navigation }) => <ProgressScreen onSaved={() => {
+          if (navigation.isFocused()) onDay1Saved?.('logged_first_weight');
+        }} />}
+      </MoreStackNav.Screen>
       <MoreStackNav.Screen name="Settings"     component={SettingsScreen} />
       <MoreStackNav.Screen name="AddCoachCode" component={AddCoachCodeScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
@@ -664,12 +684,14 @@ const TUTORIAL_TABS = [
   ...(featureFlags.communityTab ? ['CommunityTab'] : []),
 ];
 
-export default function ClientNavigator() {
+export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1SaveProps = {}) {
   const { semanticColors: sc } = useTheme();
   const insets = useSafeAreaInsets();
   // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
   // has not confirmed yet is sent when the app opens.
   useAiWithdrawalDrain();
+  // C3B-THREAD-R1: Style B messages written offline send from here, thread open or not.
+  useMessageOutboxDrain();
   // Latest tab-screen navigation object, captured from screenListeners, so
   // the tutorial overlay (which sits outside the navigator) can offer
   // "Take me there" for screens behind a menu.
@@ -745,7 +767,6 @@ export default function ClientNavigator() {
     >
       <Tab.Screen
         name="Home"
-        component={HomeStackNavigator}
         options={{
           tabBarAccessibilityLabel: 'Home',
           title: 'Home',
@@ -753,7 +774,9 @@ export default function ClientNavigator() {
             <Ionicons name="home-outline" size={24} color={color} />
           ),
         }}
-      />
+      >
+        {() => <HomeStackNavigator onDay1Saved={onDay1Saved} />}
+      </Tab.Screen>
       <Tab.Screen
         name="WorkoutTab"
         component={WorkoutStackNavigator}
@@ -767,7 +790,6 @@ export default function ClientNavigator() {
       />
       <Tab.Screen
         name="Log"
-        component={ProtectedLogScreen}
         options={{
           tabBarAccessibilityLabel: 'Log food',
           title: 'Food',
@@ -775,7 +797,11 @@ export default function ClientNavigator() {
             <Ionicons name="restaurant-outline" size={24} color={color} />
           ),
         }}
-      />
+      >
+        {({ navigation }) => <ProtectedLogScreen suspended={day1NoteVisible} onSaved={() => {
+          if (navigation.isFocused()) onDay1Saved?.('first_meal');
+        }} />}
+      </Tab.Screen>
       {/* S-SCHED Calendar tab — gated by featureFlags.clientCalendar (default
           OFF). Off: the tab, its routes and deep links do not register. */}
       {featureFlags.clientCalendar && (
@@ -793,7 +819,6 @@ export default function ClientNavigator() {
       )}
       <Tab.Screen
         name="MoreTab"
-        component={MoreStackNavigator}
         options={{
           tabBarAccessibilityLabel: 'Profile and more',
           title: 'You',
@@ -801,7 +826,9 @@ export default function ClientNavigator() {
             <Ionicons name="person-outline" size={24} color={color} />
           ),
         }}
-      />
+      >
+        {() => <MoreStackNavigator onDay1Saved={onDay1Saved} />}
+      </Tab.Screen>
       {/* v1-5 Community tab — gated by featureFlags.communityTab (default OFF).
           When the flag is OFF this <Tab.Screen> is not rendered, so the tab does
           not appear and the CommunityTab route (and its deep link) never
@@ -819,6 +846,7 @@ export default function ClientNavigator() {
       )}
     </Tab.Navigator>
     <JoinPackageHost />
+    <RomanJoinOfferHost />
     </TutorialHost>
   );
 }
