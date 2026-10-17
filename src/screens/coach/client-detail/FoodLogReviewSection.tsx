@@ -123,8 +123,8 @@ export function FoodLogReviewSection({
         <View style={styles.emptyCard}>
           <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
           <Text style={styles.emptyText}>{error}</Text>
-          <TouchableOpacity onPress={load} accessibilityRole="button">
-            <Text style={[styles.actionPillText, { marginTop: 8 }]}>Retry</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={load} accessibilityRole="button">
+            <Text style={styles.retryBtnText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : !shared ? (

@@ -348,6 +348,8 @@ export const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
   },
   retryBtn: {
+    minHeight: layout.touchMin,
+    justifyContent: 'center',
     marginTop: 8,
     paddingHorizontal: 18,
     paddingVertical: 8,
