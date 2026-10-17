@@ -48,11 +48,12 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
   const [q, setQ] = useState('');
   const target = useCurrentMacrosForClient(clientId).data;
   const ends = days ? addDays(starts, days - 1) : undefined;
-  // A week of start chips, then the picked date if it is later; length chips, then a picked length.
+  // A week of start chips and four lengths; a date or length picked beyond them shows on the Pick a date chip.
   const startChips = [0, 1, 2, 3, 4, 5, 6].map((n) => addDays(today, n))
     .map((iso, n): [string, string] => [iso, n ? `${fmt(iso, { weekday: 'short' })} ${Number(iso.slice(8))}` : 'Today']);
-  if (!startChips.some(([iso]) => iso === starts)) startChips.push([starts, fmt(starts)]);
-  const lengthChips = [...LENGTHS, ...(LENGTHS.includes(days) ? [] : [days])].map((d): [number, string] => [d, span(d)]);
+  const lengthChips = LENGTHS.map((d): [number, string] => [d, span(d)]);
+  const customStart = startChips.some(([iso]) => iso === starts) ? undefined : fmt(starts);
+  const customLength = LENGTHS.includes(days) ? undefined : span(days);
   const toggle = (which: 'start' | 'end') => setPicking(picking === which ? undefined : which);
   // Android's dialog closes on any answer; iOS keeps its calendar open (changing month can move the date) until Done.
   const onPick = (e: DateTimePickerEvent, d?: Date) => {
@@ -99,8 +100,9 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
         loading={assign.isPending} onPress={() => void submit()} testID="assign-submit" />}>
       <Masthead title="Assign to a client" sub={p ? `${p.name} · ${num(kcal)} kcal a day` : undefined} onBack={() => navigation.goBack()}>
         <Chips label="Starts" items={startChips} value={starts} onChange={setStarts} scroll
-          pick={{ label: 'Pick a start date', open: picking === 'start', onPress: () => toggle('start') }} />
-        <Chips label="Ends" items={lengthChips} value={days} onChange={setDays} pick={{ label: 'Pick an end date', open: picking === 'end', onPress: () => toggle('end') }} />
+          pick={{ label: 'Pick a start date', open: picking === 'start', chosen: customStart, onPress: () => toggle('start') }} />
+        <Chips label="Ends" items={lengthChips} value={days} onChange={setDays}
+          pick={{ label: 'Pick an end date', open: picking === 'end', chosen: customLength, onPress: () => toggle('end') }} />
         <Text style={[typography.body, styles.range, { color: sc.textOnAccent }]}>
           {days === 1 ? `On ${fmt(starts)} only` : `From ${fmt(starts)}${ends ? ` to ${fmt(ends)}` : ', no end date'}`}
         </Text>

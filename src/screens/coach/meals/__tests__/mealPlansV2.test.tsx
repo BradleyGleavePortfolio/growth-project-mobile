@@ -278,8 +278,9 @@ it.each<[number, string, string]>([
     await fireEvent.press(s.getByTestId('assign-date'));
   }
   await fireEvent.press(s.getByText('Done'));
-  expect([s.getByLabelText(long(40)), s.getByLabelText(label)].map((c) => c.props.accessibilityState.checked)).toEqual([true, true]);
-  expect([s.getByText(range), s.queryByTestId('assign-date')]).toEqual([expect.anything(), null]);
+  expect([s.getByText(long(40)), s.getByText(label), s.getByText(range), s.queryByTestId('assign-date')]).toEqual([expect.anything(), expect.anything(), expect.anything(), null]);
+  expect(s.getByLabelText('Pick a start date').props.accessibilityState.selected).toBe(true);
+  expect(s.getByLabelText(days ? 'Pick an end date' : 'No end date').props.accessibilityState).toMatchObject(days ? { selected: true } : { checked: true });
   await fireEvent.press(s.getByTestId('assign-submit'));
   await waitFor(() => expect(mockDb.assignments[mockDb.assignments.length - 1]).toMatchObject(
     { client_id: 'c2', starts_on: toIsoDate(day(40)), ends_on: days ? toIsoDate(day(39 + days)) : null }));
