@@ -55,13 +55,12 @@ import RomanState from '../../components/roman/RomanState';
 import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
 import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
 import RomanConsentGate from '../../components/roman/RomanConsentGate';
+import RomanLoadingSkeleton from '../../components/roman/RomanLoadingSkeleton';
 import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
-import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { useRomanReveal } from '../../components/roman/useRomanReveal';
 import {
   romanPoolEmpty,
   romanRateLimited,
-  ROMAN_LOADING_A11Y_LABEL,
   ROMAN_LOADING_OLDER,
   ROMAN_REPLY_ANNOUNCE_PREFIX,
   ROMAN_SEND_FAILED,
@@ -83,27 +82,6 @@ import { useTheme } from '../../theme/useTheme';
 export interface RomanChatScreenProps {
   /** Host surface; defaults to 'client' when a route omits it. */
   surface?: RomanSurface;
-}
-
-function LoadingSkeleton(): React.ReactElement {
-  // The skeleton blocks themselves are hidden from assistive tech (Skeleton.tsx
-  // sets accessibilityElementsHidden), so the LOADING STATE must be exposed on
-  // the wrapper instead: a busy progressbar with a Roman-voiced label so a
-  // screen-reader user is told the surface is loading rather than meeting
-  // silence (R3 P1-1).
-  return (
-    <View
-      style={styles.skeletonWrap}
-      testID="roman-loading-skeleton"
-      accessibilityRole="progressbar"
-      accessibilityLabel={ROMAN_LOADING_A11Y_LABEL}
-      accessibilityState={{ busy: true }}
-    >
-      <Skeleton width="70%" height={18} testID="roman-skeleton-line-1" />
-      <Skeleton width="55%" height={18} />
-      <Skeleton width="80%" height={18} />
-    </View>
-  );
 }
 
 /** Roman's locked state for a client with no coach (Back keeps the stack). */
@@ -368,7 +346,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   if (phase === 'loading') {
     return (
       <Screen edges={['top']} scroll={false} header={header} contentStyle={styles.body} testID="roman-chat-screen">
-        <LoadingSkeleton />
+        <RomanLoadingSkeleton />
       </Screen>
     );
   }
@@ -543,10 +521,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: spacing.lg,
-  },
-  skeletonWrap: {
-    padding: spacing.xl,
-    gap: spacing.md,
   },
   olderNote: {
     flexDirection: 'row',

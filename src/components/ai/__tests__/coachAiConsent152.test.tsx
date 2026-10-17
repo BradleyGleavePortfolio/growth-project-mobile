@@ -5,9 +5,9 @@
  * A refusal in the real coach room keeps the room and the draft; both builder sheets show CAC-5.
  */
 import React from 'react';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { createHash } from 'crypto';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn(), delete: jest.fn() } }));
@@ -25,11 +25,13 @@ jest.mock('../../../api/romanApi', () => ({
   sendMessage: (...a: unknown[]) => mockSend(...a),
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ firstName: 'Bradley' }) }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: (props: object) => require('react').createElement(require('react-native').Text, props),
+}));
 jest.mock('../../../ui/skeletons/Skeleton', () => ({ Skeleton: () => null }));
 
 import CoachAiConsentHost from '../CoachAiConsentHost';
-import AiRefusalNotice from '../AiRefusalNotice';
+import AiRefusalNotice, { type AiRefusalNoticeProps } from '../AiRefusalNotice';
 import RomanConsentGate from '../../roman/RomanConsentGate';
 import RomanChatScreen from '../../../screens/roman/RomanChatScreen';
 import AiBuilderSheet from '../../coach/ai-builder/AiBuilderSheet';
@@ -38,12 +40,15 @@ import WeekAiSheet from '../../coach/ai-entry/WeekAiSheet';
 import { RomanApiError } from '../../../api/romanApi';
 import { aiBuilderApi, toAiBuilderError, type AiBuilderProposal, type AiBuilderStatus } from '../../../api/aiBuilderApi';
 import type { ProgramDay } from '../../../api/programsApi';
-import { lightTokens } from '../../../theme/tokens';
+import { lightTokens, radius } from '../../../theme/tokens';
 import { CoachRomanSwitch } from '../../../screens/coach/settings/CoachRomanSwitch';
-import { coachAiConsentApi, markCoachAskedAtSignUp, parseCoachAiConsentStatus, type CoachAiConsentState } from '../../../api/coachAiConsentApi';
+import { makeStyles } from '../../../screens/coach/settings/styles';
+import { coachAiConsentApi, markCoachAskedAtSignUp, parseCoachAiConsentStatus, type CoachAiConsentOutcome, type CoachAiConsentState } from '../../../api/coachAiConsentApi';
+import { ROMAN_LOADING_A11Y_LABEL } from '../../roman/romanVoice';
 import { COACH_AI_CONSENT_COPY as COPY, COACH_AI_CONSENT_COPY_SHA256 } from '../../../lib/ai/coachAiConsentCopy';
 import { aiRefusalCopy, aiRefusalFromHttp, aiRefusalFromStreamCode, aiRefusalOf } from '../../../lib/ai/aiRefusal';
 import { HapticService } from '../../../ui/haptics/haptics.service';
+import type { ThemeColors } from '../../../theme/ThemeProvider';
 import http from '../../../services/api';
 
 const ok = (state: CoachAiConsentState) => ({ kind: 'ok' as const, status: { state, granted: state === 'granted', asked: state !== 'not_asked' } });
@@ -149,6 +154,26 @@ describe('the one-time sheet over coach Home', () => {
 });
 
 describe('the coach Roman screen', () => {
+  it.each([
+    ['granted', ok('granted')],
+    ['off', ok('withdrawn')],
+    ['unreadable', { kind: 'unavailable' as const }],
+  ])('shows the shared loading state and Back until the first %s status arrives', async (_, outcome) => {
+    let resolve!: (out: CoachAiConsentOutcome) => void;
+    const api = { ...makeApi('granted'), getStatus: jest.fn(() => new Promise<CoachAiConsentOutcome>((done) => { resolve = done; })) };
+    const r = await render(<RomanConsentGate surface="coach" coachApi={api}><Text>room</Text></RomanConsentGate>);
+    expect(r.getByRole('progressbar', { name: ROMAN_LOADING_A11Y_LABEL }).props.accessibilityState).toEqual({ busy: true });
+    expect(r.queryByText('room')).toBeNull();
+    expect(r.queryByText(COPY.off.title)).toBeNull();
+    await fireEvent.press(r.getByRole('button', { name: 'Back' }));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(api.grant).not.toHaveBeenCalled();
+    await act(async () => resolve(outcome));
+    expect(r.queryByTestId('roman-loading-skeleton')).toBeNull();
+    expect(r.getByText(outcome.kind === 'ok' && !outcome.status.granted ? COPY.off.title : 'room')).toBeTruthy();
+    expect(api.getStatus).toHaveBeenCalledTimes(1);
+  });
+
   it.each(OFF)('shows CAC-5 for %s; its button opens the request and Allow opens the room', async (state) => {
     const api = makeApi(state);
     const r = await render(<RomanConsentGate surface="coach" coachApi={api}><Text>room</Text></RomanConsentGate>);
@@ -165,6 +190,7 @@ describe('the coach Roman screen', () => {
     const grant = jest.spyOn(coachAiConsentApi, 'grant').mockResolvedValue(ok('granted'));
     const onRetry = jest.fn();
     const r = await render(<AiRefusalNotice refusal={{ kind: 'coach_consent_required' }} audience="coach" surface="draft" onRetry={onRetry} />);
+    expect(StyleSheet.flatten(r.getByTestId('ai-refusal').props.style).borderRadius).toBe(radius.card);
     expect(r.getByText('Roman is off')).toBeTruthy();
     await fireEvent.press(r.getByText(COPY.off.button));
     await fireEvent.press(await r.findByText(COPY.allow));
@@ -173,15 +199,32 @@ describe('the coach Roman screen', () => {
   });
 });
 
+describe.each([false, true])('refusal corners (compact=%s)', (compact) => {
+  it.each<[string, Pick<AiRefusalNoticeProps, 'refusal' | 'audience'>, string[]]>([
+    ['coach Roman off', { refusal: { kind: 'coach_consent_required' }, audience: 'coach' }, ['turn-on']],
+    ['client AI off', { refusal: { kind: 'consent_required' }, audience: 'client' }, ['allow']],
+    ['coach retry', { refusal: { kind: 'consent_required' }, audience: 'coach' }, ['retry']],
+    ['service paused', { refusal: { kind: 'egress_blocked', reference: 'ref-12345678', serverMessage: null }, audience: 'coach' }, ['support', 'copy-reference']],
+  ])('%s uses the card and button tokens for every action', async (_, props, actions) => {
+    const r = await render(<AiRefusalNotice {...props} surface="draft" compact={compact} onRetry={jest.fn()} onContactSupport={jest.fn()} />);
+    expect(StyleSheet.flatten(r.getByTestId('ai-refusal').props.style).borderRadius).toBe(radius.card);
+    for (const action of actions) {
+      expect(StyleSheet.flatten(r.getByTestId(`ai-refusal-${action}`).props.style).borderRadius).toBe(radius.button);
+    }
+  });
+});
+
 describe('Settings > Privacy switch', () => {
-  const colors = new Proxy({}, { get: () => '#000000' }) as never;
-  const styles = {} as never;
+  const colors = new Proxy({}, { get: () => '#000000' }) as ThemeColors;
+  const styles = makeStyles(colors);
 
   it('on for a grant; off withdraws at once', async () => {
     const api = makeApi('granted');
     const r = await render(<CoachRomanSwitch colors={colors} styles={styles} api={api} />);
     const sw = await r.findByTestId('coach-settings-roman-ai-switch');
     expect(sw.props.value).toBe(true);
+    expect(r.getByTestId('coach-settings-roman-ai-icon').props).toMatchObject({ name: 'shield-checkmark-outline', size: 20, color: colors.textSecondary });
+    expect(r.getByTestId('coach-settings-roman-ai-divider').props.style).toEqual(styles.divider);
     expect(r.getByText(COPY.switchHint)).toBeTruthy();
     await fireEvent(sw, 'valueChange', false);
     await waitFor(() => expect(r.getByTestId('coach-settings-roman-ai-switch').props.value).toBe(false));
