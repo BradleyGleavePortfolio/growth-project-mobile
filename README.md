@@ -427,7 +427,7 @@ New clients complete either LeanQ1–LeanQ6 or the available consultation. Compl
 
 The current coach wizard keeps five setup routes. It respects top/bottom safe insets, and Back on a cold-resumed step replaces with the preceding route rather than doing nothing or cycling forward. Step 1 has no earlier setup route. Stripe configuration unavailability does not block Continue setup; the verification resend action shows its busy state and a live cooldown. See `src/navigation/README.md` and `src/screens/auth/README.md` (COACH-EDGES-132, agent 132).
 
-Coach `ClientDetail` accepts `initialTab: 'workouts' | 'mealplan'` (optional). AI meal-plan approval opens the Plan tab; clients find their plans at More → Meal plan, not a dedicated Plan tab.
+Coach `ClientDetail` accepts `initialTab: 'workouts'` (optional); the client file has no Plan tab. Clients find their plans at More → Meal plan, not a dedicated Plan tab.
 
 The orphan coach `CoachMealTemplates` route is not registered. No entry action or deep link used it; the meal-template API, hooks and existing daily meal-plan paths are retained (MEAL-TEMPLATES-ROUTE-132).
 
