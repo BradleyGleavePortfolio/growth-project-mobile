@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polyline } from 'react-native-svg';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { radius, typography } from '../../../theme/tokens';
+import { layout, radius, typography } from '../../../theme/tokens';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useSettings } from '../../../hooks/useSettings';
@@ -76,6 +76,8 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
   });
 
   const glass = metric ? 250 : 8;
+  // Until today's water is known the chip reads as off (and is off), so it is never a dead tap.
+  const waterReady = !!water.value && water.value !== '—';
   const addWater = async () => {
     if (!currentUser) return;
     await logWater(currentUser.id, '', metric ? glass / 29.5735 : glass);
@@ -89,9 +91,9 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
     <HomeTile key="protein" label="Protein" view={protein} testID="home-tile-protein" onPress={() => navigation.navigate('Log')} />,
     <HomeTile key="water" label="Water" view={water} testID="home-tile-water" onPress={() => navigation.navigate('Log')}
       accessory={
-        <Pressable testID="home-tile-water-add" onPress={() => void addWater()} disabled={!water.value || water.value === '—'}
+        <Pressable testID="home-tile-water-add" onPress={() => void addWater()} disabled={!waterReady}
           accessibilityRole="button" accessibilityLabel={`Add ${glass} ${metric ? 'milliliters' : 'ounces'} of water`}
-          hitSlop={6} style={({ pressed }) => [styles.chip, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: pressed ? 0.7 : 1 }]}>
+          style={({ pressed }) => [styles.chip, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: !waterReady ? 0.4 : pressed ? 0.7 : 1 }]}>
           <Ionicons name="add" size={16} color={sc.textPrimary} />
           <Text style={[styles.chipText, { color: sc.textPrimary }]}>{metric ? `${glass} ml` : `${glass} oz`}</Text>
         </Pressable>
@@ -131,7 +133,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 12 },
   spacer: { flex: 1 },
   chip: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, minHeight: 32, paddingHorizontal: 12,
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, minHeight: layout.touchMin, paddingHorizontal: 14,
     borderRadius: radius.chip, borderWidth: 1,
   },
   chipText: { ...typography.bodyMd, fontSize: 13, lineHeight: 18 },

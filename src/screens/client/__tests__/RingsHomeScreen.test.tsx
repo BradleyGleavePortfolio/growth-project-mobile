@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
 
@@ -224,6 +225,10 @@ it('a failed day read shows the quiet error with Try again and dashes, not zero 
   await render(<HomeScreen />);
   expect(await screen.findByText('Today could not load. Try again.')).toBeTruthy();
   expect(screen.getByLabelText('Food, — kcal left')).toBeTruthy();
+  // Water is unknown, so its chip is off and looks off: no dead tap.
+  const chip = screen.getByLabelText('Add 8 ounces of water');
+  expect(chip.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
+  expect(StyleSheet.flatten(chip.props.style).opacity).toBe(0.4);
   await fireEvent.press(screen.getByTestId('home-day-data-error-retry'));
   expect(mockDay.loadDayData).toHaveBeenCalledTimes(2); // on mount, then Try again
   expect(mockDay.loadDayData).toHaveBeenLastCalledWith('u1', getTodayString());
@@ -275,6 +280,7 @@ it('Steps: "—" while Health loads, Connect without Health (connected devices),
 it('the water chip adds 8 oz with a success haptic, and an error haptic when it was not saved', async () => {
   await render(<HomeScreen />);
   await screen.findByLabelText('Water, 48 of 100 oz');
+  expect(StyleSheet.flatten(screen.getByLabelText('Add 8 ounces of water').props.style).minHeight).toBe(44);
   await fireEvent.press(screen.getByLabelText('Add 8 ounces of water'));
   expect(mockDay.logWater).toHaveBeenCalledWith('u1', '', 8);
   await waitFor(() => expect(HapticService.success).toHaveBeenCalledTimes(1));
