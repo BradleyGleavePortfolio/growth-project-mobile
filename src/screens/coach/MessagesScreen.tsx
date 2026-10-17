@@ -77,9 +77,8 @@ function LegacyCoachMessages() {
     useCallback(() => {
       loadUnread();
 
-      // Subscribe to message-arrived pings on the coach's own channel.
-      // The backend broadcasts to messages:{userId} for both inbound (client
-      // → coach) and acknowledgement events.
+      // Subscribe to message-arrived pings on the coach's own private topic
+      // (messages:user:<id>): the backend pings both people in every chat.
       const unsubscribe = currentUser?.id
         ? subscribeToMessages(currentUser.id, loadUnread)
         : () => {};

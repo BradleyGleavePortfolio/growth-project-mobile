@@ -48,8 +48,8 @@ Screen ──► api.<surface>.<method>(...)
             └─ otherwise ─► reject
 
 Realtime:
-  subscribeToMessages(userId, refetch) ─► channel `messages:<userId>`
-                                       └─► ping ─► caller refetches via REST
+  subscribeToMessages(userId, refetch) ─► private channel `messages:user:<userId>` (signed-in token)
+                                       └─► ping (debounced 1 s) ─► caller refetches via REST
 
 Food log offline:
   enqueueSearchLog / enqueueManualLog ─► AsyncStorage('pending_food_logs')

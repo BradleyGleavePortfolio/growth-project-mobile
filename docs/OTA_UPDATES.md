@@ -110,10 +110,12 @@ option is refused, not ignored. It runs
 only when all of these hold:
 1. **Arguments.** Exactly one eas.json build profile uses the channel; `--environment` is given and equals that profile's `environment` (after `extends`; `clinic` → `production`; SDK 55+ requires it); `--message` is non-empty; `--rollout-percentage`, when given, is a whole number from 1 to 100.
 2. **Purchase gate.** `src/config/purchaseSurfaces.ts` matches the reviewed hash in `scripts/purchase-policy.sha256`.
-3. **Hide flag, remote.** The EAS project variable `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` in that environment is exactly `"true"`.
-   - **Lookup:** `eas env:get <env> --variable-name EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES --format short --scope project --non-interactive`, with the flag stripped from the child's environment.
-   - **Requirement:** exactly one `NAME=true` record. A missing variable (eas-cli prints "not found" and still exits 0), an empty, masked or duplicate value, or a failed lookup refuses.
+3. **Hide flag, remote.** `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is exactly `"true"` in the bundle this update would ship, and that value comes only from EAS: the publish child never gets the flag, so `eas update` takes the EAS value.
+   - **Lookup:** the same `eas env:list` records as step 5 (the project-scope listing is the query `eas update` itself runs), with the flag stripped from the child's environment. Only stdout is parsed.
+   - **Requirement:** a missing, empty, masked, secret, conflicting or other value, or a failed listing, refuses.
+   - **Why not `eas env:get`:** its "not found" is only a log line on the same stream where npx, in CI, logs "The following package was not found and will be installed" (device-loop run 38968985863 refused a flag that the testing build had loaded from the same environment minutes before).
    - **Why not `eas env:exec`:** it merges the parent shell env and skips absent remote values, so a locally exported `true` could pass as remote.
+   - **eas-cli version:** every eas command runs through npx at the exact release pinned by `EAS_CLI` in `scripts/eas-update-guard.js`; the device loop installs the same one.
 4. **Hide flag, local.** The local shell does not set the flag to anything other than `"true"`. The publish child runs without it, so the bundle takes the EAS value.
 5. **The update ships the bundle the binary was built with.** `eas update --environment <e>` exports with `{ ...process.env, ...EAS plaintext and sensitive values }`; `secret` values are readable only on EAS builders and never reach an update. The guard reads `eas env:list <env> --format short --scope project|account --include-sensitive` and, for every name that reaches the bundle (each `EXPO_PUBLIC_*` and each `eas.json` profile env name), refuses when:
    - a record is `secret`, a file, masked or not revealed: the update could not carry the value the binary has (fix: make it `sensitive`, which an update can read);
