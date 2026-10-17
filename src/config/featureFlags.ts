@@ -72,6 +72,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_TEAM_MODE: process.env.EXPO_PUBLIC_FF_TEAM_MODE,
   EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF: process.env.EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF,
   EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS: process.env.EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS,
+  EXPO_PUBLIC_FF_YOU_TAB_V2: process.env.EXPO_PUBLIC_FF_YOU_TAB_V2,
   EXPO_PUBLIC_NOTIFICATIONS_MOCK: process.env.EXPO_PUBLIC_NOTIFICATIONS_MOCK,
 } as const;
 
@@ -584,6 +585,18 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_C3_STYLE_B
    */
   c3StyleB: readFlag('EXPO_PUBLIC_FF_C3_STYLE_B', false),
+
+  // ─── C9-S1 — the You tab home in Style C (MOCK-C9) ──────────────────────
+  /**
+   * The You tab as MOCK-C9 Style C (owner pick C9 = Style C): your name and
+   * week on a deep-forest masthead, your coach (or Join a coach), then
+   * Account, Settings, Health and devices and Support. The tab, the title and
+   * the screen reader all say You. OFF UNCONDITIONALLY; with it off the tab is
+   * exactly main's More list.
+   *
+   * env: EXPO_PUBLIC_FF_YOU_TAB_V2
+   */
+  youTabV2: readFlag('EXPO_PUBLIC_FF_YOU_TAB_V2', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

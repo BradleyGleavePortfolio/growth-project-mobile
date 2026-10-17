@@ -24,7 +24,7 @@ import { isAndroidHealthConnectEnabled } from '../../config/healthConnect';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
 import type { TutorialTargetId } from '../../tutorial/tutorialSteps';
-type MoreItem = {
+export type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   description: string;
@@ -97,7 +97,7 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
   },
 ];
 
-const MORE_ITEMS: MoreItem[] = [
+export const MORE_ITEMS: MoreItem[] = [
   {
     icon: 'people-outline',
     label: 'Community',
@@ -196,7 +196,7 @@ const MORE_ITEMS: MoreItem[] = [
  * the MoreStack 'RomanChat' screen, which itself is registered only behind the
  * same flag (ClientNavigator).
  */
-const ROMAN_MORE_ITEM: MoreItem = {
+export const ROMAN_MORE_ITEM: MoreItem = {
   icon: 'sparkles-outline',
   label: 'Roman',
   // Roman is not "your AI" — he is Roman, shared across surfaces (identity
@@ -219,7 +219,7 @@ const ROMAN_MORE_ITEM: MoreItem = {
  * read a phone health store: always on iPhone, and on Android only in a build
  * with Health Connect (the clinic profile), or with the tutorial on as before.
  */
-function showsWearableRows(): boolean {
+export function showsWearableRows(): boolean {
   return (
     featureFlags.clientTutorial ||
     Platform.OS === 'ios' ||
@@ -227,7 +227,7 @@ function showsWearableRows(): boolean {
   );
 }
 
-const WEARABLE_MORE_ITEMS: MoreItem[] = [
+export const WEARABLE_MORE_ITEMS: MoreItem[] = [
   {
     icon: 'heart-outline',
     label: 'Health and sleep',
