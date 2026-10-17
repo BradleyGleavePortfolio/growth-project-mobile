@@ -426,6 +426,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         </View>
         <TouchableOpacity
           style={styles.msgIconBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Open messages"
           onPress={() => {
             if (!currentUser) return;
             // Audit P1: route to the specific client thread, not the Messages
