@@ -72,6 +72,7 @@ export function useUpdateMealTemplate() {
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['meal-templates'] });
       qc.invalidateQueries({ queryKey: ['meal-templates', vars.id] });
+      qc.invalidateQueries({ queryKey: ['daily-meal-plans'] }); // plans carry their meals' numbers
     },
   });
 }
@@ -83,6 +84,7 @@ export function useArchiveMealTemplate() {
       mealTemplatesApi.archiveTemplate(id).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['meal-templates'] });
+      qc.invalidateQueries({ queryKey: ['daily-meal-plans'] }); // plans carry their meals
     },
   });
 }

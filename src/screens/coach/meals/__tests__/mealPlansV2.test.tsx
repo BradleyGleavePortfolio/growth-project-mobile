@@ -5,13 +5,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 type Row = Record<string, any>;
-const mockDb = { meals: [] as Row[], plans: [] as Row[], assignments: [] as Row[], fail: {} as Record<string, unknown> };
+const mockDb = { meals: [] as Row[], plans: [] as Row[], assignments: [] as Row[], fail: {} as Record<string, unknown>, log: [] as string[] };
 const mockNav = { navigate: jest.fn(), goBack: jest.fn() };
 let mockFlag = true;
 
 /** Backend main's coach meal routes: own rows only, archived rows hidden, DTO limits enforced. */
 function mockRoute(method: string, url: string, body: Row = {}): Promise<{ data: unknown }> {
-  const key = `${method} ${url}`;
+  const key = `${method} ${url}`; mockDb.log.push(key);
   if (key in mockDb.fail) return mockDb.fail[key] === 'hang' ? new Promise(() => {}) : Promise.reject(mockDb.fail[key]);
   const [, , kind, id, sub] = url.split('/');
   const live = (rows: Row[]) => rows.filter((r) => !r.archived_at);
@@ -58,7 +58,7 @@ const assign = (plan: string, client: string, ends_on: string | null = null) =>
 const haptic = (k: 'selection' | 'success' | 'error' | 'mediumImpact') => HapticService[k] as jest.Mock;
 const mount = (ui: React.ReactElement) => render(<QueryClientProvider client={new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>{ui}</QueryClientProvider>);
-const editor = (mealId?: string) => mount(<MealEditor {...({ route: { params: { mealId } }, navigation: mockNav } as any)} />);
+const editor = (mealId?: string, also?: React.ReactElement) => mount(<>{also}<MealEditor {...({ route: { params: { mealId } }, navigation: mockNav } as any)} /></>);
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -70,7 +70,7 @@ beforeEach(() => {
     { id: 'p2', coach_id: 'coach', name: 'Rest day', notes: null, archived_at: null, slots: [slot('s3', 'm3', 'snack', 0)] },
   ];
   mockDb.assignments = [assign('p1', 'c1'), assign('p1', 'c3'), assign('p1', 'c2', '2020-01-31T00:00:00.000Z'), assign('p2', 'c1')];
-  mockDb.fail = {};
+  Object.assign(mockDb, { fail: {}, log: [] });
 });
 afterEach(() => require('@react-native-community/netinfo').__reset());
 
@@ -121,16 +121,19 @@ it('the editor holds backend limits, says when a save fails, then creates the me
   expect(haptic('success')).toHaveBeenCalledTimes(1);
 });
 
-it('editing saves the meal, and Archive asks first, then archives it', async () => {
+it('editing saves the meal and Archive asks first, then archives it; each write refreshes the day plans', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-  const s = await editor('m1');
-  await fireEvent.changeText(await s.findByLabelText('Protein (g)'), '30');
+  const s = await editor('m1', <ProgramsLibraryScreen />);
+  await fireEvent.press(s.getByTestId('programs-tab-plans'));
+  expect(await s.findByLabelText('Training day, 1,100 kcal, 2 clients')).toBeTruthy();
+  await fireEvent.changeText(await s.findByLabelText('Calories (kcal)'), '520');
   await fireEvent.press(s.getByTestId('meal-save'));
-  await waitFor(() => expect(mockDb.meals[0].protein_g).toBe(30));
+  expect(await s.findByLabelText('Training day, 1,200 kcal, 2 clients')).toBeTruthy();
   await fireEvent.press(s.getByText('Archive this meal'));
   expect(alert).toHaveBeenCalledWith('Archive Overnight oats?', expect.any(String), expect.any(Array));
   await act(async () => (alert.mock.calls[0][2] as any)[1].onPress());
   expect(mockDb.meals[0].archived_at).toBeTruthy();
+  await waitFor(() => expect(mockDb.log.filter((k) => k === 'GET /coach/daily-meal-plans')).toHaveLength(3));
   expect(mockNav.goBack).toHaveBeenCalledTimes(2);
 });
 
