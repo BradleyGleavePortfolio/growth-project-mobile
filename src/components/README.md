@@ -273,3 +273,6 @@ under `community_terms_agreed:v1:<userId>`) and "Read the Terms of Service" (`TE
 `src/lib/legalLinks.ts`, which names the page and gives its web address when the phone cannot open it. The Create account
 screen states the Terms of Service and Privacy Policy agreement with both links. Tests:
 `community/__tests__/CommunityTermsGate.test.tsx`, `screens/auth/__tests__/CreateAccountScreen.test.tsx`.
+COACHTABS (agent 153): an optional `onBack` draws a 44 pt Back above the agreement; only the coach Community stack
+passes it, and only with `featureFlags.coachTabsV2` on (Community opens from Messages there). Back leaves without storing an
+agreement.

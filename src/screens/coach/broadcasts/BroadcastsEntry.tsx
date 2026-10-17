@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { broadcastsAvailable } from '../../../api/broadcastsApi';
-import { spacing, typography } from '../../../theme/tokens';
+import { radius, spacing, typography } from '../../../theme/tokens';
 import { useTheme } from '../../../theme/ThemeProvider';
 
 /**
@@ -35,5 +35,5 @@ export function BroadcastsEntry() {
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderRadius: 2, paddingHorizontal: spacing.md },
+  button: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderRadius: radius.button, paddingHorizontal: spacing.md },
 });

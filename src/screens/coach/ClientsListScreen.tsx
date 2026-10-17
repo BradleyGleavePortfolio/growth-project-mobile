@@ -497,6 +497,8 @@ const makeStyles = (colors: ThemeColors) =>
   filterChip: {
     paddingHorizontal: 8,
     minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 2,
     borderColor: colors.background,

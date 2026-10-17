@@ -679,6 +679,10 @@ function CalendarStackNavigator() {
         name="CoachBookingInbox"
         component={CoachBookingInboxScreen}
         options={({ navigation }) => ({
+          // The tab root names itself like the other tab roots (no empty band).
+          headerTitle: 'Calendar',
+          headerTitleAlign: 'left',
+          headerTitleStyle: styles.calendarTitle,
           headerRight: () => (
             <Pressable
               onPress={() => {
@@ -1016,6 +1020,7 @@ export default function CoachNavigator() {
 }
 
 const styles = StyleSheet.create({
+  calendarTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 28 },
   headerGear: {
     width: 44,
     height: 44,
