@@ -91,7 +91,8 @@ async function join(myTopic: string): Promise<void> {
   const { realtime } = getClient();
   await realtime.setAuth();
   // Signed out, another person meanwhile, or already joined: nothing to do.
-  if (topic !== myTopic || channel || !realtime.accessTokenValue) return;
+  const token = realtime.accessTokenValue;
+  if (topic !== myTopic || channel || !token) return;
   let joined = false;
   const ch = getClient()
     .channel(myTopic, { config: { private: true, broadcast: { self: false } } })
@@ -100,7 +101,11 @@ async function join(myTopic: string): Promise<void> {
   channel = ch;
   ch.subscribe((status: string) => {
     if (status === 'SUBSCRIBED') joined = true;
-    else if (!joined || status === 'CLOSED') drop(ch);
+    else if (ch === channel && (!joined || status === 'CLOSED')) {
+      drop(ch);
+      // A token refresh landed meanwhile: join again with the new token.
+      if (realtime.accessTokenValue !== token) void join(myTopic).catch(() => undefined);
+    }
   });
 }
 

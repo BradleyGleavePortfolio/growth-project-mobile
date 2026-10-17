@@ -180,6 +180,24 @@ describe('subscribeToMessages (private per-person topic)', () => {
     off();
   });
 
+  it('a token refresh while the join is pending: the refused join tries again with the new token', async () => {
+    const off = rt.subscribeToMessages('u1', jest.fn());
+    await flush();
+    const pending = last();
+    mockToken = 'token-new';
+    rt.refreshRealtimeAuth();
+    await flush();
+    expect(mockChannels).toHaveLength(1);
+    pending.status('CHANNEL_ERROR'); // refused: it went out with the expired token
+    await flush();
+    expect(mockRemove).toHaveBeenCalledWith(pending);
+    expect(mockChannels).toHaveLength(2);
+    last().status('CHANNEL_ERROR'); // refused with the same token: poll only, no loop
+    await flush();
+    expect(mockChannels).toHaveLength(2);
+    off();
+  });
+
   it('signed out: no token, no join', async () => {
     mockToken = null;
     const off = rt.subscribeToMessages('u1', jest.fn());
