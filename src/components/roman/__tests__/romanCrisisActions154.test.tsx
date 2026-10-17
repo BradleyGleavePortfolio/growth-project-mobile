@@ -23,7 +23,9 @@ import type { RomanChatsApi } from '../../../api/romanChatsApi';
 const mockFlag = { on: true };
 jest.mock('../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../config/featureFlags');
-  return { ...actual, featureFlags: { ...actual.featureFlags, get crisisActions() { return mockFlag.on; } } };
+  // A live getter (a spread would copy the value once, at import time).
+  const featureFlags = Object.defineProperty({ ...actual.featureFlags }, 'crisisActions', { get: () => mockFlag.on, enumerable: true });
+  return { ...actual, featureFlags };
 });
 const mockGet = jest.fn();
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (...a: unknown[]) => mockGet(...a) } }));
