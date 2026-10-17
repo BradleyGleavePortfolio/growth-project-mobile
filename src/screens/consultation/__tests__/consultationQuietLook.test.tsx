@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
-import { lightTokens, darkTokens, radius } from '../../../theme/tokens';
+import { colors, lightTokens, darkTokens, radius } from '../../../theme/tokens';
 import { fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
 import { RESULT } from '../../../lib/consultation/__fixtures__/flowHarness';
 import { Checkbox, Chip, Frame, LabeledInput, OptionRow, PrimaryButton, UnitTabs, Wheel, STEP_MS } from '../components';
@@ -61,6 +61,25 @@ it('preserves all building-block handlers, roles and disabled consent behaviour'
   await fireEvent(r.getByTestId('wheel'), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
   expect(change.mock.calls).toEqual([['Note'], ['metric'], ['imperial'], [3], [1]]);
   expect(r.getByTestId('consult-scroll').props['ph-no-capture']).toBe(true);
+});
+
+it('the tan Checkbox only changes the fill; default, selection and disabled behaviour stay the same', async () => {
+  const action = jest.fn();
+  const r = await render(<>
+    <Checkbox label="Default" checked={false} onToggle={action} testID="default" />
+    <Checkbox variant="tan" label="Tan" checked={false} onToggle={action} testID="tan" />
+    <Checkbox variant="tan" label="Checked" checked onToggle={action} testID="checked" />
+    <Checkbox variant="tan" label="Disabled" checked={false} disabled onToggle={action} testID="disabled" />
+  </>);
+  expect(StyleSheet.flatten(r.getByTestId('default').props.style).backgroundColor).toBe(lightTokens.bgPrimary);
+  for (const id of ['tan', 'checked', 'disabled']) {
+    expect(StyleSheet.flatten(r.getByTestId(id).props.style).backgroundColor).toBe(colors.cream);
+  }
+  expect(r.getByTestId('tan').props.accessibilityState).toEqual({ checked: false });
+  expect(StyleSheet.flatten(r.getByTestId('checked').props.style).borderColor).toBe(lightTokens.accent);
+  await fireEvent.press(r.getByTestId('tan'));
+  await fireEvent.press(r.getByTestId('disabled'));
+  expect(action).toHaveBeenCalledTimes(1);
 });
 
 it('keeps every summary edit, back, prepare and preparing guard', async () => {
