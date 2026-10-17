@@ -2,7 +2,7 @@
  * COACH-AI-CONSENT (owner ruling op 2): a coach's own Roman grant in every state (never asked,
  * declined, granted, withdrawn, the server's typed refusal) on the one-time sheet, the Roman
  * screen, the Settings switch and AI refusals; the pinned words, their sha256 and the routes.
- * A refusal in the real coach room keeps the room and the draft.
+ * A refusal in the real coach room keeps the room and the draft; both builder sheets show CAC-5.
  */
 import React from 'react';
 import { Text } from 'react-native';
@@ -32,7 +32,13 @@ import CoachAiConsentHost from '../CoachAiConsentHost';
 import AiRefusalNotice from '../AiRefusalNotice';
 import RomanConsentGate from '../../roman/RomanConsentGate';
 import RomanChatScreen from '../../../screens/roman/RomanChatScreen';
+import AiBuilderSheet from '../../coach/ai-builder/AiBuilderSheet';
+import { useAiBuilder } from '../../coach/ai-builder/useAiBuilder';
+import WeekAiSheet from '../../coach/ai-entry/WeekAiSheet';
 import { RomanApiError } from '../../../api/romanApi';
+import { aiBuilderApi, toAiBuilderError, type AiBuilderProposal, type AiBuilderStatus } from '../../../api/aiBuilderApi';
+import type { ProgramDay } from '../../../api/programsApi';
+import { lightTokens } from '../../../theme/tokens';
 import { CoachRomanSwitch } from '../../../screens/coach/settings/CoachRomanSwitch';
 import { coachAiConsentApi, markCoachAskedAtSignUp, parseCoachAiConsentStatus, type CoachAiConsentState } from '../../../api/coachAiConsentApi';
 import { COACH_AI_CONSENT_COPY as COPY, COACH_AI_CONSENT_COPY_SHA256 } from '../../../lib/ai/coachAiConsentCopy';
@@ -92,6 +98,7 @@ describe('words and contract', () => {
     ['AskAiActionSheet', () => aiRefusalOf(TYPED_403)],
     ['WearableInsightPanel', () => aiRefusalOf(TYPED_403)],
     ['CoachCommunityInboxScreen triage', () => aiRefusalOf(TYPED_403)],
+    ['workout builder and week Ask AI', () => ({ kind: toAiBuilderError(TYPED_403).code })],
   ])('%s maps the typed refusal to CAC-5', (_, read) => expect(read()).toEqual({ kind: 'coach_consent_required' }));
 
   it('keeps a client refusal apart and words CAC-5 for the coach', () => {
@@ -233,5 +240,47 @@ describe('the coach Roman room keeps the room and the draft through the typed re
       await waitFor(() => expect(r.getByTestId('roman-composer-input').props.value).toBe(''));
       expect(mockSend.mock.calls).toEqual([['s1', DRAFT], ['s1', DRAFT]]);
     }
+  });
+});
+
+// Opus 6225592099 B2 / LS-760 COACH-AI-BUILDER-RECOVERY: both builder sheets show CAC-5, keep the ask, resume after Allow.
+describe('workout builder Ask AI', () => {
+  const STATUS: AiBuilderStatus = { state: 'on', create: true, edit: true, label: 'AI-suggested, coach-approved', credits: { remaining_pct: 50, resets_at: null } };
+  const PROPOSAL: AiBuilderProposal = { draft_id: 'd1', summary: 'Day 1 progressed.', changes: [], dropped: [], context_used: [], screening_flag: false };
+  const DAY: ProgramDay = { week_index: 0, day_index: 0, plan_id: 'plan-0', name: 'Push', type: 'strength', duration_estimate_minutes: null, exercise_count: 4, updated_at: '2026-10-16T00:00:00Z' };
+  function Builder() {
+    const ai = useAiBuilder({ planId: 'plan-0', isBlank: false, prepare: async () => ({ ok: true }), onApplied: () => undefined });
+    return <AiBuilderSheet open onClose={() => undefined} ai={ai} isBlank={false} sc={lightTokens} />;
+  }
+  beforeEach(() => {
+    jest.spyOn(aiBuilderApi, 'getStatus').mockResolvedValue(STATUS);
+    jest.spyOn(coachAiConsentApi, 'grant').mockResolvedValue(ok('granted'));
+  });
+
+  it('the builder sheet: CAC-5 with Turn on Roman, the instruction kept, asked again after Allow', async () => {
+    const propose = jest.spyOn(aiBuilderApi, 'propose').mockRejectedValueOnce(TYPED_403).mockResolvedValue(PROPOSAL);
+    const r = await render(<Builder />);
+    await fireEvent.changeText(await r.findByTestId('ai-builder-input'), 'swap squats');
+    await fireEvent.press(r.getByTestId('ai-builder-send'));
+    expect(await r.findByText('Roman is off')).toBeTruthy();
+    expect(r.queryByTestId('ai-builder-error')).toBeNull();
+    expect(r.getByTestId('ai-builder-input').props.value).toBe('swap squats');
+    await fireEvent.press(r.getByTestId('ai-builder-roman-off-turn-on'));
+    await fireEvent.press(await r.findByTestId('ai-builder-roman-off-coach-sheet-allow'));
+    expect(await r.findByTestId('ai-builder-review')).toBeTruthy();
+    expect(propose.mock.calls.map((c) => c[0].instruction)).toEqual(['swap squats', 'swap squats']);
+    expect(r.queryByTestId('ai-builder-roman-off')).toBeNull();
+  });
+
+  it('the week sheet: CAC-5 instead of the error line; after Allow the week is asked again', async () => {
+    const propose = jest.spyOn(aiBuilderApi, 'propose').mockRejectedValueOnce(TYPED_403).mockResolvedValue(PROPOSAL);
+    const r = await render(<WeekAiSheet action="progress" week={0} days={[DAY]} status={STATUS} onClose={() => undefined} onApplied={() => undefined} />);
+    expect(await r.findByText('Roman is off')).toBeTruthy();
+    expect(r.queryByTestId('week-ai-error')).toBeNull();
+    await fireEvent.press(r.getByTestId('week-ai-roman-off-turn-on'));
+    await fireEvent.press(await r.findByTestId('week-ai-roman-off-coach-sheet-allow'));
+    expect(await r.findByTestId('week-ai-day-0')).toBeTruthy();
+    expect(propose).toHaveBeenCalledTimes(2);
+    expect(r.queryByTestId('week-ai-roman-off')).toBeNull();
   });
 });
