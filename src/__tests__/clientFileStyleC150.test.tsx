@@ -54,9 +54,10 @@ jest.mock('../components/coach/DisputePausedPlansCard', () => ({ DisputePausedPl
 const now = new Date();
 const monday = bucketDateLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7)));
 const today = `${getTodayString()}T00:00:00.000Z`;
+const yesterday = `${bucketDateLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))}T00:00:00.000Z`;
 let summary: Record<string, unknown>;
 let timeline: Record<string, unknown>;
-let clientWeek: { week_start: string; today: string; shared: boolean; assignments: unknown[] };
+let clientWeek: { week_start: string; today: string; assignments: unknown[] };
 const params = { clientId: 'client-test', clientName: 'Test client' };
 const TABS = ['week', 'summary', 'logs', 'mealplan', 'progress', 'healthFitness', 'sleepRecovery', 'workouts', 'timeline', 'weekly'];
 // Every render is the app's real stack (Clients, the file, the thread) under the app's status band, on a 47 pt notch.
@@ -86,12 +87,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.coachTabsV2 = true;
   useCoachStore.getState().reset();
-  summary = { client_name: 'Test client', profile: { macro_target_calories: 2100 }, today: {}, consent: { workouts: true } };
-  clientWeek = { week_start: monday, today: getTodayString(), shared: true, assignments: [{ id: 'a1', day: monday, completed_at: today, skipped_at: null }] };
-  timeline = {
-    meals: [{ id: 'm1', date: today, quantity_multiplier: 1, food_item: { calories: 500 } }],
+  summary = { client_name: 'Test client', profile: { macro_target_calories: 2100 }, today: {} };
+  clientWeek = { week_start: monday, today: getTodayString(), assignments: [{ id: 'a1', day: monday, completed_at: today, skipped_at: null }] };
+  timeline = { // #FOODAVG: yesterday's 1,800 is the average; today's 500 is still being logged
+    meals: [{ id: 'm1', date: today, quantity_multiplier: 1, food_item: { calories: 500 } }, { id: 'm0', date: yesterday, quantity_multiplier: 1, food_item: { calories: 1800 } }],
     checkIns: [{ date: today, reviewed_by_coach: false }], weights: [],
-    consent: { workouts: true, food_macros: true, body_metrics: true, habits_progress: true },
   };
   read.mockReset().mockImplementation(async () => ({ data: summary }));
   week.mockReset().mockImplementation(async () => ({ data: timeline }));
@@ -114,9 +114,9 @@ it('flag off: the file is unchanged (Summary first, the old header, no masthead)
   expect(band(view)).toEqual(BONE);
 });
 
-it('flag on: opens on This week with the name, the ring, the day strip and the four cards (Food: the client\'s own target, LO-739 B1)', async () => {
+it('flag on: opens on This week with the name, the ring, the day strip and the four cards (Food: the client\'s own target, LO-739 B1; today out of the average)', async () => {
   const view = await render(file());
-  expect(await view.findByText('Logged 1 of 7 days · Average 500 kcal · target 2,100')).toBeTruthy();
+  expect(await view.findByText('Logged 2 of 7 days · Average 1,800 kcal · target 2,100')).toBeTruthy();
   expect(view.getByLabelText('This week').props.accessibilityState).toEqual({ selected: true });
   expect(view.getByRole('header').props.children).toBe('Test client');
   expect(view.getByLabelText('1 of 1 done')).toBeTruthy();
@@ -127,7 +127,6 @@ it('flag on: opens on This week with the name, the ring, the day strip and the f
   // B3 (Opus, FIX739): the coach tab bar under the file owns the 34 pt inset, so Message sits one gutter above it.
   expect(StyleSheet.flatten(view.getByTestId('file-footer').props.style).paddingBottom).toBe(layout.gutter);
   expect(coachApi.getClientWeek).toHaveBeenCalledWith('client-test');
-  expect(view.queryByText('Clients choose what they share with you. Anything not shared stays private.')).toBeNull();
   expect(view.getAllByRole('tab').map((t) => t.props.testID)).toEqual(TABS.map((k) => `file-tab-${k}`));
   expect(band(view)).toEqual(FOREST);
 });
@@ -146,7 +145,7 @@ it('nothing planned and archived: no ring, the Workouts card and the masthead sa
 // B1 (GPT, FIX739): This week reads again each time it opens, so work done on another tab shows on return. A coach target wins over the client's own (LO-739 B1).
 it.each<[string, string, () => void, string]>([
   ['a check-in marked reviewed', 'timeline', () => { timeline.checkIns = [{ date: today, reviewed_by_coach: true }]; }, '1 this week · 0 to review'],
-  ['a coach calorie target', 'summary', () => { jest.mocked(macrosApi.currentForClient).mockResolvedValue({ data: { calories_kcal: 1900 } } as never); }, 'Logged 1 of 7 days · Average 500 kcal · target 1,900'],
+  ['a coach calorie target', 'summary', () => { jest.mocked(macrosApi.currentForClient).mockResolvedValue({ data: { calories_kcal: 1900 } } as never); }, 'Logged 2 of 7 days · Average 1,800 kcal · target 1,900'],
 ])('after %s on the %s tab, This week shows it on return', async (_name, tab, change, line) => {
   const view = await render(file());
   await view.findByText('1 this week · 1 to review');
@@ -181,13 +180,11 @@ it.each<[string, string, (v: Awaited<ReturnType<typeof render>>) => void]>([
   landed(view);
 });
 
-it('a switch that is off reads Not shared by {first} with a lock, and is not a button', async () => {
-  timeline.consent = { workouts: true, food_macros: false, body_metrics: false, habits_progress: true };
+// Sol B1 (FIX739D, #FOODAVG): a client who has logged only today has no finished day, so the card shows no average yet.
+it('a client who has logged only today reads Logged 1 of 7 days, with no average', async () => {
+  timeline.meals = [{ id: 'm1', date: today, quantity_multiplier: 1, food_item: { calories: 500 } }];
   const view = await render(file());
-  expect(await view.findByText('Clients choose what they share with you. Anything not shared stays private.')).toBeTruthy();
-  expect(view.getAllByText('Not shared by Test')).toHaveLength(2);
-  for (const id of ['file-card-food', 'file-card-weighins']) expect(view.getByTestId(id).props.accessibilityRole).toBeUndefined();
-  expect(view.getByTestId('file-card-checkins').props.accessibilityRole).toBe('button');
+  expect(await view.findByText('Logged 1 of 7 days')).toBeTruthy();
 });
 
 it('the file error names the client, keeps the masthead and Message, buzzes once, and Try again reloads', async () => {

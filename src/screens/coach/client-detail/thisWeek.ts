@@ -9,7 +9,7 @@ export const TIMELINE_PAGE = 100;
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /** The week read: `week_start`, `today` and each row's `day` are YYYY-MM-DD in the client's zone. */
-export interface ClientWeek { week_start: string; today: string; shared: boolean; assignments: { day: string; completed_at?: string | null; skipped_at?: string | null }[] }
+export interface ClientWeek { week_start: string; today: string; assignments: { day: string; completed_at?: string | null; skipped_at?: string | null }[] }
 export interface MealRow { id: string; date?: string | null; logged_at?: string | null; quantity_multiplier?: number | null; food_item?: { calories?: number | null } | null }
 export interface CheckInRow { date: string; reviewed_by_coach?: boolean }
 
@@ -22,9 +22,8 @@ const DAY_MS = 86_400_000;
 const daysFrom = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS);
 const plusDays = (day: string, n: number) => new Date(Date.parse(day) + n * DAY_MS).toISOString().slice(0, 10);
 
-/** The ring and the day strip; null when the client keeps Workouts private. A skipped session counts as missed; "Missed {day}" names a day only once it has come. */
-export function workoutWeek(w: ClientWeek): WorkoutWeek | null {
-  if (!w.shared) return null;
+/** The ring and the day strip. A skipped session counts as missed; "Missed {day}" names a day only once it has come. */
+export function workoutWeek(w: ClientWeek): WorkoutWeek {
   const today = daysFrom(w.week_start, w.today);
   const week = w.assignments.map((a) => ({ day: daysFrom(w.week_start, a.day), done: !!a.completed_at, skipped: !!a.skipped_at }));
   const state = (r: (typeof week)[number]): SegmentState => (r.done ? 'done' : r.skipped || r.day < today ? 'missed' : 'planned');
@@ -57,7 +56,7 @@ export function needsNextMealPage(page: ReadonlyArray<MealRow>, today: string): 
   const last = page[page.length - 1];
   return page.length >= TIMELINE_PAGE && !!last && mealDay(last) >= lastSevenDays(today)[0];
 }
-/** Logged counts every day of the seven; today, still being logged, joins the average only when it is the only one. */
+/** Logged counts every day of the seven; today, still being logged, never joins the average (#FOODAVG). */
 export function foodWeek(meals: ReadonlyArray<MealRow>, today: string): { logged: number; average: number | null } {
   const days = new Set(lastSevenDays(today));
   const kcal = new Map<string, number>();
@@ -66,7 +65,7 @@ export function foodWeek(meals: ReadonlyArray<MealRow>, today: string): { logged
     if (!days.has(d)) continue;
     kcal.set(d, (kcal.get(d) ?? 0) + (m.food_item?.calories || 0) * (m.quantity_multiplier || 1));
   }
-  const full = [...kcal].filter(([d]) => d !== today || kcal.size === 1).map(([, k]) => k);
+  const full = [...kcal].filter(([d]) => d !== today).map(([, k]) => k);
   return { logged: kcal.size, average: full.length > 0 ? Math.round(full.reduce((a, b) => a + b, 0) / full.length) : null };
 }
 
@@ -89,7 +88,7 @@ export function toGoLine(w: WorkoutWeek): string | null {
   return left > 0 ? `${left} to go` : null;
 }
 /** Workouts card: K1-S-38 · K1-S-39, or (FIX739-W1) a plain line when this week has no session. */
-export const workoutsLine = (w: WorkoutWeek | null) => (!w?.total ? 'Nothing planned this week'
+export const workoutsLine = (w: WorkoutWeek) => (!w.total ? 'Nothing planned this week'
   : [doneLine(w), w.missed != null ? `Missed ${DAY_NAMES[w.missed]}` : null].filter(Boolean).join(' · '));
 /** Food card: K1-S-41 · K1-S-42 (the target part only when a target is set). */
 export function foodLine(f: { logged: number; average: number | null }, target: number | null): string {

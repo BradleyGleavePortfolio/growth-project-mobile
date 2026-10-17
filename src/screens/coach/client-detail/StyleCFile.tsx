@@ -2,7 +2,6 @@
  * K1-OVERVIEW — the client file in Style C (planning/MOCKUP3/K1, owner pick "K1 - STYLE C"), behind
  * featureFlags.coachTabsV2: a deep-forest masthead (radius 24 at the bottom) with the name, the week ring and
  * day strip (StyleCMarks, onDark) and light text tabs with a leaf underline, pinned while the file scrolls.
- * A switch the client keeps off reads "Not shared by {first}" with a lock and is not a button.
  */
 import React, { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -152,28 +151,21 @@ export function MessageButton({ label, onPress }: { label: string; onPress: () =
   );
 }
 
-export interface WeekCard { key: string; title: string; line?: string | null; shared: boolean; onPress: () => void }
+export interface WeekCard { key: string; title: string; line?: string | null; onPress: () => void }
 
-/** One This week card: a button to its tab, or (not shared) a locked line that is not a button. */
-export function FileCard({ card, first }: { card: WeekCard; first: string }) {
+/** One This week card: a button to its tab. */
+export function FileCard({ card }: { card: WeekCard }) {
   const sc = useTheme().semanticColors;
   return (
     <Pressable
-      onPress={card.shared ? () => { HapticService.selection(); card.onPress(); } : undefined}
-      accessibilityRole={card.shared ? 'button' : undefined} style={[s.card, s.row, { backgroundColor: sc.bgSurface }]} testID={`file-card-${card.key}`}
+      onPress={() => { HapticService.selection(); card.onPress(); }}
+      accessibilityRole="button" style={[s.card, s.row, { backgroundColor: sc.bgSurface }]} testID={`file-card-${card.key}`}
     >
       <View style={s.flex}>
         <Text maxFontSizeMultiplier={CAP} style={[typography.h4, { color: sc.textPrimary }]}>{card.title}</Text>
-        {card.shared ? (
-          card.line ? <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, { color: sc.textMuted }]}>{card.line}</Text> : null
-        ) : (
-          <View style={s.locked}>
-            <Ionicons name="lock-closed-outline" size={16} color={sc.textMuted} />
-            <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, s.flex, { color: sc.textMuted }]}>{`Not shared by ${first}`}</Text>
-          </View>
-        )}
+        {card.line ? <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, { color: sc.textMuted }]}>{card.line}</Text> : null}
       </View>
-      {card.shared ? <Ionicons name="chevron-forward" size={20} color={sc.textMuted} /> : null}
+      <Ionicons name="chevron-forward" size={20} color={sc.textMuted} />
     </Pressable>
   );
 }
@@ -182,30 +174,18 @@ export function FileCard({ card, first }: { card: WeekCard; first: string }) {
 export function ThisWeekBody({ first, read, profile, onOpen, onRetry }: {
   first: string; read: ThisWeekRead; profile: Parameters<typeof resolveCoachTargets>[1]; onOpen: (tab: TabKey) => void; onRetry: () => void;
 }) {
-  const sc = useTheme().semanticColors;
   if (read.kind === 'loading') return <FilePlaceholders first={first} />;
   if (read.kind === 'error') return <FileNotice first={first} onRetry={onRetry} />;
-  const { sharing } = read;
   const cards: WeekCard[] = [
-    { key: 'workouts', title: 'Workouts', shared: sharing.workouts, line: workoutsLine(read.week), onPress: () => onOpen('workouts') },
-    { key: 'food', title: 'Food', shared: sharing.food, line: foodLine(read.food, resolveCoachTargets(read.target, profile)?.calories ?? null), onPress: () => onOpen('logs') },
-    { key: 'checkins', title: 'Check-ins', shared: sharing.checkIns, line: checkInLine(read.checkIns), onPress: () => onOpen('timeline') },
-    { key: 'weighins', title: 'Weigh-ins', shared: sharing.weighIns, onPress: () => onOpen('progress') },
+    { key: 'workouts', title: 'Workouts', line: workoutsLine(read.week), onPress: () => onOpen('workouts') },
+    { key: 'food', title: 'Food', line: foodLine(read.food, resolveCoachTargets(read.target, profile)?.calories ?? null), onPress: () => onOpen('logs') },
+    { key: 'checkins', title: 'Check-ins', line: checkInLine(read.checkIns), onPress: () => onOpen('timeline') },
+    { key: 'weighins', title: 'Weigh-ins', onPress: () => onOpen('progress') },
   ];
-  return (
-    <View testID="file-this-week">
-      {cards.some((c) => !c.shared) ? (
-        <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, s.privacy, { color: sc.textMuted }]}>
-          Clients choose what they share with you. Anything not shared stays private.
-        </Text>
-      ) : null}
-      {cards.map((c) => <FileCard key={c.key} card={c} first={first} />)}
-    </View>
-  );
+  return <View testID="file-this-week">{cards.map((c) => <FileCard key={c.key} card={c} />)}</View>;
 }
 
 const s = StyleSheet.create({
-  privacy: { marginTop: 16 },
   flex: { flex: 1 },
   head: { paddingHorizontal: layout.gutter, paddingTop: 4, paddingBottom: 8 },
   bar: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: -10, marginBottom: 4 },
@@ -223,7 +203,6 @@ const s = StyleSheet.create({
   retry: { alignSelf: 'flex-start', minHeight: 48, justifyContent: 'center', paddingHorizontal: 20, borderRadius: radius.button, borderWidth: 1.5, marginTop: 12 },
   card: { borderRadius: radius.card, padding: 20, marginTop: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
-  locked: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   placeholder: { height: 88 },
   footer: { paddingHorizontal: layout.gutter, paddingTop: layout.footerTopGap, paddingBottom: layout.gutter },
   primary: {

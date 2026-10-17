@@ -1,25 +1,16 @@
 /**
  * K1-OVERVIEW — This week's reads: the client's week (the masthead ring on every tab), the timeline's last 8 days
- * (meals, check-ins, sharing) and the calorie target. A full page of meals inside the seven days reads the next (5 more at most).
+ * (meals and check-ins) and the calorie target. A full page of meals inside the seven days reads the next (5 more at most).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
 import { macrosApi, type MacroTarget } from '../../../api/macrosApi';
 import { checkInWeek, foodWeek, needsNextMealPage, workoutWeek, type ClientWeek, type MealRow, type WorkoutWeek } from './thisWeek';
 
-export interface Sharing { workouts: boolean; food: boolean; weighIns: boolean; checkIns: boolean }
 export type ThisWeekRead =
   | { kind: 'loading' }
   | { kind: 'error' }
-  | { kind: 'ok'; sharing: Sharing; week: WorkoutWeek | null; food: { logged: number; average: number | null }; target: MacroTarget | null; checkIns: { count: number; toReview: number } };
-
-type Consent = { workouts?: boolean; food_macros?: boolean; body_metrics?: boolean; habits_progress?: boolean } | undefined;
-
-/** The server's sharing block; a missing flag reads as shared, as the summary does today. */
-export const sharingOf = (c: Consent): Sharing => ({
-  workouts: c?.workouts !== false, food: c?.food_macros !== false,
-  weighIns: c?.body_metrics !== false, checkIns: c?.habits_progress !== false,
-});
+  | { kind: 'ok'; week: WorkoutWeek; food: { logged: number; average: number | null }; target: MacroTarget | null; checkIns: { count: number; toReview: number } };
 
 /** `on`: the Style C file is showing. `active`: This week is the open tab. */
 export function useThisWeek(clientId: string, on: boolean, active: boolean) {
@@ -45,7 +36,7 @@ export function useThisWeek(clientId: string, on: boolean, active: boolean) {
       }
       if (mine !== seq.current) return;
       setRead({
-        kind: 'ok', sharing: sharingOf(first.consent), week: workoutWeek(week), target,
+        kind: 'ok', week: workoutWeek(week), target,
         food: foodWeek(meals, week.today), checkIns: checkInWeek(first.checkIns ?? [], week.week_start),
       });
     } catch {

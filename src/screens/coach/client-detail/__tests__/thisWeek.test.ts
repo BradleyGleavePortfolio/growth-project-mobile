@@ -6,11 +6,11 @@ import {
 
 // The client's week runs Monday 12 to Sunday 18 October 2026; today is Wednesday 14.
 const row = (day: number, done = false, skipped = false) => ({ day: `2026-10-${day}`, completed_at: done ? 'x' : null, skipped_at: skipped ? 'x' : null });
-const of = (assignments: ClientWeek['assignments'], shared = true) => workoutWeek({ week_start: '2026-10-12', today: '2026-10-14', shared, assignments });
+const of = (assignments: ClientWeek['assignments']) => workoutWeek({ week_start: '2026-10-12', today: '2026-10-14', assignments });
 
 describe('workoutWeek', () => {
   it('reads done, missed, today, planned and rest from the week read (the K1 C week)', () => {
-    const w = of([row(12, true), row(13), row(16)])!;
+    const w = of([row(12, true), row(13), row(16)]);
     expect(w.segments).toEqual(['done', 'missed', 'planned']);
     expect(w.days).toEqual(['done', 'missed', 'today', 'rest', 'planned', 'rest', 'rest']);
     expect(w.dates).toEqual([12, 13, 14, 15, 16, 17, 18]);
@@ -20,17 +20,16 @@ describe('workoutWeek', () => {
   });
 
   it('a skipped later day is dashed but not named missed until it comes; a fully done day is done, a half-done past day is missed', () => {
-    const s = of([row(16, false, true)])!;
-    expect([s.days[4], s.missed, weekHeadline(s), weekHeadline(of([row(13), row(16, false, true)])!)]).toEqual(['missed', null, '0 of 1 done', 'Missed Tue']);
-    const w = of([row(12, true), row(12, true), row(13, true), row(13)])!;
+    const s = of([row(16, false, true)]);
+    expect([s.days[4], s.missed, weekHeadline(s), weekHeadline(of([row(13), row(16, false, true)]))]).toEqual(['missed', null, '0 of 1 done', 'Missed Tue']);
+    const w = of([row(12, true), row(12, true), row(13, true), row(13)]);
     expect(w.days.slice(0, 2)).toEqual(['done', 'missed']);
     expect([weekHeadline(w), toGoLine(w)]).toEqual(['Missed Tue', null]);
-    expect(weekHeadline(of([row(12, true), row(16)])!)).toBe('1 of 2 done');
+    expect(weekHeadline(of([row(12, true), row(16)]))).toBe('1 of 2 done');
   });
 
-  it('Workouts kept private: no week; nothing planned: no segments and a plain card line', () => {
-    expect(of([row(12, true)], false)).toBeNull();
-    expect(of([])!.total).toBe(0);
+  it('nothing planned: no segments and a plain card line', () => {
+    expect(of([]).total).toBe(0);
     expect(workoutsLine(of([]))).toBe('Nothing planned this week');
   });
 });
@@ -38,12 +37,17 @@ describe('workoutWeek', () => {
 describe('food, check-ins and paging', () => {
   const meal = (id: string, date: string, kcal: number, qty = 1): MealRow => ({ id, date: `${date}T00:00:00.000Z`, quantity_multiplier: qty, food_item: { calories: kcal } });
 
-  it('counts the seven days ending the client\'s today; the average leaves today out unless it is the only logged day (LO-739 N1)', () => {
-    const f = foodWeek([meal('a', '2026-10-14', 500), meal('b', '2026-10-13', 300, 2), meal('c', '2026-10-08', 2000), meal('d', '2026-10-07', 9000)], '2026-10-14');
-    expect(f).toEqual({ logged: 3, average: 1300 });
-    expect(foodLine(f, 2100)).toBe('Logged 3 of 7 days · Average 1,300 kcal · target 2,100');
-    expect(foodLine(f, null)).toBe('Logged 3 of 7 days · Average 1,300 kcal');
-    expect([foodLine(foodWeek([], '2026-10-14'), 2100), foodLine(foodWeek([meal('a', '2026-10-14', 500)], '2026-10-14'), 2100)]).toEqual(['Logged 0 of 7 days', 'Logged 1 of 7 days · Average 500 kcal · target 2,100']);
+  // #FOODAVG: today counts as logged but never enters the average; with no finished logged day there is no average.
+  it.each<[string, MealRow[], string]>([
+    ['nothing logged', [], 'Logged 0 of 7 days'],
+    ['today only', [meal('a', '2026-10-14', 500)], 'Logged 1 of 7 days'],
+    ['a finished day only', [meal('b', '2026-10-13', 1800)], 'Logged 1 of 7 days · Average 1,800 kcal · target 2,100'],
+    ['finished days and today (the eighth day back is out)', [meal('a', '2026-10-14', 500), meal('b', '2026-10-13', 300, 2), meal('c', '2026-10-08', 2000), meal('d', '2026-10-07', 9000)], 'Logged 3 of 7 days · Average 1,300 kcal · target 2,100'],
+  ])('food over the seven days ending the client\'s today: %s', (_name, meals, line) => {
+    expect(foodLine(foodWeek(meals, '2026-10-14'), 2100)).toBe(line);
+  });
+  it('the Food line drops the target part when no target is set', () => {
+    expect(foodLine({ logged: 3, average: 1300 }, null)).toBe('Logged 3 of 7 days · Average 1,300 kcal');
   });
 
   it('reads the next page only while a full page still reaches into the seven days', () => {
