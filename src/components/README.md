@@ -7,7 +7,8 @@ Visible tabs read Week/Month/All. `WeightTrendChartDark` composes TgpLineChart:
 trend, readings, decorative usual-range ribbon, labelled optional goal except
 Week, dashed gaps, latest/pending rings, hold/drag and adjustable day-by-day
 inspection. Detail includes legend, textual range and smoothing explanation
-on the page colour. Overview omits band/legend. Caller supplies authorized full
+on the page colour. The dark part owns 24 pt gutters; use it full width below
+the masthead title/number. Overview omits band/legend. Caller supplies authorized full
 history, optional goal and coach name, pending state and through date. No reads,
 writes, coach lock or screen wiring. Full state frames remain C8 PR 13.
 

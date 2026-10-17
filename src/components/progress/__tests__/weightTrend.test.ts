@@ -1,4 +1,4 @@
-import { WEIGHT_DAY as D, weightDomain, weightPeriod, weightTrend } from '../weightTrend';
+import { WEIGHT_DAY as D, weightDomain, weightPeriod, weightSegments, weightTrend } from '../weightTrend';
 const sample = (d: number, y: number, pending = false) => ({ x: d * D, y, pending });
 
 it('seeds the first reading and moves exactly a tenth on weigh-in days only', () => {
@@ -21,6 +21,9 @@ it.each([1, 2, 3, 7])('marks %i missing days only at the three-day threshold', (
 it('carries a missed week through today without moving or resetting the trend', () => {
   const days = weightTrend([sample(1, 170), sample(2, 169)], 9 * D);
   expect(days.slice(2).every((p) => p.y === 169.9 && p.gap && p.weight == null)).toBe(true);
+  const runs = weightSegments(days);
+  expect(runs.map((r) => r.gap)).toEqual([false, true]);
+  expect(runs[1].points).toHaveLength(8);
 });
 it('sorts without mutation and uses the last same-day reading and pending state', () => {
   const samples = [sample(2, 180), sample(1, 170), { x: 2 * D + 1, y: 172, pending: true }];

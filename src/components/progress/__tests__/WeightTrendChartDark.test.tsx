@@ -3,11 +3,11 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import WeightTrendChart from '../WeightTrendChart';
 import PeriodTabs from '../PeriodTabs';
-import { featureFlags } from '../../../config/featureFlags';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { WEIGHT_DAY as D } from '../weightTrend';
 
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { clientProgressV2: true } }));
+const mockFlags = jest.requireMock('../../../config/featureFlags').featureFlags as { clientProgressV2: boolean };
 jest.mock('../../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn() } }));
 jest.mock('../../../screens/client/wearables/components/useReduceMotion', () => ({ useReduceMotion: () => true }));
 // Keep the real chart, layers and assistive actions. Expose only the gesture callbacks.
@@ -23,7 +23,7 @@ jest.mock('react-native-gesture-handler', () => ({
   } },
 }));
 const data = [{ x: D, y: 170 }, { x: 2 * D, y: 169 }, { x: 6 * D, y: 168, pending: true }];
-beforeEach(() => { featureFlags.clientProgressV2 = true; jest.clearAllMocks(); mockGesture = {}; });
+beforeEach(() => { mockFlags.clientProgressV2 = true; jest.clearAllMocks(); mockGesture = {}; });
 
 it.each([
   ['7D', false, false], ['30D', false, true], ['All', false, true], ['7D', true, true],
@@ -44,7 +44,7 @@ it('has no invented goal or coach, and no coachless lock', async () => {
 it('draws dots, the decorative band, dashed gap, latest point and hollow pending ring', async () => {
   const v = await render(<WeightTrendChart variant="dark" data={data} through={6 * D} />);
   expect(v.getAllByTestId('weight-reading')).toHaveLength(2);
-  expect(v.getAllByTestId('weight-gap')).toHaveLength(4);
+  expect(v.getAllByTestId('weight-gap')).toHaveLength(1);
   expect(v.getByTestId('weight-pending').props).toMatchObject({ fill: 'none', strokeDasharray: '3 2.4' });
   expect(v.getByTestId('weight-latest')).toBeTruthy();
   expect(v.getByText(/Usual range today:/)).toBeTruthy();
@@ -88,7 +88,7 @@ it('all three 44 pt tabs change the real selected period', async () => {
   }
 });
 it('flag off preserves the legacy chart and all four legacy period tabs', async () => {
-  featureFlags.clientProgressV2 = false;
+  mockFlags.clientProgressV2 = false;
   const v = await render(<WeightTrendChart variant="dark" data={data} />);
   expect(v.queryByRole('adjustable')).toBeNull();
   await v.rerender(<PeriodTabs variant="dark" value="All" onChange={jest.fn()} />);

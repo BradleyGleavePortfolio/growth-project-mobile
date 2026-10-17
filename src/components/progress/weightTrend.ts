@@ -41,6 +41,18 @@ export function weightPeriod(days: WeightTrendDay[], period: WeightPeriod): Weig
   return days.filter((p) => p.x >= start);
 }
 
+/** One path per run keeps dash spacing continuous across missing days. */
+export function weightSegments(days: WeightTrendDay[]) {
+  const runs: Array<{ gap: boolean; points: WeightTrendDay[] }> = [];
+  days.slice(1).forEach((p, i) => {
+    if (p.count < 2) return;
+    const run = runs[runs.length - 1];
+    if (run && run.gap === p.gap) run.points.push(p);
+    else runs.push({ gap: p.gap, points: [days[i], p] });
+  });
+  return runs;
+}
+
 /** Whole-pound ticks, never zero-based or magnified around a flat series. */
 export function weightDomain(days: WeightTrendDay[], step: number, band: boolean, goal?: number): [number, number] {
   const values = days.flatMap((p) => [p.y, p.weight ?? p.y, ...(band ? [p.low, p.high] : [])]);

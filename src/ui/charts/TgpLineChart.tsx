@@ -41,6 +41,7 @@ import Svg, {
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { Colors } from '../../constants/colors';
+import { typography } from '../../theme/tokens';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface ChartDataPoint {
@@ -99,7 +100,8 @@ export default function TgpLineChart({
   const W = width;
   const H = height;
   const plotW = W - PAD_L - PAD_R;
-  const plotH = H - PAD_T - PAD_B;
+  const plotBottom = H - (plot ? 56 : PAD_B);
+  const plotH = plotBottom - PAD_T;
 
   const { toSvgX, toSvgY, points, yTicks, xLabels } = useMemo(() => {
     if (data.length === 0) {
@@ -225,13 +227,14 @@ export default function TgpLineChart({
               y={toSvgY(v) + 4}
               textAnchor="end"
               fontSize={plot ? 12 * fontScale : 9}
+              fontFamily={plot ? typography.body.fontFamily : undefined}
               fill={colors.textMuted}
             >
               {Math.round(v)}
             </SvgText>
           ))}
           {/* Line */}
-          {plot ? plot.render({ x: toSvgX, y: toSvgY, right: W - PAD_R, bottom: H - PAD_B }) : <Polyline
+          {plot ? plot.render({ x: toSvgX, y: toSvgY, right: W - PAD_R, bottom: plotBottom }) : <Polyline
             points={points}
             fill="none"
             stroke={colors.primary}
@@ -261,6 +264,7 @@ export default function TgpLineChart({
               y={H - 8}
               textAnchor={plot ? (i === 0 ? 'start' : 'end') : 'middle'}
               fontSize={plot ? 12 * fontScale : 9}
+              fontFamily={plot ? typography.body.fontFamily : undefined}
               fill={colors.textMuted}
             >
               {xFormatter ? xFormatter(d.x) : String(Math.round(d.x))}

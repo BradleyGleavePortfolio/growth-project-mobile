@@ -7,7 +7,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme } from '../../theme/ThemeProvider';
 import { colors, radius, typography } from '../../theme/tokens';
 import { useReduceMotion } from '../../screens/client/wearables/components/useReduceMotion';
-import { weightDomain, weightPeriod, weightTrend, type WeightPeriod, type WeightSample } from './weightTrend';
+import { weightDomain, weightPeriod, weightSegments, weightTrend, type WeightPeriod, type WeightSample } from './weightTrend';
 
 export interface WeightTrendDarkProps {
   data: WeightSample[];
@@ -66,8 +66,8 @@ export default function WeightTrendChartDark({
     ...(days.some((p) => p.gap) ? [['No weigh-ins.', sc.data.trend, 'dash'] as [string, string, 'dash']] : []),
   ];
   return (
-    <View>
-    <View testID={testID} style={{ backgroundColor: sc.surface.masthead }}>
+    <View style={{ backgroundColor: sc.bgPrimary }}>
+    <View testID={testID} style={{ backgroundColor: sc.surface.masthead, paddingHorizontal: 24, paddingBottom: 16 }}>
       <Animated.View style={{ opacity }}>
         <TgpLineChart key={period} data={days} height={height} accessibilityLabel={label} xFormatter={date}
           themeOverride={{ primary: sc.data.trend, textMuted: sc.textOnMastheadMuted, border: sc.surface.forestBand }}
@@ -80,7 +80,7 @@ export default function WeightTrendChartDark({
               if (index != null) void HapticService.selection();
             },
             overlay: ({ x, y, right }) => <>
-              {showGoal && <View pointerEvents="none" style={{ position: 'absolute', left: 44, right: 16, top: y(goal.value) + 4 }}>
+              {showGoal && <View pointerEvents="none" style={{ position: 'absolute', left: 44, right: 16, top: y(goal.value) + 4, backgroundColor: sc.surface.masthead }}>
                 <Text testID="weight-goal-label" style={[styles.caption, { color: sc.data.goal }]}>{goalLabel}</Text>
               </View>}
               {selected && <View pointerEvents="none" testID="weight-touch-chip" style={[styles.chip, {
@@ -94,9 +94,9 @@ export default function WeightTrendChartDark({
                   d={`${days.map((p, i) => `${i ? 'L' : 'M'}${x(p.x)},${y(p.high)}`).join(' ')} ${[...days].reverse().map((p) => `L${x(p.x)},${y(p.low)}`).join(' ')} Z`} />}
                 {showGoal && <Line testID="weight-goal-line" x1={x(first.x)} x2={right}
                   y1={y(goal.value)} y2={y(goal.value)} stroke={sc.data.goal} strokeWidth={1.5} strokeDasharray="5 5" />}
-                {days.slice(1).map((p, i) => p.count > 1 && <Line key={p.x} testID={p.gap ? 'weight-gap' : 'weight-segment'}
-                  x1={x(days[i].x)} x2={x(p.x)} y1={y(days[i].y)} y2={y(p.y)}
-                  stroke={sc.data.trend} strokeWidth={2.5} strokeLinecap="round" strokeDasharray={p.gap ? '4 4' : undefined} />)}
+                {weightSegments(days).map((run, i) => <Path key={i} testID={run.gap ? 'weight-gap' : 'weight-segment'}
+                  d={run.points.map((p, j) => `${j ? 'L' : 'M'}${x(p.x)},${y(p.y)}`).join(' ')} fill="none"
+                  stroke={sc.data.trend} strokeWidth={2.5} strokeLinecap="round" strokeDasharray={run.gap ? '4 4' : undefined} />)}
                 {days.filter((p) => p.weight != null).map((p) => <Circle key={p.x} testID={p.pending ? 'weight-pending' : 'weight-reading'}
                   cx={x(p.x)} cy={y(p.weight!)} r={p.pending ? 5 : 2.5} fill={p.pending ? 'none' : sc.data.weighIn}
                   stroke={p.pending ? sc.data.pending : 'none'} strokeWidth={1.5} strokeDasharray={p.pending ? '3 2.4' : undefined} />)}
@@ -122,7 +122,7 @@ export default function WeightTrendChartDark({
         {!overview && <Text style={[styles.caption, text]}>Touch and hold the chart to read any day.</Text>}
       </>}
     </View>
-    {!overview && <Text style={[styles.caption, { color: sc.textPrimary, backgroundColor: sc.bgPrimary, paddingVertical: 16 }]}>
+    {!overview && <Text style={[styles.caption, { color: sc.textPrimary, padding: 24 }]}>
       Each weigh-in moves your trend a tenth of the way toward it, so one high or low morning barely moves the line. The band is your usual day-to-day range.
     </Text>}
     </View>
