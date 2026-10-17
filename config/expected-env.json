@@ -176,6 +176,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "UI-3 Food tab plan checklist for coached clients (V1_1_UI_SPEC UI-3); off in every profile until its switch-on PR."
+    },
     "EXPO_PUBLIC_FF_IMPORT_REVIEW": {
       "kind": "flag",
       "default": "off",
