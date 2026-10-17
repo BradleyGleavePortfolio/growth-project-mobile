@@ -8,6 +8,7 @@ import { ROMAN_LOADING_A11Y_LABEL } from './romanVoice';
 export default function RomanLoadingSkeleton(): React.ReactElement {
   return (
     <View
+      accessible
       style={styles.wrap}
       testID="roman-loading-skeleton"
       accessibilityRole="progressbar"

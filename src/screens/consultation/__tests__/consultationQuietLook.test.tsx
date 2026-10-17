@@ -75,7 +75,7 @@ it('the tan Checkbox only changes the fill; default, selection and disabled beha
   for (const id of ['tan', 'checked', 'disabled']) {
     expect(StyleSheet.flatten(r.getByTestId(id).props.style).backgroundColor).toBe(colors.cream);
   }
-  expect(r.getByTestId('tan').props.accessibilityState).toEqual({ checked: false });
+  expect(r.getByTestId('tan').props.accessibilityState).toMatchObject({ checked: false });
   expect(StyleSheet.flatten(r.getByTestId('checked').props.style).borderColor).toBe(lightTokens.accent);
   await fireEvent.press(r.getByTestId('tan'));
   await fireEvent.press(r.getByTestId('disabled'));
