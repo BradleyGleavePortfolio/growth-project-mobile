@@ -86,7 +86,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.coachTabsV2 = true;
   useCoachStore.getState().reset();
-  summary = { client_name: 'Test client', profile: {}, today: {}, consent: { workouts: true } };
+  summary = { client_name: 'Test client', profile: { macro_target_calories: 2100 }, today: {}, consent: { workouts: true } };
   clientWeek = { week_start: monday, today: getTodayString(), shared: true, assignments: [{ id: 'a1', day: monday, completed_at: today, skipped_at: null }] };
   timeline = {
     meals: [{ id: 'm1', date: today, quantity_multiplier: 1, food_item: { calories: 500 } }],
@@ -96,7 +96,7 @@ beforeEach(() => {
   read.mockReset().mockImplementation(async () => ({ data: summary }));
   week.mockReset().mockImplementation(async () => ({ data: timeline }));
   (coachApi.getClientWeek as jest.Mock).mockReset().mockImplementation(async () => ({ data: clientWeek }));
-  (macrosApi.currentForClient as jest.Mock).mockReset().mockResolvedValue({ data: { calories_kcal: 2100 } });
+  (macrosApi.currentForClient as jest.Mock).mockReset().mockResolvedValue({ data: null }); // no coach target yet: every new client
   (coachApi.getClients as jest.Mock).mockReset().mockResolvedValue({ data: [{ id: 'client-test', name: 'Test client', role: 'student', archived_at: null }] });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -114,7 +114,7 @@ it('flag off: the file is unchanged (Summary first, the old header, no masthead)
   expect(band(view)).toEqual(BONE);
 });
 
-it('flag on: opens on This week with the name, the ring, the day strip and the four cards', async () => {
+it('flag on: opens on This week with the name, the ring, the day strip and the four cards (Food: the client\'s own target, LO-739 B1)', async () => {
   const view = await render(file());
   expect(await view.findByText('Logged 1 of 7 days · Average 500 kcal · target 2,100')).toBeTruthy();
   expect(view.getByLabelText('This week').props.accessibilityState).toEqual({ selected: true });
@@ -143,10 +143,10 @@ it('nothing planned and archived: no ring, the Workouts card and the masthead sa
   expect(view.queryByTestId('file-week')).toBeNull();
 });
 
-// B1 (GPT, FIX739): This week reads again each time it opens, so work done on another tab shows on return.
+// B1 (GPT, FIX739): This week reads again each time it opens, so work done on another tab shows on return. A coach target wins over the client's own (LO-739 B1).
 it.each<[string, string, () => void, string]>([
   ['a check-in marked reviewed', 'timeline', () => { timeline.checkIns = [{ date: today, reviewed_by_coach: true }]; }, '1 this week · 0 to review'],
-  ['a new calorie target', 'summary', () => { jest.mocked(macrosApi.currentForClient).mockResolvedValue({ data: { calories_kcal: 1900 } } as never); }, 'Logged 1 of 7 days · Average 500 kcal · target 1,900'],
+  ['a coach calorie target', 'summary', () => { jest.mocked(macrosApi.currentForClient).mockResolvedValue({ data: { calories_kcal: 1900 } } as never); }, 'Logged 1 of 7 days · Average 500 kcal · target 1,900'],
 ])('after %s on the %s tab, This week shows it on return', async (_name, tab, change, line) => {
   const view = await render(file());
   await view.findByText('1 this week · 1 to review');

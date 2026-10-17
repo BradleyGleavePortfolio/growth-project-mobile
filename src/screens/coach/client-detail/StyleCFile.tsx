@@ -13,6 +13,7 @@ import { DayMark, SegmentedRing } from '../../../ui/charts/StyleCMarks';
 import { DAY_LABELS } from '../../client/habits/constants';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { resolveCoachTargets } from '../../../utils/coach/foodReview';
 import { checkInLine, dayLabel, doneLine, foodLine, toGoLine, weekHeadline, workoutsLine, type WorkoutWeek } from './thisWeek';
 import type { ThisWeekRead } from './useThisWeek';
 import type { TabKey } from './types';
@@ -177,9 +178,9 @@ export function FileCard({ card, first }: { card: WeekCard; first: string }) {
   );
 }
 
-/** The This week tab: Workouts, Food, Check-ins and Weigh-ins, each opening its tab. */
-export function ThisWeekBody({ first, read, onOpen, onRetry }: {
-  first: string; read: ThisWeekRead; onOpen: (tab: TabKey) => void; onRetry: () => void;
+/** The This week tab: Workouts, Food, Check-ins and Weigh-ins, each opening its tab. Food's target is Summary's (the coach's, else the client's own). */
+export function ThisWeekBody({ first, read, profile, onOpen, onRetry }: {
+  first: string; read: ThisWeekRead; profile: Parameters<typeof resolveCoachTargets>[1]; onOpen: (tab: TabKey) => void; onRetry: () => void;
 }) {
   const sc = useTheme().semanticColors;
   if (read.kind === 'loading') return <FilePlaceholders first={first} />;
@@ -187,7 +188,7 @@ export function ThisWeekBody({ first, read, onOpen, onRetry }: {
   const { sharing } = read;
   const cards: WeekCard[] = [
     { key: 'workouts', title: 'Workouts', shared: sharing.workouts, line: workoutsLine(read.week), onPress: () => onOpen('workouts') },
-    { key: 'food', title: 'Food', shared: sharing.food, line: foodLine(read.food, read.target), onPress: () => onOpen('logs') },
+    { key: 'food', title: 'Food', shared: sharing.food, line: foodLine(read.food, resolveCoachTargets(read.target, profile)?.calories ?? null), onPress: () => onOpen('logs') },
     { key: 'checkins', title: 'Check-ins', shared: sharing.checkIns, line: checkInLine(read.checkIns), onPress: () => onOpen('timeline') },
     { key: 'weighins', title: 'Weigh-ins', shared: sharing.weighIns, onPress: () => onOpen('progress') },
   ];

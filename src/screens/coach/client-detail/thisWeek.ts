@@ -57,7 +57,7 @@ export function needsNextMealPage(page: ReadonlyArray<MealRow>, today: string): 
   const last = page[page.length - 1];
   return page.length >= TIMELINE_PAGE && !!last && mealDay(last) >= lastSevenDays(today)[0];
 }
-
+/** Logged counts every day of the seven; today, still being logged, joins the average only when it is the only one. */
 export function foodWeek(meals: ReadonlyArray<MealRow>, today: string): { logged: number; average: number | null } {
   const days = new Set(lastSevenDays(today));
   const kcal = new Map<string, number>();
@@ -66,8 +66,8 @@ export function foodWeek(meals: ReadonlyArray<MealRow>, today: string): { logged
     if (!days.has(d)) continue;
     kcal.set(d, (kcal.get(d) ?? 0) + (m.food_item?.calories || 0) * (m.quantity_multiplier || 1));
   }
-  const total = [...kcal.values()].reduce((a, b) => a + b, 0);
-  return { logged: kcal.size, average: kcal.size > 0 ? Math.round(total / kcal.size) : null };
+  const full = [...kcal].filter(([d]) => d !== today || kcal.size === 1).map(([, k]) => k);
+  return { logged: kcal.size, average: full.length > 0 ? Math.round(full.reduce((a, b) => a + b, 0) / full.length) : null };
 }
 
 export function checkInWeek(rows: ReadonlyArray<CheckInRow>, weekStart: string): { count: number; toReview: number } {

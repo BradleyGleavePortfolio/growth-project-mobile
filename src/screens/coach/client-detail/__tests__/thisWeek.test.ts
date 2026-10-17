@@ -38,12 +38,12 @@ describe('workoutWeek', () => {
 describe('food, check-ins and paging', () => {
   const meal = (id: string, date: string, kcal: number, qty = 1): MealRow => ({ id, date: `${date}T00:00:00.000Z`, quantity_multiplier: qty, food_item: { calories: kcal } });
 
-  it('counts the seven days ending the client\'s today and averages the logged ones', () => {
-    const f = foodWeek([meal('a', '2026-10-14', 500), meal('b', '2026-10-14', 300, 2), meal('c', '2026-10-08', 2000), meal('d', '2026-10-07', 9000)], '2026-10-14');
-    expect(f).toEqual({ logged: 2, average: 1550 });
-    expect(foodLine(f, 2100)).toBe('Logged 2 of 7 days · Average 1,550 kcal · target 2,100');
-    expect(foodLine(f, null)).toBe('Logged 2 of 7 days · Average 1,550 kcal');
-    expect(foodLine(foodWeek([], '2026-10-14'), 2100)).toBe('Logged 0 of 7 days');
+  it('counts the seven days ending the client\'s today; the average leaves today out unless it is the only logged day (LO-739 N1)', () => {
+    const f = foodWeek([meal('a', '2026-10-14', 500), meal('b', '2026-10-13', 300, 2), meal('c', '2026-10-08', 2000), meal('d', '2026-10-07', 9000)], '2026-10-14');
+    expect(f).toEqual({ logged: 3, average: 1300 });
+    expect(foodLine(f, 2100)).toBe('Logged 3 of 7 days · Average 1,300 kcal · target 2,100');
+    expect(foodLine(f, null)).toBe('Logged 3 of 7 days · Average 1,300 kcal');
+    expect([foodLine(foodWeek([], '2026-10-14'), 2100), foodLine(foodWeek([meal('a', '2026-10-14', 500)], '2026-10-14'), 2100)]).toEqual(['Logged 0 of 7 days', 'Logged 1 of 7 days · Average 500 kcal · target 2,100']);
   });
 
   it('reads the next page only while a full page still reaches into the seven days', () => {

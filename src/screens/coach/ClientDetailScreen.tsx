@@ -546,7 +546,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           reloadKey={planReloadKey}
           colors={colors}
         />
-        {activeTab === 'week' && <ThisWeekBody first={first} read={thisWeek.read} onOpen={setActiveTab} onRetry={thisWeek.retry} />}
+        {activeTab === 'week' && <ThisWeekBody first={first} read={thisWeek.read} profile={profile} onOpen={setActiveTab} onRetry={thisWeek.retry} />}
         {activeTab === 'summary' && (
           <SummaryTab
             profile={profile}

@@ -4,14 +4,14 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
-import { macrosApi } from '../../../api/macrosApi';
+import { macrosApi, type MacroTarget } from '../../../api/macrosApi';
 import { checkInWeek, foodWeek, needsNextMealPage, workoutWeek, type ClientWeek, type MealRow, type WorkoutWeek } from './thisWeek';
 
 export interface Sharing { workouts: boolean; food: boolean; weighIns: boolean; checkIns: boolean }
 export type ThisWeekRead =
   | { kind: 'loading' }
   | { kind: 'error' }
-  | { kind: 'ok'; sharing: Sharing; week: WorkoutWeek | null; food: { logged: number; average: number | null }; target: number | null; checkIns: { count: number; toReview: number } };
+  | { kind: 'ok'; sharing: Sharing; week: WorkoutWeek | null; food: { logged: number; average: number | null }; target: MacroTarget | null; checkIns: { count: number; toReview: number } };
 
 type Consent = { workouts?: boolean; food_macros?: boolean; body_metrics?: boolean; habits_progress?: boolean } | undefined;
 
@@ -34,7 +34,7 @@ export function useThisWeek(clientId: string, on: boolean, active: boolean) {
       const [first, week, target] = await Promise.all([
         coachApi.getClientTimeline(clientId, 8).then((r) => r.data),
         coachApi.getClientWeek(clientId).then((r) => r.data as ClientWeek),
-        macrosApi.currentForClient(clientId).then((r) => r.data?.calories_kcal ?? null, () => null),
+        macrosApi.currentForClient(clientId).then((r) => r.data ?? null, () => null),
       ]);
       if (!first || first.error) throw new Error('timeline');
       const meals: MealRow[] = [...(first.meals ?? [])];
