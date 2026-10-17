@@ -294,7 +294,7 @@ export type MoreStackParamList = {
   DeleteAccount: undefined;
   /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
   RomanAiConsent: undefined;
-  /** B-SHARE-127: Settings > Privacy > Coach sharing (four toggles). */
+  /** B-SHARE-127: Settings > Privacy > Coach sharing (read-only: what the coach sees). */
   CoachSharing: undefined;
   /** Your conversations with Roman: list, open, delete (backend #635). Not behind the Roman chat flag. */
   RomanConversations: undefined;

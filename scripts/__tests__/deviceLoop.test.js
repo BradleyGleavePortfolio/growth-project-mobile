@@ -6,7 +6,9 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { resolveProfile, channelProfiles } = require('../eas-profile');
+const { EAS_CLI } = require('../eas-update-guard');
 const hook = require('../eas-testing-version');
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -112,5 +114,43 @@ describe('.github/workflows/device-loop.yml', () => {
     expect(yml).toContain('eas build --profile testing --platform ios --non-interactive --auto-submit --no-wait');
     expect(yml).toContain('npm run update:publish -- --channel testing --environment production');
     expect(yml).not.toMatch(/eas update/);
+  });
+
+  it('runs the loop job only from main, with the same pinned eas-cli as the update guard', () => {
+    expect(yml).toContain("if: needs.token.outputs.present == 'true' && github.ref == 'refs/heads/main'");
+    expect(yml.match(/eas-version: (\S+)/)[1]).toBe(EAS_CLI.replace(/^eas-cli@/, ''));
+  });
+
+  describe('the Decide step (run against a stub eas)', () => {
+    const lines = yml.split('\n');
+    const from = lines.findIndex((l) => l.includes('- name: Decide')) + 3;
+    const end = lines.findIndex((l, i) => i >= from && l.trim() && !l.startsWith(' '.repeat(10)));
+    const script = lines.slice(from, end).map((l) => l.slice(10)).join('\n');
+    const STUB = '#!/bin/bash\ncase "$1" in\n  fingerprint:generate) echo \'{"hash":"fp1"}\' ;;\n  build:list) if [[ " $* " == *" --runtime-version fp1 "* ]]; then echo "$MINE"; else echo "$RECENT"; fi ;;\n  *) exit 9 ;;\nesac\n';
+    const now = new Date().toISOString();
+    const b = (status, n = 1) => Array.from({ length: n }, () => ({ status, createdAt: now }));
+    (process.platform === 'linux' ? it.each : it.skip.each)([
+      ['a build with this fingerprint finished', 'push', 'update', b('FINISHED'), b('FINISHED'), /Device loop: update::/],
+      ['another testing build is running', 'push', 'none', [], b('IN_PROGRESS'), /Device loop: waiting::/],
+      ['the build with this fingerprint failed', 'push', 'none', b('ERRORED'), b('ERRORED'), /Device loop: build failed::/],
+      ['the build with this fingerprint was canceled', 'push', 'none', b('CANCELED'), b('CANCELED'), /Device loop: build failed::/],
+      ['the build with this fingerprint failed', 'schedule', 'build', b('ERRORED'), b('ERRORED'), /Device loop: build::.*\(2 of 10/],
+      ['the build with this fingerprint was canceled', 'workflow_dispatch', 'build', b('CANCELED'), b('CANCELED'), /Device loop: build::/],
+      ['10 testing builds started in 31 days', 'schedule', 'none', [], b('FINISHED', 10), /Device loop: build limit::/],
+      ['no testing build has this fingerprint', 'push', 'build', [], [], /Device loop: build::.*\(1 of 10/],
+    ])('%s: a %s run decides %s', (_label, event, action, mine, recent, notice) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgp-decide-'));
+      try {
+        fs.writeFileSync(path.join(dir, 'eas'), STUB, { mode: 0o755 });
+        const out = path.join(dir, 'out');
+        const env = { PATH: `${dir}:${process.env.PATH}`, GITHUB_OUTPUT: out, GITHUB_EVENT_NAME: event, MAX_TESTING_BUILDS: '10', MINE: JSON.stringify(mine), RECENT: JSON.stringify(recent) };
+        const res = spawnSync('bash', ['-c', script], { env, encoding: 'utf8' });
+        expect(res.status).toBe(0);
+        expect(fs.readFileSync(out, 'utf8')).toBe(`action=${action}\n`);
+        expect(res.stdout).toMatch(notice);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });

@@ -126,6 +126,14 @@ export default function RomanChatScreen({
   const needsCoach = useClientNeedsCoach();
   // Checked before the room mounts, so no session is opened for them.
   if (surface === 'client' && needsCoach) return <RomanCoachLock />;
+  // COACH-AI-CONSENT: the coach room opens only while the coach's own Roman is on.
+  if (surface === 'coach') {
+    return (
+      <RomanConsentGate surface="coach">
+        <RomanChatRoom surface="coach" />
+      </RomanConsentGate>
+    );
+  }
   return <RomanChatRoom surface={surface} />;
 }
 
@@ -229,6 +237,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   // (Allow AI help, or Contact support with the reference), never the
   // generic send-failed row.
   const refusal = sendError?.kind === 'aiRefused' ? (sendError.refusal ?? null) : null;
+  // COACH-AI-CONSENT: coach_consent_required is CAC-5 in this notice; the room and draft stay (onRefusalRetry).
   const refusalAudience = surface === 'coach' ? 'coach' : 'client';
   // Daily AI cap: the pop-up carries the copy, so no inline error row. The
   // draft (or the stored turn) stays; the composer is never blocked, so a
@@ -471,7 +480,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         />
 
         {/* B32 (prototype 68): consent before Roman's first answer. */}
-        <RomanConsentGate surface={surface} />
+        {surface === 'client' ? <RomanConsentGate surface="client" /> : null}
 
         {askAgainHint && sendError == null ? (
           <View style={styles.sendError} testID="roman-ask-again" accessibilityLiveRegion="polite">
