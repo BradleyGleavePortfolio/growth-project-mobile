@@ -83,7 +83,11 @@ function profileEnv(name) {
         } finally { await context.close(); }
       }
     }
-    fs.writeFileSync(path.join(out, 'evidence.json'), JSON.stringify({ evidence, captions: SCREENSHOT_CAPTIONS }, null, 2));
+    fs.writeFileSync(path.join(out, 'evidence.json'), JSON.stringify({
+      profile: process.env.SCREENSHOT_PROFILE || 'production',
+      coachTabsV2: env.EXPO_PUBLIC_FF_COACH_TABS_V2 || 'false',
+      evidence, captions: SCREENSHOT_CAPTIONS,
+    }, null, 2));
   } finally {
     await browser?.close();
     server?.kill('SIGTERM');

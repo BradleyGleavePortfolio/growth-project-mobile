@@ -321,12 +321,16 @@ export const DEMO_COMMUNITY_FEED = [
 export const DEMO_MESSAGES = [
   {
     id: 'msg-1',
+    sender_id: DEMO_COACH_ID,
+    sender_role: 'coach',
     body: 'Strong week — your protein is dialled. Let us hold the deficit one more week, then reassess.',
     direction: 'inbound' as const,
     created_at: '2026-05-01T14:30:00Z',
   },
   {
     id: 'msg-2',
+    sender_id: DEMO_USER_ID,
+    sender_role: 'client',
     body: 'Sounds good. Travelling Thursday — I will pre-log lunch.',
     direction: 'outbound' as const,
     created_at: '2026-05-01T14:32:00Z',

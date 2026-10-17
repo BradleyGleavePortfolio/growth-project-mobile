@@ -38,7 +38,7 @@ export async function seedDemoUser(audience: 'client' | 'coach' = 'client'): Pro
     ? Math.round((profile.height_cm / 2.54) * 10) / 10
     : undefined;
   await AsyncStorage.setItem(
-    'macro_targets',
+    `macro_targets:${DEMO_USER.id}`,
     JSON.stringify({
       calories: profile?.calorie_target ?? 2200,
       protein: profile?.protein_target ?? 165,

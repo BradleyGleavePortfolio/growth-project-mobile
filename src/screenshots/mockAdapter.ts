@@ -140,7 +140,13 @@ const ROUTES: Route[] = [
   }) },
   { method: 'GET', pattern: /^\/coach\/command-center\/at-risk$/, handler: () => ({ items: [], total_at_risk: 0 }) },
   { method: 'GET', pattern: /^\/coach\/connect\/payouts/, handler: () => ({ payouts: [] }) },
-  { method: 'GET', pattern: /^\/coach\/command-center\/ltv-metrics$/, handler: () => ({}) },
+  { method: 'GET', pattern: /^\/coach\/command-center\/ltv-metrics$/, handler: () => ({ active_client_count: 14, churn_rate_pct: 0, mrr_30d_ago_cents: 260000 }) },
+  { method: 'GET', pattern: /^\/coach\/connect\/status$/, handler: () => ({
+    state: 'active', account_id: 'demo-connect', charges_enabled: true, payouts_enabled: true, details_submitted: true,
+  }) },
+  { method: 'GET', pattern: /^\/v1\/coach\/packages$/, handler: () => [{ id: 'demo-package', title: 'Upper body', is_active: true, published_at: '2026-05-01T09:00:00Z' }] },
+  { method: 'GET', pattern: /^\/coach\/clients$/, handler: () => [DEMO_USER] },
+  { method: 'GET', pattern: /^\/v1\/coach\/money\/charges$/, handler: () => ({ charges: [{ id: 'demo-charge' }] }) },
   { method: 'GET', pattern: /^\/v1\/coach\/money\/summary$/, handler: (config) => ({
     currency: 'usd', currencies: ['usd'], window: { from: config.params.from, to: config.params.to },
     totals: { gross_cents: 300000, processing_cents: 9000, platform_fee_cents: 6000,
