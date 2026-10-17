@@ -61,79 +61,80 @@ const clients: QueryClient[] = [];
 const page = (data: Partial<CalendarWeekData> = {}) => render(
   <CalendarWeekPage data={{ ...base, ...data }} onRefresh={refresh} onSession={openSession} onBook={book} />,
 );
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  await cleanup();
   clients.splice(0).forEach((q) => q.clear());
   jest.clearAllMocks();
 });
 
-it('every week day selects a real agenda; notification, booking and own workout routes are real', () => {
-  const r = page();
+it('every week day selects a real agenda; notification, booking and own workout routes are real', async () => {
+  const r = await page();
   const start = getLocalWeekStart();
   for (let i = 0; i < 7; i += 1) {
     const day = addDays(start, i);
-    fireEvent.press(r.getByTestId(`week-day-${day}`));
+    await fireEvent.press(r.getByTestId(`week-day-${day}`));
     expect(r.getByTestId(`week-agenda-${day}`)).toBeTruthy();
     expect(r.getByTestId(`week-day-${day}`).props.accessibilityState.selected).toBe(true);
   }
-  fireEvent.press(r.getByTestId(`week-day-${today}`));
-  fireEvent.press(r.getByTestId('week-workout-assignment-own'));
+  await fireEvent.press(r.getByTestId(`week-day-${today}`));
+  await fireEvent.press(r.getByTestId('week-workout-assignment-own'));
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'assignment-own' } });
   expect(r.getByText('Frozen plan')).toBeTruthy();
   expect(r.queryByText('Live plan')).toBeNull();
-  fireEvent.press(r.getByTestId('week-session-session-own'));
+  await fireEvent.press(r.getByTestId('week-session-session-own'));
   expect(openSession).toHaveBeenCalledWith('session-own');
-  fireEvent.press(r.getByTestId('week-book'));
+  await fireEvent.press(r.getByTestId('week-book'));
   expect(book).toHaveBeenCalledWith('coach-own');
-  fireEvent.press(r.getByTestId('week-notifications'));
+  await fireEvent.press(r.getByTestId('week-notifications'));
   expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter' });
-  fireEvent.press(r.getByTestId('week-checkin-open'));
+  await fireEvent.press(r.getByTestId('week-checkin-open'));
   expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Habits', params: { initialTab: 'checkin' } });
 });
 
-it('next session opens real detail even if outside this week, without duplicating pages', () => {
+it('next session opens real detail even if outside this week, without duplicating pages', async () => {
   const next = { ...session, session_type_id: 'type-own', start_at: `${addDays(today, 10)}T12:00:00`, end_at: `${addDays(today, 10)}T12:30:00` };
-  const r = page({ sessions: [next, next], descriptions: { 'type-own': 'The coach’s actual session description.' } });
-  fireEvent.press(r.getByTestId('week-next-session-own'));
+  const r = await page({ sessions: [next, next], descriptions: { 'type-own': 'The coach’s actual session description.' } });
+  await fireEvent.press(r.getByTestId('week-next-session-own'));
   expect(openSession).toHaveBeenCalledWith('session-own');
   expect(r.getAllByTestId('week-next-session-own')).toHaveLength(1);
   expect(r.getByText('The coach’s actual session description.')).toBeTruthy();
 });
 
-it('coachless clients keep workouts, saved check-ins, today entry and notifications without a lock', () => {
-  const r = page({ coaches: [], sessions: [] });
+it('coachless clients keep workouts, saved check-ins, today entry and notifications without a lock', async () => {
+  const r = await page({ coaches: [], sessions: [] });
   expect(r.getByTestId('week-workout-assignment-own')).toBeTruthy();
   expect(r.getByTestId(`week-checkin-${today}`)).toBeTruthy();
   expect(r.queryByTestId('week-book')).toBeNull();
-  fireEvent.press(r.getByTestId('week-checkin-open'));
+  await fireEvent.press(r.getByTestId('week-checkin-open'));
   expect(mockNavigate).toHaveBeenCalled();
 });
 
-it.each(['loading', 'failed', 'offline'] as const)('%s never invents empty or rest states', (key) => {
-  const r = page({ sessions: [], workouts: [], checkIns: [], [key]: true });
+it.each(['loading', 'failed', 'offline'] as const)('%s never invents empty or rest states', async (key) => {
+  const r = await page({ sessions: [], workouts: [], checkIns: [], [key]: true });
   expect(r.queryByTestId('week-empty')).toBeNull();
   expect(r.queryByText(c['C4-S-89'])).toBeNull();
   if (key === 'failed') {
-    fireEvent.press(r.getByTestId('week-retry'));
+    await fireEvent.press(r.getByTestId('week-retry'));
     expect(refresh).toHaveBeenCalledTimes(1);
   }
 });
 
-it('offline keeps loaded rows, disables booking and distinguishes a cold offline view', () => {
-  const r = page({ offline: true });
+it('offline keeps loaded rows, disables booking and distinguishes a cold offline view', async () => {
+  const r = await page({ offline: true });
   expect(r.getByText(c['C4S1-S-01'])).toBeTruthy();
   expect(r.getByTestId('week-workout-assignment-own')).toBeTruthy();
-  fireEvent.press(r.getByTestId('week-book'));
+  await fireEvent.press(r.getByTestId('week-book'));
   expect(book).not.toHaveBeenCalled();
-  r.unmount();
-  expect(page({ offline: true, hasData: false, sessions: [], workouts: [], checkIns: [] }).getByText(c['C4S1-S-03'])).toBeTruthy();
+  await r.unmount();
+  const cold = await page({ offline: true, hasData: false, sessions: [], workouts: [], checkIns: [] });
+  expect(cold.getByText(c['C4S1-S-03'])).toBeTruthy();
 });
 
-it('successfully empty week is honest; completed rows say Done', () => {
-  const r = page({ sessions: [], workouts: [], checkIns: [] });
+it('successfully empty week is honest; completed rows say Done', async () => {
+  const r = await page({ sessions: [], workouts: [], checkIns: [] });
   expect(r.getByTestId('week-empty')).toBeTruthy();
-  r.unmount();
-  const done = page({ workouts: [{ ...workout, completed_at: stamp }] });
+  await r.unmount();
+  const done = await page({ workouts: [{ ...workout, completed_at: stamp }] });
   expect(within(done.getByTestId('week-workout-assignment-own')).getByText('Done')).toBeTruthy();
 });
 
@@ -144,8 +145,9 @@ it('reads only signed-in-client lists, including retained session history withou
   jest.mocked(checkInsApi.list).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof checkInsApi.list>>);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(qc);
-  const navigation = { navigate: mockNavigate } as NativeStackNavigationProp<CalendarStackParamList, 'CalendarHome'>;
-  const r = render(<QueryClientProvider client={qc}><CalendarWeekScreen navigation={navigation}
+  // @ts-expect-error Test navigator supplies only the one method this screen calls.
+  const navigation: NativeStackNavigationProp<CalendarStackParamList, 'CalendarHome'> = { navigate: mockNavigate };
+  const r = await render(<QueryClientProvider client={qc}><CalendarWeekScreen navigation={navigation}
     route={{ key: 'home', name: 'CalendarHome' }} /></QueryClientProvider>);
   await waitFor(() => expect(r.getByTestId('week-workout-assignment-own')).toBeTruthy());
   expect(workoutBuilderApi.listMyAssignments).toHaveBeenCalledWith();

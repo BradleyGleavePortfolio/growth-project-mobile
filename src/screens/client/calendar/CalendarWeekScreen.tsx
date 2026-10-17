@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   body: { ...typography.body, fontSize: 14, lineHeight: 22 },
   bodyStrong: { ...typography.body, fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 23 },
   small: { ...typography.caption, letterSpacing: 0, flexShrink: 1 },
-  overline: { ...typography.label, lineHeight: 18, marginBottom: spacing.md },
+  overline: { ...typography.eyebrow, lineHeight: 18, marginBottom: spacing.md },
   session: { borderRadius: radius.card, borderLeftWidth: 3, borderLeftColor: colors.camel, padding: spacing.lg, marginBottom: spacing.lg, minHeight: 44 },
   sessionTitle: { ...typography.h2 },
   coachWords: { ...typography.h3, fontStyle: 'italic', marginTop: spacing.md },
