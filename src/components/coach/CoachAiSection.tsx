@@ -34,6 +34,7 @@ import type { CoachAiDraftType, CoachAiStatus } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
 import AiRefusalNotice from '../ai/AiRefusalNotice';
 import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
+import { layout } from '../../theme/tokens';
 
 // How long the post-timeout poll runs (2 extra minutes) and the interval.
 const POLL_INTERVAL_MS = 10_000;
@@ -939,6 +940,7 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     inboxBtn: {
+      minHeight: layout.touchMin,
       flexDirection: 'row' as const,
       alignItems: 'center',
       gap: 6,

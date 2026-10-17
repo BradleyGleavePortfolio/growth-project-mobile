@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { renderHook, act, cleanup, waitFor } from '@testing-library/react-native';
 import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import {
@@ -121,29 +121,43 @@ describe('useBiometricGate', () => {
   });
 
   // START-HANG-FOLLOW-134 (U1 on m#619).
-  it('opted in: the lock covers the app at once on return from the background, before the read answers', async () => {
-    await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, 'true');
+  it.each([
+    [BACKGROUND_TIMEOUT_MS - 1, 'unlocked', 1],
+    [BACKGROUND_TIMEOUT_MS + 1, 'checking', 2],
+  ] as const)('opted in: after %i ms in the background, status is %s before the read answers', async (elapsed, status, authentications) => {
+    jest.useFakeTimers({ now: 1_000_000 });
     const listeners: Array<(s: string) => void> = [];
     const sub = jest.spyOn(AppState, 'addEventListener').mockImplementation(((_: string, fn: (s: string) => void) => {
       listeners.push(fn);
       return { remove: jest.fn() };
     }) as never);
-    const { result } = await renderHook(() => useBiometricGate());
-    await waitFor(() => expect(result.current.status).toBe('unlocked'));
-    let answer: (v: string) => void = () => undefined;
-    (SecureStore.getItemAsync as jest.Mock).mockImplementationOnce(() => new Promise((r) => { answer = r; }));
-    const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
     try {
+      await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, 'true');
+      const { result } = await renderHook(() => useBiometricGate());
+      await waitFor(() => expect(result.current.status).toBe('unlocked'));
+      let answer: (v: string) => void = () => undefined;
+      const read = SecureStore.getItemAsync as jest.Mock;
+      read.mockClear();
+      if (status === 'checking') {
+        read.mockImplementationOnce(() => new Promise((r) => { answer = r; }));
+      }
+      // Model 2 ms of setup between the old clock sample and background event.
+      await act(async () => { await jest.advanceTimersByTimeAsync(2); });
       await act(async () => listeners.forEach((fn) => fn('background')));
-      clock.mockReturnValue(1_000_000 + BACKGROUND_TIMEOUT_MS + 1);
+      await act(async () => { await jest.advanceTimersByTimeAsync(elapsed); });
       await act(async () => listeners.forEach((fn) => fn('active')));
+      expect(result.current.status).toBe(status);
+      expect(read).toHaveBeenCalledTimes(authentications - 1);
+      expect(mockAuthenticate).toHaveBeenCalledTimes(1);
+      if (status === 'checking') {
+        await act(async () => answer('true'));
+        await waitFor(() => expect(result.current.status).toBe('unlocked'));
+      }
+      expect(mockAuthenticate).toHaveBeenCalledTimes(authentications);
     } finally {
-      clock.mockRestore();
+      await cleanup();
+      sub.mockRestore();
+      jest.useRealTimers();
     }
-    expect(result.current.status).toBe('checking');
-    await act(async () => answer('true'));
-    await waitFor(() => expect(result.current.status).toBe('unlocked'));
-    expect(mockAuthenticate).toHaveBeenCalledTimes(2);
-    sub.mockRestore();
   });
 });

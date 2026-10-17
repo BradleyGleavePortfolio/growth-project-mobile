@@ -48,6 +48,7 @@ import { BillingSection } from './settings/BillingSection';
 import { DangerZone } from './settings/DangerZone';
 import { BookingOptionsEntry } from './settings/BookingOptionsEntry';
 import { AICreditsRow } from './settings/AICreditsRow';
+import { CoachRomanSwitch } from './settings/CoachRomanSwitch';
 import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from '../settings/deletionErrors';
 import { Headline, Overline, useScreenInsets } from '../../ui';
 import { layout } from '../../theme/tokens';
@@ -785,6 +786,8 @@ export default function SettingsScreen() {
           be able to view and undo their blocks from Settings. */}
       <Overline style={styles.sectionHeader}>Privacy</Overline>
       <View style={styles.section}>
+        {/* COACH-AI-CONSENT: the coach's own Roman switch (not for a sub-coach: no coach Roman routes). */}
+        {currentUser?.role !== 'sub_coach' ? <CoachRomanSwitch colors={colors} styles={styles} /> : null}
         <TouchableOpacity
           style={styles.row}
           onPress={() => navigation.navigate('BlockedUsers')}

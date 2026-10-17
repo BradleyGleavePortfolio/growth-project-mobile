@@ -50,6 +50,9 @@ export const ROMAN_CHATS_COPY = {
   confirmAllTitle: 'Delete all your conversations with Roman?',
   confirmAllBody:
     'This permanently deletes every conversation you have had with Roman, from every day. It cannot be undone. Your plan, your logs and your messages with your coach stay as they are.',
+  /** K1-5 (owner "k1-5 - approved"): a client with no coach is told what stays, with no coach in it. */
+  confirmAllBodyNoCoach:
+    'This permanently deletes every conversation you have had with Roman, from every day. It cannot be undone. Your plan and your logs stay as they are.',
   confirmAllTypeLabel: 'Type DELETE to confirm',
   confirmAllWord: 'DELETE',
 

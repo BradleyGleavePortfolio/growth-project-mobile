@@ -46,7 +46,7 @@ export const makeStyles = (colors: ThemeColors) =>
     width: 38, height: 38, borderRadius: radius.chip, backgroundColor: colors.primaryPale,
     justifyContent: 'center', alignItems: 'center',
   },
-  tabScroll: { maxHeight: 44, marginBottom: 16 },
+  tabScroll: { flexGrow: 0, flexShrink: 0, marginBottom: 16 },
   tabRow: { paddingHorizontal: layout.gutter, gap: 8 },
   tab: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -93,6 +93,7 @@ export const makeStyles = (colors: ThemeColors) =>
     lineHeight: 27,
     letterSpacing: 0.4,
     fontWeight: '500',
+    color: colors.primary,
   },
   macroCardLabel: {
     fontFamily: 'Inter_500Medium',
@@ -111,9 +112,11 @@ export const makeStyles = (colors: ThemeColors) =>
   profileLabel: { fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textSecondary, textTransform: 'capitalize' },
   profileValue: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: colors.textPrimary, textTransform: 'capitalize' },
   // Coach actions (messages + nudge)
-  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
   actionPill: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '40%',
+    minHeight: layout.touchMin,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -124,6 +127,8 @@ export const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.primaryPale,
   },
   actionPillText: {
+    flexShrink: 1,
+    textAlign: 'center',
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     fontWeight: '500',
@@ -276,6 +281,10 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   foodReviewChips: { flexDirection: 'row', gap: 6 },
   foodReviewChip: {
+    minWidth: layout.touchMin,
+    minHeight: layout.touchMin,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: radius.chip,
@@ -305,6 +314,23 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   foodReviewDayDate: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   foodReviewDayTotal: { fontSize: 12, fontWeight: '600', color: colors.primary },
+  retryBtn: {
+    minHeight: layout.touchMin,
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: radius.button,
+    backgroundColor: colors.primaryPale,
+  },
+  retryBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.primary,
+  },
   });
 
 export type ClientDetailStyles = ReturnType<typeof makeStyles>;

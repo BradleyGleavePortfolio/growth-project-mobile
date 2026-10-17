@@ -30,6 +30,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { patchUserCache } from '../../lib/userCache';
+import { useRomanJoinOfferHold } from '../../lib/romanJoinOffer';
 import { presentJoinFrom } from '../../lib/joinPackage';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { logger } from '../../utils/logger';
@@ -102,6 +103,8 @@ export default function CoachCodeSheet({
   // B-SHARE-127: the sentence above Join; its version is sent with the code.
   const sharingVersion = useCoachSharingNotice();
 
+  // Owner 62y2: the Roman and AI offer waits until this sheet closes.
+  useRomanJoinOfferHold(visible);
   useEffect(() => {
     if (visible) setCode(initialCode ?? '');
   }, [visible, initialCode]);
