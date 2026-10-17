@@ -53,9 +53,14 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
     { bucket: 'HEALTH_FITNESS', from: range.from, to: range.to, granularity: 'day', preferredOnly: true },
     { enabled: !!currentUser },
   );
+  // Pull to refresh on Home refetches every tile read (useQuery's refetch functions are stable).
+  const { refetch: refetchWeight } = weight;
+  const { refetch: refetchHabits } = habits;
+  const { refetch: refetchHabitLogs } = habitLogs;
+  const { refetch: refetchFitness } = fitness;
   useEffect(() => {
-    if (refreshing) void Promise.all([weight.refetch(), habits.refetch(), habitLogs.refetch(), fitness.refetch()]);
-  }, [refreshing]);
+    if (refreshing) void Promise.all([refetchWeight(), refetchHabits(), refetchHabitLogs(), refetchFitness()]);
+  }, [refreshing, refetchWeight, refetchHabits, refetchHabitLogs, refetchFitness]);
 
   const metric = settings.unit === 'kg';
   const protein = proteinTile({ ready: day.ready, protein: day.protein, carbs: day.carbs, fat: day.fat, target: day.proteinTarget, simple: day.simple });
