@@ -521,7 +521,8 @@ export default function AiConsentSheet({
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+/** The sheet's styles, shared with CoachAiConsentSheet (one presentation for every AI consent sheet). */
+export function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
     sheet: {

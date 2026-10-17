@@ -249,3 +249,5 @@ correctly integrated; a Stripe webview alone is not that integration.
 The exception for 1:1 online coaching requires two individuals and no replay of the
 paid session in a Play-distributed app.
 [Google Play's policy explanation](https://support.google.com/googleplay/android-developer/answer/10281818?hl=en).
+
+COACH-AI-CONSENT (owner op 2 item 4): Settings > Privacy starts with `settings/CoachRomanSwitch.tsx`, "Roman (AI by Anthropic)" (CAC-4). On = the coach's own grant; on opens `CoachAiConsentSheet`, off withdraws at once (`DELETE /me/ai-consent/coach`). Hidden for a sub-coach and until the status loads.
