@@ -19,8 +19,9 @@ describe('workoutWeek', () => {
     expect([dayLabel(w, 0), dayLabel(w, 1), dayLabel(w, 2), dayLabel(w, 3)]).toEqual(['Mon 12 done', 'Tue 13 missed', 'Wed 14 today', 'Thu 15']);
   });
 
-  it('a skipped session is missed, even later this week; a fully done day is done, a half-done past day is missed', () => {
-    expect(of([row(16, false, true)])!.days[4]).toBe('missed');
+  it('a skipped later day is dashed but not named missed until it comes; a fully done day is done, a half-done past day is missed', () => {
+    const s = of([row(16, false, true)])!;
+    expect([s.days[4], s.missed, weekHeadline(s), weekHeadline(of([row(13), row(16, false, true)])!)]).toEqual(['missed', null, '0 of 1 done', 'Missed Tue']);
     const w = of([row(12, true), row(12, true), row(13, true), row(13)])!;
     expect(w.days.slice(0, 2)).toEqual(['done', 'missed']);
     expect([weekHeadline(w), toGoLine(w)]).toEqual(['Missed Tue', null]);

@@ -22,7 +22,7 @@ const DAY_MS = 86_400_000;
 const daysFrom = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS);
 const plusDays = (day: string, n: number) => new Date(Date.parse(day) + n * DAY_MS).toISOString().slice(0, 10);
 
-/** The ring and the day strip; null when the client keeps Workouts private. A skipped session counts as missed. */
+/** The ring and the day strip; null when the client keeps Workouts private. A skipped session counts as missed; "Missed {day}" names a day only once it has come. */
 export function workoutWeek(w: ClientWeek): WorkoutWeek | null {
   if (!w.shared) return null;
   const today = daysFrom(w.week_start, w.today);
@@ -36,7 +36,7 @@ export function workoutWeek(w: ClientWeek): WorkoutWeek | null {
     if (d === today) return 'today';
     return mine.length > 0 ? 'planned' : 'rest';
   });
-  const missedDays = week.filter((r) => state(r) === 'missed').map((r) => r.day);
+  const missedDays = week.filter((r) => state(r) === 'missed' && r.day <= today).map((r) => r.day);
   return {
     segments, days,
     dates: days.map((_, d) => Number(plusDays(w.week_start, d).slice(8))),
