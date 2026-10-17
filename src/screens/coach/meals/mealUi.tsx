@@ -128,8 +128,9 @@ export function FirstCard({ title, body, children }: { title: string; body: stri
   );
 }
 
-/** Masthead choice chips, one picked (cream fill, ink text); selection haptic. */
-export function Chips<T extends string | number>({ items, value, onChange, label, scroll }: { items: [T, string][]; value: T; onChange: (v: T) => void; label: string; scroll?: boolean }) {
+/** Masthead choice chips, one picked (cream fill, ink text); selection haptic. `pick` ends the row with a chip that opens a date picker. */
+export function Chips<T extends string | number>({ items, value, onChange, label, scroll, pick }: { items: [T, string][]; value: T; onChange: (v: T) => void; label: string;
+  scroll?: boolean; pick?: { label: string; open: boolean; onPress: () => void } }) {
   const { semanticColors: sc } = useTheme();
   const row = (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[s.chips, scroll && s.oneRow]}>
@@ -143,6 +144,14 @@ export function Chips<T extends string | number>({ items, value, onChange, label
           </Pressable>
         );
       })}
+      {pick ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={pick.label} accessibilityState={{ expanded: pick.open }}
+          onPress={() => { void HapticService.selection(); pick.onPress(); }}
+          style={({ pressed }) => [s.chip, s.pick, { borderColor: sc.data.plannedOnDark }, pressed && s.pressed]}>
+          <Ionicons name="calendar-outline" size={18} color={sc.textOnAccent} />
+          <Text style={[typography.body, { color: sc.textOnAccent }]}>Pick a date</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
   return scroll ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.bleed} contentContainerStyle={s.bleedPad}>{row}</ScrollView> : row;
@@ -162,6 +171,7 @@ export const mealStyles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }, oneRow: { flexWrap: 'nowrap' },
   bleed: { marginHorizontal: -layout.gutter }, bleedPad: { paddingHorizontal: layout.gutter },
   chip: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: 16, borderWidth: 1, borderRadius: radius.button },
+  pick: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   notice: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
 });
 const s = mealStyles;

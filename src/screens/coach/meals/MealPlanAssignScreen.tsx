@@ -4,42 +4,63 @@
  * shows the client the plan that starts latest, so conflicts are read here.
  */
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui/layout/Screen';
-import { PrimaryButton } from '../../../ui/buttons/PrimaryButton';
+import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useAssignDailyMealPlan, useDailyMealPlan, useDailyMealPlans, useMealPlanAssignments } from '../../../hooks/useMealTemplates';
 import { useAssignableClients } from '../../../hooks/usePrograms';
 import { useCurrentMacrosForClient } from '../../../hooks/useMacros';
 import { toIsoDate } from '../../../api/programsApi';
 import type { ProgramsScreenProps } from '../programs/types';
-import { Chips, FirstCard, LoadFailed, Loading, Masthead, Notice, dayTotals, httpStatus, mealStyles as ms, num, saveFailed, sortedSlots } from './mealUi';
+import { Chips, FirstCard, LoadFailed, Loading, Masthead, Notice, count, dayTotals, httpStatus, mealStyles as ms, num, saveFailed, sortedSlots } from './mealUi';
 
-const dayIso = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return toIsoDate(d); };
-const fmt = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) =>
-  new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', o);
-const ENDS: [number, string][] = [[0, 'No end date'], [1, '1 week'], [2, '2 weeks'], [4, '4 weeks']];
+/** ISO dates at noon, so a clock change never moves a day. */
+const noon = (iso: string) => new Date(`${iso}T12:00:00`);
+const addDays = (iso: string, n: number) => { const d = noon(iso); d.setDate(d.getDate() + n); return toIsoDate(d); };
+const between = (a: string, b: string) => Math.round((noon(b).getTime() - noon(a).getTime()) / 864e5);
+const fmt = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) => noon(iso).toLocaleDateString('en-US', o);
+/** Any length the coach picks (#MEAL-1): whole weeks say weeks, anything else days; 0 is no end date. */
+const span = (d: number) => (!d ? 'No end date' : d % 7 ? count(d, 'day', 'days') : count(d / 7, 'week', 'weeks'));
+const LENGTHS = [0, 7, 14, 28];
 
 export default function MealPlanAssignScreen({ route, navigation }: ProgramsScreenProps<'MealPlanAssign'>) {
   const { semanticColors: sc } = useTheme();
   const { planId } = route.params;
   const p = useDailyMealPlan(planId).data;
-  const plans = useDailyMealPlans().data;
+  const list = useDailyMealPlans();
+  const plans = list.data;
   const ids = useMemo(() => (plans ?? []).map((x) => x.id), [plans]);
-  const { byPlan } = useMealPlanAssignments(ids);
+  const { byPlan, error: runsError } = useMealPlanAssignments(ids);
+  const qc = useQueryClient();
+  const rereading = useIsFetching({ queryKey: ['daily-meal-plans'] }) > 0;
   const roster = useAssignableClients();
   const assign = useAssignDailyMealPlan();
   const [clientId, setClientId] = useState<string>();
-  const [start, setStart] = useState(0);
-  const [weeks, setWeeks] = useState(0);
+  const today = toIsoDate(new Date());
+  const [starts, setStarts] = useState(today);
+  const [days, setDays] = useState(0);
+  const [picking, setPicking] = useState<'start' | 'end'>();
   const [q, setQ] = useState('');
   const target = useCurrentMacrosForClient(clientId).data;
-  const today = dayIso(0);
-  const starts = dayIso(start);
-  const ends = weeks ? dayIso(start + weeks * 7 - 1) : undefined;
-  const startChips: [number, string][] = [0, 1, 2, 3, 4, 5, 6].map((n) => [n, n ? `${fmt(dayIso(n), { weekday: 'short' })} ${Number(dayIso(n).slice(8))}` : 'Today']);
+  const ends = days ? addDays(starts, days - 1) : undefined;
+  // A week of start chips, then the picked date if it is later; length chips, then a picked length.
+  const startChips = [0, 1, 2, 3, 4, 5, 6].map((n) => addDays(today, n))
+    .map((iso, n): [string, string] => [iso, n ? `${fmt(iso, { weekday: 'short' })} ${Number(iso.slice(8))}` : 'Today']);
+  if (!startChips.some(([iso]) => iso === starts)) startChips.push([starts, fmt(starts)]);
+  const lengthChips = [...LENGTHS, ...(LENGTHS.includes(days) ? [] : [days])].map((d): [number, string] => [d, span(d)]);
+  const toggle = (which: 'start' | 'end') => setPicking(picking === which ? undefined : which);
+  // Android's dialog closes on any answer; iOS keeps its calendar open (changing month can move the date) until Done.
+  const onPick = (e: DateTimePickerEvent, d?: Date) => {
+    if (Platform.OS !== 'ios') setPicking(undefined);
+    if (e.type !== 'set' || !d) return;
+    if (picking === 'start') setStarts(toIsoDate(d));
+    else setDays(Math.max(1, between(starts, toIsoDate(d)) + 1));
+  };
   const runs = (plans ?? []).flatMap((plan) => (byPlan?.get(plan.id) ?? [])
     .map((a) => ({ plan, client: a.client_id, from: a.starts_on.slice(0, 10), to: a.ends_on?.slice(0, 10) }))
     .filter((r) => !r.to || r.to >= today));
@@ -52,9 +73,12 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
   const kcal = p ? dayTotals(sortedSlots(p)).calories_kcal : 0;
   const bold = { fontFamily: 'Inter_600SemiBold' };
   const shown = (roster.data ?? []).filter((c) => c.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const readError = list.error ?? runsError;
+  // Overlaps are read from every plan's assignments: until all of them are in, Assign waits (button and handler alike).
+  const blocked = !client || !p || !plans || !byPlan || !!same || !!tie;
 
   const submit = async () => {
-    if (!client) return;
+    if (blocked || !client) return;
     void HapticService.mediumImpact();
     try {
       await assign.mutateAsync({ planId, input: { client_id: client.id, starts_on: starts, ...(ends ? { ends_on: ends } : {}) } });
@@ -70,14 +94,28 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
 
   return (
     <Screen edges={['bottom']} contentStyle={styles.content} footer={
-      <PrimaryButton label={client ? `Assign to ${first}` : 'Assign to a client'} haptic={false} disabled={!client || !p || !!same || !!tie}
+      <PrimaryButton label={client ? `Assign to ${first}` : 'Assign to a client'} haptic={false} disabled={blocked}
         accessibilityHint={client ? undefined : 'Pick a client first'}
         loading={assign.isPending} onPress={() => void submit()} testID="assign-submit" />}>
       <Masthead title="Assign to a client" sub={p ? `${p.name} · ${num(kcal)} kcal a day` : undefined} onBack={() => navigation.goBack()}>
-        <Chips label="Starts" items={startChips} value={start} onChange={setStart} scroll />
-        <Chips label="Ends" items={ENDS} value={weeks} onChange={setWeeks} />
-        <Text style={[typography.body, styles.range, { color: sc.textOnAccent }]}>{`From ${fmt(starts)}${ends ? ` to ${fmt(ends)}` : ', no end date'}`}</Text>
+        <Chips label="Starts" items={startChips} value={starts} onChange={setStarts} scroll
+          pick={{ label: 'Pick a start date', open: picking === 'start', onPress: () => toggle('start') }} />
+        <Chips label="Ends" items={lengthChips} value={days} onChange={setDays} pick={{ label: 'Pick an end date', open: picking === 'end', onPress: () => toggle('end') }} />
+        <Text style={[typography.body, styles.range, { color: sc.textOnAccent }]}>
+          {days === 1 ? `On ${fmt(starts)} only` : `From ${fmt(starts)}${ends ? ` to ${fmt(ends)}` : ', no end date'}`}
+        </Text>
       </Masthead>
+      {picking ? (
+        <View style={Platform.OS === 'ios' ? [ms.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }] : undefined}>
+          <DateTimePicker mode="date" display={Platform.OS === 'ios' ? 'inline' : 'default'} accentColor={sc.accent} onChange={onPick} testID="assign-date"
+            value={noon(picking === 'start' ? starts : ends ?? starts)} minimumDate={noon(picking === 'start' ? today : starts)} />
+          {Platform.OS === 'ios' ? <TextLink label="Done" tone="accent" underline={false} align="end" onPress={() => setPicking(undefined)} /> : null}
+        </View>
+      ) : null}
+      {readError ? (
+        <LoadFailed title="Your meal plans didn’t load." error={readError} retrying={rereading}
+          onRetry={() => void qc.refetchQueries({ queryKey: ['daily-meal-plans'], type: 'active' })} />
+      ) : null}
       {same ? (
         <Notice icon="alert-circle-outline"><Text style={bold}>{`${first} is already on ${same.plan.name} from ${fmt(same.from)}.`}</Text></Notice>
       ) : tie ? (

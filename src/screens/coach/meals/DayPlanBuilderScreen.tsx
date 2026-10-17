@@ -2,8 +2,9 @@
  * MEALBUILD 2/2: the day-plan builder (MOCK-K5 Style C "builder") on
  * coach/daily-meal-plans. A new plan is named first (POST); after that every
  * change saves at once (PATCH), so clients on the plan see it right away.
+ * The name and note save when a field ends and again when the screen goes.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -31,6 +32,24 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
   const { byPlan } = useMealPlanAssignments(planId ? [planId] : []);
   const [name, setName] = useState<string>();
   const [note, setNote] = useState<string>();
+  const p = plan.data;
+  const sent = useRef('');
+  // The typed name and note not yet saved. Back with the keyboard up can remove the screen before onEndEditing lands,
+  // so leaving saves them too; `sent` keeps a late onEndEditing from sending the same change twice.
+  const edits: UpdateDailyMealPlanInput = !p ? {} : {
+    ...(name?.trim() && name.trim() !== p.name ? { name: name.trim() } : {}),
+    ...(note !== undefined && note.trim() !== (p.notes ?? '') ? { notes: note.trim() } : {}),
+  };
+  const flush = () => {
+    const key = JSON.stringify(edits);
+    if (!p || key === '{}' || key === sent.current) return;
+    sent.current = key;
+    update.mutate({ id: p.id, input: edits },
+      { onSuccess: () => void HapticService.success(), onError: () => { sent.current = ''; void HapticService.error(); } });
+  };
+  const latest = useRef(flush);
+  useEffect(() => { latest.current = flush; });
+  useEffect(() => navigation.addListener('beforeRemove', () => latest.current()), [navigation]);
   const back = () => navigation.goBack();
   const onDark = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
@@ -58,7 +77,6 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
     );
   }
 
-  const p = plan.data;
   if (!p) {
     return (
       <Screen edges={['bottom']} contentStyle={styles.content}>
@@ -73,15 +91,13 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
   const slots = sortedSlots(p);
   const t = dayTotals(slots);
   const clients = byPlan && clientsOn(byPlan.get(p.id) ?? []).size;
-  const save = (input: UpdateDailyMealPlanInput) => update.mutate({ id: p.id, input },
-    { onSuccess: () => void HapticService.success(), onError: () => void HapticService.error() });
   return (
     <Screen edges={['bottom']} contentStyle={styles.content}
       footer={<PrimaryButton label="Assign to a client" disabled={!slots.length} accessibilityHint={slots.length ? undefined : 'Add a meal first'}
         onPress={() => navigation.navigate('MealPlanAssign', { planId: p.id })} testID="plan-assign" />}>
       <Masthead onBack={back} title={
         <TextInput value={name ?? p.name} onChangeText={setName} maxLength={120} accessibilityLabel="Day plan name"
-          onEndEditing={() => { if (name?.trim() && name.trim() !== p.name) save({ name: name.trim() }); }} style={[ms.title, styles.title, onDark]} />
+          onEndEditing={flush} style={[ms.title, styles.title, onDark]} />
       }>
         <View style={styles.big}>
           <Text style={[styles.kcal, onDark]}>{num(t.calories_kcal)}</Text>
@@ -95,7 +111,7 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
         <Text style={[typography.eyebrow, { color: sc.textPrimary }]}>Your note · clients see it</Text>
         <TextInput value={note ?? p.notes ?? ''} onChangeText={setNote} multiline maxLength={2000} accessibilityLabel="Your note on this plan, clients see it"
           placeholder="A line for clients, such as when to eat the bigger meal" placeholderTextColor={sc.textMuted}
-          onEndEditing={() => { if (note !== undefined && note.trim() !== (p.notes ?? '')) save({ notes: note.trim() }); }}
+          onEndEditing={flush}
           style={[styles.note, { color: sc.textPrimary }]} />
       </View>
       {slots.map((x, i) => {

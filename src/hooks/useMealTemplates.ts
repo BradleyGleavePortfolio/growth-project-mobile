@@ -154,7 +154,7 @@ export function useAssignDailyMealPlan() {
   });
 }
 
-/** Each plan's assignments, one GET a plan (the list has no count); `byPlan` is undefined until all read. */
+/** Each plan's assignments, one GET a plan (the list has no count); `byPlan` is undefined until all read, `error` is the first failed read. */
 export function useMealPlanAssignments(planIds: string[]) {
   return useQueries({
     queries: planIds.map((id) => ({
@@ -166,6 +166,7 @@ export function useMealPlanAssignments(planIds: string[]) {
       byPlan: results.every((r) => r.isSuccess)
         ? new Map(planIds.map((id, i) => [id, results[i].data as DailyMealPlanAssignment[]]))
         : undefined,
+      error: results.find((r) => r.error)?.error ?? null,
     }),
   });
 }
