@@ -11,7 +11,6 @@ jest.mock('../AuthNavigator', () => () => null);
 jest.mock('../ClientNavigator', () => () => null);
 jest.mock('../CoachNavigator', () => () => null);
 jest.mock('../OnboardingNavigator', () => () => null);
-jest.mock('../LeanOnboardingNavigator', () => () => null);
 jest.mock('../../components/OfflineBanner', () => () => null);
 jest.mock('../../screens/client/Day1WinScreen', () => () => null);
 jest.mock('../../services/support/crisp.service', () => ({
