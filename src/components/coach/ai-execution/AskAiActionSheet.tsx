@@ -228,12 +228,6 @@ export function AskAiActionSheet({
                   library. The right surface for that pick is the Workouts
                   / Meal Plans tab, where the picker already exists; we
                   will add an "Ask AI to schedule this" affordance there. */}
-              <View style={styles.followUpNote}>
-                <Text style={styles.followUpText}>
-                  Workout + meal plan AI suggestions land in a follow-up — coach
-                  picks the plan in its tab first, then asks AI to schedule.
-                </Text>
-              </View>
             </ScrollView>
           )}
 
@@ -390,18 +384,6 @@ function makeStyles(colors: ThemeColors) {
       color: colors.textMuted,
       marginTop: 2,
     },
-    followUpNote: {
-      marginTop: 16,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-    },
-    followUpText: {
-      ...typography.bodySmall,
-      color: colors.textMuted,
-    },
-
     promptBody: { paddingTop: 4 },
     promptHeaderRow: {
       flexDirection: 'row',

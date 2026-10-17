@@ -3,8 +3,10 @@
  *
  * Reads `/me/meal-plan/today` via `useMealPlanToday(dateIso?)`. The
  * endpoint returns one or more active assignments for the requested
- * date; we pick the most-recent (first in the API's starts_on DESC
- * order) and render its slots grouped by slot_label.
+ * date; we list every one, newest first (the API's starts_on DESC
+ * order), each with its slots grouped by slot_label. More > Meal plan
+ * opens this screen with no params, so a client with two active plans
+ * reaches and logs both here.
  *
  * Route param `date` (optional, ISO `YYYY-MM-DD`): when present, the
  * screen loads the plan that covers that day instead of today. Added
@@ -20,7 +22,7 @@
  * delivered meal_plan drop as a DailyMealPlanAssignment and stores its id in
  * `materialised_ref`, not a date. Delivered assignments start on delivery
  * day with no end, so the plan is among today's active assignments; the
- * screen shows exactly that assignment instead of the newest one. If it is
+ * screen shows exactly that assignment instead of every active one. If it is
  * absent, an honest unavailable state replaces another plan.
  *
  * When no assignment is active for the chosen day we render an honest
@@ -85,30 +87,10 @@ export default function ClientDailyMealPlanScreen() {
     void refetch();
   }, [refetch]);
 
-  const active: DailyMealPlanAssignmentWithPlan | null = useMemo(() => {
-    if (!data || data.assignments.length === 0) return null;
-    if (assignmentId) {
-      return data.assignments.find((a) => a.id === assignmentId) ?? null;
-    }
-    return data.assignments[0] ?? null;
+  const shown: DailyMealPlanAssignmentWithPlan[] = useMemo(() => {
+    const all = data?.assignments ?? [];
+    return assignmentId ? all.filter((a) => a.id === assignmentId) : all;
   }, [data, assignmentId]);
-
-  const groups = useMemo<Array<{ label: SlotLabel; slots: DailyMealPlanSlot[] }>>(() => {
-    if (!active) return [];
-    const byLabel = new Map<SlotLabel, DailyMealPlanSlot[]>();
-    for (const slot of active.daily_meal_plan.slots) {
-      const label = slot.slot_label as SlotLabel;
-      const list = byLabel.get(label) ?? [];
-      list.push(slot);
-      byLabel.set(label, list);
-    }
-    return SLOT_LABELS.filter((l) => byLabel.has(l)).map((label) => ({
-      label,
-      slots: (byLabel.get(label) ?? []).sort((a, b) => a.order - b.order),
-    }));
-  }, [active]);
-
-  const dayTotal = useMemo(() => formatDayTotal(active?.daily_meal_plan.slots ?? []), [active]);
 
   return (
     <ScrollView
@@ -140,30 +122,46 @@ export default function ClientDailyMealPlanScreen() {
             <Text style={[typography.bodySmall, { color: sc.textOnAccent }]}>Try again</Text>
           </HapticPressable>
         </View>
-      ) : !active && assignmentId ? (
+      ) : shown.length === 0 && assignmentId ? (
         <UnavailableState styles={styles} sc={sc} />
-      ) : !active ? (
+      ) : shown.length === 0 ? (
         <EmptyState styles={styles} sc={sc} dateOverride={dateParam} />
       ) : (
-        <>
-          <Text style={[typography.h2, { color: sc.textPrimary }]}>
-            {active.daily_meal_plan.name}
-          </Text>
-          {dayTotal ? (
-            <Text testID="daily-meal-plan-total"
-              style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
-              {dayTotal}
-            </Text>
-          ) : null}
-          {active.daily_meal_plan.notes ? (
-            <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{active.daily_meal_plan.notes}</Text>
-          ) : null}
-          {groups.map((g) => (
-            <SlotGroup key={g.label} label={g.label} slots={g.slots} sc={sc} styles={styles} />
-          ))}
-        </>
+        shown.map((a) => <PlanSection key={a.id} assignment={a} sc={sc} styles={styles} />)
       )}
     </ScrollView>
+  );
+}
+
+function PlanSection({ assignment, sc, styles }: {
+  assignment: DailyMealPlanAssignmentWithPlan;
+  sc: SemanticTokens;
+  styles: Styles;
+}) {
+  const plan = assignment.daily_meal_plan;
+  const byLabel = new Map<SlotLabel, DailyMealPlanSlot[]>();
+  for (const slot of plan.slots) {
+    const label = slot.slot_label as SlotLabel;
+    byLabel.set(label, [...(byLabel.get(label) ?? []), slot]);
+  }
+  const dayTotal = formatDayTotal(plan.slots);
+  return (
+    <>
+      <Text style={[typography.h2, { color: sc.textPrimary }]}>{plan.name}</Text>
+      {dayTotal ? (
+        <Text testID="daily-meal-plan-total"
+          style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
+          {dayTotal}
+        </Text>
+      ) : null}
+      {plan.notes ? (
+        <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{plan.notes}</Text>
+      ) : null}
+      {SLOT_LABELS.filter((l) => byLabel.has(l)).map((label) => (
+        <SlotGroup key={label} label={label} sc={sc} styles={styles}
+          slots={(byLabel.get(label) ?? []).sort((a, b) => a.order - b.order)} />
+      ))}
+    </>
   );
 }
 

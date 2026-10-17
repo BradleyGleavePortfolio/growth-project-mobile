@@ -58,6 +58,7 @@ import {
 import { getTodayString } from '../../utils/date';
 import { homeDateLine } from './homeDate';
 import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/workoutDoneToday';
+import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
 
 // ─── Progress line ────────────────────────────────────────────────────────────
@@ -191,7 +192,7 @@ export default function HomeScreen() {
         const savedWorkout = active.status === 'fulfilled' ? active.value?.session ?? null : null;
         if (!cancelled) {
           setWorkoutDone(done);
-          setPendingPlanName(pending?.workout_plan?.name?.trim() || null);
+          setPendingPlanName((pending && assignmentPlanName(pending)?.trim()) || null);
           setPendingAssignmentId(pending?.id ?? null);
           setHasCoachPlan(assignments.status === 'fulfilled' && assignments.value.some((assignment) => !!assignment.workout_plan));
           setActiveWorkout(savedWorkout);

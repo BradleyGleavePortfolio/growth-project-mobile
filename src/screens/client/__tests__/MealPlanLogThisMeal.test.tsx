@@ -100,3 +100,23 @@ it('parity, daily plan: one Log this meal per slot is the only new action; pull 
   await fireEvent(screen.getByTestId('daily-meal-plan-refresh'), 'refresh');
   expect(refetch).toHaveBeenCalledTimes(1);
 });
+
+// More > Meal plan opens the day plan with no params: every active plan for
+// the day is listed, newest first, and each plan's meals can be logged.
+it('More entry: two active plans are both listed, newest first, and both log', async () => {
+  const soup = { ...assignment.daily_meal_plan.slots[0], id: 's3', daily_meal_plan_id: 'dp2',
+    meal_template_id: 'm3', slot_label: 'lunch' as const, order: 0, meal_template: template('m3', 'Soup', 300, 15, 30, 8) };
+  const rest = { ...assignment, id: 'a2', daily_meal_plan_id: 'dp2', starts_on: '2026-09-20',
+    daily_meal_plan: { ...assignment.daily_meal_plan, id: 'dp2', name: 'Rest day', slots: [soup] } };
+  mockDaily.mockReturnValue({ data: { date: '2026-10-07', assignments: [assignment, rest] }, isLoading: false,
+    isError: false, isRefetching: false, refetch });
+  await render(<ClientDailyMealPlanScreen />);
+  expect(screen.getAllByText(/^(Coach plan|Rest day)$/).map((t) => t.props.children)).toEqual(['Coach plan', 'Rest day']);
+  expect(logButtons().map((b) => b.props.accessibilityLabel)).toEqual([
+    'Log this meal: Pasta', 'Log this meal: Banana', 'Log this meal: Soup',
+  ]);
+  await fireEvent.press(screen.getByLabelText('Log this meal: Soup'));
+  expect(await screen.findByText("Added to today's lunch.")).toBeTruthy();
+  expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Soup', calories: 300 }));
+  expect(logApi.logFood).toHaveBeenCalledWith(expect.objectContaining({ meal_type: 'lunch' }));
+});

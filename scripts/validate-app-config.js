@@ -738,6 +738,7 @@ function runtimeSourceFiles(root) {
 const EXPECTED_CHANNELS = {
   preview: { channel: 'preview', environment: 'preview' },
   production: { channel: 'production', environment: 'production' },
+  testing: { channel: 'testing', environment: 'production' },
   clinic: { channel: 'clinic', environment: 'production' },
   'clinic-apk': { channel: 'clinic-apk', environment: 'production' },
 };
