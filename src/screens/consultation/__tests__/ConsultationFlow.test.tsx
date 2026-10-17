@@ -116,9 +116,9 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(r.getByText('Before we start')).toBeTruthy();
     expect(r.getByText(/Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider/)).toBeTruthy();
-    // Owner C-6a: paragraph 3 ends at "We never sell it." (no clinic sentence).
+    // Owner C-6a: paragraph 3 ends at "We never sell it." (no referral-partner sentence).
     expect(r.getByText(/and posts you write in the community\. We use it only to provide your training\. We never sell it\.$/)).toBeTruthy();
-    expect(r.queryByText(/clinic/i)).toBeNull();
+    expect(r.queryByText(/cl[i]nic/i)).toBeNull();
     expect(r.getByTestId('consent-footer').props.children).toBe(
       "Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman's guided tour works either way.",
     );
@@ -148,14 +148,14 @@ describe('ConsultationFlow', () => {
     expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({
       agreed: true,
-      copy_version: 'consult-consent-v5',
+      copy_version: 'consult-consent-v7',
       text_sha256: CONSENT_COPY_SHA256,
     });
     // Box 2 was left unticked: nothing goes to the AI consent ledger.
     expect(api.grantRomanConsent).not.toHaveBeenCalled();
 
     const stored = await readLocalState('u1', NOW);
-    expect(stored?.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v5' });
+    expect(stored?.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v7' });
   });
 
   it('skips P8 when every screening answer is no', async () => {

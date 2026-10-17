@@ -40,6 +40,9 @@ import type { AccountBinding } from '../../services/accountBinding';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useRomanCrisisSentence } from '../../lib/romanCrisisSentence';
 import { useRomanChats, type RomanChatsNotice } from './useRomanChats';
+import { clientPrivacyText, signedInClientIsCoachless } from '../../lib/ai/aiCoachless';
+import { isCoachLikeRole } from '../../lib/roleSelectionGate';
+import { readUserCacheSync } from '../../lib/userCache';
 import RomanChatsConfirmSheet from './RomanChatsConfirmSheet';
 import RomanChatsSupportAction from './RomanChatsSupportAction';
 import {
@@ -49,6 +52,12 @@ import {
   ROMAN_CHATS_COPY,
   type RomanChatsFailureView,
 } from './romanChatsCopy';
+
+/** K1-5: a client with no coach reads what stays, with no coach in it; a coach account and a coached client as before. */
+const confirmAllBody = () =>
+  signedInClientIsCoachless() && !isCoachLikeRole(readUserCacheSync()?.role)
+    ? ROMAN_CHATS_COPY.confirmAllBodyNoCoach
+    : clientPrivacyText(ROMAN_CHATS_COPY.confirmAllBody);
 
 /** Params of the transcript screen (RomanConversationScreen). */
 export interface RomanConversationParams {
@@ -217,7 +226,7 @@ export default function RomanConversationsScreen({
 
   const intro = (
     <Text style={styles.body} testID="roman-chats-intro">
-      {crisisText(ROMAN_CHATS_COPY.intro)}
+      {clientPrivacyText(crisisText(ROMAN_CHATS_COPY.intro))}
     </Text>
   );
   // Every state that is not the list scrolls in this one container (the list
@@ -375,7 +384,7 @@ export default function RomanConversationsScreen({
         visible={allOpen}
         typed
         title={ROMAN_CHATS_COPY.confirmAllTitle}
-        body={ROMAN_CHATS_COPY.confirmAllBody}
+        body={confirmAllBody()}
         confirmLabel={ROMAN_CHATS_COPY.deleteAll}
         onCancel={() => setConfirmAll(null)}
         onConfirm={() => {

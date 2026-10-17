@@ -7,7 +7,12 @@
  *   - error branch sanitized copy + Retry,
  *   - expanded state renders all four fields + confidence chip label/%,
  *   - review sheet: open / edit-detection / dismiss,
- *   - approve 'ok' → panel replaced by the forward hook,
+ *   - what is sent is what the box holds: Roman's exact text is the only
+ *     `approve`, any other byte is an `edit` (b#1058 OPERATOR RULING 2),
+ *   - approve 'ok' → panel replaced by the forward hook; dismiss 'ok' → sheet
+ *     closes and the card folds, with no "Sent" claim,
+ *   - the server refusing an approve whose text is not Roman's (400) → the
+ *     existing error line,
  *   - approve failure (e.g. 404 from a deploy/route regression) → sheet stays
  *     open and surfaces sanitized, recoverable error copy + a Retry CTA,
  *   - no banned strings.
@@ -178,6 +183,70 @@ describe('review sheet', () => {
     expect(
       getByTestId('coach-insight-edit-send').props.accessibilityState.disabled,
     ).toBe(false);
+  });
+
+  // One rule for every send path: Roman's text byte for byte is the only
+  // `approve`; any other byte is the coach's `edit`, sent exactly as typed.
+  const ORIGINAL = fullInsight().suggested_message_draft;
+  it.each([
+    ['unchanged', ORIGINAL, 'approve'],
+    ['with a trailing space', `${ORIGINAL} `, 'edit'],
+    ['with a leading line break', `\n${ORIGINAL}`, 'edit'],
+    ['with one word changed', ORIGINAL.replace('Hey', 'Hi'), 'edit'],
+  ] as const)('text %s: only %s can send, with exactly that text', async (_case, text, action) => {
+    mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
+    const { getByTestId } = await openSheet();
+    await fireEvent.changeText(getByTestId('coach-insight-draft-input'), text);
+    const approveBtn = getByTestId('coach-insight-approve');
+    const editBtn = getByTestId('coach-insight-edit-send');
+    expect(approveBtn.props.accessibilityState.disabled).toBe(action !== 'approve');
+    expect(editBtn.props.accessibilityState.disabled).toBe(action !== 'edit');
+
+    await fireEvent.press(approveBtn);
+    await fireEvent.press(editBtn);
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(mockMutate.mock.calls[0][0]).toEqual({
+      clientId: 'client-1',
+      bucket: 'SLEEP_RECOVERY',
+      action,
+      draftBody: text,
+    });
+  });
+
+  it('a successful dismiss closes the sheet and folds the card, never claiming a send', async () => {
+    mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
+    mockMutate.mockImplementation((_vars, opts) => {
+      opts.onSuccess({
+        status: 'ok',
+        draft_id: '11111111-1111-1111-1111-111111111111',
+        materialised_at: '2026-05-20T10:00:00Z',
+      });
+    });
+    const { getByTestId, queryByTestId, queryByText } = await openSheet();
+    await fireEvent.press(getByTestId('coach-insight-dismiss'));
+    await waitFor(() => expect(queryByTestId('coach-insight-draft-input')).toBeNull());
+    expect(queryByTestId('coach-insight-sent')).toBeNull();
+    expect(queryByText(/^Sent to/)).toBeNull();
+    expect(getByTestId('coach-insight-panel').props.accessibilityState.expanded).toBe(false);
+    expect(queryByTestId('coach-insight-expanded')).toBeNull();
+  });
+
+  it("the server refusing an approve whose text is not Roman's (400) shows the existing error line", async () => {
+    mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
+    // The panel keys on the status, so the refusal's error code needs no copy of its own.
+    const mismatch = Object.assign(new Error('Request failed with status code 400'), {
+      isAxiosError: true,
+      response: { status: 400, data: { error: 'WEARABLE_SUGGESTION_MISMATCH' } },
+    });
+    mockMutate.mockImplementation((_vars, opts) => {
+      opts.onError(mismatch);
+    });
+    const { getByTestId, getByText, queryByTestId } = await openSheet();
+    await fireEvent.press(getByTestId('coach-insight-approve'));
+    await waitFor(() => expect(getByTestId('coach-insight-sheet-error')).toBeTruthy());
+    expect(getByText("Couldn't send right now. Try again.")).toBeTruthy();
+    expect(getByTestId('coach-insight-draft-input')).toBeTruthy();
+    expect(queryByTestId('coach-insight-sent')).toBeNull();
   });
 
   it('Approve & send sends the ORIGINAL body with action approve', async () => {

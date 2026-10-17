@@ -73,6 +73,7 @@ import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { authEvents } from '../utils/authEvents';
 import { isStartupTimeout, withStartupTimeout } from '../lib/startupTimebox';
 import { secureStorage } from './secureStorage';
+import { refreshRealtimeAuth } from './realtime';
 import { env } from '../config/env';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
@@ -328,6 +329,8 @@ async function performRefresh(startGeneration: number): Promise<string> {
   } finally {
     fence.release();
   }
+  // MSGRT-M: the private message channel reads the new token (never logged).
+  refreshRealtimeAuth();
   // Bump only on success — failures must not advance the cycle, otherwise a
   // stale request would think the next cycle's token is in play and ask for
   // a third refresh.

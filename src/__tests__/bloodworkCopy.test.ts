@@ -8,7 +8,7 @@
  * the rule exists so the surface stays clearly non-medical.
  *
  * Also asserts that the long-form disclaimer keeps the required safety
- * phrases ("not medical advice", "not a diagnosis", "clinician").
+ * phrases ("not medical advice", "not a diagnosis", "doctor").
  */
 
 import * as copy from '../constants/bloodworkCopy';

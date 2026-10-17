@@ -163,7 +163,11 @@ export type ApproveResponse = z.infer<typeof ApproveResponseSchema>;
 export interface ApproveDraftPayload {
   clientId: string;
   bucket: WearableMetricBucket;
-  /** May differ from `suggested_message_draft` when the coach edited the text. */
+  /**
+   * `approve`: Roman's `suggested_message_draft` byte for byte (the server
+   * refuses other text with a 400). `edit`: the coach's text whenever it
+   * differs at all, even by a space. `dismiss`: '' (nothing is sent).
+   */
   draftBody: string;
   action: 'approve' | 'edit' | 'dismiss';
 }
