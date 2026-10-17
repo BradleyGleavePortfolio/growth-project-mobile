@@ -16,7 +16,8 @@
  * on, and stays empty otherwise.
  *
  * `layout="rings"` (UI-1 rings Home): a coachless client sees Roman locked
- * ("Opens with a coach", status only) instead of "Ask Roman" (139-15).
+ * ("Opens with a coach") instead of "Ask Roman" (139-15). The tap opens Roman's
+ * existing lock screen (Join a coach), never a chat (owner 10-17: no dead tap).
  *
  * The coach name comes from `GET /v1/clients/me/coach` (same endpoint as
  * CoachIntroductionBanner); any failure keeps the generic label.
@@ -151,15 +152,15 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
           </Text>
           <NotificationBadge count={unreadMessages} />
         </Pressable>
-      ) : userKnown && rings ? (
-        <View style={styles.message} testID="home-roman-locked-header" accessible
-          accessibilityLabel="Roman. Opens with a coach">
+      ) : userKnown && rings && featureFlags.romanChat ? (
+        <Pressable onPress={openRoman} accessibilityRole="button" accessibilityLabel="Roman. Opens with a coach"
+          testID="home-roman-locked-header" style={({ pressed }) => [styles.message, { opacity: pressed ? 0.85 : 1 }]}>
           <LockedRomanAvatar />
           <View style={styles.lockedText}>
             <Text style={[typography.bodyMd, styles.lockedName, { color: sc.textPrimary }]}>Roman</Text>
             <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Opens with a coach</Text>
           </View>
-        </View>
+        </Pressable>
       ) : userKnown && featureFlags.romanChat ? (
         <Pressable
           onPress={openRoman}
