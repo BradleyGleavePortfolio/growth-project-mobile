@@ -46,6 +46,18 @@ const isProductionBuild =
     // initDatabase() in screenshot mode, so a no-op shim is correct and safe.
     // Production builds (no EXPO_PUBLIC_SCREENSHOT_MODE) take the original path.
     if (
+      !isProductionBuild &&
+      process.env.EXPO_PUBLIC_SCREENSHOT_MODE === '1' &&
+      /\/src\/(services\/realtime|api\/communityRealtime)(\.ts)?$/.test(
+        path.resolve(path.dirname(context.originModulePath), moduleName),
+      )
+    ) {
+      // Fixtures never join a live user's channel, on web or native.
+      return { type: 'sourceFile', filePath: path.resolve(__dirname, 'src/screenshots/realtimeStub.js') };
+    }
+
+    if (
+      !isProductionBuild &&
       process.env.EXPO_PUBLIC_SCREENSHOT_MODE === '1' &&
       platform === 'web' &&
       ['expo-sqlite', '@stripe/stripe-react-native', 'crisp-sdk-react-native'].includes(moduleName)
