@@ -61,9 +61,11 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
     { enabled: !!currentUser },
   );
   const checkIn = useTodayCheckIn(today, !!currentUser);
+  const { refetch: refetchSleep } = sleepRead;
+  const { refetch: refetchCheckIn } = checkIn;
   const refresh = useCallback(async () => {
-    await Promise.all([onRefresh(), sleepRead.refetch(), checkIn.refetch()]);
-  }, [onRefresh, sleepRead.refetch, checkIn.refetch]);
+    await Promise.all([onRefresh(), refetchSleep(), refetchCheckIn()]);
+  }, [onRefresh, refetchSleep, refetchCheckIn]);
 
   const food = foodDial({ ready: day.ready && !day.error, eaten: day.calories, target: day.calorieTarget });
   const train = trainDial({
