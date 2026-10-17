@@ -7,9 +7,7 @@
  * to the appropriate draft screen.
  *
  * The section calls `GET /coach/ai/status` on mount. When `ready=false`
- * the CTAs render in a disabled state with a caption explaining that
- * the owner must set `ANTHROPIC_API_KEY` in Fly secrets to bring AI
- * back online — see backend 503 contract in `coachAi.ts`.
+ * the CTAs render in a disabled state with a calm retry caption.
  *
  * Doctrine-clean: no emoji, no hex literals, theme tokens only.
  */
@@ -36,10 +34,12 @@ import type { CoachAiDraftType, CoachAiStatus } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
 import AiRefusalNotice from '../ai/AiRefusalNotice';
 import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
+import { layout } from '../../theme/tokens';
 
 // How long the post-timeout poll runs (2 extra minutes) and the interval.
 const POLL_INTERVAL_MS = 10_000;
 const POLL_MAX_DURATION_MS = 120_000;
+const AI_UNAVAILABLE = 'AI is temporarily unavailable. Try again later.';
 
 type Mode = 'workout' | 'meal' | 'insight' | null;
 
@@ -242,7 +242,7 @@ export default function CoachAiSection({
         closeModal();
         startBackgroundPoll(clientId);
       } else if (isAiDisabledError(err)) {
-        setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
+        setSubmitError(AI_UNAVAILABLE);
         await fetchStatus();
       } else {
         setSubmitError(errorMessage(err, 'Could not generate program.'));
@@ -303,7 +303,7 @@ export default function CoachAiSection({
         closeModal();
         startBackgroundPoll(clientId);
       } else if (isAiDisabledError(err)) {
-        setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
+        setSubmitError(AI_UNAVAILABLE);
         await fetchStatus();
       } else {
         setSubmitError(errorMessage(err, 'Could not generate meal plan.'));
@@ -332,7 +332,7 @@ export default function CoachAiSection({
         closeModal();
         startBackgroundPoll(clientId);
       } else if (isAiDisabledError(err)) {
-        setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
+        setSubmitError(AI_UNAVAILABLE);
         await fetchStatus();
       } else {
         setSubmitError(errorMessage(err, 'Could not generate insight.'));
@@ -366,7 +366,7 @@ export default function CoachAiSection({
 
       {!ready && !statusLoading ? (
         <Text style={styles.offlineCaption} testID="coach-ai-offline-caption">
-          AI offline — owner action required
+          {AI_UNAVAILABLE}
         </Text>
       ) : null}
       {statusError ? (
@@ -1084,6 +1084,7 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     inboxBtn: {
+      minHeight: layout.touchMin,
       flexDirection: 'row' as const,
       alignItems: 'center',
       gap: 6,

@@ -66,6 +66,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key. On only for the preview and clinic-apk profiles (the directly installed Android test apps): credit packs open Stripe Checkout in the system browser on Android."
     },
+    "EXPO_PUBLIC_FF_C3_STYLE_B": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (client coach thread in Style B, C3B-THREAD). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT": {
       "kind": "flag",
       "default": "on in dev, off in release",
@@ -79,7 +84,7 @@
     "EXPO_PUBLIC_FF_CLIENT_HOME_RINGS": {
       "kind": "flag",
       "default": "off",
-      "reason": "UI-1 rings and tiles client Home (featureFlags.clientHomeRings); off in every eas.json profile until the owner switches it on."
+      "reason": "UI-1 rings and tiles client Home (featureFlags.clientHomeRings); default off; no eas.json profile sets it, so it stays off until the owner switches it on."
     },
     "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": {
       "kind": "flag",
@@ -95,6 +100,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COACH_TABS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (COACHTABS: the six coach tabs)."
     },
     "EXPO_PUBLIC_FF_COMMUNITY_ACKS": {
       "kind": "flag",
@@ -220,6 +230,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Roman draft marks stay off by default; the operator switches them on once the backend gates in m#731 hold."
     },
     "EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW": {
       "kind": "flag",
@@ -373,6 +388,13 @@
       "require": [],
       "stripe": "any",
       "reason": "Internal APK/TestFlight test builds: required names and placeholders only; Stripe test keys allowed."
+    },
+    "testing": {
+      "require": [
+        "EXPO_PUBLIC_SENTRY_DSN"
+      ],
+      "stripe": "live",
+      "reason": "Device-loop TestFlight build (docs/DEVICE_LOOP.md): the production build on the testing update channel, so it gets the production checks."
     }
   }
 }

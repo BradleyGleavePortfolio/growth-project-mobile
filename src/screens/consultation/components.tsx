@@ -370,6 +370,7 @@ export function Checkbox({
   testID,
   disabled = false,
   hint,
+  detail,
 }: {
   checked: boolean;
   onToggle: () => void;
@@ -378,15 +379,18 @@ export function Checkbox({
   /** Not tappable yet (box 2 while the saved choice is being read, Opus C-310-7). */
   disabled?: boolean;
   hint?: string;
+  /** A line under the label (COACH-AI-CONSENT sign-up box: CAC-2 under CAC-1); read as the hint. */
+  detail?: string;
 }) {
   const { s, palette } = useConsultationStyles();
+  const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null]}>{label}</Text>;
   return (
     <Pressable
       onPress={disabled ? undefined : onToggle}
       disabled={disabled}
       accessibilityRole="checkbox"
       accessibilityLabel={label}
-      accessibilityHint={hint}
+      accessibilityHint={hint ?? detail}
       accessibilityState={disabled ? { checked, disabled: true, busy: true } : { checked }}
       testID={testID}
       style={({ pressed }) => [s.checkRow, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
@@ -394,7 +398,14 @@ export function Checkbox({
       <View style={[s.box, checked && s.boxOn]}>
         {checked ? <Ionicons name="checkmark" size={16} color={palette.onAccent} /> : null}
       </View>
-      <Text style={s.checkLabel}>{label}</Text>
+      {detail ? (
+        <View style={s.checkText}>
+          {text}
+          <Text style={s.checkDetail}>{detail}</Text>
+        </View>
+      ) : (
+        text
+      )}
     </Pressable>
   );
 }
@@ -467,7 +478,10 @@ const ROW_H = 44;
 
 /**
  * Prototype T-D wheels: the selected value at full ink, its neighbours
- * fading with distance (B2, B3, B4).
+ * fading with distance (B2, B3, B4). FIXAGE2 R6: `value` null is a wheel
+ * nothing was picked on yet: it rests at `anchor` with every row the same
+ * (muted, full strength, so AA contrast; FIXAGE3), and the first scroll or
+ * adjust picks a row (even the anchor's).
  */
 export function wheelOpacity(distance: number): number {
   const d = Math.abs(distance);
@@ -478,20 +492,23 @@ export function Wheel<T extends string | number>({
   label,
   values,
   value,
+  anchor,
   onChange,
   format,
   testID,
 }: {
   label: string;
   values: readonly T[];
-  value: T;
+  value: T | null;
+  anchor?: T;
   onChange: (v: T) => void;
   format?: (v: T) => string;
   testID?: string;
 }) {
   const { s } = useConsultationStyles();
   const ref = useRef<ScrollView>(null);
-  const idx = Math.max(0, values.indexOf(value));
+  const unset = value === null;
+  const idx = Math.max(0, values.indexOf(value ?? anchor ?? values[0]));
   const fmt = useMemo(() => format ?? ((v: T) => String(v)), [format]);
 
   useEffect(() => {
@@ -501,7 +518,7 @@ export function Wheel<T extends string | number>({
   const settle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = Math.round(e.nativeEvent.contentOffset.y / ROW_H);
     const clamped = Math.min(values.length - 1, Math.max(0, i));
-    if (values[clamped] !== value) onChange(values[clamped]);
+    if (unset || values[clamped] !== value) onChange(values[clamped]);
   };
 
   // ONB-SWEEP U4: a flick settles on momentum end. Settling at the release
@@ -525,7 +542,7 @@ export function Wheel<T extends string | number>({
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel={label}
-      accessibilityValue={{ text: fmt(value) }}
+      accessibilityValue={value === null ? undefined : { text: fmt(value) }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={onAction}
       testID={testID}
@@ -547,7 +564,7 @@ export function Wheel<T extends string | number>({
       >
         {values.map((v, i) => (
           <View key={String(v)} style={s.wheelRow}>
-            <Text style={[s.wheelText, { opacity: wheelOpacity(i - idx) }, i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
+            <Text style={[s.wheelText, { opacity: unset ? 1 : wheelOpacity(i - idx) }, !unset && i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
           </View>
         ))}
       </ScrollView>
@@ -671,6 +688,9 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   },
   boxOn: { backgroundColor: palette.accent, borderColor: palette.accent },
   checkLabel: { ...typography.bodyMd, color: palette.ink, flex: 1 },
+  checkTitle: { fontFamily: 'Inter_600SemiBold', flex: 0 },
+  checkText: { flex: 1, gap: spacing.xs },
+  checkDetail: { ...typography.bodySmall, color: palette.charcoal },
   inputWrap: { marginTop: spacing.lg },
   flabel: { ...typography.eyebrow, color: palette.muted, marginBottom: spacing.sm },
   field: {

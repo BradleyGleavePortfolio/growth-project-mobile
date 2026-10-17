@@ -54,7 +54,7 @@ export function habitsSummary(done: number, total: number): string {
   return `${cap(word(done))} of ${word(total)} done today.`;
 }
 
-export default function HabitsScreen() {
+export default function HabitsScreen({ onSaved }: { onSaved?: () => void }) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const today = getTodayString();
@@ -177,6 +177,9 @@ export default function HabitsScreen() {
         value: newCompleted ? habit.targetCount || 1 : 0,
       },
       {
+        onSuccess: () => {
+          if (newCompleted) onSaved?.();
+        },
         onError: (err) => {
           Alert.alert("Couldn't update habit", errorMessage(err, 'The habit was not updated. Try again.'));
         },
@@ -187,7 +190,7 @@ export default function HabitsScreen() {
   const handleDelete = (habit: HabitView) => {
     Alert.alert(
       'Delete habit',
-      `Are you sure you want to delete "${habit.name}"? This will remove the habit and all its history.`,
+      `Remove ${habit.name}? Its history stays.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

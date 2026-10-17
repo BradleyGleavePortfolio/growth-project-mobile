@@ -81,7 +81,7 @@ export function FoodLogReviewSection({
             <TouchableOpacity
               key={d}
               onPress={() => setDays(d)}
-              style={[styles.foodReviewChip, { minHeight: 44, justifyContent: 'center' }, days === d && styles.foodReviewChipActive]}
+              style={[styles.foodReviewChip, days === d && styles.foodReviewChipActive]}
               accessibilityRole="button"
               accessibilityLabel={`Review the last ${d} days of food logs`}
               accessibilityState={{ selected: days === d }}

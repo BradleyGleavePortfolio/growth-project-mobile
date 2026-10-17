@@ -428,7 +428,7 @@ export default function ClientPackagesScreen() {
           <Text style={styles.gateTitle}>No self-serve plans yet</Text>
           <Text style={styles.gateBody}>
             Your coach handles access directly. Message them to start or
-            change a plan — no payment is taken inside the app until they
+            change a plan. No payment is taken inside the app until they
             enable it.
           </Text>
           <TouchableOpacity

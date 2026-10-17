@@ -58,6 +58,7 @@ import {
 import { getTodayString } from '../../utils/date';
 import { homeDateLine } from './homeDate';
 import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/workoutDoneToday';
+import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
 import { featureFlags } from '../../config/featureFlags';
 // UI-1 rings and tiles layout, behind featureFlags.clientHomeRings (off in every profile).
@@ -195,7 +196,7 @@ export default function HomeScreen() {
         const savedWorkout = active.status === 'fulfilled' ? active.value?.session ?? null : null;
         if (!cancelled) {
           setWorkoutDone(done);
-          setPendingPlanName(pending?.workout_plan?.name?.trim() || null);
+          setPendingPlanName((pending && assignmentPlanName(pending)?.trim()) || null);
           setPendingAssignmentId(pending?.id ?? null);
           setHasCoachPlan(assignments.status === 'fulfilled' && assignments.value.some((assignment) => !!assignment.workout_plan));
           setActiveWorkout(savedWorkout);

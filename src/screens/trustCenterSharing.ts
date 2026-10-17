@@ -5,7 +5,9 @@
  * - the coach reads consultation answers on the coach link alone
  *   (onboarding.service.ts canCoachRead), not through the switches;
  * - the coach reads connected-device data (Apple Health, Health Connect) on
- *   the coach link alone (coachSharingCopy.devicesNote);
+ *   the coach link alone, except weight and body fat, which follow Weigh-ins
+ *   (coachSharingCopy.devicesNote; the line below is unchanged, WEIGHTWALL
+ *   Owner item C);
  * - workouts, food logs, weigh-ins, check-ins and habits only while their
  *   switch is on, except a coach on the TGP owner account (owner_access),
  *   which sees them even when they are off.
@@ -64,6 +66,9 @@ export function trustCoachLine(view: TrustCoachView): string | null {
 /** Roman conversations: "Not your coach" only when there is a coach. */
 export function trustRomanLine(view: TrustCoachView): string {
   return view.kind === 'read' || view.kind === 'unread'
-    ? 'Not your coach — your Roman conversations, which are kept until you delete them or your account'
+    ? sentences([
+        'Not your coach — your Roman conversations, which are kept until you delete them or your account',
+        'One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.',
+      ])
     : 'Your Roman conversations are kept until you delete them or your account';
 }

@@ -421,6 +421,8 @@ src/
 
 ## Navigation
 
+Coach tabs (COACHTABS, behind `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off): Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from a gear on Overview, Community from Messages and Team from Clients; every existing route and push target still lands. With it on, coaches open the app on Overview. Off, the coach bar and the Clients landing are unchanged. See `src/navigation/README.md`.
+
 New clients complete either LeanQ1–LeanQ6 or the available consultation. Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
 
 The current coach wizard keeps five setup routes. It respects top/bottom safe insets, and Back on a cold-resumed step replaces with the preceding route rather than doing nothing or cycling forward. Step 1 has no earlier setup route. Stripe configuration unavailability does not block Continue setup; the verification resend action shows its busy state and a live cooldown. See `src/navigation/README.md` and `src/screens/auth/README.md` (COACH-EDGES-132, agent 132).
@@ -441,7 +443,7 @@ The orphan coach `CoachMealTemplates` route is not registered. No entry action o
 - Messages is not behind the client paywall: basic text DM with the coach is free server-side (only voice upload is paid).
 - The Membership screen's website link is not rendered on hidden iOS builds.
 - API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy`. The backend does not read the policy header yet (planned follow-up), so today it is advisory. The OTA publish guard is planned in #305; expo-updates is not configured at this head.
-- `IOS_P2P_ONLY_MIN_NATIVE_BUILD` is 6, the native anchor; `app.json` `ios.buildNumber` is 9 (build 8 is already uploaded). `scripts/validate-app-config.js` fails anything below 6.
+- `IOS_P2P_ONLY_MIN_NATIVE_BUILD` is 6, the native anchor; `app.json` `ios.buildNumber` is 10 (build 9 is already uploaded). `scripts/validate-app-config.js` fails anything below 6.
 Auth stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection` (params `{ inviteAttachError?, inviteCode? }`), `AcceptInvite`, `ResetPassword`. The signup policy (`GET /auth/signup-policy`) is read through `src/lib/signupPolicy.ts` by CreateAccount, RoleSelection and Login. See `src/navigation/README.md` for invite redemption and retry.
 
 New clients see `LeanOnboardingNavigator`, or `ConsultationOnboardingNavigator` (the full consultation, `src/screens/consultation/README.md`) when `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` is on. That flag is off by default and on in the `clinic` EAS profile.

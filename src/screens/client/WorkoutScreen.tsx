@@ -45,6 +45,7 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 // registered in MoreStack for a while but no UI surfaced a navigate call,
 // so this build hid them from the user entirely.
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
+import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 // Clinic tutorial (C08): pinned plan explanation card; flag-gated, renders
 // nothing unless featureFlags.clientTutorial and a program exists.
 import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
@@ -616,13 +617,8 @@ export default function WorkoutScreen() {
     id: string;
     completed_at: string | null;
     workout_plan?: { name?: string } | null;
-  }> = Array.isArray(assignmentsQuery.data)
-    ? (assignmentsQuery.data as Array<{
-        id: string;
-        completed_at: string | null;
-        workout_plan?: { name?: string } | null;
-      }>)
-    : [];
+    snapshot?: { plan_name?: string } | null;
+  }> = Array.isArray(assignmentsQuery.data) ? assignmentsQuery.data : [];
   const pendingAssignments = assignmentsList.filter((a) => !a.completed_at);
   const historyRows =
     showAllHistory && historySessions.length > recentSessions.length ? historySessions : recentSessions;
@@ -659,11 +655,11 @@ export default function WorkoutScreen() {
   // workout and Create a routine stay; only what did not load is replaced.
   const assignedLabel =
     pendingAssignments.length === 1
-      ? `Open assigned workout: ${pendingAssignments[0].workout_plan?.name ?? 'Coach-assigned workout'}`
+      ? `Open assigned workout: ${assignmentPlanName(pendingAssignments[0]) ?? 'Coach-assigned workout'}`
       : `View ${pendingAssignments.length} coach-assigned workouts`;
   const assignedTitle =
     pendingAssignments.length === 1
-      ? (pendingAssignments[0].workout_plan?.name ?? 'New workout assigned')
+      ? (assignmentPlanName(pendingAssignments[0]) ?? 'New workout assigned')
       : `${pendingAssignments.length} workouts waiting`;
   const assignedLeads = !loadError && pendingAssignments.length > 0;
   const quickLeads = !loadError && pendingAssignments.length === 0;
