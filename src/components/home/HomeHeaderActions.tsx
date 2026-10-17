@@ -216,7 +216,8 @@ const styles = StyleSheet.create({
   ringsRow: { marginBottom: 20 },
   lockedText: { marginLeft: 12, flexShrink: 1 },
   lockedName: { lineHeight: 22 },
-  dimmed: { opacity: 0.55 },
+  // Paler, as drawn, while Roman's "R" keeps 4.5:1 on its gold circle.
+  dimmed: { opacity: 0.8 },
   lock: {
     position: 'absolute', right: -5, bottom: -5, width: 18, height: 18, borderRadius: radius.chip, borderWidth: 2,
     alignItems: 'center', justifyContent: 'center',
