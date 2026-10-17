@@ -37,6 +37,7 @@ import {
 } from '../services/accountBinding';
 import { supportReferenceOf } from '../utils/correlation';
 import type { RomanMessage, RomanSurface } from './romanApi';
+import { RomanSafetyActionsWireSchema, toSafetyActions } from './romanSafetyActions';
 
 /** Backend default and maximum page size (roman.constants.ts). */
 export const ROMAN_CHATS_PAGE_LIMIT = 30;
@@ -81,6 +82,7 @@ const RomanTranscriptMessageSchema = z
     content: z.string(),
     interrupted: z.boolean(),
     createdAt: IsoSchema,
+    safety_actions: RomanSafetyActionsWireSchema,
   })
   .strict();
 
@@ -287,13 +289,17 @@ export const romanChatsApi: RomanChatsApi = {
       return {
         ok: true,
         value: {
-          messages: parsed.data.messages.map((m) => ({
-            id: m.id,
-            role: m.role === 'roman' ? 'assistant' : 'user',
-            content: m.content,
-            interrupted: m.interrupted,
-            createdAt: m.createdAt,
-          })),
+          messages: parsed.data.messages.map((m): RomanMessage => {
+            const safetyActions = toSafetyActions(m.safety_actions);
+            return {
+              id: m.id,
+              role: m.role === 'roman' ? 'assistant' : 'user',
+              content: m.content,
+              interrupted: m.interrupted,
+              createdAt: m.createdAt,
+              ...(safetyActions ? { safetyActions } : {}),
+            };
+          }),
           nextCursor: parsed.data.nextCursor,
         },
       };

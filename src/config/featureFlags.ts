@@ -41,6 +41,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
+  EXPO_PUBLIC_FF_CRISIS_ACTIONS: process.env.EXPO_PUBLIC_FF_CRISIS_ACTIONS,
   EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: process.env.EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE,
   EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES: process.env.EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES,
   EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS,
@@ -101,6 +102,15 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_COACH_TABS_V2
    */
   coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', false),
+
+  /**
+   * CRISIS-BTN (owner "#CRISIS-2B - all 3 buttons"): Call 988, Text 988 and
+   * Message <coach> under Roman's fixed crisis reply, only when the server
+   * marks that reply. Default off; off, the room and transcript are today's.
+   *
+   * env: EXPO_PUBLIC_FF_CRISIS_ACTIONS
+   */
+  crisisActions: readFlag('EXPO_PUBLIC_FF_CRISIS_ACTIONS', false),
 
   // ─── Bloodwork ────────────────────────────────────────────────────────────
   /**
