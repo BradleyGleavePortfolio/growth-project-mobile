@@ -48,12 +48,14 @@ export default function WeightTrendChartDark({
   const heading = period === '7D' ? 'Weight trend this week' : period === '30D'
     ? 'Weight trend for 30 days' : `Weight trend since ${date(data.length ? Math.min(...data.map((p) => p.x)) : first.x)}`;
   const delta = last.y - first.y;
-  const change = `${delta < 0 ? 'Down' : 'Up'} ${pounds(Math.abs(delta))} lb`;
+  const change = Math.round(delta * 10) === 0 ? 'Steady' : `${delta < 0 ? 'Down' : 'Up'} ${pounds(Math.abs(delta))} lb`;
   const lastReading = [...days].reverse().find((p) => p.weight != null)
     ?? weightTrend(data, through).filter((p) => p.weight != null).pop();
   const missed = last.gap && last.weight == null;
   const label = last.count === 1
     ? `First weigh-in, ${pounds(last.y)} lb, ${date(lastReading?.x ?? first.x)}. This is your starting point.`
+    : missed && lastReading
+    ? `${heading}. Last weigh-in ${date(lastReading.x)}, trend ${pounds(last.y)} lb.${showGoal ? ` ${goalLabel}.` : ''}`
     : `${heading}, now ${pounds(last.y)} lb, ${change}.${band ? ` ${range}.` : ''}${showGoal ? ` ${goalLabel}.` : ''}`;
   const describe = (index: number) => {
     const p = days[index];
