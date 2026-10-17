@@ -39,7 +39,8 @@ fill. Single readings remain dots, while the trend begins with the second readin
 Keep full history before period filtering: the 0.1 update runs on weigh-in days
 only, and three missing days cause a dashed carry rather than a fabricated change.
 Week uses whole-pound ticks; other weight views use two-pound ticks. Fewer labels
-at 130% retain that scale. Period changes fade 150 ms, instant with Reduce Motion.
+at 130% retain that scale. Period changes fade 150 ms and their underline slides
+200 ms; both are instant with Reduce Motion.
 The caller gates the dark variant with clientProgressV2, off by default.
 
 ### TgpBarChart

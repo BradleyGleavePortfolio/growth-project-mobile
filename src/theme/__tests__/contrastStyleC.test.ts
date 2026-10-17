@@ -1,7 +1,7 @@
 // Style C v2 (MOCK-C1V2 index-v2 sections 4-5): every new text and chart pair
 // clears WCAG 2.x in light and dark. Text needs 4.5:1 (1.4.3); chart marks and
 // rings need 3:1 (1.4.11). The table matches src/theme/README.md.
-import { colors, lightTokens, darkTokens, type SemanticTokens } from '../tokens';
+import { brand, colors, lightTokens, darkTokens, type SemanticTokens } from '../tokens';
 
 function lum(hex: string): number {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
@@ -30,6 +30,7 @@ const pairs = (t: SemanticTokens): Array<[string, string, string, number]> => [
   ['weight goal across range', t.data.goal, t.data.range, MARK],
   ['weight pending ring', t.data.pending, t.surface.masthead, MARK],
   ['weight empty frame', t.data.frameOnDark, t.surface.masthead, MARK],
+  ['weight touch chip', colors.ink, t.textOnAccent, TEXT],
   ['masthead, error card edge', colors.warningBg, t.surface.masthead, MARK],
   ['forest band, primary text', t.textOnAccent, t.surface.forestBand, TEXT],
   ['forest band, secondary text', t.textOnMastheadMuted, t.surface.forestBand, TEXT],
@@ -109,6 +110,7 @@ it('keeps the index-v2 section 4 light values', () => {
 it.each([lightTokens, darkTokens])('keeps all six weight roles as aliases', (t) => {
   expect(t.data.trend).toBe(t.data.leaf);
   expect(t.data.pending).toBe(t.data.trend);
+  expect(t.data.range).toBe(brand[500]);
   expect(t.data.weighIn).toBe(t.textOnMastheadMuted);
   expect(t.data.goal).toBe(t.data.peak);
   expect(t.data.frameOnDark).toBe(t.data.plannedOnDark);
