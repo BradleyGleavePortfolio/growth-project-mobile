@@ -152,12 +152,12 @@ it('Sleep with only an older night shows the existing empty state, with a matchi
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Connections', initial: false });
 });
 
-it('Sleep retains the 130% font limits and two-line supporting layout', async () => {
+it('Sleep keeps the ring text limit (115%, so 130% never runs into the ring) and two-line supporting layout', async () => {
   mockSleepData = sleepData(getTodayString());
   await render(<HomeScreen />);
   expect(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep')).toHaveStyle({ minHeight: 44, width: '33%' });
-  expect(screen.getByText('78%').props.maxFontSizeMultiplier).toBe(1.3);
-  expect(screen.getByText('recovered').props.maxFontSizeMultiplier).toBe(1.3);
+  expect(screen.getByText('78%').props.maxFontSizeMultiplier).toBe(1.15);
+  expect(screen.getByText('recovered').props.maxFontSizeMultiplier).toBe(1.15);
   expect(screen.getByText('7 h 20 m asleep').props.numberOfLines).toBe(2);
 });
 
