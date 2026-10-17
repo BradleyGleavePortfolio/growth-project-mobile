@@ -128,15 +128,13 @@ describe('FOOD-COACH-124 normal-day regressions', () => {
     await waitFor(() => expect(screen.getByText('167% of current daily calorie target')).toBeTruthy());
   });
 
-  it('offers the existing message and meal-plan actions without claiming adherence', async () => {
+  it('offers the existing message action and no retired meal-plan action', async () => {
     respondWithPages([[meal('one')]]);
     const onOpenMessages = jest.fn();
-    const onOpenMealPlans = jest.fn();
-    await render(<FoodLogReviewSection {...reviewProps} onOpenMessages={onOpenMessages} onOpenMealPlans={onOpenMealPlans} />);
+    await render(<FoodLogReviewSection {...reviewProps} onOpenMessages={onOpenMessages} />);
     await fireEvent.press(screen.getByText('Send feedback'));
-    await fireEvent.press(screen.getByText('Meal plans'));
     expect(onOpenMessages).toHaveBeenCalledTimes(1);
-    expect(onOpenMealPlans).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Meal plans')).toBeNull();
   });
 
   it('distinguishes withheld food consent from no logged food', async () => {
