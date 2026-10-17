@@ -446,8 +446,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             </Text>
           </View>
           <View style={styles.headerLabels}>
-            <Text style={styles.clientName} numberOfLines={2}>{clientName}</Text>
-            <Text style={styles.clientStatus} numberOfLines={1}>
+            <Text style={styles.clientName}>{clientName}</Text>
+            <Text style={styles.clientStatus}>
               {[
                 isArchived === true ? 'Archived client' : isArchived === false ? 'Active client' : null,
                 profile?.primaryGoal?.replace(/_/g, ' '),
