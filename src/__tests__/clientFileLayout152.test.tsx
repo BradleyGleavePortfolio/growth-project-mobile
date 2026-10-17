@@ -219,6 +219,32 @@ it('CF2: shared Coach AI form controls use semantic radii and 44 pt targets, ret
   }
 });
 
+it.each([
+  ['workout', 'days', [1, 2, 3, 4, 5, 6, 7], 'dpw'],
+  ['insight', 'window', [7, 14, 30], 'window'],
+] as const)('CF2 B1: %s numeric options share one non-wrapping, equal-width row', async (kind, row, values, option) => {
+  const v = await render(<CoachAiSection {...props} />);
+  await fireEvent.press(v.getByTestId(`coach-ai-cta-${kind}`));
+  const rowStyle = flat(v.getByTestId(`coach-ai-${kind}-${row}-row`).props.style);
+  expect(rowStyle).toMatchObject({ flexDirection: 'row', flexWrap: 'nowrap', gap: 2 });
+  for (const value of values) {
+    const chip = v.getByTestId(`coach-ai-${kind}-${option}-${value}`);
+    expect(flat(chip.props.style)).toMatchObject({
+      flex: 1, minWidth: layout.touchMin, minHeight: layout.touchMin,
+    });
+    await fireEvent.press(chip);
+    expect(chip.props.accessibilityState.selected).toBe(true);
+  }
+  for (const width of [360, 390]) {
+    let scroll = v.getByTestId(`coach-ai-${kind}-${row}-row`).parent;
+    while (scroll && !scroll.props.contentContainerStyle) scroll = scroll.parent;
+    const padding = flat(scroll?.props.contentContainerStyle).padding as number;
+    expect(padding).toBe(20);
+    expect((width - 2 * padding - (values.length - 1) * (rowStyle.gap as number)) / values.length)
+      .toBeGreaterThanOrEqual(layout.touchMin);
+  }
+});
+
 it('CF2: timeout link opens the inbox and the rounded ready-draft action opens the real draft route', async () => {
   jest.useFakeTimers();
   try {

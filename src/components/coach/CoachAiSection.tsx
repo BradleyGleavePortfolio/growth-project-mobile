@@ -517,10 +517,11 @@ export default function CoachAiSection({
             />
 
             <Text style={styles.fieldLabel}>Days per week</Text>
-            <View style={styles.chipRow}>
+            <View style={styles.optionRow} testID="coach-ai-workout-days-row">
               {DAYS_PER_WEEK_OPTIONS.map((d) => (
                 <Chip
                   key={d}
+                  expand
                   active={daysPerWeek === d}
                   label={String(d)}
                   onPress={() => setDaysPerWeek(d)}
@@ -647,10 +648,11 @@ export default function CoachAiSection({
           <ModalHeader title="Generate weekly insight" onClose={closeModal} />
           <ScrollView contentContainerStyle={styles.modalContent}>
             <Text style={styles.fieldLabel}>Window</Text>
-            <View style={styles.chipRow}>
+            <View style={styles.optionRow} testID="coach-ai-insight-window-row">
               {INSIGHT_WINDOWS.map((w) => (
                 <Chip
                   key={w}
+                  expand
                   active={windowDays === w}
                   label={`${w} days`}
                   onPress={() => setWindowDays(w)}
@@ -774,17 +776,19 @@ function Chip({
   label,
   onPress,
   testID,
+  expand = false,
 }: {
   active: boolean;
   label: string;
   onPress: () => void;
   testID?: string;
+  expand?: boolean;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <TouchableOpacity
-      style={[styles.chip, active && styles.chipActive]}
+      style={[styles.chip, expand && styles.optionChip, active && styles.chipActive]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
@@ -957,6 +961,13 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 8,
       marginBottom: 4,
     },
+    optionRow: {
+      flexDirection: 'row',
+      flexWrap: 'nowrap',
+      gap: 2,
+      marginBottom: 4,
+    },
+    optionChip: { flex: 1 },
     chip: {
       minHeight: layout.touchMin,
       minWidth: layout.touchMin,
