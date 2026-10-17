@@ -64,7 +64,7 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
     ? weightHistoryRows(weight.data).map((r) => parseWeightLogRow(r, currentUser?.id ?? '')).filter((r) => r !== null)
     : null;
   const body = weightTile(loaded ? rows : null, metric);
-  const habitView = habitsTile(habits.data, habitLogs.data);
+  const habitView = habitsTile(habits.data, habitLogs.data, today);
   const stepsSeries = fitness.data?.series.find((s) => s.metric === 'STEPS');
   // Day buckets are calendar days in UTC (as the Health screen reads them).
   const todaySteps = seriesPoints(stepsSeries).filter((p) => new Date(p.x).toISOString().slice(0, 10) === today).pop();
@@ -103,7 +103,7 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
     // Connections only once Health answered with no source; pending or failed opens Health and fitness.
     <HomeTile key="steps" label="Steps" view={steps} testID="home-tile-steps" prompt={steps.value === 'Connect'}
       onPress={steps.value === 'Connect' ? open('Connections') : open('Health', { bucket: 'fitness' })} />,
-    <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits')} />,
+    <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits', { tab: 'checkin' })} />,
   ];
   const pairs: React.ReactNode[][] = [];
   for (let i = 0; i < tiles.length; i += 2) pairs.push(tiles.slice(i, i + 2));

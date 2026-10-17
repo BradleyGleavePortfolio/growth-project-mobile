@@ -54,12 +54,49 @@ export function weightTile(rows: WeightLog[] | null, metric: boolean): TileView 
 const list = (names: string[]): string =>
   names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
+/** A GET /habits row: the client's own and coach-set habits (HB1); rows without a plan count every day. */
+export interface HabitRow {
+  id: string;
+  name: string;
+  schedule_kind?: string | null;
+  /** 0 = Sunday ... 6 = Saturday. */
+  schedule_days?: number[] | null;
+  times_per_week?: number | null;
+  starts_on?: string | null;
+  logs?: ReadonlyArray<{ date: string; completed?: boolean | null }> | null;
+}
+
+const utcDay = (day: string): Date => new Date(`${day}T00:00:00Z`);
+
+/**
+ * #HABITS-CONCEPT (the ring): today's ring holds the habits planned for today only. A habit
+ * counts from its start day, on its chosen days, or (times a week) until this week's count is
+ * met before today; Monday starts the week.
+ */
+export function plannedToday(h: HabitRow, today: string): boolean {
+  if (h.starts_on && h.starts_on.slice(0, 10) > today) return false;
+  if (h.schedule_kind === 'days') return (h.schedule_days ?? []).includes(utcDay(today).getUTCDay());
+  if (h.schedule_kind === 'times_per_week' && h.times_per_week) {
+    const monday = utcDay(today);
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+    const start = monday.toISOString().slice(0, 10);
+    const done = new Set((h.logs ?? []).filter((l) => l.completed).map((l) => l.date.slice(0, 10))
+      .filter((day) => day >= start && day < today));
+    return done.size < h.times_per_week;
+  }
+  return true;
+}
+
 export function habitsTile(
-  habits: ReadonlyArray<{ id: string; name: string }> | null | undefined,
+  rows: ReadonlyArray<HabitRow> | null | undefined,
   logs: ReadonlyArray<{ habit_id: string; completed: boolean }> | null | undefined,
+  today: string,
 ): TileView {
-  if (!habits || !logs || habits.length === 0) return DASH;
+  if (!rows || !logs) return DASH;
   const doneIds = new Set(logs.filter((l) => l.completed).map((l) => l.habit_id));
+  // A habit ticked today stays in today's ring even on a day it was not planned.
+  const habits = rows.filter((h) => doneIds.has(h.id) || plannedToday(h, today));
+  if (habits.length === 0) return DASH;
   const done = habits.filter((h) => doneIds.has(h.id)).map((h) => h.name.trim());
   const open = habits.filter((h) => !doneIds.has(h.id)).map((h) => h.name.trim());
   const sub = [done.length ? `${list(done)} done.` : '', open.length ? `${list(open)} open.` : ''].filter(Boolean).join(' ');

@@ -1,4 +1,4 @@
-import { checkInTile, habitsTile, proteinTile, stepsTile, waterTile, weightTile } from '../homeTiles';
+import { checkInTile, habitsTile, plannedToday, proteinTile, stepsTile, waterTile, weightTile } from '../homeTiles';
 import type { WeightLog } from '../../../../types';
 
 const log = (date: string, weight: number): WeightLog =>
@@ -40,15 +40,42 @@ describe('weightTile', () => {
 
 describe('habitsTile', () => {
   const habits = [{ id: 'a', name: 'Water' }, { id: 'b', name: 'Steps' }, { id: 'c', name: 'Stretch' }];
+  const wed = '2026-10-14'; // a Wednesday; its week starts Monday 2026-10-12
   it('counts done habits today and names done and open ones', () => {
-    expect(habitsTile(habits, [{ habit_id: 'a', completed: true }, { habit_id: 'b', completed: true }]))
+    expect(habitsTile(habits, [{ habit_id: 'a', completed: true }, { habit_id: 'b', completed: true }], wed))
       .toMatchObject({ value: '2', small: 'of 3', sub: 'Water and Steps done. Stretch open.' });
-    expect(habitsTile(habits, []).sub).toBe('Water, Steps and Stretch open.');
-    expect(habitsTile(habits, [{ habit_id: 'c', completed: false }]).value).toBe('0');
+    expect(habitsTile(habits, [], wed).sub).toBe('Water, Steps and Stretch open.');
+    expect(habitsTile(habits, [{ habit_id: 'c', completed: false }], wed).value).toBe('0');
   });
-  it('dashes with no habits or a read that has not answered', () => {
-    expect(habitsTile([], []).value).toBe('—');
-    expect(habitsTile(habits, undefined).value).toBe('—');
+  it('dashes with no habits, none planned today, or a read that has not answered', () => {
+    expect(habitsTile([], [], wed).value).toBe('—');
+    expect(habitsTile(habits, undefined, wed).value).toBe('—');
+    expect(habitsTile([{ id: 'a', name: 'Run', schedule_kind: 'days', schedule_days: [1, 5] }], [], wed).value).toBe('—');
+  });
+  it("follows the ring: only today's planned habits, as the coach or client set them (HB1 plan)", () => {
+    const rows = [
+      { id: 'a', name: 'Walk', schedule_kind: 'daily' },
+      { id: 'b', name: 'Run', schedule_kind: 'days', schedule_days: [1, 3, 5] }, // Mon, Wed, Fri
+      { id: 'c', name: 'Yoga', schedule_kind: 'days', schedule_days: [2, 4] }, // not on Wednesday
+      { id: 'd', name: 'Swim', schedule_kind: 'daily', starts_on: '2026-10-15T00:00:00.000Z' }, // starts tomorrow
+      { id: 'e', name: 'Lift', schedule_kind: 'times_per_week', times_per_week: 2,
+        logs: [{ date: '2026-10-12T00:00:00.000Z', completed: true }, { date: '2026-10-09T00:00:00.000Z', completed: true }] },
+      { id: 'f', name: 'Read', schedule_kind: 'times_per_week', times_per_week: 1,
+        logs: [{ date: '2026-10-13T00:00:00.000Z', completed: true }] }, // met this week
+    ];
+    expect(habitsTile(rows, [{ habit_id: 'a', completed: true }], wed))
+      .toMatchObject({ value: '1', small: 'of 3', sub: 'Walk done. Run and Lift open.' });
+    // A habit ticked today stays in today's ring, planned or not.
+    expect(habitsTile(rows, [{ habit_id: 'c', completed: true }, { habit_id: 'f', completed: true }], wed))
+      .toMatchObject({ value: '2', small: 'of 5', sub: 'Yoga and Read done. Walk, Run and Lift open.' });
+  });
+  it('plannedToday: a Sunday is day 0, and the week count resets on Monday', () => {
+    expect(plannedToday({ id: 'a', name: 'Rest', schedule_kind: 'days', schedule_days: [0] }, '2026-10-18')).toBe(true);
+    const lift = { id: 'e', name: 'Lift', schedule_kind: 'times_per_week', times_per_week: 1,
+      logs: [{ date: '2026-10-18T00:00:00.000Z', completed: true }] };
+    expect(plannedToday(lift, '2026-10-18')).toBe(true); // the tick is today's own
+    expect(plannedToday(lift, '2026-10-19')).toBe(true); // Monday: new week
+    expect(plannedToday({ ...lift, logs: [{ date: '2026-10-17T00:00:00.000Z', completed: true }] }, '2026-10-18')).toBe(false);
   });
 });
 

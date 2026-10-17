@@ -126,6 +126,12 @@ it.each([undefined, 'coach-gate'])(
   },
 );
 
+it("opens on the Daily check-in tab when Home's Check-in tile asks for it", async () => {
+  const screen = await render(<QueryClientProvider client={queryClient}><HabitsScreen initialTab="checkin" /></QueryClientProvider>);
+  await waitFor(() => expect(screen.getByText('How are you feeling?')).toBeTruthy());
+  expect(screen.queryByText('Drink water')).toBeNull();
+});
+
 async function openCheckIn() {
   const screen = await render(tree());
   await fireEvent.press(screen.getByText('Daily check-in'));

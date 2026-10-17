@@ -3,11 +3,12 @@
  *   - Coached: the existing holistic insight sentence (no new AI call; the UI-6
  *     daily brief redo revisits it) and "Ask Roman", which opens Roman chat.
  *   - Coachless (139-15: no Roman without a coach): Roman shown locked with the
- *     mockup's two lines. Status only, not a control, so there is no dead tap,
- *     and the insights read is never made.
+ *     mockup's two lines. The tap opens Roman's existing lock screen (Join a
+ *     coach), never a chat (owner 10-17: no dead tap); hidden while Roman chat
+ *     is off, as for a coached client. The insights read is never made.
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { typography } from '../../../theme/tokens';
@@ -26,15 +27,18 @@ export default function HomeRomanLine({ coached }: { coached: boolean }) {
 
 function LockedRomanLine() {
   const { semanticColors: sc } = useTheme();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  if (!featureFlags.romanChat) return null;
   return (
-    <View style={[styles.row, { borderColor: sc.border }]} testID="home-roman-locked" accessible
-      accessibilityLabel={`${ROMAN_LOCKED_TITLE}. ${ROMAN_LOCKED_BODY}`}>
+    <Pressable style={({ pressed }) => [styles.row, { borderColor: sc.border, opacity: pressed ? 0.85 : 1 }]}
+      testID="home-roman-locked" accessibilityRole="button" accessibilityLabel={`${ROMAN_LOCKED_TITLE}. ${ROMAN_LOCKED_BODY}`}
+      onPress={() => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false })}>
       <LockedRomanAvatar />
       <View style={styles.text}>
         <Text style={[styles.title, { color: sc.textPrimary }]}>{ROMAN_LOCKED_TITLE}</Text>
         <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{ROMAN_LOCKED_BODY}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

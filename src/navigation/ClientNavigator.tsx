@@ -208,7 +208,8 @@ const TAB_BUTTON_PADDING = 5;
 
 export type HomeStackParamList = {
   HomeMain: undefined;
-  Habits: undefined;
+  /** tab: 'checkin' opens the Daily check-in tab (Home's Check-in tile, UI-1). */
+  Habits: { tab?: 'checkin' } | undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
   Messages: { openCoachCode?: boolean } | undefined;
@@ -443,7 +444,7 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
-        {({ navigation }) => <ProtectedHabitsScreen onSaved={() => {
+        {({ navigation, route }) => <ProtectedHabitsScreen initialTab={route.params?.tab} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_checkin');
         }} />}
       </HomeStackNav.Screen>

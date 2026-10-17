@@ -210,6 +210,7 @@ it('coachless with Roman chat off: no Roman at all, the same as a coached client
   expect(await screen.findByLabelText('Open Train')).toBeTruthy();
   expect(screen.queryByLabelText('Roman. Opens with a coach')).toBeNull();
   expect(screen.queryByText('Opens with a coach')).toBeNull();
+  expect(screen.queryByTestId('home-roman-locked')).toBeNull();
   expect(screen.getByTestId('home-leading-empty')).toBeTruthy();
 });
 
@@ -239,7 +240,7 @@ it.each([
   ['home-tile-water', ['Log']],
   ['home-tile-weight', ['MoreTab', { screen: 'Progress', initial: false }]],
   ['home-tile-habits', ['Habits']],
-  ['home-tile-checkin', ['Habits']],
+  ['home-tile-checkin', ['Habits', { tab: 'checkin' }]],
 ] as const)('%s opens a real screen, with a light haptic', async (testID, destination) => {
   await render(<HomeScreen />);
   await screen.findByLabelText('Start Full Body A');
@@ -294,11 +295,11 @@ it("coached with Roman chat off and no sentence: no Roman's line", async () => {
   expect(screen.queryByTestId('home-roman-line')).toBeNull();
 });
 
-it("coachless: Roman's line is locked, makes no insights read and is not a control", async () => {
+it("coachless: Roman's line is locked, makes no insights read and opens Roman's lock screen, not a chat", async () => {
   mockUser.coach_id = '';
   await render(<HomeScreen />);
   const locked = await screen.findByLabelText("Roman works with a coach. Roman reads your rings with a coach's guidance. Your own logging stays open.");
   expect(mockInsights).not.toHaveBeenCalled();
   await fireEvent.press(locked);
-  expect(mockNavigate).not.toHaveBeenCalled();
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'RomanChat', initial: false });
 });
