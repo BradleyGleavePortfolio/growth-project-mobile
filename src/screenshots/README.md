@@ -1,95 +1,69 @@
 # Screenshot harness
 
-Captures App Store / Play Store marketing screenshots from the **real** app
-components — same `HomeScreen`, `PlanScreen`, `LogScreen`, `RecipesScreen`,
-`ProgressScreen`, `FastingScreen` the production build renders. Demo data is
-seeded by intercepting the axios instance in `services/api.ts`; nothing about
-the screen components themselves changes.
+The existing tool captures **real app screens**, not drawn substitutes:
+client Home, Roman chat, active workout logging, food logging, coach messages,
+then coach Overview. `screens.ts` is the single target/size manifest consumed
+by the app and both drivers. Its caption options retain MOCK-STORESHOTS ids
+1–12 (prefix `MOCK-STORESHOTS-`); owner selection is pending. Captures have no
+caption, frame, device illustration or marketing overlay.
 
-## When the harness is active
+## Isolation and navigation
 
-`isScreenshotMode()` returns true only when `EXPO_PUBLIC_SCREENSHOT_MODE=1` is
-set in the environment (typed at build/start time, e.g.
-`EXPO_PUBLIC_SCREENSHOT_MODE=1 npx expo start --ios`).
+Only `EXPO_PUBLIC_SCREENSHOT_MODE=1` activates the fixture adapter and demo
+storage. App mounts `ScreenshotNavigator`, which reads
+`tgp://screenshot/<slug>` (web: `/screenshot/<slug>`), seeds the target role,
+and supplies nested initial state to the **shipping ClientNavigator or
+CoachNavigator**. All six possible client tabs are represented by the real
+navigation type; flags still decide which exist. Coach tabs are never replaced
+or forced on: the selected store profile's `coachTabsV2` decides the bar.
+Roman must be enabled in that profile; its canned history makes no AI call.
+Network data is invented. Never use this mode on a personal/production install.
+Capture-only realtime adapters never join live channels, on either platform.
+The production Metro alias still removes the harness and fixtures entirely.
+Web-only adapters cover SQLite and unused native payment/support SDKs; no selected
+screen or navigation bar is substituted.
 
-In that mode:
+## CI proof / web review
 
-1. `App.tsx` skips the splash/auth bootstrap, seeds AsyncStorage with a demo
-   user, and mounts `ClientNavigator` directly.
-2. `services/api.ts` registers an axios adapter that returns canned responses
-   for every endpoint the screenshot screens hit (see `fixtures.ts`).
-3. Animations and pull-to-refresh spinners stay quiet so captured frames are
-   stable.
+The Store capture CI job uses `eas.json` production profile env (including
+inherited env), starts Expo locally, and runs the existing web driver. It checks
+distinct screen content, missing fixtures, runtime errors and PNG header sizes,
+then uploads **12 raw PNGs**, `evidence.json` (captions separate) and Metro logs.
+Web frames are react-native-web renders, **not native/device proof**; review
+them, but use the native path below for App Store upload.
 
-When the env var is absent, none of the screenshot code is mounted and there
-is zero impact on production behavior.
-
-## Capturing on iPhone 6.5" (1284 × 2778) — recommended path
-
-App Store Connect requires 6.5" or 6.7" screenshots at 1284×2778. The iPhone
-14 Plus / 16 Plus simulator natively renders at that size.
+For an equivalent run on a dedicated development machine with dependencies
+and Playwright/Chromium already installed:
 
 ```bash
-# 1. Install once
-npm install
-brew install --cask xcode  # if not already
+SCREENSHOT_PROFILE=production node scripts/capture-screenshots-web.js
+```
 
-# 2. Boot the 6.5" simulator
-xcrun simctl boot "iPhone 16 Plus" || true
-open -a Simulator
+Outputs: `screenshots/web/{1320x2868,1290x2796}/<slug>.png`.
+The 6.9-inch set is 1320×2868; the second set is 1290×2796.
+An existing Expo server may be selected with `SCREENSHOT_WEB_URL`; start it
+with the selected profile's flags and screenshot mode yourself in that case.
+Remote EAS environment values are not read: supply any store-build flag
+overrides in the shell, particularly `EXPO_PUBLIC_FF_COACH_TABS_V2`, if used.
+The driver does not silently enable that flag.
 
-# 3. Build and start the app in screenshot mode
-EXPO_PUBLIC_SCREENSHOT_MODE=1 \
-EXPO_PUBLIC_API_URL=http://127.0.0.1:0 \
-EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:0 \
-EXPO_PUBLIC_SUPABASE_ANON_KEY=screenshot-mode \
-npx expo run:ios --device "iPhone 16 Plus"
+## Native capture (macOS, no EAS)
 
-# 4. From a second terminal, drive captures
+On a dedicated simulator, install/start a development app with the **same
+public feature flags as the store build**, plus screenshot mode, using Expo's
+local simulator workflow. Do this on both iPhone 16 Pro Max (1320×2868) and
+iPhone 15 Pro Max (1290×2796). The release binary intentionally has no harness.
+Keep Metro running, then:
+
+```bash
 bash scripts/capture-screenshots.sh
 ```
 
-Output PNGs land in `./screenshots/ios-6.5/`.
-
-## Capturing via web preview — fallback path
-
-If you do not have macOS / Xcode, the web build can be captured headlessly via
-Playwright. Fidelity is lower (some RN components render slightly differently
-under react-native-web), but layout is faithful enough for review and internal
-sign-off.
-
-```bash
-npm install
-npm install --no-save react-native-web@~0.21.0 react-dom@19.2.0 \
-  @expo/metro-runtime playwright
-npx playwright install chromium
-
-EXPO_PUBLIC_SCREENSHOT_MODE=1 \
-EXPO_PUBLIC_API_URL=http://127.0.0.1:0 \
-EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:0 \
-EXPO_PUBLIC_SUPABASE_ANON_KEY=screenshot-mode \
-npx expo start --web --port 8081 &
-
-# Wait for "Web Bundling complete" then:
-node scripts/capture-screenshots-web.js
-```
-
-Output PNGs land in `./screenshots/web-6.5/`.
-
-## What the harness will not do
-
-- **No fake UI.** Every captured pixel comes from the production screen
-  component tree. The mock layer only stands in for the network — equivalent
-  to running the app against a backend whose database happens to contain the
-  fixture data.
-- **No medical / financial / coach-only consequential outputs.** Demo data
-  shows a routine logging day (meals, weight trend, fasting timer) and never
-  shows AI-generated text that would require coach approval per TGP
-  guardrails. The AI Guide screen is intentionally excluded.
-
-## Adding a screen to the capture set
-
-1. Add an entry to `screens.ts` with a navigation key matching the route name
-   in `ClientNavigator`.
-2. Make sure every endpoint the screen hits has a fixture in `fixtures.ts`.
-3. Rerun the capture script.
+The existing native driver cold-launches each target and switches client/coach
+fixtures automatically. It rejects missing apps and wrong PNG dimensions
+(no stretching or resizing). Outputs: `screenshots/ios/<size>/<slug>.png`.
+If Metro needs longer, set `SCREENSHOT_SETTLE=20`. Before upload, inspect all
+12 frames: correct screen, content loaded, no development overlays, full real
+navigation bar, no caption. Native capture requires this visual check; a
+fixed settle delay alone is not proof of screen readiness.
+No EAS build/update, production service or store upload is part of either driver.
