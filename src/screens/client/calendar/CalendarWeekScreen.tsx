@@ -46,9 +46,8 @@ const dayDate = (day: string) => new Date(`${day}T12:00:00`);
 
 export default function CalendarWeekScreen({ navigation }: Props) {
   const coaches = useMyCoaches();
-  const hasCoach = (coaches.data?.length ?? 0) > 0;
-  const sessions = useMySessions(50, hasCoach);
-  const past = usePastSessions(hasCoach);
+  const sessions = useMySessions();
+  const past = usePastSessions();
   const workouts = useMyWorkoutAssignments();
   const from = getLocalWeekStart();
   const to = addDays(from, 6);
@@ -57,7 +56,7 @@ export default function CalendarWeekScreen({ navigation }: Props) {
     queryFn: async () => (await checkInsApi.list({ from, to, limit: 7 })).data,
   });
   const network = useNetworkStatus();
-  const queries = [coaches, workouts, checkIns, ...(hasCoach ? [sessions, past] : [])];
+  const queries = [coaches, workouts, checkIns, sessions, past];
   // Native tab focus must refresh after booking, completing a workout or saving a check-in.
   const refreshRef = useRef(() => {});
   refreshRef.current = () => { queries.forEach((q) => { void q.refetch(); }); };

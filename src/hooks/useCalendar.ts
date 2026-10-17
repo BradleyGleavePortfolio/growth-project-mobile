@@ -119,11 +119,10 @@ export function useOpenSlots(
   });
 }
 
-export function useMySessions(limit = 50, enabled = true) {
+export function useMySessions(limit = 50) {
   return useQuery<CoachingSession[]>({
     queryKey: ['scheduling', 'sessions', 'me', { limit }],
     queryFn: () => schedulingApi.listMySessions(limit),
-    enabled,
     staleTime: THIRTY_S_MS,
     refetchOnMount: 'always',
     refetchInterval: THIRTY_S_MS,
