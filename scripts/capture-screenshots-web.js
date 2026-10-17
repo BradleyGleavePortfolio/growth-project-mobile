@@ -51,7 +51,7 @@ function profileEnv(name) {
           viewport: { width: size.width / 3, height: size.height / 3 }, deviceScaleFactor: 3 });
         const page = await context.newPage();
         const errors = [];
-        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('pageerror', (error) => { errors.push(error.message); console.error(error.message); });
         page.on('console', (message) => {
           if (message.text().includes('[screenshot mock]')) errors.push(message.text());
         });
@@ -78,6 +78,7 @@ function profileEnv(name) {
           evidence.push({ slug: target.slug, ...size, readyText: target.readyText, url: page.url() });
           console.log(`Captured ${target.slug} ${size.width}x${size.height}`);
         } catch (error) {
+          console.error(await page.locator('body').innerText());
           await page.screenshot({ path: path.join(dir, `${target.slug}-FAILED.png`) });
           throw error;
         } finally { await context.close(); }

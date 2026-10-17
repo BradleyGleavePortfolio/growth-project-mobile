@@ -21,9 +21,13 @@ jobs:
           cache: npm
       - run: npm ci
       # Playwright is the existing web driver's external prerequisite.
-      - run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.58.2
-      - run: npx playwright install --with-deps chromium
-      - run: node scripts/capture-screenshots-web.js
+      - run: |
+          npm exec --yes --package=playwright@1.58.2 -- sh -c '
+            playwright install --with-deps chromium
+            export NODE_PATH="$(dirname "$(dirname "$(command -v playwright)")")"
+            node scripts/capture-screenshots-web.js'
+      - run: cat screenshots/web/metro.log
+        if: failure()
       - uses: actions/upload-artifact@v7
         if: always()
         with:
