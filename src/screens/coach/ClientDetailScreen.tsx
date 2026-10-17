@@ -414,7 +414,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               {clientName.split(' ').map((n) => n[0]).join('')}
             </Text>
           </View>
-          <View>
+          <View style={styles.headerLabels}>
             <Text style={styles.clientName}>{clientName}</Text>
             <Text style={styles.clientStatus}>
               {[

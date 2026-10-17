@@ -147,6 +147,8 @@ it.each(['Message', 'Archive / Unarchive'])('CF2: header %s shares the 44 by 44 
   expect(styles.msgIconBtn).toMatchObject({ width: layout.touchMin, height: layout.touchMin });
   const source = readFileSync(resolve(__dirname, '../screens/coach/ClientDetailScreen.tsx'), 'utf8');
   expect(source.match(/style=\{(?:\[)?styles\.msgIconBtn/g)).toHaveLength(2);
+  expect(styles.headerLabels).toMatchObject({ flex: 1, minWidth: 0 });
+  expect(source).toContain('style={styles.headerLabels}');
 });
 
 it.each(['summary', 'food'])('CF2: %s retry has the shared 44 pt target and retries its read', async (surface) => {
