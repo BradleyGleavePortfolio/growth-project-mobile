@@ -91,6 +91,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_COACH_BRIEF_GATE": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
     "EXPO_PUBLIC_FF_COACH_COMMUNITY": {
       "kind": "flag",
       "default": "off",

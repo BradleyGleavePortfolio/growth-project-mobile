@@ -40,6 +40,7 @@ import TrustCenterScreen from '../screens/TrustCenterScreen';
 // when the matching feature flag is explicitly true, so stub surfaces never
 // reach production binaries.
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
+import CoachBriefListScreen, { type CoachBriefListParams } from '../screens/coach/brief/CoachBriefListScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
 import { featureFlags } from '../config/featureFlags';
 // Community v1-6 — coach community sub-stack (six screens). Mounted as a
@@ -284,6 +285,8 @@ export type SettingsStackParamList = {
   TrustCenter: undefined;
   // Wave 11 — runtime scaffolding (flag-gated; safe to mount).
   CoachBrief: undefined;
+  /** BRIEFA: the clients behind one brief row ("See weight logs"); behind coachBrief and coachBriefGate. */
+  CoachBriefList: CoachBriefListParams;
   AdminControlRoom: undefined;
   // Phase 11 Track 9 — Crisp support inbox.
   SupportInbox: undefined;
@@ -564,6 +567,9 @@ function SettingsStackNavigator({ initialRouteName }: { initialRouteName?: keyof
           production binaries. */}
       {featureFlags.coachBrief && (
         <SettingsStack.Screen name="CoachBrief" component={CoachBriefScreen} />
+      )}
+      {featureFlags.coachBrief && featureFlags.coachBriefGate && (
+        <SettingsStack.Screen name="CoachBriefList" component={CoachBriefListScreen} />
       )}
       {featureFlags.adminControlRoom && (
         <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
