@@ -172,7 +172,7 @@ describe('You home', () => {
     expect(SLEEP_AND_RECOVERY_ROW).toBeNull();
   });
 
-  it('coachless: Join a coach opens the coach-code sheet; every row but Roman stays', async () => {
+  it("coachless: Join a coach opens the coach-code sheet; every row stays (Roman opens today's Roman works with a coach page)", async () => {
     mockUser = { ...COACHED, coach_id: undefined };
     mockNeedsCoach = true;
     mockFlags.romanChat = true;

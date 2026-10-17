@@ -16,7 +16,7 @@
  * Coachless clients get every row; only Roman needs a coach (owner 10-17).
  */
 import React, { useReducer, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
@@ -135,6 +135,8 @@ export default function YouScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
   const insets = useScreenInsets();
+  // Large text: Edit moves under the name so the name keeps the width (no word split mid-name).
+  const editUnder = useWindowDimensions().fontScale > 1.15;
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const needsCoach = useClientNeedsCoach();
@@ -211,21 +213,22 @@ export default function YouScreen() {
         style={({ pressed }) => [styles.identityText, pressed && styles.pressed]}
       >
         <View style={styles.fill}>
-          {name ? <Text style={styles.name} numberOfLines={2}>{name}</Text> : null}
+          {name ? <Text style={styles.name}>{name}</Text> : null}
           {since ? <Text style={styles.mastheadMuted}>{since}</Text> : null}
           {weekDone ? (
             <Text style={styles.weekLine} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
               {`${YOU_COPY.thisWeek} · ${weekDone}`}
             </Text>
           ) : null}
+          {editUnder ? <Text style={[styles.edit, styles.editUnder]}>{YOU_COPY.edit}</Text> : null}
         </View>
-        <Text style={styles.edit}>{YOU_COPY.edit}</Text>
+        {editUnder ? null : <Text style={styles.edit}>{YOU_COPY.edit}</Text>}
       </Pressable>
     </View>
   ) : (
     <View style={styles.identity} accessible accessibilityLabel={YOU_COPY.loading} testID="you-loading">
       <View style={[styles.avatar, styles.placeholderOnDark]} />
-      <View style={styles.identityText}>
+      <View style={styles.fill}>
         <View style={[styles.bar, styles.placeholderOnDark, { width: '70%' }]} />
         <View style={[styles.bar, styles.barThin, styles.placeholderOnDark, { width: '45%' }]} />
       </View>
@@ -254,7 +257,7 @@ export default function YouScreen() {
           ) : (
             <View style={styles.coachAvatar}><Text style={styles.coachInitial}>{coachInitial}</Text></View>
           )}
-          <Text style={styles.coachName} numberOfLines={2}>{coach.data.name}</Text>
+          <Text style={styles.coachName}>{coach.data.name}</Text>
         </View>
         <PrimaryButton label={messageCoachLabel(coach.data.name)} onPress={openCoachThread} style={styles.cardButton} testID="you-message-coach" />
       </View>
@@ -331,7 +334,7 @@ export default function YouScreen() {
           () => navigation.navigate('NotificationSettings'), { detail: YOU_COPY.notificationsDetail, first: true }))}
         {health.length > 0 ? section(YOU_COPY.healthAndDevices, health.map(itemRow)) : null}
         {section(YOU_COPY.support, kept.map(itemRow))}
-        <TextLink label={YOU_COPY.signOut} tone="ink" underline={false} align="start" onPress={() => { void handleSignOut(); }} testID="you-sign-out" />
+        <TextLink label={YOU_COPY.signOut} tone="ink" underline={false} align="start" onPress={() => { void handleSignOut(); }} testID="you-sign-out" style={styles.signOut} />
         <Text style={styles.version}>{YOU_COPY.version}</Text>
       </View>
       {sheetOpen ? (
@@ -375,6 +378,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   mastheadMuted: { ...typography.body, color: sc.textOnMastheadMuted },
   weekLine: { ...typography.bodyMd, color: sc.textOnAccent },
   edit: { ...typography.bodyMd, color: sc.textOnAccent, textDecorationLine: 'underline' },
+  editUnder: { marginTop: 8 },
   placeholderOnDark: { backgroundColor: sc.surface.forestBand },
   bar: { height: 22, borderRadius: radius.control, marginBottom: 10 },
   barThin: { height: 12, marginBottom: 0 },
@@ -409,5 +413,6 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
     ...typography.caption, letterSpacing: 0.2, color: sc.accentText, borderWidth: 1, borderColor: sc.accentText,
     borderRadius: radius.chip, paddingHorizontal: 10, paddingVertical: 2, overflow: 'hidden',
   },
+  signOut: { marginTop: 16 },
   version: { ...typography.bodySmall, color: sc.textMuted, marginTop: 4, marginBottom: 8 },
 });
