@@ -7,6 +7,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import Colors from '../constants/colors';
 import { layout, radius } from '../theme/tokens';
 import type { ThemeColors } from '../theme/ThemeProvider';
+import type { WeightLog } from '../types';
 import { makeStyles } from '../screens/coach/client-detail/styles';
 import { MacroCard } from '../screens/coach/client-detail/MacroCard';
 import { SummaryTab } from '../screens/coach/client-detail/SummaryTab';
@@ -171,7 +172,7 @@ it.each(['summary', 'food'])('CF2: %s retry has the shared 44 pt target and retr
 });
 
 it.each([-10, 0, 10])('CF2: signed Change %s meets 4.5:1 on its actual cream surface', async (change) => {
-  const log = (id: string, date: string, weight: number) => ({
+  const log = (id: string, date: string, weight: number): WeightLog => ({
     id, userId: 'c1', coachId: '', date, weight, unit: 'lbs', notes: '', createdAt: date,
   });
   const v = await render(<ProgressTab colors={colors} styles={styles}
