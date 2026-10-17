@@ -62,6 +62,7 @@ import { HapticService } from '../../../ui/haptics/haptics.service';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 
 const OPTIONAL = { invite_code_required: false, providers: ['email', 'google'], role_choice: true };
+const HIDDEN = { includeHiddenElements: true };
 const nav = () => ({ navigate: jest.fn(), replace: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => false) });
 type Nav = ReturnType<typeof nav>;
 const login = (n: Nav) => render(<LoginScreen navigation={n as never} route={{ key: 'l', name: 'Login' } as never} />);
@@ -129,25 +130,28 @@ it('Sign in: every action lands on a real screen', async () => {
   }
 });
 
-it('Sign in: "or" only under a provider on screen; Google keeps the existing-account question and its call', async () => {
+it('Sign in: no "or" without a provider on screen', async () => {
   mockApi.getSignupPolicy.mockResolvedValue({ data: { ...OPTIONAL, providers: ['email'] } });
-  const bare = await login(nav());
+  const view = await login(nav());
   await waitFor(() => expect(mockApi.getSignupPolicy).toHaveBeenCalled());
-  expect(bare.queryByTestId('login-or')).toBeNull();
-  bare.unmount();
+  expect(view.queryByTestId('login-or', HIDDEN)).toBeNull();
+  expect(view.queryByText('or', HIDDEN)).toBeNull();
+});
+
+it('Sign in: "or" under the Apple button on iPhone', async () => {
+  mockApi.getSignupPolicy.mockResolvedValue({ data: { ...OPTIONAL, providers: ['email'] } });
   mockAppleOnDevice = true;
-  const apple = await login(nav());
-  expect(await apple.findByTestId('login-or')).toBeTruthy();
-  apple.unmount();
-  mockAppleOnDevice = false;
-  __resetSignupPolicyCacheForTests();
-  mockApi.getSignupPolicy.mockResolvedValue({ data: OPTIONAL });
+  const view = await login(nav());
+  expect(await view.findByTestId('login-or', HIDDEN)).toBeTruthy();
+});
+
+it('Sign in: Google keeps "or", the existing-account question and its call', async () => {
   mockGoogle.mockResolvedValue({ success: false, error: 'cancelled' });
-  const google = await login(nav());
-  await fireEvent.press(await google.findByLabelText('Continue with Google'));
-  expect(google.getByTestId('login-or')).toBeTruthy();
+  const view = await login(nav());
+  await fireEvent.press(await view.findByLabelText('Continue with Google'));
+  expect(view.getByTestId('login-or', HIDDEN)).toBeTruthy();
   expect(mockGoogle).not.toHaveBeenCalled();
-  await fireEvent.press(google.getByText('Sign in to existing account'));
+  await fireEvent.press(view.getByText('Sign in to existing account'));
   await waitFor(() => expect(mockGoogle).toHaveBeenCalledWith());
 });
 
@@ -171,19 +175,20 @@ it('Create account, code optional: no code action or field; the same register re
   expect(await view.findByTestId('create-account-verify')).toBeTruthy();
 });
 
-it('Create account keeps the code field when the policy requires it or does not answer', async () => {
+it('Create account keeps the code field when the policy requires it', async () => {
   mockApi.getSignupPolicy.mockResolvedValue({ data: { invite_code_required: true, providers: ['email'] } });
-  const required = await create(nav());
-  expect(await required.findByTestId('invite-code-input')).toBeTruthy();
-  expect(required.getByText('INVITE CODE')).toBeTruthy();
-  required.unmount();
-  __resetSignupPolicyCacheForTests();
+  const view = await create(nav());
+  expect(await view.findByTestId('invite-code-input')).toBeTruthy();
+  expect(view.getByText('INVITE CODE')).toBeTruthy();
+});
+
+it('Create account keeps the code action and field when the policy does not answer', async () => {
   mockApi.getSignupPolicy.mockRejectedValue(new Error('offline'));
-  const unknown = await create(nav());
-  await fireEvent.press(await unknown.findByTestId('role-choice-client'));
-  expect(unknown.getByTestId('role-choice-invite-code')).toBeTruthy();
-  await fireEvent.press(unknown.getByTestId('role-choice-continue'));
-  expect(unknown.getByTestId('invite-code-input')).toBeTruthy();
+  const view = await create(nav());
+  await fireEvent.press(await view.findByTestId('role-choice-client'));
+  expect(view.getByTestId('role-choice-invite-code')).toBeTruthy();
+  await fireEvent.press(view.getByTestId('role-choice-continue'));
+  expect(view.getByTestId('invite-code-input')).toBeTruthy();
 });
 
 it('Create account from a join link keeps the code and today\'s signup-with-code request', async () => {
