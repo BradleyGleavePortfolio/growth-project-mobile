@@ -503,7 +503,7 @@ see the linked food-logger quality-floor change.
 ## Coach AI
 
 Coach AI v1 is the per-client generate / edit / approve flow for workout
-programs, meal plans, and weekly insights. The mobile half lives in
+programs and weekly insights. The mobile half lives in
 `src/screens/coach/AIWorkoutDraftScreen.tsx`,
 `src/screens/coach/AIMealPlanDraftScreen.tsx`,
 `src/screens/coach/ClientInsightScreen.tsx`, and the entry point
@@ -540,15 +540,13 @@ call that races past the status gate.
   `ClientInsight`).
 
 ### HOW
-1. Coach taps one of the three CTAs on `ClientDetailScreen`.
+1. Coach taps one of the two CTAs on `ClientDetailScreen`.
 2. A bottom sheet collects inputs:
    - Workout — weeks (1-12 stepper), days per week (1-7 chips), focus
      (Strength / Hypertrophy / Endurance / Mobility chips), notes.
-   - Meal plan — days (1-14 stepper), notes.
    - Insight — windowDays chip (7 / 14 / 30, default 7).
 3. The mobile POSTs to one of:
    - `POST /coach/ai/workout-program`
-   - `POST /coach/ai/meal-plan`
    - `POST /coach/ai/client-insight`
 4. The returned `draftId` is handed to the matching draft screen.
 5. The draft screen loads `GET /coach/ai/drafts/:draftId`, renders an
