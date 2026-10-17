@@ -3,18 +3,23 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { StyleSheet } from 'react-native';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import Colors from '../constants/colors';
-import { layout } from '../theme/tokens';
+import { layout, radius } from '../theme/tokens';
 import type { ThemeColors } from '../theme/ThemeProvider';
+import type { WeightLog } from '../types';
 import { makeStyles } from '../screens/coach/client-detail/styles';
 import { MacroCard } from '../screens/coach/client-detail/MacroCard';
 import { SummaryTab } from '../screens/coach/client-detail/SummaryTab';
 import { FoodLogReviewSection } from '../screens/coach/client-detail/FoodLogReviewSection';
+import { ProgressTab } from '../screens/coach/client-detail/ProgressTab';
+import { loadCoachFoodReview } from '../api/coachFoodReviewApi';
 import CoachAiSection from '../components/coach/CoachAiSection';
 import coachAiApi from '../api/coachAi';
 
 const mockNavigate = jest.fn();
+const mockRefetch = jest.fn();
+let mockTargetError = false;
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
@@ -24,7 +29,7 @@ jest.mock('../theme/ThemeProvider', () => ({
 }));
 jest.mock('../hooks/useMacros', () => ({
   useCurrentMacrosForClient: () => ({
-    data: null, isLoading: false, isError: false, refetch: jest.fn(),
+    data: null, isLoading: false, isError: mockTargetError, refetch: mockRefetch,
   }),
 }));
 jest.mock('../screens/coach/client-detail/ConsultationSummaryCard', () => ({
@@ -39,7 +44,10 @@ jest.mock('../api/coachAi', () => ({
   default: {
     status: jest.fn(async () => ({ data: { ready: true } })),
     listDrafts: jest.fn(async () => ({ data: [] })),
+    generateWorkout: jest.fn(),
   },
+  isTimeoutError: (err: { code?: string }) => err?.code === 'ECONNABORTED',
+  isAiDisabledError: () => false,
 }));
 
 const colors: ThemeColors = {
@@ -49,7 +57,10 @@ const styles = makeStyles(colors);
 const flat = (style: unknown) => StyleSheet.flatten<ViewStyle & TextStyle>(style as StyleProp<ViewStyle & TextStyle>);
 const props = { clientId: 'c1', clientName: 'Maya Chen' };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockTargetError = false;
+});
 
 it('R2: every client-file tab keeps its content height without a shrinking or capped viewport', () => {
   expect(styles.tabScroll).toMatchObject({ flexGrow: 0, flexShrink: 0 });
@@ -130,4 +141,111 @@ it('R6: every food-review period chip shares a 44 pt target and keeps selection 
     expect(chip.props.accessibilityState.selected).toBe(true);
     expect(await v.findByText(`No meals logged in the last ${d} days.`)).toBeTruthy();
   }
+});
+
+it.each(['Message', 'Archive / Unarchive'])('CF2: header %s shares the 44 by 44 target', () => {
+  expect(styles.msgIconBtn).toMatchObject({ width: layout.touchMin, height: layout.touchMin });
+  const source = readFileSync(resolve(__dirname, '../screens/coach/ClientDetailScreen.tsx'), 'utf8');
+  expect(source.match(/style=\{(?:\[)?styles\.msgIconBtn/g)).toHaveLength(2);
+  expect(styles.headerLabels).toMatchObject({ flex: 1, minWidth: 0 });
+  expect(source).toContain('style={styles.headerLabels}');
+  expect(source).toContain('accessibilityLabel="Open messages"');
+});
+
+it.each(['summary', 'food'])('CF2: %s retry has the shared 44 pt target and retries its read', async (surface) => {
+  mockTargetError = true;
+  const read = jest.mocked(loadCoachFoodReview);
+  const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+  if (surface === 'food') read.mockRejectedValueOnce(new Error('offline'));
+  const v = await render(surface === 'food'
+    ? <FoodLogReviewSection {...props} colors={colors} styles={styles} />
+    : <SummaryTab {...props} profile={null} foodShared totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }}
+        nudgeSuccess={false} colors={colors} styles={styles} onOpenMessages={jest.fn()}
+        onOpenNudge={jest.fn()} onOpenMacrosReview={jest.fn()} onOpenWorkoutBuilder={jest.fn()} />);
+  const retry = await v.findByRole('button', { name: surface === 'food' ? 'Retry' : 'Retry target' });
+  expect(flat(retry.props.style)).toMatchObject({ minHeight: layout.touchMin, minWidth: layout.touchMin });
+  await fireEvent.press(retry);
+  if (surface === 'food') {
+    expect(await v.findByText('No meals logged in the last 7 days.')).toBeTruthy();
+    expect(read).toHaveBeenCalledTimes(2);
+  } else {
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+  }
+  errorLog.mockRestore();
+});
+
+it.each([-10, 0, 10])('CF2: signed Change %s meets 4.5:1 on its actual cream surface', async (change) => {
+  const log = (id: string, date: string, weight: number): WeightLog => ({
+    id, userId: 'c1', coachId: '', date, weight, unit: 'lbs', notes: '', createdAt: date,
+  });
+  const v = await render(<ProgressTab colors={colors} styles={styles}
+    weightLogs={[log('first', '2026-10-01', 180), log('latest', '2026-10-15', 180 + change)]} />);
+  const text = `${change > 0 ? '+' : ''}${change.toFixed(1)}`;
+  const foreground = flat(v.getByText(text).props.style).color as string;
+  expect(foreground).toBe(colors.textPrimary);
+  expect((luminance(styles.progressStat.backgroundColor) + 0.05) / (luminance(foreground) + 0.05)).toBeGreaterThanOrEqual(4.5);
+});
+
+it('CF2: shared Coach AI form controls use semantic radii and 44 pt targets, retaining input actions', async () => {
+  const v = await render(<CoachAiSection {...props} />);
+  for (const kind of ['workout', 'insight']) {
+    expect(flat(v.getByTestId(`coach-ai-cta-${kind}`).props.style)).toMatchObject({
+      borderRadius: radius.button, minHeight: layout.touchMin,
+    });
+  }
+  await fireEvent.press(v.getByTestId('coach-ai-cta-workout'));
+  for (const [label, result] of [['Increase', 'Weeks (5)'], ['Decrease', 'Weeks (4)']]) {
+    const stepper = v.getByRole('button', { name: label });
+    expect(flat(stepper.props.style)).toMatchObject({ width: layout.touchMin, height: layout.touchMin, borderRadius: radius.button });
+    await fireEvent.press(stepper);
+    expect(v.getByText(result)).toBeTruthy();
+  }
+  for (const day of [1, 2, 3, 4, 5, 6, 7]) {
+    const option = v.getByTestId(`coach-ai-workout-dpw-${day}`);
+    expect(flat(option.props.style)).toMatchObject({ minHeight: layout.touchMin, minWidth: layout.touchMin, borderRadius: radius.input });
+    await fireEvent.press(option);
+    expect(option.props.accessibilityState.selected).toBe(true);
+  }
+  expect(flat(v.getByPlaceholderText('Injuries, equipment available, preferences…').props.style).borderRadius).toBe(radius.input);
+  const submit = v.getAllByRole('button', { name: 'Generate workout program' }).slice(-1)[0];
+  expect(flat(submit.props.style)).toMatchObject({ borderRadius: radius.button, minHeight: layout.touchMin });
+  await fireEvent.press(v.getByRole('button', { name: 'Close' }));
+  await fireEvent.press(v.getByTestId('coach-ai-cta-insight'));
+  for (const days of [7, 14, 30]) {
+    const chip = v.getByTestId(`coach-ai-insight-window-${days}`);
+    expect(flat(chip.props.style)).toMatchObject({ minHeight: layout.touchMin, borderRadius: radius.input });
+    await fireEvent.press(chip);
+    expect(chip.props.accessibilityState.selected).toBe(true);
+  }
+});
+
+it('CF2: timeout link opens the inbox and the rounded ready-draft action opens the real draft route', async () => {
+  jest.useFakeTimers();
+  try {
+    jest.mocked(coachAiApi.generateWorkout).mockRejectedValueOnce({ code: 'ECONNABORTED' });
+    const v = await render(<CoachAiSection {...props} />);
+    await fireEvent.press(v.getByTestId('coach-ai-cta-workout'));
+    await fireEvent.press(v.getByText('Generate'));
+    const banner = await v.findByTestId('coach-ai-timeout-banner');
+    expect(flat(banner.props.style).borderRadius).toBe(radius.card);
+    const link = v.getByRole('button', { name: 'View pending drafts' });
+    expect(flat(link.props.style)).toMatchObject({ minHeight: layout.touchMin, minWidth: layout.touchMin });
+    await fireEvent.press(link);
+    expect(await v.findByText('No pending drafts for this client.')).toBeTruthy();
+    await fireEvent.press(v.getByRole('button', { name: 'Close' }));
+    jest.mocked(coachAiApi.listDrafts).mockResolvedValueOnce({ data: [{ id: 'draft1', type: 'WORKOUT_PROGRAM' }] } as never);
+    await act(async () => { jest.advanceTimersByTime(10_000); });
+    const ready = await v.findByTestId('coach-ai-draft-ready-banner');
+    expect(flat(ready.props.style)).toMatchObject({ borderRadius: radius.button, minHeight: layout.touchMin });
+    await fireEvent.press(ready);
+    expect(mockNavigate).toHaveBeenCalledWith('AIWorkoutDraft', { draftId: 'draft1', ...props });
+  } finally {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  }
+});
+
+it('CF2: every Coach AI radius comes from the semantic token set', () => {
+  const source = readFileSync(resolve(__dirname, '../components/coach/CoachAiSection.tsx'), 'utf8');
+  expect(source).not.toMatch(/borderRadius:\s*\d/);
 });

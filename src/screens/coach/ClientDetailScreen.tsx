@@ -414,7 +414,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               {clientName.split(' ').map((n) => n[0]).join('')}
             </Text>
           </View>
-          <View>
+          <View style={styles.headerLabels}>
             <Text style={styles.clientName}>{clientName}</Text>
             <Text style={styles.clientStatus}>
               {[
@@ -426,6 +426,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         </View>
         <TouchableOpacity
           style={styles.msgIconBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Open messages"
           onPress={() => {
             if (!currentUser) return;
             // Audit P1: route to the specific client thread, not the Messages
