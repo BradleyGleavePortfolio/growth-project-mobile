@@ -49,7 +49,7 @@ import BiometricUnlockGate from './src/components/BiometricUnlockGate';
 // In development and screenshot capture runs, the real module is used.
 // Do NOT use a dynamic require() guarded by __DEV__ here — __DEV__ is a
 // runtime constant and Metro cannot tree-shake dynamic requires at bundle time.
-import { installAxiosMockAdapter, isScreenshotMode, seedDemoUser } from './src/screenshots';
+import { installAxiosMockAdapter, isScreenshotMode, seedDemoUser, ScreenshotNavigator } from './src/screenshots';
 
 // Initialise Sentry as early as possible so even import-time failures get
 // captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
@@ -285,7 +285,7 @@ function App() {
                 It sits inside ThemeProvider so the locked-state UI uses the
                 same theme as the rest of the app. */}
             <BiometricUnlockGate>
-              <RootNavigator />
+              {isScreenshotMode() ? <ScreenshotNavigator /> : <RootNavigator />}
             </BiometricUnlockGate>
           </ThemeProvider>
         </QueryClientProvider>

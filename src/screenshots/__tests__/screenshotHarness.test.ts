@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isScreenshotMode } from '../mode';
-import { SCREENSHOT_TARGETS } from '../screens';
+import { SCREENSHOT_TARGETS, SCREENSHOT_SIZES, SCREENSHOT_CAPTIONS, screenshotState, screenshotTarget } from '../screens';
 import { DEMO_USER, DEMO_FOOD_LOGS, DEMO_RECIPES } from '../fixtures';
 
 describe('screenshot mode flag', () => {
@@ -51,17 +51,30 @@ describe('screenshot targets', () => {
     }
   });
 
-  it('routes match registered ClientNavigator screen names', () => {
+  it('routes match the shipping navigator for each audience', () => {
     // We do not import ClientNavigator (it pulls react-native-screens) — we
     // grep its source instead so the test stays JS-only and fast.
-    const src = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'navigation', 'ClientNavigator.tsx'),
-      'utf8',
-    );
     for (const t of SCREENSHOT_TARGETS) {
+      const src = fs.readFileSync(
+        path.resolve(__dirname, '../../navigation', t.audience === 'coach' ? 'CoachNavigator.tsx' : 'ClientNavigator.tsx'), 'utf8',
+      );
       const re = new RegExp(`name=["']${t.route}["']`);
       expect(src).toMatch(re);
+      expect(screenshotTarget(`tgp://screenshot/${t.slug}`)).toBe(t);
+      expect(screenshotTarget(`http://localhost:8081/screenshot/${t.slug}`)).toBe(t);
+      expect(screenshotState(t).routes[0].name).toBe(t.tab ?? t.route);
     }
+  });
+
+  it('has the six listing frames, both exact sizes, and pending captions only as data', () => {
+    expect(SCREENSHOT_TARGETS.map((t) => t.route)).toEqual(
+      ['HomeMain', 'RomanChat', 'ActiveWorkout', 'Log', 'Messages', 'CommandCenter'],
+    );
+    expect(SCREENSHOT_SIZES).toEqual([{ width: 1320, height: 2868 }, { width: 1290, height: 2796 }]);
+    expect(SCREENSHOT_CAPTIONS.flatMap((c) => c.ids)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+    expect(screenshotState(SCREENSHOT_TARGETS[2], { exercises: '[]' }).routes[0]).toEqual({
+      name: 'WorkoutTab', state: { routes: [{ name: 'ActiveWorkout', params: { exercises: '[]' } }] },
+    });
   });
 });
 

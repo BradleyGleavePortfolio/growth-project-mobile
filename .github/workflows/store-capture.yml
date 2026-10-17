@@ -1,0 +1,31 @@
+name: Store capture
+on:
+  pull_request:
+    paths:
+      - 'src/screenshots/**'
+      - 'scripts/capture-screenshots*'
+      - 'App.tsx'
+      - '.github/workflows/store-capture.yml'
+permissions:
+  contents: read
+jobs:
+  capture:
+    name: Real app store frames
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+      - run: npm ci
+      # Playwright is the existing web driver's external prerequisite.
+      - run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/capture-screenshots-web.js
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: raw-store-frames
+          path: screenshots/web/

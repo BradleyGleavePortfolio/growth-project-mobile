@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isScreenshotMode } from './mode';
 import { secureStorage } from '../services/secureStorage';
 import { DEMO_USER } from './fixtures';
+import { setUserCache } from '../lib/userCache';
 
 /**
  * Seed AsyncStorage + SecureStore so RootNavigator routes the demo user
@@ -18,11 +19,14 @@ import { DEMO_USER } from './fixtures';
  *
  * No-ops when EXPO_PUBLIC_SCREENSHOT_MODE is off.
  */
-export async function seedDemoUser(): Promise<void> {
+export async function seedDemoUser(audience: 'client' | 'coach' = 'client'): Promise<void> {
   if (!isScreenshotMode()) return;
 
   await secureStorage.setItem('supabase_token', 'screenshot-mode-token');
   await AsyncStorage.setItem('user_data', JSON.stringify(DEMO_USER));
+  await setUserCache(audience === 'coach'
+    ? { ...DEMO_USER, id: DEMO_USER.coach_id!, name: 'Sam Carter', firstName: 'Sam', role: 'coach' }
+    : DEMO_USER);
   await AsyncStorage.setItem('onboarding_complete', 'true');
   await AsyncStorage.removeItem('needs_role_selection');
 

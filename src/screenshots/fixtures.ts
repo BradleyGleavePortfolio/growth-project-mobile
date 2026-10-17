@@ -8,8 +8,7 @@
  *
  * TGP guardrails honored:
  *  - No diagnosis / treatment language, no medical claims.
- *  - No financial advice, no AI-generated coach text. The AI Guide screen is
- *    intentionally not in the screenshot target set.
+ *  - Invented chat history only; no live AI request or coach draft.
  *  - All copy is generic ("Steady week", "Cardio session") with no claim of
  *    outcomes attributable to the app.
  */
@@ -340,3 +339,21 @@ export const DEMO_AUTH_ME = {
   user: DEMO_USER,
   profile: DEMO_USER.profile,
 };
+
+export const DEMO_WORKOUT_PARAMS = {
+  routineName: 'Upper body',
+  exercises: JSON.stringify([
+    { exerciseId: 'bench', exerciseName: 'Bench press', sets: 3, reps: 8, restSec: 90 },
+    { exerciseId: 'row', exerciseName: 'Seated row', sets: 3, reps: 10, restSec: 90 },
+  ]),
+};
+
+export const DEMO_ROMAN_SESSION = {
+  id: 'demo-roman', surface: 'client', messageCount: 2,
+  startedAt: '2026-05-02T09:00:00Z', lastActivityAt: '2026-05-02T09:01:00Z',
+};
+
+export const DEMO_ROMAN_MESSAGES = [
+  { id: 'roman-2', role: 'roman', content: 'Protein first, then carbs around training. Your targets are in your food log.', interrupted: false, createdAt: '2026-05-02T09:01:00Z' },
+  { id: 'roman-1', role: 'user', content: 'Where can I see my food targets?', interrupted: false, createdAt: '2026-05-02T09:00:00Z' },
+];

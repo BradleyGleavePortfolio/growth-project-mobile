@@ -30,6 +30,8 @@ import {
   DEMO_RECIPES,
   DEMO_USER,
   DEMO_WEIGHT_HISTORY,
+  DEMO_ROMAN_SESSION,
+  DEMO_ROMAN_MESSAGES,
 } from './fixtures';
 
 type Handler = (
@@ -50,7 +52,7 @@ const ROUTES: Route[] = [
     handler: () => ({ invite_code_required: false, coach_code_required: false, providers: ['email', 'google', 'apple'] }) },
 
   // Profile / preferences ────────────────────────────────────────────────────
-  { method: 'GET',  pattern: /^\/profile$/,                 handler: () => DEMO_USER.profile },
+  { method: 'GET',  pattern: /^\/profile$/,                 handler: () => ({ ...DEMO_USER.profile, coach_id: DEMO_USER.coach_id, coach_name: 'Sam Carter' }) },
   { method: 'GET',  pattern: /^\/users\/me\/preferences$/,
     handler: () => ({ units: 'imperial', tone: 'direct' }) },
   { method: 'GET',  pattern: /^\/notifications\/preferences$/,
@@ -76,7 +78,7 @@ const ROUTES: Route[] = [
     handler: () => ({ days: weeklyFromLogs() }) },
 
   // Water ────────────────────────────────────────────────────────────────────
-  { method: 'GET',  pattern: /^\/nutrition\/water\?/,
+  { method: 'GET',  pattern: /^\/nutrition\/water(\?|$)/,
     handler: () => ({ total_ml: DEMO_DAILY_TOTAL_ML }) },
   { method: 'GET',  pattern: /^\/nutrition\/water\/weekly/,
     handler: () => ({ days: [] }) },
@@ -117,6 +119,36 @@ const ROUTES: Route[] = [
   // Workouts ─────────────────────────────────────────────────────────────────
   { method: 'GET',  pattern: /^\/workouts/,                 handler: () => [] },
   { method: 'GET',  pattern: /^\/routines$/,                handler: () => [] },
+  { method: 'GET', pattern: /^\/assignments\/me$/, handler: () => [] },
+  { method: 'GET', pattern: /^\/me\/macros\/current$/, handler: () => ({ calories_kcal: 2200, protein_g: 165, carbs_g: 230, fats_g: 70 }) },
+  { method: 'GET', pattern: /^\/v1\/clients\/me\/coach$/, handler: () => ({ id: DEMO_USER.coach_id, name: 'Sam Carter' }) },
+  { method: 'GET', pattern: /^\/coach\/team\/members$/, handler: () => [{ id: DEMO_USER.coach_id, role: 'head_coach' }] },
+  { method: 'GET', pattern: /^\/notifications\/unread-count$/, handler: () => ({ count: 0 }) },
+  { method: 'GET', pattern: /^\/users\/blocks$/, handler: () => ({ blocked: [] }) },
+  { method: 'GET', pattern: /^\/v1\/checkout\/entitlement$/, handler: () => ({ active: true }) },
+  { method: 'GET', pattern: /^\/me\/onboarding$/, handler: () => ({ tutorial_completed: true }) },
+  { method: 'POST', pattern: /^\/roman\/sessions$/, handler: () => DEMO_ROMAN_SESSION },
+  { method: 'GET', pattern: /^\/roman\/sessions\?/, handler: () => ({ sessions: [], nextCursor: null }) },
+  { method: 'GET', pattern: /^\/roman\/sessions\/demo-roman\/messages$/, handler: () => ({ messages: DEMO_ROMAN_MESSAGES, nextCursor: null }) },
+  { method: 'GET', pattern: /^\/me\/ai-consent(\?|$)/, handler: () => ({
+    granted: true, state: 'granted', version: 'client-ai-v4', granted_at: '2026-05-02T08:00:00Z',
+    withdrawn_at: null, current_version: 'client-ai-v4', needs_reconsent: false, copy: null,
+  }) },
+  { method: 'GET', pattern: /^\/coach\/command-center\/overview$/, handler: () => ({
+    roster_size: 14, active_today: 9, check_in_rate_7day: 0.71, open_alerts: 0,
+    at_risk_count: 0, win_streak_count: 6, unread_messages: 2, pending_actions: 0,
+  }) },
+  { method: 'GET', pattern: /^\/coach\/command-center\/at-risk$/, handler: () => ({ items: [], total_at_risk: 0 }) },
+  { method: 'GET', pattern: /^\/coach\/connect\/payouts/, handler: () => ({ payouts: [] }) },
+  { method: 'GET', pattern: /^\/coach\/command-center\/ltv-metrics$/, handler: () => ({}) },
+  { method: 'GET', pattern: /^\/v1\/coach\/money\/summary$/, handler: (config) => ({
+    currency: 'usd', currencies: ['usd'], window: { from: config.params.from, to: config.params.to },
+    totals: { gross_cents: 300000, processing_cents: 9000, platform_fee_cents: 6000,
+      head_coach_split_cents: 0, refunded_cents: 0, head_coach_income_cents: 0,
+      net_cents: 285000, charge_count: 14, processing_paid_by: 'coach' },
+    recurring: { mrr_cents: 300000, paying_clients: 14, churned_30d: 0, new_clients_30d: 2 },
+    attention_count: 0, generated_at: new Date().toISOString(),
+  }) },
 
   // Messages / nudges / community ────────────────────────────────────────────
   { method: 'GET',  pattern: /^\/messages(\?|$)/,           handler: () => DEMO_MESSAGES },
