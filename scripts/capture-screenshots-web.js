@@ -65,7 +65,7 @@ function profileEnv(name) {
         const dir = path.join(out, `${size.width}x${size.height}`);
         fs.mkdirSync(dir, { recursive: true });
         try {
-          await page.goto(`${url}/screenshot/${target.slug}`, { waitUntil: 'domcontentloaded' });
+          await page.goto(`${url}/screenshot/${target.slug}`, { waitUntil: 'domcontentloaded', timeout: 180000 });
           await page.getByTestId(`screenshot-${target.slug}`).waitFor({ timeout: 180000 });
           await page.getByText(target.readyText, { exact: false }).first().waitFor({ timeout: 30000 });
           await page.evaluate(() => document.fonts.ready);

@@ -128,7 +128,7 @@ const ROUTES: Route[] = [
   { method: 'GET', pattern: /^\/v1\/checkout\/entitlement$/, handler: () => ({ active: true }) },
   { method: 'GET', pattern: /^\/me\/onboarding$/, handler: () => ({ tutorial_completed: true }) },
   { method: 'POST', pattern: /^\/roman\/sessions$/, handler: () => DEMO_ROMAN_SESSION },
-  { method: 'GET', pattern: /^\/roman\/sessions\?/, handler: () => ({ sessions: [], nextCursor: null }) },
+  { method: 'GET', pattern: /^\/roman\/sessions(\?|$)/, handler: () => ({ sessions: [], nextCursor: null }) },
   { method: 'GET', pattern: /^\/roman\/sessions\/demo-roman\/messages$/, handler: () => ({ messages: DEMO_ROMAN_MESSAGES, nextCursor: null }) },
   { method: 'GET', pattern: /^\/me\/ai-consent(\?|$)/, handler: () => ({
     granted: true, state: 'granted', version: 'client-ai-v4', granted_at: '2026-05-02T08:00:00Z',
