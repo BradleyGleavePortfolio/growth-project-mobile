@@ -32,7 +32,6 @@ import {
 import {
   AI_CHOICE_UNKNOWN_LINE,
   AI_WITHDRAW_UNCONFIRMED_LINE,
-  CONSENT_FOOTER,
   consentScreenCopy,
   P8_COPY,
 } from '../../lib/consultation/copy';
@@ -96,6 +95,8 @@ export interface QuestionScreenProps {
     aiUnconfirmed?: boolean;
     aiUnknown?: boolean;
     aiMemory?: AiConsentUpgradeCopy | null;
+    /** CRISIS-APP-COPY: the server answered with client-ai-v8 / v9, so P0 shows v8 and records v9 / v10. */
+    aiCrisis?: boolean;
     /** B-SHARE-GUEST-127: the coach-sharing sentence printed above P0 Continue (null: none). */
     coachSharing?: { version: string; coachName: string | null } | null;
   };
@@ -533,7 +534,7 @@ export function openPrivacyPolicy(): void {
 function ConsentBody(props: BodyProps) {
   const { answers, onNext, header, consent: state, ctx } = props;
   // Owner 62: a client with no coach sees (and records) the coach-free text.
-  const copy = consentScreenCopy(!!ctx?.coachless);
+  const copy = consentScreenCopy(!!ctx?.coachless, !!state?.aiCrisis);
   // Only a record matching this build's copy version counts (Sol A-03):
   // stale or malformed records render box 1 unticked.
   const already = isConsentAnswerCurrent(answers.P0);
@@ -604,7 +605,16 @@ function ConsentBody(props: BodyProps) {
         label={copy.box1Label}
         testID="consent-checkbox"
       />
-      <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
+      {/* W-CONSENT: a client with no coach is asked too, with why Roman waits for a coach. */}
+      {copy.romanTitle ? (
+        <>
+          <Headline level="h2" style={{ marginTop: 28 }} testID="consent-roman-title">
+            {copy.romanTitle}
+          </Headline>
+          <Text style={[s.body, { marginTop: 8 }]} testID="consent-roman-lead">{copy.romanLead}</Text>
+        </>
+      ) : null}
+      <Text style={[s.small, { marginTop: copy.romanTitle ? 12 : 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
         {aiMemory ? aiMemory.paragraph.text : copy.aiParagraph}
       </Text>
       <Checkbox
@@ -628,7 +638,7 @@ function ConsentBody(props: BodyProps) {
           {AI_WITHDRAW_UNCONFIRMED_LINE}
         </Text>
       ) : null}
-      <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{CONSENT_FOOTER}</Text>
+      <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{copy.footer}</Text>
       {/* C-8 (operator 2026-10-01): the Privacy Policy, below the two boxes.
           Not part of the consent text or its hash; opening it sends nothing. */}
       <TextLink label="Privacy Policy" onPress={openPrivacyPolicy} testID="consent-privacy-link" role="link" />

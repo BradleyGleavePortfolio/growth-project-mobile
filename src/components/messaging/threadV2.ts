@@ -18,6 +18,7 @@ export interface ThreadV2Fields {
   edited_at: string | null;
   pinned_at: string | null;
   client_message_id: string | null;
+  drafted?: boolean;
 }
 
 export function resolveSenderRole(r: Record<string, unknown>, selfId: string | undefined, selfRole: SenderRole): SenderRole {
@@ -47,6 +48,7 @@ export function readThreadV2Fields(r: Record<string, unknown>): ThreadV2Fields {
     edited_at: str(r.edited_at),
     pinned_at: str(r.pinned_at),
     client_message_id: str(r.client_message_id),
+    drafted: r.ai_draft_id != null && !str(r.voice_url),
   };
 }
 
@@ -61,14 +63,14 @@ export function replyQuoteText(reply: ReplyPreview): string {
 type LocalParent = { id: string; body: string; sender_role: SenderRole } | null | undefined;
 
 /** Bubble fields for a row: the server quote wins over the local lookup. */
-export function bubbleV2Fields(v2: ThreadV2Fields | undefined, clientUserId: string | undefined, local: LocalParent): Pick<BubbleMessage, 'parent' | 'deleted' | 'edited' | 'pinned'> {
+export function bubbleV2Fields(v2: ThreadV2Fields | undefined, clientUserId: string | undefined, local: LocalParent): Pick<BubbleMessage, 'parent' | 'deleted' | 'edited' | 'pinned' | 'drafted'> {
   const q = v2?.reply_to;
   const parent = q
     ? { id: q.id, body: replyQuoteText(q), sender_role: (q.sender_id && q.sender_id === clientUserId ? 'client' : 'coach') as SenderRole }
     : local
       ? { id: local.id, body: local.body, sender_role: local.sender_role }
       : null;
-  return { parent, deleted: v2?.deleted, edited: !!v2?.edited_at, pinned: !!v2?.pinned_at };
+  return { parent, deleted: v2?.deleted, edited: !!v2?.edited_at, pinned: !!v2?.pinned_at, drafted: v2?.drafted };
 }
 
 export function withinEditWindow(createdAt: string, now: number = Date.now()): boolean {

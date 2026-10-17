@@ -87,11 +87,11 @@ it.each(STATES)('from %s: every way out arrives (support, Sign out, Download my 
   ]);
   buttons.find((b) => b.text === 'Sign out')?.onPress?.();
   expect(signOut).toHaveBeenCalledTimes(1);
-  await choose('Download my data', 'age-data-export');
+  await choose('Download my data', 'consult-data-export');
   await r.findByTestId('data-export-screen');
   await fireEvent.press(r.getByLabelText('Go back'));
   await r.findByTestId(state === 'the age step' ? 'consult-screen-B2' : 'consult-screen-UNDER_AGE');
-  await choose('Delete my account', 'age-delete-account');
+  await choose('Delete my account', 'consult-delete-account');
   await r.findByText('Delete account');
   await fireEvent.press(r.getByLabelText('Go back'));
   expect(r.getByTestId(state === 'the age step' ? 'consult-screen-B2' : 'consult-screen-UNDER_AGE')).toBeTruthy();
