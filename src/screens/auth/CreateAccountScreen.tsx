@@ -1257,15 +1257,6 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         coachName={sharingCoachName}
         style={styles.legalText}
       />
-      {isCoachSignup ? (
-        <Checkbox
-          checked={romanOn}
-          onToggle={() => setRomanOn((v) => !v)}
-          label={COACH_AI_CONSENT_COPY.title}
-          detail={COACH_AI_CONSENT_COPY.paragraph}
-          testID="create-account-roman"
-        />
-      ) : null}
       <PrimaryButton
         label="Create account"
         onPress={handleRegister}
@@ -1607,6 +1598,17 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             textContentType="telephoneNumber"
           />
         </View>
+
+        {/* COACH-AI-CONSENT: the coach form's last item, right above Create account (owner mockup 1). */}
+        {isCoachSignup ? (
+          <Checkbox
+            checked={romanOn}
+            onToggle={() => setRomanOn((v) => !v)}
+            label={COACH_AI_CONSENT_COPY.title}
+            detail={COACH_AI_CONSENT_COPY.paragraph}
+            testID="create-account-roman"
+          />
+        ) : null}
 
         {keyboardOpen ? (
           <View style={styles.inlineFooter} testID="create-account-inline-footer">{footerContent}</View>

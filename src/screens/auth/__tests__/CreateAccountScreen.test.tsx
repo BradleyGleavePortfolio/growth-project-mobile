@@ -11,7 +11,7 @@
 import React from 'react';
 import { Alert, Linking, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockGetSignupPolicy = jest.fn();
 const mockSignupWithCode = jest.fn();
@@ -598,6 +598,9 @@ describe('CreateAccountScreen', () => {
       const utils = await renderScreen(undefined, 'coach');
       const box = utils.getByTestId('create-account-roman');
       expect(box.props.accessibilityState).toMatchObject({ checked: false });
+      // In the form (its last item), never in the pinned footer that holds Create account.
+      expect(within(utils.getByTestId('create-account-register-scroll')).getByTestId('create-account-roman')).toBeTruthy();
+      expect(within(utils.getByTestId('create-account-register-footer')).queryByTestId('create-account-roman')).toBeNull();
       expect(utils.getByText('Turn on Roman')).toBeTruthy();
       expect(utils.getByText(/^Roman runs on Anthropic, an outside AI company\./)).toBeTruthy();
       if (tick) await fireEvent.press(box);
