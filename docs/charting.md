@@ -29,6 +29,19 @@ walks every such chart.
 
 ---
 
+### C8 v2 weight plot (C8V2-2A)
+
+`TgpLineChart.plot` composes custom SVG layers and an optional native-text overlay
+with shared measured axes, nearest-day long-press exploration and adjustable
+screen-reader actions. Default plots retain their existing rendering and gestures.
+The weight consumer adds a decorative upper/lower range ribbon, not a baseline
+fill. Single readings remain dots, while the trend begins with the second reading.
+Keep full history before period filtering: the 0.1 update runs on weigh-in days
+only, and three missing days cause a dashed carry rather than a fabricated change.
+Week uses whole-pound ticks; other weight views use two-pound ticks. Fewer labels
+at 130% retain that scale. Period changes fade 150 ms, instant with Reduce Motion.
+The caller gates the dark variant with clientProgressV2, off by default.
+
 ### TgpBarChart
 
 **Use for:** Discrete categorical comparisons (e.g. weekly session counts, macro group totals).

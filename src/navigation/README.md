@@ -1,5 +1,8 @@
 # Navigation
 
+C8V2-2A adds no route or navigation entry. Its chart and period variants remain
+off by default behind clientProgressV2; ProgressScreen integration is C8 PR 2b.
+
 Day One cards enter the existing Food / Home > Habits / You > Progress loggers without marking completion. `ClientNavigator.onDay1Saved` forwards only focused, successful saves; `RootNavigator` matches and consumes the selected type for the committed user, then shows `Day1WinScreen(savedWin)` for the server note while retaining the mounted navigator. `day1NoteVisible` temporarily hides the open food sheet, without clearing its meal, search or success feedback. Continue reveals that same logger without re-arming completion. See `screens/client/first-win/README.md`.
 
 Coach tab labels use the same one-line Inter tokens and fitting props as client tabs. Labels come from each route's existing title so no string override bypasses the shared renderer. The label reclaims the bottom-tab button's 5 pt side inset. Every button keeps the native tab role; Messages announces the visible unread badge, and iOS labels retain the tab position. Tab order, destinations, feature gates and selection haptics are unchanged.

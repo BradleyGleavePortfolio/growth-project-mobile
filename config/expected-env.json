@@ -96,6 +96,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "C8 v2 chart parts stay off until the Progress page integration is ready."
+    },
     "EXPO_PUBLIC_FF_COACH_TABS_V2": {
       "kind": "flag",
       "default": "off",

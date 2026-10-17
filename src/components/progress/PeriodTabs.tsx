@@ -3,19 +3,33 @@
  * (CATALOG patterns: "Filter rows use underline-on-active, no pill backgrounds").
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/ThemeProvider';
 import { PERIODS, type Period } from './progressFormat';
+import { featureFlags } from '../../config/featureFlags';
+import { HapticService } from '../../ui/haptics/haptics.service';
 
 export default function PeriodTabs({
   value,
   onChange,
+  variant,
 }: {
   value: Period;
   onChange: (period: Period) => void;
+  variant?: 'dark';
 }): React.ReactElement {
   const { semanticColors: sc } = useTheme();
+  if (featureFlags.clientProgressV2 && variant === 'dark') {
+    return <View style={styles.row} accessibilityRole="tablist" accessibilityLabel="Weight period">
+      {(['7D', '30D', 'All'] as const).map((p, i) => <Pressable key={p} style={styles.tab}
+        accessibilityRole="tab" accessibilityLabel={['Week', 'Month', 'All'][i]}
+        accessibilityState={{ selected: value === p }} onPress={() => { void HapticService.selection(); onChange(p); }}>
+        <Text style={[styles.label, { color: value === p ? sc.textOnAccent : sc.textOnMastheadMuted }]}>{['Week', 'Month', 'All'][i]}</Text>
+        <View style={[styles.underline, { backgroundColor: value === p ? sc.data.trend : 'transparent' }]} />
+      </Pressable>)}
+    </View>;
+  }
   return (
     <View style={styles.row} accessibilityRole="tablist">
       {PERIODS.map((p) => {

@@ -22,13 +22,14 @@
  *   • Do NOT use inside a VirtualizedList without a fixed height.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import Svg, {
   Polyline,
@@ -58,6 +59,15 @@ export interface TgpLineChartProps {
    * When omitted the raw rounded x value is rendered (back-compat).
    */
   xFormatter?: (x: number) => string;
+  /** Optional layered plot; axes and touch/assistive exploration stay shared. */
+  plot?: {
+    domain: [number, number];
+    tickStep: number;
+    render: (p: { x: (v: number) => number; y: (v: number) => number; right: number; bottom: number }) => React.ReactNode;
+    overlay?: (p: { x: (v: number) => number; y: (v: number) => number; right: number }) => React.ReactNode;
+    describe: (index: number) => string;
+    onSelect: (index: number | null) => void;
+  };
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -73,6 +83,7 @@ export default function TgpLineChart({
   themeOverride,
   accessibilityLabel = 'Line chart',
   xFormatter,
+  plot,
 }: TgpLineChartProps) {
   // ThemeProvider exposes a sensible default via createContext(defaultTheme),
   // so useTheme() is always safe to call unconditionally — no try/catch needed.
@@ -80,8 +91,12 @@ export default function TgpLineChart({
   const colors: ThemeColors = { ...theme.colors, ...themeOverride };
 
   const [tooltip, setTooltip] = useState<{ x: number; y: number; value: number; label: string } | null>(null);
+  const [width, setWidth] = useState(SCREEN_WIDTH - 32);
+  const selected = useRef<number | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState('');
+  const { fontScale } = useWindowDimensions();
 
-  const W = SCREEN_WIDTH - 32;
+  const W = width;
   const H = height;
   const plotW = W - PAD_L - PAD_R;
   const plotH = H - PAD_T - PAD_B;
@@ -92,28 +107,47 @@ export default function TgpLineChart({
     }
     const ys = data.map((d) => d.y);
     const xs = data.map((d) => d.x);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
+    const minY = plot?.domain[0] ?? Math.min(...ys);
+    const maxY = plot?.domain[1] ?? Math.max(...ys);
     const rangeY = maxY - minY || 1;
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);
     const rangeX = maxX - minX || 1;
 
-    const toSvgX = (x: number) => PAD_L + ((x - minX) / rangeX) * plotW;
+    const toSvgX = (x: number) => data.length === 1 ? PAD_L + plotW / 2 : PAD_L + ((x - minX) / rangeX) * plotW;
     const toSvgY = (y: number) => PAD_T + plotH - ((y - minY) / rangeY) * plotH;
 
     const pts = data.map((d) => `${toSvgX(d.x)},${toSvgY(d.y)}`).join(' ');
-    const yTks = [0, 1, 2, 3].map((i) => minY + (rangeY * i) / 3);
+    const tickCount = plot ? Math.round(rangeY / plot.tickStep) : 3;
+    const stride = plot ? Math.max(1, Math.ceil(tickCount / (fontScale >= 1.3 ? 2 : 4))) : 1;
+    const yTks = Array.from({ length: tickCount + 1 }, (_, i) => minY + rangeY * i / tickCount)
+      .filter((_, i) => i % stride === 0 || i === tickCount);
     const step = Math.max(1, Math.floor(data.length / 4));
-    const xLbls = data.filter((_, i) => i % step === 0 || i === data.length - 1);
+    const xLbls = data.filter((_, i) => plot ? i === 0 || i === data.length - 1 : i % step === 0 || i === data.length - 1);
 
     return { minY, maxY, rangeY, toSvgX, toSvgY, points: pts, yTicks: yTks, xLabels: xLbls };
-  }, [data, plotW, plotH]);
+  }, [data, plotW, plotH, plot, fontScale]);
+
+  const select = (index: number | null) => {
+    if (selected.current === index) return;
+    selected.current = index;
+    setSelectedLabel(index == null ? '' : plot?.describe(index) ?? '');
+    plot?.onSelect(index);
+  };
+  const selectAt = (px: number) => {
+    if (!plot || !data.length) return;
+    const target = data[0].x + Math.max(0, Math.min(1, (px - PAD_L) / plotW)) * (data[data.length - 1].x - data[0].x);
+    const index = data.reduce((best, p, i) => Math.abs(p.x - target) < Math.abs(data[best].x - target) ? i : best, 0);
+    select(index);
+  };
 
   // ── Pan gesture: find nearest data point and show tooltip ──────────────────
   const panGesture = Gesture.Pan()
     .runOnJS(true)
+    .activateAfterLongPress(plot ? 180 : 0)
+    .onStart((evt) => selectAt(evt.x))
     .onUpdate((evt) => {
+      if (plot) { selectAt(evt.x); return; }
       if (data.length === 0) return;
       const rawX = evt.x - PAD_L;
       const xs = data.map((d) => d.x);
@@ -136,11 +170,13 @@ export default function TgpLineChart({
         label: xFormatter ? xFormatter(nearest.x) : String(Math.round(nearest.x)),
       });
     })
-    .onEnd(() => setTooltip(null));
+    .onEnd(() => setTooltip(null))
+    .onFinalize(() => { if (plot) select(null); });
 
-  if (data.length < 2) {
+  if (!data.length || (!plot && data.length < 2)) {
     return (
       <View
+        accessible={plot ? true : undefined}
         style={[styles.empty, { backgroundColor: colors.surface, height }]}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="image"
@@ -155,11 +191,19 @@ export default function TgpLineChart({
   return (
     <GestureDetector gesture={panGesture}>
       <View
+        accessible={plot ? true : undefined}
         accessibilityLabel={accessibilityLabel}
-        accessibilityRole="image"
+        accessibilityRole={plot ? 'adjustable' : 'image'}
+        accessibilityValue={plot ? { text: selectedLabel || accessibilityLabel } : undefined}
+        accessibilityActions={plot ? [{ name: 'increment' }, { name: 'decrement' }] : undefined}
+        onAccessibilityAction={plot ? ({ nativeEvent: { actionName } }) => {
+          const from = selected.current ?? data.length - 1;
+          select(Math.max(0, Math.min(data.length - 1, from + (actionName === 'increment' ? 1 : -1))));
+        } : undefined}
+        onLayout={plot ? (e) => { if (e.nativeEvent.layout.width > 0) setWidth(e.nativeEvent.layout.width); } : undefined}
         style={{ height }}
       >
-        <Svg width={W} height={H}>
+        <Svg width={W} height={H} accessible={plot ? false : undefined}>
           {/* Grid lines */}
           {yTicks.map((v, i) => (
             <SvgLine
@@ -180,26 +224,26 @@ export default function TgpLineChart({
               x={PAD_L - 6}
               y={toSvgY(v) + 4}
               textAnchor="end"
-              fontSize={9}
+              fontSize={plot ? 12 * fontScale : 9}
               fill={colors.textMuted}
             >
               {Math.round(v)}
             </SvgText>
           ))}
           {/* Line */}
-          <Polyline
+          {plot ? plot.render({ x: toSvgX, y: toSvgY, right: W - PAD_R, bottom: H - PAD_B }) : <Polyline
             points={points}
             fill="none"
             stroke={colors.primary}
             strokeWidth={2.5}
             strokeLinejoin="round"
             strokeLinecap="round"
-          />
+          />}
           {/* Dots — only when the series is small enough that per-point
               markers stay readable. Above ~30 points the dots blur into a
               solid stripe along the line and tank fps on low-end Android,
               so the line alone is the better signal. */}
-          {data.length <= 30 &&
+          {!plot && data.length <= 30 &&
             data.map((d, i) => (
               <Circle
                 key={i}
@@ -215,8 +259,8 @@ export default function TgpLineChart({
               key={i}
               x={toSvgX(d.x)}
               y={H - 8}
-              textAnchor="middle"
-              fontSize={9}
+              textAnchor={plot ? (i === 0 ? 'start' : 'end') : 'middle'}
+              fontSize={plot ? 12 * fontScale : 9}
               fill={colors.textMuted}
             >
               {xFormatter ? xFormatter(d.x) : String(Math.round(d.x))}
@@ -266,6 +310,7 @@ export default function TgpLineChart({
             </>
           )}
         </Svg>
+        {plot?.overlay?.({ x: toSvgX, y: toSvgY, right: W - PAD_R })}
       </View>
     </GestureDetector>
   );

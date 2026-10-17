@@ -1,5 +1,9 @@
 # Client screens
 
+C8V2-2A supplies dark weight-chart parts behind `clientProgressV2` (off).
+ProgressScreen is unchanged; C8 PR 2b will opt into the parts with full history
+and the authorized goal. Coachless clients use the same chart and period controls.
+
 Chart contract (PEAKCHARTS): Health & Fitness, Sleep & Recovery, metric detail
 and Progress use lines or daily-total bars, never area fills, gradients or
 glow. Shared chart fixes cover the client screens and coach health embeds;

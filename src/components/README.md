@@ -1,5 +1,16 @@
 # Components
 
+C8V2-2A adds opt-in `variant="dark"` on `progress/WeightTrendChart` and
+`progress/PeriodTabs`, requiring `clientProgressV2` (off by default).
+`weightTrend.ts` smooths full history in pounds before 7D/30D/All filtering.
+Visible tabs read Week/Month/All. `WeightTrendChartDark` composes TgpLineChart:
+trend, readings, decorative usual-range ribbon, labelled optional goal except
+Week, dashed gaps, latest/pending rings, hold/drag and adjustable day-by-day
+inspection. Detail includes legend, textual range and smoothing explanation
+on the page colour. Overview omits band/legend. Caller supplies authorized full
+history, optional goal and coach name, pending state and through date. No reads,
+writes, coach lock or screen wiring. Full state frames remain C8 PR 13.
+
 Shared, screen-agnostic UI. Anything that more than one screen renders, or anything that owns its own animation / lifecycle, lives here. Tokenised — no hardcoded hex, no inline radius / shadow values.
 
 ## Purpose
