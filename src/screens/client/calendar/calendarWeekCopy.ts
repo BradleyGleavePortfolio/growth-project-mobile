@@ -1,0 +1,23 @@
+/** MOCKUP3/C4 §10 IDs; additions are listed in the PR's Wording needed table. */
+export const WEEK_COPY = {
+  'C4-S-01': 'Calendar',
+  'C4-S-03': 'Next session',
+  'C4-S-09': 'Book a session',
+  'C4-S-44': 'Notifications',
+  'C4-S-80': 'Week',
+  'C4-S-82': 'Today',
+  'C4-S-83': 'Session',
+  'C4-S-84': 'Workout',
+  'C4-S-85': 'Check-in',
+  'C4-S-88': 'Daily check-in',
+  'C4-S-89': 'Rest day',
+  'C4-S-130': 'Calendar could not load. Check the connection, then try again.',
+  'C4-S-131': 'Nothing planned this week yet.',
+  'C4-S-136': 'Loading your calendar',
+  'C4-S-137': 'Planned',
+  'C4-S-138': 'Done',
+  'C1-S-47': 'Try again',
+  'C4S1-S-01': 'You are offline. Only previously loaded calendar items are shown.',
+  'C4S1-S-02': 'Open today’s check-in',
+  'C4S1-S-03': 'Your calendar has not been saved on this phone yet. Connect to load it.',
+} as const;

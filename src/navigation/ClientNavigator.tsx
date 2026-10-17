@@ -155,6 +155,7 @@ import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
 import { logger } from '../utils/logger';
 // S-SCHED — client Calendar tab (featureFlags.clientCalendar, default OFF).
 import CalendarHomeScreen from '../screens/client/calendar/CalendarHomeScreen';
+import CalendarWeekScreen from '../screens/client/calendar/CalendarWeekScreen';
 import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
@@ -208,7 +209,7 @@ const TAB_BUTTON_PADDING = 5;
 
 export type HomeStackParamList = {
   HomeMain: undefined;
-  Habits: undefined;
+  Habits: { initialTab?: 'checkin' } | undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
   Messages: { openCoachCode?: boolean } | undefined;
@@ -423,7 +424,7 @@ function CalendarStackNavigator() {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <CalendarStackNav.Screen name="CalendarHome" component={ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
+      <CalendarStackNav.Screen name="CalendarHome" component={featureFlags.clientCalendarV2 ? CalendarWeekScreen : ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
       <CalendarStackNav.Screen name="CalendarBook" component={ProtectedCalendarBookScreen} />
       <CalendarStackNav.Screen name="CalendarSession" component={ProtectedCalendarSessionScreen} />
     </CalendarStackNav.Navigator>
@@ -443,7 +444,7 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
-        {({ navigation }) => <ProtectedHabitsScreen onSaved={() => {
+        {({ navigation, route }) => <ProtectedHabitsScreen key={route.params?.initialTab ?? 'habits'} initialTab={route.params?.initialTab} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_checkin');
         }} />}
       </HomeStackNav.Screen>

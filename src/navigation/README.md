@@ -251,3 +251,6 @@ Both client branches of `RootNavigator` wrap `ClientNavigator` in `DunningLockou
 ## Client tab labels (B26)
 
 The six labelled tabs keep their names; the label uses `typography.tabLabel` / `tabLabelActive` (Inter 11 pt, -0.2 tracking), one line with shrink-to-fit, and `tabBarItemStyle` drops the item's side padding, so "Community" (58.5 pt) fits the 60 pt each tab gets on a 360 pt wide Android phone.
+# C4-S1
+
+The existing Calendar tab flag still controls tab registration. Its root uses the existing protected home when `clientCalendarV2` is off; when on, the own-data week page is reachable for every client. Booking and session detail retain their existing gates. The Home Habits route accepts optional `initialTab: 'checkin'` so the week's today action lands directly on the real check-in form; existing callers keep the Habits default.

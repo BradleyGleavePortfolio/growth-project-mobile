@@ -34,6 +34,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_C3_STYLE_B: process.env.EXPO_PUBLIC_FF_C3_STYLE_B,
   EXPO_PUBLIC_FF_CLIENT_CALENDAR: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR,
+  EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
@@ -154,6 +155,8 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_CLIENT_CALENDAR
    */
   clientCalendar: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR', false),
+  /** C4 Style C week. Independent rollout; off in every build unless explicitly enabled. */
+  clientCalendarV2: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2', false),
 
   // ─── Wave 11 — runtime scaffolding ───────────────────────────────────────
   /** Client Path Copilot — AI summaries + drafts on the client home tab. */
