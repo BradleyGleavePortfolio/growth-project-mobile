@@ -1,4 +1,4 @@
-import { extractInviteCode } from '../inviteCodeInput';
+import { extractInviteCode, isCompleteInviteCode } from '../inviteCodeInput';
 
 describe('extractInviteCode', () => {
   it.each([
@@ -48,4 +48,18 @@ describe('extractInviteCode', () => {
     expect(extractInviteCode(undefined)).toBeNull();
     expect(extractInviteCode(42)).toBeNull();
   });
+});
+
+// Owner 26: TGP- + 7 (new) and GP- + 6 in the generator alphabet (old) are complete; vanity codes are not.
+describe('isCompleteInviteCode', () => {
+  it.each(['TGP-ABC2345', 'tgp-abc2345', ' TGP-XYZ7890 ', 'GP-ABC234', 'gp-abc234'])('%p is complete', (code) => {
+    expect(isCompleteInviteCode(code)).toBe(true);
+  });
+
+  it.each(['TGP-ABC234', 'TGP-ABC23456', 'TGP-ABC-234', 'GP-ABC23', 'GP-ABC2345', 'GP-TOP', 'GP-BRADLE', 'GP-BRADLEY', 'TGP'])(
+    '%p is not complete',
+    (code) => {
+      expect(isCompleteInviteCode(code)).toBe(false);
+    },
+  );
 });
