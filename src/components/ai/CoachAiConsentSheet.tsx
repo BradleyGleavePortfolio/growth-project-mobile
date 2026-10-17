@@ -1,12 +1,7 @@
 /**
- * CoachAiConsentSheet (COACH-AI-CONSENT, owner ruling op 2): the one request a coach answers before
- * Roman sends what they type, and their coaching notes, to Anthropic (Apple 5.1.2(i)). The
- * AiConsentSheet presentation (its styles, the shared PrimaryButton / TextLink) with Roman's face,
- * CAC-1 as the title, CAC-2 and CAC-3. Allow grants and plays HapticService.success(); Not now and
- * the Android back gesture record "Not now" (kept by the server only while never asked) and close.
- * A grant that is not saved says so in the sheet's existing words, with Try again. Opened once at app
- * open (CoachAiConsentHost), from Roman's off state (RomanConsentGate), a coach AI refusal
- * (AiRefusalNotice) and the Settings switch (CoachRomanSwitch).
+ * CoachAiConsentSheet (COACH-AI-CONSENT, owner op 2): the coach's one request before Roman sends what
+ * they type to Anthropic (Apple 5.1.2(i)), in AiConsentSheet's styles: Roman's face, CAC-1, CAC-2, CAC-3.
+ * Allow grants (HapticService.success()); Not now and back record "Not now". An unsaved grant says so.
  */
 import React, { useState } from 'react';
 import { Modal, Text, View } from 'react-native';

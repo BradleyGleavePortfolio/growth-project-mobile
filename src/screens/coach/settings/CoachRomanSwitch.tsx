@@ -1,8 +1,6 @@
 /**
- * COACH-AI-CONSENT (owner ruling op 2 item 4): Settings > Privacy, the coach's own Roman switch
- * (CAC-4). On = a live grant. On opens the same request (CoachAiConsentSheet); off withdraws at once
- * (DELETE /me/ai-consent/coach), from the next request. Read again on every focus; hidden until the
- * status loads. A withdrawal that is not saved puts the switch back and says so.
+ * COACH-AI-CONSENT (owner op 2 item 4): Settings > Privacy, the coach's own Roman switch (CAC-4). On opens
+ * CoachAiConsentSheet; off withdraws at once. Re-read on focus; an unsaved withdrawal goes back on and says so.
  */
 import React, { useContext, useEffect, useState } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';

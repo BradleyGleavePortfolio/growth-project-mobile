@@ -2,8 +2,9 @@
  * COACH-AI-CONSENT (owner ruling op 2): a coach's own Roman grant in every state (never asked,
  * declined, granted, withdrawn, the server's typed refusal) on the one-time sheet, the Roman
  * screen, the Settings switch and AI refusals; the pinned words, their sha256 and the routes.
+ * A refusal in the real coach room keeps the room and the draft.
  */
-import React, { useContext } from 'react';
+import React from 'react';
 import { Text } from 'react-native';
 import { createHash } from 'crypto';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -16,14 +17,26 @@ const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   NavigationContext: jest.requireActual('react').createContext({ goBack: () => mockGoBack(), addListener: () => () => undefined }),
 }));
+const mockSend = jest.fn();
+jest.mock('../../../api/romanApi', () => ({
+  ...jest.requireActual('../../../api/romanApi'),
+  openOrResumeSession: async () => ({ id: 's1', surface: 'coach', messageCount: 0 }),
+  listMessages: async () => ({ messages: [], nextCursor: null }),
+  sendMessage: (...a: unknown[]) => mockSend(...a),
+}));
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ firstName: 'Bradley' }) }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('../../../ui/skeletons/Skeleton', () => ({ Skeleton: () => null }));
 
 import CoachAiConsentHost from '../CoachAiConsentHost';
 import AiRefusalNotice from '../AiRefusalNotice';
-import RomanConsentGate, { RomanCoachOffContext } from '../../roman/RomanConsentGate';
+import RomanConsentGate from '../../roman/RomanConsentGate';
+import RomanChatScreen from '../../../screens/roman/RomanChatScreen';
+import { RomanApiError } from '../../../api/romanApi';
 import { CoachRomanSwitch } from '../../../screens/coach/settings/CoachRomanSwitch';
 import { coachAiConsentApi, markCoachAskedAtSignUp, parseCoachAiConsentStatus, type CoachAiConsentState } from '../../../api/coachAiConsentApi';
-import { COACH_AI_CONSENT_COPY as COPY, COACH_AI_CONSENT_COPY_SHA256, COACH_AI_OFF_VERSIONS } from '../../../lib/ai/coachAiConsentCopy';
-import { aiRefusalCopy, aiRefusalFromHttp, aiRefusalFromStreamCode } from '../../../lib/ai/aiRefusal';
+import { COACH_AI_CONSENT_COPY as COPY, COACH_AI_CONSENT_COPY_SHA256 } from '../../../lib/ai/coachAiConsentCopy';
+import { aiRefusalCopy, aiRefusalFromHttp, aiRefusalFromStreamCode, aiRefusalOf } from '../../../lib/ai/aiRefusal';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import http from '../../../services/api';
 
@@ -37,6 +50,7 @@ function makeApi(state: CoachAiConsentState) {
   };
 }
 const ASKED: CoachAiConsentState[] = ['declined', 'granted', 'withdrawn'];
+const TYPED_403 = Object.assign(new Error('HTTP 403'), { isAxiosError: true, response: { status: 403, data: { code: 'coach_ai_consent_required', message: 'Turn on Roman' } } });
 const OFF: CoachAiConsentState[] = ['not_asked', 'declined', 'withdrawn'];
 
 beforeEach(() => {
@@ -49,7 +63,7 @@ describe('words and contract', () => {
   it('ships the approved words, CAC-5 version A, and the sha256 the server checks', () => {
     expect(COPY).toMatchObject({ title: 'Turn on Roman', allow: 'Allow', notNow: 'Not now', switchLabel: 'Roman (AI by Anthropic)' });
     expect(COPY.switchHint).toBe('Turn off to stop sending what you type to Anthropic.');
-    expect(COPY.off).toBe(COACH_AI_OFF_VERSIONS.A);
+    expect(COPY.off).toEqual({ title: 'Roman is off', body: 'Allow Roman to use Anthropic, then you can chat and draft.', button: 'Turn on Roman' });
     const sha = createHash('sha256').update(`${COPY.paragraph}\n\n${COPY.title}`, 'utf8').digest('hex');
     expect(sha).toBe(COACH_AI_CONSENT_COPY_SHA256);
   });
@@ -70,10 +84,17 @@ describe('words and contract', () => {
     expect(parseCoachAiConsentStatus({ state: 'on', granted: true })).toBeNull();
   });
 
-  it('maps the typed refusal (HTTP and in-stream) to CAC-5, apart from a client refusal', () => {
-    const coach = { kind: 'coach_consent_required' };
-    expect(aiRefusalFromHttp(403, { code: 'coach_ai_consent_required', message: 'Turn on Roman' })).toEqual(coach);
-    expect(aiRefusalFromStreamCode({ code: 'coach_ai_consent_required', message: '' }, null)).toEqual(coach);
+  // Every coach AI surface (Opus 6225592099 B2) fed the same typed 403 reads it as CAC-5.
+  it.each([
+    ['Roman chat, HTTP 403', () => aiRefusalFromHttp(403, TYPED_403.response.data)],
+    ['Roman chat, in the stream', () => aiRefusalFromStreamCode({ code: 'coach_ai_consent_required', message: '' }, null)],
+    ['CoachAiSection', () => aiRefusalOf(TYPED_403)],
+    ['AskAiActionSheet', () => aiRefusalOf(TYPED_403)],
+    ['WearableInsightPanel', () => aiRefusalOf(TYPED_403)],
+    ['CoachCommunityInboxScreen triage', () => aiRefusalOf(TYPED_403)],
+  ])('%s maps the typed refusal to CAC-5', (_, read) => expect(read()).toEqual({ kind: 'coach_consent_required' }));
+
+  it('keeps a client refusal apart and words CAC-5 for the coach', () => {
     expect(aiRefusalFromHttp(403, { code: 'ai_consent_required' })).toEqual({ kind: 'consent_required' });
     expect(aiRefusalCopy({ kind: 'coach_consent_required' }, 'coach', 'draft')).toEqual({ title: 'Roman is off', body: COPY.off.body, referenceLine: null });
   });
@@ -120,15 +141,10 @@ describe('the one-time sheet over coach Home', () => {
   });
 });
 
-function Room() {
-  const off = useContext(RomanCoachOffContext);
-  return <Text onPress={() => off?.()}>room</Text>;
-}
-
 describe('the coach Roman screen', () => {
   it.each(OFF)('shows CAC-5 for %s; its button opens the request and Allow opens the room', async (state) => {
     const api = makeApi(state);
-    const r = await render(<RomanConsentGate surface="coach" coachApi={api}><Room /></RomanConsentGate>);
+    const r = await render(<RomanConsentGate surface="coach" coachApi={api}><Text>room</Text></RomanConsentGate>);
     expect(await r.findByText('Roman is off')).toBeTruthy();
     expect(r.getByText(COPY.off.body)).toBeTruthy();
     expect(r.queryByText('room')).toBeNull();
@@ -136,13 +152,6 @@ describe('the coach Roman screen', () => {
     await fireEvent.press(await r.findByText(COPY.allow));
     expect(await r.findByText('room')).toBeTruthy();
     expect(api.grant).toHaveBeenCalledTimes(1);
-  });
-
-  it('a granted coach gets the room; the typed refusal turns it into CAC-5', async () => {
-    const api = makeApi('granted');
-    const r = await render(<RomanConsentGate surface="coach" coachApi={api}><Room /></RomanConsentGate>);
-    await fireEvent.press(await r.findByText('room'));
-    expect(await r.findByText('Roman is off')).toBeTruthy();
   });
 
   it('a coach AI refusal elsewhere offers the same request, then retries', async () => {
@@ -187,5 +196,42 @@ describe('Settings > Privacy switch', () => {
     await fireEvent(await r.findByTestId('coach-settings-roman-ai-switch'), 'valueChange', false);
     expect(await r.findByTestId('coach-settings-roman-ai-failed')).toBeTruthy();
     expect(r.getByTestId('coach-settings-roman-ai-switch').props.value).toBe(true);
+  });
+});
+
+// Sol 6225557370 B1: the real coach room (first status read failed, so it is open) refused mid-chat.
+describe('the coach Roman room keeps the room and the draft through the typed refusal', () => {
+  const DRAFT = 'Plan next week for my early group';
+  it.each([
+    ['HTTP 403, nothing stored', new RomanApiError('aiRefused', 'Roman cannot answer this request.', undefined, aiRefusalFromHttp(403, TYPED_403.response.data) ?? undefined)],
+    ['in the stream, turn stored', new RomanApiError('aiRefused', 'Turn on Roman', undefined, aiRefusalFromStreamCode({ code: 'coach_ai_consent_required', message: 'Turn on Roman' }, null) ?? undefined, true)],
+  ])('%s: CAC-5 in the room, Not now keeps it, Allow resumes once', async (_, refused) => {
+    jest.spyOn(coachAiConsentApi, 'getStatus').mockResolvedValue({ kind: 'unavailable' });
+    const decline = jest.spyOn(coachAiConsentApi, 'decline').mockResolvedValue(ok('declined'));
+    const grant = jest.spyOn(coachAiConsentApi, 'grant').mockResolvedValue(ok('granted'));
+    mockSend.mockReset().mockRejectedValueOnce(refused).mockResolvedValue({ text: 'Here is the week.', messageId: 'a1', interrupted: false });
+    const r = await render(<RomanChatScreen surface="coach" />);
+    await fireEvent.changeText(await r.findByTestId('roman-composer-input'), DRAFT);
+    await fireEvent.press(r.getByTestId('roman-composer-send'));
+    expect(await r.findByText('Roman is off')).toBeTruthy();
+    const draftKept = () => expect(r.getByTestId('roman-composer-input').props.value).toBe(DRAFT);
+    draftKept();
+    await fireEvent.press(r.getByTestId('roman-ai-refusal-turn-on'));
+    await fireEvent.press(await r.findByTestId('roman-ai-refusal-coach-sheet-not-now'));
+    expect(decline).toHaveBeenCalledTimes(1);
+    expect(r.queryByTestId('roman-consent-gate-off')).toBeNull();
+    draftKept();
+    await fireEvent.press(r.getByTestId('roman-ai-refusal-turn-on'));
+    await fireEvent.press(await r.findByTestId('roman-ai-refusal-coach-sheet-allow'));
+    expect(grant).toHaveBeenCalledTimes(1);
+    if (refused.turnStored) {
+      // Stored before the refusal: never sent again on its own; the ask-again line, the draft kept.
+      expect(await r.findByTestId('roman-ask-again')).toBeTruthy();
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      draftKept();
+    } else {
+      await waitFor(() => expect(r.getByTestId('roman-composer-input').props.value).toBe(''));
+      expect(mockSend.mock.calls).toEqual([['s1', DRAFT], ['s1', DRAFT]]);
+    }
   });
 });

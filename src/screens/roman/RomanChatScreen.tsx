@@ -54,7 +54,7 @@ import RomanComposer from '../../components/roman/RomanComposer';
 import RomanState from '../../components/roman/RomanState';
 import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
 import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
-import RomanConsentGate, { RomanCoachOffContext } from '../../components/roman/RomanConsentGate';
+import RomanConsentGate from '../../components/roman/RomanConsentGate';
 import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { useRomanReveal } from '../../components/roman/useRomanReveal';
@@ -237,12 +237,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   // (Allow AI help, or Contact support with the reference), never the
   // generic send-failed row.
   const refusal = sendError?.kind === 'aiRefused' ? (sendError.refusal ?? null) : null;
-  // COACH-AI-CONSENT: the server's typed refusal turns the coach room into the CAC-5 state.
-  const coachOff = useContext(RomanCoachOffContext);
-  const coachRefused = refusal?.kind === 'coach_consent_required';
-  useEffect(() => {
-    if (coachRefused) coachOff?.();
-  }, [coachRefused, coachOff]);
+  // COACH-AI-CONSENT: coach_consent_required is CAC-5 in this notice; the room and draft stay (onRefusalRetry).
   const refusalAudience = surface === 'coach' ? 'coach' : 'client';
   // Daily AI cap: the pop-up carries the copy, so no inline error row. The
   // draft (or the stored turn) stays; the composer is never blocked, so a

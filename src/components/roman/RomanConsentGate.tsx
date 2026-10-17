@@ -12,12 +12,11 @@
  *
  * Coaches (COACH-AI-CONSENT, owner op 2 item 3): the gate wraps the coach room and reads the
  * coach's own grant (GET /me/ai-consent/coach) once. Never asked, Not now or turned off shows the
- * CAC-5 "Roman is off" state instead, whose button opens the same request (CoachAiConsentSheet);
- * so does the server's typed refusal (403 coach_ai_consent_required), which the room reports
- * through RomanCoachOffContext. After Allow the room opens afresh. A status that does not load
- * leaves the room open; the server still refuses.
+ * CAC-5 "Roman is off" state instead, whose button opens the same request (CoachAiConsentSheet).
+ * A status that does not load leaves the room open. Once the room is open it is never taken away:
+ * the server's typed refusal on a send shows CAC-5 inside the room (AiRefusalNotice), with the draft.
  */
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';
 import AiConsentSheet, { type AiConsentSheetApi } from '../ai/AiConsentSheet';
 import CoachAiConsentSheet from '../ai/CoachAiConsentSheet';
@@ -27,9 +26,6 @@ import { coachAiConsentApi, type CoachAiConsentApi } from '../../api/coachAiCons
 import { isLiveRomanGrant } from '../../lib/consultation/aiConsent';
 import { COACH_AI_CONSENT_COPY } from '../../lib/ai/coachAiConsentCopy';
 import { logger } from '../../utils/logger';
-
-/** The coach room calls this when the server refuses with coach_ai_consent_required. */
-export const RomanCoachOffContext = createContext<(() => void) | null>(null);
 
 export interface RomanConsentGateProps {
   surface: 'client' | 'coach';
@@ -102,9 +98,8 @@ function CoachRomanGate({ children, coachApi = coachAiConsentApi, testID = 'roma
     };
   }, [coachApi]);
 
-  const markOff = useCallback(() => setOff(true), []);
   if (off === null) return null;
-  if (!off) return <RomanCoachOffContext.Provider value={markOff}>{children}</RomanCoachOffContext.Provider>;
+  if (!off) return <>{children}</>;
   const { title, body, button } = COACH_AI_CONSENT_COPY.off;
   return (
     <>

@@ -1,13 +1,8 @@
 /**
- * COACH-AI-CONSENT: the signed-in coach's own choice whether Roman may send what they type, and their
- * coaching notes, to Anthropic (Apple 5.1.2(i)), over the existing consent ledger (backend
- * op152/coach-ai-consent-be, ai-consent.controller.ts; coach and owner roles, all idempotent):
- *   GET    /me/ai-consent/coach          -> CoachAiConsentStatus (`asked` is kept per account)
- *   POST   /me/ai-consent/coach          { version, copy_sha256, platform } -> grant
- *   POST   /me/ai-consent/coach/decline  same body -> "Not now" (kept only while never asked)
- *   DELETE /me/ai-consent/coach          -> withdraw (the Settings switch off)
- * Failures map as on the client routes (aiConsentFailure). A refused coach AI request is
- * 403 { code: 'coach_ai_consent_required' } (lib/ai/aiRefusal).
+ * COACH-AI-CONSENT: the signed-in coach's own Roman grant (Apple 5.1.2(i)) over the consent ledger
+ * (backend ai-consent.controller.ts, idempotent): GET /me/ai-consent/coach (status), POST (grant),
+ * POST /decline ("Not now", kept only while never asked), DELETE (withdraw). Failures map as
+ * aiConsentFailure; a refused coach AI request is 403 coach_ai_consent_required (lib/ai/aiRefusal).
  */
 import api from '../services/api';
 import { aiConsentFailure, type AiConsentOutcome } from './aiConsentApi';
@@ -66,10 +61,7 @@ export const coachAiConsentApi = {
 
 export type CoachAiConsentApi = typeof coachAiConsentApi;
 
-/**
- * Sign-up (owner op 2 item 1): this account was just shown the box, ticked or not, so the one-time
- * sheet waits for the next app open (the server's `asked` still decides then).
- */
+/** Sign-up (owner op 2 item 1): the box was the ask, so the one-time sheet waits for the next app open. */
 let askedAtSignUp: string | null = null;
 export function markCoachAskedAtSignUp(userId: string | null): void {
   askedAtSignUp = userId;
