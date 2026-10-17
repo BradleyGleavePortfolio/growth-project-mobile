@@ -19,7 +19,7 @@ or forced on: the selected store profile's `coachTabsV2` decides the bar.
 Roman must be enabled in that profile; its canned history makes no AI call.
 Network data is invented. Never use this mode on a personal/production install.
 The production Metro alias still removes the harness and fixtures entirely.
-Web-only adapters cover SQLite and the unused native payment SDK; no selected
+Web-only adapters cover SQLite and unused native payment/support SDKs; no selected
 screen or navigation bar is substituted.
 
 ## CI proof / web review

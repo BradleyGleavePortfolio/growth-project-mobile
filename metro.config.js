@@ -48,14 +48,14 @@ const isProductionBuild =
     if (
       process.env.EXPO_PUBLIC_SCREENSHOT_MODE === '1' &&
       platform === 'web' &&
-      (moduleName === 'expo-sqlite' || moduleName === '@stripe/stripe-react-native')
+      ['expo-sqlite', '@stripe/stripe-react-native', 'crisp-sdk-react-native'].includes(moduleName)
     ) {
       return {
         type: 'sourceFile',
-        // Payment sheets are not capture targets; their lazy SDK import is
-        // native-only, but Metro still visits it while bundling navigators.
+        // Payment/support SDKs are not capture targets; their native-only
+        // imports are still visited while bundling the shipping navigators.
         filePath: path.resolve(__dirname, moduleName === 'expo-sqlite'
-          ? 'src/screenshots/expoSqliteStub.web.js' : 'src/screenshots/stripeStub.web.js'),
+          ? 'src/screenshots/expoSqliteStub.web.js' : 'src/screenshots/nativeSdkStub.web.js'),
       };
     }
 
