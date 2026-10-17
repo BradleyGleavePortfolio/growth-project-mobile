@@ -31,7 +31,7 @@ jest.mock('@expo/vector-icons', () => ({
 jest.mock('../../../ui/skeletons/Skeleton', () => ({ Skeleton: () => null }));
 
 import CoachAiConsentHost from '../CoachAiConsentHost';
-import AiRefusalNotice from '../AiRefusalNotice';
+import AiRefusalNotice, { type AiRefusalNoticeProps } from '../AiRefusalNotice';
 import RomanConsentGate from '../../roman/RomanConsentGate';
 import RomanChatScreen from '../../../screens/roman/RomanChatScreen';
 import AiBuilderSheet from '../../coach/ai-builder/AiBuilderSheet';
@@ -196,6 +196,21 @@ describe('the coach Roman screen', () => {
     await fireEvent.press(await r.findByText(COPY.allow));
     await waitFor(() => expect(onRetry).toHaveBeenCalledTimes(1));
     expect(grant).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe.each([false, true])('refusal corners (compact=%s)', (compact) => {
+  it.each<[string, Pick<AiRefusalNoticeProps, 'refusal' | 'audience'>, string[]]>([
+    ['coach Roman off', { refusal: { kind: 'coach_consent_required' }, audience: 'coach' }, ['turn-on']],
+    ['client AI off', { refusal: { kind: 'consent_required' }, audience: 'client' }, ['allow']],
+    ['coach retry', { refusal: { kind: 'consent_required' }, audience: 'coach' }, ['retry']],
+    ['service paused', { refusal: { kind: 'egress_blocked', reference: 'ref-12345678', serverMessage: null }, audience: 'coach' }, ['support', 'copy-reference']],
+  ])('%s uses the card and button tokens for every action', async (_, props, actions) => {
+    const r = await render(<AiRefusalNotice {...props} surface="draft" compact={compact} onRetry={jest.fn()} onContactSupport={jest.fn()} />);
+    expect(StyleSheet.flatten(r.getByTestId('ai-refusal').props.style).borderRadius).toBe(radius.card);
+    for (const action of actions) {
+      expect(StyleSheet.flatten(r.getByTestId(`ai-refusal-${action}`).props.style).borderRadius).toBe(radius.button);
+    }
   });
 });
 

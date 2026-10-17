@@ -202,7 +202,7 @@ function makeStyles(colors: ThemeColors, compact: boolean) {
     primary: {
       minHeight: 44,
       paddingHorizontal: 16,
-      borderRadius: 10,
+      borderRadius: radius.button,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
@@ -211,7 +211,7 @@ function makeStyles(colors: ThemeColors, compact: boolean) {
     secondary: {
       minHeight: 44,
       paddingHorizontal: 16,
-      borderRadius: 10,
+      borderRadius: radius.button,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.primary,
       alignItems: 'center',
