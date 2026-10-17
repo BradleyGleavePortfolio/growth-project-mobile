@@ -73,6 +73,7 @@ import {
 } from "../../../lib/money/moneyCopy";
 import { captureError } from "../../../services/sentry";
 import { featureFlags } from "../../../config/featureFlags";
+import { creditPacksHidden } from "../../../config/purchaseSurfaces";
 // §2.12 Roman payout notice, moved here from the deleted Earnings screen
 // (C-332-2). Gated behind romanChat.
 import RomanPayoutNotice from "../../../components/roman/RomanPayoutNotice";
@@ -893,6 +894,20 @@ export default function MoneyScreen({
           >
             <Text style={styles.footerText}>Packages</Text>
           </TouchableOpacity>
+          {/* PK-2a: "Buy more credits" is two taps from the Money tab (tab, then
+              this row). Same gate as every credit-pack entry: hidden where the
+              build may not sell packs (iOS store without the US link). */}
+          {creditPacksHidden() ? null : (
+            <TouchableOpacity
+              onPress={() => navigation.navigate("CreditPackCheckout", undefined)}
+              style={styles.footerRow}
+              accessibilityRole="button"
+              accessibilityLabel="Buy AI credits"
+              testID="money-buy-credits"
+            >
+              <Text style={styles.footerText}>Buy credits</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1120,6 +1135,8 @@ export const makeStyles = (colors: ThemeColors) =>
     chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: 12 },
     chip: {
       minHeight: 44,
+      minWidth: 44,
+      alignItems: "center",
       paddingHorizontal: 12,
       justifyContent: "center",
       borderWidth: 1,

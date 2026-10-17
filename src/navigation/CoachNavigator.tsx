@@ -680,6 +680,10 @@ function CalendarStackNavigator() {
         name="CoachBookingInbox"
         component={CoachBookingInboxScreen}
         options={({ navigation }) => ({
+          // The tab root names itself like the other tab roots (no empty band).
+          headerTitle: 'Calendar',
+          headerTitleAlign: 'left',
+          headerTitleStyle: styles.calendarTitle,
           headerRight: () => (
             <Pressable
               onPress={() => {
@@ -1019,6 +1023,7 @@ export default function CoachNavigator() {
 }
 
 const styles = StyleSheet.create({
+  calendarTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 28 },
   headerGear: {
     width: 44,
     height: 44,
@@ -1026,8 +1031,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bellButton: {
-    marginRight: 16,
-    padding: 4,
+    // 44 pt target; the glyph stays where it was (12 + 8 = 16 + 4).
+    marginRight: 12,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bellWrap: {
     position: 'relative',
