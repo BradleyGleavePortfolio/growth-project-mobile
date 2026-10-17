@@ -31,7 +31,7 @@ jest.mock('../../../services/api', () => ({
   default: { post: (...a: unknown[]) => mockPost(...a) },
   authApi: {
     attachInviteCode: (...a: unknown[]) => mockAttach(...a),
-    getSignupPolicy: async () => ({ data: { coach_sharing_notice: 'coach_sharing_join_v1' } }),
+    getSignupPolicy: async () => ({ data: { coach_sharing_notice: 'coach_sharing_join_v2' } }),
   },
 }));
 jest.mock('../../../api/coachSharingApi', () => ({ acceptFirstSignInSharing: jest.fn(async () => true) }));
