@@ -53,3 +53,8 @@ it('44 pt targets: Availability steppers reach 44 with hitSlop, the Clients filt
   expect(avail).toMatch(/stepBtn: \{[^}]*width: 36,\s*height: 36,/);
   expect(read('screens/coach/ClientsListScreen.tsx')).toMatch(/filterChip: \{\s*paddingHorizontal: 8,\s*minHeight: 44,\s*minWidth: 44,/);
 });
+
+it('44 pt targets: the Clients-stack bell (Broadcasts, Reports and other pushed screens) and the Money filter chips', () => {
+  expect(read('navigation/CoachNavigator.tsx')).toMatch(/bellButton: \{[^}]*marginRight: 12,\s*minWidth: 44,\s*minHeight: 44,/);
+  expect(read('screens/coach/money/MoneyScreen.tsx')).toMatch(/chip: \{\s*minHeight: 44,\s*minWidth: 44,/);
+});

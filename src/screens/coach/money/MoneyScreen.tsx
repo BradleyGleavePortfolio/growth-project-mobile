@@ -1135,6 +1135,8 @@ export const makeStyles = (colors: ThemeColors) =>
     chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: 12 },
     chip: {
       minHeight: 44,
+      minWidth: 44,
+      alignItems: "center",
       paddingHorizontal: 12,
       justifyContent: "center",
       borderWidth: 1,

@@ -1028,8 +1028,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bellButton: {
-    marginRight: 16,
-    padding: 4,
+    // 44 pt target; the glyph stays where it was (12 + 8 = 16 + 4).
+    marginRight: 12,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bellWrap: {
     position: 'relative',
