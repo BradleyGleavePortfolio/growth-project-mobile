@@ -7,7 +7,9 @@ production backend, live Stripe) on its own update channel, `testing`, which no 
 ## What runs when
 
 On every push to `main`, daily at 11:23 UTC, and on Actions → Device loop → Run workflow. Never on pull requests; runs never
-overlap (one concurrency group).
+overlap (one concurrency group). Only `main` is built or published: Run workflow from any other branch skips the loop job.
+The workflow and the update guard run the same pinned eas-cli (`eas-version` in the workflow, `EAS_CLI` in
+`scripts/eas-update-guard.js`); bump both together (`scripts/__tests__/deviceLoop.test.js` fails otherwise).
 
 1. No `EXPO_TOKEN` repository secret: the run skips with the notice "Device loop skipped". Nothing fails.
 2. Otherwise it computes the iOS fingerprint of the `testing` profile (`eas fingerprint:generate --platform ios --build-profile
@@ -17,6 +19,7 @@ overlap (one concurrency group).
 |---|---|
 | One with this fingerprint is finished or still building | publishes the commit to channel `testing` through the update guard (`npm run update:publish -- --channel testing --environment production`, docs/OTA_UPDATES.md) |
 | Another one is still building | nothing; the next push or daily run builds the new fingerprint |
+| One with this fingerprint failed or was canceled | on a push: nothing (warning "build failed"); the daily run or Run workflow builds it again |
 | 10 started in the last 31 days | nothing (warning); a build ages out after 31 days |
 | None of the above | `eas build --profile testing --platform ios --non-interactive --auto-submit --no-wait`: EAS builds, then submits to TestFlight |
 
@@ -51,9 +54,10 @@ EAS Free allows 15 iOS builds a month and cannot be charged overage: once they a
 included, until the allowance resets. JavaScript-only changes cost no build (they ship as updates). The loop starts a build
 only when no finished or running testing build has the fingerprint, never while another testing build runs, and at most 10 in
 any 31 days (`MAX_TESTING_BUILDS` in the workflow; manual testing builds count too), so at least 5 of every month's 15 stay for
-the other profiles, store builds first. The fingerprint covers the native inputs: dependencies, app config, config plugins,
-`eas.json` (any profile: a flag change there costs a testing build), `package.json` scripts and
-`src/config/purchaseSurfaces.ts`. Check usage with `eas account:usage the-growth-project`.
+the other profiles, store builds first. A failed or canceled testing build is retried only by the daily run or Run workflow,
+never by a push, so a build that fails every time costs one build a day (plus any manual run), not one per merge. The
+fingerprint covers the native inputs: dependencies, app config, config plugins, `eas.json` (any profile: a flag change there
+costs a testing build), `package.json` scripts and `src/config/purchaseSurfaces.ts`. Check usage with `eas account:usage the-growth-project`.
 
 ## Before the first run (operator)
 
@@ -63,7 +67,8 @@ the other profiles, store builds first. The fingerprint covers the native inputs
    `SENTRY_AUTH_TOKEN` as `sensitive`. The guard refuses an update without them.
 3. EAS Submit needs an App Store Connect API key stored in EAS (`eas credentials`) to submit without prompting; TestFlight
    needs an internal group with automatic distribution.
-4. Start the first run from Actions → Device loop → Run workflow.
+4. Merging to main starts the first run (EXPO_TOKEN is already set), so finish steps 2 and 3 first. On EAS Free one build runs
+   at a time, so a testing build queued first delays a store build behind it.
 
 ## Turning it off
 
