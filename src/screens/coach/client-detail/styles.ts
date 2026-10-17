@@ -10,9 +10,11 @@ export const makeStyles = (colors: ThemeColors) =>
     flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background,
   },
   header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.gutter, marginBottom: 16, gap: 14,
+    flexDirection: 'column', paddingHorizontal: layout.gutter, marginBottom: 16, gap: 12,
   },
-  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerLabels: { flex: 1, minWidth: 0 },
   avatar: {
     width: 44, height: 44, borderRadius: radius.chip, backgroundColor: colors.primaryDark,

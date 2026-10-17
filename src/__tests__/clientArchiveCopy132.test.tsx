@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook, waitFor, within } from '@testing-library/react-native';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { useClientDetailData } from '../screens/coach/client-detail/useClientDetailData';
 import { useCoachStore } from '../store/coachStore';
@@ -95,6 +95,28 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
+
+it.each([
+  ['Christopher Martinez', false],
+  ['Jessica Richardson', false],
+  ['Christopher Martinez', true],
+  ['Jessica Richardson', true],
+] as const)('FIX762: %s has a separate identity row (archived %s), retaining header destinations', async (clientName, isArchived) => {
+  archived = isArchived;
+  const params = { ...props.route.params, clientName };
+  const view = await render(<ClientDetailScreen {...props} route={{ ...props.route, params }} />);
+  const action = await view.findByLabelText(isArchived ? 'Unarchive client' : 'Archive client');
+  const identity = within(view.getByTestId('client-file-header-identity'));
+  expect(identity.getByText(clientName).props.numberOfLines).toBe(2);
+  expect(identity.getByText(`${isArchived ? 'Archived' : 'Active'} client · Build strength`).props.numberOfLines).toBe(1);
+  expect(identity.queryByLabelText('Open messages')).toBeNull();
+  const actions = within(view.getByTestId('client-file-header-actions'));
+  expect(actions.getByLabelText(isArchived ? 'Unarchive client' : 'Archive client')).toBe(action);
+  await fireEvent.press(actions.getByLabelText('Open messages'));
+  expect(navigate).toHaveBeenCalledWith('ClientMessages', params);
+  await fireEvent.press(actions.getByText('arrow-back'));
+  expect(goBack).toHaveBeenCalledTimes(1);
+});
 
 it('Summary Workouts opens this client Workouts tab and its builder path carries the client and copied plan', async () => {
   mockShowSummary = true;

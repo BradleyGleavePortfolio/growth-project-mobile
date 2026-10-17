@@ -404,18 +404,50 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     <View style={[styles.container, top]} testID="client-detail">
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
+        <View style={styles.headerActions} testID="client-file-header-actions">
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.msgIconBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Open messages"
+              onPress={() => {
+                if (!currentUser) return;
+                // Audit P1: route to the specific client thread, not the Messages
+                // tab (which is the global inbox and ignored the params we were
+                // passing). ClientMessages lives inside ClientsStack, the same
+                // navigator as ClientDetail, so a direct .navigate works.
+                navigation.navigate('ClientMessages', { clientId, clientName });
+              }}
+            >
+              <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+            {isArchived !== null && <TouchableOpacity
+              style={styles.msgIconBtn}
+              onPress={handleToggleArchive}
+              disabled={archiveBusy}
+              accessibilityRole="button"
+              accessibilityLabel={isArchived ? 'Unarchive client' : 'Archive client'}
+            >
+              <Ionicons
+                name={isArchived ? 'archive' : 'archive-outline'}
+                size={20}
+                color={isArchived ? colors.warning : colors.textSecondary}
+              />
+            </TouchableOpacity>}
+          </View>
+        </View>
+        <View style={styles.headerCenter} testID="client-file-header-identity">
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {clientName.split(' ').map((n) => n[0]).join('')}
             </Text>
           </View>
           <View style={styles.headerLabels}>
-            <Text style={styles.clientName}>{clientName}</Text>
-            <Text style={styles.clientStatus}>
+            <Text style={styles.clientName} numberOfLines={2}>{clientName}</Text>
+            <Text style={styles.clientStatus} numberOfLines={1}>
               {[
                 isArchived === true ? 'Archived client' : isArchived === false ? 'Active client' : null,
                 profile?.primaryGoal?.replace(/_/g, ' '),
@@ -423,34 +455,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             </Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.msgIconBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Open messages"
-          onPress={() => {
-            if (!currentUser) return;
-            // Audit P1: route to the specific client thread, not the Messages
-            // tab (which is the global inbox and ignored the params we were
-            // passing). ClientMessages lives inside ClientsStack, the same
-            // navigator as ClientDetail, so a direct .navigate works.
-            navigation.navigate('ClientMessages', { clientId, clientName });
-          }}
-        >
-          <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
-        </TouchableOpacity>
-        {isArchived !== null && <TouchableOpacity
-          style={[styles.msgIconBtn, { marginLeft: 4 }]}
-          onPress={handleToggleArchive}
-          disabled={archiveBusy}
-          accessibilityRole="button"
-          accessibilityLabel={isArchived ? 'Unarchive client' : 'Archive client'}
-        >
-          <Ionicons
-            name={isArchived ? 'archive' : 'archive-outline'}
-            size={20}
-            color={isArchived ? colors.warning : colors.textSecondary}
-          />
-        </TouchableOpacity>}
       </View>
 
       {archiveStatusError ? (

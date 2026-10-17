@@ -148,6 +148,11 @@ it.each(['Message', 'Archive / Unarchive'])('CF2: header %s shares the 44 by 44 
   const source = readFileSync(resolve(__dirname, '../screens/coach/ClientDetailScreen.tsx'), 'utf8');
   expect(source.match(/style=\{(?:\[)?styles\.msgIconBtn/g)).toHaveLength(2);
   expect(styles.headerLabels).toMatchObject({ flex: 1, minWidth: 0 });
+  expect(styles.header.flexDirection).toBe('column');
+  expect(styles.headerActions).toMatchObject({ flexDirection: 'row', justifyContent: 'space-between' });
+  expect(styles.headerButtons.gap).toBe(4);
+  expect(styles.headerCenter.flexDirection).toBe('row');
+  expect(styles.headerCenter).not.toHaveProperty('flex');
   expect(source).toContain('style={styles.headerLabels}');
   expect(source).toContain('accessibilityLabel="Open messages"');
 });
@@ -159,7 +164,7 @@ it.each(['summary', 'food'])('CF2: %s retry has the shared 44 pt target and retr
   if (surface === 'food') read.mockRejectedValueOnce(new Error('offline'));
   const v = await render(surface === 'food'
     ? <FoodLogReviewSection {...props} colors={colors} styles={styles} />
-    : <SummaryTab {...props} profile={null} foodShared totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }}
+    : <SummaryTab {...props} profile={null} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }}
         nudgeSuccess={false} colors={colors} styles={styles} onOpenMessages={jest.fn()}
         onOpenNudge={jest.fn()} onOpenMacrosReview={jest.fn()} onOpenWorkoutBuilder={jest.fn()} />);
   const retry = await v.findByRole('button', { name: surface === 'food' ? 'Retry' : 'Retry target' });
