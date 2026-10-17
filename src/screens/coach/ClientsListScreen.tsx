@@ -276,7 +276,7 @@ export default function ClientsListScreen({ navigation }: Props) {
       <View style={styles.privacyBanner}>
         <Ionicons name="shield-checkmark-outline" size={16} color={colors.textSecondary} style={{ marginTop: 1 }} />
         <Text style={styles.privacyBannerText}>
-          Clients choose what they share with you. Anything not shared stays private.
+          You see your clients' workouts, food logs, weigh-ins and check-ins while you coach them.
         </Text>
       </View>
 
