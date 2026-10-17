@@ -5,9 +5,11 @@ declarations or connect actions. Apple Health on iOS is unchanged.
 
 `app.config.js` reads the base Expo config from `app.json`.
 `TGP_ANDROID_HEALTH_CONNECT=1` is the only opt-in value; unset, `0` and all other
-values keep Android Health Connect off. `preview` and `production` explicitly set
-`0` in `eas.json`. `clinic` (the launch profile) extends `production` and sets
-`1` (S14 round 3, #317): Health Connect returns in the clinic Android binary.
+values keep Android Health Connect off. `preview` explicitly sets `0` in
+`eas.json`. `clinic` (the launch profile) extends `production` and sets `1`
+(S14 round 3, #317): Health Connect returns in the clinic Android binary.
+`production` also sets `1` from build 10 (agent 142; owner: "Health Connect stays
+on for day 1"), so a store build from either profile has it.
 Before that binary goes to a reviewed Play track, the owner completes the Play
 Console Health apps declaration for the read types listed in #317.
 

@@ -70,6 +70,7 @@ When the toggle changes:
 | `EditProfileScreen` | `error()` | Profile save API failure |
 | `AgeCheckScreen` | `success()` | Date of birth saved (16 or older) |
 | `AgeCheckScreen` | `error()` | Date of birth save API failure |
+| `CoachAiConsentSheet` (COACH-AI-CONSENT) | `success()` | The coach's Roman grant is saved (Allow, Try again) |
 | `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
 | `MessagesScreen` (client, `c3StyleB` on) | `softImpact()` | Send tapped |
 | `MessagesScreen` (client, `c3StyleB` on) | `error()` | A send fails while online (once per failure; it holds the messages after it; none while offline, the message waits) |

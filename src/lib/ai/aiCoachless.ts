@@ -10,6 +10,7 @@
  */
 import { readUserCacheSync } from '../userCache';
 import { AI_CONSENT_SAFETY_EXCEPTION } from '../consultation/copy';
+import { withCrisisSentence } from '../romanCrisisSentence';
 
 /** True when the signed-in user has an id and no coach attached. */
 export function signedInClientIsCoachless(): boolean {
@@ -35,15 +36,16 @@ const COACH_DOES_NOT_SEE = /never sees|private from your coach|^Not your coach/;
 /**
  * K2 (owner 57c): the approved exception right after the first such promise, as
  * client-ai-v6 / v7 and main #703 place it. Text that already carries it, or makes
- * no such promise, is returned as it is.
+ * no such promise, is returned as it is. `crisis` (CRISIS-APP-COPY, `roman_crisis_alert`
+ * on): the crisis sentence follows the exception it adds, as client-ai-v8 / v9 place it.
  */
-export function withSafetyException(text: string): string {
+export function withSafetyException(text: string, crisis = false): string {
   if (text.includes(AI_CONSENT_SAFETY_EXCEPTION)) return text;
   const parts = sentencesOf(text);
   const i = parts.findIndex((s) => COACH_DOES_NOT_SEE.test(s));
   if (i < 0) return text;
   const promise = /[.!?]$/.test(parts[i]) ? parts[i] : `${parts[i]}.`;
-  return [...parts.slice(0, i), promise, AI_CONSENT_SAFETY_EXCEPTION, ...parts.slice(i + 1)].join(' ');
+  return withCrisisSentence([...parts.slice(0, i), promise, AI_CONSENT_SAFETY_EXCEPTION, ...parts.slice(i + 1)].join(' '), crisis);
 }
 
 /** The privacy and consent text a signed-in client is shown: K1 with no coach, K2 with one. */

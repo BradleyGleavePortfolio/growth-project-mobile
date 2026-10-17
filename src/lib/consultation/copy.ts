@@ -18,13 +18,17 @@
  * through T4 review (privacy / data path).
  */
 import { anyScreeningYes, ageOn } from './engine';
+import { ROMAN_CRISIS_TOLD_SENTENCE, ROMAN_SAFETY_EXCEPTION } from '../romanCrisisSentence';
 import type { Answers, MeasureAnswer } from './types';
-import { ROMAN_SAFETY_EXCEPTION } from '../romanCrisisSentence';
 import {
   CONSENT_TITLE,
   CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_COPY_VERSION,
+  CONSULT_CONSENT_CRISIS_COPY_VERSION,
+  CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
 } from './consentVersion';
 
@@ -58,6 +62,9 @@ export const AI_CONSENT_SAFETY_EXCEPTION = ROMAN_SAFETY_EXCEPTION;
 
 /** Paragraph 4 (client-ai-v6): shown above box 2, and again in Settings > Privacy > Roman and AI. */
 export const AI_CONSENT_PARAGRAPH = `${AI_CONSENT_PARAGRAPH_PRE57C} ${AI_CONSENT_SAFETY_EXCEPTION}`;
+
+/** CRISIS-APP-COPY (client-ai-v8, b#1041): v6 with the crisis sentence; shown only when the server answers with it. */
+export const AI_CONSENT_PARAGRAPH_CRISIS = `${AI_CONSENT_PARAGRAPH} ${ROMAN_CRISIS_TOLD_SENTENCE}`;
 
 /** Box 2 (optional, unticked by default). */
 export const AI_CONSENT_CHECKBOX_LABEL =
@@ -148,40 +155,55 @@ export const AI_CONSENT_COACH_FREE_COPY_SHA256 = '2a8c7973ba6047b58a0fdccb2604a7
 export const AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256 = 'c7cd7ebd3b47e3eb0e890a8efa932610c35716aa79ad4f139b6f0c0aad7128fe';
 
 /**
+ * CRISIS-APP-COPY pins (backend b#1041): client-ai-v8 / v9 copy sha256 (box 2 with this build's v8
+ * paragraph, or the server's v9 one) and the whole P0 screen with them (consult-consent-v9 / v10).
+ */
+export const AI_CONSENT_CRISIS_COPY_SHA256 = 'af4cc4fa55aa72cab8e7c6cdcee881d6ba1f448df048088e47acd5e7d479e0ef';
+export const AI_CONSENT_CRISIS_MEMORY_COPY_SHA256 = '16074f18ce0e985e35ba7cfb3f12233cd993159585a35759c4580a730ed3c9dd';
+export const CONSENT_CRISIS_COPY_SHA256 = '1daf2cde65d223686b4bd60f786b85866f93714176dcc8781ff94b4c9f0e30bf';
+export const CONSENT_CRISIS_MEMORY_COPY_SHA256 = '5f36acf2704699f1e7faa68d7c65b8b8ed1f1988d197774a61914b97f22ff512';
+/** FIXCONSENT (backend b#1046): the coach-free P0 screen with them (consult-consent-v10 / v11-coach-free). */
+export const CONSENT_COACH_FREE_CRISIS_COPY_SHA256 = 'b79c1f039e2832560593390b7b66a91f61b2e7be5eb55ef3509ecd7a100d7c4c';
+export const CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_SHA256 = '3528b10d50d8e7bb67a3065b86ba2b5cf33f3891b8194be413c78f2519e3257f';
+
+/**
  * The P0 screen a client sees and what its record names: `version` / `sha256` with this build's
  * paragraph 4, `memoryVersion` / `memorySha256` when box 2 shows the server's memory paragraph.
  * W-CONSENT: a client with no coach sees the coached paragraph 4 and box 2 (client-ai-v6 / v7, so the
  * grant covers Roman once a coach is linked) under `romanTitle`, led by `romanLead`. Their P0 record
  * names that whole screen (consult-consent-v8-coach-free / v9-coach-free, FIX684); box 2 itself is also
  * recorded by the AI consent ledger grant with its own copy sha256, as box 2 always is.
+ * `crisis` (CRISIS-APP-COPY): the server answered with client-ai-v8 / v9, so paragraph 4 is v8's and the
+ * record is consult-consent-v9 / v10, or v10 / v11-coach-free for a client with no coach (FIXCONSENT: the
+ * crisis sentence follows the exception wherever it is stated).
  */
-export function consentScreenCopy(coachFree: boolean) {
+export function consentScreenCopy(coachFree: boolean, crisis = false) {
   return coachFree
     ? {
         paragraphs: CONSENT_PARAGRAPHS_COACH_FREE,
         box1Label: CONSENT_CHECKBOX_LABEL_COACH_FREE,
         romanTitle: CONSENT_ROMAN_COACH_FREE_TITLE,
         romanLead: CONSENT_ROMAN_COACH_FREE_LEAD,
-        aiParagraph: AI_CONSENT_PARAGRAPH,
+        aiParagraph: crisis ? AI_CONSENT_PARAGRAPH_CRISIS : AI_CONSENT_PARAGRAPH,
         box2Label: AI_CONSENT_CHECKBOX_LABEL,
         footer: CONSENT_FOOTER_COACH_FREE,
-        version: CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
-        sha256: CONSENT_COACH_FREE_COPY_SHA256,
-        memoryVersion: CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
-        memorySha256: CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
+        version: crisis ? CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION : CONSULT_CONSENT_COACH_FREE_COPY_VERSION,
+        sha256: crisis ? CONSENT_COACH_FREE_CRISIS_COPY_SHA256 : CONSENT_COACH_FREE_COPY_SHA256,
+        memoryVersion: crisis ? CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION : CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION,
+        memorySha256: crisis ? CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_SHA256 : CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
       }
     : {
         paragraphs: CONSENT_PARAGRAPHS,
         box1Label: CONSENT_CHECKBOX_LABEL,
         romanTitle: null,
         romanLead: null,
-        aiParagraph: AI_CONSENT_PARAGRAPH,
+        aiParagraph: crisis ? AI_CONSENT_PARAGRAPH_CRISIS : AI_CONSENT_PARAGRAPH,
         box2Label: AI_CONSENT_CHECKBOX_LABEL,
         footer: CONSENT_FOOTER,
-        version: CONSULT_CONSENT_COPY_VERSION,
-        sha256: CONSENT_COPY_SHA256,
-        memoryVersion: CONSULT_CONSENT_MEMORY_COPY_VERSION,
-        memorySha256: CONSENT_MEMORY_COPY_SHA256,
+        version: crisis ? CONSULT_CONSENT_CRISIS_COPY_VERSION : CONSULT_CONSENT_COPY_VERSION,
+        sha256: crisis ? CONSENT_CRISIS_COPY_SHA256 : CONSENT_COPY_SHA256,
+        memoryVersion: crisis ? CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION : CONSULT_CONSENT_MEMORY_COPY_VERSION,
+        memorySha256: crisis ? CONSENT_CRISIS_MEMORY_COPY_SHA256 : CONSENT_MEMORY_COPY_SHA256,
       };
 }
 

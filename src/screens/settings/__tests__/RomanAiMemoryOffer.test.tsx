@@ -108,9 +108,9 @@ const V5_HOLDER = body({
   memory_on: true,
 });
 
-/** B-A (b#1047): the copies this screen asks for, offered whatever is on file; each write sends the GET's ask. */
+/** B-A (b#1047): the copies this screen asks for (flag off), offered whatever is on file; each write sends the GET's ask. */
 const COACHED = romanFamily(false);
-const ASK = {};
+const ASK = { crisis: false };
 const V7_COPY = { ...V5_COPY, version: 'client-ai-v7', paragraph: { text: SHOWN_V5, sha256: V5_PARAGRAPH_SHA }, sha256: V7_COPY_SHA };
 const V6_COPY = { ...V4_COPY, version: 'client-ai-v6', paragraph: { text: SHOWN_V4, sha256: 'b'.repeat(64) }, sha256: V6_COPY_SHA };
 const V4_V7_COPY = body({ ...LIVE_V4, memory_on: true, memory_copy: V7_COPY });
@@ -290,6 +290,7 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     expect(memorySwitchOf(noText, COACHED)).toBeNull();
     expect(memorySwitchOf(V5_HOLDER, COACHED)).toEqual({ on: true, onCopy: null });
     expect(memorySwitchOf(V4_V7_COPY, COACHED)?.onCopy?.sha256).toBe(V7_COPY_SHA);
+    expect(memorySwitchOf(V4_MEMORY_COPY, romanFamily(false, true))).toBeNull();
   });
 });
 

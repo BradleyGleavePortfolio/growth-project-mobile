@@ -1,0 +1,107 @@
+# Device loop (docs/DEVICE_LOOP.md): keeps one internal TestFlight build of
+# mobile main current. A new native fingerprint starts a "testing" iOS build
+# that EAS submits to TestFlight; otherwise main goes to that build as an EAS
+# Update on the "testing" channel, which no production binary reads.
+name: Device loop
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 11 * * *' # daily, 04:23 PDT / 03:23 PST
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: device-loop
+  cancel-in-progress: false
+
+jobs:
+  token:
+    name: EXPO_TOKEN set
+    runs-on: ubuntu-latest
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - id: check
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -n "$EXPO_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Device loop skipped::The repository secret EXPO_TOKEN is not set, so nothing was built or published. docs/DEVICE_LOOP.md says how to add it."
+          fi
+
+  loop:
+    name: TestFlight build or testing update
+    needs: token
+    # Main only: a manual run from another branch must not ship that branch.
+    if: needs.token.outputs.present == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      # At most this many testing iOS builds in any 31 days, so the rest of
+      # EAS Free's 15 iOS builds a month stay for store builds.
+      MAX_TESTING_BUILDS: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22.13
+          cache: npm
+
+      # Before the Expo token enters the job: install scripts never see it.
+      - run: npm ci
+
+      - uses: expo/expo-github-action@eab7a230208c952974db8c3245cfd78402c7b385 # 9.0.0
+        with:
+          eas-version: 25.0.0 # = EAS_CLI in scripts/eas-update-guard.js (deviceLoop.test.js)
+          packager: npm
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Decide (fingerprint vs testing builds)
+        id: decide
+        run: |
+          set -euo pipefail
+          builds() { eas build:list --platform ios --build-profile testing --limit 50 --json --non-interactive "$@"; }
+          fp=$(eas fingerprint:generate --platform ios --build-profile testing --json --non-interactive | jq -er '.hash')
+          mine=$(builds --runtime-version "$fp")
+          usable=$(jq '[.[] | select(.status | IN("NEW", "IN_QUEUE", "IN_PROGRESS", "FINISHED"))] | length' <<<"$mine")
+          failed=$(jq '[.[] | select(.status | IN("ERRORED", "CANCELED"))] | length' <<<"$mine")
+          recent=$(builds)
+          running=$(jq '[.[] | select(.status | IN("NEW", "IN_QUEUE", "IN_PROGRESS"))] | length' <<<"$recent")
+          used=$(jq --arg since "$(date -u -d '31 days ago' +%Y-%m-%dT%H:%M:%SZ)" '[.[] | select(.createdAt >= $since)] | length' <<<"$recent")
+          if [ "$usable" -gt 0 ]; then
+            action=update
+            echo "::notice title=Device loop: update::Fingerprint $fp has a finished or running testing build; publishing this commit to channel testing."
+          elif [ "$running" -gt 0 ]; then
+            action=none
+            echo "::notice title=Device loop: waiting::No testing build has fingerprint $fp yet, and another testing build is still running. The next run builds it."
+          elif [ "$failed" -gt 0 ] && [ "$GITHUB_EVENT_NAME" = push ]; then
+            action=none
+            echo "::warning title=Device loop: build failed::The testing build for fingerprint $fp failed or was canceled, and a push never retries it. Fix the cause shown on expo.dev; the daily run or Actions → Device loop → Run workflow builds it again."
+          elif [ "$used" -ge "$MAX_TESTING_BUILDS" ]; then
+            action=none
+            echo "::warning title=Device loop: build limit::No testing build has fingerprint $fp, but $used testing builds started in the last 31 days (limit $MAX_TESTING_BUILDS). No build until one is older than 31 days."
+          else
+            action=build
+            echo "::notice title=Device loop: build::No testing build has fingerprint $fp; starting one with auto-submit to TestFlight ($((used + 1)) of $MAX_TESTING_BUILDS in 31 days)."
+          fi
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+
+      - name: Start the TestFlight build
+        if: steps.decide.outputs.action == 'build'
+        run: eas build --profile testing --platform ios --non-interactive --auto-submit --no-wait
+
+      # The update guard (docs/OTA_UPDATES.md) is the only supported publish path:
+      # it ships the profile's eas.json env and refuses on any release-value gap.
+      - name: Publish to the testing channel
+        if: steps.decide.outputs.action == 'update'
+        run: npm run update:publish -- --channel testing --environment production "--message=$(git log -1 --format='%h %s')"

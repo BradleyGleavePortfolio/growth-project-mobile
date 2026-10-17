@@ -12,6 +12,11 @@
  *       A server-side policy defect (never the person's choice). Contact
  *       support with the reference (the request ID). Never a consent prompt.
  *
+ *   403 { code: 'coach_ai_consent_required', message }
+ *       COACH-AI-CONSENT: the signed-in coach has not turned on Roman (never
+ *       asked, Not now, or turned off). Nothing was sent. Every coach surface
+ *       shows the CAC-5 "Roman is off" state, whose button opens the request.
+ *
  * Roman's buffered SSE stream can carry the same codes in its in-stream
  * error frame (HTTP 200, `event: error`, exactly `{ code, message }`); the
  * reference then comes from the response's X-Request-ID header.
@@ -22,15 +27,19 @@
  */
 import { shortReference, supportReferenceOf } from '../../utils/correlation';
 import { signedInClientIsCoachless } from './aiCoachless';
+import { COACH_AI_CONSENT_COPY } from './coachAiConsentCopy';
 
 export const AI_CONSENT_REQUIRED_CODE = 'ai_consent_required';
 export const AI_EGRESS_BLOCKED_CODE = 'ai_egress_blocked';
+export const COACH_AI_CONSENT_REQUIRED_CODE = 'coach_ai_consent_required';
 
 /** Who is looking at the refusal: the client themself, or their coach. */
 export type AiAudience = 'client' | 'coach';
 
 export type AiRefusal =
   | { kind: 'consent_required' }
+  /** The coach's own grant is missing (COACH-AI-CONSENT); never about a client. */
+  | { kind: 'coach_consent_required' }
   | {
       kind: 'egress_blocked';
       /** Full support reference (request ID), or null when none is known. */
@@ -75,6 +84,7 @@ export function aiRefusalFromHttp(
 ): AiRefusal | null {
   const code = machineCodeOf(body);
   if (status === 403 && code === AI_CONSENT_REQUIRED_CODE) return { kind: 'consent_required' };
+  if (status === 403 && code === COACH_AI_CONSENT_REQUIRED_CODE) return { kind: 'coach_consent_required' };
   if (status === 503 && code === AI_EGRESS_BLOCKED_CODE) {
     return {
       kind: 'egress_blocked',
@@ -105,6 +115,7 @@ export function aiRefusalFromStreamCode(
   headerReference: string | null,
 ): AiRefusal | null {
   if (frame.code === AI_CONSENT_REQUIRED_CODE) return { kind: 'consent_required' };
+  if (frame.code === COACH_AI_CONSENT_REQUIRED_CODE) return { kind: 'coach_consent_required' };
   if (frame.code === AI_EGRESS_BLOCKED_CODE) {
     return { kind: 'egress_blocked', reference: headerReference, serverMessage: frame.message || null };
   }
@@ -147,6 +158,10 @@ export function aiRefusalCopy(
   coachless: boolean = signedInClientIsCoachless(),
 ): AiRefusalCopy {
   const { name: what, isAre } = SURFACE_PHRASE[surface];
+  if (refusal.kind === 'coach_consent_required') {
+    const { title, body } = COACH_AI_CONSENT_COPY.off;
+    return { title, body, referenceLine: null };
+  }
   if (refusal.kind === 'consent_required') {
     if (audience === 'client') {
       return {

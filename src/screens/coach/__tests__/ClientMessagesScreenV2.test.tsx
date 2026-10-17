@@ -147,6 +147,8 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
     mockRows.push(row({ id: 'm4', sender_id: 'client-1', body: 'are you there', created_at: new Date().toISOString() }));
     const self = mockSubs.filter((x) => x.userId === 'coach-1').pop();
     expect(self).toBeTruthy();
+    // MSGRT: only the coach's own topic, never the client's.
+    expect(mockSubs.filter((x) => x.userId !== 'coach-1')).toEqual([]);
     self?.onPing();
     await waitFor(() => expect(postMock).toHaveBeenCalledWith(`${BASE}/read`, { up_to_message_id: 'm4' }, expect.anything()));
   });

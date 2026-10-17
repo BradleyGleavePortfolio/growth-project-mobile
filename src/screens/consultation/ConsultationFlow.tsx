@@ -66,6 +66,7 @@ import {
   readAiWithdrawalPending,
   romanBox2MemoryCopyOf,
   romanFamily,
+  romanFamilyOf,
   romanGrantBody,
   runAiLedgerWrite,
   withdrawRomanWithRetry,
@@ -164,6 +165,13 @@ const defaultApi: ConsultationApi = {
  * still reconciled with whatever the client chose.
  */
 export const AI_STATUS_WAIT_MS = 3000;
+
+/**
+ * CRISIS-APP-COPY / FIXCONSENT: every P0 ledger call asks crisis_alert, and box 2 follows the answer: client-ai-v8 / v9
+ * while the server's FEATURE_ROMAN_CRISIS_ALERT is on, v6 / v7 while it is off. P0 comes before the age step, where the
+ * server refuses GET /me/feature-flags (403 AGE_CONFIRMATION_REQUIRED), so the flow never reads the flag itself.
+ */
+const P0_ASK = { crisis: true } as const;
 
 export interface ConsultationFlowProps {
   userId: string | null;
@@ -303,6 +311,9 @@ export default function ConsultationFlow({
   /** R11-C2B: the server's client-ai-v5 copy box 2 shows and grants, or null for the pinned v4 text. */
   const [aiMemory, setAiMemory] = useState<AiConsentUpgradeCopy | null>(null);
   const aiMemoryRef = useRef<AiConsentUpgradeCopy | null>(null);
+  /** CRISIS-APP-COPY: the copies box 2 shows and grants, as the server answered P0_ASK (v8 / v9 while its switch is on). */
+  const aiFamily = useRef(romanFamily(false));
+  const [aiCrisis, setAiCrisis] = useState(false);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
   const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
   /** Each box 2 notice is shown once per load, however often a retry fails. */
@@ -706,12 +717,15 @@ export default function ConsultationFlow({
   async function refreshAiFromLedger(gen: number) {
     try {
       // W-CONSENT: a client with no coach reads (and box 2 grants) the coached copies too.
-      const out = await api.getRomanConsent();
+      const out = await api.getRomanConsent(P0_ASK);
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, romanFamily(false));
+        const crisisCopy = romanFamilyOf(out.status) === romanFamily(false, true);
+        aiFamily.current = romanFamily(false, crisisCopy);
+        setAiCrisis(crisisCopy);
+        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, aiFamily.current);
         setAiMemory(aiMemoryRef.current);
-        setAiConfirmed(isLiveRomanGrant(out.status, romanFamily(false)), true);
+        setAiConfirmed(isLiveRomanGrant(out.status, aiFamily.current), true);
         reconcileAi(gen);
       }
     } catch {
@@ -761,9 +775,9 @@ export default function ConsultationFlow({
           // and yes still being the latest choice (B-310-5).
           const result = await runAiLedgerWrite(() =>
             grantRomanWithRetry(
-              api.grantRomanConsent,
+              (body) => api.grantRomanConsent(body, P0_ASK),
               () => aiLive(gen) && aiWant.current === true,
-              () => romanGrantBody(aiMemoryRef.current, romanFamily(false)),
+              () => romanGrantBody(aiMemoryRef.current, aiFamily.current),
             ),
           );
           if (!aiLive(gen)) return;
@@ -806,7 +820,10 @@ export default function ConsultationFlow({
         if (!aiLive(gen)) return;
         aiWithdrawRetryDue.current = false;
         const result = await runAiLedgerWrite(() =>
-          withdrawRomanWithRetry(api.withdrawRomanConsent, () => aiLive(gen) && aiWant.current === false),
+          withdrawRomanWithRetry(
+            () => api.withdrawRomanConsent(P0_ASK),
+            () => aiLive(gen) && aiWant.current === false,
+          ),
         );
         if (!aiLive(gen)) return;
         if (result === 'withdrawn') {
@@ -1270,7 +1287,7 @@ export default function ConsultationFlow({
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
         romanOverride={welcomeBackId === screen.id ? welcomeBackLine(screen.chapter) : null}
-        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, coachSharing }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, aiCrisis, coachSharing }}
         escape={(stopped) => (stopped ? <EscapeRow {...exits} /> : null)}
       />
     );
