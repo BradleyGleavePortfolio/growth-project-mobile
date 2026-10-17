@@ -124,6 +124,16 @@ const ROUTES: Route[] = [
   { method: 'GET', pattern: /^\/v1\/clients\/me\/coach$/, handler: () => ({ id: DEMO_USER.coach_id, name: 'Sam Carter' }) },
   { method: 'GET', pattern: /^\/coach\/team\/members$/, handler: () => [{ id: DEMO_USER.coach_id, role: 'head_coach' }] },
   { method: 'GET', pattern: /^\/notifications\/unread-count$/, handler: () => ({ count: 0 }) },
+  { method: 'GET', pattern: /^\/me\/feature-flags$/, handler: () => ({ flags: {}, evaluated_at: new Date().toISOString() }) },
+  { method: 'GET', pattern: /^\/community\/me$/, handler: () => ({
+    feature_flag_state: 'enabled', workspace_id: null, membership: null,
+    unread: { cohort_messages: 0, dm_messages: 0, mentions: 0 },
+    flags: { community_api: true, community_dm: false, community_realtime: false, community_push: false, community_telemetry: false },
+  }) },
+  { method: 'GET', pattern: /^\/insights\/holistic(\?|$)/, handler: () => ({
+    version: 1, status: 'insufficient_data', generated_at: new Date().toISOString(),
+    data_window: { window_days: 90, weeks_observed: 2 }, insights: [], notes: [],
+  }) },
   { method: 'GET', pattern: /^\/users\/blocks$/, handler: () => ({ blocked: [] }) },
   { method: 'GET', pattern: /^\/v1\/checkout\/entitlement$/, handler: () => ({ active: true }) },
   { method: 'GET', pattern: /^\/me\/onboarding$/, handler: () => ({ tutorial_completed: true }) },

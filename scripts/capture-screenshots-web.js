@@ -45,6 +45,7 @@ function profileEnv(name) {
     if (!available) throw new Error('Expo did not start; see metro.log');
     browser = await chromium.launch({ headless: true });
     const evidence = [];
+    const failures = [];
     for (const size of SCREENSHOT_SIZES) {
       for (const target of SCREENSHOT_TARGETS) {
         const context = await browser.newContext({ ...devices['iPhone 13 Pro Max'],
@@ -80,15 +81,16 @@ function profileEnv(name) {
         } catch (error) {
           console.error(await page.locator('body').innerText());
           await page.screenshot({ path: path.join(dir, `${target.slug}-FAILED.png`) });
-          throw error;
+          failures.push(`${target.slug} ${size.width}x${size.height}: ${error.message}`);
         } finally { await context.close(); }
       }
     }
     fs.writeFileSync(path.join(out, 'evidence.json'), JSON.stringify({
       profile: process.env.SCREENSHOT_PROFILE || 'production',
       coachTabsV2: env.EXPO_PUBLIC_FF_COACH_TABS_V2 || 'false',
-      evidence, captions: SCREENSHOT_CAPTIONS,
+      evidence, failures, captions: SCREENSHOT_CAPTIONS,
     }, null, 2));
+    if (failures.length) throw new Error(failures.join('\n'));
   } finally {
     await browser?.close();
     server?.kill('SIGTERM');
