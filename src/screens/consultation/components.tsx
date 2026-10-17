@@ -370,6 +370,7 @@ export function Checkbox({
   testID,
   disabled = false,
   hint,
+  detail,
 }: {
   checked: boolean;
   onToggle: () => void;
@@ -378,15 +379,18 @@ export function Checkbox({
   /** Not tappable yet (box 2 while the saved choice is being read, Opus C-310-7). */
   disabled?: boolean;
   hint?: string;
+  /** A line under the label (COACH-AI-CONSENT sign-up box: CAC-2 under CAC-1); read as the hint. */
+  detail?: string;
 }) {
   const { s, palette } = useConsultationStyles();
+  const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null]}>{label}</Text>;
   return (
     <Pressable
       onPress={disabled ? undefined : onToggle}
       disabled={disabled}
       accessibilityRole="checkbox"
       accessibilityLabel={label}
-      accessibilityHint={hint}
+      accessibilityHint={hint ?? detail}
       accessibilityState={disabled ? { checked, disabled: true, busy: true } : { checked }}
       testID={testID}
       style={({ pressed }) => [s.checkRow, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
@@ -394,7 +398,14 @@ export function Checkbox({
       <View style={[s.box, checked && s.boxOn]}>
         {checked ? <Ionicons name="checkmark" size={16} color={palette.onAccent} /> : null}
       </View>
-      <Text style={s.checkLabel}>{label}</Text>
+      {detail ? (
+        <View style={s.checkText}>
+          {text}
+          <Text style={s.checkDetail}>{detail}</Text>
+        </View>
+      ) : (
+        text
+      )}
     </Pressable>
   );
 }
@@ -677,6 +688,9 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   },
   boxOn: { backgroundColor: palette.accent, borderColor: palette.accent },
   checkLabel: { ...typography.bodyMd, color: palette.ink, flex: 1 },
+  checkTitle: { fontFamily: 'Inter_600SemiBold', flex: 0 },
+  checkText: { flex: 1, gap: spacing.xs },
+  checkDetail: { ...typography.bodySmall, color: palette.charcoal },
   inputWrap: { marginTop: spacing.lg },
   flabel: { ...typography.eyebrow, color: palette.muted, marginBottom: spacing.sm },
   field: {

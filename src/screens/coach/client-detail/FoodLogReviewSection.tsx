@@ -79,7 +79,7 @@ export function FoodLogReviewSection({
             <TouchableOpacity
               key={d}
               onPress={() => setDays(d)}
-              style={[styles.foodReviewChip, { minHeight: 44, justifyContent: 'center' }, days === d && styles.foodReviewChipActive]}
+              style={[styles.foodReviewChip, days === d && styles.foodReviewChipActive]}
               accessibilityRole="button"
               accessibilityLabel={`Review the last ${d} days of food logs`}
               accessibilityState={{ selected: days === d }}
@@ -123,8 +123,8 @@ export function FoodLogReviewSection({
         <View style={styles.emptyCard}>
           <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
           <Text style={styles.emptyText}>{error}</Text>
-          <TouchableOpacity onPress={load} accessibilityRole="button">
-            <Text style={[styles.actionPillText, { marginTop: 8 }]}>Retry</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={load} accessibilityRole="button">
+            <Text style={styles.retryBtnText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : !shared ? (

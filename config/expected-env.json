@@ -226,6 +226,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Roman draft marks stay off by default; the operator switches them on once the backend gates in m#731 hold."
+    },
     "EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW": {
       "kind": "flag",
       "default": "off",
@@ -378,6 +383,13 @@
       "require": [],
       "stripe": "any",
       "reason": "Internal APK/TestFlight test builds: required names and placeholders only; Stripe test keys allowed."
+    },
+    "testing": {
+      "require": [
+        "EXPO_PUBLIC_SENTRY_DSN"
+      ],
+      "stripe": "live",
+      "reason": "Device-loop TestFlight build (docs/DEVICE_LOOP.md): the production build on the testing update channel, so it gets the production checks."
     }
   }
 }

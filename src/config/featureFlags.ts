@@ -64,6 +64,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ROMAN_CHAT: process.env.EXPO_PUBLIC_FF_ROMAN_CHAT,
   EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE,
   EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL: process.env.EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL,
+  EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK: process.env.EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK,
   EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW: process.env.EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW,
   EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH: process.env.EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH,
   EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE,
@@ -87,6 +88,8 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 
 /** Centralised, typed flag map. Add new flags here as new surfaces land. */
 export const featureFlags = {
+  /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
+  romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
   /** Team management stays hidden for launch, including in development. */
   teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),
 

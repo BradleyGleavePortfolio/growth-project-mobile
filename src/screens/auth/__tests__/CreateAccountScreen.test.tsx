@@ -11,7 +11,7 @@
 import React from 'react';
 import { Alert, Linking, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockGetSignupPolicy = jest.fn();
 const mockSignupWithCode = jest.fn();
@@ -79,6 +79,12 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 
 const mockEmit = jest.fn();
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: () => mockEmit() } }));
+const mockCoachGrant = jest.fn(async () => ({ kind: 'ok' }));
+const mockMarkAsked = jest.fn();
+jest.mock('../../../api/coachAiConsentApi', () => ({
+  coachAiConsentApi: { grant: () => mockCoachGrant() },
+  markCoachAskedAtSignUp: (id: string) => mockMarkAsked(id),
+}));
 
 import CreateAccountScreen from '../CreateAccountScreen';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../../config/env';
@@ -584,6 +590,30 @@ describe('CreateAccountScreen', () => {
       await fireEvent.press(utils.getByTestId('apple-button'));
       await waitFor(() => expect(mockEmit).toHaveBeenCalled());
       expect(utils.nav.replace).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])('COACH-AI-CONSENT: the optional, unticked Roman box grants only when ticked (%s), after the account exists', async (tick) => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'c1', role: 'coach' } });
+      const utils = await renderScreen(undefined, 'coach');
+      const box = utils.getByTestId('create-account-roman');
+      expect(box.props.accessibilityState).toMatchObject({ checked: false });
+      // In the form (its last item), never in the pinned footer that holds Create account.
+      expect(within(utils.getByTestId('create-account-register-scroll')).getByTestId('create-account-roman')).toBeTruthy();
+      expect(within(utils.getByTestId('create-account-register-footer')).queryByTestId('create-account-roman')).toBeNull();
+      expect(utils.getByText('Turn on Roman')).toBeTruthy();
+      expect(utils.getByText(/^Roman runs on Anthropic, an outside AI company\./)).toBeTruthy();
+      if (tick) await fireEvent.press(box);
+      expect(mockCoachGrant).not.toHaveBeenCalled();
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() => expect(mockEmit).toHaveBeenCalled());
+      expect(mockCoachGrant).toHaveBeenCalledTimes(tick ? 1 : 0);
+      expect(mockMarkAsked).toHaveBeenCalledWith('c1');
+    });
+
+    it('COACH-AI-CONSENT: the client form has no Roman box', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      expect((await renderScreen(undefined, 'client')).queryByTestId('create-account-roman')).toBeNull();
     });
 
     it('F4: Apple coach choice on an EXISTING provider account: signed in, and told the choice did not apply', async () => {

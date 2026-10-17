@@ -1,5 +1,6 @@
 /** Ask AI copy (plan PART 1 "States"): no first person, emojis, exclamation marks or generic errors. */
 import type { AiBuilderErrorCode, AiBuilderInjuryArea, AiBuilderQuickAction } from '../../../api/aiBuilderApi';
+import { COACH_AI_CONSENT_COPY } from '../../../lib/ai/coachAiConsentCopy';
 
 export const AI_LABEL = 'AI-suggested, coach-approved';
 // U1 (SAFE-AIB-127): stage 2 names injuries only when the server really screens some (an injury area was chosen).
@@ -46,6 +47,7 @@ export function noCreditsCopy(resetsAt: string | null): string {
 
 const ERROR_COPY: Record<Exclude<AiBuilderErrorCode, 'no_credits'>, string> = {
   consent_required: 'This client has not allowed AI to use their data. Edit by hand, or build from a template without client data.',
+  coach_consent_required: COACH_AI_CONSENT_COPY.off.body, // the sheets show the CAC-5 card (AiRefusalNotice) instead
   stale: 'This workout changed on another screen. Reload it and ask again.',
   no_safe_proposal: 'No safe change found for that request. Try: swap squats for a knee-friendly option.',
   over_limits: 'Those changes together go past a training limit for this workout. Keep the matching removal too, or untick an addition.',

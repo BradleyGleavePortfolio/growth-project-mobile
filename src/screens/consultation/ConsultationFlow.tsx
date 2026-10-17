@@ -46,8 +46,9 @@
  * There is no skip-to-finish path: the only way out is the plan reveal,
  * which is reached only through a successful complete call.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, View } from 'react-native';
+import { NavigationContext } from '@react-navigation/native';
 import {
   consultationApi,
   CompleteOnboardingResponse,
@@ -65,6 +66,7 @@ import {
   readAiWithdrawalPending,
   romanBox2MemoryCopyOf,
   romanFamily,
+  romanFamilyOf,
   romanGrantBody,
   runAiLedgerWrite,
   withdrawRomanWithRetry,
@@ -116,6 +118,7 @@ import { AnalyticsExcluded, palette, STEP_MS } from './components';
 import {
   CompleteProblem,
   CompleteProblemScreen,
+  EscapeRow,
   MacroRevealScreen,
   PausedScreen,
   PlanRevealScreen,
@@ -163,6 +166,13 @@ const defaultApi: ConsultationApi = {
  */
 export const AI_STATUS_WAIT_MS = 3000;
 
+/**
+ * CRISIS-APP-COPY / FIXCONSENT: every P0 ledger call asks crisis_alert, and box 2 follows the answer: client-ai-v8 / v9
+ * while the server's FEATURE_ROMAN_CRISIS_ALERT is on, v6 / v7 while it is off. P0 comes before the age step, where the
+ * server refuses GET /me/feature-flags (403 AGE_CONFIRMATION_REQUIRED), so the flow never reads the flag itself.
+ */
+const P0_ASK = { crisis: true } as const;
+
 export interface ConsultationFlowProps {
   userId: string | null;
   firstName?: string | null;
@@ -178,6 +188,9 @@ export interface ConsultationFlowProps {
   prepMinMs?: number;
   /** Sign out from the problem and paused screens (operator C-310-3). Hidden when absent. */
   onSignOut?: () => void;
+  /** AGEDELETE (App Store 5.1.1(v)): the account screens, from the under-16 stop and paused screens. */
+  onOpenDataExport?: () => void;
+  onOpenDeleteAccount?: () => void;
 }
 
 type Phase = 'loading' | 'question' | 'summary' | 'preparing' | 'macro' | 'plan' | 'paused' | 'problem';
@@ -221,7 +234,7 @@ export default function ConsultationFlow({
   now: nowFn = () => new Date(),
   autoAdvanceMs = STEP_MS,
   prepMinMs = 900,
-  onSignOut,
+  ...exits
 }: ConsultationFlowProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [screenId, setScreenId] = useState<string>('W1');
@@ -298,6 +311,9 @@ export default function ConsultationFlow({
   /** R11-C2B: the server's client-ai-v5 copy box 2 shows and grants, or null for the pinned v4 text. */
   const [aiMemory, setAiMemory] = useState<AiConsentUpgradeCopy | null>(null);
   const aiMemoryRef = useRef<AiConsentUpgradeCopy | null>(null);
+  /** CRISIS-APP-COPY: the copies box 2 shows and grants, as the server answered P0_ASK (v8 / v9 while its switch is on). */
+  const aiFamily = useRef(romanFamily(false));
+  const [aiCrisis, setAiCrisis] = useState(false);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
   const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
   /** Each box 2 notice is shown once per load, however often a retry fails. */
@@ -700,13 +716,16 @@ export default function ConsultationFlow({
    */
   async function refreshAiFromLedger(gen: number) {
     try {
-      // Owner 62: a client with no coach is offered (and box 2 grants) the coach-free copies.
-      const out = coachless ? await api.getRomanConsent({ coachFree: true }) : await api.getRomanConsent();
+      // W-CONSENT: a client with no coach reads (and box 2 grants) the coached copies too.
+      const out = await api.getRomanConsent(P0_ASK);
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, romanFamily(coachless));
+        const crisisCopy = romanFamilyOf(out.status) === romanFamily(false, true);
+        aiFamily.current = romanFamily(false, crisisCopy);
+        setAiCrisis(crisisCopy);
+        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, aiFamily.current);
         setAiMemory(aiMemoryRef.current);
-        setAiConfirmed(isLiveRomanGrant(out.status, romanFamily(coachless)), true);
+        setAiConfirmed(isLiveRomanGrant(out.status, aiFamily.current), true);
         reconcileAi(gen);
       }
     } catch {
@@ -756,9 +775,9 @@ export default function ConsultationFlow({
           // and yes still being the latest choice (B-310-5).
           const result = await runAiLedgerWrite(() =>
             grantRomanWithRetry(
-              api.grantRomanConsent,
+              (body) => api.grantRomanConsent(body, P0_ASK),
               () => aiLive(gen) && aiWant.current === true,
-              () => romanGrantBody(aiMemoryRef.current, romanFamily(coachless)),
+              () => romanGrantBody(aiMemoryRef.current, aiFamily.current),
             ),
           );
           if (!aiLive(gen)) return;
@@ -787,7 +806,9 @@ export default function ConsultationFlow({
           setAiWant(null);
           if (result === 'unavailable') return; // ledger off: skipped silently
           logger.warn('ConsultationFlow', `optional AI choice not recorded (${result}); left for Settings`);
-          noticeOnce('grant', AI_GRANT_NOTICE);
+          // W-CONSENT: a client with no coach is asked again once they join one (RomanJoinOfferHost), so
+          // a refusal (403 ROMAN_REQUIRES_COACH from a server that does not store it yet) stays quiet, unsaved.
+          if (!coachless) noticeOnce('grant', AI_GRANT_NOTICE);
           return;
         }
         // No: nothing can be on file (no confirmed grant, no grant attempted
@@ -799,7 +820,10 @@ export default function ConsultationFlow({
         if (!aiLive(gen)) return;
         aiWithdrawRetryDue.current = false;
         const result = await runAiLedgerWrite(() =>
-          withdrawRomanWithRetry(api.withdrawRomanConsent, () => aiLive(gen) && aiWant.current === false),
+          withdrawRomanWithRetry(
+            () => api.withdrawRomanConsent(P0_ASK),
+            () => aiLive(gen) && aiWant.current === false,
+          ),
         );
         if (!aiLive(gen)) return;
         if (result === 'withdrawn') {
@@ -1034,10 +1058,12 @@ export default function ConsultationFlow({
     return phase !== 'macro';
   }, [clearTimer, phase, setPhaseBoth, showScreen]);
 
+  // AGEDELETE: Android back closes an account screen opened over the flow (the navigator's back), never a question under it.
+  const navigation = useContext(NavigationContext);
   useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => onBack());
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => (navigation?.isFocused() === false ? false : onBack()));
     return () => sub.remove();
-  }, [onBack]);
+  }, [navigation, onBack]);
 
   const onFinishLater = useCallback(() => {
     clearTimer();
@@ -1221,7 +1247,7 @@ export default function ConsultationFlow({
           reference={problemRef}
           onAction={onProblemAction}
           onBack={() => setPhaseBoth('summary')}
-          onSignOut={onSignOut}
+          onSignOut={exits.onSignOut}
         />
       );
     }
@@ -1234,7 +1260,7 @@ export default function ConsultationFlow({
             showScreen(id);
             if (id !== 'W1' && id !== 'P0') setWelcomeBackId(id);
           }}
-          onSignOut={onSignOut}
+          {...exits}
         />
       );
     }
@@ -1261,7 +1287,8 @@ export default function ConsultationFlow({
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
         romanOverride={welcomeBackId === screen.id ? welcomeBackLine(screen.chapter) : null}
-        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, coachSharing }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, aiCrisis, coachSharing }}
+        escape={(stopped) => (stopped ? <EscapeRow {...exits} /> : null)}
       />
     );
   }
