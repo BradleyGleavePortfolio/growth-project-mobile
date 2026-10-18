@@ -20,7 +20,7 @@ const facts = (c: ShareSnapshot, shown = String(c.value)) => (c.kind === 'weigh_
   : `${c.words}, ${c.value.toLocaleString()} lb, recent best, ${formatDate(c.to)}`);
 
 /** A weigh-in run of `days` days ending on `end` (YYYY-MM-DD); `shown` is the number as Progress says it ("60+"). */
-export function runCard(days: number, end: string, shown: string): ShareCardContent {
+export function runCard(days: number, end: string, shown: string): ShareCardContent & { snapshot: ShareSnapshot } {
   const start = addDays(end, 1 - days);
   const snapshot: ShareSnapshot = { kind: 'weigh_in_run', value: days, words: 'days in a row', from: start, to: end };
   return {
@@ -43,7 +43,7 @@ export function runCard(days: number, end: string, shown: string): ShareCardCont
 }
 
 /** A recent best: `lift` at `weight` lb, the heaviest in the last 50 saved workouts, on `day` (YYYY-MM-DD). */
-export function bestCard(lift: string, weight: number, day: string): ShareCardContent {
+export function bestCard(lift: string, weight: number, day: string): ShareCardContent & { snapshot: ShareSnapshot } {
   const lb = weight.toLocaleString();
   const snapshot: ShareSnapshot = { kind: 'recent_best', value: weight, words: lift.trim().slice(0, 60), to: day }; // SHARE-BE: words 1-60
   return {
@@ -82,7 +82,7 @@ export function SharedCard({ card }: { card: ShareSnapshot }) {
 export const sharedCardLabel = (c: ShareSnapshot) => `Shared progress: ${facts(c)}.`;
 
 /** The forest card: eyebrow (gold with a star only for a recent best), the content, a hairline, the app name. */
-function Frame({ eyebrow, star, children }: { eyebrow: string; star?: boolean; children: React.ReactNode }) {
+export function Frame({ eyebrow, star, children }: { eyebrow: string; star?: boolean; children: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={[s.card, { backgroundColor: sc.surface.masthead }]}>
@@ -97,7 +97,7 @@ function Frame({ eyebrow, star, children }: { eyebrow: string; star?: boolean; c
   );
 }
 
-const Figure = ({ value, unit }: { value: string; unit: string }) => (
+export const Figure = ({ value, unit }: { value: string; unit: string }) => (
   <View style={s.figure}>
     <Ink text={value} style={s.number} />
     <Ink text={unit} style={s.unit} />
@@ -116,7 +116,7 @@ function Bars({ days }: { days: number }) {
   );
 }
 
-function Ink({ text, style, muted }: { text: string; style: TextStyle; muted?: boolean }) {
+export function Ink({ text, style, muted }: { text: string; style: TextStyle; muted?: boolean }) {
   const { semanticColors: sc } = useTheme();
   return <Text style={[style, { color: muted ? sc.textOnMastheadMuted : sc.textOnAccent }]}>{text}</Text>;
 }

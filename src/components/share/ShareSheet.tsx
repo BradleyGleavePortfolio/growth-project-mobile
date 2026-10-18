@@ -33,8 +33,8 @@ export interface ShareCardContent {
   label: string; // what a screen reader says for the picture
   inIt: string;
   notInIt: string;
-  snapshot: ShareSnapshot; // what Send to {coach} posts
-  type: 'streak' | 'pr'; // analytics card type
+  snapshot?: ShareSnapshot; // what Send to {coach} posts; none (a health card: no server kind yet): no Send
+  type: 'streak' | 'pr' | 'health'; // analytics card type
 }
 
 type Act = 'picture' | 'send';
@@ -83,7 +83,7 @@ export default function ShareSheet({ card, onClose }: { card: ShareCardContent |
     queryFn: async () => (await api.get<{ name?: string }>('/v1/clients/me/coach')).data?.name ?? null,
   });
   const coachFirst = typeof coach.data === 'string' ? (coach.data.trim().split(/\s+/)[0] ?? '') : '';
-  const canSend = sendOn && coachFirst !== '';
+  const canSend = sendOn && coachFirst !== '' && shown?.snapshot != null;
 
   const run = async (act: Act, c: ShareCardContent, work: () => Promise<boolean | null>) => {
     setBusy((b) => [...b, act]);
@@ -95,6 +95,7 @@ export default function ShareSheet({ card, onClose }: { card: ShareCardContent |
   };
   const outside = (c: ShareCardContent) => run('picture', c, () => sharePicture(cardRef, { card_type: c.type }, 'Share your card'));
   const send = (c: ShareCardContent) => run('send', c, async () => {
+    if (!c.snapshot) return null;
     if (sendKey.current.card !== c) sendKey.current = { card: c, id: randomUUID() };
     if (!uid) return null; // Send shows only to a signed-in coached client
     const result = await viaOutbox(uid, c.snapshot, sendKey.current.id);
