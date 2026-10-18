@@ -80,6 +80,12 @@ When the toggle changes:
 | `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |
 | Consultation T1, B1, B3, N1, N2 (`consultTilesV2` on) | `selection()` | A tile, chip, or Imperial / Metric tap (ONBQ-TILES) |
 | `roman/RomanCrisisActions` (CRISIS-BTN, `crisisActions` on) | `softImpact()` | Call 911, Call 988, Text 988 or Message <coach> under Roman's marked crisis reply; none when the reply arrives |
+| `WelcomeScreen` (`firstRunV2` on) | `mediumImpact()` | Get started |
+| `LoginScreen` (`firstRunV2` on) | `error()` | A sign-in failure is shown (once per failure) |
+| `LoginScreen`, `CreateAccountScreen`, `ResetPasswordScreen` (`firstRunV2` on) | `selection()` | Show or hide password |
+| `RoleChoice` tiles (`firstRunV2` on) | `selection()` | A role tile is picked |
+| `ForgotPasswordScreen` (`firstRunV2` on) | `softImpact()` | The reset request is submitted (the forest card shows) |
+| `ResetPasswordScreen` (`firstRunV2` on) | `success()` | The new password is saved |
 
 ## Architecture
 
