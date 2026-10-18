@@ -3,8 +3,10 @@
  * rendered by HomeScreen when featureFlags.clientHomeRings is on. HomeScreen keeps the
  * day and workout reads; this layout shows the coach row and bell (coachless: Roman
  * locked), the date, three dials (each its own number and screen), Join a coach for a
- * coachless client (m#654) and the day's one forest button. Roman's line, the tiles,
- * Edit tiles and the notice slot follow in the next UI-1 pull requests.
+ * coachless client (m#654), Roman's line (coachless: locked), the day's one forest
+ * button, the tiles and the one notice slot (today's Home notices, most urgent first, one at
+ * a time); a failed payment shows alone under the dials. Every read refreshes on open: focus
+ * and a return to the foreground. Edit tiles follows in the next UI-1 pull request.
  */
 import React, { useCallback } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -16,6 +18,8 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useTodayCheckIn } from '../../../hooks/useApi';
 import { useWearableSamples } from '../../../hooks/useWearableSamples';
 import { useWearableConnections } from '../../../hooks/useWearableConnections';
+import { useRefreshOnOpen } from '../../../hooks/useRefreshOnOpen';
+import { useDeviceHealthOnOpen } from '../../../hooks/useDeviceHealthOnOpen';
 import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
 import type { ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilderApi';
@@ -25,6 +29,17 @@ import HomeHeaderActions from '../../../components/home/HomeHeaderActions';
 import CoachlessHomeSlot from '../../../components/coachless/CoachlessHomeSlot';
 import HomeDial from '../../../components/home/rings/HomeDial';
 import { foodDial, lastNightSleep, noHealthSource, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
+import HomeRomanLine from '../../../components/home/rings/HomeRomanLine';
+import HomeTiles, { type HomeTilesProps } from '../../../components/home/rings/HomeTiles';
+import { HomeNoticeSlot } from '../../../components/home/HomeNoticeSlot';
+import { DunningBanner } from '../../../entitlements/dunning/DunningBanner';
+import PendingInviteBanner from '../../../components/PendingInviteBanner';
+import FinishJoining from '../../../components/join/FinishJoining';
+import ProfileNudge from '../../../components/home/ProfileNudge';
+import PushPermissionCard from '../../../components/home/PushPermissionCard';
+import CoachIntroductionBanner from '../../../components/home/CoachIntroductionBanner';
+import FullMacrosIntroCard from '../../../components/home/FullMacrosIntroCard';
+import TutorialHomeSlot from '../../../components/tutorial/TutorialHomeSlot';
 import { homeDateLine } from '../homeDate';
 
 /** The raw workout reads behind the Train dial (null = that read failed). */
@@ -34,8 +49,10 @@ export interface RingsWorkoutReads {
 }
 
 export interface RingsHomeScreenProps {
-  day: { ready: boolean; error: string | null; retrying: boolean; calories: number | undefined; calorieTarget: number | undefined };
-  workout: RingsWorkoutReads & { exists: boolean | 'loading'; label: string; hint: string; onContinue: () => void };
+  day: HomeTilesProps['day'] & {
+    error: string | null; retrying: boolean; calories: number | undefined; calorieTarget: number | undefined; carbsTarget?: number; fatTarget?: number;
+  };
+  workout: RingsWorkoutReads & { exists: boolean | 'loading'; label: string; hint: string; onContinue: () => void; hasCoachPlan: boolean };
   refreshing: boolean;
   onRefresh: () => Promise<void>;
 }
@@ -68,6 +85,13 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
   const refresh = useCallback(async () => {
     await Promise.all([onRefresh(), refetchSleep(), refetchCheckIn(), refetchConnections()]);
   }, [onRefresh, refetchSleep, refetchCheckIn, refetchConnections]);
+
+  // Refresh on open: Home's reads again on each refocus and return to the foreground; Health on this phone
+  // on first open and on each return to the app, so last night reaches the Sleep dial without opening Health.
+  useDeviceHealthOnOpen(connections.data);
+  useRefreshOnOpen(() => {
+    void refetchSleep(); void refetchCheckIn(); void refetchConnections();
+  });
 
   const food = foodDial({ ready: day.ready && !day.error, eaten: day.calories, target: day.calorieTarget });
   const train = trainDial({
@@ -108,7 +132,11 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             accessibilityLabel={dialLabel('Sleep', sleep)}
             onPress={() => (noSource && sleep.source !== 'health' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'recovery' }))} />
         </View>
+        {/* #RINGS-PAY-SLOT: the failed payment alone, up under the dials; every other notice waits in the slot. */}
+        <DunningBanner surface="HomeScreen" presentation="section" style={styles.pay} />
         <CoachlessHomeSlot part="join" />
+        {/* Once the user is known, so a coached client never sees Roman locked first. */}
+        {currentUser ? <HomeRomanLine coached={!!currentUser.coach_id} /> : null}
         <View style={styles.cta}>
           {workout.exists === 'loading' ? (
             <QuietLoading label="Loading" rows={1} testID="cta-skeleton" />
@@ -119,6 +147,17 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             <PrimaryButton label="Log a meal →" accessibilityLabel="Log a meal" onPress={() => navigation.navigate('Log')} testID="home-explore-cta" />
           )}
         </View>
+        <HomeTiles day={{ ...day, ready: day.ready && !day.error }} checkIn={checkIn.data} refreshing={refreshing} noSource={noSource} />
+        {/* UI-1 spec item 9: one notice at a time, most urgent first (HomeNoticeSlot's rank). */}
+        <HomeNoticeSlot style={styles.notices}>
+          <PendingInviteBanner />
+          <PushPermissionCard presentation="section" />
+          <FinishJoining />
+          <CoachIntroductionBanner />
+          <FullMacrosIntroCard carbsG={day.carbsTarget} fatG={day.fatTarget} />
+          <TutorialHomeSlot part="reoffer" />
+          <ProfileNudge hasCoachPlan={workout.hasCoachPlan} hasTargets={(day.calorieTarget ?? 0) > 0} />
+        </HomeNoticeSlot>
       </ScrollView>
     </SafeAreaView>
   );
@@ -128,4 +167,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: layout.gutter, paddingTop: 6, paddingBottom: 48 },
   dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
   cta: { marginTop: 20 },
+  pay: { marginTop: 20, marginBottom: 0, paddingBottom: 0 }, // the Roman line or the button below brings its own gap
+  notices: { marginTop: layout.sectionGap },
 });
