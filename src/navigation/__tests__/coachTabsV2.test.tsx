@@ -471,28 +471,31 @@ it.each(ENTRIES.slice(1))('flag on: an unsent broadcast left open in Messages as
   expect([stackOf('Messages'), ref.getCurrentRoute()?.params]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT]);
 });
 
-// Sol B1 (round 3): unsent text in a chat left open in Messages (this client's or another's) asks before a chat from
-// outside closes it, in the broadcast composer's words. Keep editing: nothing closes, and Messages opens on that chat
-// with its text. Discard: the new chat, fresh, on the same inbox.
-it.each(ENTRIES.slice(1).flatMap(([probe, home]) => [CHAT, OTHER].map((left) => [probe, left.clientName, left, home] as const)))(
+// Sol B1 (round 3): unsent text in a chat left open in Messages (this client's, another's, or another's under its
+// contact page) asks before a chat from outside closes it, in the broadcast composer's words. Keep editing: nothing
+// closes, and Messages opens where it was, the chat keeping its text. Discard: the new chat, fresh, on the same inbox.
+const DRAFTS = [[CHAT.clientName, CHAT, false], [OTHER.clientName, OTHER, false], [`${OTHER.clientName} under the contact page`, OTHER, true]] as const;
+it.each(ENTRIES.slice(1).flatMap(([probe, home]) => DRAFTS.map(([name, left, contact]) => [probe, name, left, contact, home] as const)))(
   'flag on: unsent text in a chat left open in Messages asks before a chat from %s closes it (left open: %s)',
-  async (probe, _name, left, [tab, screen]) => {
+  async (probe, _name, left, contact, [tab, screen]) => {
     const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const view = await mount();
     await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: left, initial: false }));
     await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+    const page = { contactId: left.clientId, displayName: left.clientName };
+    if (contact) await act(async () => ref.navigate('Messages', { screen: 'ContactView', params: page }));
     const kept = messagesKeys();
     await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
     await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
     expect(ask.mock.calls.map(([title, message, buttons]) => [title, message, buttons?.map((b) => [b.text, b.style])])).toEqual([[
       'Discard this message?', 'Leaving removes the text from this message.', [['Keep editing', 'cancel'], ['Discard', 'destructive']],
     ]]);
-    expect([focusedTab(), messagesKeys(), ref.getCurrentRoute()?.params]).toEqual(['Messages', kept, left]); // Keep editing
-    expect(view.getByLabelText('Message text').props.value).toBe('See you at six');
+    expect([focusedTab(), messagesKeys(), ref.getCurrentRoute()?.params]).toEqual(['Messages', kept, contact ? page : left]); // Keep editing
+    expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('See you at six');
     await act(async () => ask.mock.calls[0][2]?.[1]?.onPress?.()); // Discard
     expect([stackOf('Messages'), messagesKeys()[0], kept.includes(messagesKeys()[1]), ref.getCurrentRoute()?.params])
       .toEqual([['MessagesInbox', 'ClientMessages'], kept[0], false, CHAT]);
-    expect(view.getByLabelText('Message text').props.value).toBe('');
+    expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('');
     ask.mockRestore();
   },
 );
