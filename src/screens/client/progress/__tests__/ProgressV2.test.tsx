@@ -219,9 +219,17 @@ describe('progressV2 words and numbers', () => {
     expect(lastWas(log('2026-10-14', 169.1), 'lb', '2026-10-14')).toBeNull();
   });
   it('a first lift is a best set but not a new best', () => {
-    expect(latestBest([{ date: '2026-10-01', exercises: [{ exercise_name: 'Row', weight_per_set: [100], reps_per_set: [8] }] }]))
+    expect(latestBest([{ date: '2026-10-01', exercises: [{ exercise_name: 'Row', weight_per_set: [100], reps_per_set: [8] }] }], '2026-10-14'))
       .toMatchObject({ name: 'Row', weight: 100, reps: 8, isNew: false });
-    expect(latestBest([{ date: '2026-10-01', exercises: [{ exercise_name: 'Row', weight_per_set: [0], reps_per_set: [8] }] }])).toBeNull();
+    expect(latestBest([{ date: '2026-10-01', exercises: [{ exercise_name: 'Row', weight_per_set: [0], reps_per_set: [8] }] }], '2026-10-14')).toBeNull();
+  });
+  it('claims a new best only from a whole history and within 30 days', () => {
+    const squat = (date: string, w: number) => ({ date, exercises: [{ exercise_name: 'Back squat', weight_per_set: [w], reps_per_set: [5] }] });
+    const two = [squat('2026-09-01', 175), squat('2026-10-12', 185)];
+    expect(latestBest(two, '2026-10-14')).toMatchObject({ weight: 185, isNew: true });
+    expect(latestBest(two, '2026-11-20')).toMatchObject({ weight: 185, isNew: false }); // a best from over 30 days ago
+    const fullPage = [...two, ...Array.from({ length: 48 }, (_, i) => squat(`2026-08-${String(i % 28 + 1).padStart(2, '0')}`, 100))];
+    expect(latestBest(fullPage, '2026-10-14')).toMatchObject({ weight: 185, isNew: false }); // 50 read: older sets may be heavier
   });
   it('counts weeks from Monday and plans only this week', () => {
     const wed = '2026-10-14';

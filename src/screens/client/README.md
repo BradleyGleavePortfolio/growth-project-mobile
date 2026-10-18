@@ -5,7 +5,8 @@ C8V2-2B: with `clientProgressV2` on (off in every build) `ProgressScreen` render
 "Your progress", the Weight overline and Log weight chip, the trend number in the
 client's unit, one period sentence or the saved block, Week / Month / All and the
 2a chart with the usual-range band), then Strength (newest best set of the last 50
-workouts, PeakStar only when it beats an earlier session) and Training (this
+workouts; PeakStar and "New best" only when it beats an earlier session, is from
+the last 30 days and the read holds every workout) and Training (this
 week's ring when a plan exists, else the week's count and 8 weekly bars), recent
 weigh-ins, Timeline and the report. `progress/LogWeightSheetV2.tsx` is the cream
 sheet: the number in the forest band, 0.1 steppers, the last weigh-in, notes and,

@@ -66,12 +66,17 @@ export interface Session {
 }
 export interface BestSet { name: string; weight: number; reps: number; date: string; isNew: boolean }
 
+/** One page of GET /workouts (newest first). A full page may hide an older, heavier set. */
+export const SESSIONS = 50;
+
 /**
- * The newest best set in the last 50 workouts (heaviest, then most reps). It
- * is a "New best" only when it beat an earlier session of the same lift; a
- * new best wins the tile over a first-ever lift.
+ * The newest best set in the workouts read (heaviest, then most reps). It is a
+ * "New best" only when it beat an earlier session of the same lift, the read
+ * holds every workout (less than a full page) and it is from the last 30 days;
+ * a new best wins the tile over a first-ever lift.
  */
-export function latestBest(sessions: Session[]): BestSet | null {
+export function latestBest(sessions: Session[], today: string): BestSet | null {
+  const whole = sessions.length < SESSIONS;
   const best = new Map<string, BestSet>();
   const sets: BestSet[] = [];
   [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => s.exercises?.forEach((e) => {
@@ -79,7 +84,7 @@ export function latestBest(sessions: Session[]): BestSet | null {
       .filter((x) => x.w > 0 && x.r > 0).sort((a, b) => b.w - a.w || b.r - a.r)[0];
     const prev = best.get(e.exercise_name);
     if (!top || (prev && (top.w < prev.weight || (top.w === prev.weight && top.r <= prev.reps)))) return;
-    const set = { name: e.exercise_name, weight: top.w, reps: top.r, date: s.date.slice(0, 10), isNew: !!prev };
+    const set = { name: e.exercise_name, weight: top.w, reps: top.r, date: s.date.slice(0, 10), isNew: !!prev && whole && dayX(s.date) > dayX(today) - 30 * DAY };
     best.set(e.exercise_name, set);
     sets.push(set);
   }));

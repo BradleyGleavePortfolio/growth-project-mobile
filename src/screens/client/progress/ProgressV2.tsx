@@ -69,7 +69,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
           .filter((l): l is WeightLog => l !== null).sort((a, b) => a.date.localeCompare(b.date)));
         setFailed(false);
       }, (err: unknown) => { setFailed(true); fail('weight history')(err); }),
-      workoutApi.getAll(50).then((res) => setSessions(Array.isArray(res.data) ? res.data : []), fail('workouts')),
+      workoutApi.getAll(P.SESSIONS).then((res) => setSessions(Array.isArray(res.data) ? res.data : []), fail('workouts')),
       coachless ? null : workoutBuilderApi.listMyAssignments().then((rows) => setPlan(P.trainingWeek(rows, getTodayString())), fail('assignments')),
     ]);
   }, [userId, coachless]);
@@ -101,7 +101,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const trend = logs && has ? P.trendNow(logs, today) : null;
   const sentence = logs && has ? P.trendSentence(logs, period, unit, today) : null;
   const num = (lbs: number) => P.one(P.toUnit(lbs, unit));
-  const best = P.latestBest(sessions);
+  const best = P.latestBest(sessions, today);
   const counts = P.weeklyWorkouts(sessions, today);
   const training = plan || counts.some((c) => c > 0);
   const tile = [s.tile, fontScale <= 1.15 && s.grow];
