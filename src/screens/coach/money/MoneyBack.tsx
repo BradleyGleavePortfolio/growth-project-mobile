@@ -12,6 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { CoachTabParamList } from "../../../navigation/CoachNavigator";
 import { useTheme } from "../../../theme/ThemeProvider";
+import { featureFlags } from "../../../config/featureFlags";
 
 export default function MoneyBack({
   testID,
@@ -23,6 +24,8 @@ export default function MoneyBack({
   const { colors } = useTheme();
   const navigation = useNavigation();
   if (!navigation.canGoBack()) return null;
+  // COACHTABS: with the six tabs Money is the Money tab's root: no Back there.
+  if (featureFlags.coachTabsV2 && navigation.getState()?.index === 0) return null;
   const onPress = () => {
     navigation.goBack();
     if (toHome) {

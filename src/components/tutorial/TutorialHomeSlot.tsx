@@ -6,6 +6,7 @@
  *   - the pinned MacroExplanationCard (C08);
  *   - a "Message your coach" row into the real coach thread (HomeStack
  *     `Messages`), which the tutorial spotlights for both messaging steps.
+ * `part="reoffer"` is the re-offer line alone, for the rings Home's notice slot.
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -18,17 +19,19 @@ import { dispatchTutorial, useTutorialStore } from '../../tutorial/tutorialStore
 import MacroExplanationCard from './MacroExplanationCard';
 import TutorialTarget from './TutorialTarget';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useNoticeSlot } from '../home/HomeNoticeSlot';
 
-export default function TutorialHomeSlot(): React.ReactElement | null {
+export default function TutorialHomeSlot({ part }: { part?: 'reoffer' }): React.ReactElement | null {
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const status = useTutorialStore((s) => s.tutorial.status);
   const coachName = useTutorialStore((s) => s.payload?.coach?.display_name ?? null);
   const coachLinked = !!useCurrentUser()?.coach_id;
-  if (!featureFlags.clientTutorial) return null;
+  const reoffer = useNoticeSlot('tourReoffer', featureFlags.clientTutorial && status === 'paused'); // one notice at a time on the rings Home
+  if (!featureFlags.clientTutorial || (part === 'reoffer' && !reoffer)) return null;
   return (
     <View testID="tutorial-home-slot">
-      {status === 'paused' ? (
+      {reoffer ? (
         <Pressable
           onPress={() => dispatchTutorial({ type: 'RESUME' })}
           accessibilityRole="button"
@@ -42,8 +45,8 @@ export default function TutorialHomeSlot(): React.ReactElement | null {
           </Text>
         </Pressable>
       ) : null}
-      <MacroExplanationCard />
-      {coachLinked ? <TutorialTarget id="home-message-coach">
+      {part === 'reoffer' ? null : <MacroExplanationCard />}
+      {coachLinked && part !== 'reoffer' ? <TutorialTarget id="home-message-coach">
         <Pressable
           onPress={() => navigation.navigate('Messages')}
           accessibilityRole="button"

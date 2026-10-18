@@ -19,6 +19,7 @@ import {
 } from '../ai-builder/aiBuilderCopy';
 import { fireAiHaptic } from '../ai-builder/useAiBuilder';
 import CoachExerciseName from '../workout-builder/CoachExerciseName';
+import AiRefusalNotice from '../../ai/AiRefusalNotice';
 
 export type WeekAiAction = 'progress' | 'deload';
 export const WEEK_AI_TITLES: Record<WeekAiAction, string> = {
@@ -67,6 +68,8 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
   const [results, setResults] = useState<DayResult[]>([]);
   const [kept, setKept] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [romanOff, setRomanOff] = useState(false); // COACH-AI-CONSENT: the coach's own Roman is off; CAC-5 shows
+  const [run, setRun] = useState(0); // the week is asked again after Allow
   const live = useRef(true);
   useEffect(() => () => void (live.current = false), []);
 
@@ -86,6 +89,7 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
           const copy = describeAiBuilderError(e.code, e.resetsAt);
           if (!PER_DAY.includes(e.code)) {
             if (live.current) setError(copy);
+            if (live.current) setRomanOff(e.code === 'coach_consent_required');
             break;
           }
           out.push({ day, error: copy });
@@ -100,9 +104,10 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
       if (out.some((r) => r.error) || !ids.length) fireAiHaptic('error');
       ids.slice(0, 5).forEach((_, i) => setTimeout(() => fireAiHaptic('light'), i * 60));
     })();
-    // Runs once per sheet: the week and action are fixed while it is open.
+    // Runs once per sheet (again after Allow on CAC-5): the week and action are fixed while it is open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [run]);
+  const askAgain = () => { setRomanOff(false); setError(null); setAnswered(0); setPhase('thinking'); setRun((r) => r + 1); };
 
   const pending = results.filter((r) => r.proposal);
   const accepted = (r: DayResult) => r.proposal?.changes.filter((c) => kept[selKey(r.day, c.change_id)]).map((c) => c.change_id) ?? [];
@@ -182,7 +187,9 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
                 <ActivityIndicator color={sc.accentText} accessibilityLabel="Asking AI about each day" />
               </View>
             ) : null}
-            {error ? <Text testID="week-ai-error" accessibilityRole="alert" style={[typography.body, styles.alert, { color: sc.textPrimary, borderColor: sc.accentText }]}>{error}</Text> : null}
+            {romanOff ? (
+              <AiRefusalNotice refusal={{ kind: 'coach_consent_required' }} audience="coach" surface="draft" onRetry={askAgain} compact testID="week-ai-roman-off" />
+            ) : error ? <Text testID="week-ai-error" accessibilityRole="alert" style={[typography.body, styles.alert, { color: sc.textPrimary, borderColor: sc.accentText }]}>{error}</Text> : null}
             {screening ? <Text style={[typography.body, styles.alert, { color: sc.textPrimary, borderColor: sc.accentText }]}>{SCREENING_COPY}</Text> : null}
             {phase !== 'thinking' ? results.map((r, di) => (
               <View key={r.day.plan_id} testID={`week-ai-day-${r.day.day_index}`} style={styles.day}>

@@ -38,6 +38,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Pressable,
 } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,6 +46,9 @@ import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { useTheme } from '../../theme/ThemeProvider';
 import { lightTokens, radius, type SemanticTokens } from '../../theme/tokens';
 import { env } from '../../config/env';
+import { Headline, Lede, PrimaryButton, Screen } from '../../ui';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { authStyleB, FieldCard, RoundBack, styleBFieldStyles } from './AuthStyleB';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
 
@@ -131,6 +135,7 @@ export default function ResetPasswordScreen({ navigation, route }: Props) {
       // for password recovery (see docs.supabase.com/auth/passwords).
       await supabase.auth.signOut();
       setDone(true);
+      if (authStyleB()) void HapticService.success();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not update password.';
       setError(msg);
@@ -138,6 +143,56 @@ export default function ResetPasswordScreen({ navigation, route }: Props) {
       setSubmitting(false);
     }
   };
+
+  // C7 Style B (firstRunV2): same token gate, validator and Supabase calls; the action is pinned.
+  if (authStyleB()) {
+    const f = styleBFieldStyles(colors);
+    const field = { secureTextEntry: !showPw, autoCapitalize: 'none', autoCorrect: false, textContentType: 'newPassword', editable: tokensPresent && !submitting } as const;
+    return (
+      <Screen
+        testID="reset-password-b"
+        header={<RoundBack onBack={() => navigation.navigate('Login')} label="Back to login" testID="reset-back" />}
+        footer={
+          done ? (
+            <PrimaryButton label="Go to login" onPress={() => navigation.navigate('Login')} testID="reset-go-to-login" />
+          ) : (
+            <PrimaryButton label="Update password" onPress={handleSubmit} loading={submitting} disabled={!tokensPresent} testID="reset-submit" />
+          )
+        }
+      >
+        <Headline style={styles.bTitle}>{done ? 'Password updated' : 'Set a new password'}</Headline>
+        <Lede style={styles.bLede}>
+          {done ? 'Sign in with your new password to continue.' : 'Enter the new password you would like to use for your account.'}
+        </Lede>
+        {done ? null : (
+          <>
+            <FieldCard
+              label="NEW PASSWORD"
+              trailing={
+                <Pressable onPress={() => { void HapticService.selection(); setShowPw((v) => !v); }} style={styles.bEye}
+                  accessibilityRole="button" accessibilityLabel={showPw ? 'Hide password' : 'Show password'}>
+                  <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textPrimary} />
+                </Pressable>
+              }
+            >
+              <TextInput style={f.input} value={password} onChangeText={setPassword} placeholder="New password"
+                placeholderTextColor={colors.textMuted} accessibilityLabel="New password" {...field} />
+            </FieldCard>
+            <Text style={[styles.passwordHint, styles.bHint]}>At least 8 characters, one uppercase letter, one number and one special character.</Text>
+            <FieldCard label="CONFIRM NEW PASSWORD">
+              <TextInput style={f.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Re-enter password"
+                placeholderTextColor={colors.textMuted} accessibilityLabel="Confirm new password" {...field} />
+            </FieldCard>
+          </>
+        )}
+        {error ? (
+          <Text style={styles.errorText} accessibilityLiveRegion="assertive" accessibilityRole="alert">
+            {error}
+          </Text>
+        ) : null}
+      </Screen>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
@@ -334,4 +389,8 @@ const makeStyles = (colors: SemanticTokens) =>
       gap: 24,
       paddingTop: 40,
     },
+    bTitle: { marginTop: 8 },
+    bLede: { marginBottom: 24 },
+    bHint: { marginTop: -4, marginBottom: 12 },
+    bEye: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   });

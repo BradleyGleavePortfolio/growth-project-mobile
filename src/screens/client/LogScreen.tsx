@@ -54,7 +54,7 @@ import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 
-export default function LogScreen() {
+export default function LogScreen({ onSaved, suspended = false }: { onSaved?: () => void; suspended?: boolean }) {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useScreenInsets();
@@ -334,6 +334,7 @@ export default function LogScreen() {
       setSelectedFood(null);
       setAddedFoodName(selectedFood.name);
       setSavedMessage(`${selectedFood.name} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
+      onSaved?.();
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -377,6 +378,7 @@ export default function LogScreen() {
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'manual' });
       setModalVisible(false);
       setSavedMessage(`${manualFields.foodName.trim()} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
+      onSaved?.();
     } catch (err) {
       console.error('LogScreen: handleManualLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -424,6 +426,7 @@ export default function LogScreen() {
         track(AnalyticsEvents.MEAL_LOGGED, { meal_type: mealType, source: 'repeat_meal' });
         setModalVisible(false);
         setSavedMessage(`${added} ${added === 1 ? 'food' : 'foods'} added to ${target}.`);
+        onSaved?.();
       } else {
         HapticService.error();
         Alert.alert(
@@ -437,8 +440,7 @@ export default function LogScreen() {
   };
   const handleRepeatMeal = () => repeatMealTo(repeatMeal, activeMealType, sheetLink);
 
-  // UI-3 "Ate it as planned": one tap logs the coach's plan meal into its meal with the same
-  // manual-entry write (and offline queue) as LogPlannedMealButton on the meal plan screen.
+  // UI-3 "Ate it as planned": one tap logs the plan meal with LogPlannedMealButton's write (offline queue included).
   const logPlanned = async (slot: DaySlot) => {
     if (!currentUser || foodSaving) return;
     const v = (x: number) => String(Math.round(x * 10) / 10);
@@ -460,6 +462,7 @@ export default function LogScreen() {
       HapticService.success();
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: slot.mealType, source: 'meal_plan' });
       setSavedMessage(`${slot.name} added to ${mealLabel(slot.mealType)}.`);
+      onSaved?.();
     } catch (err) {
       console.error('LogScreen: plan meal log failed', err);
       HapticService.error();
@@ -636,8 +639,7 @@ export default function LogScreen() {
           />
         }
       >
-        {/* UI-3: behind featureFlags.foodPlanChecklist the day's plan checklist shows first; with no plan
-            to show it renders this Food log (its children below) unchanged. */}
+        {/* UI-3: behind featureFlags.foodPlanChecklist the day's plan checklist shows first; with no plan, this Food log. */}
         <FoodDayGate
           on={featureFlags.foodPlanChecklist && !!currentUser}
           coached={!!currentUser?.coach_id}
@@ -716,7 +718,7 @@ export default function LogScreen() {
       </Screen>
 
       <FoodSearchModal
-        visible={modalVisible}
+        visible={modalVisible && !suspended}
         activeMealType={activeMealType}
         addedFoodName={addedFoodName}
         onClose={() => {

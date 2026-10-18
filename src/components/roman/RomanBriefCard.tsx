@@ -15,7 +15,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import { romanCoachBrief, type RomanVoiceMode } from '../../lib/roman/copy';
-import { colors, spacing, typography } from '../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../theme/tokens';
 
 export interface RomanBriefCardProps {
   coachName: string;
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg,
     backgroundColor: colors.cream,
-    borderRadius: 4,
+    borderRadius: radius.card,
     marginBottom: spacing.lg,
   },
   copy: {

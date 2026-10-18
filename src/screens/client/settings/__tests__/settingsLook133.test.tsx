@@ -30,7 +30,10 @@ jest.mock('../../../../hooks/useBiometricGate', () => ({
   setBiometricOptIn: jest.fn(async () => {}),
 }));
 jest.mock('../ClientTutorialSetting', () => () => null);
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: jest.fn() }),
+  useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]),
+}));
 
 const DIR = path.resolve(__dirname, '../..');
 const navigation = { goBack: jest.fn(), navigate: jest.fn() } as unknown as NavigationProp<ParamListBase>;

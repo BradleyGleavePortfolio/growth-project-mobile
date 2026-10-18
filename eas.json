@@ -47,7 +47,7 @@
       "env": {
         "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
-        "TGP_ANDROID_HEALTH_CONNECT": "0",
+        "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
         "EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES": "true",
@@ -61,6 +61,13 @@
         "EXPO_PUBLIC_FF_DELIVERABLES": "true",
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
         "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true"
+      }
+    },
+    "testing": {
+      "extends": "production",
+      "channel": "testing",
+      "env": {
+        "EXPO_PUBLIC_FF_TEAM_MODE": "false"
       }
     },
     "clinic": {
@@ -109,6 +116,9 @@
       "ios": {
         "ascAppId": "6765847915"
       }
+    },
+    "testing": {
+      "extends": "production"
     },
     "clinic": {
       "extends": "production"

@@ -58,7 +58,6 @@ import type { CoachAIBudgetResponse } from '../api/types/coachAIBudget';
 import { AIBudgetMount } from '../components/coach/ai-budget/AIBudgetMount';
 import { AIBudgetTutorialModal } from '../components/coach/ai-budget/AIBudgetTutorialModal';
 import { PackOptionsRow } from '../components/coach/ai-budget/PackOptionsRow';
-import { UpgradeGate } from '../screens/coach/TeamManagementScreen';
 import { COACH_PUSH_ROUTES } from '../services/pushTapRouter';
 import {
   CREDIT_PACK_NON_REFUNDABLE,
@@ -185,14 +184,12 @@ describe('Android release build, Android link on (preview profile)', () => {
     await AsyncStorage.clear();
   });
 
-  it('packs show and a budget push opens them; seat upgrades stay hidden; the header says packs are sold', async () => {
+  it('packs show and a budget push opens them; seat upgrades stay hidden; the header says packs are sold', () => {
     expect(creditPackCheckoutMode()).toBe('external');
     expect(creditPacksHidden()).toBe(false);
     expect(digitalPurchasesHidden()).toBe(true);
     expect(purchasePolicyHeader()).toBe('p2p-and-ai-credits');
-    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'CreditPackCheckout' });
-    const gate = await render(<UpgradeGate />);
-    expect(JSON.stringify(gate.toJSON())).not.toMatch(/Upgrade/);
+    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'CreditPackCheckout', initial: false });
   });
 
   it('hard pause: packs, who is paid and the non-refundable line; a pack tap carries that pack to checkout', async () => {
@@ -205,6 +202,7 @@ describe('Android release build, Android link on (preview profile)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', {
       screen: 'CreditPackCheckout',
       params: { preselect: 2500 },
+      initial: false,
     });
   });
 
@@ -212,7 +210,7 @@ describe('Android release build, Android link on (preview profile)', () => {
     mockBudget = budget(96);
     const banner = await render(<AIBudgetMount />);
     await fireEvent.press(banner.getByText('Buy credits'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' } });
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' }, initial: false });
   });
 
   it('tutorial last card: packs with the non-refundable line', async () => {
@@ -247,6 +245,6 @@ describe('Android release build without the switch (production, clinic)', () => 
     const pause = await render(<AIBudgetMount />);
     expect(pause.getByTestId('ai-hard-pause-neutral')).toBeTruthy();
     expect(pause.queryByText(CREDIT_PACK_NON_REFUNDABLE)).toBeNull();
-    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'SettingsHome' });
+    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'SettingsHome', pop: true });
   });
 });

@@ -171,19 +171,16 @@ it('food review shows readable eat dates and meal labels without changing record
   expect(view.queryByText('lunch')).toBeNull();
 });
 
-it('food review retains feedback, meal plans, refresh and all three period filters', async () => {
+it('food review retains feedback, refresh and all three period filters', async () => {
   const messages = jest.fn();
-  const plans = jest.fn();
   const view = await render(<FoodLogReviewSection
     clientId="client-test" colors={testColors} styles={styles}
-    onOpenMessages={messages} onOpenMealPlans={plans}
+    onOpenMessages={messages}
   />);
   await view.findByText('Test lunch');
   await fireEvent.press(view.getByText('Send feedback'));
-  await fireEvent.press(view.getByText('Meal plans'));
   await fireEvent.press(view.getByText('Refresh'));
   expect(messages).toHaveBeenCalledTimes(1);
-  expect(plans).toHaveBeenCalledTimes(1);
   expect(mockRefetch).toHaveBeenCalledTimes(1);
   for (const days of [14, 30, 7]) {
     await fireEvent.press(view.getByText(`${days}d`));

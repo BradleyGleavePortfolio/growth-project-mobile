@@ -59,6 +59,7 @@ import { describeError } from "../../../lib/coachSetup/errors";
 import { mediumTap, successTap, warningTap } from "../../../utils/haptics";
 import { track } from "../../../lib/analytics";
 import { useTheme } from "../../../theme/ThemeProvider";
+import { featureFlags } from "../../../config/featureFlags";
 import type { SemanticTokens, Tokens } from "../../../theme/tokens";
 import { layout, radius } from "../../../theme/tokens";
 import { useScreenInsets } from "../../../ui";
@@ -311,7 +312,14 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           break;
         case "billing":
           buttons.push(
-            { text: "Open Money", onPress: () => navigation.navigate("CoachMoney") },
+            {
+              text: "Open Money",
+              // COACHTABS: Money is its own tab when coachTabsV2 is on.
+              onPress: () =>
+                featureFlags.coachTabsV2
+                  ? navigation.navigate("MoneyStack", { screen: "CoachMoney", pop: true })
+                  : navigation.navigate("CoachMoney"),
+            },
             support,
             close,
           );

@@ -32,6 +32,7 @@ const mockGet = jest.fn(async (url: string) => {
   return { data: { is_complete: true } };
 });
 jest.mock('../services/api', () => ({
+  authApi: { me: async () => ({ data: { profile: { date_of_birth: '1990-01-01' } } }) },
   __esModule: true,
   default: {
     get: (url: string) => mockGet(url),
@@ -85,11 +86,6 @@ jest.mock('../navigation/ClientNavigator', () => {
   return () => React.createElement(Text, { testID: 'nav-client' }, 'client');
 });
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
-jest.mock('../navigation/LeanOnboardingNavigator', () => {
-  const React = jest.requireActual('react');
-  const { Text } = jest.requireActual('react-native');
-  return () => React.createElement(Text, { testID: 'nav-lean' }, 'lean');
-});
 jest.mock('../navigation/CoachWizardNavigator', () => () => null);
 jest.mock('../navigation/Day1OnboardingNavigator', () => {
   const React = jest.requireActual('react');
@@ -201,7 +197,6 @@ describe('B14: every new client gets the consultation, never the lean flow', () 
     mockOnboarding.body = { completed: false, answers: null, consultation_available: false };
     const r = await mount();
     await r.findByTestId('nav-consultation');
-    expect(r.queryByTestId('nav-lean')).toBeNull();
     // Routing no longer asks the server; no lean marker is written.
     expect(onboardingReads()).toBe(0);
     expect(await AsyncStorage.getItem(MARKER)).toBeNull();
@@ -211,7 +206,6 @@ describe('B14: every new client gets the consultation, never the lean flow', () 
     mockOnboarding.body = { completed: false, answers: null, consultation_available: true };
     const r = await mount();
     await r.findByTestId('nav-consultation');
-    expect(r.queryByTestId('nav-lean')).toBeNull();
   });
 
   it.each([
@@ -222,14 +216,12 @@ describe('B14: every new client gets the consultation, never the lean flow', () 
     arrange();
     const r = await mount();
     await r.findByTestId('nav-consultation');
-    expect(r.queryByTestId('nav-lean')).toBeNull();
   });
 
   it('a lean marker from an earlier build, onboarding never finished: the consultation, and the marker is cleared', async () => {
     await AsyncStorage.setItem(MARKER, 'true');
     const r = await mount();
     await r.findByTestId('nav-consultation');
-    expect(r.queryByTestId('nav-lean')).toBeNull();
     expect(await AsyncStorage.getItem(MARKER)).toBeNull();
   });
 
