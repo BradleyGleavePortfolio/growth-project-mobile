@@ -326,6 +326,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
       content: reply.text,
       interrupted: reply.interrupted,
       createdAt: new Date().toISOString(),
+      ...(reply.safetyActions ? { safetyActions: reply.safetyActions } : {}),
     };
     setMessages((prev) => [...prev, localAssistant]);
 

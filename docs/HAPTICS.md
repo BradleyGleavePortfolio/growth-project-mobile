@@ -60,6 +60,7 @@ When the toggle changes:
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
 | `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
 | Overview gear, Calendar gear, Messages Community button (COACHTABS) | `softImpact()` | Opens Settings, Hours and rules, Community |
+| `wearables/HealthFitnessTab` (HEALTH-1, `healthPages` off by default) | `selection()`; `error()` | Opens the device row, Steps, a card or Connect; Try again fails |
 | `messaging/RomanDraftMark` (Roman draft mark, both threads and C3 Style B) | `selection()` | Show or fold the draft line, open its explanation, or forward a long press to message actions (flag off by default) |
 | `ActiveWorkoutScreen` | `heavyImpact()` | Workout saved successfully |
 | `ActiveWorkoutScreen` | `error()` | Workout save failed |
@@ -77,6 +78,8 @@ When the toggle changes:
 | `MessagesScreen` (client, `c3StyleB` on) | `success()` | The coach's read lands while the thread is open |
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
 | `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |
+| Consultation T1, B1, B3, N1, N2 (`consultTilesV2` on) | `selection()` | A tile, chip, or Imperial / Metric tap (ONBQ-TILES) |
+| `roman/RomanCrisisActions` (CRISIS-BTN, `crisisActions` on) | `softImpact()` | Call 911, Call 988, Text 988 or Message <coach> under Roman's marked crisis reply; none when the reply arrives |
 | `WelcomeScreen` (`firstRunV2` on) | `mediumImpact()` | Get started |
 | `LoginScreen` (`firstRunV2` on) | `error()` | A sign-in failure is shown (once per failure) |
 | `LoginScreen`, `CreateAccountScreen`, `ResetPasswordScreen` (`firstRunV2` on) | `selection()` | Show or hide password |

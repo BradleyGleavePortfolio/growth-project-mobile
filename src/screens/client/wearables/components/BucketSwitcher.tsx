@@ -19,6 +19,7 @@ import {
   withAlpha,
 } from '../../../../theme/tokens';
 import { lightTap } from '../../../../utils/haptics';
+import { useTheme } from '../../../../theme/ThemeProvider';
 import type { WearableMetricBucket } from '../../../../api/wearablesSamplesApi';
 import { toneForBucket, toneTokens } from '../wearablesTheme';
 
@@ -36,9 +37,12 @@ const SEGMENTS: readonly Segment[] = [
 interface Props {
   readonly active: WearableMetricBucket;
   readonly onChange: (bucket: WearableMetricBucket) => void;
+  /** HEALTH-1: underlined tabs on surface.masthead (leaf underline, no pill). */
+  readonly onDark?: boolean;
 }
 
-export default function BucketSwitcher({ active, onChange }: Props) {
+export default function BucketSwitcher({ active, onChange, onDark = false }: Props) {
+  const { semanticColors: sc } = useTheme();
   const handlePress = useCallback(
     (bucket: WearableMetricBucket) => {
       if (bucket === active) return;
@@ -49,7 +53,7 @@ export default function BucketSwitcher({ active, onChange }: Props) {
   );
 
   return (
-    <View style={styles.container} accessibilityRole="tablist">
+    <View style={onDark ? styles.darkContainer : styles.container} accessibilityRole="tablist">
       {SEGMENTS.map((segment) => {
         const selected = segment.bucket === active;
         const tone = toneTokens(toneForBucket(segment.bucket));
@@ -64,18 +68,18 @@ export default function BucketSwitcher({ active, onChange }: Props) {
             // ≥44pt tap surface (HIG floor) with minHeight + symmetric hitSlop
             // so edge taps near the pill track still register.
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={[styles.segment, selected && styles.segmentSelected]}
+            style={[styles.segment, selected && !onDark && styles.segmentSelected, onDark && styles.darkSegment]}
           >
             <Ionicons
               name={segment.icon}
               size={16}
-              color={selected ? tone.accent : colors.charcoal}
+              color={onDark ? (selected ? sc.textOnAccent : sc.textOnMastheadMuted) : selected ? tone.accent : colors.charcoal}
             />
             <Text
               style={[
                 styles.label,
                 {
-                  color: selected ? colors.ink : colors.charcoal,
+                  color: onDark ? (selected ? sc.textOnAccent : sc.textOnMastheadMuted) : selected ? colors.ink : colors.charcoal,
                   // P2: non-color disambiguator — weight bump complements the
                   // underline below so the active segment never relies on
                   // color alone (a11y: contrast-independent state).
@@ -87,7 +91,9 @@ export default function BucketSwitcher({ active, onChange }: Props) {
             </Text>
             {/* P2: position-anchored underline — a non-color active indicator
                 that harmonises with the segmented pill chrome. */}
-            {selected && <View style={styles.activeUnderline} />}
+            {selected && (
+              <View style={onDark ? [styles.darkUnderline, { backgroundColor: sc.data.leaf }] : styles.activeUnderline} />
+            )}
           </Pressable>
         );
       })}
@@ -123,6 +129,9 @@ const styles = StyleSheet.create({
   segmentSelected: {
     backgroundColor: SWITCH_SURFACE,
   },
+  darkContainer: { flexDirection: 'row', gap: spacing.xl, alignSelf: 'flex-start' },
+  darkSegment: { paddingHorizontal: 0 },
+  darkUnderline: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderRadius: radius.chip },
   label: {
     ...typography.bodySmall,
     // fontFamily is set per-segment (selected → SemiBold) as a non-color

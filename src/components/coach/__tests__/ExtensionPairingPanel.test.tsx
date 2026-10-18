@@ -185,7 +185,7 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
     mockHookState = { status: 'paired', code: null };
     const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     fireEvent.press(getByTestId('pairing-review-cta'));
-    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList' });
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList', pop: true });
     expect(mockTrack).toHaveBeenCalledWith(AnalyticsEvents.IMPORT_REVIEW_OPENED, {
       platform: 'truecoach',
     });

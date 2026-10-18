@@ -121,7 +121,8 @@ export default function CommandCenterScreen({
       <Ionicons name="settings-outline" size={22} color={sc.textPrimary} />
     </TouchableOpacity>
   ) : null;
-  const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList' });
+  // LO-773 N4: back to the open list (`pop`), never a second copy over a client's file.
+  const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList', pop: true });
   const openSafetyAlert = (item: ActionQueueItem) => {
     if (!isSafetyAlert(item)) return;
     navigation.navigate('ClientsStack', {

@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Text, View } from 'react-native';
 import * as Localization from 'expo-localization';
 import { PRIVACY_POLICY_URL } from '../../config/env';
+import { featureFlags } from '../../config/featureFlags';
 import type { AiConsentUpgradeCopy } from '../../api/aiConsentApi';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import type {
@@ -113,6 +114,15 @@ function range(a: number, b: number): number[] {
 }
 const ftIn = (v: number) => `${Math.floor(v / 12)} ft ${v % 12} in`;
 
+/**
+ * Owner pick MOCK-ONBQ option A, path op 1: the Quiet Tiles look on the
+ * consultation questions that match onboarding questions 2 to 6. Behind
+ * featureFlags.consultTilesV2 (off); answers, order, skips and saves are
+ * unchanged either way.
+ */
+export const TILE_SCREENS: ReadonlySet<string> = new Set(['T1', 'B1', 'B2', 'B3', 'B4', 'N1', 'N2']);
+export const tilesOn = (id: string): boolean => featureFlags.consultTilesV2 && TILE_SCREENS.has(id);
+
 function phoneRegion(): string | null {
   try {
     return Localization.getLocales()[0]?.regionCode ?? null;
@@ -128,6 +138,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
   const value = answers[key];
   const validation = validateScreen(screen, answers, now);
   const options = optionsFor(screen, now);
+  const tiles = tilesOn(screen.id);
 
   const header = (
     <QuestionHeader
@@ -208,13 +219,14 @@ export default function QuestionScreen(props: QuestionScreenProps) {
     case 'yesno': {
       const showCta = screen.template === 'yesno' ? detailShown(screen, answers) : false;
       return frame(
-        <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
+        <View accessibilityRole="radiogroup" style={{ gap: tiles ? 12 : 8 }}>
           {options.map((o) => (
             <OptionRow
               key={o.value}
               option={o}
               selected={value === o.value}
               tall={screen.template === 'yesno'}
+              tiles={tiles}
               onPress={() => onAnswer(key, o.value, { advance: !!screen.autoAdvance && !o.noAutoAdvance })}
               testID={`consult-option-${o.value}`}
             />
@@ -248,6 +260,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
                 big={screen.big}
                 selected={multi ? cur.includes(o.value) : value === o.value}
                 capped={capped}
+                tiles={tiles}
                 onPress={() =>
                   multi
                     ? onAnswer(key, toggleSelection(cur, o.value, { exclusive: screen.exclusive, max }))
@@ -350,6 +363,7 @@ function parseIso(v: unknown): { y: number; m: number; d: number } | null {
 
 function DobBody(props: BodyProps) {
   const { screen, answers, now, onAnswer, onNext, header } = props;
+  const tiles = tilesOn(screen.id);
   const parsed = parseIso(answers.B2);
   // FIXAGE2 R6: "only a date the client actually chose is ever saved as
   // their date of birth." No wheel starts chosen (a saved answer excepted);
@@ -408,7 +422,8 @@ function DobBody(props: BodyProps) {
         />
       }
     >
-      <View style={s.wheels}>
+      {/* Quiet Tiles: the three wheels sit in one cream card. */}
+      <View style={[s.wheels, tiles && s.wheelCard]} testID={tiles ? 'consult-card-dob' : undefined}>
         <View style={[s.wheelCol, { flex: 1.6 }]}>
           <Wheel label="Birth month" values={MONTHS} value={m ? MONTHS[m - 1] : null} anchor={MONTHS[now.getMonth()]} onChange={(x) => { const nm = MONTHS.indexOf(x) + 1; setM(nm); commit(y, nm, d); }} testID="wheel-dob-month" />
         </View>
@@ -427,6 +442,7 @@ function DobBody(props: BodyProps) {
 
 function MeasureBody(props: BodyProps) {
   const { answers, onAnswer, onNext, header } = props;
+  const tiles = tilesOn(props.screen.id);
   const existing = answers.B3 as MeasureAnswer | undefined;
   // Prototype B3: the unit tabs default from the phone's region (US, Liberia
   // and Myanmar imperial, everywhere else metric); a saved answer keeps its unit.
@@ -439,10 +455,10 @@ function MeasureBody(props: BodyProps) {
   const kg = Math.round(weightLbs * 0.453592);
   return (
     <BodyFrame props={props} header={header} footer={<PrimaryButton label="Continue" onPress={() => onNext({ B3: value })} testID="consult-continue" />}>
-      <UnitTabs unit={unit} onChange={(u) => { setUnit(u); commit({ unit: u }); }} />
+      <UnitTabs unit={unit} tiles={tiles} onChange={(u) => { setUnit(u); commit({ unit: u }); }} />
       <View style={s.wheels}>
-        <View style={s.wheelCol}>
-          <Text style={s.eyebrow}>Height</Text>
+        <View style={[s.wheelCol, tiles && s.wheelCard]} testID={tiles ? 'consult-card-height' : undefined}>
+          <Text style={[s.eyebrow, tiles && s.wheelCardLabel]}>Height</Text>
           {unit === 'imperial' ? (
             <Wheel label="Height" values={range(48, 90)} value={Math.min(90, Math.max(48, inches))} format={ftIn}
               onChange={(x) => { const cm = Math.round(x * 2.54 * 10) / 10; setHeightCm(cm); commit({ height_cm: cm }); }} testID="wheel-height" />
@@ -451,8 +467,8 @@ function MeasureBody(props: BodyProps) {
               onChange={(x) => { setHeightCm(x); commit({ height_cm: x }); }} testID="wheel-height" />
           )}
         </View>
-        <View style={s.wheelCol}>
-          <Text style={s.eyebrow}>Weight</Text>
+        <View style={[s.wheelCol, tiles && s.wheelCard]} testID={tiles ? 'consult-card-weight' : undefined}>
+          <Text style={[s.eyebrow, tiles && s.wheelCardLabel]}>Weight</Text>
           {unit === 'imperial' ? (
             <Wheel label="Weight" values={range(70, 600)} value={Math.min(600, Math.max(70, Math.round(weightLbs)))} format={(x) => `${x} lb`}
               onChange={(x) => { setWeightLbs(x); commit({ weight_lbs: x }); }} testID="wheel-weight" />
@@ -478,6 +494,7 @@ export function goalWeightNote(goalLbs: number, currentLbs: number, goal: unknow
 
 function GoalWeightBody(props: BodyProps) {
   const { answers, onNext, onAnswer, header, screen, ctx } = props;
+  const tiles = tilesOn(screen.id);
   const m = answers.B3 as MeasureAnswer | undefined;
   const current = m?.weight_lbs ?? 172;
   const unit = m?.unit ?? 'imperial';
@@ -496,9 +513,9 @@ function GoalWeightBody(props: BodyProps) {
         </>
       }
     >
-      <View style={{ alignItems: 'center' }}>
-        <View style={{ width: 220 }}>
-          <Text style={s.eyebrow}>Goal weight</Text>
+      <View style={{ alignItems: tiles ? 'stretch' : 'center' }}>
+        <View style={tiles ? s.wheelCard : { width: 220 }} testID={tiles ? 'consult-card-goal' : undefined}>
+          <Text style={[s.eyebrow, tiles && s.wheelCardLabel]}>Goal weight</Text>
           {unit === 'imperial' ? (
             <Wheel label="Goal weight" values={range(70, 600)} value={Math.min(600, Math.max(70, lbs))} format={(x) => `${x} lb`} onChange={(x) => { setLbs(x); onAnswer('B4', x); }} testID="wheel-goal" />
           ) : (
