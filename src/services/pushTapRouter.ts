@@ -298,7 +298,7 @@ export function routeAppLink(path: string, waitForSignIn = true, notificationId?
     rememberId(notificationId);
   }
   pending = {
-    screen: '', path, ownerUserId: sessionUserId(session),
+    screen: waitForSignIn ? '' : 'NotificationCenter', path, ownerUserId: sessionUserId(session),
     waitForSignIn: waitForSignIn && (session.kind === 'unknown' || session.kind === 'signedOut'),
   };
   flushPendingPushTap();
@@ -329,7 +329,10 @@ export function flushPendingPushTap(): boolean {
   pending = null;
   if (path !== undefined) {
     const target = resolveAppLink(path, session.role);
-    if (!target || !routeNames.includes(target.root)) return false;
+    // A trusted but unsupported push URL keeps its existing inbox fallback.
+    // URL opens have no fallback, and untrusted origins never enter the queue.
+    if (!target) return screen ? deliver(navigator, session.role, routeNames, screen, params) : false;
+    if (!routeNames.includes(target.root)) return false;
     return deliverTarget(navigator, target, target.params);
   }
   // Unroutable target: dropped rather than crashing (deliver returns false).

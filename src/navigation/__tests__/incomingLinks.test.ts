@@ -139,6 +139,12 @@ describe('shared incoming-link queue identity and readiness', () => {
     expect(nav.navigate).not.toHaveBeenCalled();
   });
 
+  it('keeps the existing inbox fallback for a trusted push URL with no mobile target', () => {
+    setPushSession({ kind: 'app', role: 'student', userId: 'one' });
+    routePushTap('NotificationCenter', undefined, 'push-one', 'tgp://client/library');
+    expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', params: undefined });
+  });
+
   it('deduplicates the same cold/live meal-plan push and preserves specific safety actions', () => {
     setPushSession({ kind: 'app', role: 'student', userId: 'one' });
     routePushTap('NotificationCenter', undefined, 'push-one', `tgp://meal-plan/${ID}`);
