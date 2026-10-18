@@ -123,6 +123,6 @@ export function sleepDial(input: {
     return { value: `${Math.round(hours * 10) / 10}`, unit: 'h asleep', sub: '', progress: clamp01((hours * 60) / DEFAULT_SLEEP_NEED_MIN), source: 'checkin' };
   }
   // A connected client with nothing for last night keeps the dash, never "Connect".
-  if (!input.noSource || input.reads.checkIn !== 'ok') return unknown;
+  if (input.reads.health !== 'ok' || input.reads.checkIn !== 'ok' || !input.noSource) return unknown;
   return { value: 'Connect', unit: '', sub: '', progress: 0, source: 'none' };
 }
