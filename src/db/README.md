@@ -23,8 +23,8 @@
 
 > Removed in the nutrition P0 cleanup: `recipesDb.ts`, `mealPlanDb.ts`,
 > `fastingDb.ts`, `shoppingListDb.ts`. All four were orphan: foods/recipes
-> are now fetched live via `recipesApi`, meal plans via `mealTemplatesApi`
-> + `mealPlansApi`, fasting via `fastingApi`, and grocery/shopping lists
+> are now fetched live via `recipesApi`, meal plans via `mealTemplatesApi`,
+> fasting via `fastingApi`, and grocery/shopping lists
 > via `listsApi`.
 
 ## Data flow

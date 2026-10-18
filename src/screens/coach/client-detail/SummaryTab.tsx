@@ -200,15 +200,13 @@ export function SummaryTab({
         </View>
       )}
 
-      {/* Coach AI v1 — generate workout / meal plan / weekly insight drafts.
+      {/* Coach AI v1 — generate workout / weekly insight drafts.
           Hides the CTAs when /coach/ai/status reports ready=false. */}
       <CoachAiSection
         clientId={clientId}
         clientName={clientName}
         openWorkoutRequest={openWorkoutRequest}
         onWorkoutRequestHandled={onWorkoutRequestHandled}
-        clientAllergies={allergies}
-        clientDietaryRestrictions={restrictions}
       />
     </>
   );
