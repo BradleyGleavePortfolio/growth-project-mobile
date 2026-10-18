@@ -896,7 +896,8 @@ export default function MoneyScreen({
           </TouchableOpacity>
           {/* PK-2a: "Buy more credits" is two taps from the Money tab (tab, then
               this row). Same gate as every credit-pack entry: hidden where the
-              build may not sell packs (iOS store without the US link). */}
+              build may not sell packs (iOS store builds without the US link,
+              Android release builds without the Android link). */}
           {creditPacksHidden() ? null : (
             <TouchableOpacity
               onPress={() => navigation.navigate("CreditPackCheckout", undefined)}

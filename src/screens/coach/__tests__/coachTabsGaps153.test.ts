@@ -47,7 +47,7 @@ describe('owner radius scale (12 / 16 / 24) on the Calendar and Messages tab scr
   });
 });
 
-it('44 pt targets: Availability steppers reach 44 with hitSlop, the Clients filters are 44 wide', () => {
+it('Availability steppers carry hitSlop 4 (effective 44 pt not proven here); the Clients filters are 44 wide', () => {
   const avail = read('screens/coach/CoachAvailabilityEditorScreen.tsx');
   expect(avail.match(/hitSlop=\{4\}\n\s*style=\{\[styles\.stepBtn,/g)).toHaveLength(4);
   expect(avail).toMatch(/stepBtn: \{[^}]*width: 36,\s*height: 36,/);
