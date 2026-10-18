@@ -15,6 +15,8 @@ COACHLAND (owner 10-15 "coaches land on overview/home page"): with `coachTabsV2`
 
 React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navigator is mounted based on auth + onboarding state, and owns the deep-link configuration that all `tgp://` and `https://app.trygrowthproject.com` URLs flow through.
 
+MOBILE-DEEPLINK: `incomingLinks.ts` validates the complete URL before any routing or auth-link side effect. It restores the authority segment for both registered custom schemes (`tgp`, `com.growthproject.app`) and accepts HTTPS only on `app.trygrowthproject.com`. Public auth links remain with the native linking receiver; authenticated links share the role-aware `pushTapRouter` queue across cold start, foreground opens and push `deepLink`/`deep_link` payloads. URL opens while signed out wait for sign-in; account-bound links and pushes never cross a sign-out/account switch. `meal-plan/:assignmentId` requires a UUID and opens only the client's existing `MoreTab/ClientDailyMealPlan`, preserving More underneath; the screen selects only from the signed-in client's own assignments and keeps its existing unavailable state. Coach links resolve only to coach routes; a client-file link gets its display name from the existing scoped summary when the URL supplies only an ID. Unknown origins, paths and invalid IDs are ignored, never opened externally.
+
 ## Purpose
 
 - Centralise the auth gate. There is exactly one place where "is this user signed in, and which experience do they get?" is decided: `RootNavigator.bootstrapAuth`.
@@ -77,7 +79,7 @@ This means:
 
 - `tgp://join` and `tgp://join/AB12CD` both resolve to `CreateAccount`. The optional param is parsed straight through.
 - `https://app.trygrowthproject.com/join/AB12CD` resolves the same way **after** Android App Links / iOS Universal Links verify silently. Until the hosted association files are live, the URL opens a chooser (Android) or Safari (iOS) — at which point the user can paste the code into the welcome screen manually.
-- Signed-in users are not routed by deep links because the matching screen is not mounted under their navigator. This is intentional: a signed-in client tapping an invite URL is a no-op.
+- Public signup links do not replace a signed-in navigator: an invite code is saved for the existing attach flow. Authenticated app links use the role-aware queue described above.
 
 ## App-store / deep-link dependencies
 
@@ -132,7 +134,7 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 - `ShareCard` (MoreStack) is registered only while `featureFlags.shareSheetV2` is off (SHARE-A). On, Share on Progress and on the Session summary opens `components/share/ShareSheet` over the screen instead, so no route or param shape is needed; see `docs/share-card.md`.
 - The `TrophyShare` route was removed from `ClientNavigator` in #63 alongside the `TrophyShareScreen` and `FirstWinCelebration`. Do not reintroduce it; the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`) will fail the build.
 - A6 (AUTHB-05): `tgp://wearables/connected?status&provider&ticket` maps to `MoreTab/Connections` (params `{ ticket?, provider?, status? }`), so a cloud tracker return that Android hands to the app opens the screen that finishes the link. It uses the existing `tgp` scheme; no intent filter change.
-- The `linking` config covers only the unauthenticated path. If a future feature needs to be addressable by a deep link to a signed-in screen, that route must be added under both `ClientNavigator` and `CoachNavigator` configs and the Android intent filter / `applinks:` entry extended in `app.json`.
+- Public auth links use `linking`; authenticated app links resolve through `incomingLinks.resolveAppLink` for the signed-in role. New app-link destinations must name an existing mounted screen and respect its feature gate. HTTPS links also require the matching platform association path.
 
 ## Phase 9 — Bell icon entry point (Notification Center)
 

@@ -26,6 +26,7 @@
  */
 import { featureFlags } from '../config/featureFlags';
 import { creditPacksHidden } from '../config/purchaseSurfaces';
+import { incomingLinkPath, isPublicLinkPath, resolveAppLink } from '../navigation/incomingLinks';
 
 export interface PushNavigator {
   isReady(): boolean;
@@ -165,6 +166,8 @@ const SCREEN_NAME = /^[A-Za-z][A-Za-z0-9]{0,63}$/;
 interface PendingTap {
   screen: string;
   params?: Record<string, string>;
+  path?: string;
+  waitForSignIn?: boolean;
   /** The signed-in user the tap belongs to; null while bootstrap is unknown. */
   ownerUserId: string | null;
 }
@@ -244,11 +247,11 @@ export function attachPushNavigator(nav: PushNavigator): () => void {
 export function setPushSession(next: PushSession): void {
   session = next;
   if (!pending) return;
-  if (next.kind === 'signedOut') {
+  if (next.kind === 'signedOut' && !pending.waitForSignIn) {
     pending = null;
     return;
   }
-  if (next.kind === 'unknown') return;
+  if (next.kind === 'unknown' || next.kind === 'signedOut') return;
   const uid = next.userId;
   if (pending.ownerUserId === null) {
     pending.ownerUserId = uid;
@@ -256,6 +259,7 @@ export function setPushSession(next: PushSession): void {
     pending = null;
     return;
   }
+  if (uid !== null) pending.waitForSignIn = false;
   flushPendingPushTap();
 }
 
@@ -263,7 +267,18 @@ export function routePushTap(
   actionScreen?: string,
   actionParams?: unknown,
   notificationId?: string,
+  deepLink?: string,
 ): void {
+  if (deepLink !== undefined) {
+    const path = incomingLinkPath(deepLink);
+    if (path === null) return;
+    // Specific action screens (safety alerts, bookings) retain their richer
+    // params. A generic inbox fallback must not swallow a real app link.
+    if (!actionScreen || actionScreen === 'NotificationCenter') {
+      routeAppLink(path, false, notificationId);
+      return;
+    }
+  }
   if (!actionScreen || typeof actionScreen !== 'string' || !SCREEN_NAME.test(actionScreen)) return;
   if (notificationId) {
     if (seen.has(notificationId)) return;
@@ -276,6 +291,21 @@ export function routePushTap(
     screen: actionScreen,
     params: decodePushParams(actionParams),
     ownerUserId: sessionUserId(session),
+  };
+  flushPendingPushTap();
+}
+
+/** Shared queue for cold-start URLs, foreground opens and push URL payloads. */
+export function routeAppLink(path: string, waitForSignIn = true, notificationId?: string): void {
+  if (isPublicLinkPath(path)) return;
+  if (!waitForSignIn && session.kind === 'signedOut') return;
+  if (notificationId) {
+    if (seen.has(notificationId)) return;
+    rememberId(notificationId);
+  }
+  pending = {
+    screen: waitForSignIn ? '' : 'NotificationCenter', path, ownerUserId: sessionUserId(session),
+    waitForSignIn: waitForSignIn && (session.kind === 'unknown' || session.kind === 'signedOut'),
   };
   flushPendingPushTap();
 }
@@ -301,8 +331,16 @@ export function flushPendingPushTap(): boolean {
   // frame between an auth-state change and the navigator commit).
   if (!routeNames.includes(ROLE_ANCHOR[session.role])) return false;
 
-  const { screen, params } = pending;
+  const { screen, params, path } = pending;
   pending = null;
+  if (path !== undefined) {
+    const target = resolveAppLink(path, session.role);
+    // A trusted but unsupported push URL keeps its existing inbox fallback.
+    // URL opens have no fallback, and untrusted origins never enter the queue.
+    if (!target) return screen ? deliver(navigator, session.role, routeNames, screen, params) : false;
+    if (!routeNames.includes(target.root)) return false;
+    return deliverTarget(navigator, target, target.params);
+  }
   // Unroutable target: dropped rather than crashing (deliver returns false).
   deliver(navigator, session.role, routeNames, screen, params);
   return true;
@@ -319,6 +357,10 @@ function deliver(
   if (!routeNames.includes(target.root)) {
     target = resolvePushTarget(role, 'NotificationCenter');
   }
+  return deliverTarget(nav, target, params);
+}
+
+function deliverTarget(nav: PushNavigator, target: Target, params?: Record<string, string>): boolean {
   try {
     if (target.screen && target.beneath) {
       nav.navigate(target.root, {

@@ -14,7 +14,7 @@ import {
 import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
 
 export function useClientDetailData(clientId: string, colors: ThemeColors, coachId?: string) {
-  const [profile, setProfile] = useState<ClientProfile | null>(null);
+  const [profile, setProfile] = useState<(ClientProfile & { name?: string }) | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
