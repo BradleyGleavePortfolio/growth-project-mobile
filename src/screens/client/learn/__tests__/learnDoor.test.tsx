@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api, { coachApi, lessonsApi } from '../../../../services/api';
 import MoreScreen from '../../MoreScreen';
+import YouScreen from '../../YouScreen';
 import LearnGuidelinesScreen from '../LearnGuidelinesScreen';
 import { GUIDELINES_PLAN_TITLE } from '../learnData';
 
@@ -13,7 +14,9 @@ const mockNav = { navigate: jest.fn(), goBack: jest.fn(), getParent: jest.fn(), 
 let mockUser: { id: string; coach_id?: string | null } = { id: 'me', coach_id: 'c1' };
 let mockFocused = true;
 let mockOnline = true;
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useIsFocused: () => mockFocused }));
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => mockNav, useIsFocused: () => mockFocused, useFocusEffect: () => undefined,
+}));
 jest.mock('../../../../hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ online: mockOnline }), isEffectivelyOnline: (n: { online: boolean }) => n.online,
 }));
@@ -32,6 +35,16 @@ jest.mock('../../../../services/api', () => ({
   coachApi: { getMyGuidelines: jest.fn() },
   lessonsApi: { getAll: jest.fn(), complete: jest.fn() },
 }));
+// The You home (C9-S1) carries the same Learn row in its Support group.
+jest.mock('../../../../services/queryClient', () => ({ queryClient: new (jest.requireActual('@tanstack/react-query').QueryClient)() }));
+jest.mock('../../../../lib/packagePayment', () => ({
+  ...jest.requireActual('../../../../lib/packagePayment'), listClientPlans: () => Promise.resolve([]),
+}));
+jest.mock('../../../../hooks/useWorkoutBuilder', () => ({ useMyWorkoutAssignments: () => ({ data: [] }) }));
+jest.mock('../../../../components/coachless/JoinCoachState', () => ({ useClientNeedsCoach: () => false }));
+jest.mock('../../../../components/coachless/CoachCodeSheet', () => () => null);
+jest.mock('../../../../services/authActions', () => ({ prepareSignOutConfirm: jest.fn(), signOut: jest.fn() }));
+jest.mock('../../../../ui/charts', () => ({ SegmentedRing: () => null }));
 
 const year = new Date().getFullYear();
 const GUIDE = { description: '# Food\n- Protein at every meal, about a palm.', updated_at: `${year}-10-12T12:00:00Z` };
@@ -96,6 +109,22 @@ describe('Learn door on the You list (#LEARN-DOOR op 2, #LEARN-COACHLESS op 1)',
       await again();
       expect(await screen.findByLabelText('Learn')).toBeTruthy();
     });
+
+  it.each([
+    ['the coach has written something', [LESSON], GUIDE, 'c1', true],
+    ['nothing written', [], null, 'c1', false],
+    ['no coach', [LESSON], GUIDE, null, false],
+  ])('the You home (C9-S1) Support group: %s, the Learn row shows = %s', async (_label, rows, guide, coach, shows) => {
+    mockUser = { id: 'me', coach_id: coach };
+    answer(rows, guide);
+    await show(YouScreen);
+    expect(screen.getByTestId('you-row-Settings')).toBeTruthy();
+    expect(screen.queryByTestId('you-row-Learn') !== null).toBe(shows);
+    if (shows) {
+      await fireEvent.press(screen.getByTestId('you-row-Learn'));
+      expect(mockNav.navigate).toHaveBeenCalledWith('Learn', undefined);
+    }
+  });
 
   it('without a coach the row stays hidden and nothing is read', async () => {
     mockUser = { id: 'me', coach_id: null };
