@@ -62,6 +62,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
+  EXPO_PUBLIC_FF_LEARN_HUB: process.env.EXPO_PUBLIC_FF_LEARN_HUB,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
   EXPO_PUBLIC_FF_MWB_PROGRAMS: process.env.EXPO_PUBLIC_FF_MWB_PROGRAMS,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
@@ -631,6 +632,17 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_FIRST_RUN_V2
    */
   firstRunV2: readFlag('EXPO_PUBLIC_FF_FIRST_RUN_V2', false),
+
+  // ─── LEARN-A — Learn: the coach's guidelines and lessons (MOCK-LEARN) ───
+  /**
+   * Learn as one page for what the client's coach wrote: the guidelines card,
+   * the numbered lessons with one next step, and the lesson view with Mark as
+   * complete (boards 3, 4, 11-13). The server is the only record of
+   * completions. OFF in every build; with it off Learn is exactly main's.
+   *
+   * env: EXPO_PUBLIC_FF_LEARN_HUB
+   */
+  learnHub: readFlag('EXPO_PUBLIC_FF_LEARN_HUB', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
