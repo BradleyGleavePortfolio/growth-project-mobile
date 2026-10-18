@@ -167,6 +167,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: layout.gutter, paddingTop: 6, paddingBottom: 48 },
   dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
   cta: { marginTop: 20 },
-  pay: { marginTop: 20, marginBottom: 0 },
+  pay: { marginTop: 20, marginBottom: 0, paddingBottom: 0 }, // the Roman line or the button below brings its own gap
   notices: { marginTop: layout.sectionGap },
 });
