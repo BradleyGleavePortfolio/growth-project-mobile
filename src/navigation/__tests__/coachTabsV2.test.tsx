@@ -509,7 +509,7 @@ it('flag on: Back from a chat with unsent text goes straight back, as today', as
 
 it('the real chat arms the same guard with its own unsent text', () => {
   const chat = SOURCES.find(([file]) => file === 'ClientMessagesScreen.tsx')?.[1];
-  expect(chat).toMatch(/\n  useKeepUnsentChat\(inputText\.trim\(\) !== ''\);\n/);
+  expect(chat).toMatch(/^ {2}useKeepUnsentChat\(inputText\.trim\(\) !== ''\);$/m);
 });
 
 it('every chat opened outside Clients goes through coachInbox.ts, and every file that does is a row above', () => {
