@@ -107,10 +107,10 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
       {body.points.length > 1 ? <Sparkline points={body.points} color={sc.accent} /> : null}
     </HomeTile>,
     <HomeTile key="habits" label="Habits" view={habitView} testID="home-tile-habits" onPress={() => navigation.navigate('Habits')} />,
-    // #RINGS-CONNECT (the Sleep dial's rule): Connections only when the client's connections list none connected;
-    // every other state opens Health and fitness. Both sit in the Home stack, so Back lands on Home.
+    // #RINGS-CONNECT (the Sleep dial's rule): Connections only when the client's connections list none connected and
+    // Health has no steps today ("Connect"); every other state opens Health and fitness. Both sit in the Home stack.
     <HomeTile key="steps" label="Steps" view={steps} testID="home-tile-steps" prompt={steps.value === 'Connect'}
-      onPress={() => (noSource ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'fitness' }))} />,
+      onPress={() => (steps.value === 'Connect' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'fitness' }))} />,
     <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits', { tab: 'checkin' })} />,
   ];
   const pairs: React.ReactNode[][] = [];

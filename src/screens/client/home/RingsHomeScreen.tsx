@@ -77,8 +77,8 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
     now: new Date(), assignments: workout.assignments, history: workout.history,
     daysPerWeek: currentUser?.profile?.workout_days_per_week, loading: workout.exists === 'loading',
   });
-  // #RINGS-CONNECT: Connections only when the client's connections list none connected; every other
-  // state opens Recovery. Both sit in the Home stack, so Back lands on Home.
+  // #RINGS-CONNECT: Connections only when the client's connections list none connected and Health has no
+  // number for last night; every other state opens Recovery. Both sit in the Home stack, so Back lands on Home.
   const noSource = noHealthSource(connections);
   const sleep = sleepDial({
     recovery: recoveryScore(sleepRead.data),
@@ -110,7 +110,7 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             onPress={() => navigation.navigate('WorkoutTab')} />
           <HomeDial label="Sleep" view={sleep} testID="home-dial-sleep" prompt={sleep.source === 'none'}
             accessibilityLabel={dialLabel('Sleep', sleep)}
-            onPress={() => (noSource ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'recovery' }))} />
+            onPress={() => (noSource && sleep.source !== 'health' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'recovery' }))} />
         </View>
         <CoachlessHomeSlot part="join" />
         {/* Once the user is known, so a coached client never sees Roman locked first. */}
