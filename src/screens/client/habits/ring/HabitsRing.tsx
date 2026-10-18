@@ -20,8 +20,9 @@ import { QuietLoading } from '../../../../ui/states/QuietStates';
 import { useTheme } from '../../../../theme/ThemeProvider';
 import { colors, layout, radius, typography, type SemanticTokens } from '../../../../theme/tokens';
 import { getTodayString } from '../../../../utils/date';
+import { plannedToday } from '../../../../components/home/rings/homeTiles';
 import {
-  IDEAS, RING_COPY as C, dayName, dayOfMonth, doneOn, mondayOf, onToday, plusDays, runLine,
+  IDEAS, RING_COPY as C, dayName, dayOfMonth, doneOn, mondayOf, plusDays, runLine,
   weekCount, weekStrip, weekdayLetter, weekdayName, type HabitSummary, type RingHabit,
 } from './ringModel';
 
@@ -98,7 +99,8 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     });
   }, [habits, today]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const parts = list.filter((h) => onToday(h, today, isDone(h)));
+  // The same parts as Home's habits tile: planned today, or ticked today on the server.
+  const parts = list.filter((h) => doneOn(h, today) || plannedToday(h, today));
   const done = parts.filter(isDone).length;
   const toggle = (h: RingHabit) => {
     if (busy.current.has(h.id)) return;

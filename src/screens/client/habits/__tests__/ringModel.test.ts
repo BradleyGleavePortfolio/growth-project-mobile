@@ -1,25 +1,8 @@
-import { mondayOf, onToday, runLine, segmentsOf, weekCount, weekStrip, type RingHabit } from '../ring/ringModel';
+import { mondayOf, runLine, segmentsOf, weekCount, weekStrip, type RingHabit } from '../ring/ringModel';
 
 const TODAY = '2026-10-14'; // a Wednesday
 const h = (extra: Partial<RingHabit>): RingHabit => ({ id: 'h', user_id: 'u', name: 'Walk', created_at: '', logs: [], ...extra });
 const tick = (date: string) => ({ id: date, habit_id: 'h', user_id: 'u', date: `${date}T00:00:00.000Z`, completed: true });
-
-it('today\'s ring: every day, on its days, from its start date', () => {
-  expect(onToday(h({ schedule_kind: 'daily' }), TODAY, false)).toBe(true);
-  expect(onToday(h({ schedule_kind: 'days', schedule_days: [1, 3, 5] }), TODAY, false)).toBe(true);
-  expect(onToday(h({ schedule_kind: 'days', schedule_days: [1, 5] }), TODAY, false)).toBe(false);
-  expect(onToday(h({ schedule_kind: 'daily', starts_on: '2026-10-15' }), TODAY, false)).toBe(false);
-  expect(onToday(h({ schedule_kind: 'daily', starts_on: '2026-10-14T00:00:00.000Z' }), TODAY, false)).toBe(true);
-});
-
-it('today\'s ring: a times-a-week habit while its week needs ticks, or once ticked today', () => {
-  const week = (done: number) => ({ planned: 3, done });
-  expect(onToday(h({ schedule_kind: 'times_per_week', week: week(2) }), TODAY, false)).toBe(true);
-  expect(onToday(h({ schedule_kind: 'times_per_week', week: week(3) }), TODAY, false)).toBe(false);
-  expect(onToday(h({ schedule_kind: 'times_per_week', week: week(3) }), TODAY, true)).toBe(true);
-  // Ticked today and then unticked on the screen: the week still needs it, so it stays.
-  expect(onToday(h({ schedule_kind: 'times_per_week', week: week(3), logs: [tick(TODAY)] }), TODAY, false)).toBe(true);
-});
 
 it('the run line: a run from 2 up, else the best run kept, else nothing', () => {
   expect(runLine(h({ schedule_kind: 'daily', run_days: 12 }), true)).toBe('12 days in a row');

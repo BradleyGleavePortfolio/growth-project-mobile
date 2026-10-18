@@ -1,6 +1,6 @@
 /**
- * HB-B1: the ring's words (section 11 ids beside each) and the pure maths: which habits make today's ring
- * and how each day of the strip draws. Runs, best runs and week counts come from the server (HB3).
+ * HB-B1: the ring's words (section 11 ids beside each) and the pure maths for the tiles and the strip.
+ * Runs, best runs and week counts come from the server (HB3); today's parts are Home's plannedToday.
  */
 import type { ApiHabit } from '../../../../hooks/useApi';
 import type { SegmentState } from '../../../../ui/charts/StyleCMarks';
@@ -77,17 +77,6 @@ export const mondayOf = (ymd: string) => plusDays(ymd, -((weekday(ymd) + 6) % 7)
 /** Whether the server holds a done tick for the habit on `ymd`. */
 export function doneOn(h: RingHabit, ymd: string): boolean {
   return !!h.logs?.some((l) => l.completed && l.date.slice(0, 10) === ymd);
-}
-
-/**
- * Whether the habit is one part of today's ring, by HB3's rules: from its start
- * date, every day or on its days; a times-a-week habit while its week still
- * needs ticks, or once ticked today. `done` is today's tick as the screen shows it.
- */
-export function onToday(h: RingHabit, today: string, done: boolean): boolean {
-  if (h.starts_on && h.starts_on.slice(0, 10) > today && !doneOn(h, today)) return false;
-  if (h.schedule_kind === 'times_per_week') return done || !h.week || h.week.done - Number(doneOn(h, today)) < h.week.planned;
-  return h.schedule_kind !== 'days' || (h.schedule_days ?? []).includes(weekday(today));
 }
 
 /** The run line under a tile: a run from 2 days up, else the best run kept, else nothing. */

@@ -70,7 +70,7 @@ const HABITS = [
   habit('h2', 'Walk 30 minutes', { best_run_days: 9, assigned_by_coach_id: 'c1', week: { planned: 7, done: 2 } }),
   habit('h3', 'Stretch 10 minutes', { schedule_kind: 'days', schedule_days: [1, 3, 5], logs: [log(TODAY)], run_days: 6, week: { planned: 3, done: 2 } }),
   habit('h4', 'Lights out by 11', { schedule_kind: 'days', schedule_days: [0, 1, 2, 4], week: { planned: 4, done: 2 } }),
-  habit('h5', 'Read', { schedule_kind: 'times_per_week', times_per_week: 3, week: { planned: 3, done: 3 } }),
+  habit('h5', 'Read', { schedule_kind: 'times_per_week', times_per_week: 2, logs: [log('2026-10-12'), log('2026-10-13')], week: { planned: 2, done: 2 } }),
 ];
 const SUMMARY = {
   today: TODAY,
@@ -103,7 +103,7 @@ it('today: the ring has a part per habit planned today, the week line, the strip
   expect(v.getByText('2 of 3')).toBeTruthy();
   expect(lastRing('habits-ring').segments).toEqual(['done', 'planned', 'done']);
   expect(v.getByText('Wednesday')).toBeTruthy();
-  expect(v.getByText('12 of 24 this week')).toBeTruthy();
+  expect(v.getByText('11 of 23 this week')).toBeTruthy();
   expect(mockGet).toHaveBeenCalledWith('/habits/summary', { params: { from: '2026-10-12', to: '2026-10-18' } });
   await waitFor(() => expect(v.getByLabelText('Tuesday 13, 3 of 4 done')).toBeTruthy());
   expect(lastRing('habits-ring-day-2026-10-13').segments).toEqual(['done', 'done', 'done', 'missed']);
@@ -128,7 +128,7 @@ it('the last tick closes the ring: the part draws, success haptic, logged for th
   expect(lastRing('habits-ring')).toMatchObject({ drawIndex: 1, event: `h2:${TODAY}:1` });
   expect(v.getByText('Done · best run 9 days')).toBeTruthy();
   expect(v.getByTestId('habits-ring-tile-h2').props.accessibilityState).toMatchObject({ checked: true });
-  expect(v.getByText('13 of 24 this week')).toBeTruthy();
+  expect(v.getByText('12 of 23 this week')).toBeTruthy();
 });
 
 it('a tick that does not close the day is a soft tap; an untick is a selection and logs false', async () => {
