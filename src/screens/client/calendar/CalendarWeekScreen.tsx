@@ -14,6 +14,7 @@ import type { ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilde
 import { checkInsApi } from '../../../services/api';
 import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { useMyWorkoutAssignments } from '../../../hooks/useWorkoutBuilder';
+import { useWorkouts, type ApiWorkoutSession } from '../../../hooks/useApi';
 import { withProtectedScreen } from '../../../entitlements/withProtectedScreen';
 import { useClientNeedsCoach } from '../../../components/coachless/JoinCoachState';
 import { useNetworkStatus } from '../../../hooks/useNetworkStatus';
@@ -36,6 +37,8 @@ export type CalendarWeekData = {
   sessions: CoachingSession[];
   workouts: ClientWorkoutAssignmentWithPlan[];
   checkIns: CheckIn[];
+  /** Workouts the client logged (Quick Workout, own routines, coach plans). */
+  logs?: ApiWorkoutSession[];
   descriptions?: Record<string, string>;
   loading: boolean;
   failed: boolean;
@@ -55,6 +58,7 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
   const sessions = useMySessions(50, !coachless);
   const past = usePastSessions(!coachless);
   const workouts = useMyWorkoutAssignments();
+  const logs = useWorkouts(50); // GET /workouts, newest first: covers any week of training.
   const coachList = coachless ? [] : coaches.data ?? [];
   const types = useBookableTypes(coachList[0]?.coach_id);
   const from = getLocalWeekStart();
@@ -64,7 +68,7 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
     queryFn: async () => (await checkInsApi.list({ from, to, limit: 7 })).data,
   });
   const network = useNetworkStatus();
-  const own = [workouts, checkIns];
+  const own = [workouts, checkIns, logs];
   const queries = coachless ? own : [coaches, sessions, past, ...own];
   // Native tab focus must refresh after booking, completing a workout or saving a check-in.
   const refreshRef = useRef(() => {});
@@ -75,6 +79,7 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
     sessions: coachless ? [] : [...(sessions.data ?? []), ...(past.data?.pages.flat() ?? [])],
     workouts: workouts.data ?? [],
     checkIns: checkIns.data ?? [],
+    logs: logs.data ?? [],
     descriptions: Object.fromEntries((types.data ?? []).filter((t) => t.description).map((t) => [t.id, t.description!])),
     loading: queries.some((q) => q.isPending && q.fetchStatus === 'fetching'),
     failed: queries.some((q) => q.isError),
@@ -123,14 +128,27 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   const next = sessions.find((s) => active(s) && Date.parse(s.end_at) > Date.now());
   const coach = data.coaches[0];
   const sessionDay = (s: CoachingSession) => bucketDateLocal(new Date(s.start_at));
-  const workoutsOn = (day: string) => data.workouts.filter((w) => bucketDateLocal(new Date(w.scheduled_for)) === day);
+  const planName = (w: ClientWorkoutAssignmentWithPlan) => w.snapshot?.plan_name || w.workout_plan.name;
+  // Finishing a coach plan also saves its log (same day, same name): show that workout once.
+  const logs = (data.logs ?? []).filter((l) => !data.workouts.some((w) => w.completed_at &&
+    bucketDateLocal(new Date(w.completed_at)) === l.date.slice(0, 10) && planName(w) === l.workout_name));
+  const workoutsOn = (day: string) => [
+    ...data.workouts.filter((w) => bucketDateLocal(new Date(w.scheduled_for)) === day).map((w) => ({
+      id: w.id, testID: `week-workout-${w.id}`, name: planName(w), done: !!w.completed_at,
+      open: () => nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id }, initial: false }),
+    })),
+    ...logs.filter((l) => l.date.slice(0, 10) === day).map((l) => ({
+      id: l.id, testID: `week-log-${l.id}`, name: l.workout_name || c['C4-S-84'], done: true,
+      open: () => nav.navigate('WorkoutTab', { screen: 'WorkoutHistoryEdit', params: { workout: JSON.stringify(l) }, initial: false }),
+    })),
+  ];
   const checkOn = (day: string) => data.checkIns.some((row) => row.date.slice(0, 10) === day);
   const dayLabel = (day: string) => formatDayLabel(dayDate(day));
   const ink = { color: sc.textPrimary };
   // Use primary ink for small supporting text: never low-contrast stone on tan.
   const body = [styles.body, ink];
   const noItems = !sessions.some((s) => days.includes(sessionDay(s))) &&
-    !data.workouts.some((w) => days.includes(bucketDateLocal(new Date(w.scheduled_for)))) && !data.checkIns.length;
+    !days.some((day) => workoutsOn(day).length) && !data.checkIns.length;
   const sessionCard = (s: CoachingSession, hero = false) => {
     const owner = data.coaches.find((item) => item.coach_id === s.coach_id);
     const name = owner?.name ?? s.coach_name;
@@ -210,15 +228,15 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
               <Text style={[styles.date, ink]} accessibilityRole="header">{dayLabel(day)}{day === today ? ` · ${c['C4-S-82']}` : ''}</Text>
               {sessions.filter((s) => sessionDay(s) === day).map((s) => sessionCard(s))}
               {workoutsOn(day).map((w) => (
-                <Pressable key={w.id} accessibilityRole="button" testID={`week-workout-${w.id}`}
-                  accessibilityLabel={`${w.snapshot?.plan_name ?? w.workout_plan.name}, ${w.completed_at ? c['C4-S-138'] : c['C4-S-137']}`}
+                <Pressable key={w.id} accessibilityRole="button" testID={w.testID}
+                  accessibilityLabel={`${w.name}, ${w.done ? c['C4-S-138'] : c['C4-S-137']}`}
                   style={[styles.row, { borderColor: sc.border }]}
-                  onPress={() => { void HapticService.softImpact(); nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id }, initial: false }); }}>
+                  onPress={() => { void HapticService.softImpact(); w.open(); }}>
                   <View style={styles.rowText}>
                     <Text style={[styles.small, ink]}>{c['C4-S-84']}</Text>
-                    <Text style={[styles.bodyStrong, ink]}>{w.snapshot?.plan_name ?? w.workout_plan.name}</Text>
+                    <Text style={[styles.bodyStrong, ink]}>{w.name}</Text>
                   </View>
-                  <Text style={[styles.small, ink]}>{w.completed_at ? c['C4-S-138'] : c['C4-S-137']}</Text>
+                  <Text style={[styles.small, ink]}>{w.done ? c['C4-S-138'] : c['C4-S-137']}</Text>
                 </Pressable>
               ))}
               {checkOn(day) ? <View style={[styles.row, { borderColor: sc.border }]} testID={`week-checkin-${day}`}>

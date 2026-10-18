@@ -43,13 +43,15 @@ jest.mock('../../../../services/api', () => ({
   __esModule: true,
   default: {},
   checkInsApi: { list: jest.fn() },
+  workoutApi: { getAll: jest.fn() },
 }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({
   HapticService: { softImpact: jest.fn(), selection: jest.fn(), error: jest.fn() },
 }));
 import { schedulingApi } from '../../../../api/schedulingApi';
 import { workoutBuilderApi } from '../../../../api/workoutBuilderApi';
-import { checkInsApi } from '../../../../services/api';
+import { checkInsApi, workoutApi } from '../../../../services/api';
+import type { ApiWorkoutSession } from '../../../../hooks/useApi';
 import { entitlementEvents } from '../../../../entitlements/entitlementEvents';
 import { COACHLESS_TITLE, COACH_MANAGED_TITLE } from '../../../../entitlements/PaywallSheet';
 import { ProtectedScreen } from '../../../../entitlements/ProtectedScreen';
@@ -86,6 +88,11 @@ const screen = async () => {
 const page = (data: Partial<CalendarWeekData> = {}) => render(
   <CalendarWeekPage data={{ ...base, ...data }} onRefresh={refresh} onSession={openSession} onBook={book} />,
 );
+const logged = (id: string, day: string, name: string) =>
+  ({ id, user_id: 'me', date: `${day}T00:00:00.000Z`, workout_name: name, exercises: [], created_at: `${day}T18:00:00.000Z` }) as ApiWorkoutSession;
+beforeEach(() => {
+  jest.mocked(workoutApi.getAll).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof workoutApi.getAll>>);
+});
 afterEach(async () => {
   await cleanup();
   clients.splice(0).forEach((q) => q.clear());
@@ -194,6 +201,7 @@ it('a coached, entitled client reads every signed-in-client list, including past
   expect(checkInsApi.list).toHaveBeenCalledWith({ from: getLocalWeekStart(), to: addDays(getLocalWeekStart(), 6), limit: 7 });
   expect(schedulingApi.listMySessions).toHaveBeenCalledWith(50);
   expect(schedulingApi.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', before: undefined, beforeId: undefined });
+  expect(workoutApi.getAll).toHaveBeenCalledWith(50);
   expect(r.queryByTestId('week-error')).toBeNull();
 });
 
@@ -211,8 +219,14 @@ it('a coachless client sees their own week; scheduling never runs and Book opens
   denyScheduling();
   jest.mocked(workoutBuilderApi.listMyAssignments).mockResolvedValue([workout]);
   jest.mocked(checkInsApi.list).mockResolvedValue({ data: [{ id: 'checkin-own', date: today }] } as Awaited<ReturnType<typeof checkInsApi.list>>);
+  const quick = logged('log-quick', today, 'Quick Workout');
+  jest.mocked(workoutApi.getAll).mockResolvedValue({ data: [quick] } as Awaited<ReturnType<typeof workoutApi.getAll>>);
   const r = await screen();
   await waitFor(() => expect(r.getByTestId('week-workout-assignment-own')).toBeTruthy());
+  await waitFor(() => expect(r.getByTestId('week-log-log-quick')).toBeTruthy());
+  expect(within(r.getByTestId('week-log-log-quick')).getByText('Quick Workout')).toBeTruthy();
+  await fireEvent.press(r.getByTestId('week-log-log-quick'));
+  expect(mockNavigate).toHaveBeenCalledWith('WorkoutTab', { screen: 'WorkoutHistoryEdit', params: { workout: JSON.stringify(quick) }, initial: false });
   await waitFor(() => expect(r.getByTestId(`week-checkin-${today}`)).toBeTruthy());
   expect(r.getByTestId('week-checkin-open')).toBeTruthy();
   schedulingReads.forEach((read) => expect(read).not.toHaveBeenCalled());
@@ -238,10 +252,31 @@ it('a coached client without access keeps the Calendar gate, with no 402 schedul
   expect(r.getByText(COACH_MANAGED_TITLE)).toBeTruthy();
   schedulingReads.forEach((read) => expect(read).not.toHaveBeenCalled());
   expect(workoutBuilderApi.listMyAssignments).not.toHaveBeenCalled();
+  expect(workoutApi.getAll).not.toHaveBeenCalled();
   expect(r.queryByTestId('calendar-week')).toBeNull();
   expect(emit).not.toHaveBeenCalled();
   await fireEvent.press(r.getByTestId('protected-screen-message-coach'));
   expect(mockMessageCoach).toHaveBeenCalledTimes(1);
   expect(mockOpenPlans).not.toHaveBeenCalled();
   emit.mockRestore();
+});
+
+const mon = getLocalWeekStart();
+const plan = (id: string, done: boolean) => ({
+  id, scheduled_for: `${mon}T12:00:00`, completed_at: done ? `${mon}T13:00:00` : null,
+  workout_plan: { name: 'Live plan' }, snapshot: { plan_name: 'Frozen plan' },
+}) as ClientWorkoutAssignmentWithPlan;
+it.each<[string, Partial<CalendarWeekData>, string[], string[]]>([
+  ['Quick Workout log', { logs: [logged('quick', mon, 'Quick Workout')] }, ['week-log-quick'], []],
+  ['own routine log', { logs: [logged('push', mon, 'Push day')] }, ['week-log-push'], []],
+  ['coach plan finished: one row, not two', { workouts: [plan('plan-done', true)], logs: [logged('plan-log', mon, 'Frozen plan')] }, ['week-workout-plan-done'], ['week-log-plan-log']],
+  ['coach plan still planned', { workouts: [plan('plan-open', false)] }, ['week-workout-plan-open'], []],
+])('%s shows on its day and the day is never called a rest day', async (_source, data, shown, hidden) => {
+  const r = await page({ sessions: [], checkIns: [], workouts: [], ...data });
+  await fireEvent.press(r.getByTestId(`week-day-${mon}`));
+  const day = within(r.getByTestId(`week-agenda-${mon}`));
+  shown.forEach((id) => expect(day.getByTestId(id)).toBeTruthy());
+  hidden.forEach((id) => expect(r.queryByTestId(id)).toBeNull());
+  expect(day.queryByText(c['C4-S-89'])).toBeNull();
+  expect(r.queryByTestId('week-empty')).toBeNull();
 });
