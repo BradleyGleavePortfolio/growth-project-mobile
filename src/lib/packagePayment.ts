@@ -38,6 +38,7 @@
  * short reference only.
  */
 import api from "../services/api";
+import { queryClient } from "../services/queryClient";
 import { captureError } from "../services/sentry";
 import { errorStatus } from "../types/common";
 import { shortReference, supportReferenceOf } from "../utils/correlation";
@@ -372,6 +373,11 @@ export async function getClientPlan(
   const res = await api.get<unknown>(subscriptionPath(purchaseId));
   return normalizePlan(res?.data);
 }
+
+/** The plans read that other screens summarise (You's Your plans row). */
+export const YOUR_PLANS_QUERY_KEY = ["your-plans"] as const;
+/** A plan was bought, ended, kept or granted by a code: every summary of the plans is out of date (and reads again). */
+export const plansChanged = (): void => void queryClient.invalidateQueries({ queryKey: YOUR_PLANS_QUERY_KEY });
 
 export async function listClientPlans(): Promise<ClientPlan[]> {
   const res = await api.get<{ plans?: unknown[] }>(SUBSCRIPTIONS_PATH);

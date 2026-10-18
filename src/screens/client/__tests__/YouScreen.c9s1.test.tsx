@@ -4,7 +4,7 @@ import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Alert, Platform } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockNavigate = jest.fn();
@@ -43,6 +43,10 @@ jest.mock('../../../lib/packagePayment', () => ({
   ...jest.requireActual('../../../lib/packagePayment'),
   listClientPlans: () => mockListPlans(),
 }));
+jest.mock('../../../services/queryClient', () => {
+  const { QueryClient } = jest.requireActual('@tanstack/react-query');
+  return { queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }) };
+});
 const mockConfirm = jest.fn();
 const mockSignOut = jest.fn();
 jest.mock('../../../services/authActions', () => ({
@@ -66,7 +70,8 @@ jest.mock('../../../ui/charts', () => ({
 import YouScreen, { nextCharge, weekSegments } from '../YouScreen';
 import { planDate } from '../../../lib/planActions';
 import { clearPendingJoin } from '../../../lib/joinPackage';
-import { YOUR_PLANS_QUERY_KEY } from '../../../components/purchase/YourPlansPanel';
+import { plansChanged } from '../../../lib/packagePayment';
+import { queryClient as client } from '../../../services/queryClient';
 
 const NAV = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'navigation', 'ClientNavigator.tsx'), 'utf8');
 const stackRoutes = (v: string) => Array.from(NAV.matchAll(new RegExp(`<${v}\\.Screen\\s+name="(\\w+)"`, 'g')), (m) => m[1]);
@@ -84,9 +89,8 @@ const REAL_OS = Platform.OS;
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
 afterAll(() => setOS(REAL_OS));
 
-let client: QueryClient;
 function draw() {
-  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.clear(); // the app's client, the one plansChanged outdates
   return render(<QueryClientProvider client={client}><YouScreen /></QueryClientProvider>);
 }
 
@@ -286,13 +290,13 @@ describe('B1: the Your plans line follows the plans', () => {
     await shows(after.includes(ACTIVE_PLAN));
   });
 
-  it('End on Your plans outdates the line at once, before the new read answers', async () => {
+  it('a plan change (plansChanged: End, Keep, a purchase, a code join) outdates the line at once, before the new read answers', async () => {
     mockPlans = [ACTIVE_PLAN];
     await draw();
     await shows(true);
     let answer: (plans: unknown[]) => void = () => undefined;
     mockListPlans.mockImplementationOnce(() => new Promise((r) => { answer = r; }));
-    await act(async () => { void client.invalidateQueries({ queryKey: YOUR_PLANS_QUERY_KEY }); });
+    await act(async () => plansChanged());
     await shows(false);
     await act(async () => answer([ENDING]));
     await shows(false);
