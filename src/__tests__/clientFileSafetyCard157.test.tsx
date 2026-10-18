@@ -138,6 +138,7 @@ it.each(BOTH.flatMap((on) => LINES.map(([type, line]) => [on, type, line] as con
     const words = within(card).getAllByText(/./).map((t) => t.props.children);
     expect(words).toEqual([line, 'Message Sam', 'Dismiss']);
     expect(within(card).getByRole('button', { name: 'Dismiss alert for Sam Rivera' })).toBeTruthy();
+    expect(card.props['ph-no-capture']).toBe(true); // out of analytics capture, as in Actions
     const texts = view.getAllByText(/./).map((t) => t.props.children); // screen order
     expect(texts.indexOf(line)).toBeLessThan(texts.indexOf('paused-plans')); // above everything else in the file
     for (const tab of ['Summary', 'Logs', 'Progress']) {

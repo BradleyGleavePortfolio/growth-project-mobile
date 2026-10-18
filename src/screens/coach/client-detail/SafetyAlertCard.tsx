@@ -3,7 +3,8 @@
  * summary's `open_safety_alert` is set (b#1075: an id and a type, never the client's words, and only for the
  * client's current coach). One calm card: the approved line with the first name, never a quote. Message {first}
  * opens their chat (the screen says where); Dismiss is the Actions queue's own route, so it clears there too.
- * A soft haptic on Message; success or error when the server answers Dismiss; none on arrival.
+ * A soft haptic on Message; success or error when the server answers Dismiss; none on arrival. Kept out of
+ * analytics capture (`ph-no-capture`), as on the alert screen and in Actions.
  */
 import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -50,7 +51,7 @@ export function SafetyAlertCard({ alert, first, clientName, onMessage, onDismiss
   };
   return (
     <FadeInView duration={300}>
-      <View style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="file-safety-alert">
+      <View ph-no-capture style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="file-safety-alert">
         <View style={s.row}>
           <Ionicons name="shield-outline" size={22} color={sc.accentText} />
           <Text maxFontSizeMultiplier={CAP} style={[typography.body, s.flex, { color: sc.textPrimary }]}>{line}</Text>
