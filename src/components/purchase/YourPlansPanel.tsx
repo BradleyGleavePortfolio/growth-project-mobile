@@ -46,6 +46,10 @@ import {
   SupportEmailFallback,
   useSupportEmail,
 } from "../support/SupportEmailFallback";
+import { queryClient } from "../../services/queryClient";
+
+/** The plans read other screens summarise (You's Your plans line); End / Keep here outdates it. */
+export const YOUR_PLANS_QUERY_KEY = ["your-plans"] as const;
 
 export const YOUR_PLANS_COPY = {
   title: "Your plans",
@@ -260,6 +264,7 @@ export default function YourPlansPanel({
             return next;
           });
         }
+        void queryClient.invalidateQueries({ queryKey: YOUR_PLANS_QUERY_KEY });
         await load();
         if (mounted.current) onPlanChanged?.();
       } catch (err) {

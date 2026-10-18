@@ -15,10 +15,10 @@
  *
  * Coachless clients get every row; only Roman needs a coach (owner 10-17).
  */
-import React, { useReducer, useState } from 'react';
+import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -31,8 +31,9 @@ import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { messageCoachLabel } from '../../components/home/HomeHeaderActions';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
-import { YOUR_PLANS_COPY } from '../../components/purchase/YourPlansPanel';
+import { YOUR_PLANS_COPY, YOUR_PLANS_QUERY_KEY } from '../../components/purchase/YourPlansPanel';
 import { listClientPlans, type ClientPlan } from '../../lib/packagePayment';
+import { subscribeJoin } from '../../lib/joinPackage';
 import { planDate } from '../../lib/planActions';
 import { money } from '../../lib/planTerms';
 import { prepareSignOutConfirm, signOut } from '../../services/authActions';
@@ -111,9 +112,12 @@ export function weekSegments(
     .map(({ a, at }) => (a.completed_at ? 'done' : at < today ? 'missed' : 'planned'));
 }
 
-/** "Next charge of $149.00 on November 14." for the first renewing active plan. */
+/** "Next charge of $149.00 on November 14." for the renewing active plan that charges soonest. */
 export function nextChargeLine(plans: ReadonlyArray<ClientPlan> | undefined): string | null {
-  const plan = plans?.find((p) => p.state === 'active' && !p.cancelAtPeriodEnd && p.nextChargeAt);
+  const at = (p: ClientPlan) => Date.parse(p.nextChargeAt ?? '');
+  const [plan] = (plans ?? [])
+    .filter((p) => p.state === 'active' && !p.cancelAtPeriodEnd && p.nextChargeAt)
+    .sort((a, b) => at(a) - at(b));
   return plan ? YOUR_PLANS_COPY.renews(money(plan.amountCents, plan.currency), planDate(plan.nextChargeAt)) : null;
 }
 
@@ -151,11 +155,23 @@ export default function YouScreen() {
     queryFn: async () => (await api.get<CoachCard>('/v1/clients/me/coach')).data,
     enabled: !!coachId,
   });
+  const userId = user?.id;
   const plans = useQuery({
-    queryKey: ['you-plans', user?.id],
+    queryKey: [...YOUR_PLANS_QUERY_KEY, userId],
     queryFn: listClientPlans,
-    enabled: !!user?.id,
+    enabled: !!userId,
+    staleTime: Infinity, // fresh until You re-reads it or End / Keep on Your plans outdates it
+    meta: { persist: false }, // never a charge from a read saved to the phone on an earlier visit
   });
+  const { refetch: refetchPlans } = plans;
+  // Plans change on Your plans, at checkout and through a coach code (a paid join ends in
+  // JoinPackageHost over You): re-read the user and the plans on every return to You and after a join.
+  const refresh = useCallback(() => {
+    reread();
+    if (userId) void refetchPlans({ cancelRefetch: false });
+  }, [userId, refetchPlans]);
+  useFocusEffect(refresh);
+  useEffect(() => subscribeJoin(refresh), [refresh]);
   const assignments = useMyWorkoutAssignments();
 
   const segments = weekSegments(assignments.data ?? []);
@@ -164,7 +180,7 @@ export default function YouScreen() {
   const name = user?.name?.trim() ?? '';
   const initial = name.charAt(0).toUpperCase();
   const since = memberSince(user?.createdAt);
-  const chargeLine = nextChargeLine(plans.data);
+  const chargeLine = plans.isSuccess && !plans.isStale ? nextChargeLine(plans.data) : null; // a read that worked, not outdated
 
   const open = (item: MoreItem) => {
     if (item.target.type === 'stack') {
@@ -341,7 +357,7 @@ export default function YouScreen() {
         <CoachCodeSheet
           visible
           onClose={() => setSheetOpen(false)}
-          onAttached={() => reread()}
+          onAttached={refresh}
           onChoosePlan={() => navigation.navigate('ClientPackages')}
           onMessageCoach={openCoachThread}
         />

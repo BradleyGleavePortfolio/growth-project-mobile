@@ -8,12 +8,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Alert, Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockNavigate = jest.fn();
 const mockParentNavigate = jest.fn();
+let mockFocus: (() => void) | null = null;
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, getParent: () => ({ navigate: mockParentNavigate }) }),
+  useFocusEffect: (cb: () => void) => { mockFocus = cb; }, // the test calls it when You comes back into view
 }));
 const mockFlags: Record<string, boolean> = {};
 jest.mock('../../../config/featureFlags', () => ({
@@ -39,9 +41,10 @@ jest.mock('../../../hooks/useWorkoutBuilder', () => ({ useMyWorkoutAssignments: 
 const mockGet = jest.fn();
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (...a: unknown[]) => mockGet(...a) } }));
 let mockPlans: unknown[] = [];
+const mockListPlans = jest.fn();
 jest.mock('../../../lib/packagePayment', () => ({
   ...jest.requireActual('../../../lib/packagePayment'),
-  listClientPlans: async () => mockPlans,
+  listClientPlans: () => mockListPlans(),
 }));
 const mockConfirm = jest.fn();
 const mockSignOut = jest.fn();
@@ -65,6 +68,8 @@ jest.mock('../../../ui/charts', () => ({
 
 import YouScreen, { SLEEP_AND_RECOVERY_ROW, nextChargeLine, weekSegments } from '../YouScreen';
 import { planDate } from '../../../lib/planActions';
+import { clearPendingJoin } from '../../../lib/joinPackage';
+import { YOUR_PLANS_QUERY_KEY } from '../../../components/purchase/YourPlansPanel';
 
 const NAV = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'navigation', 'ClientNavigator.tsx'), 'utf8');
 const stackRoutes = (v: string) => Array.from(NAV.matchAll(new RegExp(`<${v}\\.Screen\\s+name="(\\w+)"`, 'g')), (m) => m[1]);
@@ -81,8 +86,9 @@ const REAL_OS = Platform.OS;
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
 afterAll(() => setOS(REAL_OS));
 
+let client: QueryClient;
 function draw() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={client}><YouScreen /></QueryClientProvider>);
 }
 
@@ -93,6 +99,8 @@ beforeEach(() => {
   mockNeedsCoach = false;
   mockAssignments = [];
   mockPlans = [];
+  mockListPlans.mockImplementation(async () => mockPlans);
+  mockFocus = null;
   mockSheet = null;
   mockRing = null;
   mockHealthConnect = false;
@@ -118,6 +126,9 @@ describe('week ring and plan line', () => {
     expect(nextChargeLine([ACTIVE_PLAN as never])).toBe(`Next charge of $149.00 on ${planDate(NEXT)}.`);
     expect(nextChargeLine([{ ...ACTIVE_PLAN, cancelAtPeriodEnd: true } as never])).toBeNull();
     expect(nextChargeLine([])).toBeNull();
+    // The server lists the newest purchase first; the older plan charges sooner, so it is the one named.
+    const SOONER = { ...ACTIVE_PLAN, purchaseId: 'p0', amountCents: 4900, nextChargeAt: '2026-10-30T12:00:00Z' };
+    expect(nextChargeLine([ACTIVE_PLAN, SOONER] as never)).toBe(`Next charge of $49.00 on ${planDate(SOONER.nextChargeAt)}.`);
   });
 });
 
@@ -230,6 +241,54 @@ describe('You home', () => {
     buttons[1].onPress?.();
     expect(mockSignOut).toHaveBeenCalled();
     expect(screen.getByText('The Growth Project v1.0.0')).toBeTruthy();
+  });
+});
+
+describe('B1: the Your plans line follows the plans', () => {
+  const ENDING = { ...ACTIVE_PLAN, cancelAtPeriodEnd: true, nextChargeAt: null, accessEndsAt: NEXT, canCancel: false, canResume: true };
+  const CHARGE = `Your plans, Next charge of $149.00 on ${planDate(NEXT)}., Active`;
+  // The row speaks the next charge and Active, or only "Your plans" when no charge is promised.
+  const shows = (charge: boolean) => waitFor(() => expect(screen.getByLabelText(charge ? CHARGE : 'Your plans')).toBeTruthy());
+
+  it.each<[string, unknown[], unknown[], 'back' | 'attached' | 'paid']>([
+    ['ends the plan on Your plans, then comes Back', [ACTIVE_PLAN], [ENDING], 'back'],
+    ['buys a renewing plan on Your plans, then comes Back', [], [ACTIVE_PLAN], 'back'],
+    ['joins a coach whose code grants a plan, in the code sheet on You', [], [ACTIVE_PLAN], 'attached'],
+    ['pays for a coach-code join in the package sheet over You', [], [ACTIVE_PLAN], 'paid'],
+  ])('%s', async (_what, before, after, how) => {
+    mockNeedsCoach = how !== 'back';
+    mockPlans = [...before];
+    await draw();
+    if (mockNeedsCoach) await fireEvent.press(screen.getByText('Enter a coach code'));
+    await shows(before.length > 0);
+    mockPlans = [...after];
+    await act(async () => {
+      if (how === 'back') mockFocus?.();
+      else if (how === 'attached') mockSheet?.onAttached();
+      else await clearPendingJoin(); // the paid join clears once the server shows the coach
+    });
+    await shows(after.includes(ACTIVE_PLAN));
+  });
+
+  it('End on Your plans outdates the line at once, before the new read answers', async () => {
+    mockPlans = [ACTIVE_PLAN];
+    await draw();
+    await shows(true);
+    let answer: (plans: unknown[]) => void = () => undefined;
+    mockListPlans.mockImplementationOnce(() => new Promise((r) => { answer = r; }));
+    await act(async () => { void client.invalidateQueries({ queryKey: YOUR_PLANS_QUERY_KEY }); });
+    expect(screen.getByLabelText('Your plans')).toBeTruthy();
+    await act(async () => answer([ENDING]));
+    await shows(false);
+  });
+
+  it('a failed read promises no charge (the earlier line is not shown again)', async () => {
+    mockPlans = [ACTIVE_PLAN];
+    await draw();
+    await shows(true);
+    mockListPlans.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => mockFocus?.());
+    await shows(false);
   });
 });
 
