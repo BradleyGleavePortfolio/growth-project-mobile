@@ -92,7 +92,7 @@ Reproduced from the header of `tokens.ts`. Required ratios: 4.5:1 body, 3:1 larg
 
 ## Style C v2 surfaces and chart marks (MOCK-C1V2)
 
-`semanticColors.surface`, `semanticColors.data` and `textOnMastheadMuted` hold the Style C v2 roles from index-v2 section 4. Light values are exactly that table; no value failed its own contrast row. Dark keeps the masthead, forest band, leaf greens, gold and on-dark marks (they were drawn for a dark ground) and moves the light-ground roles: `surface.sage` #17211A, `surface.sageLine` #2A3A2F, `data.forest` #527A5E, `data.peakInk` gold.300, `data.missed` #A09B94, `data.trackLight` #24221F. The shared parts that draw them are in `ui/charts/StyleCMarks.tsx` (docs/charting.md).
+`semanticColors.surface`, `semanticColors.data` and `textOnMastheadMuted` hold the Style C v2 roles from index-v2 section 4. Light values are exactly that table; no value failed its own contrast row. Dark keeps the masthead, forest band, leaf greens, gold and on-dark marks (they were drawn for a dark ground) and moves the light-ground roles: `surface.sage` #17211A, `surface.sageLine` #2A3A2F, `data.forest` #527A5E, `data.peakInk` gold.300, `data.missed` #A09B94, `data.trackLight` #24221F. `surface.forestBandLine` #A8B2A6 is section 5's rest band chip border (60% `textOnAccent` over forest, kept solid), the same in both schemes. The shared parts that draw them are in `ui/charts/StyleCMarks.tsx` (docs/charting.md).
 
 1. Leaf and fern are for dark ground, or as fills with a moss edge. Never use them as text or as a lone mark on bone or cream.
 2. Gold (`data.peak`, gold.300) means a personal best, nothing else. On light ground it always has the `data.peakInk` outline, and it always comes with a star and the words.
@@ -101,7 +101,7 @@ Reproduced from the header of `tokens.ts`. Required ratios: 4.5:1 body, 3:1 larg
 
 The `ui/charts` parts draw on light ground by default, with `onDark` on `surface.masthead`, and with `onBand` on `surface.forestBand`: the ring's done segments only, in leaf (4.98). plannedOnDark (2.89) and missedOnDark as text (4.19) fail on the band, so the ring's types refuse them there.
 
-WCAG 2.x pairs, locked by `__tests__/contrastStyleC.test.ts` in both schemes (text 4.5:1, marks 3:1). `ink` is `colors.ink` in both schemes; charcoal on sage (8.91) is light only.
+WCAG 2.x pairs, locked by `__tests__/contrastStyleC.test.ts` in both schemes (text 4.5:1, marks 3:1). `ink` is `colors.ink` in both schemes. The charcoal rows and deep on the page are light only: dark uses `textMuted` for that text, and deep on the dark page (1.34) waits for the owner's dark review.
 
 | Use | Pair | Light | Dark | Needs |
 | --- | --- | --- | --- | --- |
@@ -112,10 +112,17 @@ WCAG 2.x pairs, locked by `__tests__/contrastStyleC.test.ts` in both schemes (te
 | Best ever label and star | `data.peak` on `surface.masthead` | 7.32 | 7.32 | text 4.5 |
 | Planned arcs and rings | `data.plannedOnDark` on `surface.masthead` | 4.13 | 4.13 | mark 3 |
 | Error card edge | `colors.warningBg` on `surface.masthead` | 12.58 | 12.58 | mark 3 |
+| Error card title | `colors.ink` on `colors.warningBg` | 15.62 | 15.62 | text 4.5 |
+| Error card body | `colors.charcoal` on `colors.warningBg` | 9.77 | 9.77 | text 4.5 |
+| Error card border | `colors.warningInk` on `colors.warningBg` | 4.51 | 4.51 | mark 3 |
+| Effort 3-4 fill on the masthead | `data.fern` on `surface.masthead` | 5.00 | 5.00 | mark 3 |
 | Rest band text | `textOnAccent` on `surface.forestBand` | 9.19 | 9.19 | text 4.5 |
 | Rest band secondary text | `textOnMastheadMuted` on `surface.forestBand` | 5.81 | 5.81 | text 4.5 |
 | Rest ring, done chip check | `data.leaf` on `surface.forestBand` | 4.98 | 4.98 | mark 3 |
+| Rest band chip border | `surface.forestBandLine` on `surface.forestBand` | 4.48 | 4.48 | mark 3 |
+| Gold on the forest band | `data.peak` on `surface.forestBand` | 5.12 | 5.12 | mark 3 |
 | Sage card text | `textPrimary` on `surface.sage` | 14.25 | 13.32 | text 4.5 |
+| Sage card cue text | `colors.charcoal` on `surface.sage` | 8.91 | light only | text 4.5 |
 | Sage card captions | `textMuted` on `surface.sage` | 4.60 | 6.00 | text 4.5 |
 | +20 lb, Changed by Sam | `accentText` on `surface.sage` | 8.03 | 5.41 | text 4.5 |
 | Done set disc, up icon | `data.forest` on `surface.sage` | 8.03 | 3.39 | mark 3 |
@@ -128,11 +135,16 @@ WCAG 2.x pairs, locked by `__tests__/contrastStyleC.test.ts` in both schemes (te
 | Effort 7-8, check in a done disc | `textOnAccent` on `data.forest` | 9.19 | 4.57 | text 4.5 |
 | Effort 9-10 | `textOnAccent` on `data.deep` | 13.14 | 13.14 | text 4.5 |
 | Progress bar fill | `data.forest` on `data.trackLight` | 7.41 | 3.25 | mark 3 |
+| Loading, disabled Start | `textOnDisabled` on `disabledBg` | 5.90 | 4.99 | text 4.5 |
 | Missed number on the page | `data.missed` on `bgPrimary` / `bgSurface` | 4.92 / 5.54 | 6.84 / 6.29 | text 4.5 |
 | Done arcs, selected ring | `data.forest` on `bgPrimary` / `bgSurface` | 8.57 / 9.65 | 3.87 / 3.56 | mark 3 |
 | Moss lines, dots, chip edges | `data.moss` on `bgPrimary` / `bgSurface` | 4.39 / 4.94 | 3.75 / 3.45 | mark 3 |
 | Planned arcs, unfilled chips | `data.planned` on `bgPrimary` / `bgSurface` | 3.47 / 3.91 | 4.75 / 4.37 | mark 3 |
 | Star outline | `data.peakInk` on `bgPrimary` / `bgSurface` | 6.65 / 7.49 | 9.84 / 9.05 | mark 3 |
+| 2/4 label, next set row, today and planned number | `textPrimary` on `bgPrimary` / `bgSurface` | 15.23 / 17.15 | 15.18 / 13.97 | text 4.5 |
+| Skip placeholder, rest number | `textMuted` on `bgPrimary` / `bgSurface` | 4.92 / 5.54 | 6.84 / 6.29 | text 4.5 |
+| Legend and history labels | `colors.charcoal` on `bgPrimary` | 9.52 | light only | text 4.5 |
+| Effort 9-10 fill on the page | `data.deep` on `bgPrimary` | 12.26 | light only | mark 3 |
 
 Decorative, no ratio needed: `surface.sageLine`, `data.trackLight`, and the gold star fill on bone (1.68; the outline carries it).
 

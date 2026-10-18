@@ -198,7 +198,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
             <Ionicons name="chevron-back" size={20} color={sc.textMuted} />
           </HapticPressable>
           <Pressable onPress={() => { void HapticService.softImpact(); p.onDateChange(today); }} accessibilityRole="button"
-            accessibilityLabel={isToday ? 'Viewing today' : `Viewing ${dayLabel}, tap to go to today`} style={s.shrink}>
+            accessibilityLabel={isToday ? 'Viewing today' : `Viewing ${dayLabel}, tap to go to today`} hitSlop={{ top: 16, bottom: 16 }} style={s.shrink}>
             <Text style={[s.eyebrow, s.ink]}>{dayLabel.toUpperCase()}</Text>
           </Pressable>
           <HapticPressable intent="light" disableAnimation onPress={() => p.onDateChange(addDays(p.selectedDate, 1))} hitSlop={12}
