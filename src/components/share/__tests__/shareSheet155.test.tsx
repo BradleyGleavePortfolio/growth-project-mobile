@@ -143,10 +143,10 @@ it('board 4: the Session summary has a Share link under each record line only wi
   await fireEvent.press(s.getByRole('button', { name: 'Share Back squat at 225 lb' }));
   [s.getByText('Recent best'), s.getByText('The heaviest in your last 50 saved workouts.'),
     s.getByText('In this card: this lift, its weight and the date.')].forEach((n) => expect(n).toBeTruthy());
-  s.unmount();
+  await s.unmount();
   const empty = await wrap(<WorkoutFinishSummary summary={{ ...summary, records: [] } as never} {...props} />);
   expect(empty.queryByRole('button', { name: /^Share/ })).toBeNull();
-  empty.unmount();
+  await empty.unmount();
   mockFlags = { shareSheetV2: false, shareSendV1: false };
   const off = await wrap(<WorkoutFinishSummary summary={summary as never} {...props} />);
   expect(off.queryByRole('button', { name: 'Share Back squat at 225 lb' })).toBeNull();
@@ -163,6 +163,7 @@ it('a 400 from a server without share cards (or 409, no coach) is "not available
   mockPost.mockRejectedValueOnce(axiosError(400));
   const s = await show();
   await fireEvent.press(await s.findByRole('button', { name: 'Send to Sam' }));
+  await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(s.queryByRole('button', { name: 'Send to Sam' })).toBeNull());
   expect(s.getByRole('button', { name: 'Share outside the app' })).toBeTruthy();
   expect(s.getByText(FOOT_OUTSIDE)).toBeTruthy();
