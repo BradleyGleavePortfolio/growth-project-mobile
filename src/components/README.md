@@ -1,5 +1,17 @@
 # Components
 
+C8V2-2A adds opt-in `variant="dark"` on `progress/WeightTrendChart` and
+`progress/PeriodTabs`, requiring `clientProgressV2` (off by default).
+`weightTrend.ts` smooths full history in pounds before 7D/30D/All filtering.
+Visible tabs read Week/Month/All. `WeightTrendChartDark` composes TgpLineChart:
+trend, readings, decorative usual-range ribbon, labelled optional goal except
+Week, dashed gaps, latest/pending rings, hold/drag and adjustable day-by-day
+inspection. Detail includes legend, textual range and smoothing explanation
+on the page colour. The dark part owns 24 pt gutters; use it full width below
+the masthead title/number. Overview omits band/legend. Caller supplies authorized full
+history, optional goal and coach name, pending state and through date. No reads,
+writes, coach lock or screen wiring. Full state frames remain C8 PR 13.
+
 CAC-POLISH: `roman/RomanLoadingSkeleton.tsx` is the existing Roman loading state shared by the first coach-consent read and the room read, with the same spoken label and Reduce Motion support. The initial consent read keeps a working Back action; it never mounts the room early. `ai/AiRefusalNotice.tsx` uses `radius.card` (16) for every refusal card, compact or full, and `radius.button` (12) for every primary and secondary action; refusal handling and wording are unchanged.
 
 Shared, screen-agnostic UI. Anything that more than one screen renders, or anything that owns its own animation / lifecycle, lives here. Tokenised — no hardcoded hex, no inline radius / shadow values.
