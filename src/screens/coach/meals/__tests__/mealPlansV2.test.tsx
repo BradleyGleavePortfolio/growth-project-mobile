@@ -26,7 +26,7 @@ function mockRoute(method: string, url: string, body: Row = {}): Promise<{ data:
   if (body.slots) body = { ...body, slots: body.slots.map((x: Row, i: number) => ({ id: `n${i}`, ...x })) };
   let data: unknown;
   if (kind === 'meal-plan') data = { assignments: mockDb.assignments.filter((a) => a.client_id === 'c1' && a.starts_on.slice(0, 10) <= toIsoDate(new Date()) // Maya's /me/meal-plan/today: every covering
-    && (!a.ends_on || a.ends_on.slice(0, 10) >= toIsoDate(new Date()))).sort((a, b) => b.starts_on.localeCompare(a.starts_on)).map((a) => ({ ...a, daily_meal_plan: plan(mockDb.plans.find((x) => x.id === a.daily_meal_plan_id)) })) };
+    && (!a.ends_on || a.ends_on.slice(0, 10) >= toIsoDate(new Date()))).sort((a, b) => b.starts_on.localeCompare(a.starts_on)).map((a) => ({ ...a, daily_meal_plan: plan(mockDb.plans.find((x) => x.id === a.daily_meal_plan_id) as Row) })) };
   else if (kind === 'clients') data = { calories_kcal: 2100, protein_g: 160, carbs_g: 220, fats_g: 70 };
   else if (kind === 'meal-templates') {
     if (method === 'GET') data = live(mockDb.meals);
