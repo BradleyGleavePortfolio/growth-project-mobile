@@ -166,7 +166,8 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
                 <View style={[tile, { backgroundColor: sc.surface.masthead }]} testID="progress-strength">
                   <Text style={[typography.eyebrow, muted]}>Strength</Text>
                   {best.isNew ? <View style={s.row}><PeakStar onDark /><Text style={[typography.bodyMd, { color: sc.data.peak }]}>New best</Text></View> : null}
-                  <Text style={[s.mid, light]}>{`${formatWeight(P.toUnit(best.weight, unit))} ${unit} \u00d7 ${best.reps}`}</Text>
+                  <Text style={[s.mid, light]}>{formatWeight(P.toUnit(best.weight, unit))}
+                    <Text style={[typography.bodyMd, light]}>{` ${unit} \u00d7 ${best.reps}`}</Text></Text>
                   <Text style={[typography.bodySmall, muted]}>{`${best.name}, ${short(best.date)}`}</Text>
                 </View>
               ) : null}
@@ -174,9 +175,11 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
                 <View style={[tile, { backgroundColor: sc.surface.sage }]} testID="progress-training">
                   <Text style={[typography.eyebrow, { color: sc.textMuted }]}>Training</Text>
                   {plan ? (
-                    <View style={s.row} accessible accessibilityLabel={`${plan.done} of ${plan.total} done, this week`}>
-                      <SegmentedRing segments={plan.segments} size={64} label={`${plan.done} of ${plan.total} done`} />
-                      <View style={s.flex}>
+                    <View style={[s.row, s.wrap]} accessible accessibilityLabel={`${plan.done} of ${plan.total} done, this week`}>
+                      <SegmentedRing segments={plan.segments} size={64} label={`${plan.done} of ${plan.total} done`}>
+                        <Text style={[typography.bodyMd, ink]}>{`${plan.done}/${plan.total}`}</Text>
+                      </SegmentedRing>
+                      <View style={s.ringText}>
                         <Text style={[typography.bodyMd, ink]}>{`${plan.done} of ${plan.total} done`}</Text>
                         <Text style={[typography.bodySmall, { color: sc.textMuted }]}>This week</Text>
                       </View>
@@ -230,11 +233,13 @@ const s = StyleSheet.create({
   center: { textAlign: 'center' },
   chip: { gap: 6, minHeight: 44, paddingHorizontal: 14, borderWidth: 1, borderRadius: radius.button },
   big: { ...serif, fontSize: 64, lineHeight: 80 },
-  mid: { ...serif, fontSize: 34, lineHeight: 43 },
+  mid: { ...serif, fontSize: 30, lineHeight: 38 },
   disc: { width: 32, height: 32, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   gutter: { paddingHorizontal: 24, gap: 24 },
   gutterTop: { paddingTop: 24 },
-  tile: { alignSelf: 'stretch', borderRadius: radius.card, padding: 20, gap: 8 },
+  tile: { alignSelf: 'stretch', borderRadius: radius.card, padding: 16, gap: 8 },
   grow: { flex: 1 },
   bars: { alignItems: 'flex-end', gap: 6, height: 40 },
+  wrap: { flexWrap: 'wrap' },
+  ringText: { flexBasis: 50, flexGrow: 1, gap: 2 },
 });
