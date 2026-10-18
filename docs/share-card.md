@@ -6,9 +6,17 @@ SHARE-A (owner 10-17 #SHARE-SEND op 1): with `featureFlags.shareSheetV2` (off in
 registered. Share on the Progress run line and under each recent best on the Session summary opens
 `src/components/share/ShareSheet.tsx` over the screen, with `runCard` / `bestCard` from `shareCards.tsx` (number, words,
 dates, app name; each says what is in it and what is not). Coached with `featureFlags.shareSendV1` (off), Send to {coach}
-posts `{ card: { type: 'share', snapshot }, client_message_id }` to `POST /messages` (`src/api/shareCardApi.ts`, backend
-SHARE-BE; a 400 is a server without share cards and a 409 no current coach, so Send goes). The thread bubble and
-outbox are mobile PR B.
+posts `{ card: { type: 'share', snapshot }, client_message_id }` to `POST /messages` (backend SHARE-BE) through the
+client's thread outbox (`services/messageOutbox` `sendCardViaOutbox`, SHARE-B). The outbox retains a NO_COACH_ASSIGNED card and waits for a valid current coach; other permanent 4xx refusals
+use the unavailable path.
+
+SHARE-B (same flag): thread rows carry `card` (`readShareCard` keeps a `share` card it can draw). Both threads draw it
+as the same forest card under "Shared progress" on cream (`SharedCard`), the client's on the right and the coach's
+view on the left; the coach inbox, and the client's, say "Shared a card" when the newest message is one. The sheet
+sends through the client's thread outbox in either thread style (`outboxOn`: `c3StyleB` or `shareSendV1`), so offline
+the card waits in the thread ("Waiting to send") and sends on reconnect, thread open or not; a failed one says "Not
+sent. Tap to send again" in the sheet and in either thread; the tap replays its key through the outbox, with or
+without server v2 (`messaging_core_v2` also offers long press, Send again).
 
 ## Implementation
 

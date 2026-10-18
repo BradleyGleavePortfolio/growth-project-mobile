@@ -1,5 +1,6 @@
 /**
- * Hooks over the Style B outbox (services/messageOutbox, C3B-THREAD-R1).
+ * Hooks over the Style B outbox (services/messageOutbox, C3B-THREAD-R1). They run while `outboxOn()`: featureFlags.c3StyleB
+ * (every send) or shareSendV1 (SHARE-B: a share card, either thread style).
  *
  * useMessageOutboxDrain, mounted once by ClientNavigator next to useAiWithdrawalDrain: sends the signed-in client's
  * waiting messages when the app opens, when the signal returns and when the app comes back to the foreground, whether
@@ -10,10 +11,10 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { featureFlags } from '../config/featureFlags';
 import {
   drainOutbox,
   hydrateOutbox,
+  outboxOn,
   readOutbox,
   releaseOutbox,
   subscribeOutbox,
@@ -27,10 +28,10 @@ export function useMessageOutboxDrain(): void {
   const uid = useCurrentUser()?.id ?? null;
   const online = isEffectivelyOnline(useNetworkStatus());
   useEffect(() => {
-    if (featureFlags.c3StyleB && uid && online) void drainOutbox(uid);
+    if (outboxOn() && uid && online) void drainOutbox(uid);
   }, [uid, online]);
   useEffect(() => {
-    if (!featureFlags.c3StyleB || !uid) return undefined;
+    if (!outboxOn() || !uid) return undefined;
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') void drainOutbox(uid);
     });
