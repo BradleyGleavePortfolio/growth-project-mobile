@@ -116,6 +116,8 @@ export function installForegroundHandler(): () => void {
   // Write to the in-app banner store instead.
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
     const { title, body } = notification.request.content;
+    const data = notification.request.content.data;
+    const deepLink = data?.deepLink ?? data?.deep_link;
     foregroundBannerStore.getState().showBanner({
       title: title ?? '',
       body: body ?? '',
@@ -124,6 +126,7 @@ export function installForegroundHandler(): () => void {
       // includes them. Fall through to undefined if absent.
       actionScreen: (notification.request.content.data?.actionScreen as string) ?? undefined,
       actionParams: (notification.request.content.data?.actionParams as Record<string, string>) ?? undefined,
+      ...(typeof deepLink === 'string' ? { deepLink } : {}),
     });
   });
 
@@ -141,6 +144,7 @@ export type NotificationResponseCallback = (
   actionScreen?: string,
   actionParams?: Record<string, string>,
   notificationId?: string,
+  deepLink?: string,
 ) => void;
 
 /**
@@ -170,7 +174,12 @@ function dispatchResponse(
     typeof data?.actionScreen === 'string' ? data.actionScreen : fallbackScreenForKind(data?.kind);
   // Untrusted payload: decode to a bounded string map (audit #304 Sol C2).
   const actionParams = decodePushParams(data?.actionParams);
-  onResponse(actionScreen, actionParams, request?.identifier);
+  const deepLink = data?.deepLink ?? data?.deep_link;
+  if (typeof deepLink === 'string') {
+    onResponse(actionScreen, actionParams, request?.identifier, deepLink);
+  } else {
+    onResponse(actionScreen, actionParams, request?.identifier);
+  }
 }
 
 /**

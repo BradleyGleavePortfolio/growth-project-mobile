@@ -1,5 +1,7 @@
 # Notifications — Phase 9
 
+URL-bearing inbox rows retain `deepLink` / `deep_link` during normalization and use the same trusted, role-aware receiver as native and foreground push taps. Meal-plan links open the existing client daily meal plan, specific booking/alert actions retain their params, and untrusted origins never fall through to direct navigation. Rows without a URL retain their existing routing.
+
 The global system-notification center for The Growth Project mobile app. This is distinct from the Phase 8 coach command-center inbox (`/coach/command-center/inbox`) — that surface covers direct coach–client messages. This center covers every other notification kind the platform can emit: coach notes, milestones, build-week gate approvals, system alerts, reminders, and coaching tips, for both client and coach roles.
 
 ---

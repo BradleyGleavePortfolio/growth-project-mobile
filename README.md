@@ -421,6 +421,8 @@ src/
 
 ## Navigation
 
+Incoming app links validate scheme and HTTPS host once in `navigation/incomingLinks.ts`; cold-start URLs, foreground opens and push URL payloads share the existing role-aware navigation queue. Client meal-plan assignment links open the existing daily meal-plan screen after sign-in, not the coach navigator. See `src/navigation/README.md`.
+
 Coach tabs (COACHTABS, behind `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off): Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from a gear on Overview, Community from Messages and Team from Clients; every existing route and push target still lands. With it on, coaches open the app on Overview. Off, the coach bar and the Clients landing are unchanged. See `src/navigation/README.md`.
 
 New clients complete the consultation (the unmounted lean LeanQ1–LeanQ6 flow was deleted in ONBQ-TILES). Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
@@ -682,10 +684,11 @@ Four-tier channel/category system registered at app bootstrap:
 
 ### Share Card
 
-Three card variants: `streak`, `pr`, `transformation`.
+With `featureFlags.shareSheetV2` (off in every build): one `src/components/share/ShareSheet.tsx` over Progress or the
+Session summary, and no `ShareCard` route (SHARE-A). Off: one card variant, `streak`.
 
-- Screen: `src/screens/share/ShareCardScreen.tsx`
-- Navigation: `MoreStackParamList.ShareCard`
+- Screen (flag off): `src/screens/share/ShareCardScreen.tsx`
+- Navigation (flag off): `MoreStackParamList.ShareCard`
 - Capture: `react-native-view-shot` (requires native build)
 - Share: `expo-sharing`
 - Analytics: fires `REFERRAL_SHARE_CARD_SHARED` on share

@@ -71,6 +71,7 @@ import PreferencesScreen from '../screens/client/PreferencesScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
 // Phase 7B — Transformation Timeline
 import TimelineScreen from '../screens/client/TimelineScreen';
+import TimelinePage from '../screens/client/timeline/TimelinePage';
 // Phase 7C — Peer Leaderboard
 import LeaderboardScreen from '../screens/client/LeaderboardScreen';
 import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
@@ -278,7 +279,8 @@ export type MoreStackParamList = {
   // B-314-4: Community safety opens from member wins even when the
   // flag-gated Community tab (which has its own CommunitySafety route) is off.
   CommunitySafety: undefined;
-  Progress:    undefined;
+  /** logWeightAt: the Timeline's empty state opens the Log weight sheet (tap time, so each tap opens it). */
+  Progress:    { logWeightAt?: number } | undefined;
   ProfileMain: undefined;
   EditProfile: undefined;
   Settings:    undefined;
@@ -416,6 +418,8 @@ const HomeStackNav  = createNativeStackNavigator<HomeStackParamList>();
 const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
 const MoreStackNav  = createNativeStackNavigator<MoreStackParamList>();
 const CalendarStackNav = createNativeStackNavigator<CalendarStackParamList>();
+// TIMELINE: the Style C page behind clientTimelineV2 (off); off, today's screen.
+const TimelineRoute = featureFlags.clientTimelineV2 ? TimelinePage : TimelineScreen;
 
 function CalendarStackNavigator() {
   return (
@@ -536,7 +540,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
       <MoreStackNav.Screen name="Progress" options={backOnlyHeader()}>
-        {({ navigation }) => <ProgressScreen onSaved={() => {
+        {({ navigation, route }) => <ProgressScreen logWeightAt={route.params?.logWeightAt} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('logged_first_weight');
         }} />}
       </MoreStackNav.Screen>
@@ -562,7 +566,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
-      <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="Timeline"     component={TimelineRoute} options={backOnlyHeader()} />
       {/* Phase 7C — Peer Leaderboard (opt-in) */}
       <MoreStackNav.Screen name="Leaderboard"          component={LeaderboardScreen} />
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
@@ -590,8 +594,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           {() => <RomanChatScreen surface="client" />}
         </MoreStackNav.Screen>
       )}
-      {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
-      <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
+      {/* Phase 11 — Share Card. With featureFlags.shareSheetV2 (SHARE-A) the route goes: Share opens ShareSheet in place. */}
+      {featureFlags.shareSheetV2 ? null : <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />}
       {/* Phase 11 — Notification category preferences (push taxonomy). */}
       <MoreStackNav.Screen name="NotificationPreferences" component={NotificationCategoryPreferencesScreen} />
       {/* Full notification settings (Mute all, per-category switches) for client Settings. */}
