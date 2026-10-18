@@ -85,7 +85,7 @@ describe('TimelinePage', () => {
     expect(screen.getByText('7 days of check-ins in a row')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByText('No check-in').props.style).color).toBe(lightTokens.data.missed);
     expect(screen.queryByText(/Sam|coach|wrote to you/i)).toBeNull();
-    expect(mockFetch).toHaveBeenCalledWith({ sinceDays: 365, limit: 20 });
+    expect(mockFetch).toHaveBeenCalledWith({ sinceDays: 365, limit: 20, lanes: ['body', 'win', 'friction'] });
   });
 
   it('empty: one sentence, and Log weight opens the weigh-in sheet on Progress', async () => {
@@ -136,7 +136,7 @@ describe('TimelinePage', () => {
     expect(screen.getByText('Weighed in at 82.4 kg')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('timeline-more-error-retry'));
     await waitFor(() => expect(screen.getByText('No check-in')).toBeTruthy());
-    expect(mockFetch).toHaveBeenLastCalledWith({ sinceDays: 365, limit: 20, cursor: 'c1' });
+    expect(mockFetch).toHaveBeenLastCalledWith({ sinceDays: 365, limit: 20, lanes: ['body', 'win', 'friction'], cursor: 'c1' });
     expect(screen.getAllByText('Weighed in at 82.4 kg')).toHaveLength(1);
   });
 });

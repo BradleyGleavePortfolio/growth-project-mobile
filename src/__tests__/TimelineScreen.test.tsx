@@ -166,7 +166,7 @@ describe('TimelineScreen', () => {
     });
   });
 
-  it('calls API without lanes parameter when All is selected', async () => {
+  it('names the three lanes when All is selected, so no server sends coach notes', async () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
     const { getByText } = await renderScreen();
     await waitFor(() => expect(getByText('All')).toBeTruthy());
@@ -177,7 +177,7 @@ describe('TimelineScreen', () => {
 
     await waitFor(() => {
       const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1][0];
-      expect(lastCall?.lanes).toBeUndefined();
+      expect(lastCall?.lanes).toEqual(['body', 'win', 'friction']);
     });
   });
 

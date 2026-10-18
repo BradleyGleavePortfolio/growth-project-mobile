@@ -10,7 +10,7 @@ import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type ParamListBase } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { fetchTimeline, type TimelineEvent } from '../../../services/timelineApi';
+import { fetchTimeline, type TimelineEvent, type TimelineLane } from '../../../services/timelineApi';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { PrimaryButton, Screen } from '../../../ui';
 import { QuietError, isConnectionFailure } from '../../../ui/states/QuietStates';
@@ -29,7 +29,9 @@ export const TIMELINE_COPY = {
   noAnswer: 'Check the connection and try again.',
 } as const;
 
-const PAGE = { sinceDays: 365, limit: 20 } as const;
+// Lanes by name: a server before b#1078 never sends its coach lane here either.
+const LANES: TimelineLane[] = ['body', 'win', 'friction'];
+const PAGE = { sinceDays: 365, limit: 20, lanes: LANES };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const localDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

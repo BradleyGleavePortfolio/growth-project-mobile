@@ -85,7 +85,8 @@ function useTimeline(activeLanes: TimelineLane[]) {
       try {
         const result = await fetchTimeline({
           sinceDays: 365,
-          lanes: activeLanes.length === ALL_LANES.length ? undefined : activeLanes,
+          // Named lanes even for All: a server before b#1078 never sends its coach lane here.
+          lanes: activeLanes,
           cursor,
           limit: 20,
         });
