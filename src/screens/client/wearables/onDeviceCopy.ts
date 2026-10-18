@@ -435,9 +435,26 @@ export function cloudReturnedErrorMessage(name: string): OnDeviceMessage {
   };
 }
 
+/**
+ * A6 (AUTHB-05): a returned link that could not be finished. A refused ticket
+ * (expired, used or someone else's: 400) or a drifted reply did not finish;
+ * any other HTTP failure gets the cloud connect copy for its status.
+ */
+export function cloudFinishFailureMessage(err: unknown, name: string): OnDeviceMessage {
+  return axios.isAxiosError(err) && statusOf(err) !== 400
+    ? cloudConnectFailureMessage(err, name)
+    : cloudReturnedErrorMessage(name);
+}
+
 /** True when the auth-session return URL reports a failed connect. */
 export function cloudReturnFailed(url: string | null | undefined): boolean {
   return typeof url === 'string' && /[?&]status=error(?:&|#|$)/.test(url);
+}
+
+/** A6 (AUTHB-05): the single-use ticket a good return URL carries, or null. */
+export function cloudReturnTicket(url: string | null | undefined): string | null {
+  const match = typeof url === 'string' ? /[?&]ticket=([A-Za-z0-9_-]+)/.exec(url) : null;
+  return match ? match[1] : null;
 }
 
 export function cloudSessionLockedMessage(name: string): OnDeviceMessage {
