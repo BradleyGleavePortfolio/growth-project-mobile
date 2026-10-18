@@ -101,10 +101,11 @@ function wireRow(id: string, name: string, activity?: Activity, archived = false
 type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 const navigate = jest.fn();
 let focusListener: (() => void) | null = null;
-async function mount(insets?: EdgeInsets) {
-  // Only navigate() and the focus listener are read by the screen.
+async function mount(insets?: EdgeInsets, focused = true) {
+  // Only navigate(), isFocused() and the focus listener are read by the screen.
   const navigation = {
     navigate,
+    isFocused: () => focused,
     addListener: (_type: string, cb: () => void) => {
       focusListener = cb;
       return () => undefined;
@@ -290,6 +291,19 @@ describe('Clients list screen', () => {
       data: [wireRow('c1', 'Ana Lopez', { shared: true, last_active_on: localDay(0), check_ins_to_review: 1 })],
     });
     await act(async () => focusListener?.());
+    expect(mockGetClients.mock.calls.length).toBe(before + 1);
+    expect(await screen.findByText('1 to review')).toBeTruthy();
+  });
+
+  it('LO-773 N1: mounted unseen (six tabs: Clients opens with the app), the first visit reloads in place', async () => {
+    mockGetClients.mockResolvedValue({ data: [wireRow('c1', 'Ana Lopez')] });
+    await mount(undefined, false);
+    await screen.findByText('Ana Lopez');
+    const before = mockGetClients.mock.calls.length;
+    mockGetClients.mockResolvedValue({
+      data: [wireRow('c1', 'Ana Lopez', { shared: true, last_active_on: localDay(0), check_ins_to_review: 1 })],
+    });
+    await act(async () => focusListener?.()); // the first visit
     expect(mockGetClients.mock.calls.length).toBe(before + 1);
     expect(await screen.findByText('1 to review')).toBeTruthy();
   });

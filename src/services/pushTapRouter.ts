@@ -56,6 +56,8 @@ interface Target {
    * opened by a push still reaches Settings, sign out and account deletion).
    */
   initial?: false;
+  /** true when `screen` is its stack's root: back to the open one, never a second copy (LO-773 N4). */
+  pop?: true;
   /** Fixed params for a root-only target (merged over the push's own). */
   params?: Record<string, string>;
 }
@@ -98,13 +100,17 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
 
 /** Coach destinations. Root = CoachNavigator tab names. */
 export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
-  Messages: () => ({ root: 'Messages' }),
+  // COACH-CHAT-BACK: with the six tabs Messages is a stack; a message push opens its inbox, not a chat left open there.
+  Messages: () => (featureFlags.coachTabsV2 ? { root: 'Messages', screen: 'MessagesInbox', pop: true } : { root: 'Messages' }),
   NotificationCenter: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   Notifications: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
   // S-SCHED: coach booking pushes open the booking inbox.
   // COACHTABS: with the six tabs the booking inbox is the Calendar tab's root.
-  CoachBookingInbox: () => ({ root: featureFlags.coachTabsV2 ? 'CalendarStack' : 'ClientsStack', screen: 'CoachBookingInbox' }),
+  CoachBookingInbox: () =>
+    featureFlags.coachTabsV2
+      ? { root: 'CalendarStack', screen: 'CoachBookingInbox', pop: true }
+      : { root: 'ClientsStack', screen: 'CoachBookingInbox' },
   // B-R1F: a Roman safety alert push or inbox row sent before 57d opens
   // Command Center > Actions.
   CoachActionQueue: () => ({ root: 'CommandCenter', params: { tab: 'action-queue' } }),
@@ -125,8 +131,8 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   // (whose gated wrapper would only say the packs are not sold here).
   CreditPackCheckout: () =>
     creditPacksHidden()
-      ? { root: 'SettingsStack', screen: 'SettingsHome' }
-      : { root: 'SettingsStack', screen: 'CreditPackCheckout' },
+      ? { root: 'SettingsStack', screen: 'SettingsHome', pop: true }
+      : { root: 'SettingsStack', screen: 'CreditPackCheckout', initial: false },
   CommunityEventDetail: () =>
     featureFlags.coachCommunity && featureFlags.communityEvents
       ? { root: 'CommunityStack', screen: 'CoachCommunityEvents' }
@@ -313,6 +319,7 @@ function deliver(
         screen: target.screen,
         params,
         ...(target.initial === false ? { initial: false } : {}),
+        ...(target.pop ? { pop: true } : {}),
       });
     } else {
       nav.navigate(target.root, target.params ? { ...params, ...target.params } : params);

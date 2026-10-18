@@ -27,14 +27,12 @@ export function FoodLogReviewSection({
   clientId,
   profile,
   onOpenMessages,
-  onOpenMealPlans,
   colors,
   styles,
 }: {
   clientId: string;
   profile?: ClientProfile | null;
   onOpenMessages?: () => void;
-  onOpenMealPlans?: () => void;
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
@@ -103,11 +101,6 @@ export function FoodLogReviewSection({
             <Text style={styles.actionPillText}>Send feedback</Text>
           </TouchableOpacity>
         ) : null}
-        {onOpenMealPlans ? (
-          <TouchableOpacity style={styles.actionPill} onPress={onOpenMealPlans} accessibilityRole="button">
-            <Text style={styles.actionPillText}>Meal plans</Text>
-          </TouchableOpacity>
-        ) : null}
         <TouchableOpacity
           style={styles.actionPill}
           onPress={() => { void load(); void currentTarget.refetch(); }}
@@ -128,8 +121,8 @@ export function FoodLogReviewSection({
         <View style={styles.emptyCard}>
           <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
           <Text style={styles.emptyText}>{error}</Text>
-          <TouchableOpacity onPress={load} accessibilityRole="button">
-            <Text style={[styles.actionPillText, { marginTop: 8 }]}>Retry</Text>
+          <TouchableOpacity style={styles.textAction} onPress={load} accessibilityRole="button">
+            <Text style={styles.actionPillText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : grouped.length === 0 ? (

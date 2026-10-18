@@ -23,6 +23,7 @@
 import React from 'react';
 import { Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CommunityTermsGate from '../components/community/CommunityTermsGate';
 import { Colors } from '../theme';
@@ -45,8 +46,9 @@ const CoachCommunityStack =
  * terms agreement, so a deep link or push into any Community route asks first.
  */
 export default function CoachCommunityNavigator(): React.ReactElement {
+  const navigation = useNavigation();
   return (
-    <CommunityTermsGate>
+    <CommunityTermsGate onBack={featureFlags.coachTabsV2 ? () => navigation.goBack() : undefined}>
       <CoachCommunityNavigatorStack />
     </CommunityTermsGate>
   );

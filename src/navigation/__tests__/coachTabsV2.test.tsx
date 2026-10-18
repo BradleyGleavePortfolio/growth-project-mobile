@@ -9,8 +9,10 @@
  */
 import React from 'react';
 import { Platform, Text } from 'react-native';
-import { NavigationContainer, createNavigationContainerRef, type ParamListBase } from '@react-navigation/native';
-import { act, fireEvent, render, within } from '@testing-library/react-native';
+import {
+  NavigationContainer, createNavigationContainerRef, useNavigation, type NavigationProp, type ParamListBase,
+} from '@react-navigation/native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -47,6 +49,25 @@ function ClientsListProbe() {
   return <Text>{`ClientsList team:${team}`}</Text>;
 }
 jest.doMock('../../screens/coach/ClientsListScreen', () => ({ __esModule: true, default: ClientsListProbe }));
+// COACHTABS-NAV: the inbox, a client's file and a chat open the next screen the way the real ones do.
+function probe(label: string, go: (navigation: NavigationProp<ParamListBase>) => void) {
+  return function Probe() {
+    const navigation = useNavigation<NavigationProp<ParamListBase>>();
+    return <Text onPress={() => go(navigation)}>{label}</Text>;
+  };
+}
+const CHAT = { clientId: 'client-1', clientName: 'Sam' };
+type Tap = (navigation: NavigationProp<ParamListBase>) => void;
+const chatTap: Tap = (n) => require('../coachInbox').openInboxChat(n, CHAT.clientId, CHAT.clientName);
+let inboxTap = chatTap; // the inbox's chat row; the header-entry rows swap in Broadcasts or Community reports
+const PROBES: [string, Tap][] = [
+  ['MessagesScreen', (n) => inboxTap(n)],
+  ['ClientDetailScreen', (n) => n.navigate('ClientMessages', CHAT)],
+  ['ClientMessagesScreen', (n) => n.navigate('ContactView', { contactId: CHAT.clientId, displayName: CHAT.clientName })],
+];
+for (const [name, go] of PROBES) {
+  jest.doMock(`../../screens/coach/${name}`, () => ({ __esModule: true, default: probe(`../screens/coach/${name}`, go) }));
+}
 jest.doMock('../../screens/coach/ed/FirstPaymentWowHost', () => ({
   __esModule: true, default: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -69,6 +90,7 @@ beforeEach(() => {
   mockCommandCenter.__USING_MOCK_DATA = true;
   mockTeam.hasSubCoaches = true;
   HapticService.selection.mockClear();
+  inboxTap = chatTap;
 });
 afterAll(() => Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS }));
 
@@ -185,12 +207,13 @@ it.each([true, false])('coachTabsV2 %s: every navigate() and push target lands o
 // every coach push into Clients through the real push router. Each row is a fresh launch, then Messages, then the jump.
 // Flag off (real coaches land on Clients) behaves the same as today.
 const SRC = path.join(__dirname, '..', '..');
+const SOURCES = fs.readdirSync(SRC, { encoding: 'utf8', recursive: true })
+  .filter((file) => /\.tsx?$/.test(file) && !file.includes('__tests__'))
+  .map((file) => [path.basename(file), fs.readFileSync(path.join(SRC, file), 'utf8')] as const);
 const jumps = new Map<string, string>();
-for (const file of fs.readdirSync(SRC, { encoding: 'utf8', recursive: true })) {
-  if (!/\.tsx?$/.test(file) || file.includes('__tests__')) continue;
-  const source = fs.readFileSync(path.join(SRC, file), 'utf8');
+for (const [file, source] of SOURCES) {
   for (const [, screen] of source.matchAll(/navigate\(\s*["']ClientsStack["'],\s*\{\s*screen:\s*["'](\w+)["']/g)) {
-    if (screen !== 'ClientsList') jumps.set(`${path.basename(file)} > ${screen}`, screen);
+    if (screen !== 'ClientsList') jumps.set(`${file} > ${screen}`, screen);
   }
 }
 const intoClients = (on: boolean) => {
@@ -221,4 +244,135 @@ it.each([...intoClients(true), ...intoClients(false)])('coachTabsV2 %s: %s opens
   await act(async () => ref.navigate('Messages'));
   await fireEvent.press(view.getByRole('tab', { name: /^Clients, tab/ }));
   expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['ClientsStack', 'ClientsList']);
+});
+
+// COACH-CHAT-BACK (owner op 1: "Chats get their own place in the Messages tab, like any inbox"). The inbox probe
+// opens a chat with the real `openInboxChat` both inboxes use; a client's file opens it the way ClientDetail does.
+const stackOf = (tab: string) => ref.getRootState().routes.find((r) => r.name === tab)?.state?.routes.map((r) => r.name);
+const MESSAGES_TAB = tabName('Messages', 5);
+
+it('flag on: a chat opened from Messages opens in Messages; Back (also from its contact page) and the Messages tab return to the inbox', async () => {
+  mockCommandCenter.__USING_MOCK_DATA = false; // what ships: the coach lands on Overview
+  const view = await mount();
+  await fireEvent.press(view.getByRole('tab', { name: MESSAGES_TAB }));
+  await fireEvent.press(view.getByText('../screens/coach/MessagesScreen'));
+  expect([focusedTab(), stackOf('Messages'), stackOf('ClientsStack')]).toEqual(['Messages', ['MessagesInbox', 'ClientMessages'], ['ClientsList']]);
+  expect(view.getByRole('tab', { name: MESSAGES_TAB })).toBeSelected();
+  await fireEvent.press(view.getByText('../screens/coach/ClientMessagesScreen'));
+  expect(stackOf('Messages')).toEqual(['MessagesInbox', 'ClientMessages', 'ContactView']);
+  await act(async () => ref.goBack());
+  expect(ref.getCurrentRoute()?.name).toBe('ClientMessages');
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['Messages', 'MessagesInbox']);
+  await fireEvent.press(view.getByText('../screens/coach/MessagesScreen'));
+  await fireEvent.press(view.getByRole('tab', { name: MESSAGES_TAB }));
+  await waitFor(() => expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['Messages', 'MessagesInbox']));
+});
+
+it("flag on: a chat opened from a client's file stays in Clients; Back returns to the file", async () => {
+  const view = await mount();
+  await act(async () => ref.navigate('ClientsStack', { screen: 'ClientDetail', params: CHAT }));
+  await fireEvent.press(view.getByText('../screens/coach/ClientDetailScreen'));
+  expect([focusedTab(), stackOf('ClientsStack'), stackOf('Messages')]).toEqual(['ClientsStack', ['ClientsList', 'ClientDetail', 'ClientMessages'], undefined]);
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['ClientsStack', 'ClientDetail']);
+});
+
+it("flag off: Messages is today's single screen; its chat opens in Clients and Back lands on the client list", async () => {
+  mockFlags.coachTabsV2 = false;
+  mockCommandCenter.__USING_MOCK_DATA = false;
+  const view = await mount();
+  await fireEvent.press(view.getByRole('tab', { name: 'Messages, tab, 4 of 7' }));
+  await fireEvent.press(view.getByText('../screens/coach/MessagesScreen'));
+  expect([focusedTab(), stackOf('ClientsStack'), stackOf('Messages')]).toEqual(['ClientsStack', ['ClientsList', 'ClientMessages'], undefined]);
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['ClientsStack', 'ClientsList']);
+});
+
+it.each([true, false].flatMap((on) => [[on, 'CoachBroadcasts', 'CoachBroadcastComposer'], [on, 'CoachCommunityModeration', 'CoachCommunityPostDetail']] as const))(
+  'coachTabsV2 %s: the Messages header opens %s (then %s) where Back returns to the inbox, or off to the client list as today', async (on, screen, next) => {
+    mockFlags.coachTabsV2 = on;
+    mockCommandCenter.__USING_MOCK_DATA = false;
+    inboxTap = (n) => require('../coachInbox').openInboxScreen(n, screen);
+    const [tab, root] = on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', 'ClientsList'];
+    const view = await mount();
+    await fireEvent.press(view.getByRole('tab', { name: on ? MESSAGES_TAB : 'Messages, tab, 4 of 7' }));
+    await fireEvent.press(view.getByText('../screens/coach/MessagesScreen'));
+    await act(async () => ref.navigate(next, { postId: 'post-1' }));
+    expect([focusedTab(), stackOf(tab)]).toEqual([tab, [root, screen, next]]);
+    await act(async () => ref.goBack());
+    await act(async () => ref.goBack());
+    expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([tab, root]);
+  });
+
+// COACHTABS-NAV (LO-773 N4 and the jumps into Settings). Rows: every navigate('<tab>Stack', { screen, ... }) in src
+// that opens Settings or a tab's root, read here with its own `initial` / `pop` (comments skipped), so new calls join;
+// and every coach push into Settings or to a tab's root through the real push router. Each row is a fresh launch.
+// Into Settings: Settings home stays beneath, so Back lands on it. To a root: back to the one already open, never a
+// second copy over the screen above it.
+const ROOTS: Record<string, string> = {
+  ClientsStack: 'ClientsList', SettingsStack: 'SettingsHome', MoneyStack: 'CoachMoney', CalendarStack: 'CoachBookingInbox', Messages: 'MessagesInbox',
+};
+const ABOVE: Record<string, string> = {
+  ClientsStack: 'ClientDetail', SettingsStack: 'Billing', MoneyStack: 'Billing', CalendarStack: 'CoachHours', Messages: 'ClientMessages',
+};
+type Jump = { tab: string; screen?: string; initial?: false; pop?: true };
+const CALLS = SOURCES.flatMap(([file, source]) =>
+  [...source.matchAll(/navigate\(\s*["'](\w+Stack)["'],\s*\{/g)].flatMap((m) => {
+    const start = Number(m.index);
+    if (/\/\/|^\s*\*/.test(source.slice(source.lastIndexOf('\n', start) + 1, start))) return [];
+    let end = start + m[0].length;
+    for (let depth = 1; depth > 0 && end < source.length; end += 1) depth += source[end] === '{' ? 1 : source[end] === '}' ? -1 : 0;
+    const call = source.slice(start, end);
+    const jump: Jump = {
+      tab: m[1],
+      screen: /screen:\s*["'](\w+)["']/.exec(call)?.[1],
+      ...(/initial:\s*false/.test(call) ? { initial: false as const } : {}),
+      ...(/pop:\s*true/.test(call) ? { pop: true as const } : {}),
+    };
+    return [[`${file}:${source.slice(0, start).split('\n').length}`, jump] as const];
+  }));
+const settingsOrRoot = (j: Jump) => j.screen !== undefined && (j.tab === 'SettingsStack' || j.screen === ROOTS[j.tab]);
+
+it('every navigate() into Settings in src keeps Settings home beneath (`initial: false`), or is Settings home with `pop`', () => {
+  const settings = CALLS.filter(([, j]) => j.tab === 'SettingsStack');
+  expect(settings.length).toBeGreaterThanOrEqual(10);
+  for (const [entry, j] of settings) {
+    expect([entry, j.screen === 'SettingsHome' ? j.pop : j.initial]).toEqual([entry, j.screen === 'SettingsHome' ? true : false]);
+  }
+});
+
+const settingsAndRootJumps = (on: boolean) => {
+  mockFlags.coachTabsV2 = on;
+  const tabs = on ? Object.keys(ROOTS) : ['ClientsStack', 'SettingsStack'];
+  const pushes = Object.keys(COACH_PUSH_ROUTES).filter((key) => {
+    const { root, ...t } = resolvePushTarget('coach', key);
+    return tabs.includes(root) && settingsOrRoot({ tab: root, ...t });
+  });
+  return [
+    ...CALLS.filter(([, j]) => tabs.includes(j.tab) && settingsOrRoot(j)).map(([entry, j]) => [on, entry, j, undefined] as const),
+    ...pushes.map((key) => [on, `push ${key}`, undefined, key] as const),
+  ];
+};
+
+it.each([...settingsAndRootJumps(true), ...settingsAndRootJumps(false)])('coachTabsV2 %s: %s keeps its tab root beneath, never a second copy', async (on, _entry, call, push) => {
+  mockFlags.coachTabsV2 = on;
+  mockCommandCenter.__USING_MOCK_DATA = false; // what ships
+  const j: Jump = push ? (({ root, ...t }) => ({ tab: root, ...t }))(resolvePushTarget('coach', push)) : (call as Jump);
+  const root = ROOTS[j.tab];
+  const toRoot = j.screen === root;
+  await mount();
+  if (toRoot) await act(async () => ref.navigate(j.tab, { screen: ABOVE[j.tab], params: CHAT, initial: false }));
+  if (toRoot) expect(stackOf(j.tab)).toEqual([root, ABOVE[j.tab]]);
+  await act(async () => ref.navigate('Templates'));
+  await act(async () => {
+    if (!push) return ref.navigate(j.tab, { screen: j.screen, params: {}, ...(j.initial === false ? { initial: false } : {}), ...(j.pop ? { pop: true } : {}) });
+    attachPushNavigator(ref);
+    setPushSession({ kind: 'app', userId: 'coach-1', role: 'coach' });
+    routePushTap(push);
+  });
+  expect([focusedTab(), stackOf(j.tab)]).toEqual([j.tab, toRoot ? [root] : [root, j.screen]]);
+  if (toRoot) return;
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([j.tab, root]);
 });

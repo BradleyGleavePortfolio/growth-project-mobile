@@ -98,7 +98,7 @@ describe("More: your plan rows (S-REACH)", () => {
   it("stack rows push inside More; cross-tab rows go through the tab bar and keep the stack root", async () => {
     await render(<MoreScreen />);
     await fireEvent.press(screen.getByLabelText("Meal plan"));
-    expect(mockNavigate).toHaveBeenCalledWith("Plan");
+    expect(mockNavigate).toHaveBeenCalledWith("ClientDailyMealPlan");
     await fireEvent.press(screen.getByLabelText("Macro targets"));
     expect(mockNavigate).toHaveBeenCalledWith("ClientMacros");
     await fireEvent.press(screen.getByLabelText("Progress"));
@@ -200,7 +200,7 @@ describe("More: Health and sleep / Connected devices (AUDIT-11-125)", () => {
 describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
   const originalOS = Platform.OS;
   const stackRows = [
-    ["Meal plan", "Plan"], ["Macro targets", "ClientMacros"], ["Progress", "Progress"],
+    ["Meal plan", "ClientDailyMealPlan"], ["Macro targets", "ClientMacros"], ["Progress", "Progress"],
     ["Timeline", "Timeline"], ["Membership", "Membership"],
     ["Recipes", "Recipes"], ["Fasting", "Fast"], ["Community", "Community"],
     ["Profile", "ProfileMain"], ["Settings", "Settings"], ["Report", "Report"],
@@ -289,5 +289,25 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
     expect(screen.getByText("Meal plan")).toHaveStyle({ fontFamily: "Inter_500Medium", fontSize: 16 });
     expect(screen.getByLabelText("Meal plan")).toHaveStyle({ minHeight: 72, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border });
     expect(screen.getByLabelText("Meal plan")).not.toHaveStyle({ backgroundColor: palette.bgSurface });
+  });
+});
+
+// HEALTH-1 (owner #SLEEP-PLACE op 2): the row reads healthPages when it is drawn.
+// Off, every test above is main's row.
+describe("More: Sleep and recovery row (HEALTH-1, healthPages on)", () => {
+  afterEach(() => {
+    mockFlags.healthPages = false;
+    mockHealthConnectBuild = false;
+  });
+
+  it("reads Sleep and recovery and opens Health and sleep on Recovery", async () => {
+    jest.clearAllMocks();
+    mockFlags.healthPages = true;
+    mockHealthConnectBuild = true; // the rows show on either platform
+    await render(<MoreScreen />);
+    expect(screen.queryByLabelText("Health and sleep")).toBeNull();
+    expect(screen.getByText("Recovery estimate, activity and heart rate")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Sleep and recovery"));
+    expect(mockNavigate).toHaveBeenLastCalledWith("Health", { bucket: "recovery" });
   });
 });
