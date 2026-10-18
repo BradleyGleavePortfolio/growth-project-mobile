@@ -24,7 +24,8 @@ jest.mock('../../theme/ThemeProvider', () => ({
 }));
 jest.mock('../../services/api', () => ({ coachApi: { getUnreadCounts: async () => ({ data: { total: 0 } }) } }));
 jest.mock('../../services/notificationsApi', () => ({ fetchUnreadCount: async () => 0 }));
-jest.mock('../../services/commandCenterApi', () => ({ __USING_MOCK_DATA: true }));
+const mockCommandCenter = { __USING_MOCK_DATA: true };
+jest.mock('../../services/commandCenterApi', () => mockCommandCenter);
 jest.mock('../../components/NotificationBadge', () => () => null);
 jest.mock('../../components/purchases/withNonP2PPurchaseGate', () => ({
   withNonP2PPurchaseGate: (screen: unknown) => screen,
@@ -54,7 +55,7 @@ for (const name of ['ProgramsStackNavigator', 'CoachCommunityNavigator']) {
 }
 const CoachNavigator = require('../CoachNavigator').default;
 const { HapticService } = require('../../ui/haptics/haptics.service');
-const { COACH_PUSH_ROUTES, resolvePushTarget } = require('../../services/pushTapRouter');
+const { COACH_PUSH_ROUTES, resolvePushTarget, attachPushNavigator, setPushSession, routePushTap } = require('../../services/pushTapRouter');
 
 const ref = createNavigationContainerRef<ParamListBase>();
 const mount = () => render(<NavigationContainer ref={ref}><CoachNavigator /></NavigationContainer>);
@@ -65,6 +66,7 @@ const originalOS = Platform.OS;
 beforeEach(() => {
   Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
   mockFlags.coachTabsV2 = true;
+  mockCommandCenter.__USING_MOCK_DATA = true;
   mockTeam.hasSubCoaches = true;
   HapticService.selection.mockClear();
 });
@@ -175,4 +177,48 @@ it.each([true, false])('coachTabsV2 %s: every navigate() and push target lands o
     const landed = { root, screen, tab: focusedTab(), route: screen && ref.getCurrentRoute()?.name };
     expect(landed).toEqual({ root, screen, tab: root, route: screen });
   }
+});
+
+// COACHTABS-CLIENTS-ROOT: Clients is a tab and, with the six tabs, coaches land on Overview, so Clients is not open
+// yet. Every jump into a Clients screen must still open on top of the client list: Back and the Clients tab land on it.
+// Rows: every navigate('ClientsStack', { screen }) in src (read here, so new ones join), sent with no `initial`, and
+// every coach push into Clients through the real push router. Each row is a fresh launch, then Messages, then the jump.
+// Flag off (real coaches land on Clients) behaves the same as today.
+const SRC = path.join(__dirname, '..', '..');
+const jumps = new Map<string, string>();
+for (const file of fs.readdirSync(SRC, { encoding: 'utf8', recursive: true })) {
+  if (!/\.tsx?$/.test(file) || file.includes('__tests__')) continue;
+  const source = fs.readFileSync(path.join(SRC, file), 'utf8');
+  for (const [, screen] of source.matchAll(/navigate\(\s*["']ClientsStack["'],\s*\{\s*screen:\s*["'](\w+)["']/g)) {
+    if (screen !== 'ClientsList') jumps.set(`${path.basename(file)} > ${screen}`, screen);
+  }
+}
+const intoClients = (on: boolean) => {
+  mockFlags.coachTabsV2 = on;
+  const pushes = Object.keys(COACH_PUSH_ROUTES).filter((key) => resolvePushTarget('coach', key).root === 'ClientsStack');
+  return [
+    ...[...jumps].map(([entry, screen]) => [on, entry, screen, undefined] as const),
+    ...pushes.map((key) => [on, `push ${key}`, resolvePushTarget('coach', key).screen as string, key] as const),
+  ];
+};
+
+it.each([...intoClients(true), ...intoClients(false)])('coachTabsV2 %s: %s opens on top of the client list; Back and the Clients tab land on it', async (on, _entry, screen, push) => {
+  mockFlags.coachTabsV2 = on;
+  mockCommandCenter.__USING_MOCK_DATA = false; // what ships
+  const view = await mount();
+  expect(focusedTab()).toBe(on ? 'CommandCenter' : 'ClientsStack');
+  await act(async () => ref.navigate('Messages'));
+  await act(async () => {
+    if (!push) return ref.navigate('ClientsStack', { screen, params: { clientId: 'client-1', clientName: 'Sam' } });
+    attachPushNavigator(ref);
+    setPushSession({ kind: 'app', userId: 'coach-1', role: 'coach' });
+    routePushTap(push, { clientId: 'client-1' });
+  });
+  const clientsStack = () => ref.getRootState().routes.find((r) => r.name === 'ClientsStack')?.state?.routes.map((r) => r.name);
+  expect([focusedTab(), clientsStack()]).toEqual(['ClientsStack', ['ClientsList', screen]]);
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['ClientsStack', 'ClientsList']);
+  await act(async () => ref.navigate('Messages'));
+  await fireEvent.press(view.getByRole('tab', { name: /^Clients, tab/ }));
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['ClientsStack', 'ClientsList']);
 });
