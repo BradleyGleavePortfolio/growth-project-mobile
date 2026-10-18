@@ -86,6 +86,11 @@
       "default": "off",
       "reason": "Native client Calendar tab and Roman booking tutorial; on in clinic and production profiles."
     },
+    "EXPO_PUBLIC_FF_CLIENT_HOME_RINGS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "UI-1 rings and tiles client Home (featureFlags.clientHomeRings); default off; no eas.json profile sets it, so it stays off until the owner switches it on."
+    },
     "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": {
       "kind": "flag",
       "default": "off",
