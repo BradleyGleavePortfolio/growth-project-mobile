@@ -10,3 +10,9 @@ export function openInboxChat(navigation: NavigationProp<ParamListBase>, clientI
   if (featureFlags.coachTabsV2) navigation.navigate('ClientMessages', { clientId, clientName });
   else navigation.navigate('ClientsStack', { screen: 'ClientMessages', params: { clientId, clientName } });
 }
+
+/** The Messages header's Broadcasts and Community reports follow the same rule as a chat. */
+export function openInboxScreen(navigation: NavigationProp<ParamListBase>, screen: 'CoachBroadcasts' | 'CoachCommunityModeration'): void {
+  if (featureFlags.coachTabsV2) navigation.navigate(screen);
+  else navigation.navigate('ClientsStack', { screen, initial: false }); // off: client list beneath (B-332-7)
+}

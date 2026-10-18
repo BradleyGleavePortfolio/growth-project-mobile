@@ -328,8 +328,9 @@ export type SettingsStackParamList = {
   CreditPackCheckout: { preselect?: number | 'custom' } | undefined;
 };
 
-/** COACH-CHAT-BACK (owner op 1) — with the six tabs: the inbox and the chats opened from it. */
-export type MessagesStackParamList = { MessagesInbox: undefined } & Pick<ClientsStackParamList, 'ClientMessages' | 'ContactView'>;
+/** COACH-CHAT-BACK (owner op 1) — with the six tabs: the inbox and what opens from it (chats, Broadcasts, Community reports). */
+export type MessagesStackParamList = { MessagesInbox: undefined } & Pick<ClientsStackParamList, 'ClientMessages' | 'ContactView' |
+  'CoachBroadcasts' | 'CoachBroadcastComposer' | 'CoachCommunityModeration' | 'CoachCommunityPostDetail'>;
 
 /** Phase 11 / Track 7 — team management stack param list. */
 export type TeamStackParamList = {
@@ -711,15 +712,21 @@ function CalendarStackNavigator() {
 
 /**
  * COACH-CHAT-BACK (owner op 1: "Chats get their own place in the Messages tab,
- * like any inbox") — with the six tabs a chat opened from Messages opens here,
- * so Back returns to Messages. A chat opened from a client's file stays in Clients.
+ * like any inbox") — with the six tabs a chat, Broadcasts or Community reports
+ * opened from Messages opens here, so Back returns to Messages. A chat opened
+ * from a client's file stays in Clients. Headers match the Clients stack's.
  */
 function MessagesStackNavigator() {
+  const header = (title: string) => ({ headerShown: true, title, headerBackTitle: 'Back' });
   return (
     <MessagesStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.background } }}>
       <MessagesStack.Screen name="MessagesInbox" component={MessagesScreen} />
       <MessagesStack.Screen name="ClientMessages" component={ClientMessagesScreen} />
       <MessagesStack.Screen name="ContactView" component={ContactView} />
+      <MessagesStack.Screen name="CoachBroadcasts" component={CoachBroadcastsScreen} options={header('Broadcasts')} />
+      <MessagesStack.Screen name="CoachBroadcastComposer" component={BroadcastComposerScreen} options={header('New broadcast')} />
+      <MessagesStack.Screen name="CoachCommunityModeration" component={CoachCommunityModerationScreen} options={header('Community reports')} />
+      <MessagesStack.Screen name="CoachCommunityPostDetail" component={CoachCommunityPostDetailScreen} options={header('Reported post')} />
     </MessagesStack.Navigator>
   );
 }
