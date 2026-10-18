@@ -25,7 +25,9 @@ function mockRoute(method: string, url: string, body: Row = {}): Promise<{ data:
   const deadMeal = (body.slots ?? []).some((x: Row) => ![...live(mockDb.meals), ...(p?.slots ?? []).map((y: Row) => ({ id: y.meal_template_id }))].some((m) => m.id === x.meal_template_id));
   if (body.slots) body = { ...body, slots: body.slots.map((x: Row, i: number) => ({ id: `n${i}`, ...x })) };
   let data: unknown;
-  if (kind === 'clients') data = { calories_kcal: 2100, protein_g: 160, carbs_g: 220, fats_g: 70 };
+  if (kind === 'meal-plan') data = { assignments: mockDb.assignments.filter((a) => a.client_id === 'c1' && a.starts_on.slice(0, 10) <= toIsoDate(new Date()) // Maya's /me/meal-plan/today: every covering
+    && (!a.ends_on || a.ends_on.slice(0, 10) >= toIsoDate(new Date()))).sort((a, b) => b.starts_on.localeCompare(a.starts_on)).map((a) => ({ ...a, daily_meal_plan: plan(mockDb.plans.find((x) => x.id === a.daily_meal_plan_id)) })) };
+  else if (kind === 'clients') data = { calories_kcal: 2100, protein_g: 160, carbs_g: 220, fats_g: 70 };
   else if (kind === 'meal-templates') {
     if (method === 'GET') data = live(mockDb.meals);
     else if (bad) return no(400, 'Bad Request');
@@ -51,7 +53,8 @@ jest.mock('../../../../config/featureFlags', () => {
 });
 jest.mock('../../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: require('../../../../constants/colors').default,
   tokens: require('../../../../theme/tokens').default, semanticColors: require('../../../../theme/tokens').lightTokens }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useFocusEffect: jest.fn(), usePreventRemove: (on: boolean, cb: typeof mockGuard) => { mockGuard = on ? cb : undefined; } }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useRoute: () => ({}), useFocusEffect: jest.fn(), usePreventRemove: (on: boolean, cb: typeof mockGuard) => { mockGuard = on ? cb : undefined; } }));
+jest.mock('../../../../components/mealplan/LogPlannedMealButton', () => ({ __esModule: true, default: () => null, plannedMealFromSlot: () => ({}) }));
 jest.mock('react-native-safe-area-context', () => ({ ...jest.requireActual('react-native-safe-area-context'), SafeAreaView: require('react-native').View }));
 jest.mock('../../../../components/coach/ai-entry/useAiEntryStatus', () => ({ useAiEntryStatus: () => ({ visible: false }) }));
 jest.mock('../../../../hooks/usePrograms', () => ({
@@ -67,6 +70,7 @@ import MealEditor from '../../CoachMealTemplatesScreen';
 import DayPlanBuilder from '../DayPlanBuilderScreen';
 import MealPicker from '../MealPickerScreen';
 import MealPlanAssign from '../MealPlanAssignScreen';
+import ClientDailyMealPlanScreen from '../../../client/ClientDailyMealPlanScreen';
 import { toIsoDate } from '../../../../api/programsApi';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
 
@@ -320,30 +324,28 @@ it.each(['GET /coach/daily-meal-plans', 'GET /coach/daily-meal-plans/p1/assignme
   expect([s.getByTestId('assign-submit').props.accessibilityState.disabled, mockDb.log.some((k) => k.startsWith('POST'))]).toEqual([true, false]);
   delete mockDb.fail[read];
   await fireEvent.press(s.getByText('Try again'));
-  expect(await s.findByText('Leo is on Training day from Thu, Oct 1. On days both plans cover, Leo sees the one that starts later.')).toBeTruthy();
+  expect(await s.findByText('Leo is on Training day from Thu, Oct 1. On days both plans cover, Leo sees both.')).toBeTruthy();
   expect(s.getByTestId('assign-submit').props.accessibilityState.disabled).toBe(false);
 });
 
-it.each<[string, number | null, string, string]>([
-  ['with no end date', null, '1 client', '1 client follows this plan'], ['that ends in 10 days', 10, '2 clients', '2 clients follow this plan'],
-])('a client moved to a later plan %s: the old plan counts her only if she returns, her row says where she is, and Assign moves her back', async (_, end, card, builder) => {
-  mockDb.assignments[3] = { ...assign('p2', 'c1', end === null ? null : toIsoDate(day(end))), starts_on: toIsoDate(day(-3)) };
+it.each<[string, number, number | null, string, string]>([
+  ['a later plan with no end', -3, null, 'Rest day and Training day', '1 client'], ['a later plan that ends in 3 days', -3, 3, 'Rest day and Training day', '1 client'],
+  ['a later plan that ended yesterday', -10, -1, 'Training day', '0 clients'], ['a plan that starts in 3 days', 3, null, 'Training day', '1 client'],
+])('Maya on Training day and %s: her row names what her Meal plan screen shows (every covering plan), each plan counts her while she has days on it, and she is already on Training day', async (_, from, to, sees, rest) => {
+  mockDb.assignments[3] = { ...assign('p2', 'c1', to === null ? null : toIsoDate(day(to))), starts_on: toIsoDate(day(from)) };
+  const client = await mount(<ClientDailyMealPlanScreen />);
+  expect((await client.findAllByText(/^(Training|Rest) day$/)).map((t) => t.props.children).join(' and ')).toBe(sees);
+  await client.unmount();
   const home = await mount(<ProgramsLibraryScreen />);
   await fireEvent.press(home.getByTestId('programs-tab-plans'));
-  expect([await home.findByLabelText(`Training day, 1,100 kcal, ${card}`), home.getByLabelText('Rest day, 220 kcal, 1 client'), home.getByText('2 day plans · 3 meals · 2 clients on a plan')]).toBeTruthy();
+  expect([await home.findByLabelText('Training day, 1,100 kcal, 2 clients'), home.getByLabelText(`Rest day, 220 kcal, ${rest}`)]).toBeTruthy();
   await home.unmount();
-  const b = await open(DayPlanBuilder, { planId: 'p1' });
-  expect(await b.findByText(builder)).toBeTruthy();
-  await b.unmount();
   const s = await open(MealPlanAssign, { planId: 'p1' });
-  expect(await s.findByLabelText('Maya Chen, on Rest day')).toBeTruthy();
-  await fireEvent.press(s.getByTestId('client-c1'));
-  expect(await s.findByText(`Maya is on Rest day from ${long(-3)}. On days both plans cover, Maya sees the one that starts later.`)).toBeTruthy();
-  await fireEvent.press(s.getByTestId('assign-submit'));
-  await waitFor(() => expect(mockDb.assignments[mockDb.assignments.length - 1]).toMatchObject({ daily_meal_plan_id: 'p1', client_id: 'c1', starts_on: toIsoDate(day(0)) }));
+  await fireEvent.press(await s.findByLabelText(`Maya Chen, on ${sees}`));
+  expect([await s.findByText('Maya is already on Training day from Thu, Oct 1.'), s.getByTestId('assign-submit').props.accessibilityState.disabled]).toEqual([expect.anything(), true]);
 });
 
-it('Assign conflicts: same plan and same start day block, an overlap explains, a moved client and an archived plan say so', async () => {
+it('Assign conflicts: the same plan blocks, an overlap (any start day) explains, a moved client and an archived plan say so', async () => {
   mockDb.assignments.push({ ...assign('p2', 'c4'), starts_on: toIsoDate(day(2)) });
   const s = await open(MealPlanAssign, { planId: 'p1' });
   await fireEvent.press(await s.findByTestId('client-c1'));
@@ -351,10 +353,9 @@ it('Assign conflicts: same plan and same start day block, an overlap explains, a
   expect(s.getByTestId('assign-submit').props.accessibilityState.disabled).toBe(true);
   await fireEvent.press(s.getByTestId('client-c4'));
   const from = day(2).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  expect(s.getByText(`Nina is on Rest day from ${from}. On days both plans cover, Nina sees the one that starts later.`)).toBeTruthy();
+  expect(s.getByText(`Nina is on Rest day from ${from}. On days both plans cover, Nina sees both.`)).toBeTruthy();
   await fireEvent.press(s.getByLabelText(chip(2)));
-  expect(s.getByText(`Nina starts Rest day on ${from}. Pick another start date.`)).toBeTruthy();
-  expect(s.getByTestId('assign-submit').props.accessibilityState.disabled).toBe(true);
+  expect([s.getByText(`Nina is on Rest day from ${from}. On days both plans cover, Nina sees both.`), s.getByTestId('assign-submit').props.accessibilityState.disabled]).toEqual([expect.anything(), false]);
   await fireEvent.press(s.getByLabelText('Today'));
   await fireEvent.press(s.getByTestId('client-c2'));
   mockDb.clients = mockDb.clients.filter((c) => c.id !== 'c2');
