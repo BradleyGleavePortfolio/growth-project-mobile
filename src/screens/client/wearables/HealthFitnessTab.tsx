@@ -8,20 +8,19 @@
  * when empty) and, for coached clients only, one coach line.
  */
 import React, { useCallback, useMemo } from 'react';
-import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../services/api';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useWearableSamples } from '../../../hooks/useWearableSamples';
 import { useWearableConnections } from '../../../hooks/useWearableConnections';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { configFor } from '../../../api/wearablesConnectionsApi';
-import type { SampleSeries, SamplesResponse, WearableMetricType } from '../../../api/wearablesSamplesApi';
+import type { GetSamplesParams, SampleSeries, SamplesResponse, WearableMetricType } from '../../../api/wearablesSamplesApi';
 import { deviceSourceForPlatform } from '../../../services/health/onDeviceSync';
 import { HapticService } from '../../../ui/haptics/haptics.service';
-import { PrimaryButton } from '../../../ui';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, semantic, spacing, typography } from '../../../theme/tokens';
 import { useReduceMotion } from './components/useReduceMotion';
@@ -33,6 +32,7 @@ import HeartCard from './cards/HeartCard';
 import WorkoutsCard from './cards/WorkoutsCard';
 import BodyCard from './cards/BodyCard';
 import WeekStepBars, { type StepDay } from './cards/WeekStepBars';
+import HealthFitnessEmptyState from './empty/HealthFitnessEmptyState';
 
 const TODAY = [
   { metric: 'STEPS', label: 'Steps', unit: 'steps' },
@@ -66,6 +66,28 @@ export function savedAt(ms: number, now: Date = new Date()): string {
 const find = (data: SamplesResponse | undefined, metric: WearableMetricType) => data?.series.find((s) => s.metric === metric);
 const has = (s: SampleSeries | undefined) => (s?.sample_count ?? 0) > 0;
 
+/** Offline only: retain the latest own series when a new hour changes the query window. */
+function useFitnessSamples(params: GetSamplesParams, online: boolean, userId: string | undefined) {
+  const query = useWearableSamples(params);
+  const client = useQueryClient();
+  const saved = !online && !query.data && userId
+    ? client.getQueriesData<SamplesResponse>({
+      queryKey: ['wearables', 'samples', {
+        bucket: params.bucket, metric: params.metric ?? null, clientId: null,
+        granularity: 'day', preferredOnly: true, providers: null, timezone: null,
+      }],
+    })
+      .filter(([, data]) => data?.user_id === userId)
+      .map(([key, data]) => ({ data, at: client.getQueryState(key)?.dataUpdatedAt ?? 0 }))
+      .sort((a, b) => b.at - a.at)[0]
+    : undefined;
+  return {
+    ...query, data: query.data ?? saved?.data,
+    dataUpdatedAt: query.data ? query.dataUpdatedAt : saved?.at ?? 0,
+    isLoading: query.isLoading && !saved,
+  };
+}
+
 interface Props {
   /** The shell's sync notice, drawn under the masthead. */
   readonly renderNotice?: () => React.ReactNode;
@@ -77,6 +99,7 @@ export default function HealthFitnessTab({ renderNotice, aiPanelSlot }: Props) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const reduceMotion = useReduceMotion();
   const online = isEffectivelyOnline(useNetworkStatus());
+  const user = useCurrentUser();
   const accent = toneTokens('warm').accent;
 
   // 30 days to the end of this hour (so this hour counts), stable for the hour.
@@ -86,19 +109,20 @@ export default function HealthFitnessTab({ renderNotice, aiPanelSlot }: Props) {
     const end = to.getTime() + HOUR_MS;
     return { from: new Date(end - 30 * 24 * HOUR_MS).toISOString(), to: new Date(end).toISOString() };
   }, []);
-  const query = useWearableSamples({ bucket: 'HEALTH_FITNESS', ...span, granularity: 'day' });
-  const rhrQuery = useWearableSamples({ bucket: 'SLEEP_RECOVERY', metric: 'RESTING_HEART_RATE_BPM', ...span, granularity: 'day' });
+  const query = useFitnessSamples({ bucket: 'HEALTH_FITNESS', ...span, granularity: 'day' }, online, user?.id);
+  const rhrQuery = useFitnessSamples({ bucket: 'SLEEP_RECOVERY', metric: 'RESTING_HEART_RATE_BPM', ...span, granularity: 'day' }, online, user?.id);
   const connectionsQuery = useWearableConnections();
   const { data, isLoading, isError, isRefetching, dataUpdatedAt } = query;
 
-  const coachId = useCurrentUser()?.coach_id ?? null;
+  const coachId = user?.coach_id ?? null;
   const coach = useQuery({
     queryKey: ['wearables', 'coach-name', coachId],
     enabled: coachId != null,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => (await api.get<{ name?: string }>('/v1/clients/me/coach')).data?.name ?? null,
   });
-  const coachFirst = typeof coach.data === 'string' ? coach.data.trim().split(/\s+/)[0] : '';
+  const coachName = coachId && typeof coach.data === 'string' ? coach.data.trim() : '';
+  const coachFirst = coachName && coachName !== 'Your coach' ? coachName.split(/\s+/)[0] : '';
 
   const now = new Date();
   const week = localDayTotals(find(data, 'STEPS'), now, 7);
@@ -110,7 +134,6 @@ export default function HealthFitnessTab({ renderNotice, aiPanelSlot }: Props) {
   const source = linked.find((c) => c.provider === deviceSource) ?? linked[0];
   const sourceName = source ? configFor(source.provider).displayName : null;
   const synced = source ? relativeTime(source.last_synced_at) : null;
-  const platformName = Platform.OS === 'android' ? 'Health Connect' : 'Apple Health';
   const failed = !isLoading && !data;
   const showConnect = !isLoading && !failed && !source && !hasAnyData && connectionsQuery.data != null;
 
@@ -231,13 +254,7 @@ export default function HealthFitnessTab({ renderNotice, aiPanelSlot }: Props) {
             </View>
           )}
           {showConnect && (
-            <View style={[styles.connect, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="health-fitness-connect">
-              <Text style={[styles.connectTitle, { color: sc.textPrimary }]}>See your fitness in one place</Text>
-              <Text style={[styles.body1, { color: sc.textMuted }]}>
-                {`Connect ${platformName} to import activity, heart rate, workouts and body measurements.`}
-              </Text>
-              <PrimaryButton label={`Connect ${platformName}`} onPress={() => go('Connections')} haptic={false} style={styles.connectButton} />
-            </View>
+            <HealthFitnessEmptyState tone="warm" reduceMotion={reduceMotion} cardOnly onConnect={() => go('Connections')} />
           )}
           {sourceName && (
             <WearableCard
@@ -290,7 +307,7 @@ export default function HealthFitnessTab({ renderNotice, aiPanelSlot }: Props) {
                 <View style={styles.coach} testID="health-coach-line">
                   <Ionicons name="person-outline" size={18} color={sc.textMuted} />
                   <Text style={[styles.sub, styles.grow, { color: sc.textMuted }]}>
-                    {`${coachFirst} can see the health data your devices bring in.`}
+                    {`${coachFirst} can see the activity your devices bring in.`}
                   </Text>
                 </View>
               ) : null}
@@ -329,9 +346,6 @@ const styles = StyleSheet.create({
   warm: { flexDirection: 'row', gap: spacing.sm, padding: spacing.lg, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
   body1: { ...typography.body, flexShrink: 1 },
   strong: { fontFamily: 'Inter_600SemiBold' },
-  connect: { padding: spacing.lg, gap: spacing.md, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
-  connectTitle: { ...typography.h2 },
-  connectButton: { paddingHorizontal: spacing.md }, // "Connect Health Connect" fits at 130% on 360 pt
   sub: { ...typography.bodySmall },
   link: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: layout.touchMin, paddingLeft: spacing.md },
   coach: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.xs },
