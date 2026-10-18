@@ -1,7 +1,8 @@
 # Navigation
 
-C8V2-2A adds no route or navigation entry. Its chart and period variants remain
-off by default behind clientProgressV2; ProgressScreen integration is C8 PR 2b.
+C8V2-2B adds no route. With clientProgressV2 on, More > Progress keeps its back-only
+header in the masthead forest with light text and status bar (`backOnlyHeader(title,
+onMasthead)`), so the bar and the page read as one surface.
 
 Day One cards enter the existing Food / Home > Habits / You > Progress loggers without marking completion. `ClientNavigator.onDay1Saved` forwards only focused, successful saves; `RootNavigator` matches and consumes the selected type for the committed user, then shows `Day1WinScreen(savedWin)` for the server note while retaining the mounted navigator. `day1NoteVisible` temporarily hides the open food sheet, without clearing its meal, search or success feedback. Continue reveals that same logger without re-arming completion. See `screens/client/first-win/README.md`.
 

@@ -51,6 +51,12 @@ it('has no invented goal or coach, and no coachless lock', async () => {
   expect(v.getByText('Your goal 165 lb')).toBeTruthy();
   expect(v.queryByText(/Sam/)).toBeNull();
 });
+it('a kg client reads kilograms in every label; the trend is still smoothed in pounds', async () => {
+  const v = await render(<WeightTrendChart variant="dark" data={data} through={6 * D} unit="kg" goal={{ value: 165 }} />);
+  expect(v.getByText('Your goal 74.8 kg')).toBeTruthy();
+  expect(v.getByText(/^Usual range today: \d+\.\d to \d+\.\d kg$/)).toBeTruthy();
+  expect(v.queryByText(/ lb/)).toBeNull();
+});
 it('draws dots, the decorative band, dashed gap, latest point and hollow pending ring', async () => {
   const v = await render(<WeightTrendChart variant="dark" data={data} through={6 * D} />);
   expect(v.getAllByTestId('weight-reading')).toHaveLength(2);

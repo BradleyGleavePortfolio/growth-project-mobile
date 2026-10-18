@@ -13,6 +13,9 @@ on the page colour. The dark part owns 24 pt gutters; use it full width below
 the masthead title/number. Overview omits band/legend. Caller supplies authorized full
 history, optional goal and coach name, pending state and through date. No reads,
 writes, coach lock or screen wiring. Full state frames remain C8 PR 13.
+C8V2-2B: `unit="kg"` scales every drawn value and label after smoothing in pounds;
+the masthead's 24 pt bottom corners close on the chart. `WeighInRows` takes the
+same `unit`. Progress v2 (`screens/client/progress/ProgressV2.tsx`) is the caller.
 
 CAC-POLISH: `roman/RomanLoadingSkeleton.tsx` is the existing Roman loading state shared by the first coach-consent read and the room read, with the same spoken label and Reduce Motion support. The initial consent read keeps a working Back action; it never mounts the room early. `ai/AiRefusalNotice.tsx` uses `radius.card` (16) for every refusal card, compact or full, and `radius.button` (12) for every primary and secondary action; refusal handling and wording are unchanged.
 
