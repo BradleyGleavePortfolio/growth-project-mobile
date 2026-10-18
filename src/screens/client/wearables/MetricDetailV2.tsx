@@ -67,14 +67,15 @@ export default function MetricDetailV2({ metric, bucket, title, goal, unit }: Pr
   const [range, setRange] = useState<Range>('week');
   const [sharing, setSharing] = useState(false);
 
-  // 30 days to the end of this hour (the Fitness tab's window), stable for the hour.
+  // The Fitness tab's own query (30 days to the end of this hour, every metric of the bucket), stable for the hour:
+  // online it is already loaded, and offline a first open finds the copy the tab saved. The series is picked below.
   const span = useMemo(() => {
     const to = new Date();
     to.setMinutes(0, 0, 0);
     const end = to.getTime() + HOUR_MS;
     return { from: new Date(end - DAYS * 24 * HOUR_MS).toISOString(), to: new Date(end).toISOString() };
   }, []);
-  const query = useFitnessSamples({ bucket, metric, ...span, granularity: 'day' }, online, user?.id);
+  const query = useFitnessSamples({ bucket, ...span, granularity: 'day' }, online, user?.id);
   const { data, isLoading } = query;
   const series = data?.series.find((s) => s.metric === metric);
   const all = useMemo(() => localDayTotals(series, new Date(), DAYS), [series]);

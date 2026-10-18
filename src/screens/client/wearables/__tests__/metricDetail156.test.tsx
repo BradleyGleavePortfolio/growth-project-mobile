@@ -7,7 +7,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 let mockSamples: () => object = () => ({});
-jest.mock('../../../../hooks/useWearableSamples', () => ({ useWearableSamples: () => mockSamples() }));
+jest.mock('../../../../hooks/useWearableSamples', () => ({ ...jest.requireActual('../../../../hooks/useWearableSamples'), useWearableSamples: () => mockSamples() }));
 let mockOnline = true;
 jest.mock('../../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({}), isEffectivelyOnline: () => mockOnline }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'u1', coach_id: 'coach-1' }) }));
@@ -32,6 +32,8 @@ jest.mock('../../../../lib/analytics', () => ({ track: jest.fn() }));
 
 import MetricDetailScreen from '../MetricDetailScreen';
 import { dayAverage, subLine } from '../MetricDetailV2';
+import { savedAt } from '../HealthFitnessTab';
+import { wearableSamplesQueryKey } from '../../../../hooks/useWearableSamples';
 
 const haptic = () => jest.requireMock('../../../../ui/haptics/haptics.service').HapticService;
 const NOW = new Date();
@@ -49,8 +51,8 @@ const ok = (agos = ALL) => ({
   data: { bucket: 'HEALTH_FITNESS', window: {}, series: [steps(agos)], freshness: [] },
   isLoading: false, isError: false, error: null, dataUpdatedAt: Date.now(), refetch: mockRefetch,
 });
-const show = () => render(
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+const show = (client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) => render(
+  <QueryClientProvider client={client}>
     <MetricDetailScreen />
   </QueryClientProvider>,
 );
@@ -137,6 +139,31 @@ it('board 11, offline: the saved series with the warm saved-data card', async ()
   expect(screen.getByTestId('metric-detail-saved')).toBeTruthy();
   expect(screen.getByText(/^You're offline\. Showing your last synced data from .+\.$/)).toBeTruthy();
   expect(screen.getByText('7,600')).toBeTruthy();
+});
+
+// Sol B1 (m#792): a first open offline reads the Fitness tab's own saved query (every metric, no metric in the key).
+const DIV = { STEPS: 1, ACTIVE_ENERGY_KCAL: 10, WORKOUT_DURATION_MIN: 100 } as const;
+const bucketData = (user: string, k = 1) => ({ user_id: user, bucket: 'HEALTH_FITNESS', window: {}, freshness: [],
+  series: Object.entries(DIV).map(([metric, d]) => ({ ...steps(ALL), metric, samples: steps(ALL).samples.map((s) => ({ ...s, value: (s.value * k) / d })) })) });
+it.each([
+  ['STEPS', '7,600', 'steps a day'], ['ACTIVE_ENERGY_KCAL', '760', 'kcal a day'], ['WORKOUT_DURATION_MIN', '76', 'min a day'],
+])('board 11, offline, first open of %s: the Fitness tab\'s saved copy, its sync time and Share; never another account\'s or scope\'s', async (metric, avg, unitLine) => {
+  [mockOnline, mockParams] = [false, { metric, bucket: 'HEALTH_FITNESS' }];
+  mockSamples = () => ({ data: undefined, isLoading: true, isError: false, error: null, dataUpdatedAt: 0, refetch: mockRefetch });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const synced = Date.now() - 60_000;
+  const seed = (over: object, user: string, at: number, k = 1) => client.setQueryData(
+    wearableSamplesQueryKey({ bucket: 'HEALTH_FITNESS', from: 'an earlier hour', to: 'its end', granularity: 'day', ...over }), bucketData(user, k), { updatedAt: at });
+  seed({}, 'u1', synced); // the Fitness tab's query, saved an hour that has passed
+  seed({}, 'u2', Date.now(), 2); // another account on this phone: never
+  seed({ clientId: 'c1' }, 'u1', Date.now(), 2); // a coach's read of a client: never
+  seed({ providers: ['OURA_RING'] }, 'u1', Date.now(), 2); // one source only: never
+  await show(client);
+  expect(screen.getByText(avg)).toBeTruthy();
+  expect(screen.getByText(unitLine)).toBeTruthy();
+  expect(screen.getByText(`You're offline. Showing your last synced data from ${savedAt(synced)}.`)).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('metric-detail-share'));
+  expect(await screen.findByText('Last 7 days')).toBeTruthy();
 });
 
 it('a failed load is a calm error with Try again; a failed retry is the error haptic', async () => {
