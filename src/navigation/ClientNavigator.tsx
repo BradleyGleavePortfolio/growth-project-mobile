@@ -220,6 +220,10 @@ export type HomeStackParamList = {
   ContactView: MoreStackParamList['ContactView'];
   /** C3B-S2: the Messages list (coach and Roman), opened from Home while Style B is on. */
   MessagesInbox: undefined;
+  /** #HEALTH-PAGES: the same Health page (and its two inner routes), opened from the rings Home. */
+  Health: MoreStackParamList['Health'];
+  WearableMetricDetail: MoreStackParamList['WearableMetricDetail'];
+  Connections: MoreStackParamList['Connections'];
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -374,8 +378,11 @@ export type MoreStackParamList = {
   BlockedUsers: undefined;
   /** Client-facing checkout for a coach's package share link. */
   PackageCheckout: { shareToken: string };
-  /** PR-HK-1-mobile — Wearable Connections Hub (manage health data sources). */
-  Connections: undefined;
+  /**
+   * PR-HK-1-mobile — Wearable Connections Hub (manage health data sources).
+   * A6: a cloud tracker's return link may carry a single-use ticket.
+   */
+  Connections: { ticket?: string; provider?: string; status?: string } | undefined;
   /** PR-HK-3a — Wearables bucket shell (Fitness | Recovery segmented switcher). */
   Health: { bucket?: 'fitness' | 'recovery' } | undefined;
   /** PR-HK-3a — shared metric drill-down (compare sources + glow-drag chart). */
@@ -463,6 +470,11 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         component={NotificationPreferencesScreen}
         options={{ headerShown: false }}
       />
+      {/* #HEALTH-PAGES: the rings Home opens the one Health page here, so its Back lands on Home (the You
+          row keeps its own, Back to You); its metric detail and Connections come along so no tap inside dead-ends. */}
+      <HomeStackNav.Screen name="Health" component={WearablesShell} />
+      <HomeStackNav.Screen name="WearableMetricDetail" component={MetricDetailScreen} />
+      <HomeStackNav.Screen name="Connections" component={ConnectionsScreen} />
     </HomeStackNav.Navigator>
   );
 }

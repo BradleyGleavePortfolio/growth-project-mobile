@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
 import type { WearableSamplesResponse } from '../../../api/wearablesSamplesApi';
@@ -108,18 +110,18 @@ it('coached: three dials with their own numbers and one forest button', async ()
   });
 });
 
-it.each([
-  ['home-dial-food', ['Log']],
-  ['home-dial-train', ['WorkoutTab']],
-  ['home-dial-sleep', ['MoreTab', { screen: 'Connections', initial: false }]],
-] as const)('%s opens a real screen, with a light haptic', async (testID, destination) => {
-  await render(<HomeScreen />);
-  await screen.findByLabelText('Start Full Body A');
-  await fireEvent.press(screen.getByTestId(testID));
-  expect(mockNavigate).toHaveBeenCalledWith(...destination);
-  expect(HapticService.selection).toHaveBeenCalledTimes(1);
-});
-
+// Every tap lands on a real screen: navigate() from Home resolves in the Home stack, then the tab bar.
+const NAV = readFileSync(join(__dirname, '../../../navigation/ClientNavigator.tsx'), 'utf8');
+const screensIn = (nav: string): Record<string, string> => Object.fromEntries(
+  [...NAV.slice(NAV.indexOf(`<${nav}.Navigator`), NAV.indexOf(`</${nav}.Navigator>`))
+    .matchAll(new RegExp(`<${nav}\\.Screen\\s+name="(\\w+)"(?:\\s+component=\\{(\\w+)\\})?`, 'g'))].map((m) => [m[1], m[2] ?? '']));
+const TAB_STACK: Record<string, string> = { Home: 'HomeStackNav', WorkoutTab: 'WorkoutStackNav', MoreTab: 'MoreStackNav' };
+function lands([name, params]: readonly unknown[]): boolean {
+  const nested = (params as { screen?: string } | undefined)?.screen;
+  if (typeof name !== 'string') return false;
+  if (name in screensIn('HomeStackNav')) return true;
+  return name in screensIn('Tab') && (!nested || nested in screensIn(TAB_STACK[name] ?? ''));
+}
 function sleepData(day: string): WearableSamplesResponse {
   const start_at = `${day}T00:00:00.000Z`;
   const end_at = `${day}T23:59:59.999Z`;
@@ -135,21 +137,53 @@ function sleepData(day: string): WearableSamplesResponse {
   };
 }
 
-it('Sleep with last night shows recovered and asleep and opens Sleep and recovery', async () => {
-  mockSleepData = sleepData(getTodayString());
+const NO_SOURCE: WearableSamplesResponse = { ...sleepData('2020-01-01'), series: [] };
+const HEALTH = ['Health', { bucket: 'recovery' }] as const;
+const CONNECTIONS = ['Connections'] as const;
+
+// #HEALTH-PAGES: Recovery in every state; Connections only once Health answered with no source at all.
+// [state, what Health returned, Health read, check-in hours, check-in read, the dial's spoken label, where the tap lands]
+it.each([
+  ['Food', 'nothing', 'ok', null, 'ok', 'Food, 820 kcal left, 1,030 of 1,850', ['Log']],
+  ['Train', 'nothing', 'ok', null, 'ok', 'Train, 1 of 2 workouts, This week', ['WorkoutTab']],
+  ['Sleep, last night from Health', 'last night', 'ok', null, 'ok', 'Sleep, 78% recovered, 7 h 20 m asleep', HEALTH],
+  ['Sleep, a source but nothing for last night (an older night)', 'a source', 'ok', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, a source and the check-in', 'a source', 'ok', 7.5, 'ok', 'Sleep, 7.5 h asleep', HEALTH],
+  ['Sleep, no source and the check-in', 'nothing', 'ok', 7.5, 'ok', 'Sleep, 7.5 h asleep', CONNECTIONS],
+  ['Sleep, no source and no check-in', 'nothing', 'ok', null, 'ok', 'Sleep, Connect', CONNECTIONS],
+  ['Sleep, no source, check-in loading', 'nothing', 'ok', null, 'pending', 'Sleep, —', CONNECTIONS],
+  ['Sleep, no source, check-in failed', 'nothing', 'ok', null, 'failed', 'Sleep, —', CONNECTIONS],
+  ['Sleep, Health loading', 'nothing', 'pending', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, Health failed', 'nothing', 'failed', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, Health failed and the check-in', 'nothing', 'failed', 6.5, 'ok', 'Sleep, 6.5 h asleep', HEALTH],
+] as const)('%s: the tap lands on a real screen, with a light haptic', async (_, health, healthRead, hours, checkInRead, label, to) => {
+  mockSleepData = healthRead !== 'ok' ? undefined
+    : health === 'nothing' ? NO_SOURCE : sleepData(health === 'last night' ? getTodayString() : '2020-01-01');
+  mockSleepRead = healthRead; mockCheckInRead = checkInRead; mockCheckIn = hours ? { sleep_hours: hours } : null;
   await render(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep'));
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
+  await screen.findByLabelText('Start Full Body A');
+  await fireEvent.press(screen.getByLabelText(label));
+  expect(mockNavigate).toHaveBeenLastCalledWith(...to);
+  expect(lands(to)).toBe(true);
+  expect(HapticService.selection).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText(/coming soon/i)).toBeNull();
 });
 
-it('Sleep with only an older night shows the existing empty state, with a matching spoken label and route', async () => {
+it('opened from Home, Back lands on Home: the Home stack holds the same Health page and inner routes as You', () => {
+  const home = screensIn('HomeStackNav');
+  const you = screensIn('MoreStackNav');
+  for (const name of ['Health', 'WearableMetricDetail', 'Connections']) expect([name, home[name]]).toEqual([name, you[name]]);
+  expect(home.Health).toBe('WearablesShell');
+});
+
+it('Sleep with only an older night shows the existing dash, no number and no fill, never Connect', async () => {
   mockSleepData = sleepData('2020-01-01');
   await render(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Sleep, Connect'));
+  expect(await screen.findByLabelText('Sleep, —')).toBeTruthy();
   expect(screen.queryByText('78%')).toBeNull();
   expect(screen.queryByText('7 h 20 m asleep')).toBeNull();
   expect(screen.queryByTestId('home-dial-sleep-fill')).toBeNull();
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Connections', initial: false });
+  expect(screen.queryByText('Connect')).toBeNull();
 });
 
 it('Sleep keeps the ring text limit (115%, so 130% never runs into the ring) and two-line supporting layout', async () => {
@@ -159,38 +193,6 @@ it('Sleep keeps the ring text limit (115%, so 130% never runs into the ring) and
   expect(screen.getByText('78%').props.maxFontSizeMultiplier).toBe(1.15);
   expect(screen.getByText('recovered').props.maxFontSizeMultiplier).toBe(1.15);
   expect(screen.getByText('7 h 20 m asleep').props.numberOfLines).toBe(2);
-});
-
-it('Sleep falls back to the check-in, and with neither shows Connect, never "coming soon"', async () => {
-  mockSleepData = sleepData('2020-01-01');
-  mockCheckIn = { sleep_hours: 7.5 };
-  const view = await render(<HomeScreen />);
-  expect(await screen.findByLabelText('Sleep, 7.5 h asleep')).toBeTruthy();
-  mockCheckIn = null;
-  await view.rerender(<HomeScreen />);
-  expect(await screen.findByLabelText('Sleep, Connect')).toBeTruthy();
-  expect(screen.queryByText(/coming soon/i)).toBeNull();
-});
-
-it.each([
-  ['loading', 'pending', 'ok'],
-  ['failed', 'failed', 'ok'],
-  ['check-in loading', 'ok', 'pending'],
-  ['check-in failed', 'ok', 'failed'],
-] as const)('Sleep while its read is %s shows "—", never Connect, and opens Sleep and recovery', async (_, sleepRead, checkInRead) => {
-  mockSleepData = sleepData('2020-01-01');
-  mockSleepRead = sleepRead; mockCheckInRead = checkInRead;
-  await render(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Sleep, —'));
-  expect(screen.queryByText('Connect')).toBeNull();
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
-});
-
-it('Sleep keeps a verified check-in when the Health read failed', async () => {
-  mockSleepRead = 'failed'; mockCheckIn = { sleep_hours: 6.5 };
-  await render(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Sleep, 6.5 h asleep'));
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
 });
 
 it.each([
