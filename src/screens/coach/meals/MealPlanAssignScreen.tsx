@@ -3,7 +3,7 @@
  * coach/daily-meal-plans/:id/assignments. The server takes any overlap and
  * shows the client the plan that starts latest, so conflicts are read here.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
@@ -12,12 +12,12 @@ import { radius, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui/layout/Screen';
 import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
-import { useAssignDailyMealPlan, useDailyMealPlan, useDailyMealPlans, useMealPlanAssignments } from '../../../hooks/useMealTemplates';
+import { useAssignDailyMealPlan, useDailyMealPlan, useMealPlanRuns } from '../../../hooks/useMealTemplates';
 import { useAssignableClients } from '../../../hooks/usePrograms';
 import { useCurrentMacrosForClient } from '../../../hooks/useMacros';
 import { toIsoDate } from '../../../api/programsApi';
 import type { ProgramsScreenProps } from '../programs/types';
-import { Chips, FirstCard, LoadFailed, Loading, Masthead, Notice, count, dayTotals, httpStatus, mealStyles as ms, num, saveFailed, sortedSlots } from './mealUi';
+import { Chips, FirstCard, LoadFailed, Loading, Masthead, Notice, count, dayTotals, httpStatus, mealStyles as ms, num, saveFailed, seen, sortedSlots } from './mealUi';
 
 /** ISO dates at noon, so a clock change never moves a day. */
 const noon = (iso: string) => new Date(`${iso}T12:00:00`);
@@ -32,10 +32,7 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
   const { semanticColors: sc } = useTheme();
   const { planId } = route.params;
   const p = useDailyMealPlan(planId).data;
-  const list = useDailyMealPlans();
-  const plans = list.data;
-  const ids = useMemo(() => (plans ?? []).map((x) => x.id), [plans]);
-  const { byPlan, error: runsError } = useMealPlanAssignments(ids);
+  const { runs: read, error: readError } = useMealPlanRuns();
   const qc = useQueryClient();
   const rereading = useIsFetching({ queryKey: ['daily-meal-plans'] }) > 0;
   const roster = useAssignableClients();
@@ -62,21 +59,20 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
     if (picking === 'start') setStarts(toIsoDate(d));
     else setDays(Math.max(1, between(starts, toIsoDate(d)) + 1));
   };
-  const runs = (plans ?? []).flatMap((plan) => (byPlan?.get(plan.id) ?? [])
-    .map((a) => ({ plan, client: a.client_id, from: a.starts_on.slice(0, 10), to: a.ends_on?.slice(0, 10) }))
-    .filter((r) => !r.to || r.to >= today));
+  const runs = read ?? [];
   const client = roster.data?.find((c) => c.id === clientId);
   const first = client?.name.split(' ')[0] ?? '';
   const mine = runs.filter((r) => r.client === clientId && r.from <= (ends ?? '9999-12-31') && (!r.to || r.to >= starts));
-  const same = mine.find((r) => r.plan.id === planId);
+  // Blocked only when the client would already see this plan on the start day (a later plan may have replaced it).
+  const at = clientId ? seen(runs, clientId, starts) : undefined;
+  const same = at?.plan.id === planId ? at : undefined;
   const tie = mine.find((r) => r.from === starts);
   const other = mine.find((r) => r.plan.id !== planId);
   const kcal = p ? dayTotals(sortedSlots(p)).calories_kcal : 0;
   const bold = { fontFamily: 'Inter_600SemiBold' };
   const shown = (roster.data ?? []).filter((c) => c.name.toLowerCase().includes(q.trim().toLowerCase()));
-  const readError = list.error ?? runsError;
   // Overlaps are read from every plan's assignments: until all of them are in, Assign waits (button and handler alike).
-  const blocked = !client || !p || !plans || !byPlan || !!same || !!tie;
+  const blocked = !client || !p || !read || !!same || !!tie;
 
   const submit = async () => {
     if (blocked || !client) return;
@@ -140,7 +136,7 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
           <View accessibilityRole="radiogroup" accessibilityLabel="Your clients" style={[ms.card, styles.list, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
             {shown.map((c, i) => {
               const on = c.id === clientId;
-              const now = runs.filter((r) => r.client === c.id && r.from <= today).sort((a, b) => b.from.localeCompare(a.from))[0];
+              const now = seen(runs, c.id, today);
               return (
                 <Pressable key={c.id} accessibilityRole="radio" accessibilityState={{ checked: on }} testID={`client-${c.id}`}
                   accessibilityLabel={now ? `${c.name}, on ${now.plan.name}` : c.name}

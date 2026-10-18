@@ -10,7 +10,9 @@ import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isConnectionFailure } from '../../../ui/states/QuietStates';
 import { toIsoDate } from '../../../api/programsApi';
-import type { DailyMealPlan, DailyMealPlanAssignment, MealTemplate, SlotLabel } from '../../../api/mealTemplatesApi';
+import { addDays } from '../../../utils/date';
+import type { DailyMealPlan, MealTemplate, SlotLabel } from '../../../api/mealTemplatesApi';
+import type { MealPlanRun } from '../../../hooks/useMealTemplates';
 import type { ProgramsNav } from '../programs/types';
 
 export type ProgramsHalf = 'workouts' | 'plans' | 'meals';
@@ -25,9 +27,13 @@ export const dayTotals = (slots: { meal_template: Macros }[]): Macros => slots.r
   calories_kcal: t.calories_kcal + m.calories_kcal, protein_g: t.protein_g + m.protein_g,
   carbs_g: t.carbs_g + m.carbs_g, fats_g: t.fats_g + m.fats_g,
 }), { calories_kcal: 0, protein_g: 0, carbs_g: 0, fats_g: 0 });
-/** Clients whose assignment runs today or later. */
-export const clientsOn = (rows: DailyMealPlanAssignment[], today = toIsoDate(new Date())) =>
-  new Set(rows.filter((a) => !a.ends_on || a.ends_on.slice(0, 10) >= today).map((a) => a.client_id));
+/** The run a client sees on `day`: of the runs covering it, the one that starts latest (getTodayForClient, starts_on desc). */
+export const seen = (runs: MealPlanRun[], client: string, day: string) => runs
+  .filter((r) => r.client === client && r.from <= day && (!r.to || r.to >= day)).sort((a, b) => b.from.localeCompare(a.from))[0];
+/** Clients who see `planId` today or on a later day. What a client sees changes only on a start or the day after an end. */
+export const clientsOn = (runs: MealPlanRun[], planId: string, today = toIsoDate(new Date())) => new Set(runs.filter((r) => r.plan.id === planId
+  && [today, r.from, ...runs.filter((o) => o.client === r.client && o.to).map((o) => addDays(o.to as string, 1))]
+    .some((d) => d >= today && seen(runs, r.client, d)?.plan.id === planId)).map((r) => r.client));
 export const saveFailed = (err: unknown) => `That did not save. ${isConnectionFailure(err)
   ? 'Check your connection, then try again.' : 'Try again in a moment.'}`;
 export const httpStatus = (err: unknown) => (err as { response?: { status?: number } } | null)?.response?.status;

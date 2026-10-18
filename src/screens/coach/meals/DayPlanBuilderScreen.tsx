@@ -2,11 +2,12 @@
  * MEALBUILD 2/2: the day-plan builder (MOCK-K5 Style C "builder") on
  * coach/daily-meal-plans. A new plan is named first (POST); after that every
  * change saves at once (PATCH), so clients on the plan see it right away.
- * The name and note save when a field ends and again when the screen goes.
+ * The name and note save when a field ends, before Swap, Add or Assign, and on leaving, which waits for the save.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui/layout/Screen';
@@ -14,7 +15,7 @@ import { PrimaryButton } from '../../../ui/buttons/PrimaryButton';
 import HapticPressable from '../../../components/HapticPressable';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import {
-  useCreateDailyMealPlan, useDailyMealPlan, useMealPlanAssignments, useUpdateDailyMealPlan,
+  useCreateDailyMealPlan, useDailyMealPlan, useMealPlanRuns, useUpdateDailyMealPlan,
 } from '../../../hooks/useMealTemplates';
 import type { UpdateDailyMealPlanInput } from '../../../api/mealTemplatesApi';
 import type { ProgramsScreenProps } from '../programs/types';
@@ -29,27 +30,30 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
   const plan = useDailyMealPlan(planId);
   const create = useCreateDailyMealPlan();
   const update = useUpdateDailyMealPlan();
-  const { byPlan } = useMealPlanAssignments(planId ? [planId] : []);
+  const { runs } = useMealPlanRuns();
   const [name, setName] = useState<string>();
   const [note, setNote] = useState<string>();
   const p = plan.data;
-  const sent = useRef('');
-  // The typed name and note not yet saved. Back with the keyboard up can remove the screen before onEndEditing lands,
-  // so leaving saves them too; `sent` keeps a late onEndEditing from sending the same change twice.
+  const sent = useRef<{ key: string; done: Promise<boolean> }>(undefined);
+  // The typed name and note not yet saved. Back with the keyboard up can come before onEndEditing lands, so leaving
+  // saves them too; `sent` hands a late onEndEditing the save already under way, so each change is sent once.
   const edits: UpdateDailyMealPlanInput = !p ? {} : {
     ...(name?.trim() && name.trim() !== p.name ? { name: name.trim() } : {}),
     ...(note !== undefined && note.trim() !== (p.notes ?? '') ? { notes: note.trim() } : {}),
   };
   const flush = () => {
     const key = JSON.stringify(edits);
-    if (!p || key === '{}' || key === sent.current) return;
-    sent.current = key;
-    update.mutate({ id: p.id, input: edits },
-      { onSuccess: () => void HapticService.success(), onError: () => { sent.current = ''; void HapticService.error(); } });
+    if (!p || key === '{}') return undefined;
+    if (sent.current?.key === key) return sent.current.done;
+    const done = update.mutateAsync({ id: p.id, input: edits }).then(() => { void HapticService.success(); return true; },
+      () => { sent.current = undefined; void HapticService.error(); return false; });
+    sent.current = { key, done };
+    return done;
   };
-  const latest = useRef(flush);
-  useEffect(() => { latest.current = flush; });
-  useEffect(() => navigation.addListener('beforeRemove', () => latest.current()), [navigation]);
+  // Back, swipe and Android back wait for the save (native-stack guard), then replay; a failed save keeps screen, draft and error.
+  const [exit, setExit] = useState<NavigationAction>();
+  usePreventRemove(!exit && JSON.stringify(edits) !== '{}', ({ data }) => void flush()?.then((ok) => ok && setExit(data.action)));
+  useEffect(() => { if (exit) navigation.dispatch(exit); }, [exit, navigation]);
   const back = () => navigation.goBack();
   const onDark = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
@@ -90,14 +94,14 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
 
   const slots = sortedSlots(p);
   const t = dayTotals(slots);
-  const clients = byPlan && clientsOn(byPlan.get(p.id) ?? []).size;
+  const clients = runs && clientsOn(runs, p.id).size;
   return (
     <Screen edges={['bottom']} contentStyle={styles.content}
       footer={<PrimaryButton label="Assign to a client" disabled={!slots.length} accessibilityHint={slots.length ? undefined : 'Add a meal first'}
-        onPress={() => navigation.navigate('MealPlanAssign', { planId: p.id })} testID="plan-assign" />}>
+        onPress={() => { void flush(); navigation.navigate('MealPlanAssign', { planId: p.id }); }} testID="plan-assign" />}>
       <Masthead onBack={back} title={
         <TextInput value={name ?? p.name} onChangeText={setName} maxLength={120} accessibilityLabel="Day plan name"
-          onEndEditing={flush} style={[ms.title, styles.title, onDark]} />
+          onEndEditing={() => void flush()} style={[ms.title, styles.title, onDark]} />
       }>
         <View style={styles.big}>
           <Text style={[styles.kcal, onDark]}>{num(t.calories_kcal)}</Text>
@@ -111,8 +115,7 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
         <Text style={[typography.eyebrow, { color: sc.textPrimary }]}>Your note · clients see it</Text>
         <TextInput value={note ?? p.notes ?? ''} onChangeText={setNote} multiline maxLength={2000} accessibilityLabel="Your note on this plan, clients see it"
           placeholder="A line for clients, such as when to eat the bigger meal" placeholderTextColor={sc.textMuted}
-          onEndEditing={flush}
-          style={[styles.note, { color: sc.textPrimary }]} />
+          onEndEditing={() => void flush()} style={[styles.note, { color: sc.textPrimary }]} />
       </View>
       {slots.map((x, i) => {
         const slot = SLOT_NAMES[x.slot_label];
@@ -129,10 +132,10 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
                 <View style={[styles.tile, { backgroundColor: sc.bgPrimary }]}><Ionicons name="restaurant-outline" size={22} color={sc.textPrimary} /></View>
                 <View style={ms.fill}>
                   <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{m.name}</Text>
-                  <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{m.archived_at ? 'Archived meal. Swap it to keep editing.' : macroLine(m)}</Text>
+                  <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{m.archived_at ? 'Archived meal. Clients see it until you swap it.' : macroLine(m)}</Text>
                 </View>
                 <HapticPressable accessibilityRole="button" accessibilityLabel={`Swap ${slot.toLowerCase()}`} hitSlop={4} style={styles.icon}
-                  onPress={() => navigation.navigate('MealPicker', { planId: p.id, index: i })}>
+                  onPress={() => { void flush(); navigation.navigate('MealPicker', { planId: p.id, index: i }); }}>
                   <Ionicons name="swap-horizontal-outline" size={22} color={sc.textMuted} />
                 </HapticPressable>
               </View>
@@ -141,7 +144,7 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
         );
       })}
       <HapticPressable accessibilityRole="button" accessibilityLabel="Add a meal" style={styles.add} testID="plan-add"
-        onPress={() => navigation.navigate('MealPicker', { planId: p.id })}>
+        onPress={() => { void flush(); navigation.navigate('MealPicker', { planId: p.id }); }}>
         <Ionicons name="add" size={22} color={sc.accentText} />
         <Text style={[typography.bodyMd, { color: sc.accentText }]}>Add a meal</Text>
       </HapticPressable>
@@ -162,7 +165,7 @@ const styles = StyleSheet.create({
   big: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   kcal: { ...typography.display, fontSize: 52, lineHeight: 65, fontVariant: ['lining-nums', 'tabular-nums'] },
   noteCard: { gap: 6, paddingVertical: 16 },
-  note: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 19, lineHeight: 25, padding: 0, minHeight: 25 },
+  note: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 19, lineHeight: 25, padding: 0, minHeight: 44 },
   slot: { flexDirection: 'row', gap: 10 },
   rail: { width: 22, alignItems: 'center' },
   dot: { width: 22, height: 22, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },

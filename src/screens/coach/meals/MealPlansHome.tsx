@@ -1,5 +1,5 @@
 /** MEALBUILD: Programs > Meal plans and Meals (MOCK-K5 C "plans") on coach/daily-meal-plans and coach/meal-templates. */
-import React, { useMemo } from 'react';
+import React from 'react';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -8,7 +8,7 @@ import { radius, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui/layout/Screen';
 import { PrimaryButton } from '../../../ui/buttons/PrimaryButton';
 import HapticPressable from '../../../components/HapticPressable';
-import { useDailyMealPlans, useMealPlanAssignments, useMealTemplates } from '../../../hooks/useMealTemplates';
+import { useMealPlanRuns, useMealTemplates } from '../../../hooks/useMealTemplates';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import type { DailyMealPlan } from '../../../api/mealTemplatesApi';
 import type { ProgramsNav } from '../programs/types';
@@ -20,12 +20,11 @@ import {
 export default function MealPlansHome({ tab, onTab }: { tab: 'plans' | 'meals'; onTab: (h: ProgramsHalf) => void }) {
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<ProgramsNav>();
-  const plans = useDailyMealPlans();
+  const { plans, runs } = useMealPlanRuns();
   const meals = useMealTemplates();
-  const { byPlan } = useMealPlanAssignments(useMemo(() => (plans.data ?? []).map((p) => p.id), [plans.data]));
   const offline = !isEffectivelyOnline(useNetworkStatus());
   const query = tab === 'plans' ? plans : meals;
-  const everyone = byPlan && new Set([...byPlan.values()].flatMap((rows) => [...clientsOn(rows)])).size;
+  const everyone = runs && new Set((plans.data ?? []).flatMap((p) => [...clientsOn(runs, p.id)])).size;
   const sub = plans.data && meals.data ? [count(plans.data.length, 'day plan', 'day plans'), count(meals.data.length, 'meal', 'meals'),
     everyone === undefined ? '' : `${count(everyone, 'client', 'clients')} on a plan`].filter(Boolean).join(' · ') : undefined;
   const card = [ms.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }];
@@ -48,7 +47,7 @@ export default function MealPlansHome({ tab, onTab }: { tab: 'plans' | 'meals'; 
     )) : <FirstCard title="No meals yet." body="Add the meals you use most, with their calories and macros. Day plans are built from them." />;
   } else {
     body = plans.data?.length
-      ? plans.data.map((p) => <PlanCard key={p.id} plan={p} clients={byPlan && clientsOn(byPlan.get(p.id) ?? []).size}
+      ? plans.data.map((p) => <PlanCard key={p.id} plan={p} clients={runs && clientsOn(runs, p.id).size}
         onPress={() => navigation.navigate('DayPlanBuilder', { planId: p.id })} />)
       : <FirstCard title="No day plans yet." body="A day plan is a day of your meals, such as a training day or a rest day. Clients see it in Food." />;
   }

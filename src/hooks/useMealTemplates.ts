@@ -154,21 +154,25 @@ export function useAssignDailyMealPlan() {
   });
 }
 
-/** Each plan's assignments, one GET a plan (the list has no count); `byPlan` is undefined until all read, `error` is the first failed read. */
-export function useMealPlanAssignments(planIds: string[]) {
-  return useQueries({
-    queries: planIds.map((id) => ({
-      queryKey: ['daily-meal-plans', id, 'assignments'],
-      queryFn: () => mealTemplatesApi.listAssignmentsForPlan(id).then((r) => r.data),
+export type MealPlanRun = { plan: DailyMealPlan; client: string; from: string; to?: string }; // ISO days; no `to` = no end date
+/** The coach's plans and every plan's assignments as runs, one GET a plan (the list has no count); `runs` is undefined until all read, `error` is the first failed read. */
+export function useMealPlanRuns() {
+  const plans = useDailyMealPlans();
+  const list = plans.data ?? [];
+  return { plans, ...useQueries({
+    queries: list.map((p) => ({
+      queryKey: ['daily-meal-plans', p.id, 'assignments'],
+      queryFn: () => mealTemplatesApi.listAssignmentsForPlan(p.id).then((r) => r.data),
       staleTime: FIVE_MIN_MS,
     })),
     combine: (results) => ({
-      byPlan: results.every((r) => r.isSuccess)
-        ? new Map(planIds.map((id, i) => [id, results[i].data as DailyMealPlanAssignment[]]))
+      runs: plans.data && results.every((r) => r.isSuccess)
+        ? list.flatMap((plan, i) => (results[i].data as DailyMealPlanAssignment[]).map((a): MealPlanRun =>
+          ({ plan, client: a.client_id, from: a.starts_on.slice(0, 10), to: a.ends_on?.slice(0, 10) })))
         : undefined,
-      error: results.find((r) => r.error)?.error ?? null,
+      error: plans.error ?? results.find((r) => r.error)?.error ?? null,
     }),
-  });
+  }) };
 }
 
 // ---- Client today view -----------------------------------------------------
