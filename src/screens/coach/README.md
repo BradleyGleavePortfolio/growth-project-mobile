@@ -1,5 +1,7 @@
 # Coach screens
 
+CAC-POLISH: the Roman switch in Settings > Privacy uses the same 20 pt outline-icon slot and inset divider as sibling settings rows. Its accessible switch, whole-row toggle and consent requests are unchanged.
+
 Client-file layout: the shared tab scroller keeps its intrinsic height without shrinking; Summary and food-review action pills wrap into readable rows with 44 pt minimum height. Macro values use forest text on cream, retaining the existing macro bar colours. Food-review period chips and the Pending AI drafts action have 44 pt minimum targets. Copy, routes and data access are unchanged (UIFIX-R2R6).
 
 UIFIX-CF2: header Message and Archive/Unarchive share 44 by 44 pt targets. Summary and food-review retries share a 44 pt text-action style; the Coach AI timeout link, form options and steppers use the same minimum target token. Weight Change uses primary text for every signed delta, without a goal-dependent warning colour. Coach AI corners use semantic button/input (12), card (16) and pill tokens. Existing handlers, wording and data access are unchanged; regression coverage extends `src/__tests__/clientFileLayout152.test.tsx`.

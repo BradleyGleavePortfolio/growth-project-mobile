@@ -32,6 +32,7 @@ import {
   type AiSurface,
 } from '../../lib/ai/aiRefusal';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
 
 export const AI_REFUSAL_ACTIONS = {
   allow: 'Allow AI help',
@@ -186,7 +187,7 @@ export default function AiRefusalNotice({
 function makeStyles(colors: ThemeColors, compact: boolean) {
   return StyleSheet.create({
     card: {
-      borderRadius: 14,
+      borderRadius: radius.card,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       backgroundColor: colors.surface,
@@ -201,7 +202,7 @@ function makeStyles(colors: ThemeColors, compact: boolean) {
     primary: {
       minHeight: 44,
       paddingHorizontal: 16,
-      borderRadius: 10,
+      borderRadius: radius.button,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
@@ -210,7 +211,7 @@ function makeStyles(colors: ThemeColors, compact: boolean) {
     secondary: {
       minHeight: 44,
       paddingHorizontal: 16,
-      borderRadius: 10,
+      borderRadius: radius.button,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.primary,
       alignItems: 'center',

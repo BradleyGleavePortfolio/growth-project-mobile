@@ -1,5 +1,7 @@
 # Auth screens
 
+CAC-POLISH: the optional coach Roman box uses the shared `Checkbox` tan variant from the approved sign-up mockup. It still starts unticked, stays inside the form scroll, and uses the same wording and consent handlers.
+
 Pre-login surface area: welcome, login, invite-gated signup, password reset, and one-time role selection. Everything in this folder is mounted under `AuthNavigator` and is the only place where the user is allowed to be without a backend session.
 
 ## Purpose
