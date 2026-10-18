@@ -62,7 +62,6 @@ import coachAiApi, { isAiDisabledError } from '../api/coachAi';
 import type {
   Draft,
   InsightPayload,
-  MealPlanPayload,
   WorkoutPayload,
 } from '../types/coachAi';
 
@@ -351,7 +350,7 @@ describe('AIWorkoutDraftScreen', () => {
       }),
     );
     // Suppress unused-var warnings for the type imports above.
-    void ({} as InsightPayload | MealPlanPayload);
+    void ({} as InsightPayload);
     void getByText;
   });
 });

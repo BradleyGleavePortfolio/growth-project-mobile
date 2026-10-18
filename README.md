@@ -505,7 +505,6 @@ see the linked food-logger quality-floor change.
 Coach AI v1 is the per-client generate / edit / approve flow for workout
 programs and weekly insights. The mobile half lives in
 `src/screens/coach/AIWorkoutDraftScreen.tsx`,
-`src/screens/coach/AIMealPlanDraftScreen.tsx`,
 `src/screens/coach/ClientInsightScreen.tsx`, and the entry point
 `src/components/coach/CoachAiSection.tsx` mounted inside
 `ClientDetailScreen`. The typed client is `src/api/coachAi.ts`; the
@@ -533,10 +532,9 @@ call that races past the status gate.
 - Entry: `src/components/coach/CoachAiSection.tsx` on
   `src/screens/coach/ClientDetailScreen.tsx` (Summary tab).
 - Workout draft: `src/screens/coach/AIWorkoutDraftScreen.tsx`.
-- Meal plan draft: `src/screens/coach/AIMealPlanDraftScreen.tsx`.
 - Insight digest: `src/screens/coach/ClientInsightScreen.tsx`.
 - Navigation registered in `src/navigation/CoachNavigator.tsx` under
-  `ClientsStack` (routes `AIWorkoutDraft`, `AIMealPlanDraft`,
+  `ClientsStack` (routes `AIWorkoutDraft`,
   `ClientInsight`).
 
 ### HOW
@@ -571,8 +569,6 @@ stubbed pending a coach-to-client booking surface (see Deferred below).
 ### WHAT (data shapes)
 - `WorkoutPayload` — `weeks[] → days[] → exercises[]` with optional
   RIR / RPE / notes.
-- `MealPlanPayload` — `days[] → meals[] → items[]` with optional
-  per-item macros and per-day totals.
 - `InsightPayload` — `{ summary, wins[], concerns[], suggested_actions[],
   questions_for_coach[] }`.
 

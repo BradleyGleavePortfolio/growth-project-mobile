@@ -146,7 +146,6 @@ describe.each(DEVICES)('pushed coach screens on $name', (d) => {
 const ROOT = path.join(__dirname, '..');
 const GUTTERS: Array<[string, string[]]> = [
   ['AIWorkoutDraftScreen.tsx', ['header', 'scrollContent', 'footer']],
-  ['AIMealPlanDraftScreen.tsx', ['header', 'scrollContent', 'footer']],
   ['ClientInsightScreen.tsx', ['header', 'scrollContent', 'footer']],
   ['CoachInboxV2.tsx', ['header', 'searchContainer', 'listContent']],
   ['MessagesScreen.tsx', ['header', 'searchContainer', 'listContent']],
