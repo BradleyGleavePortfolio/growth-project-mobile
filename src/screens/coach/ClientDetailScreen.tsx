@@ -41,6 +41,8 @@ import { layout, radius, typography } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
 import { FileHead, FileNotice, FilePlaceholders, FileTabs, MessageButton, ThisWeekBody, firstOf } from './client-detail/StyleCFile';
 import { useThisWeek } from './client-detail/useThisWeek';
+import { SafetyAlertCard } from './client-detail/SafetyAlertCard';
+import { openInboxChat } from '../../navigation/coachInbox';
 import { HapticService } from '../../ui/haptics/haptics.service';
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
@@ -62,6 +64,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const currentUser = useCurrentUser();
 
   const {
+    safetyAlert,
+    dismissSafetyAlert,
     profile,
     totals,
     weightLogs,
@@ -417,6 +421,13 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         {styleC ? fileHead() : null}
         {styleC ? <FileTabs tabs={tabs} active={activeTab} onTab={setActiveTab} /> : null}
         <View style={styleC ? { paddingHorizontal: layout.gutter } : undefined}>
+        {/* SAFETY-CARD: Message opens the chat through Messages (coachInbox.ts; off, over this file). */}
+        {safetyAlert ? (
+          <SafetyAlertCard
+            key={safetyAlert.alert_id} alert={safetyAlert} first={first} clientName={clientName}
+            onMessage={() => openInboxChat(navigation, clientId, clientName)} onDismiss={dismissSafetyAlert}
+          />
+        ) : null}
         {styleC && archiveStatusError ? (
           <Text accessibilityRole="alert" style={[typography.body, { color: colors.textSecondary, marginTop: 16 }]}>{archiveStatusError}</Text>
         ) : null}

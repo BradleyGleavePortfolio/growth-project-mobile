@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
+import { commandCenterApi } from '../../../services/commandCenterApi';
 import { useCoachStore } from '../../../store/coachStore';
 import { errorMessage } from '../../../types/common';
 import { loadFailureMessage } from '../../../ui/states/QuietStates';
@@ -11,7 +12,11 @@ import {
   type WeekSummary,
   type WorkoutSession,
 } from './types';
+import type { OpenSafetyAlert } from './SafetyAlertCard';
 import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
+
+const openAlertOf = (data: { error?: unknown; open_safety_alert?: OpenSafetyAlert | null }) =>
+  (data.error ? null : data.open_safety_alert ?? null);
 
 export function useClientDetailData(clientId: string, colors: ThemeColors, coachId?: string) {
   const [profile, setProfile] = useState<(ClientProfile & { name?: string }) | null>(null);
@@ -38,6 +43,15 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
   }, [refreshing]);
   const [isArchived, setIsArchived] = useState<boolean | null>(null);
   const [archiveStatusError, setArchiveStatusError] = useState<string | null>(null);
+  // SAFETY-CARD: the summary's open Roman safety alert (b#1075), sent only to the client's current coach.
+  // Cleared when the routed client changes, and a late read for the last client is dropped, so one client's
+  // alert never shows on another's file.
+  const [safetyAlert, setSafetyAlert] = useState<OpenSafetyAlert | null>(null);
+  const shownClient = useRef(clientId);
+  useEffect(() => {
+    shownClient.current = clientId;
+    setSafetyAlert(null);
+  }, [clientId]);
   const loadArchiveStatus = useCallback(async (refresh = false) => {
     setArchiveStatusError(null);
     const roster = useCoachStore.getState();
@@ -67,6 +81,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
 
       const res = await coachApi.getClientSummary(clientId, today);
       const data = res.data;
+      if (shownClient.current === clientId) setSafetyAlert(openAlertOf(data));
       if (data.error) return;
       // Set profile
       setProfile(data.profile ? {
@@ -354,7 +369,18 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     }
   }, [clientId]);
 
+  /** Dismiss (the Actions queue's route, scoped to this coach); throws on failure. Then the next open alert, if any. */
+  const dismissSafetyAlert = useCallback(async (alertId: string) => {
+    await commandCenterApi.dismissAlert(alertId);
+    setSafetyAlert(null);
+    coachApi.getClientSummary(clientId, getTodayString()).then((res) => {
+      if (shownClient.current === clientId) setSafetyAlert(openAlertOf(res.data));
+    }, () => undefined);
+  }, [clientId]);
+
   return {
+    safetyAlert,
+    dismissSafetyAlert,
     profile,
     foodLogs,
     totals,
