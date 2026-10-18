@@ -34,7 +34,6 @@ jest.mock('../../services/api', () => ({
   logApi: {},
   checkInsApi: {},
   coachApi: {},
-  mealPlansApi: {},
   messagesApi: {},
 }));
 

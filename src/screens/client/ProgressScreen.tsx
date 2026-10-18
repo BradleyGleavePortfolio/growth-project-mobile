@@ -41,6 +41,8 @@ import HapticPressable from '../../components/HapticPressable';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import type { ShareCardMilestone } from '../share/ShareCardScreen';
+import ShareSheet, { type ShareCardContent } from '../../components/share/ShareSheet';
+import { runCard } from '../../components/share/shareCards';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { radius, typography, type SemanticTokens } from '../../theme/tokens';
@@ -118,7 +120,7 @@ export function formatLogDate(date: string): string {
   return `${LOG_DATE_WEEKDAYS[d.getDay()]} ${d.getDate()} ${LOG_DATE_MONTHS[d.getMonth()]}`;
 }
 
-export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
+export default function ProgressScreen({ onSaved, logWeightAt }: { onSaved?: () => void; logWeightAt?: number }) {
   const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -130,6 +132,10 @@ export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [period, setPeriod] = useState<Period>('30D');
   const [showLogModal, setShowLogModal] = useState(false);
+  // TIMELINE: Log weight on the Timeline's empty state opens this sheet.
+  useEffect(() => {
+    if (logWeightAt) setShowLogModal(true);
+  }, [logWeightAt]);
   const [newWeight, setNewWeight] = useState('');
   const [newNotes, setNewNotes] = useState('');
   // B1 (FW-BODY-128): Save is disabled while the POST is in flight so a
@@ -146,6 +152,8 @@ export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
   const [heightCm, setHeightCm] = useState<number | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [loggingStreak, setLoggingStreak] = useState(0);
+  // SHARE-A (featureFlags.shareSheetV2): the card the share sheet is open on, over this screen.
+  const [shareCard, setShareCard] = useState<ShareCardContent | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // ED.4 (audit R3 P3): the chart-error retry calls loadData directly, but
   // `refreshing` only reflects pull-to-refresh — so the retry button stayed
@@ -414,12 +422,17 @@ export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
                 intent="light"
                 style={styles.inlineLink}
                 onPress={() => {
+                  track(AnalyticsEvents.REFERRAL_SHARE_INITIATED, { source: 'progress_screen' });
+                  // The run ends on the latest weigh-in (today, or yesterday when today has none yet).
+                  if (featureFlags.shareSheetV2 && lastLog) {
+                    setShareCard(runCard(loggingStreak, lastLog.date, runCount));
+                    return;
+                  }
                   const milestone: ShareCardMilestone = {
                     variant: 'streak',
                     value: runCount,
                     label: 'days in a row with a weigh-in',
                   };
-                  track(AnalyticsEvents.REFERRAL_SHARE_INITIATED, { source: 'progress_screen' });
                   navigation.navigate('ShareCard', { milestone } as never);
                 }}
                 accessibilityRole="button"
@@ -573,8 +586,13 @@ export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
 
         {/* Round 3: Progress lives inside MoreStack, so Report is a sibling. The
             single quiet link at the foot, as in the reference. */}
+        {/* TIMELINE (#TIMELINE-DOOR op 1): the Timeline's door, at the foot. */}
+        {featureFlags.clientTimelineV2 ? (
+          <QuietRow label="Timeline" detail="Weigh-ins and wins, newest first." onPress={() => navigation.navigate('Timeline')} accessibilityHint="Opens your timeline" style={styles.reportRow} testID="progress-timeline" />
+        ) : null}
         <QuietRow label="View progress report" onPress={() => navigation.navigate('Report')} style={styles.reportRow} />
       </Screen>
+      {featureFlags.shareSheetV2 ? <ShareSheet card={shareCard} onClose={() => setShareCard(null)} /> : null}
 
       {/* Weight Log Modal. B1 (FW-BODY-128): the sheet rides above the
           iPhone number pad (KeyboardAvoidingView), tapping outside the fields

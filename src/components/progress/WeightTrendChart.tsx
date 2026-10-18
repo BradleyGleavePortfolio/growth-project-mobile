@@ -9,6 +9,8 @@ import { Dimensions, StyleSheet, Text, View, type LayoutChangeEvent } from 'reac
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useTheme } from '../../theme/ThemeProvider';
 import { formatWeight } from './progressFormat';
+import { featureFlags } from '../../config/featureFlags';
+import WeightTrendChartDark, { type WeightTrendDarkProps } from './WeightTrendChartDark';
 
 export interface WeightPoint {
   x: number; // epoch ms of the logged day
@@ -24,7 +26,12 @@ function shortDay(ms: number): string {
   return `${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
 }
 
-export default function WeightTrendChart({
+export default function WeightTrendChart(props: WeightTrendDarkProps & { variant?: 'dark' }) {
+  return featureFlags.clientProgressV2 && props.variant === 'dark'
+    ? <WeightTrendChartDark {...props} /> : <LegacyWeightTrendChart {...props} />;
+}
+
+function LegacyWeightTrendChart({
   data,
   height = 168,
   testID,

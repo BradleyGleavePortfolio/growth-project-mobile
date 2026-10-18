@@ -194,7 +194,7 @@ it('does not promise import enablement and keeps pairing Copy/Cancel/Review/Retr
   await fireEvent.press(s.getByTestId('pairing-copy')); await fireEvent.press(s.getByTestId('pairing-cancel'));
   expect(mockCancel).toHaveBeenCalled();
   mockPairStatus = 'paired'; await s.rerender(React.createElement(ExtensionPairingPanel, { platformId: 'everfit' }));
-  await fireEvent.press(s.getByTestId('pairing-review-cta')); expect(mockNavigate).toHaveBeenLastCalledWith('ClientsStack', { screen: 'ClientsList' });
+  await fireEvent.press(s.getByTestId('pairing-review-cta')); expect(mockNavigate).toHaveBeenLastCalledWith('ClientsStack', { screen: 'ClientsList', pop: true });
   mockPairStatus = 'failed'; await s.rerender(React.createElement(ExtensionPairingPanel, { platformId: 'everfit' }));
   await fireEvent.press(s.getByTestId('pairing-retry')); expect(mockRetry).toHaveBeenCalled();
 });
