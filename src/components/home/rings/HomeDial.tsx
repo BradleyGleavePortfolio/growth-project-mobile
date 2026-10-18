@@ -1,9 +1,5 @@
-/**
- * HomeDial — one of the three Home dials (UI-1 rings and tiles): a 92 pt ring
- * (radius 40, stroke 7, hairline-colour track, forest fill with round caps from
- * 12 o'clock), the serif number and its unit inside, the label and one muted
- * line under it. The whole dial is one button that opens the screen behind it.
- */
+/** HomeDial — one Home dial (UI-1): a 92 pt ring (radius 40, stroke 7, hairline track, forest fill with round caps from
+ *  12 o'clock), the serif number and unit inside, the label and one muted line under it; one button to its screen. */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -36,10 +32,7 @@ export default function HomeDial({ label, view, onPress, accessibilityLabel, tes
   return (
     <Pressable
       testID={testID}
-      onPress={() => {
-        void HapticService.selection();
-        onPress();
-      }}
+      onPress={() => { void HapticService.selection(); onPress(); }}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [styles.dial, { opacity: pressed ? 0.7 : 1 }]}
@@ -56,26 +49,16 @@ export default function HomeDial({ label, view, onPress, accessibilityLabel, tes
           ) : null}
         </Svg>
         <View style={styles.centre} pointerEvents="none">
-          <Text
-            style={[prompt ? styles.prompt : styles.number, { color: prompt ? sc.accentText : sc.textPrimary }]}
-            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={RING_TEXT_MAX}
-          >
-            {view.value}
-          </Text>
+          <Text style={[prompt ? styles.prompt : styles.number, { color: prompt ? sc.accentText : sc.textPrimary }]}
+            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={RING_TEXT_MAX}>{view.value}</Text>
           {view.unit ? (
-            <Text
-              style={[styles.unit, { color: sc.textMuted }]}
-              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={RING_TEXT_MAX}
-            >
-              {view.unit}
-            </Text>
+            <Text style={[styles.unit, { color: sc.textMuted }]}
+              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={RING_TEXT_MAX}>{view.unit}</Text>
           ) : null}
         </View>
       </View>
       <Text style={[styles.label, { color: sc.textMuted }]} numberOfLines={1}>{label}</Text>
-      <Text style={[styles.sub, { color: sc.textMuted }]} numberOfLines={2}>
-        {view.sub || ' '}
-      </Text>
+      <Text style={[styles.sub, { color: sc.textMuted }]} numberOfLines={2}>{view.sub || ' '}</Text>
     </Pressable>
   );
 }
