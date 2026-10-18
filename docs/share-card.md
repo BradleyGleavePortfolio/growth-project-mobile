@@ -15,8 +15,8 @@ as the same forest card under "Shared progress" on cream (`SharedCard`), the cli
 view on the left; the coach inbox, and the client's, say "Shared a card" when the newest message is one. The sheet
 sends through the client's thread outbox in either thread style (`outboxOn`: `c3StyleB` or `shareSendV1`), so offline
 the card waits in the thread ("Waiting to send") and sends on reconnect, thread open or not; a failed one says "Not
-sent. Tap to send again" in the sheet and in the Style B thread, and "Not sent. Long press to send again" in the
-other.
+sent. Tap to send again" in the sheet and in either thread; the tap replays its key through the outbox, with or
+without server v2 (`messaging_core_v2` also offers long press, Send again).
 
 ## Implementation
 

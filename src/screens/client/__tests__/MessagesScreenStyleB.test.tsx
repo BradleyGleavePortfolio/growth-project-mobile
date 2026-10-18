@@ -559,15 +559,29 @@ describe('SHARE-B: shareSendV1 on, c3StyleB off: a card sent from the share shee
     expect(mockLegacySend).not.toHaveBeenCalled();
   });
 
-  it('online failure: "Not sent. Long press to send again"; Send again replays its key through the outbox, not the text send', async () => {
+  // Sol B1 (round 1): the tap needs neither Style B nor server v2 (v2 adds the long-press Send again, :582).
+  it.each([[false, true], [false, false], [true, true], [true, false]])('online failure (c3StyleB %s, server v2 %s): the sheet closed, "Not sent. Tap to send again" replays its key through the outbox, one card', async (styleB, v2) => {
+    Object.assign(featureFlags, { c3StyleB: styleB });
+    mockFlags.messaging_core_v2 = v2;
     serve('net');
     const u = await render(<App />);
     await ready(u);
     await act(async () => { await expect(sendCardViaOutbox('client-1', CARD, KEY)).resolves.toBe('failed'); });
-    expect(await u.findByText('Not sent. Long press to send again')).toBeTruthy();
+    serve('ok');
+    await fireEvent.press(await u.findByLabelText('Not sent. Tap to send again'));
+    await waitFor(() => expect(u.queryByLabelText('Not sent. Tap to send again')).toBeNull());
+    expect([keys(), delivered.length, cards(u).length]).toEqual([[KEY, KEY], 1, 1]);
+    expect(mockLegacySend).not.toHaveBeenCalled();
+  });
+
+  it('online failure, server v2 on: long press, Send again replays its key through the outbox, not the text send', async () => {
+    serve('net');
+    const u = await render(<App />);
+    await ready(u);
+    await act(async () => { await expect(sendCardViaOutbox('client-1', CARD, KEY)).resolves.toBe('failed'); });
     serve('ok');
     await menu(u, /^Shared progress: 14 days in a row/, 'Send again');
-    await waitFor(() => expect(u.queryByText('Not sent. Long press to send again')).toBeNull());
+    await waitFor(() => expect(u.queryByLabelText('Not sent. Tap to send again')).toBeNull());
     expect([keys(), delivered.length, cards(u).length]).toEqual([[KEY, KEY], 1, 1]);
     expect(mockLegacySend).not.toHaveBeenCalled();
   });

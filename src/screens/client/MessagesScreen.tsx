@@ -801,6 +801,20 @@ export default function MessagesScreen() {
                   <Text style={styles.receiptTextPending}>Waiting to send</Text>
                 </View>
               );
+            } else if (item.outbox === 'failed') {
+              // SHARE-B, Style B off: a card that failed online. The tap replays its key through the outbox, with or
+              // without server v2 (the long-press Send again needs v2's menu).
+              receiptNode = (
+                <TouchableOpacity
+                  onPress={() => retryOutbox(item.v2?.client_message_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Not sent. Tap to send again"
+                  style={[styles.receiptRow, styles.receiptRetry]}
+                >
+                  <Ionicons name="alert-circle-outline" size={11} color={textOnPrimaryDim} />
+                  <Text style={styles.receiptText}>Not sent. Tap to send again</Text>
+                </TouchableOpacity>
+              );
             } else if (item.pending && item.v2?.client_message_id) {
               // v2: a pending bubble is a send that failed; it waits for the
               // user (long press, Send again with the same key).
@@ -1107,6 +1121,7 @@ const makeStyles = (colors: ThreadColors) => {
     ...typography.bodySmall, fontSize: 13,
     color: textOnPrimaryDim,
   },
+  receiptRetry: { minHeight: layout.touchMin, marginTop: 0 },
   receiptTextPending: {
     ...typography.bodySmall, fontSize: 13,
     color: textOnPrimaryFaint,
