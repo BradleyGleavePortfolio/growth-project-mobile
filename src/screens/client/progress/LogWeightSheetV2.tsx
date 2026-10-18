@@ -75,6 +75,8 @@ export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachN
   };
 
   const was = lastWas(lastLog, unit, today);
+  // Sized to its digits (about half an em each) so the unit sits beside the number on every platform.
+  const size = Math.min(56, width * 0.15);
   const muted = { color: sc.textOnMastheadMuted };
   const stepper = (d: number, icon: 'remove' | 'add', label: string) => (
     <Pressable onPress={() => step(d)} accessibilityRole="button" accessibilityLabel={label} testID={`log-weight-${icon}`}
@@ -100,7 +102,7 @@ export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachN
                 <View style={[s.number, { borderBottomColor: sc.data.trend }]}>
                   <TextInput value={text} onChangeText={setText} keyboardType="decimal-pad" maxFontSizeMultiplier={1}
                     accessibilityLabel={unit === 'kg' ? 'Weight in kilograms' : 'Weight in pounds'} testID="log-weight-input"
-                    style={[s.value, { color: sc.textOnAccent, fontSize: Math.min(56, width * 0.15), lineHeight: Math.min(56, width * 0.15) * 1.25 }]} />
+                    style={[s.value, { color: sc.textOnAccent, fontSize: size, lineHeight: size * 1.25, width: size * 0.5 * Math.max(4, text.length) }]} />
                   <Text style={[s.unit, muted]}>{unit}</Text>
                 </View>
                 {stepper(0.1, 'add', `0.1 ${unit} more`)}
@@ -138,8 +140,8 @@ const s = StyleSheet.create({
   date: { ...typography.body, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   band: { borderRadius: radius.card, padding: 16, gap: 8 },
   step: { width: 48, height: 48, borderRadius: radius.button, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  number: { flexDirection: 'row', alignItems: 'baseline', gap: 6, borderBottomWidth: 2, paddingHorizontal: 8 },
-  value: { fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', fontVariant: ['lining-nums', 'tabular-nums'], minWidth: 96, textAlign: 'center', padding: 0 },
+  number: { flexDirection: 'row', alignItems: 'baseline', flexShrink: 1, minWidth: 0, gap: 6, borderBottomWidth: 2, paddingHorizontal: 8 },
+  value: { fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', fontVariant: ['lining-nums', 'tabular-nums'], flexShrink: 1, minWidth: 0, textAlign: 'center', padding: 0 },
   unit: { ...typography.bodyMd },
   small: { ...typography.bodySmall },
   notes: { ...typography.body, borderRadius: radius.input, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingVertical: 14 },
