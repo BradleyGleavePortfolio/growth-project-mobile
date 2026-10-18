@@ -104,9 +104,9 @@ export const featureFlags = {
   coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', false),
 
   /**
-   * CRISIS-BTN (owner "#CRISIS-2B - all 3 buttons"): Call 988, Text 988 and
-   * Message <coach> under Roman's fixed crisis reply, only when the server
-   * marks that reply. Default off; off, the room and transcript are today's.
+   * CRISIS-BTN (owner "#CRISIS-2B - all 3 buttons"): Call 911, Call 988, Text
+   * 988 and Message <coach> under Roman's fixed crisis reply, only when the
+   * server marks that reply. Default off; off, the room and transcript are today's.
    *
    * env: EXPO_PUBLIC_FF_CRISIS_ACTIONS
    */

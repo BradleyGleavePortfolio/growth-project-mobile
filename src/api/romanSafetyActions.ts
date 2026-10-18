@@ -8,14 +8,19 @@
 import { z } from 'zod';
 import { featureFlags } from '../config/featureFlags';
 
-export const ROMAN_SAFETY_ACTIONS = ['call_988', 'text_988', 'message_coach'] as const;
+export const ROMAN_SAFETY_ACTIONS = ['call_911', 'call_988', 'text_988', 'message_coach'] as const;
 export type RomanSafetyAction = (typeof ROMAN_SAFETY_ACTIONS)[number];
 export const RomanSafetyActionsWireSchema = z.array(z.string().max(64)).max(16).optional().catch(undefined);
+const known = (code: string): code is RomanSafetyAction => (ROMAN_SAFETY_ACTIONS as readonly string[]).includes(code);
 
-/** Known codes in a fixed order (call, text, message), once each; undefined when none. */
+/**
+ * Known codes once each, in the server's order (each fixed reply leads with
+ * the number it names first: Call 911 for the emergency reply, Call 988 for
+ * the self-harm reply); undefined when none.
+ */
 export function toSafetyActions(wire: readonly string[] | undefined): RomanSafetyAction[] | undefined {
-  const known = ROMAN_SAFETY_ACTIONS.filter((code) => wire?.includes(code) === true);
-  return known.length > 0 ? known : undefined;
+  const actions = [...new Set(wire)].filter(known);
+  return actions.length > 0 ? actions : undefined;
 }
 
 /**

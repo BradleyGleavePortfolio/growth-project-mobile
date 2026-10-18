@@ -169,7 +169,7 @@
     "EXPO_PUBLIC_FF_CRISIS_ACTIONS": {
       "kind": "flag",
       "default": "off",
-      "reason": "Call 988, Text 988 and Message <coach> under Roman's fixed crisis reply (CRISIS-BTN); off in every EAS profile until the operator turns it on."
+      "reason": "Call 911, Call 988, Text 988 and Message <coach> under Roman's fixed crisis reply (CRISIS-BTN); off in every EAS profile until the operator turns it on."
     },
     "EXPO_PUBLIC_FF_DELIVERABLES": {
       "kind": "flag",
