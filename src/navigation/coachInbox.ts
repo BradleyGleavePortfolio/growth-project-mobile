@@ -1,4 +1,4 @@
-import { StackActions, type NavigationAction, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import type { NavigationAction, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { featureFlags } from '../config/featureFlags';
 
 /**
@@ -32,20 +32,21 @@ function messagesStack(navigation: TabJump) {
 }
 
 /**
- * Opens a { tab, params } target (chatTarget, the brief's actionTarget). Into Messages from anywhere, whatever is
- * open there closes first, so the chat sits right on the inbox (Sol B1). The close goes through the router, so a
- * screen guarding unsent text asks first (the broadcast composer's "Discard this message?"); kept, Messages opens on it.
+ * Opens a { tab, params } target (chatTarget, the brief's actionTarget). A chat into Messages from anywhere replaces
+ * whatever is open there, so it sits right on the same inbox (Sol B1). One RESET through the router: a screen guarding
+ * unsent text asks first (the broadcast composer's "Discard this message?"); kept, Messages opens on it, and Discard
+ * re-runs the reset.
  */
 export function openTarget(navigation: TabJump, { tab, params }: { tab: string; params?: object }): void {
-  const stack = tab === 'Messages' ? messagesStack(navigation) : undefined;
-  if (stack?.key && stack.routes.length > 1) {
-    navigation.dispatch?.({ ...StackActions.popToTop(), target: stack.key });
-    if ((messagesStack(navigation)?.routes.length ?? 1) > 1) {
-      navigation.navigate(tab);
-      return;
-    }
+  const nested = params as { screen?: string; params?: object } | undefined;
+  const stack = tab === 'Messages' && nested?.screen === 'ClientMessages' ? messagesStack(navigation) : undefined;
+  if (!stack?.key || stack.routes.length < 2) {
+    navigation.navigate(tab, params);
+    return;
   }
-  navigation.navigate(tab, params);
+  const routes = [stack.routes[0], { name: 'ClientMessages', params: nested?.params }];
+  navigation.dispatch?.({ type: 'RESET', payload: { ...stack, index: 1, routes }, target: stack.key }); // CommonActions.reset
+  navigation.navigate(tab);
 }
 
 export const openInboxChat = (navigation: TabJump, clientId: string, clientName: string): void =>

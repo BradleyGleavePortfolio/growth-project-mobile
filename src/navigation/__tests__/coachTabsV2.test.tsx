@@ -452,8 +452,8 @@ it.each(ENTRIES.slice(1))('flag on: an unsent broadcast left open in Messages as
   await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
   expect(mockDiscardAsk).toHaveBeenCalledTimes(1); // Keep editing: nothing closes and Messages opens on the composer
   expect([focusedTab(), stackOf('Messages')]).toEqual(['Messages', ['MessagesInbox', 'CoachBroadcasts', 'CoachBroadcastComposer']]);
-  await act(async () => ref.dispatch(mockDiscardAsk.mock.calls[0][0].data.action)); // Discard: back to the inbox
-  expect(stackOf('Messages')).toEqual(['MessagesInbox']);
+  await act(async () => ref.dispatch(mockDiscardAsk.mock.calls[0][0].data.action)); // Discard: the chat on the inbox
+  expect([stackOf('Messages'), ref.getCurrentRoute()?.params]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT]);
 });
 
 it('every chat opened outside Clients goes through coachInbox.ts, and every file that does is a row above', () => {
