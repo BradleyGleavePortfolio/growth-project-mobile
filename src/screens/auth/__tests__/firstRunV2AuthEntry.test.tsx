@@ -63,9 +63,11 @@ jest.mock('react-native/Libraries/Components/StatusBar/StatusBar', () => {
   const { View } = jest.requireActual('react-native');
   return { __esModule: true, default: (p: object) => <View testID="status-bar" {...p} /> };
 });
-jest.mock('expo-status-bar', () => ({
-  StatusBar: (p: object) => React.createElement(require('react-native').View, { testID: 'band-icons', ...p }),
-}));
+jest.mock('expo-status-bar', () => {
+  const { createElement } = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return { StatusBar: (p: object) => createElement(View, { testID: 'band-icons', ...p }) };
+});
 
 import WelcomeScreen from '../WelcomeScreen';
 import LoginScreen from '../LoginScreen';
