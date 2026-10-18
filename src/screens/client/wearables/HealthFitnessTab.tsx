@@ -236,7 +236,7 @@ export default function HealthFitnessTab({ renderNotice, aiPanelSlot }: Props) {
               <Text style={[styles.body1, { color: sc.textMuted }]}>
                 {`Connect ${platformName} to import activity, heart rate, workouts and body measurements.`}
               </Text>
-              <PrimaryButton label={`Connect ${platformName}`} onPress={() => go('Connections')} haptic={false} />
+              <PrimaryButton label={`Connect ${platformName}`} onPress={() => go('Connections')} haptic={false} style={styles.connectButton} />
             </View>
           )}
           {sourceName && (
@@ -329,8 +329,9 @@ const styles = StyleSheet.create({
   warm: { flexDirection: 'row', gap: spacing.sm, padding: spacing.lg, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
   body1: { ...typography.body, flexShrink: 1 },
   strong: { fontFamily: 'Inter_600SemiBold' },
-  connect: { padding: spacing.xl, gap: spacing.md, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
+  connect: { padding: spacing.lg, gap: spacing.md, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
   connectTitle: { ...typography.h2 },
+  connectButton: { paddingHorizontal: spacing.md }, // "Connect Health Connect" fits at 130% on 360 pt
   sub: { ...typography.bodySmall },
   link: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: layout.touchMin, paddingLeft: spacing.md },
   coach: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.xs },
