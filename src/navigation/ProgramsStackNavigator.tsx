@@ -15,6 +15,11 @@ import ProgramPackagesScreen from "../screens/coach/programs/ProgramPackagesScre
 import ProgramHistoryScreen from "../screens/coach/programs/ProgramHistoryScreen";
 import CoachWorkoutBuilderScreen from "../screens/coach/CoachWorkoutBuilderScreen";
 import SupportInboxScreen from "../screens/support/SupportInboxScreen";
+import CoachMealTemplatesScreen from "../screens/coach/CoachMealTemplatesScreen";
+import DayPlanBuilderScreen from "../screens/coach/meals/DayPlanBuilderScreen";
+import MealPickerScreen from "../screens/coach/meals/MealPickerScreen";
+import MealPlanAssignScreen from "../screens/coach/meals/MealPlanAssignScreen";
+import { featureFlags } from "../config/featureFlags";
 import type { ProgramsStackParamList } from "../screens/coach/programs/types";
 
 const Stack = createNativeStackNavigator<ProgramsStackParamList>();
@@ -67,6 +72,14 @@ export default function ProgramsStackNavigator() {
         component={SupportInboxScreen}
         options={{ title: "Support" }}
       />
+      {featureFlags.mealPlansV2 && (
+        <Stack.Group screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="MealEditor" component={CoachMealTemplatesScreen} />
+          <Stack.Screen name="DayPlanBuilder" component={DayPlanBuilderScreen} />
+          <Stack.Screen name="MealPicker" component={MealPickerScreen} />
+          <Stack.Screen name="MealPlanAssign" component={MealPlanAssignScreen} />
+        </Stack.Group>
+      )}
     </Stack.Navigator>
   );
 }

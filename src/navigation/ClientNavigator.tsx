@@ -65,6 +65,7 @@ import LearnLessonScreen from '../screens/client/learn/LearnLessonScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
+import YouScreen from '../screens/client/YouScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
@@ -157,6 +158,7 @@ import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
 import { logger } from '../utils/logger';
 // S-SCHED — client Calendar tab (featureFlags.clientCalendar, default OFF).
 import CalendarHomeScreen from '../screens/client/calendar/CalendarHomeScreen';
+import CalendarWeekScreen from '../screens/client/calendar/CalendarWeekScreen';
 import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
@@ -209,7 +211,7 @@ const TAB_BUTTON_PADDING = 5;
 
 export type HomeStackParamList = {
   HomeMain: undefined;
-  Habits: undefined;
+  Habits: { initialTab?: 'checkin' } | undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
   Messages: { openCoachCode?: boolean } | undefined;
@@ -436,7 +438,7 @@ function CalendarStackNavigator() {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <CalendarStackNav.Screen name="CalendarHome" component={ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
+      <CalendarStackNav.Screen name="CalendarHome" component={featureFlags.clientCalendarV2 ? CalendarWeekScreen : ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
       <CalendarStackNav.Screen name="CalendarBook" component={ProtectedCalendarBookScreen} />
       <CalendarStackNav.Screen name="CalendarSession" component={ProtectedCalendarSessionScreen} />
     </CalendarStackNav.Navigator>
@@ -456,7 +458,7 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
-        {({ navigation }) => <ProtectedHabitsScreen onSaved={() => {
+        {({ navigation, route }) => <ProtectedHabitsScreen key={route.params?.initialTab ?? 'habits'} initialTab={route.params?.initialTab} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_checkin');
         }} />}
       </HomeStackNav.Screen>
@@ -536,7 +538,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <MoreStackNav.Screen name="MoreIndex"    component={MoreScreen} />
+      {/* C9-S1: the You home (MOCK-C9 Style C) behind featureFlags.youTabV2. */}
+      <MoreStackNav.Screen name="MoreIndex"    component={featureFlags.youTabV2 ? YouScreen : MoreScreen} />
       <MoreStackNav.Screen name="ProfileMain"  component={ProfileScreen} />
       <MoreStackNav.Screen name="EditProfile"  component={EditProfileScreen} />
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
@@ -843,7 +846,8 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
       <Tab.Screen
         name="MoreTab"
         options={{
-          tabBarAccessibilityLabel: 'Profile and more',
+          // C9-S1: the tab, the title and the screen reader all say You.
+          tabBarAccessibilityLabel: featureFlags.youTabV2 ? 'You' : 'Profile and more',
           title: 'You',
           tabBarIcon: ({ color }) => (
             <Ionicons name="person-outline" size={24} color={color} />

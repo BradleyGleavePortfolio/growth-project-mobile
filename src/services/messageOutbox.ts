@@ -11,11 +11,16 @@
  * - Saved per user as messages_thread_outbox_<id> in AsyncStorage: it survives leaving the thread and closing the app.
  *   Sign-out handles it like the food and workout queues (authActions SESSION-KEEP-130): one bounded try to send, the
  *   confirm names what is still unsent, then sign-out removes it, saved and in memory. Nothing waits across accounts.
+ * - SHARE-B: Send to {coach} puts a share card in the same line (sendCardViaOutbox): offline it waits in the thread and
+ *   sends on reconnect like a message, in either thread style, so the outbox also runs with shareSendV1 (outboxOn).
+ *   A card has no text, so a refused one simply leaves.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { messagingV2Api, toMessagingError, type MessagingApiError, type ThreadMessage } from '../api/messagingV2Api';
+import type { ShareSnapshot } from '../api/shareCardApi';
 import { newClientMessageId } from '../components/messaging/threadV2';
+import { featureFlags } from '../config/featureFlags';
 import { isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { readUserCacheSync } from '../lib/userCache';
 
@@ -28,6 +33,8 @@ export interface OutboxItem {
   failed?: boolean;
   /** Can never be accepted as written: it holds nothing, and a tap takes its text back to the composer. */
   refused?: boolean;
+  /** A share card (SHARE-B), sent alone: body is ''. */
+  card?: ShareSnapshot;
 }
 
 export type OutboxEvent =
@@ -138,6 +145,21 @@ export async function sendViaOutbox(uid: string, body: string, replyToId: string
   return drainOutbox(uid);
 }
 
+/** The outbox runs with Style B (every send) or with Send to {coach} (SHARE-B: cards, in either thread style). */
+export const outboxOn = (): boolean => featureFlags.c3StyleB || featureFlags.shareSendV1;
+
+/**
+ * Send to {coach} (SHARE-B): the card joins the end of the line under the sheet's key (a second tap sends that one again,
+ * from the head), and the answer says where it stands: on the server, waiting for the signal, failed, or refused.
+ */
+export async function sendCardViaOutbox(uid: string, card: ShareSnapshot, key: string): Promise<'sent' | 'waiting' | 'failed' | 'refused'> {
+  await hydrateOutbox(uid);
+  if (!readOutbox(uid).some((i) => i.key === key)) commit(uid, [...items, { key, body: '', card, replyToId: null, createdAt: new Date().toISOString() }]);
+  await drainOutbox(uid, true);
+  const left = readOutbox(uid).find((i) => i.key === key);
+  return !left ? 'sent' : left.refused ? 'refused' : left.failed ? 'failed' : 'waiting';
+}
+
 /** A refused message leaves the outbox and is returned, for its text to go back to the composer. */
 export function takeBackRefused(uid: string, key: string): OutboxItem | undefined {
   const item = readOutbox(uid).find((i) => i.key === key && i.refused);
@@ -179,7 +201,7 @@ async function sendInOrder(uid: string, manual: boolean): Promise<void> {
     const head = items.find((i) => !i.refused);
     if (!head || (head.failed && !manual)) return;
     try {
-      const row = await messagingV2Api.sendMessage({ role: 'client' }, { body: head.body, clientMessageId: head.key, replyToId: head.replyToId });
+      const row = await messagingV2Api.sendMessage({ role: 'client' }, { body: head.body, card: head.card, clientMessageId: head.key, replyToId: head.replyToId });
       commit(uid, items.filter((i) => i.key !== head.key), { type: 'sent', row });
     } catch (err) {
       const error = toMessagingError(err);

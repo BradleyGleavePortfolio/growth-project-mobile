@@ -36,6 +36,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_C3_STYLE_B: process.env.EXPO_PUBLIC_FF_C3_STYLE_B,
   EXPO_PUBLIC_FF_CLIENT_CALENDAR: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR,
+  EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2,
   EXPO_PUBLIC_FF_CLIENT_HOME_RINGS: process.env.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
@@ -54,6 +55,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COMMUNITY_DM: process.env.EXPO_PUBLIC_FF_COMMUNITY_DM,
   EXPO_PUBLIC_FF_COMMUNITY_EVENTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_EVENTS,
   EXPO_PUBLIC_FF_COMMUNITY_HALL: process.env.EXPO_PUBLIC_FF_COMMUNITY_HALL,
+  EXPO_PUBLIC_FF_COMMUNITY_HOME_V2: process.env.EXPO_PUBLIC_FF_COMMUNITY_HOME_V2,
   EXPO_PUBLIC_FF_COMMUNITY_SEARCH: process.env.EXPO_PUBLIC_FF_COMMUNITY_SEARCH,
   EXPO_PUBLIC_FF_COMMUNITY_TAB: process.env.EXPO_PUBLIC_FF_COMMUNITY_TAB,
   EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES: process.env.EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES,
@@ -66,6 +68,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
   EXPO_PUBLIC_FF_LEARN_HUB: process.env.EXPO_PUBLIC_FF_LEARN_HUB,
+  EXPO_PUBLIC_FF_MEAL_PLANS_V2: process.env.EXPO_PUBLIC_FF_MEAL_PLANS_V2,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
   EXPO_PUBLIC_FF_MWB_PROGRAMS: process.env.EXPO_PUBLIC_FF_MWB_PROGRAMS,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
@@ -83,6 +86,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_TEAM_MODE: process.env.EXPO_PUBLIC_FF_TEAM_MODE,
   EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF: process.env.EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF,
   EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS: process.env.EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS,
+  EXPO_PUBLIC_FF_YOU_TAB_V2: process.env.EXPO_PUBLIC_FF_YOU_TAB_V2,
   EXPO_PUBLIC_NOTIFICATIONS_MOCK: process.env.EXPO_PUBLIC_NOTIFICATIONS_MOCK,
 } as const;
 
@@ -187,6 +191,8 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_CLIENT_CALENDAR
    */
   clientCalendar: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR', false),
+  /** C4 Style C week. Independent rollout; off in every build unless explicitly enabled. */
+  clientCalendarV2: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2', false),
 
   // ─── Wave 11 — runtime scaffolding ───────────────────────────────────────
   /** Client Path Copilot — AI summaries + drafts on the client home tab. */
@@ -255,6 +261,15 @@ export const featureFlags = {
   communityCohorts: readFlag('EXPO_PUBLIC_FF_COMMUNITY_COHORTS', false),
   /** Direct messages (client↔coach and client↔client per §2.10 gates). */
   communityDm: readFlag('EXPO_PUBLIC_FF_COMMUNITY_DM', false),
+  /**
+   * C6-M1S (C6CHAT-S-V2 c01 and x1, MOCK-COMMX2): the Community tab opens on
+   * the Forest Pop Community Home (masthead, segment, spaces, Direct messages)
+   * and a space page gets the space-list drawer. Needs communityTab. Default
+   * off; off, the tab is today's shell.
+   *
+   * env: EXPO_PUBLIC_FF_COMMUNITY_HOME_V2
+   */
+  communityHomeV2: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HOME_V2', false),
 
   // ─── Community v1-6 — mobile coach surface ───────────────────────────────
   // The v1-6 backend (community-cohort-write, community-cohort-members,
@@ -673,6 +688,17 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_LEARN_HUB
    */
   learnHub: readFlag('EXPO_PUBLIC_FF_LEARN_HUB', false),
+  /** MEALBUILD (MOCK-K5 C): Programs > Meal plans and Meals. Off; off, Programs is main's. env: EXPO_PUBLIC_FF_MEAL_PLANS_V2 */
+  mealPlansV2: readFlag('EXPO_PUBLIC_FF_MEAL_PLANS_V2', false),
+
+  // ─── C9-S1 — the You tab home in Style C (MOCK-C9) ──────────────────────
+  /**
+   * The You tab as MOCK-C9 Style C (owner pick C9 = Style C); the tab, the title and the
+   * screen reader all say You. OFF UNCONDITIONALLY; off, the tab is exactly main's More list.
+   *
+   * env: EXPO_PUBLIC_FF_YOU_TAB_V2
+   */
+  youTabV2: readFlag('EXPO_PUBLIC_FF_YOU_TAB_V2', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

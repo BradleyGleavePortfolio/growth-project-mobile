@@ -28,6 +28,8 @@ A React Native nutrition & fitness coaching app built with Expo, TypeScript, and
 
 ## Features
 
+Calendar's optional Style C week is controlled independently by `EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2` (off by default; no checked-in build enables it). The Home Habits route accepts an optional `initialTab: 'checkin'` for direct entry from today's calendar action; unchanged callers still open Habits.
+
 - **Calorie & Macro Tracking** — Log meals with protein, carbs, fat breakdowns. Macros are stored on a strict **per-100g** canonical basis (see "Food logger math" below).
 - **Meal Plans** — Coach-assigned weekly meal plans with daily targets
 - **Recipe Library** — Searchable recipe database with filters

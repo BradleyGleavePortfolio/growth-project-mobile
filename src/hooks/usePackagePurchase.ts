@@ -55,6 +55,7 @@ import {
   isUncertainSheetResult,
   listClientPlans,
   loadPackageStripeSdk,
+  plansChanged,
   reportPackagePaymentFailure,
   type ClientPlan,
   type PackagePaymentNotice,
@@ -314,6 +315,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       if (pkg) retireAttempt(pkg);
       confirmingRef.current = null;
       oneTimeUnknownRef.current = null;
+      plansChanged(); // You's Your plans row reads the plans again
       try {
         optsRef.current.onEntitled?.();
       } catch {

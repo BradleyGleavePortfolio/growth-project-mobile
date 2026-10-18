@@ -6,7 +6,7 @@
  * coachless client (m#654) and the day's one forest button. Roman's line, the tiles,
  * Edit tiles and the notice slot follow in the next UI-1 pull requests.
  */
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
@@ -16,16 +16,15 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useTodayCheckIn } from '../../../hooks/useApi';
 import { useWearableSamples } from '../../../hooks/useWearableSamples';
 import { useWearableConnections } from '../../../hooks/useWearableConnections';
-import { getTodayString } from '../../../utils/date';
+import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
 import type { ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilderApi';
 import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import { PrimaryButton } from '../../../ui';
-import { recoveryScore, sleepDeficit } from '../wearables/recoveryData';
 import HomeHeaderActions from '../../../components/home/HomeHeaderActions';
 import CoachlessHomeSlot from '../../../components/coachless/CoachlessHomeSlot';
 import HomeDial from '../../../components/home/rings/HomeDial';
-import { foodDial, noHealthSource, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
+import { foodDial, lastNightSleep, noHealthSource, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
 import { homeDateLine } from '../homeDate';
 
 /** The raw workout reads behind the Train dial (null = that read failed). */
@@ -52,11 +51,11 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
   const currentUser = useCurrentUser();
   // One window per local day (last 7 days through tomorrow's midnight), so the query key is
   // stable: Home reopens on cached data and pull to refresh refetches the same key.
-  const today = getTodayString();
-  const range = useMemo(() => {
-    const [y, m, d] = today.split('-').map(Number) as [number, number, number];
-    return { from: new Date(y, m - 1, d - 7).toISOString(), to: new Date(y, m - 1, d + 1).toISOString() };
-  }, [today]);
+  const now = new Date();
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const today = bucketDateLocal(now, timeZone);
+  const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+  const range = { from: new Date(y, m - 1, d - 7).toISOString(), to: new Date(y, m - 1, d + 1).toISOString() };
   const sleepRead = useWearableSamples(
     { bucket: 'SLEEP_RECOVERY', from: range.from, to: range.to, granularity: 'day', preferredOnly: true },
     { enabled: !!currentUser },
@@ -79,8 +78,7 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
   // number for last night; every other state opens Recovery. Both sit in the Home stack, so Back lands on Home.
   const noSource = noHealthSource(connections);
   const sleep = sleepDial({
-    recovery: recoveryScore(sleepRead.data),
-    asleepMin: sleepDeficit(sleepRead.data)?.asleepMinutes ?? null,
+    ...lastNightSleep(sleepRead.data, now, timeZone),
     checkInHours: Number((checkIn.data as { sleep_hours?: number | string | null } | null | undefined)?.sleep_hours) || null,
     reads: { health: readState(sleepRead), checkIn: readState(checkIn) },
     noSource,

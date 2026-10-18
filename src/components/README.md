@@ -16,6 +16,8 @@ writes, coach lock or screen wiring. Full state frames remain C8 PR 13.
 
 CAC-POLISH: `roman/RomanLoadingSkeleton.tsx` is the existing Roman loading state shared by the first coach-consent read and the room read, with the same spoken label and Reduce Motion support. The initial consent read keeps a working Back action; it never mounts the room early. `ai/AiRefusalNotice.tsx` uses `radius.card` (16) for every refusal card, compact or full, and `radius.button` (12) for every primary and secondary action; refusal handling and wording are unchanged.
 
+ROMAN-RADIUS: Roman's cards (`RomanWorkoutCompleteCard`, `RomanStreakCard`, `RomanBriefCard`, the `RomanErrorBanner` toast, `adjust/RomanAdjustmentCard`) use `radius.card` (16), the adjustment card's actions `radius.button` (12) and its chips `radius.chip`; no file under `roman/` sets a literal radius (guard in `adjust/__tests__/RomanAdjustmentCard.test.tsx`).
+
 Shared, screen-agnostic UI. Anything that more than one screen renders, or anything that owns its own animation / lifecycle, lives here. Tokenised — no hardcoded hex, no inline radius / shadow values.
 
 ## Purpose
@@ -52,7 +54,7 @@ Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133):
 | `MilestoneList.tsx`, `HeroAction.tsx` | Home-tab hero composition + milestone list (date · note rows; single fade, no celebration). |
 | `anticipation/CountdownTile.tsx`, `MilestoneProgress.tsx` | "Healthy anticipation" surfaces — the next-milestone preview. |
 | `community/VoiceNotesSection.tsx`, `community/SafetyMenu.tsx` | Hall voice notes (Record, player) and the Report / Block / Delete menu every piece of community content carries (App Review 1.2); "Report sent" after "Self-harm or suicide" leads with 911 and the 988 Lifeline. Member wins render in `screens/client/CommunityScreen.tsx`. |
-| `share/ShareSheet.tsx`, `share/shareCards.tsx`, `share/sharePicture.ts` | SHARE-A (`featureFlags.shareSheetV2`, off): one share sheet over the screen it came from for any `ShareCardContent` (the health pages can pass their own). `runCard` / `bestCard` draw the forest cards (number, words, dates, app name; nothing else) and say what is in each and what is not. Coached with `shareSendV1`: Send to {coach} (filled, `api/shareCardApi`, a 400 or 409 hides it) and Share outside the app (outline); else one filled Share outside the app. `sharePicture` makes the PNG and opens the phone's share options; failures are calm words in place. `ShareLink` is the Session summary's Share action. See `docs/share-card.md`. |
+| `share/ShareSheet.tsx`, `share/shareCards.tsx`, `share/sharePicture.ts` | SHARE-A (`featureFlags.shareSheetV2`, off): one share sheet over the screen it came from for any `ShareCardContent` (the health pages can pass their own). `runCard` / `bestCard` draw the forest cards (number, words, dates, app name; nothing else) and say what is in each and what is not. Coached with `shareSendV1`: Send to {coach} (filled; a refusal, such as a 400 from a server without share cards, hides it) and Share outside the app (outline); else one filled Share outside the app. `sharePicture` makes the PNG and opens the phone's share options; failures are calm words in place. `ShareLink` is the Session summary's Share action. SHARE-B (`shareSendV1`): Send goes through the client's thread outbox in either thread style (`services/messageOutbox` `sendCardViaOutbox`: offline the sheet says "You're offline. It sends when you reconnect." and the card waits in the thread); `SharedCard` draws a sent card back under "Shared progress" in `messaging/MessageBubble` and `messaging/StyleBThread`, on cream on both sides. See `docs/share-card.md`. |
 | `trust/TrustCueRow.tsx`, `TrustExplainerSheet.tsx` | Three-chip trust rail (encrypted, data ownership, no ads). Tap opens explainer; fires `trust_cue_tapped`. |
 
 ### Roman (AI butler) identity
@@ -85,7 +87,7 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `log/DailySummaryBar.tsx` | Food log hero: the overline (Calories left / over target / eaten), one serif display number with lining tabular figures, then the quiet macro bars. |
 | `log/MealSectionCard.tsx` | Hairline meal section: serif meal title, tabular kcal, entry rows (tap = edit, long-press = delete) and a forest "Add food" text action. No meal icons, no fills. |
 | `log/FoodSearchModal.tsx`, `FoodSearchView.tsx` | Search-and-pick modal backed by `foodApi.search`. |
-| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen. |
+| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen (the coach meal picker passes its own confirm label, hint and limit notice). |
 | `log/ManualFoodEntryForm.tsx` | Free-form entry (name, macros, serving) for foods not in the catalogue. |
 | `mealplan/LogPlannedMealButton.tsx` | "Log this meal" on every planned meal (`ClientDailyMealPlanScreen`). One tap adds the meal to today's food log when the plan gives calories, protein, carbs and fat and its slot is breakfast, lunch, dinner or a snack; otherwise a sheet asks only for what the plan does not say (the meal, a missing value), so a missing value is never logged as zero. Same write as the Food log's manual entry (`utils/log/logSubmit`): online it creates the food and the entry and offers Undo; offline it queues them like the Food log. Tests: `mealplan/__tests__/LogPlannedMealButton.test.tsx`, `screens/client/__tests__/MealPlanLogThisMeal.test.tsx`. |
 
@@ -187,7 +189,7 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 | `log/DailySummaryBar.tsx` | Macro / calorie summary header for the Log screen. |
 | `log/MealSectionCard.tsx` | Per-meal card with add-food and entry list. |
 | `log/FoodSearchModal.tsx`, `FoodSearchView.tsx` | Search-and-pick modal backed by `foodApi.search`. |
-| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen. |
+| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen (the coach meal picker passes its own confirm label, hint and limit notice). |
 | `log/ManualFoodEntryForm.tsx` | Free-form entry (name, macros, serving) for foods not in the catalogue. |
 
 ### Domain-specific

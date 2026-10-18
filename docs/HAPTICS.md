@@ -61,6 +61,7 @@ When the toggle changes:
 | `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
 | Overview gear, Calendar gear, Messages Community button (COACHTABS) | `softImpact()` | Opens Settings, Hours and rules, Community |
 | `wearables/HealthFitnessTab` (HEALTH-1, `healthPages` off by default) | `selection()`; `error()` | Opens the device row, Steps, a card or Connect; Try again fails |
+| `wearables/MetricDetailV2` (HEALTH-2, `healthPages` off by default) | `selection()`; `softImpact()`; `error()` | Week or Month changes; Share opens the sheet (its own haptics are `ShareSheet`'s); Try again fails |
 | `messaging/RomanDraftMark` (Roman draft mark, both threads and C3 Style B) | `selection()` | Show or fold the draft line, open its explanation, or forward a long press to message actions (flag off by default) |
 | `ActiveWorkoutScreen` | `heavyImpact()` | Workout saved successfully |
 | `ActiveWorkoutScreen` | `error()` | Workout save failed |
@@ -77,7 +78,7 @@ When the toggle changes:
 | `MessagesScreen` (client, `c3StyleB` on) | `softImpact()` | Send tapped |
 | `MessagesScreen` (client, `c3StyleB` on) | `error()` | A send fails while online (once per failure; it holds the messages after it; none while offline, the message waits) |
 | `MessagesScreen` (client, `c3StyleB` on) | `success()` | The coach's read lands while the thread is open |
-| `share/ShareSheet` (SHARE-A, `shareSheetV2` off by default) | `softImpact()`; `success()`; `error()` | A tap on Send to {coach}, Share outside the app or the Session summary Share link; once, only when the server confirms a send (none for Share outside the app: the app cannot know whether the person finished); a picture or a send fails |
+| `share/ShareSheet` (SHARE-A, `shareSheetV2` off by default) | `softImpact()`; `success()`; `error()` | A tap on Send to {coach}, Share outside the app or the Session summary Share link; once, only when the server confirms a send (none for Share outside the app: the app cannot know whether the person finished; none when the card waits offline in the thread outbox, SHARE-B); a picture or a send fails |
 | `ShareCardScreen` (flag off) | `error()` | The picture could not be made or the share failed (the success haptic before the picture is gone) |
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
 | `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |

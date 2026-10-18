@@ -18,6 +18,8 @@ jest.mock('../../../lib/userCache', () => ({ patchUserCache: async () => undefin
 
 import CoachCodeSheet from '../CoachCodeSheet';
 import { resetCoachSharingNoticeForTests } from '../../../lib/coachSharingNotice';
+import { YOUR_PLANS_QUERY_KEY } from '../../../lib/packagePayment';
+import { queryClient } from '../../../services/queryClient';
 
 const COACH = { id: 'coach-1', name: 'Alex Rivera', photo_url: null, business_name: null, bio: null };
 const SENTENCE =
@@ -56,12 +58,14 @@ async function joinAndReadBody(): Promise<unknown> {
 }
 
 it('current production policy: no sentence on the sheet and the old redeem body', async () => {
+  const outdated = jest.spyOn(queryClient, 'invalidateQueries');
   mockPolicy.mockResolvedValue({ data: { invite_code_required: true, providers: ['email'] } });
   await renderSheet();
   expect(await screen.findByText('Coach: Alex Rivera')).toBeTruthy();
   await waitFor(() => expect(mockPolicy).toHaveBeenCalled());
   expect(screen.queryByTestId('coach-sharing-notice')).toBeNull();
   expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP' });
+  await waitFor(() => expect(outdated).toHaveBeenCalledWith({ queryKey: YOUR_PLANS_QUERY_KEY })); // a code can grant a plan
 });
 
 it('advertised version: the sentence names the coach above Join and the version rides on the redeem', async () => {
