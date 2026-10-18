@@ -136,6 +136,21 @@ WCAG 2.x pairs, locked by `__tests__/contrastStyleC.test.ts` in both schemes (te
 
 Decorative, no ratio needed: `surface.sageLine`, `data.trackLight`, and the gold star fill on bone (1.68; the outline carries it).
 
+## Forest Pop community colours (C6CHAT-S-V2)
+
+`forestPop` names the community roles from C6CHAT-S-V2 section 6. Each one is an existing token, so the palette gains no colour: `deep` brand.800, `forest` colors.forest, `leaf` data.leaf, `moss` data.moss, `gold` gold.300, `goldInk` gold.800, `sage` semantic.success.bg, `sageLine` surface.sageLine, `surface` bgSurface, `ink` colors.ink, `n700` neutral.700, `brand400` brand.400, `onDeep` textOnAccent, `onDeepMuted` brand.100, `error` colors.error. Light ground only; the app launches light.
+
+One colour, one meaning: leaf is new, unread or active (on deep, or a fill with a moss edge); forest is the one filled action and the segment track; gold is the coach, on deep only, with goldInk on light; sage tints cards and chips; sageLine is the hairline. Leaf (1.94) and gold (1.89) are never text on the light page. Shadows only on lifted rows and sheets; no gradients. Pairs, locked by `__tests__/forestPop.test.ts` (text 4.5:1):
+
+| Pair | Ratio |
+| --- | --- |
+| ink / n700 / brand400 on surface | 17.15 / 6.81 / 5.47 |
+| forest / moss / goldInk / error on surface | 9.65 / 4.94 / 7.49 / 6.36 |
+| ink / n700 / forest on sage | 14.25 / 5.66 / 8.03 |
+| onDeep / onDeepMuted / leaf / gold on deep | 13.14 / 8.30 / 7.12 / 7.32 |
+| onDeep / onDeepMuted / leaf on forest | 9.19 / 5.81 / 4.98 |
+| ink on leaf / ink on gold | 8.85 / 9.09 |
+
 ## C8 v2 weight roles
 
 C8 v2 adds six aliases, not colours: `data.trend` and `data.pending` reuse leaf;

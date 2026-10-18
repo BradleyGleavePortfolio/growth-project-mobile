@@ -1,16 +1,20 @@
-/** SHARE-A (owner #SHARE-SEND op 1): ShareSheet behind shareSheetV2, Send behind shareSendV1. MOCK-SHARE boards 1-4, 7, 9. */
+/** SHARE-A (owner #SHARE-SEND op 1): ShareSheet behind shareSheetV2, Send behind shareSendV1. MOCK-SHARE boards 1-4, 7, 9.
+ * Send runs the real thread outbox (SHARE-B, either thread style); HTTP is mocked at services/api. */
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let mockFlags = { shareSheetV2: true, shareSendV1: true };
 jest.mock('../../../config/featureFlags', () => ({ get featureFlags() { return mockFlags; } }));
-let mockUser: { coach_id?: string } | null = null;
+let mockUser: { id?: string; coach_id?: string } | null = null;
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 const mockGet = jest.fn(async () => ({ data: { name: 'Sam Rivers' } }));
 const mockPost = jest.fn(async (..._a: unknown[]): Promise<unknown> => ({ data: {} }));
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: () => mockGet(), post: (...a: unknown[]) => mockPost(...a) } }));
+jest.mock('../../../lib/userCache', () => ({ ...jest.requireActual('../../../lib/userCache'), readUserCacheSync: () => ({ id: 'client-1' }) }));
+jest.mock('../../../tutorial/tutorialEvents', () => ({ emitTutorialSignal: jest.fn() }));
 jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///tmp/card.png') }));
 jest.mock('expo-sharing', () => ({ shareAsync: jest.fn(async () => undefined), isAvailableAsync: jest.fn(async () => true) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
@@ -19,7 +23,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 import ShareSheet, { type ShareCardContent } from '../ShareSheet';
 import { bestCard, runCard } from '../shareCards';
-import { sendShareCard } from '../../../api/shareCardApi';
+import { releaseOutbox } from '../../../services/messageOutbox';
 import WorkoutFinishSummary from '../../../screens/client/active-workout/WorkoutFinishSummary';
 
 const haptic = () => jest.requireMock('../../../ui/haptics/haptics.service').HapticService;
@@ -35,10 +39,12 @@ function Host({ card }: { card: ShareCardContent }) {
 const show = (card = runCard(14, '2026-10-17', '14')) => wrap(<Host card={card} />);
 const axiosError = (status: number) => Object.assign(new Error(`status ${status}`), { isAxiosError: true, response: { status } });
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  await AsyncStorage.clear();
+  releaseOutbox();
   mockFlags = { shareSheetV2: true, shareSendV1: true };
-  mockUser = { coach_id: 'coach-1' };
+  mockUser = { id: 'client-1', coach_id: 'coach-1' };
 });
 
 it('both flags are off in every EAS build profile through the real flag reader', () => {
@@ -96,10 +102,10 @@ it('boards 1 and 7: coached, Send to Sam posts the share card and gives one succ
   await fireEvent.press(await s.findByRole('button', { name: 'Send to Sam' }));
   [s.getByRole('button', { name: 'Share outside the app' }), s.getByText('Sam sees this card in your messages.'),
     s.getByRole('button', { name: 'Sending…' })].forEach((n) => expect(n).toBeTruthy());
-  expect(mockPost).toHaveBeenCalledWith('/messages', {
+  await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/messages', {
     card: { type: 'share', snapshot: { kind: 'weigh_in_run', value: 14, words: 'days in a row', from: '2026-10-04', to: '2026-10-17' } },
     client_message_id: expect.any(String),
-  });
+  }, expect.objectContaining({ headers: { 'Idempotency-Key': expect.any(String) } })));
   expect(haptic().success).not.toHaveBeenCalled();
   await act(async () => release({ data: {} }));
   await waitFor(() => expect(s.queryByText('Share this card')).toBeNull());
@@ -152,14 +158,8 @@ it('board 4: the Session summary has a Share link under each record line only wi
   expect(off.queryByRole('button', { name: 'Share Back squat at 225 lb' })).toBeNull();
 });
 
-it('sendShareCard: 409 (no current coach) is "not available"; a network error is a failed send', async () => {
-  mockPost.mockRejectedValueOnce(axiosError(409)).mockRejectedValueOnce(new Error('Network Error'));
-  const snap = runCard(3, '2026-10-17', '3').snapshot;
-  expect([await sendShareCard(snap, 'k'), await sendShareCard(snap, 'k')]).toEqual(['unavailable', 'failed']);
-});
-
-// Last: a 400 or 409 hides Send for the rest of the app session.
-it('a 400 from a server without share cards (or 409, no coach) is "not available": Send goes, Share outside the app stays', async () => {
+// Last: a refusal hides Send for the rest of the app session.
+it('a 400 from a server without share cards is "not available": Send goes, Share outside the app stays', async () => {
   mockPost.mockRejectedValueOnce(axiosError(400));
   const s = await show();
   await fireEvent.press(await s.findByRole('button', { name: 'Send to Sam' }));
