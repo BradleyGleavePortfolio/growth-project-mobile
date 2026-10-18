@@ -1,7 +1,7 @@
 /**
  * MEALBUILD 2/2: Assign to a client (MOCK-K5 Style C, conflict state) on POST
  * coach/daily-meal-plans/:id/assignments. The server takes any overlap and
- * shows the client the plan that starts latest, so conflicts are read here.
+ * the client sees every plan that covers a day, so conflicts are read here.
  */
 import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -17,7 +17,7 @@ import { useAssignableClients } from '../../../hooks/usePrograms';
 import { useCurrentMacrosForClient } from '../../../hooks/useMacros';
 import { toIsoDate } from '../../../api/programsApi';
 import type { ProgramsScreenProps } from '../programs/types';
-import { Chips, FirstCard, LoadFailed, Loading, Masthead, Notice, count, dayTotals, httpStatus, mealStyles as ms, num, saveFailed, seen, sortedSlots } from './mealUi';
+import { Chips, FirstCard, LoadFailed, Loading, Masthead, Notice, count, covering, dayTotals, httpStatus, mealStyles as ms, num, saveFailed, sortedSlots } from './mealUi';
 
 /** ISO dates at noon, so a clock change never moves a day. */
 const noon = (iso: string) => new Date(`${iso}T12:00:00`);
@@ -63,16 +63,13 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
   const client = roster.data?.find((c) => c.id === clientId);
   const first = client?.name.split(' ')[0] ?? '';
   const mine = runs.filter((r) => r.client === clientId && r.from <= (ends ?? '9999-12-31') && (!r.to || r.to >= starts));
-  // Blocked only when the client would already see this plan on the start day (a later plan may have replaced it).
-  const at = clientId ? seen(runs, clientId, starts) : undefined;
-  const same = at?.plan.id === planId ? at : undefined;
-  const tie = mine.find((r) => r.from === starts);
+  const same = mine.find((r) => r.plan.id === planId);
   const other = mine.find((r) => r.plan.id !== planId);
   const kcal = p ? dayTotals(sortedSlots(p)).calories_kcal : 0;
   const bold = { fontFamily: 'Inter_600SemiBold' };
   const shown = (roster.data ?? []).filter((c) => c.name.toLowerCase().includes(q.trim().toLowerCase()));
   // Overlaps are read from every plan's assignments: until all of them are in, Assign waits (button and handler alike).
-  const blocked = !client || !p || !read || !!same || !!tie;
+  const blocked = !client || !p || !read || !!same;
 
   const submit = async () => {
     if (blocked || !client) return;
@@ -116,10 +113,8 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
       ) : null}
       {same ? (
         <Notice icon="alert-circle-outline"><Text style={bold}>{`${first} is already on ${same.plan.name} from ${fmt(same.from)}.`}</Text></Notice>
-      ) : tie ? (
-        <Notice icon="alert-circle-outline"><Text style={bold}>{`${first} starts ${tie.plan.name} on ${fmt(tie.from)}.`}</Text>{' Pick another start date.'}</Notice>
       ) : other ? (
-        <Notice icon="information-circle-outline">{`${first} is on ${other.plan.name} from ${fmt(other.from)}. On days both plans cover, ${first} sees the one that starts later.`}</Notice>
+        <Notice icon="information-circle-outline">{`${first} is on ${other.plan.name} from ${fmt(other.from)}. On days both plans cover, ${first} sees both.`}</Notice>
       ) : null}
       {failed ? <Text accessibilityRole="alert" style={[typography.body, { color: sc.textPrimary }]}>{failed}</Text> : null}
       {client && target ? <Text style={[typography.body, { color: sc.textMuted }]}>{`Plan ${num(kcal)} · target ${num(target.calories_kcal)} kcal`}</Text> : null}
@@ -136,15 +131,15 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
           <View accessibilityRole="radiogroup" accessibilityLabel="Your clients" style={[ms.card, styles.list, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
             {shown.map((c, i) => {
               const on = c.id === clientId;
-              const now = seen(runs, c.id, today);
+              const now = [...new Set(covering(runs, c.id, today).map((r) => r.plan.name))].join(' and ');
               return (
                 <Pressable key={c.id} accessibilityRole="radio" accessibilityState={{ checked: on }} testID={`client-${c.id}`}
-                  accessibilityLabel={now ? `${c.name}, on ${now.plan.name}` : c.name}
+                  accessibilityLabel={now ? `${c.name}, on ${now}` : c.name}
                   onPress={() => { if (!on) { void HapticService.selection(); setClientId(c.id); } }}
                   style={({ pressed }) => [styles.row, i > 0 && { borderTopColor: sc.border, borderTopWidth: StyleSheet.hairlineWidth }, pressed && ms.pressed]}>
                   <View style={[styles.radio, { borderColor: on ? sc.accent : sc.textMuted }]}>{on ? <View style={[styles.dot, { backgroundColor: sc.accent }]} /> : null}</View>
                   <Text style={[typography.h2, ms.fill, { color: sc.textPrimary }]}>{c.name}</Text>
-                  {now ? <Text style={[typography.bodySmall, styles.on, { color: sc.textMuted }]}>{`On ${now.plan.name}`}</Text> : null}
+                  {now ? <Text style={[typography.bodySmall, styles.on, { color: sc.textMuted }]}>{`On ${now}`}</Text> : null}
                 </Pressable>
               );
             })}
