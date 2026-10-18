@@ -144,7 +144,6 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `Widgets` | Client | More tab | MoreScreen, ProfileScreen | `POST /fasting/start` on backend main |  | Works, reachable |
 | `Report` | Client | More tab | MoreScreen, ProfileScreen, ProgressScreen | `GET /log/daily` live (401)<br>`GET /weight/history` live (401) |  | Works, reachable |
 | `Learn` | Client | More tab | MoreScreen, ProfileScreen | `GET /lessons` live (401)<br>`POST /lessons/:p/complete` on backend main |  | Works, reachable |
-| `Plan` | Client | More tab | More > Meal plan | `GET /me/meal-plan/today` live (401)<br>`GET /meal-plans` live (401) |  | Wired in this PR (was unreachable) |
 | `TrustCenter` | Client | More tab | SettingsScreen | `GET /v1/me/data-export/status` live (401)<br>`POST /v1/me/data-export/request` on backend main |  | Works, reachable |
 | `DeleteAccount` | Client | More tab | RomanAiConsentScreen, SettingsScreen | `GET /log/daily` live (401)<br>`GET /me/delete-account/status` live (401)<br>`GET /nutrition/water` live (401)<br>`GET /profile` live (401)<br>+11 more, none missing |  | Works, reachable |
 | `RomanAiConsent` | Client | More tab | SettingsScreen | `GET /me/ai-consent` live (401)<br>`DELETE /me/ai-consent/roman` on backend main<br>`POST /me/ai-consent/roman` on backend main |  | Works, reachable |
@@ -162,7 +161,7 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `NotificationPreferences` | Client | More tab | SettingsScreen; push tap | `PATCH /notifications/preferences` on backend main |  | Works, reachable |
 | `SupportInbox` | Client | More tab | MessagesScreen, SettingsScreen, LoginScreen +2 | none (local or static) |  | Works, reachable |
 | `ClientMacros` | Client | More tab | More > Macro targets | `GET /me/macros/current` live (401) |  | Wired in this PR (was unreachable) |
-| `ClientDailyMealPlan` | Client | More tab | dropRow | `GET /me/meal-plan/today` live (401) |  | Works, reachable |
+| `ClientDailyMealPlan` | Client | More tab | More > Meal plan; dropRow | `GET /me/meal-plan/today` live (401) |  | Works, reachable |
 | `ClientWorkoutViewer` | Client | More tab | Workout tab > assignments (cross-tab navigate) | `GET /assignments/:p` live (401)<br>`GET /assignments/me` live (401)<br>`GET /workout-plans/:p/assignments` live (401)<br>`GET /workout-plans/:p` live (401)<br>+7 more, none missing |  | Works, reachable |
 | `WorkoutAssignmentDetail` | Client | More tab | ClientWorkoutViewerScreen, dropRow | `GET /assignments/:p` live (401)<br>`GET /assignments/me` live (401)<br>`GET /workout-plans/:p/assignments` live (401)<br>`GET /workout-plans/:p` live (401)<br>+7 more, none missing |  | Works, reachable |
 | `ClientBookingRequest` | Client | More tab | none | `GET /scheduling/coaches/:p/availability` live (401)<br>`GET /scheduling/coaches/:p/session-types` live (401)<br>`GET /scheduling/providers` live (401)<br>`GET /scheduling/sessions/:p` live (401)<br>+12 more, none missing |  | Owned by #325 (calendar): entry lands there; not edited here |
