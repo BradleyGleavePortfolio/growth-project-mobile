@@ -234,11 +234,22 @@ describe('Lessons sheet', () => {
     expect(mockApi.update).not.toHaveBeenCalled();
   });
 
-  it('move down and up write the new order; the list shows it at once', async () => {
+  it('a move shows the new order before the server answers, and holds the arrows until it does', async () => {
+    mockApi.update.mockImplementation(() => new Promise(() => undefined));
     const r = await sheet();
     await waitFor(() => expect(r.getByTestId('coach-lesson-down-a')).toBeTruthy());
     await fireEvent.press(r.getByTestId('coach-lesson-down-a'));
-    expect(r.getByLabelText('1. Lesson b')).toBeTruthy();
+    await waitFor(() => expect(r.getByLabelText('1. Lesson b')).toBeTruthy());
+    expect(server.map((l) => l.order_index)).toEqual([0, 1, 2]);
+    expect(r.getByTestId('coach-lesson-down-b').props.accessibilityState).toEqual({ disabled: true });
+  });
+
+  it('move down and up write only the changed order values', async () => {
+    const r = await sheet();
+    await waitFor(() => expect(r.getByTestId('coach-lesson-down-a')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('coach-lesson-down-a'));
+    // React Query tells the screen on its next tick, so wait for the new order.
+    await waitFor(() => expect(r.getByLabelText('1. Lesson b')).toBeTruthy());
     expect(r.getByLabelText('2. Lesson a')).toBeTruthy();
     expect(mockHaptic.selection).toHaveBeenCalled();
     await waitFor(() => expect(mockApi.update).toHaveBeenCalledTimes(2));
