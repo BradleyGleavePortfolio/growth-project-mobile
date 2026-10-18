@@ -3,11 +3,12 @@
  * Each dial is its own number, never a combined score. Pure, so every rule is
  * unit tested: no invented data, "—" while a read is pending or failed, and the
  * Sleep dial never says "coming soon" (an empty ring and "Connect" instead, only
- * once both of its reads answered with no sleep).
+ * once Health answered with no source at all and the check-in with no hours).
  */
 import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
 import { DEFAULT_SLEEP_NEED_MIN } from '../../../screens/client/wearables/recoveryData';
+import type { WearableSamplesResponse } from '../../../api/wearablesSamplesApi';
 
 /** value: serif number in the ring; unit: the line under it; sub: muted line under the label ('' = none). */
 export interface DialView { value: string; unit: string; sub: string; progress: number }
@@ -90,11 +91,17 @@ export function trainDial(input: {
 export type SleepSource = 'health' | 'checkin' | 'none' | 'unknown';
 export type ReadState = 'pending' | 'failed' | 'ok';
 
+/** #HEALTH-PAGES: Health has a source once it lists a connection or returned any sample. */
+export const hasHealthSource = (data: WearableSamplesResponse | undefined): boolean =>
+  !!data && (data.freshness.providers.length > 0 || data.series.some((s) => s.sample_count > 0));
+
 export function sleepDial(input: {
   recovery: number | null;
   asleepMin: number | null;
   checkInHours: number | null | undefined;
   reads: { health: ReadState; checkIn: ReadState };
+  /** Health answered with no source at all: the one state that may say "Connect" (and opens Connections). */
+  noSource: boolean;
 }): DialView & { source: SleepSource } {
   if (input.recovery !== null) {
     return {
@@ -115,6 +122,7 @@ export function sleepDial(input: {
   if (hours !== null) {
     return { value: `${Math.round(hours * 10) / 10}`, unit: 'h asleep', sub: '', progress: clamp01((hours * 60) / DEFAULT_SLEEP_NEED_MIN), source: 'checkin' };
   }
-  if (input.reads.health !== 'ok' || input.reads.checkIn !== 'ok') return unknown;
+  // A connected client with nothing for last night keeps the dash, never "Connect".
+  if (!input.noSource || input.reads.checkIn !== 'ok') return unknown;
   return { value: 'Connect', unit: '', sub: '', progress: 0, source: 'none' };
 }

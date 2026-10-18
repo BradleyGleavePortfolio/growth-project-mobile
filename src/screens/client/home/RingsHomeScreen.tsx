@@ -24,9 +24,13 @@ import { recoveryScore, sleepDeficit } from '../wearables/recoveryData';
 import HomeHeaderActions from '../../../components/home/HomeHeaderActions';
 import CoachlessHomeSlot from '../../../components/coachless/CoachlessHomeSlot';
 import HomeDial from '../../../components/home/rings/HomeDial';
+<<<<<<< HEAD
 import { foodDial, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
 import HomeRomanLine from '../../../components/home/rings/HomeRomanLine';
 import HomeTiles, { type HomeTilesProps } from '../../../components/home/rings/HomeTiles';
+=======
+import { foodDial, hasHealthSource, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
+>>>>>>> origin/op140/ui1-home-rings-tiles
 import { homeDateLine } from '../homeDate';
 
 /** The raw workout reads behind the Train dial (null = that read failed). */
@@ -74,14 +78,16 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
     now: new Date(), assignments: workout.assignments, history: workout.history,
     daysPerWeek: currentUser?.profile?.workout_days_per_week, loading: workout.exists === 'loading',
   });
+  // #HEALTH-PAGES: Connections only once Health answered with no source at all; every other state
+  // opens Recovery. Both sit in the Home stack, so Back lands on Home.
+  const noSource = readState(sleepRead) === 'ok' && !hasHealthSource(sleepRead.data);
   const sleep = sleepDial({
     recovery: recoveryScore(sleepRead.data),
     asleepMin: sleepDeficit(sleepRead.data)?.asleepMinutes ?? null,
     checkInHours: Number((checkIn.data as { sleep_hours?: number | string | null } | null | undefined)?.sleep_hours) || null,
     reads: { health: readState(sleepRead), checkIn: readState(checkIn) },
+    noSource,
   });
-  // Connections only when Health answered with no sleep; pending or failed opens Sleep and recovery.
-  const sleepToConnections = sleep.source === 'none' || (sleep.source === 'checkin' && readState(sleepRead) === 'ok');
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
@@ -105,9 +111,7 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             onPress={() => navigation.navigate('WorkoutTab')} />
           <HomeDial label="Sleep" view={sleep} testID="home-dial-sleep" prompt={sleep.source === 'none'}
             accessibilityLabel={dialLabel('Sleep', sleep)}
-            onPress={() => (sleepToConnections
-              ? navigation.navigate('MoreTab', { screen: 'Connections', initial: false })
-              : navigation.navigate('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } }))} />
+            onPress={() => (noSource ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'recovery' }))} />
         </View>
         <CoachlessHomeSlot part="join" />
         {/* Once the user is known, so a coached client never sees Roman locked first. */}
