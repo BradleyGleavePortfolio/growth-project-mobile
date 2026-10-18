@@ -106,6 +106,11 @@
       "default": "off",
       "reason": "C8 v2 chart parts stay off until the Progress page integration is ready."
     },
+    "EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "TIMELINE: the Style C Timeline page and its door on Progress stay off until the owner turns them on."
+    },
     "EXPO_PUBLIC_FF_COACH_LESSONS": {
       "kind": "flag",
       "default": "off",
