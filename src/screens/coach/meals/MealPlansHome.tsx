@@ -49,7 +49,7 @@ export default function MealPlansHome({ tab, onTab }: { tab: 'plans' | 'meals'; 
     body = plans.data?.length
       ? plans.data.map((p) => <PlanCard key={p.id} plan={p} clients={runs && clientsOn(runs, p.id).size}
         onPress={() => navigation.navigate('DayPlanBuilder', { planId: p.id })} />)
-      : <FirstCard title="No day plans yet." body="A day plan is a day of your meals, such as a training day or a rest day. Clients see it in Food." />;
+      : <FirstCard title="No day plans yet." body="A day plan is a day of your meals, such as a training day or a rest day. Clients see it in More, under Meal plan." />;
   }
 
   return (
