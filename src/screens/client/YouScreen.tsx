@@ -40,6 +40,7 @@ import {
   showsWearableRows,
   type MoreItem,
 } from './MoreScreen';
+import { LearnDoor } from './learn/LearnParts';
 
 export const YOU_COPY = {
   title: 'You',
@@ -292,6 +293,8 @@ export default function YouScreen() {
     const r = row(item.target.screen, item.isRoman ? 'roman' : item.icon, item.label, () => open(item), {
       detail: item.description, hint: item.a11yHint, first: i === 0,
     });
+    // #LEARN-COACHLESS op 1 (kept by Learn A): with learnHub on, Learn waits for the coach's guidelines or a lesson.
+    if (featureFlags.learnHub && item.target.screen === 'Learn') return <LearnDoor key={item.label}>{r}</LearnDoor>;
     return item.tutorialTarget ? <TutorialTarget key={item.label} id={item.tutorialTarget}>{r}</TutorialTarget> : r;
   };
   const section = (title: string, children: React.ReactNode) => (
