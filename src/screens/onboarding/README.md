@@ -23,8 +23,6 @@ Both flows write to the same AsyncStorage key (`onboarding_data`) via `utils/onb
 | `LeanQ1GoalScreen.tsx` | Goal — lose / build / maintain. First screen, fires `onboarding_started`. |
 | `LeanQ2ExperienceScreen.tsx` | Self-rated experience level. |
 | `LeanQ3IntentScreen.tsx` | Intent — log a workout, track meals or explore. Saves the answer and routes to `LeanQ4`; does not promise an intent-specific Home layout. |
-| `LeanQ4MetricsScreen.tsx` | Optional sex for calorie estimates, height (cm), current weight (kg), and imperial / metric controls. Save/skip both continue to Q5. |
-| `LeanQ5Screen.tsx` | Optional birth year and target weight. An untouched wheel never writes a birth date; only drafts marked `birthYearChosen` restore a chosen year. Save/skip continue to Q6. |
 | `LeanQ6Screen.tsx` | Dietary preferences. Calls `finalizeLeanOnboarding`, sets local completion flags and emits `authEvents`. |
 | `OnboardingStep1.tsx`–`OnboardingStep10.tsx` | Long-flow steps: name & sex, dob, weights, activity, goal, eating habits, diet type, restrictions, gym/fitness level, snacks. |
 | `OnboardingResults.tsx` | TDEE / target preview that closes the long flow. |
@@ -37,8 +35,6 @@ The legacy visual chrome lives in `components/OnboardingLayout.tsx`. Lean screen
 LeanQ1 ─► saveOnboardingData({ primaryGoal })           ┐
 LeanQ2 ─► saveOnboardingData({ fitnessLevel })          ├─ AsyncStorage('onboarding_data')
 LeanQ3 ─► saveOnboardingData({ intent })                │
-LeanQ4 ─► saveOnboardingData({ sex?, height?, currentWeight? }) │
-LeanQ5 ─► saveOnboardingData({ dob?, targetWeight? })          │ // explicitly selected birth year only
 LeanQ6 ─► saveOnboardingData({ restrictions })                ┘
         ─► finalizeLeanOnboarding() // PUT /profile, targets when required inputs exist
         ─► AsyncStorage.setItem('onboarding_complete', 'true')
@@ -73,7 +69,7 @@ None. The screens are env-free; the `profileApi.update` call inherits whatever `
 
 ## Tests
 
-`__tests__/leanHonest.test.tsx` renders all six screens and exercises choices, Back, skip, optional sex, explicit birth year, units, dietary selections and the existing final macro calculation. `leanOnboardingFlow.test.ts` pins structural wiring; `LeanQ1CoachSharing.test.tsx` retains the unchanged sharing-notice contract.
+`LeanQ1CoachSharing.test.tsx` retains the unchanged sharing-notice contract. The lean flow is not mounted (RootNavigator B14); the ONBQ-TILES deletion chain removes its screens, their tests and this section.
 
 ```bash
 npm test
