@@ -115,7 +115,7 @@ describe('PlanActiveMoment', () => {
     const trial = await render(<PlanActiveMoment success={success({ kind: 'trial' })} onContinue={jest.fn()} />);
     await waitFor(() => expect(trial.getByTestId('payment-success-next')).toBeTruthy());
     expect(trial.queryByTestId('payment-success-paid')).toBeNull();
-    trial.unmount();
+    await trial.unmount();
 
     mockGetPurchases.mockResolvedValue({
       ok: true,
@@ -125,7 +125,7 @@ describe('PlanActiveMoment', () => {
     await waitFor(() => expect(old.getByText('S', { includeHiddenElements: true })).toBeTruthy());
     expect(old.queryByTestId('payment-success-receipt')).toBeNull();
     expect(old.queryByText('$149.00')).toBeNull();
-    old.unmount();
+    await old.unmount();
 
     // Not in force yet (the charge has not settled): no paid line either.
     mockGetPurchases.mockResolvedValue({ ok: true, data: [row({ status: 'pending', entitlement_active: false })] });
@@ -177,7 +177,7 @@ describe('PlanActiveMoment', () => {
     const a = await render(<PlanActiveMoment success={success()} onContinue={jest.fn()} />);
     await waitFor(() => expect(timing).toHaveBeenCalledTimes(1));
     expect(timing.mock.calls[0][1]).toMatchObject({ toValue: 0, duration: 300 });
-    a.unmount();
+    await a.unmount();
 
     timing.mockClear();
     reduceMotion = true;
@@ -201,7 +201,7 @@ describe('PurchaseFeedback success with clientBillingV2', () => {
     );
     await waitFor(() => expect(on.getByTestId('payment-success-paid')).toBeTruthy());
     expect(on.getByTestId('coach-mark', { includeHiddenElements: true })).toBeTruthy();
-    on.unmount();
+    await on.unmount();
 
     mockFlags.clientBillingV2 = false;
     const off = await render(
