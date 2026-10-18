@@ -105,7 +105,7 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 **Flow**
 
 1. The list (`useRomanChats.ts`) loads `GET /roman/sessions` (30 per page, newest first, keyset `cursor`), shows each chat's local start date and time and message count (coach-tool chats are labelled). Two chats can start on the same local date (the backend keeps one chat per UTC day), so the start time is on every row, the transcript title and the permanent-delete confirm (B-331-1); the confirm also names the message count and, for coach tools, where it happened (`chatIdentity`), and pages with "Show older conversations".
-2. Open: `RomanConversationScreen` reads `GET /roman/sessions/:id/messages` (oldest first on screen, "Show earlier messages" pages back). Read only.
+2. Open: `RomanConversationScreen` reads `GET /roman/sessions/:id/messages` (oldest first on screen, "Show earlier messages" pages back). Read only. With `crisisActions` on, a reply carrying the server marker `safety_actions` shows `RomanCrisisActions` under it (CRISIS-BTN; coachless clients get the number actions).
 3. Delete one: confirm sheet ("permanently deletes ... cannot be undone"), the row leaves at once, comes back in place if the server does not confirm. A 404 `ROMAN_SESSION_NOT_FOUND` on delete is the requested outcome (already gone). A repeat delete is a quiet 204 on the server.
 4. Delete all: confirm sheet plus typing `DELETE` (case-insensitive). A client with no coach reads "Your plan and your logs stay as they are." as its last sentence (owner K1-5). The list empties at once; on failure the previous list comes back, and after a partial or unknown failure the list is re-read to show what is left.
 5. The transcript screen tells the list a chat is gone through `romanChatsEvents.ts` (in memory, carries the owner id and the sign-in epoch).
@@ -132,11 +132,11 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 ### CoachSharingScreen
 
-`CoachSharingScreen.tsx` (Settings > Privacy > Coach sharing): four switches (Workouts, Food logs, Weigh-ins, Check-ins and
-habits), each saved at once via `POST /consent/grant | revoke`. Under them one line says weight and body fat from connected
-devices (Apple Health, Health Connect) follow Weigh-ins (backend `coach-sharing-gate.ts` `seesWeight`, WEIGHTWALL) and the
-coach reads the other device data through the coach link only (backend `wearable-samples.service.ts`), and it stays after a
-disconnect (FW-BODY B2). The **Connected devices** row
+`CoachSharingScreen.tsx` (Settings > Privacy > Coach sharing): no switches (owner #SHARE-SIMPLE / #SHARE-JOIN, backend
+#1061: workouts, food logs, weigh-ins, check-ins and habits always reach the current coach; POST /consent/revoke returns 410
+for the four removed sharing scopes, POST /consent/grant remains accepted, and the one sharing switch is Roman and AI). It
+says what the coach sees and, under it, how new device data stops: a disconnect in Connected devices, or the phone's Apple
+Health permissions (Android: Health Connect); data already shared stays (FW-BODY B2). The **Connected devices** row
 opens `Connections` on the same More stack and shows where the More screen shows that row (iPhone, Health Connect builds,
 tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`. The Settings row shows only while the server says the
 client has a coach (`GET /consent/me`; 400 = none), read each time Settings comes into view (`useFocusEffect`); until the

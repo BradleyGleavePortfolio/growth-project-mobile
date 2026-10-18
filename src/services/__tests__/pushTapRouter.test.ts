@@ -241,7 +241,7 @@ describe('pushTapRouter', () => {
       attachPushNavigator(nav);
       setPushSession(COACH_A);
       routePushTap('CreditPackCheckout');
-      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SettingsHome', params: undefined });
+      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SettingsHome', params: undefined, pop: true });
     });
 
     it('CreditPackCheckout -> SettingsStack checkout when purchases are visible', () => {
@@ -249,7 +249,7 @@ describe('pushTapRouter', () => {
       attachPushNavigator(nav);
       setPushSession(COACH_A);
       routePushTap('CreditPackCheckout');
-      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: undefined });
+      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: undefined, initial: false });
     });
 
     it('coach CommunityEventDetail -> CommunityStack events screen', () => {

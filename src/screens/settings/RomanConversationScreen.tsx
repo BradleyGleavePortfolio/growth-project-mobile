@@ -23,6 +23,8 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { ROMAN_INTERRUPTED_NOTE } from '../../components/roman/romanVoice';
+import RomanCrisisActions from '../../components/roman/RomanCrisisActions';
+import { featureFlags } from '../../config/featureFlags';
 import { typography } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { romanChatsApi as defaultApi, type RomanChatsApi } from '../../api/romanChatsApi';
@@ -319,6 +321,10 @@ export default function RomanConversationScreen({
             <Text style={[styles.body, item.role === 'user' && styles.userText]}
               accessibilityLabel={`${item.role === 'user' ? 'You' : 'Roman'} said: ${item.content}`}>{item.content}</Text>
             {item.interrupted && item.role === 'assistant' ? <Text style={styles.caption}>{ROMAN_INTERRUPTED_NOTE}</Text> : null}
+            {/* CRISIS-BTN: the server-marked crisis reply keeps its actions here too (coachless: the two 988s). */}
+            {featureFlags.crisisActions && item.role === 'assistant' && item.safetyActions ? (
+              <RomanCrisisActions actions={item.safetyActions} testID={`roman-transcript-crisis-${item.id}`} />
+            ) : null}
           </View>
         )}
         role="list"

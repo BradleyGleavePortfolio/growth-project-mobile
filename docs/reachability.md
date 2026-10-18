@@ -76,7 +76,7 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 
 ## Signed out and onboarding
 
-`ConsultationOnboardingNavigator` (single flow, `ConsultationFlow`) replaces the lean flow when `consultationOnboarding` is on (ON in the clinic profile). It reads and writes `/me/onboarding/*` and finishes only through `POST /me/onboarding/complete` (live). Verdict: works, gate confirmed.
+`ConsultationOnboardingNavigator` (single flow, `ConsultationFlow`) is the onboarding for every new client (RootNavigator B14; the unmounted lean flow was deleted in ONBQ-TILES). It reads and writes `/me/onboarding/*` and finishes only through `POST /me/onboarding/complete` (live). Verdict: works, gate confirmed.
 
 | Route | Role | Stack | Entry point | Backend route(s), prod status | Flag | Verdict |
 |---|---|---|---|---|---|---|
@@ -89,12 +89,6 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `AcceptInvite` | Signed out | Auth | Invite link (deep link) | none (local or static) |  | Works: deep link only by design |
 | `AuthCallback` | Signed out | Auth | OAuth / magic link return (deep link) | none (local or static) |  | Works: deep link only by design |
 | `SupportInbox` | Signed out | Auth | MessagesScreen, SettingsScreen, LoginScreen +2 | none (local or static) |  | Works, reachable |
-| `LeanQ1` | New client | Lean onboarding | RootNavigator (onboarding, consultation flag off) | `PUT /profile` on backend main |  | Works, reachable |
-| `LeanQ2` | New client | Lean onboarding | LeanQ1GoalScreen | `PUT /profile` on backend main |  | Works, reachable |
-| `LeanQ3` | New client | Lean onboarding | LeanQ2ExperienceScreen | `PUT /profile` on backend main |  | Works, reachable |
-| `LeanQ4` | New client | Lean onboarding | LeanQ3IntentScreen | none (local or static) |  | Works, reachable |
-| `LeanQ5` | New client | Lean onboarding | LeanQ4MetricsScreen | none (local or static) |  | Works, reachable |
-| `LeanQ6` | New client | Lean onboarding | LeanQ5Screen | `PUT /profile` on backend main |  | Works, reachable |
 | `Welcome` | New client | Day 1 onboarding | AcceptInviteScreen; deep link | `PATCH /notifications/preferences` on backend main<br>`PATCH /users/me/preferences` on backend main<br>`PUT /profile` on backend main |  | Works, reachable |
 | `CoachPairing` | New client | Day 1 onboarding | WelcomeScreen | `PATCH /notifications/preferences` on backend main<br>`PATCH /users/me/preferences` on backend main<br>`PUT /profile` on backend main |  | Works, reachable |
 | `Goals` | New client | Day 1 onboarding | CoachPairingScreen | `PATCH /notifications/preferences` on backend main<br>`PATCH /users/me/preferences` on backend main<br>`PUT /profile` on backend main |  | Works, reachable |

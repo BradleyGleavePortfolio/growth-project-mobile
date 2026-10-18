@@ -293,6 +293,10 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
             path: 'billing/update-card',
             alias: ['billing/update'],
           },
+          // A6 (AUTHB-05): a cloud tracker's sign-in return. The in-app
+          // sign-in window normally takes it; when Android hands it to the
+          // app (also after a restart), Connections finishes the link.
+          Connections: 'wearables/connected',
           CheckoutReturn: {
             path: 'checkout/:outcome',
             parse: {
