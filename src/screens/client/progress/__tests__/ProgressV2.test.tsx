@@ -62,6 +62,7 @@ it('flag on: the masthead, the trend, the period sentence and the tabs, in pound
   const v = await mount();
   await waitFor(() => expect(v.getByText('lb trend')).toBeTruthy());
   expect(v.getByRole('header', { name: 'Your progress' })).toBeTruthy();
+  expect(v.getByText(/^Since [A-Z][a-z]+ \d{1,2}$/)).toBeTruthy();
   expect(v.getByText(/^Down \d+\.\d lb in 30 days\.$/)).toBeTruthy();
   expect(lastChart()).toMatchObject({ unit: 'lb', period: '30D', goal: { value: 170 } });
   expect(v.queryByText("Today's food")).toBeNull();

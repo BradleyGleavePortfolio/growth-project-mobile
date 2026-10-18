@@ -19,7 +19,6 @@ import { QuietRow, QuietSection, Screen } from '../../../ui';
 import PeriodTabs from '../../../components/progress/PeriodTabs';
 import WeightTrendChartDark from '../../../components/progress/WeightTrendChartDark';
 import WeighInRows from '../../../components/progress/WeighInRows';
-import { formatSince } from '../../../components/progress/progressFormat';
 import type { WeightPeriod } from '../../../components/progress/weightTrend';
 import { featureFlags } from '../../../config/featureFlags';
 import { getTodayString } from '../../../utils/date';
@@ -89,7 +88,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const trend = logs && has ? P.trendNow(logs, today) : null;
   const sentence = logs && has ? P.trendSentence(logs, period, unit, today) : null;
   const num = (lbs: number) => P.one(P.toUnit(lbs, unit));
-  const since = logs?.[0] ? formatSince(logs[0].date) : null;
+  const since = logs?.[0] ? `Since ${P.monthDay(logs[0].date)}` : null;
   return (
     <>
       <Screen edges={[]} testID="progress-screen" contentStyle={s.page} refreshControl={<RefreshControl refreshing={refreshing}
