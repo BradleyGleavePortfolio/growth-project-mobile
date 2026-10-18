@@ -83,8 +83,9 @@ export default function ClientsListScreen({ navigation }: Props) {
 
   // Coming back from a client (archived, messaged, reviewed a check-in) or
   // from another tab that reloaded the shared list: refresh in place. The
-  // first focus is the mount, already loaded above.
-  const focusedOnce = useRef(false);
+  // first focus is the mount, already loaded above, unless the list mounted
+  // unseen (with the six tabs Clients opens with the app): then it is a visit.
+  const focusedOnce = useRef(!navigation.isFocused());
   const coachId = currentUser?.id;
   useEffect(
     () =>
