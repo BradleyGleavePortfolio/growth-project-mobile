@@ -65,7 +65,10 @@ export default function RomanErrorBanner({
           size={56}
           testID="roman-error-avatar"
         />
-      ) : null}
+      ) : (
+        // ROMAN-RADIUS: the error edge is a clipped child, so the 16 pt corner cuts it straight (a side border would curve).
+        <View style={styles.edge} testID="roman-error-edge" />
+      )}
       <Text
         style={isScreen ? styles.screenCopy : styles.toastCopy}
         accessibilityRole="text"
@@ -85,9 +88,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.cream,
     borderRadius: radius.card,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.error,
+    overflow: 'hidden',
   },
+  edge: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.error },
   toastCopy: {
     ...typography.body,
     color: colors.ink,

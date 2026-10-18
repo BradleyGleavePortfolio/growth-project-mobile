@@ -9,7 +9,7 @@ import RomanAdjustmentsSection from '../RomanAdjustmentsSection';
 import { ADJUST_CLIENT_UNDO_SECONDS, ADJUST_ERROR_FALLBACKS, adjustErrorView } from '../romanAdjustCopy';
 import type { RomanAdjustment } from '../../../../api/romanAdjustApi';
 import { captureError } from '../../../../services/sentry';
-import { radius } from '../../../../theme/tokens';
+import { colors, radius } from '../../../../theme/tokens';
 import RomanBriefCard from '../../RomanBriefCard';
 import RomanErrorBanner from '../../RomanErrorBanner';
 import RomanStreakCard from '../../RomanStreakCard';
@@ -423,6 +423,10 @@ it('ROMAN-RADIUS: Roman cards use radius.card, their buttons radius.button, and 
   </>);
   const corner = (id: string) => StyleSheet.flatten(r.getByTestId(id).props.style).borderRadius;
   for (const id of ['workout', 'streak', 'brief', 'toast', 'roman-adjust-card']) expect([id, corner(id)]).toEqual([id, radius.card]);
+  // The toast's error edge is a straight clipped bar, not a side border that bends round the corner.
+  const toast = StyleSheet.flatten(r.getByTestId('toast').props.style);
+  expect([toast.overflow, toast.borderLeftWidth]).toEqual(['hidden', undefined]);
+  expect(StyleSheet.flatten(r.getByTestId('roman-error-edge').props.style)).toEqual(expect.objectContaining({ position: 'absolute', width: 3, backgroundColor: colors.error }));
   for (const id of ['approve', 'edit-open', 'dismiss']) expect([id, corner(`roman-adjust-card-${id}`)]).toEqual([id, radius.button]);
   const dir = resolve(__dirname, '../..');
   const files = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => f.endsWith('.tsx') && !f.includes('__tests__'));
