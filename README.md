@@ -688,10 +688,11 @@ Four-tier channel/category system registered at app bootstrap:
 
 ### Share Card
 
-Three card variants: `streak`, `pr`, `transformation`.
+With `featureFlags.shareSheetV2` (off in every build): one `src/components/share/ShareSheet.tsx` over Progress or the
+Session summary, and no `ShareCard` route (SHARE-A). Off: one card variant, `streak`.
 
-- Screen: `src/screens/share/ShareCardScreen.tsx`
-- Navigation: `MoreStackParamList.ShareCard`
+- Screen (flag off): `src/screens/share/ShareCardScreen.tsx`
+- Navigation (flag off): `MoreStackParamList.ShareCard`
 - Capture: `react-native-view-shot` (requires native build)
 - Share: `expo-sharing`
 - Analytics: fires `REFERRAL_SHARE_CARD_SHARED` on share

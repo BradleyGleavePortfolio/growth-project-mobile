@@ -71,6 +71,8 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH: process.env.EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH,
   EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE,
   EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER: process.env.EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER,
+  EXPO_PUBLIC_FF_SHARE_SEND_V1: process.env.EXPO_PUBLIC_FF_SHARE_SEND_V1,
+  EXPO_PUBLIC_FF_SHARE_SHEET_V2: process.env.EXPO_PUBLIC_FF_SHARE_SHEET_V2,
   EXPO_PUBLIC_FF_TEAM_MODE: process.env.EXPO_PUBLIC_FF_TEAM_MODE,
   EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF: process.env.EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF,
   EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS: process.env.EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS,
@@ -604,6 +606,14 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_HEALTH_PAGES
    */
   healthPages: readFlag('EXPO_PUBLIC_FF_HEALTH_PAGES', false),
+  /**
+   * SHARE-A (#SHARE-SEND op 1): Share on Progress and the Session summary opens
+   * one ShareSheet over the screen; no ShareCard route. Off in every build.
+   * env: EXPO_PUBLIC_FF_SHARE_SHEET_V2
+   */
+  shareSheetV2: readFlag('EXPO_PUBLIC_FF_SHARE_SHEET_V2', false),
+  /** SHARE-A: Send to {coach} on the ShareSheet (backend SHARE-BE). Off in every build. env: EXPO_PUBLIC_FF_SHARE_SEND_V1 */
+  shareSendV1: readFlag('EXPO_PUBLIC_FF_SHARE_SEND_V1', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

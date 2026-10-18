@@ -261,6 +261,16 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_SHARE_SEND_V1": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Send to coach on the share sheet, SHARE-A). Off in every EAS profile until backend SHARE-BE and mobile PR B ship."
+    },
+    "EXPO_PUBLIC_FF_SHARE_SHEET_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (one share sheet from Progress and the Session summary, SHARE-A). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_TEAM_MODE": {
       "kind": "flag",
       "default": "off",
