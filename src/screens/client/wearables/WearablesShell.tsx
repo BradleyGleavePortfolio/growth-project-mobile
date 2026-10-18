@@ -403,9 +403,10 @@ export default function WearablesShell() {
         <Headline level="h1" style={v2 ? { color: sc.textOnAccent } : undefined}>Health and sleep</Headline>
         {v2 && <BucketSwitcher active={bucket} onChange={handleSwitch} onDark />}
       </View>
-      {(!v2 || !fitnessV2) && (
+      {/* HEALTH-1: on the masthead the switcher moves up; Recovery shows its own chip. */}
+      {!v2 && (
         <View style={styles.header}>
-          {!v2 && <BucketSwitcher active={bucket} onChange={handleSwitch} />}
+          <BucketSwitcher active={bucket} onChange={handleSwitch} />
           <FreshnessChip
             connections={connections}
             bucket={bucket}
