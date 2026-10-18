@@ -21,12 +21,13 @@ type Props = {
 };
 
 /**
- * C7 Style B (firstRunV2): the full-forest peak screen. Same strings and the
- * same two actions; the title rises 8 pt and fades in over 250 ms (Reduce
- * Motion: a 150 ms fade only); Get started plays mediumImpact (primary CTA).
+ * C7 Style B (firstRunV2): the forest peak screen. Main's dark status-bar line
+ * stays (the app's cream StatusBarBand sits on top; screens pushed over Welcome
+ * inherit it). The title rises 8 pt and fades in over 250 ms (Reduce Motion: a
+ * 150 ms fade only); Get started plays mediumImpact (primary CTA).
  */
 function WelcomeStyleB({ navigation }: Props) {
-  const { semanticColors: sc = lightTokens } = useTheme();
+  const { semanticColors: sc = lightTokens, colorScheme } = useTheme();
   const reduced = useReducedMotion();
   const shown = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -57,7 +58,7 @@ function WelcomeStyleB({ navigation }: Props) {
         </>
       }
     >
-      <StatusBar barStyle="light-content" backgroundColor={sc.surface.forestBand} />
+      <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={sc.bgPrimary} />
       <Overline style={{ color: sc.textOnMastheadMuted }} testID="welcome-eyebrow">Personal training, in your pocket</Overline>
       <Animated.View style={{ opacity: shown, transform: [{ translateY: rise }] }} testID="welcome-title-motion">
         <Headline level="display" style={[{ marginTop: 12 }, onForest]}>

@@ -54,6 +54,10 @@ jest.mock('../../../lib/userCache', () => ({ setUserCache: jest.fn(async () => u
 jest.mock('../../../services/queryClient', () => ({ purgePersistedQueryCacheForAllUsers: jest.fn(async () => undefined) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn(), identify: jest.fn() }));
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: jest.fn() } }));
+jest.mock('react-native/Libraries/Components/StatusBar/StatusBar', () => {
+  const { View } = jest.requireActual('react-native');
+  return { __esModule: true, default: (p: object) => <View testID="status-bar" {...p} /> };
+});
 
 import WelcomeScreen from '../WelcomeScreen';
 import LoginScreen from '../LoginScreen';
@@ -98,6 +102,22 @@ it('Welcome: Get started opens Create account with mediumImpact; Log in opens Si
   expect(n.navigate).toHaveBeenLastCalledWith('CreateAccount');
   await fireEvent.press(view.getByTestId('welcome-log-in'));
   expect(n.navigate).toHaveBeenLastCalledWith('Login');
+});
+
+// The app paints a cream band over the top inset of every screen (App.tsx StatusBarBand), and the
+// native stack keeps Welcome mounted under each auth screen, so Welcome's line is the one they show.
+const overWelcome: Array<[string, (n: Nav) => React.ReactNode]> = [
+  ['Welcome', () => null],
+  ['Sign in', (n) => <LoginScreen navigation={n as never} route={{ key: 'l', name: 'Login' } as never} />],
+  ['Create account, role step', (n) => <CreateAccountScreen navigation={n as never} route={undefined} />],
+  ['Create account, form', (n) => <CreateAccountScreen navigation={n as never} route={{ params: { invite_code: 'TGP-R8N3VW5' } }} />],
+  ['Forgot password', (n) => <ForgotPasswordScreen navigation={n as never} />],
+  ['Reset password', (n) => <ResetPasswordScreen navigation={n as never} route={{ key: 'r', name: 'ResetPassword', params: { access_token: 'a', refresh_token: 'r' } } as never} />],
+];
+it.each(overWelcome)('%s over the flag-on Welcome keeps main\'s dark status-bar icons', async (_screen, top) => {
+  const n = nav();
+  const view = await render(<><WelcomeScreen navigation={n as never} />{top(n)}</>);
+  expect(view.getAllByTestId('status-bar', HIDDEN).map((bar) => bar.props.barStyle)).toEqual(['dark-content']);
 });
 
 it('Sign in: same login request; a wrong password shows the hint under the field, error haptic once', async () => {
