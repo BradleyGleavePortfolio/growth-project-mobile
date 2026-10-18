@@ -51,7 +51,6 @@ export type Props = {
 export type TabKey =
   | 'summary'
   | 'logs'
-  | 'mealplan'
   | 'progress'
   | 'healthFitness'
   | 'workouts'

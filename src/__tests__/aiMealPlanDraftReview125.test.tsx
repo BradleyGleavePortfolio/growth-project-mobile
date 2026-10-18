@@ -52,9 +52,6 @@ jest.mock('../services/api', () => {
 import api from '../services/api';
 import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
 import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
-import { MealPlanTab } from '../screens/coach/client-detail/MealPlanTab';
-import { makeStyles } from '../screens/coach/client-detail/styles';
-import { testColors } from '../screens/client/wearables/recoveryTestColors';
 
 const mockedGet = api.get as jest.Mock;
 const mockedPost = api.post as jest.Mock;
@@ -205,30 +202,9 @@ describe('AIMealPlanDraftScreen (AUDIT-08-125)', () => {
       jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.[0]?.onPress?.();
     });
     await waitFor(() => expect(getByTestId('approved-client-detail').props.children).toBe(
-      JSON.stringify({ clientId: 'c1', clientName: 'Jane Doe', initialTab: 'mealplan' }),
+      JSON.stringify({ clientId: 'c1', clientName: 'Jane Doe' }),
     ));
   });
-});
-
-it('points clients to Meal plan and preserves the New plan action', async () => {
-  const onCreate = jest.fn();
-  const onEdit = jest.fn(); const onArchive = jest.fn(); const onRetry = jest.fn();
-  const props = { serverMealPlans: [], mealPlansLoading: false, mealPlansError: null,
-    onCreate, onEdit, onArchive, onRetry, colors: testColors, styles: makeStyles(testColors) };
-  const s = await render(<MealPlanTab {...props} />);
-  expect(s.getByText(/The client sees it under Meal plan\./)).toBeTruthy();
-  expect(s.queryByText(/their Plan tab/)).toBeNull();
-  await fireEvent.press(s.getByLabelText('Create meal plan'));
-  expect(onCreate).toHaveBeenCalledTimes(1);
-  const plan = { id: 'p1', title: 'Daily meals', items: [] };
-  await s.rerender(<MealPlanTab {...props} serverMealPlans={[plan]} />);
-  await fireEvent.press(s.getByLabelText('Edit Daily meals'));
-  expect(onEdit).toHaveBeenCalledWith(plan);
-  await fireEvent.press(s.getByLabelText('Archive Daily meals'));
-  expect(onArchive).toHaveBeenCalledWith(plan);
-  await s.rerender(<MealPlanTab {...props} mealPlansError="Could not load meal plans." />);
-  await fireEvent.press(s.getByText('Retry'));
-  expect(onRetry).toHaveBeenCalledTimes(1);
 });
 
 describe('AIWorkoutDraftScreen approve (AUDIT-08-125)', () => {

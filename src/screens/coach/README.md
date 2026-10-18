@@ -20,7 +20,7 @@ COACHTABS gaps (agent 153): the Money tab root lists Buy more credits under Pack
 
 ## Purpose
 
-Meal-plan empty-state directions name the client’s **Meal plan** entry under More, not a Plan tab. After AI meal-plan approval, `ClientDetail` opens its coach-side Plan tab via `initialTab: 'mealplan'`, including on return to an already-mounted client detail.
+The client file has no meal-plan tab: the free-form plans it edited are retired (MEALPLAN-RETIRE). After AI meal-plan approval, `ClientDetail` opens on Summary.
 
 Client-detail Summary requests the device's calendar day using the existing `date` query.
 Weekly totals multiply food nutrition by recorded portions, read `protein_g`, and sum
