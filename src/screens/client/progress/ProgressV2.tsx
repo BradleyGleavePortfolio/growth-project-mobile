@@ -5,7 +5,7 @@
  * share words and colour; no red, no BMI, no streak.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, StyleSheet, Text, View, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { weightApi } from '../../../services/api';
@@ -161,7 +161,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   );
 }
 
-const serif = { fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', fontVariant: ['lining-nums', 'tabular-nums'] } as const;
+const serif: TextStyle = { fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', fontVariant: ['lining-nums', 'tabular-nums'] };
 const s = StyleSheet.create({
   page: { paddingHorizontal: 0 },
   flex: { flex: 1, gap: 2 },
