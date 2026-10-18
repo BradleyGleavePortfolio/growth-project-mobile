@@ -175,6 +175,9 @@ export const CommunityCohortSummarySchema = z
     workspace_id: z.string().uuid(),
     name: z.string(),
     is_default: z.boolean(),
+    // C6-B1: 'chat' | 'announcement' | 'section'. Optional (older backends do
+    // not send it) and a plain string so a new kind never fails the list.
+    kind: z.string().optional(),
     member_count: z.number().int().nonnegative(),
     my_role: z.enum(COMMUNITY_MEMBER_ROLES),
   })
@@ -192,6 +195,10 @@ export const CommunityCohortListResponseSchema = z
 export type CommunityCohortListResponse = z.infer<
   typeof CommunityCohortListResponseSchema
 >;
+
+/** GET /community/workspaces/:id: only the name is read (the Community Home masthead). */
+export const CommunityWorkspaceResponseSchema = z.object({ name: z.string() }).passthrough();
+export type CommunityWorkspaceResponse = z.infer<typeof CommunityWorkspaceResponseSchema>;
 
 export const CommunityReactionSummarySchema = z
   .object({
@@ -345,6 +352,13 @@ export const communityApi = {
   getCohorts(): Promise<CommunityCohortListResponse> {
     return call(CommunityCohortListResponseSchema, () =>
       api.get<unknown>('/community/cohorts'),
+    );
+  },
+
+  /** GET /community/workspaces/:workspaceId — the server answers owners and members only. */
+  getWorkspace(workspaceId: string): Promise<CommunityWorkspaceResponse> {
+    return call(CommunityWorkspaceResponseSchema, () =>
+      api.get<unknown>(`/community/workspaces/${workspaceId}`),
     );
   },
 

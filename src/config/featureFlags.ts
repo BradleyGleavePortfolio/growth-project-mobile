@@ -254,6 +254,15 @@ export const featureFlags = {
   communityCohorts: readFlag('EXPO_PUBLIC_FF_COMMUNITY_COHORTS', false),
   /** Direct messages (client↔coach and client↔client per §2.10 gates). */
   communityDm: readFlag('EXPO_PUBLIC_FF_COMMUNITY_DM', false),
+  /**
+   * C6-M1S (C6CHAT-S-V2 c01 and x1, MOCK-COMMX2): the Community tab opens on
+   * the Forest Pop Community Home (masthead, segment, spaces, Direct messages)
+   * and a space page gets the space-list drawer. Needs communityTab. Default
+   * off; off, the tab is today's shell.
+   *
+   * env: EXPO_PUBLIC_FF_COMMUNITY_HOME_V2
+   */
+  communityHomeV2: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HOME_V2', false),
 
   // ─── Community v1-6 — mobile coach surface ───────────────────────────────
   // The v1-6 backend (community-cohort-write, community-cohort-members,
