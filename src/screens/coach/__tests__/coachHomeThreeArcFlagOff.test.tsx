@@ -62,7 +62,7 @@ describe('ED.2 three-arc router — flag-OFF containment on Coach Home', () => {
   it('the mount wires the three onPress deep-links to REAL coach routes', () => {
     expect(HOME).toMatch(/onPressCheckIns=\{\(\)\s*=>\s*navigation\.navigate\('ClientsStack'\)\}/);
     expect(HOME).toMatch(
-      /onPressBrief=\{[\s\S]*navigation\.navigate\('SettingsStack',\s*\{\s*screen:\s*'CoachBrief'\s*\}\)/,
+      /onPressBrief=\{[\s\S]*navigation\.navigate\('SettingsStack',\s*\{\s*screen:\s*'CoachBrief',\s*initial:\s*false\s*\}\)/,
     );
     expect(HOME).toMatch(/onPressReview=\{\(\)\s*=>\s*navigation\.navigate\('Messages'\)\}/);
   });

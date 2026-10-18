@@ -71,6 +71,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (client coach thread in Style B, C3B-THREAD). Off in every EAS profile until the owner turns it on."
     },
+    "EXPO_PUBLIC_FF_CONSULT_TILES_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (consultation questions T1, B1-B4, N1, N2 in Quiet Tiles, ONBQ-TILES). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT": {
       "kind": "flag",
       "default": "on in dev, off in release",
@@ -100,6 +105,21 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "C8 v2 chart parts stay off until the Progress page integration is ready."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "TIMELINE: the Style C Timeline page and its door on Progress stay off until the owner turns them on."
+    },
+    "EXPO_PUBLIC_FF_COACH_LESSONS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (LEARN-B: the coach Lessons editor in Programs)."
     },
     "EXPO_PUBLIC_FF_COACH_TABS_V2": {
       "kind": "flag",
@@ -171,6 +191,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (consultation onboarding, #310). B14/B40: must be \"true\" in every store and test profile (preview, production, clinic, clinic-apk); scripts/validate-app-config.js enforces it. RootNavigator sends every new client to the consultation whatever its value; it still gates the tour's recovery read."
     },
+    "EXPO_PUBLIC_FF_CRISIS_ACTIONS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Call 911, Call 988, Text 988 and Message <coach> under Roman's fixed crisis reply (CRISIS-BTN); off in every EAS profile until the operator turns it on."
+    },
     "EXPO_PUBLIC_FF_DELIVERABLES": {
       "kind": "flag",
       "default": "on in dev, off in release",
@@ -180,6 +205,16 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_FIRST_RUN_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (sign-in and first run in Style B, MOCKUP3 C7 index-b-join slice 1). Off in every EAS profile until the owner turns it on."
+    },
+    "EXPO_PUBLIC_FF_HEALTH_PAGES": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Health and sleep slice 1, HEALTH-1). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_IMPORT_REVIEW": {
       "kind": "flag",
@@ -195,6 +230,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key. On only for builds offered solely on the US App Store (credit packs open Stripe Checkout in the system browser)."
+    },
+    "EXPO_PUBLIC_FF_LEARN_HUB": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Learn: the coach's guidelines and lessons, MOCK-LEARN, LEARN-A). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_MWB_AUTOSAVE": {
       "kind": "flag",
@@ -255,6 +295,16 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_SHARE_SEND_V1": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Send to coach on the share sheet, SHARE-A). Off in every EAS profile until backend SHARE-BE and mobile PR B ship."
+    },
+    "EXPO_PUBLIC_FF_SHARE_SHEET_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (one share sheet from Progress and the Session summary, SHARE-A). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_TEAM_MODE": {
       "kind": "flag",

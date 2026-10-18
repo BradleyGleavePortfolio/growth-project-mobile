@@ -36,6 +36,7 @@ import {
   weeksByDays,
 } from "./ProgramUi";
 import type { ProgramsNav } from "./types";
+import { CoachLessonsEntry } from "../CoachLessons";
 
 type Tab = "programs" | "saved";
 
@@ -96,6 +97,7 @@ export default function ProgramsLibraryScreen() {
           />
         )}
       </View>
+      <CoachLessonsEntry />
       {aiEntry.visible && featureFlags.mwbAutosave ? (
         <View style={styles.row}>
           <SmallButton

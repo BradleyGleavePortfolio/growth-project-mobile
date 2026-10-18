@@ -86,6 +86,7 @@ import {
   attachPushNavigator,
   flushPendingPushTap,
   pushSessionFor,
+  routeAppLink,
   setPushSession,
 } from '../services/pushTapRouter';
 import { isValidPackageShareToken } from '../utils/packageShare';
@@ -95,6 +96,7 @@ import { wasDay1WinSkipped } from '../lib/day1WinSkip';
 import { createLatestRunGuard, isStartupTimeout, withStartupTimeout } from '../lib/startupTimebox';
 import { readDraft as readCoachConsultDraft } from '../lib/coachConsultation/draft';
 import { StartupErrorScreen, StartupPending } from '../components/StartupErrorScreen';
+import { incomingLinkPath, isPublicLinkPath } from './incomingLinks';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -141,6 +143,11 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
   // buyer could be stranded off the confirmation. See app.json `scheme` and
   // the CheckoutReturn screen config below.
   prefixes: ['tgp://', 'com.growthproject.app://', 'https://app.trygrowthproject.com'],
+  filter(url) {
+    const path = incomingLinkPath(url);
+    // App routes use the role-aware queue below, never the auth receiver.
+    return path !== null && (isPublicLinkPath(path) || isScreenshotMode());
+  },
   getStateFromPath(path, options) {
     // Defense-in-depth: a tampered package share link should not be able to
     // resolve to PackageCheckoutScreen at all. We reject the route at the
@@ -278,7 +285,7 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
           },
           ...(isScreenshotMode()
             ? {
-                Plan: 'plan',
+                ClientDailyMealPlan: 'plan',
                 Recipes: 'recipes',
                 Progress: 'progress',
                 Fast: 'fast',
@@ -363,7 +370,8 @@ function signOutFromLockout(): void {
 // effect can dedupe against the same token without re-parsing. Exported
 // for direct unit testing of the token-extraction contract.
 export function extractAcceptInviteToken(url: string): string | null {
-  const m = url.match(/\/invite\/accept\/([^/?#]+)/i);
+  const path = incomingLinkPath(url);
+  const m = path?.match(/^invite\/accept\/([^/?#]+)(?:[?#]|$)/i);
   if (!m || !m[1]) return null;
   try {
     return decodeURIComponent(m[1]);
@@ -492,23 +500,22 @@ export default function RootNavigator() {
   useEffect(() => {
     const handleUrl = async (url: string | null | undefined) => {
       if (!url) return;
+      const path = incomingLinkPath(url);
+      if (path === null) return;
+      if (!isPublicLinkPath(path)) {
+        if (!isScreenshotMode()) routeAppLink(path);
+        return;
+      }
       // Strip query/fragment for path matching.
-      const lower = url.toLowerCase();
-      const isReset =
-        lower.includes('reset-password') &&
-        (lower.startsWith('tgp://') || lower.includes('app.trygrowthproject.com'));
-      const isInvite =
-        (lower.startsWith('tgp://join/') ||
-          lower.includes('app.trygrowthproject.com/join/')) &&
-        !lower.endsWith('/join/');
+      const pathname = path.split(/[?#]/, 1)[0];
+      const isReset = pathname === 'reset-password';
+      const isInvite = /^join\/[^/]+$/.test(pathname);
       // Email Pipeline v1 — public accept link. Distinct from `/join/<code>`
       // (signup-gating code) because it carries a single-use accept token
       // and must POST to /invites/accept on landing. We treat it the same
       // way as a reset link: force signOut so the public AcceptInvite
       // screen mounts cleanly, then replay the URL to AuthNavigator.
-      const isAcceptInvite =
-        lower.startsWith('tgp://invite/accept/') ||
-        lower.includes('app.trygrowthproject.com/invite/accept/');
+      const isAcceptInvite = /^invite\/accept\/[^/]+$/.test(pathname);
 
       if (!isReset && !isInvite && !isAcceptInvite) return;
 

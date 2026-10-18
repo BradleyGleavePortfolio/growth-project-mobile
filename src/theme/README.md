@@ -136,6 +136,15 @@ WCAG 2.x pairs, locked by `__tests__/contrastStyleC.test.ts` in both schemes (te
 
 Decorative, no ratio needed: `surface.sageLine`, `data.trackLight`, and the gold star fill on bone (1.68; the outline carries it).
 
+## C8 v2 weight roles
+
+C8 v2 adds six aliases, not colours: `data.trend` and `data.pending` reuse leaf;
+`range` is brand.500; `weighIn` is brand.100; `goal` reuses peak; `frameOnDark`
+reuses plannedOnDark. The goal is a labelled dashed reference only, never a
+weight low or celebration. Its text is on the masthead, not on the range band.
+`contrastStyleC.test.ts` covers trend/readings/goal on both grounds, plus pending
+and frame marks, in both schemes. The range band is decorative and repeated in words.
+
 ## App-store / deep-link dependencies
 
 - Splash background and android adaptive icon background must match `bone` (`#F5EFE4`). Both are declared in `app.json` (`expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor`).

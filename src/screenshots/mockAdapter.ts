@@ -25,7 +25,7 @@ import {
   DEMO_FASTING_HISTORY,
   DEMO_FOOD_LOGS,
   DEMO_HABITS,
-  DEMO_MEAL_PLANS,
+  DEMO_MEAL_PLAN_TODAY,
   DEMO_MESSAGES,
   DEMO_RECIPES,
   DEMO_USER,
@@ -94,9 +94,8 @@ const ROUTES: Route[] = [
       })),
     }) },
 
-  // Meal plans ───────────────────────────────────────────────────────────────
-  { method: 'GET',  pattern: /^\/meal-plans$/,              handler: () => DEMO_MEAL_PLANS },
-  { method: 'GET',  pattern: /^\/meal-plans\/[^/]+$/,       handler: () => DEMO_MEAL_PLANS[0] },
+  // Meal plan (today's day plan) ────────────────────────────────────────────
+  { method: 'GET',  pattern: /^\/me\/meal-plan\/today/,     handler: () => DEMO_MEAL_PLAN_TODAY },
 
   // Recipes ──────────────────────────────────────────────────────────────────
   { method: 'GET',  pattern: /^\/recipes$/,                 handler: () => DEMO_RECIPES },
