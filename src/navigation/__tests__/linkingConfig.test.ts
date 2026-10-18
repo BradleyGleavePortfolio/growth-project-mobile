@@ -130,4 +130,14 @@ describe('RootNavigator linking config — behavioral routing (R26)', () => {
     const state = resolve(`https://${INVITE_UNIVERSAL_HOST}/p/%E0%A4%A`);
     expect(findRoute(state, 'PackageCheckout')).toBeUndefined();
   });
+
+  // A6 (AUTHB-05): a cloud tracker return that Android hands to the app.
+  it('routes tgp://wearables/connected to Connections with the returned ticket', () => {
+    const route = findRoute(
+      resolve('tgp://wearables/connected?status=ok&provider=OURA&ticket=tk_1-a'),
+      'Connections',
+    );
+    expect(route?.params).toEqual({ status: 'ok', provider: 'OURA', ticket: 'tk_1-a' });
+    expect(findRoute(resolve('tgp://wearables/connected?status=error'), 'Connections')).toBeTruthy();
+  });
 });

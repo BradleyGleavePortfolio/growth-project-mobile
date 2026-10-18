@@ -1,5 +1,7 @@
 # Consultation onboarding (consult-v1)
 
+CAC-POLISH: the shared `Checkbox` has an opt-in `variant="tan"` using the canonical cream fill for the approved coach sign-up card. Its default remains unfilled; checked, disabled, accessibility and toggle behaviour are unchanged.
+
 The full personal-training consultation a new client completes before their first day: Roman's welcome, a single "I agree" box straight after it, eight chapters of questions, the readiness screening, a summary, and the macro and plan reveals. Every new client gets it (RootNavigator B14); the unmounted lean flow it replaced was deleted (ONBQ-TILES).
 
 ## Rollout and rollback
