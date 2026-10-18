@@ -11,7 +11,7 @@
  * RespirationCard lives in a "More" expandable section, off the cap. The AI
  * panel slot is collapsed off the cap (HK-5b fills `aiPanelSlot`).
  *
- * Phantom CALM treatment throughout: reassurance-before-deficit copy, cool
+ * Phantom CALM treatment throughout: factual sleep-duration copy, cool
  * tones, never red, slow-reveal on every card. Plain-language sleep stages only.
  *
  * #8 input validation: the incoming bucket param is Zod-parsed; an unexpected
@@ -155,8 +155,7 @@ export default function SleepRecoveryScreen({ bucketParam, aiPanelSlot }: SleepR
   const resp = respiration(data);
   const consistency = sleepConsistency(data);
 
-  // Reassurance-before-deficit banner — only when there's a meaningful sleep
-  // deficit to communicate. Copy ALWAYS leads with reassurance (UX gate §5.2).
+  // Show measured sleep against the existing reference, without a quality claim.
   const showDeficitBanner = !!deficit && deficit.deficitMinutes >= 15;
 
   return (
@@ -190,13 +189,13 @@ export default function SleepRecoveryScreen({ bucketParam, aiPanelSlot }: SleepR
         <RecoveryRingHero score={score} colors={colors} size={240} />
       </View>
 
-      {/* 2 — Phantom reassurance-before-deficit banner (conditional). */}
+      {/* 2 — Factual sleep-duration banner (conditional). */}
       {showDeficitBanner && deficit ? (
         <View style={styles.section}>
           <PhantomCalmBanner
             colors={colors}
-            reassurance="You're close —"
-            deficit={`about ${formatMinutes(deficit.deficitMinutes)} under your sleep need`}
+            reassurance={`${formatMinutes(deficit.asleepMinutes)} asleep`}
+            deficit={`${formatMinutes(deficit.deficitMinutes)} below the ${formatMinutes(deficit.needMinutes)} sleep reference`}
           />
         </View>
       ) : null}
@@ -206,7 +205,7 @@ export default function SleepRecoveryScreen({ bucketParam, aiPanelSlot }: SleepR
         <SleepStagesCard stages={stages} colors={colors} revealDelay={60} />
       </View>
 
-      {/* 4 — HRV trend (cool tone, reassurance copy, never red). */}
+      {/* 4 — HRV trend (cool tone, measured readings, never red). */}
       <View style={styles.section}>
         <HrvTrendCard trend={hrvTrend} latestMs={hrvLatest} colors={colors} revealDelay={120} />
       </View>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
+import { commandCenterApi } from '../../../services/commandCenterApi';
 import { useCoachStore } from '../../../store/coachStore';
 import { errorMessage } from '../../../types/common';
 import { loadFailureMessage } from '../../../ui/states/QuietStates';
@@ -7,19 +8,20 @@ import { bucketDateLocal, getTodayString } from '../../../utils/date';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientProfile, FoodLog, WeightLog } from '../../../types';
 import {
-  normaliseServerPlans,
-  type CoachMealPlan,
   type TimelineEvent,
   type WeekSummary,
   type WorkoutSession,
 } from './types';
+import type { OpenSafetyAlert } from './SafetyAlertCard';
 import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
 
+const openAlertOf = (data: { error?: unknown; open_safety_alert?: OpenSafetyAlert | null }) =>
+  (data.error ? null : data.open_safety_alert ?? null);
+
 export function useClientDetailData(clientId: string, colors: ThemeColors, coachId?: string) {
-  const [profile, setProfile] = useState<ClientProfile | null>(null);
+  const [profile, setProfile] = useState<(ClientProfile & { name?: string }) | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
-  const [foodShared, setFoodShared] = useState(true);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -41,6 +43,16 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
   }, [refreshing]);
   const [isArchived, setIsArchived] = useState<boolean | null>(null);
   const [archiveStatusError, setArchiveStatusError] = useState<string | null>(null);
+  // SAFETY-CARD: the summary's open Roman safety alert (b#1075), sent only to the client's current coach. Each
+  // write names its client and only the routed client's shows, and a late read or Dismiss for a client the file
+  // no longer shows changes nothing (Sol B1), so one client's alert never shows on another's file.
+  const [safety, setSafety] = useState<{ clientId: string; alert: OpenSafetyAlert | null } | null>(null);
+  const safetyAlert = safety?.clientId === clientId ? safety.alert : null;
+  const shownClient = useRef<string | null>(clientId);
+  useEffect(() => {
+    shownClient.current = clientId;
+    return () => { shownClient.current = null; }; // CLIENTFILE-FIX: a file gone (keyed per client) shows no one
+  }, [clientId]);
   const loadArchiveStatus = useCallback(async (refresh = false) => {
     setArchiveStatusError(null);
     const roster = useCoachStore.getState();
@@ -62,10 +74,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     void loadArchiveStatus();
   }, [loadArchiveStatus]);
 
-  const [serverMealPlans, setServerMealPlans] = useState<CoachMealPlan[]>([]);
-  const [mealPlansLoading, setMealPlansLoading] = useState(false);
-  const [mealPlansError, setMealPlansError] = useState<string | null>(null);
-
   const loadData = useCallback(async () => {
     try {
       if (!refreshingRef.current) setIsLoading(true);
@@ -74,8 +82,8 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
 
       const res = await coachApi.getClientSummary(clientId, today);
       const data = res.data;
+      if (shownClient.current === clientId) setSafety({ clientId, alert: openAlertOf(data) });
       if (data.error) return;
-      setFoodShared(data.consent?.food_macros !== false);
       // Set profile
       setProfile(data.profile ? {
         ...data.profile,
@@ -139,20 +147,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       setLoadError(errorMessage(err, 'Could not load this client. Please try again.'));
     } finally {
       setIsLoading(false);
-    }
-  }, [clientId]);
-
-  const loadServerMealPlans = useCallback(async () => {
-    setMealPlansLoading(true);
-    setMealPlansError(null);
-    try {
-      const res = await coachApi.listClientMealPlans(clientId);
-      setServerMealPlans(normaliseServerPlans(res.data));
-    } catch (err) {
-      console.error('ClientDetailScreen: listClientMealPlans failed', err);
-      setMealPlansError(errorMessage(err, 'Could not load meal plans.'));
-    } finally {
-      setMealPlansLoading(false);
     }
   }, [clientId]);
 
@@ -376,11 +370,22 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     }
   }, [clientId]);
 
+  /** Dismiss (the Actions queue's route, scoped to this coach); throws on failure. Then the next open alert, if any. */
+  const dismissSafetyAlert = useCallback(async (alertId: string) => {
+    await commandCenterApi.dismissAlert(alertId);
+    if (shownClient.current !== clientId) return; // the file shows another client now
+    setSafety((shown) => (shown?.alert?.alert_id === alertId ? { clientId, alert: null } : shown));
+    coachApi.getClientSummary(clientId, getTodayString()).then((res) => {
+      if (shownClient.current === clientId) setSafety({ clientId, alert: openAlertOf(res.data) });
+    }, () => undefined);
+  }, [clientId]);
+
   return {
+    safetyAlert,
+    dismissSafetyAlert,
     profile,
     foodLogs,
     totals,
-    foodShared,
     weightLogs,
     workoutSessions,
     timeline,
@@ -399,11 +404,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     setTimeline,
     setWeekSummaries,
     setRefreshing,
-    serverMealPlans,
-    mealPlansLoading,
-    mealPlansError,
     loadData,
-    loadServerMealPlans,
     loadTimeline,
     loadWeeklySummaries,
     markCheckInReviewed,

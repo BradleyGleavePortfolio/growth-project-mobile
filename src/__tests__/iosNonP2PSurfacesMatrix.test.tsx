@@ -162,7 +162,7 @@ describe.each(ROWS)('$name', (row) => {
   it('a budget notification routes to Settings rather than hidden checkout', () => {
     expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({
       root: 'SettingsStack',
-      screen: digitalHidden ? 'SettingsHome' : 'CreditPackCheckout',
+      ...(digitalHidden ? { screen: 'SettingsHome', pop: true } : { screen: 'CreditPackCheckout', initial: false }),
     });
   });
 

@@ -6,9 +6,12 @@
  */
 
 import type {
-  WorkoutPlan,
+  AssignmentExercise,
   WorkoutPlanExercise,
 } from '../../api/workoutBuilderApi';
+
+/** A frozen assignment row or a live plan row (older replies). */
+type SeedRow = AssignmentExercise | WorkoutPlanExercise;
 
 export interface SessionExerciseSeed {
   exerciseId: string;
@@ -24,22 +27,25 @@ export interface SessionExerciseSeed {
 }
 
 export function buildActiveWorkoutExercises(
-  plan: Pick<WorkoutPlan, 'exercises'>,
+  plan: { exercises: readonly SeedRow[] },
 ): SessionExerciseSeed[] {
   return [...plan.exercises]
     .sort((a, b) => a.order - b.order)
     .map(exerciseToSessionSeed);
 }
 
-function exerciseToSessionSeed(ex: WorkoutPlanExercise): SessionExerciseSeed {
-  const id = ex.exercise_external_id || `plan-exercise:${ex.id}`;
+// A frozen snapshot row has no plan-row id: it is left out, never made up,
+// and an empty catalog id falls back to an assignment-local key by order.
+function exerciseToSessionSeed(ex: SeedRow): SessionExerciseSeed {
+  const id = ex.exercise_external_id
+    || (ex.id ? `plan-exercise:${ex.id}` : `assignment-exercise:${ex.order}`);
   return {
     exerciseId: id,
     exerciseName: prettifyExerciseName(ex.exercise_external_id) || 'Exercise',
     sets: ex.sets,
     reps: ex.reps_or_duration_seconds,
     restSec: ex.rest_seconds ?? 60,
-    workoutPlanExerciseId: ex.id,
+    ...(ex.id ? { workoutPlanExerciseId: ex.id } : {}),
     ...(ex.weight_lbs && ex.weight_lbs > 0 ? { weightLbs: ex.weight_lbs } : {}),
     ...(ex.notes && ex.notes.trim() ? { coachNote: ex.notes.trim() } : {}),
   };

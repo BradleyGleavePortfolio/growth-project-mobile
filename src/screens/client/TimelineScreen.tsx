@@ -1,19 +1,20 @@
 /**
  * TimelineScreen.tsx — Phase 7B: Transformation Timeline
  *
- * A reverse-chronological 4-lane record of a client's full journey.
+ * A reverse-chronological 3-lane record of a client's full journey. No coach
+ * lane (#TIMELINE-COACH op 1). With clientTimelineV2 on, timeline/TimelinePage
+ * replaces this screen.
  *
  * DESIGN DOCTRINE:
  *   - Cormorant Garamond for display/section headers.
  *   - Inter for body copy.
  *   - Bone/cream/ink/forest palette from src/theme/tokens.ts.
  *   - NO emoji. NO inline magic colors. All color references via tokens.
- *   - Lane dots use 4 distinct palette colors.
+ *   - Lane dots use one muted palette color.
  *
  * LANES:
  *   Body     — #2C4A36 (forest)
  *   Win      — #C5A253 (mutedGold)
- *   Coach    — #1A1A18 (ink)
  *   Friction — #B1A89F (stone)
  */
 import React, { useCallback, useState, useRef } from 'react';
@@ -41,11 +42,10 @@ const LANE_CONFIG: Record<
 > = {
   body:     { label: 'Body', accessibilityLabel: 'Body lane' },
   win:      { label: 'Wins', accessibilityLabel: 'Wins lane' },
-  coach:    { label: 'Coach', accessibilityLabel: 'Coach lane' },
   friction: { label: 'Friction', accessibilityLabel: 'Friction lane' },
 };
 
-const ALL_LANES: TimelineLane[] = ['body', 'win', 'coach', 'friction'];
+const ALL_LANES: TimelineLane[] = ['body', 'win', 'friction'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,7 +85,8 @@ function useTimeline(activeLanes: TimelineLane[]) {
       try {
         const result = await fetchTimeline({
           sinceDays: 365,
-          lanes: activeLanes.length === 4 ? undefined : activeLanes,
+          // Named lanes even for All: a server before b#1078 never sends its coach lane here.
+          lanes: activeLanes,
           cursor,
           limit: 20,
         });
@@ -262,7 +263,7 @@ export default function TimelineScreen() {
 
   const toggleLane = useCallback((lane: TimelineLane) => {
     setActiveLanes((current) => {
-      if (current.length === 4) {
+      if (current.length === ALL_LANES.length) {
         // From "All" — select just this lane.
         return [lane];
       }
@@ -272,11 +273,11 @@ export default function TimelineScreen() {
         return next.length === 0 ? ALL_LANES : next;
       }
       const next = [...current, lane];
-      return next.length === 4 ? ALL_LANES : next;
+      return next.length === ALL_LANES.length ? ALL_LANES : next;
     });
   }, []);
 
-  const isAll = activeLanes.length === 4;
+  const isAll = activeLanes.length === ALL_LANES.length;
 
   const renderItem = useCallback(
     ({ item }: { item: TimelineEvent }) => <EventCard event={item} />,

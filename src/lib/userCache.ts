@@ -39,6 +39,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { prefsStorage } from '../storage/mmkv';
 import type { CurrentUser } from '../hooks/useCurrentUser';
+import { noteCachedUser } from './romanJoinOffer';
 
 const MMKV_KEY = 'auth.user_data';
 const LEGACY_AS_KEY = 'user_data';
@@ -72,14 +73,19 @@ function parseUser(raw: string | null | undefined): CurrentUser | null {
 function commitRead(startedAt: number, value: CurrentUser | null): CurrentUser | null {
   hydrated = true;
   if (generation !== startedAt) return mirror;
+  const prev = mirror;
   mirror = value;
+  noteCachedUser(prev, value);
   return value;
 }
 
 function applyMutation(next: CurrentUser | null): void {
   generation += 1;
+  const prev = mirror;
   mirror = next;
   hydrated = true;
+  // Owner 62y2: a client with no coach who joins a coach is offered the Roman and AI choice once.
+  noteCachedUser(prev, next);
 }
 
 /** True once the cache has been read from storage (or written) in this process. */
@@ -178,6 +184,12 @@ export async function setUserCache(user: CurrentUser): Promise<void> {
 export async function patchUserCache(patch: Partial<CurrentUser>): Promise<void> {
   if (!hydrated) await readUserCache();
   const existing = mirror;
+  // FIXAGE2 R7: the profile keeps one date of birth under both names (the
+  // server's date_of_birth and Edit Profile's dob), so a new date never
+  // leaves an older one behind for the age decision (lib/ageGate).
+  const p = patch.profile as { date_of_birth?: unknown; dob?: unknown } | undefined;
+  const dob = p?.date_of_birth !== undefined ? p.date_of_birth : p?.dob;
+  if (p && dob !== undefined) patch = { ...patch, profile: { ...p, date_of_birth: dob, dob } as CurrentUser['profile'] };
   const merged: CurrentUser = existing
     ? {
         ...existing,

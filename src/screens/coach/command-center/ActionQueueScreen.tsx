@@ -26,6 +26,8 @@ import { colors, spacing, typography } from '../../../theme/tokens';
 import {
   commandCenterApi,
   ActionQueueItem,
+  isSafetyAlert,
+  safetyQuote,
 } from '../../../services/commandCenterApi';
 import AlertRow from '../../../components/command-center/AlertRow';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
@@ -37,9 +39,11 @@ type LoadState = 'loading' | 'refreshing' | 'data' | 'error';
 
 interface Props {
   onSelectClient?: (userId: string, displayName: string) => void;
+  /** A Roman safety alert card opens its detail screen (owner 57w). */
+  onOpenSafetyAlert?: (item: ActionQueueItem) => void;
 }
 
-export default function ActionQueueScreen({ onSelectClient }: Props) {
+export default function ActionQueueScreen({ onSelectClient, onOpenSafetyAlert }: Props) {
   const [state, setState] = useState<LoadState>('loading');
   const [items, setItems] = useState<ActionQueueItem[]>([]);
   const [totalPending, setTotalPending] = useState(0);
@@ -141,15 +145,34 @@ export default function ActionQueueScreen({ onSelectClient }: Props) {
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <AlertRow
-            clientName={item.client_name}
-            message={item.message}
-            onPress={() => onSelectClient?.(item.client_id, item.client_name)}
-            onDismiss={() => handleDismiss(item.alert_id, item.client_name)}
-            testID="command-center-action-queue-row"
-          />
-        )}
+        renderItem={({ item }) =>
+          isSafetyAlert(item) ? (
+            // Owner 57w / 57x: one card style for every safety alert. The
+            // client's own words stay out of analytics capture, and a crisis
+            // alert never shows them (#ROMAN-CRISIS-ALERT). Line 1 shows in
+            // full at any text size (57w).
+            <View ph-no-capture>
+              <AlertRow
+                clientName={item.client_name}
+                message={item.message}
+                messageLines={0}
+                quote={safetyQuote(item.alert_type, item.quote)}
+                hideClientName
+                onPress={() => onOpenSafetyAlert?.(item)}
+                onDismiss={() => handleDismiss(item.alert_id, item.client_name)}
+                testID="command-center-safety-alert-row"
+              />
+            </View>
+          ) : (
+            <AlertRow
+              clientName={item.client_name}
+              message={item.message}
+              onPress={() => onSelectClient?.(item.client_id, item.client_name)}
+              onDismiss={() => handleDismiss(item.alert_id, item.client_name)}
+              testID="command-center-action-queue-row"
+            />
+          )
+        }
       />
     </View>
   );

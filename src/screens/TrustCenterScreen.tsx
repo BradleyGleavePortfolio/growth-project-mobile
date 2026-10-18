@@ -8,7 +8,7 @@
  *   values are gone (FW-ACCOUNT-128 U3), so nothing is fetched for it.
  * Section 2: User actions — data export + account deletion
  * Section 3: Bullet list — who has access, what's encrypted. The coach and
- *   Roman lines follow the real coach link and the Coach sharing switches
+ *   Roman lines follow the real coach link (no sharing switches; #SHARE-SIMPLE)
  *   (GET /consent/me, clients only; trustCenterSharing.ts, FW-ACCOUNT-128 U2).
  * Footer: Privacy Policy, Consumer Health Data Privacy Policy, Terms of
  *   Service, help centre.
@@ -45,8 +45,10 @@ import { track } from '../lib/analytics';
 import { dataExportApi } from '../services/dataExportApi';
 import { readCoachSharing } from '../api/coachSharingApi';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useRomanCrisisSentence } from '../lib/romanCrisisSentence';
 import { isCoachLikeRole } from '../lib/roleSelectionGate';
 import { trustCoachLine, trustRomanLine } from './trustCenterSharing';
+import { clientPrivacyText } from '../lib/ai/aiCoachless';
 import type { TrustCoachView } from './trustCenterSharing';
 import { trustCenterLinks } from './trustCenterLinks';
 import type { TrustCenterLink } from './trustCenterLinks';
@@ -113,10 +115,13 @@ const makeMetaStyles = (colors: ThemeColors) =>
 function BulletItem({ text }: { text: string }) {
   const { colors } = useTheme();
   const bulletStyles = useMemo(() => makeBulletStyles(colors), [colors]);
+  // K1 / K2: no coach sentence for a client with no coach; the 57c exception after a coached promise.
+  const shown = clientPrivacyText(text);
+  if (!shown) return null;
   return (
     <View style={bulletStyles.row}>
       <View style={bulletStyles.dot} />
-      <Text style={bulletStyles.text}>{text}</Text>
+      <Text style={bulletStyles.text}>{shown}</Text>
     </View>
   );
 }
@@ -285,6 +290,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [exportBusy, setExportBusy] = useState(false);
   const user = useCurrentUser();
+  const crisisText = useRomanCrisisSentence();
   const userId = user?.id ?? null;
   const coachAccount = isCoachLikeRole(user?.role);
   const cachedCoach = Boolean(user?.coach_id);
@@ -311,7 +317,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
     track('trust_center_opened');
   }, []);
 
-  // Who can see your data: the server's coach link and Coach sharing switches
+  // Who can see your data: the server's coach link (no sharing switches)
   // (400 = no coach). A coach account has no coach and /consent is for
   // clients only, so nothing is read for it. If the read fails, the account's
   // own coach link decides whether a coach line shows at all.
@@ -477,7 +483,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <BulletItem text="You — always" />
           {coachLine ? <BulletItem text={coachLine} /> : null}
           <BulletItem text="Members of your community spaces — the content you choose to share there. If you opt in to a leaderboard, other clients of your coach can also see your display name and participation score." />
-          <BulletItem text={trustRomanLine(coachView)} />
+          <BulletItem text={crisisText(trustRomanLine(coachView))} />
           <BulletItem text="Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy" />
           <BulletItem text="Your data is never sold, and your health data is never used for advertising" />
 

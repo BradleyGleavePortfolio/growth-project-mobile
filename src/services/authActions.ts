@@ -24,6 +24,7 @@ import {
   pushQueuedWorkouts,
 } from '../offline/sync/sync-engine';
 import { flush as flushFoodLogQueue, getQueueLength as foodQueueLength } from './foodLogQueue';
+import { OUTBOX_KEY_PREFIX, outboxLength, releaseOutbox, sendOutboxBeforeSignOut } from './messageOutbox';
 import { activeWorkoutSessionKey } from '../storage/activeWorkoutSession';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
@@ -41,6 +42,7 @@ import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
 import { DAY1_ANSWERS_KEY_PREFIX } from '../screens/day-one/answers';
+import { releaseAgeHolds } from '../lib/ageGate';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = [
@@ -150,6 +152,8 @@ const PER_USER_KEY_PREFIXES = [
   // the desktop extension connection. Swept via the exported constant so the
   // literal lives in one place.
   IMPORT_OFFER_DECISION_KEY_PREFIX,
+  // Style B coach messages still waiting to send (services/messageOutbox), handled like the foods above.
+  OUTBOX_KEY_PREFIX,
 ];
 
 // Belt-and-braces wipe for the cacheStorage MMKV namespace. clearAllStorage()
@@ -316,34 +320,38 @@ export interface UnsyncedLogs {
   workouts: number;
   /** Foods saved offline, including any the server refused. */
   foods: number;
+  /** Style B coach messages waiting to send (services/messageOutbox), including any the server refused. */
+  messages: number;
 }
 
 /** Upper bound of the one send attempt before a sign-out (weak signal). */
 const SIGN_OUT_SEND_TIMEOUT_MS = 4000;
 
-async function readUnsynced(userId: string): Promise<{ queued: number; open: number; foods: number }> {
-  const [queued, open, foods] = await Promise.all([
+async function readUnsynced(userId: string): Promise<{ queued: number; open: number; foods: number; messages: number }> {
+  const [queued, open, foods, messages] = await Promise.all([
     countQueuedWorkouts(userId, { includeParked: true }),
     AsyncStorage.getItem(activeWorkoutSessionKey(userId)),
     foodQueueLength({ includeParked: true }),
+    outboxLength(userId),
   ]);
-  return { queued, open: open ? 1 : 0, foods };
+  return { queued, open: open ? 1 : 0, foods, messages };
 }
 
 /**
- * SESSION-KEEP-130: one bounded try to send the foods saved offline and the
- * finished workouts waiting on this phone, then what is still unsent (a
+ * SESSION-KEEP-130: one bounded try to send the foods saved offline, the
+ * finished workouts and the coach messages waiting on this phone, then what is still unsent (a
  * sign-out removes it). A workout still open cannot be sent and is counted.
  * Nothing waiting means no network call. Never rejects.
  */
 export async function sendUnsyncedLogs(userId?: string | null): Promise<UnsyncedLogs> {
   try {
     const id = await resolveSigningOutUserId(userId);
-    if (!id) return { workouts: 0, foods: 0 };
+    if (!id) return { workouts: 0, foods: 0, messages: 0 };
     let left = await readUnsynced(id);
     const sends: Array<Promise<unknown>> = [];
     if (left.foods > 0) sends.push(flushFoodLogQueue());
     if (left.queued > 0) sends.push(pushQueuedWorkouts());
+    if (left.messages > 0) sends.push(sendOutboxBeforeSignOut(id));
     if (sends.length > 0) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
@@ -355,22 +363,22 @@ export async function sendUnsyncedLogs(userId?: string | null): Promise<Unsynced
       clearTimeout(timer);
       left = await readUnsynced(id);
     }
-    return { workouts: left.queued + left.open, foods: left.foods };
+    return { workouts: left.queued + left.open, foods: left.foods, messages: left.messages };
   } catch (err) {
     logger.warn('AuthActions', 'sendUnsyncedLogs: unsynced logs not read', err);
-    return { workouts: 0, foods: 0 };
+    return { workouts: 0, foods: 0, messages: 0 };
   }
 }
 
-/** "2 workouts and 1 food have not synced yet and will be removed from this phone.", or null. */
-export function unsyncedLogsMessage({ workouts, foods }: UnsyncedLogs): string | null {
-  const parts = [
-    workouts > 0 ? `${workouts} ${workouts === 1 ? 'workout' : 'workouts'}` : '',
-    foods > 0 ? `${foods} ${foods === 1 ? 'food' : 'foods'}` : '',
-  ].filter(Boolean);
+/** "2 workouts, 1 food and 1 message have not synced yet and will be removed from this phone.", or null. */
+export function unsyncedLogsMessage({ workouts, foods, messages }: UnsyncedLogs): string | null {
+  const parts = ([[workouts, 'workout'], [foods, 'food'], [messages, 'message']] as const)
+    .filter(([n]) => n > 0)
+    .map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`);
   if (parts.length === 0) return null;
-  const verb = workouts + foods === 1 ? 'has' : 'have';
-  return `${parts.join(' and ')} ${verb} not synced yet and will be removed from this phone.`;
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
+  const verb = workouts + foods + messages === 1 ? 'has' : 'have';
+  return `${list} ${verb} not synced yet and will be removed from this phone.`;
 }
 
 let signOutConfirmPending = false;
@@ -409,6 +417,9 @@ export async function signOut(userId?: string | null, opts: SignOutOptions = {})
   // no new native page, record type, upload or progress write starts after
   // the person taps Log out (the `logout` event below comes much later).
   stopOnDeviceHealthWork();
+  // FIXAGE2 R5: nothing sign-out sends, and no request already held, waits on
+  // the age step (lib/ageGate).
+  releaseAgeHolds();
   // Sol B-362-7: health grants and progress leave through their own chain.
   const healthStateRetired = retireOnDeviceStateAtSignOut();
   try {
@@ -435,7 +446,7 @@ async function signOutWhileHealthRetires(
   const signingOutUserId = await resolveSigningOutUserId(userId);
 
   // SESSION-KEEP-130: before anything is removed, one bounded try to send the
-  // foods and finished workouts waiting on this phone. Not after a refused
+  // foods, finished workouts and coach messages waiting on this phone. Not after a refused
   // session renewal (sessionFence): that session can no longer send anything.
   if (!opts.sessionFence) await sendUnsyncedLogs(signingOutUserId);
 
@@ -487,6 +498,9 @@ async function signOutWhileHealthRetires(
     }
   }
 
+  // The messages outbox stops writing before its saved list is removed below,
+  // so a send still in flight cannot put it back.
+  releaseOutbox();
   const prefixedKeys = await collectPrefixedKeys();
   const perUserKeys = signingOutUserId
     ? PER_USER_KEY_PREFIXES.map((p) => `${p}${signingOutUserId}`)

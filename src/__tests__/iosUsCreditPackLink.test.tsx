@@ -136,7 +136,7 @@ describe('iOS store build, US link on', () => {
     const Gated = withNonP2PPurchaseGate(() => <Text>Digital checkout</Text>, creditPacksHidden);
     const utils = await render(<Gated />);
     expect(utils.getByText('Digital checkout')).toBeTruthy();
-    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'CreditPackCheckout' });
+    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'CreditPackCheckout', initial: false });
   });
 
   it('meter chip offers the packs', async () => {
@@ -149,7 +149,7 @@ describe('iOS store build, US link on', () => {
     mockBudget = budget(96);
     const banner = await render(<AIBudgetMount />);
     await fireEvent.press(banner.getByText('Buy credits'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' } });
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' }, initial: false });
   });
 
   it('hard pause shows the three packs, Custom and who is paid', async () => {
@@ -173,7 +173,7 @@ describe('iOS store build, US link on', () => {
     const chip = utils.getByTestId('ai-budget-mount-chip');
     expect(chip.props.accessibilityRole).toBe('button');
     await fireEvent.press(chip);
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' } });
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' }, initial: false });
   });
 
   it('tutorial last card: packs, who is paid, and "Not now" (no first person)', async () => {
@@ -212,7 +212,7 @@ describe('the switch never shows packs where it does not apply', () => {
     expect(purchasePolicyHeader()).toBe(header);
     const row = await render(<PackOptionsRow options={[1000]} onSelect={jest.fn()} />);
     expect(row.queryByTestId('ai-pack-option-1000')).toBeNull();
-    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'SettingsHome' });
+    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'SettingsHome', pop: true });
   });
 
   it('iOS store build, switch off: closing the pause sheet adds no chip', async () => {

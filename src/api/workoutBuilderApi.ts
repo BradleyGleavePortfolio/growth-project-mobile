@@ -76,6 +76,13 @@ export interface WorkoutPlanExercise {
   notes: string | null;
 }
 
+/**
+ * One prescribed row of a client assignment read. A frozen snapshot row
+ * (MWB-1) carries only the catalog id and prescription, no database `id` or
+ * `workout_plan_id`; a live plan row keeps its `id`.
+ */
+export type AssignmentExercise = Omit<WorkoutPlanExercise, 'id' | 'workout_plan_id'> & { id?: string };
+
 export interface WorkoutPlan {
   id: string;
   coach_id: string;
@@ -100,7 +107,16 @@ export interface ClientWorkoutAssignment {
 }
 
 export interface ClientWorkoutAssignmentWithPlan extends ClientWorkoutAssignment {
+  /** The live plan. Its rows and name can change after the assignment. */
   workout_plan: WorkoutPlan;
+  /**
+   * The prescription the client trains (MWB-1): the frozen snapshot rows when
+   * `snapshot_source` is true, else the live rows. Absent on older servers.
+   */
+  exercises?: AssignmentExercise[];
+  snapshot_source?: boolean;
+  /** The frozen plan name and type; null before MWB-1. No duration is saved. */
+  snapshot?: { plan_name: string; plan_type: WorkoutType } | null;
   /**
    * Set counts the coach approved from Roman's Action Queue, by exercise
    * `order` (B-ROMANADJ-125). Absent on servers without that change.

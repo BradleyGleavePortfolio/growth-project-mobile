@@ -1,15 +1,13 @@
 /**
  * CoachAiSection — Coach AI v1 entry point on ClientDetailScreen.
  *
- * Renders three CTAs (workout / meal plan / insight). Each CTA opens a
+ * Renders two CTAs (workout / insight). Each CTA opens a
  * lightweight bottom-sheet modal to collect inputs, then POSTs to the
  * matching `/coach/ai/*` endpoint and hands the returned draftId off
  * to the appropriate draft screen.
  *
  * The section calls `GET /coach/ai/status` on mount. When `ready=false`
- * the CTAs render in a disabled state with a caption explaining that
- * the owner must set `ANTHROPIC_API_KEY` in Fly secrets to bring AI
- * back online — see backend 503 contract in `coachAi.ts`.
+ * the CTAs render in a disabled state with a calm retry caption.
  *
  * Doctrine-clean: no emoji, no hex literals, theme tokens only.
  */
@@ -36,12 +34,14 @@ import type { CoachAiDraftType, CoachAiStatus } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
 import AiRefusalNotice from '../ai/AiRefusalNotice';
 import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
+import { layout, radius } from '../../theme/tokens';
 
 // How long the post-timeout poll runs (2 extra minutes) and the interval.
 const POLL_INTERVAL_MS = 10_000;
 const POLL_MAX_DURATION_MS = 120_000;
+const AI_UNAVAILABLE = 'AI is temporarily unavailable. Try again later.';
 
-type Mode = 'workout' | 'meal' | 'insight' | null;
+type Mode = 'workout' | 'insight' | null;
 
 const FOCUS_OPTIONS = ['Strength', 'Hypertrophy', 'Endurance', 'Mobility'] as const;
 const DAYS_PER_WEEK_OPTIONS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -50,16 +50,6 @@ const INSIGHT_WINDOWS = [7, 14, 30] as const;
 interface Props {
   clientId: string;
   clientName: string;
-  /**
-   * B14: Client safety context for the meal-plan generator. Always pass
-   * these from ClientDetailScreen so the AI request carries the user's
-   * stored allergies/restrictions. An undefined value means "not yet
-   * loaded" and the meal-plan CTA is disabled to prevent a generator
-   * call that misses safety constraints; an empty array means "loaded
-   * and the user has none".
-   */
-  clientAllergies?: string[];
-  clientDietaryRestrictions?: string[];
   /** AIB-6: the Workouts tab "Build a program with AI" entry asks for the program generator; handled once AI is ready. */
   openWorkoutRequest?: boolean;
   onWorkoutRequestHandled?: () => void;
@@ -68,8 +58,6 @@ interface Props {
 export default function CoachAiSection({
   clientId,
   clientName,
-  clientAllergies,
-  clientDietaryRestrictions,
   openWorkoutRequest,
   onWorkoutRequestHandled,
 }: Props) {
@@ -104,10 +92,6 @@ export default function CoachAiSection({
   const [daysPerWeek, setDaysPerWeek] = useState<number>(4);
   const [focus, setFocus] = useState<string | undefined>(undefined);
   const [workoutNotes, setWorkoutNotes] = useState<string>('');
-
-  // Meal plan form state
-  const [days, setDays] = useState<number>(7);
-  const [mealNotes, setMealNotes] = useState<string>('');
 
   // Insight form state
   const [windowDays, setWindowDays] = useState<number>(7);
@@ -144,7 +128,7 @@ export default function CoachAiSection({
     const pollInterval = setInterval(async () => {
       try {
         const res = await coachAiApi.listDrafts({ clientId: activeClientId, limit: 1 });
-        const drafts = res.data;
+        const drafts = res.data.filter(canOpenDraft);
         if (drafts.length > 0) {
           clearInterval(pollInterval);
           setTimeoutMessage(null);
@@ -175,7 +159,7 @@ export default function CoachAiSection({
     setInboxError(null);
     try {
       const res = await coachAiApi.listDrafts({ clientId, limit: 20 });
-      setInboxDrafts(res.data);
+      setInboxDrafts(res.data.filter(canOpenDraft));
     } catch (err) {
       setInboxError(errorMessage(err, 'Could not load pending drafts.'));
     } finally {
@@ -183,8 +167,8 @@ export default function CoachAiSection({
     }
   }, [clientId]);
 
-  // Navigate to the correct draft screen based on draft type. All three
-  // candidate routes (AIWorkoutDraft, AIMealPlanDraft, ClientInsight) accept
+  // Navigate to the correct draft screen based on draft type. Both
+  // candidate routes (AIWorkoutDraft, ClientInsight) accept
   // the same `{ draftId, clientId, clientName }` param shape per
   // ClientsStackParamList, so we can dispatch via a typed switch instead of
   // an `as any` cast — satisfies @typescript-eslint/no-explicit-any.
@@ -198,9 +182,6 @@ export default function CoachAiSection({
       switch (screen) {
         case 'AIWorkoutDraft':
           navigation.navigate('AIWorkoutDraft', params);
-          return;
-        case 'AIMealPlanDraft':
-          navigation.navigate('AIMealPlanDraft', params);
           return;
         case 'ClientInsight':
           navigation.navigate('ClientInsight', params);
@@ -242,71 +223,10 @@ export default function CoachAiSection({
         closeModal();
         startBackgroundPoll(clientId);
       } else if (isAiDisabledError(err)) {
-        setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
+        setSubmitError(AI_UNAVAILABLE);
         await fetchStatus();
       } else {
         setSubmitError(errorMessage(err, 'Could not generate program.'));
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSubmitMealPlan = async () => {
-    setSubmitError(null);
-    setSubmitRefusal(null);
-    setTimeoutMessage(null);
-    setReadyDraft(null);
-    // B14: refuse to generate a meal plan when we have not been told what the
-    // client's allergies are. `undefined` means the caller has not loaded the
-    // profile yet; the array semantics (empty = none, present = these) match
-    // profileCompletion.ts. This is the difference between "asked and said
-    // none" vs. "we never asked" — the latter is unsafe input for the AI.
-    if (clientAllergies === undefined || clientDietaryRestrictions === undefined) {
-      setSubmitError(
-        'Allergy and dietary info has not loaded yet. Reopen this client to retry.',
-      );
-      return;
-    }
-    setSubmitting(true);
-    try {
-      // Mirror safety fields into the user-facing notes so the LLM cannot
-      // miss them even if the backend prompt template forgets a field.
-      const composedNotes = [
-        mealNotes.trim() || null,
-        clientAllergies.length
-          ? `Allergies: ${clientAllergies.join(', ')}.`
-          : null,
-        clientDietaryRestrictions.length
-          ? `Dietary restrictions: ${clientDietaryRestrictions.join(', ')}.`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' ');
-      const res = await coachAiApi.generateMealPlan({
-        clientId,
-        days,
-        // The safety fields travel inside `notes` only: the backend body
-        // allow-list (GenerateMealPlanDto, forbidNonWhitelisted) refuses any
-        // other key with a 400, so sending them as their own keys failed
-        // every generation.
-        notes: composedNotes || undefined,
-      });
-      const draftId = res.data.draftId;
-      closeModal();
-      navigation.navigate('AIMealPlanDraft', { draftId, clientId, clientName });
-    } catch (err) {
-      const refusal = aiRefusalOf(err);
-      if (refusal) {
-        setSubmitRefusal(refusal);
-      } else if (isTimeoutError(err)) {
-        closeModal();
-        startBackgroundPoll(clientId);
-      } else if (isAiDisabledError(err)) {
-        setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
-        await fetchStatus();
-      } else {
-        setSubmitError(errorMessage(err, 'Could not generate meal plan.'));
       }
     } finally {
       setSubmitting(false);
@@ -332,7 +252,7 @@ export default function CoachAiSection({
         closeModal();
         startBackgroundPoll(clientId);
       } else if (isAiDisabledError(err)) {
-        setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
+        setSubmitError(AI_UNAVAILABLE);
         await fetchStatus();
       } else {
         setSubmitError(errorMessage(err, 'Could not generate insight.'));
@@ -366,7 +286,7 @@ export default function CoachAiSection({
 
       {!ready && !statusLoading ? (
         <Text style={styles.offlineCaption} testID="coach-ai-offline-caption">
-          AI offline — owner action required
+          {AI_UNAVAILABLE}
         </Text>
       ) : null}
       {statusError ? (
@@ -383,16 +303,6 @@ export default function CoachAiSection({
             setMode('workout');
           }}
           testID="coach-ai-cta-workout"
-        />
-        <CoachAiCta
-          icon="restaurant-outline"
-          label="Generate meal plan"
-          disabled={!ready}
-          onPress={() => {
-            setSubmitError(null);
-            setMode('meal');
-          }}
-          testID="coach-ai-cta-meal"
         />
         <CoachAiCta
           icon="sparkles-outline"
@@ -517,10 +427,11 @@ export default function CoachAiSection({
             />
 
             <Text style={styles.fieldLabel}>Days per week</Text>
-            <View style={styles.chipRow}>
+            <View style={styles.optionRow} testID="coach-ai-workout-days-row">
               {DAYS_PER_WEEK_OPTIONS.map((d) => (
                 <Chip
                   key={d}
+                  expand
                   active={daysPerWeek === d}
                   label={String(d)}
                   onPress={() => setDaysPerWeek(d)}
@@ -579,63 +490,6 @@ export default function CoachAiSection({
         </View>
       </Modal>
 
-      {/* Meal plan modal */}
-      <Modal
-        visible={mode === 'meal'}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={closeModal}
-      >
-        <View style={styles.modalContainer}>
-          <ModalHeader title="Generate meal plan" onClose={closeModal} />
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            <Text style={styles.fieldLabel}>Days ({days})</Text>
-            <NumberStepper
-              value={days}
-              min={1}
-              max={14}
-              onChange={setDays}
-              testID="coach-ai-meal-days"
-            />
-
-            <Text style={styles.fieldLabel}>Notes (optional)</Text>
-            <TextInput
-              style={[styles.textInput, styles.multiline]}
-              placeholder="Dietary restrictions, calorie target, preferences…"
-              placeholderTextColor={colors.textMuted}
-              value={mealNotes}
-              onChangeText={setMealNotes}
-              multiline
-              maxLength={500}
-            />
-
-            {submitError ? <Text style={styles.formError}>{submitError}</Text> : null}
-            {submitRefusal ? (
-              <AiRefusalNotice
-                refusal={submitRefusal}
-                audience="coach"
-                surface="draft"
-                onRetry={() => void handleSubmitMealPlan()}
-                compact
-                testID="coach-ai-refusal"
-              />
-            ) : null}
-
-            <TouchableOpacity
-              style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
-              onPress={handleSubmitMealPlan}
-              disabled={submitting}
-              accessibilityRole="button"
-              accessibilityLabel="Generate meal plan"
-            >
-              <Text style={styles.submitBtnText}>
-                {submitting ? 'Generating…' : 'Generate'}
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </Modal>
-
       {/* Insight modal */}
       <Modal
         visible={mode === 'insight'}
@@ -647,10 +501,11 @@ export default function CoachAiSection({
           <ModalHeader title="Generate weekly insight" onClose={closeModal} />
           <ScrollView contentContainerStyle={styles.modalContent}>
             <Text style={styles.fieldLabel}>Window</Text>
-            <View style={styles.chipRow}>
+            <View style={styles.optionRow} testID="coach-ai-insight-window-row">
               {INSIGHT_WINDOWS.map((w) => (
                 <Chip
                   key={w}
+                  expand
                   active={windowDays === w}
                   label={`${w} days`}
                   onPress={() => setWindowDays(w)}
@@ -697,18 +552,21 @@ export default function CoachAiSection({
 function draftTypeLabel(type: CoachAiDraftType): string {
   switch (type) {
     case 'WORKOUT_PROGRAM': return 'Workout program';
-    case 'MEAL_PLAN':       return 'Meal plan';
     case 'INSIGHT':         return 'Weekly insight';
     default:                return type;
   }
 }
 
+/** Old free-form MEAL_PLAN drafts have no screen (MEALPLAN-RETIRE), so they are not listed. */
+function canOpenDraft(draft: PendingDraftSummary): boolean {
+  return draftTypeToScreen(draft.type) !== null;
+}
+
 function draftTypeToScreen(
   type: CoachAiDraftType,
-): 'AIWorkoutDraft' | 'AIMealPlanDraft' | 'ClientInsight' | null {
+): 'AIWorkoutDraft' | 'ClientInsight' | null {
   switch (type) {
     case 'WORKOUT_PROGRAM': return 'AIWorkoutDraft';
-    case 'MEAL_PLAN':       return 'AIMealPlanDraft';
     case 'INSIGHT':         return 'ClientInsight';
     default:                return null;
   }
@@ -774,17 +632,19 @@ function Chip({
   label,
   onPress,
   testID,
+  expand = false,
 }: {
   active: boolean;
   label: string;
   onPress: () => void;
   testID?: string;
+  expand?: boolean;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <TouchableOpacity
-      style={[styles.chip, active && styles.chipActive]}
+      style={[styles.chip, expand && styles.optionChip, active && styles.chipActive]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
@@ -869,7 +729,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 8,
       paddingVertical: 3,
       backgroundColor: colors.surfaceElevated,
-      borderRadius: 4,
+      borderRadius: radius.chip,
     },
     offlinePillText: {
       fontFamily: 'Inter_500Medium',
@@ -896,13 +756,14 @@ const makeStyles = (colors: ThemeColors) =>
       marginBottom: 8,
     },
     cta: {
+      minHeight: layout.touchMin,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
       paddingVertical: 14,
       paddingHorizontal: 14,
       backgroundColor: colors.primaryPale,
-      borderRadius: 4,
+      borderRadius: radius.button,
     },
     ctaDisabled: {
       backgroundColor: colors.surfaceElevated,
@@ -956,11 +817,22 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 8,
       marginBottom: 4,
     },
+    optionRow: {
+      flexDirection: 'row',
+      flexWrap: 'nowrap',
+      gap: 2,
+      marginBottom: 4,
+    },
+    optionChip: { flex: 1 },
     chip: {
+      minHeight: layout.touchMin,
+      minWidth: layout.touchMin,
+      alignItems: 'center',
+      justifyContent: 'center',
       paddingVertical: 6,
       paddingHorizontal: 12,
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.input,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -985,9 +857,9 @@ const makeStyles = (colors: ThemeColors) =>
       marginVertical: 4,
     },
     stepperBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 4,
+      width: layout.touchMin,
+      height: layout.touchMin,
+      borderRadius: radius.button,
       backgroundColor: colors.primaryPale,
       justifyContent: 'center',
       alignItems: 'center',
@@ -1009,7 +881,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 4,
+      borderRadius: radius.input,
       padding: 12,
       fontSize: 14,
       color: colors.textPrimary,
@@ -1025,8 +897,9 @@ const makeStyles = (colors: ThemeColors) =>
       marginTop: 12,
     },
     submitBtn: {
+      minHeight: layout.touchMin,
       backgroundColor: colors.primary,
-      borderRadius: 4,
+      borderRadius: radius.button,
       paddingVertical: 14,
       alignItems: 'center',
       marginTop: 20,
@@ -1046,7 +919,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 12,
       paddingHorizontal: 14,
       backgroundColor: colors.surfaceElevated,
-      borderRadius: 4,
+      borderRadius: radius.card,
       marginBottom: 8,
     },
     timeoutBannerText: {
@@ -1056,6 +929,9 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     timeoutInboxBtn: {
+      minHeight: layout.touchMin,
+      minWidth: layout.touchMin,
+      justifyContent: 'center',
       alignSelf: 'flex-start' as const,
       marginTop: 4,
     },
@@ -1067,13 +943,14 @@ const makeStyles = (colors: ThemeColors) =>
       letterSpacing: 0.4,
     },
     draftReadyBanner: {
+      minHeight: layout.touchMin,
       flexDirection: 'row' as const,
       alignItems: 'center',
       gap: 8,
       paddingVertical: 12,
       paddingHorizontal: 14,
       backgroundColor: colors.primaryPale,
-      borderRadius: 4,
+      borderRadius: radius.button,
       marginBottom: 8,
     },
     draftReadyText: {
@@ -1084,6 +961,7 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     inboxBtn: {
+      minHeight: layout.touchMin,
       flexDirection: 'row' as const,
       alignItems: 'center',
       gap: 6,

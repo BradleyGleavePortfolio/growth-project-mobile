@@ -297,7 +297,7 @@ export default function CoachHomeScreen() {
             rings={dailyRingsQuery.data}
             onPressCheckIns={() => navigation.navigate('ClientsStack')}
             onPressBrief={() =>
-              navigation.navigate('SettingsStack', { screen: 'CoachBrief' })
+              navigation.navigate('SettingsStack', { screen: 'CoachBrief', initial: false })
             }
             onPressReview={() => navigation.navigate('Messages')}
           />

@@ -1,146 +1,150 @@
-// Lightweight Supabase Realtime helper for message-arrived "ping" signals.
+// Supabase Realtime "ping" signals for coach-client chat (MSGRT).
 //
-// Architecture choice: we deliberately do NOT use Realtime to deliver message
-// rows. Doing that would require Postgres RLS to be perfectly configured for
-// the messages table — any misconfig leaks every user's DMs to every other
-// user's WebSocket. The backend's REST API already enforces tenant isolation
-// via the JWT-scoped guards from Fix #3 / Fix #4, so we keep data delivery
-// there.
+// Realtime never carries message rows or text. The backend sends an empty
+// broadcast (`{}`) and the app refetches through the authenticated REST API,
+// which enforces tenant isolation. Each person has one PRIVATE topic,
+// `messages:user:<User.id>`: the backend pings both people in a chat on every
+// send, read, edit, delete, pin and unpin. Its Realtime policy (backend
+// migration 20270502003700) lets only the signed-in owner of the topic
+// receive, and nobody but the server sends.
 //
-// Instead we use Realtime BROADCAST channels (server-to-client pings with no
-// row payload). When the backend processes a message send, it broadcasts an
-// empty signal on `messages:{recipientUserId}`. Subscribed clients receive
-// the ping and trigger a React Query invalidation, fetching the actual
-// message list through the authenticated REST endpoint.
-//
-// This gives us:
-//  - sub-second perceived latency (no more 15s polling)
-//  - zero PII over the WebSocket
-//  - no RLS risk \u2014 Broadcast is opt-in per channel, no DB rows are exposed
-//  - graceful degradation \u2014 if Realtime fails, the existing setInterval
-//    fallback keeps working
+// - Auth: `accessToken` reads the signed-in Supabase access token from secure
+//   storage; setAuth() reads it before every join and after every token
+//   refresh (refreshRealtimeAuth, called by services/api.ts). Never logged.
+// - One channel per person: realtime-js keeps one channel per topic, so every
+//   screen's listener shares it. It goes when the last listener leaves (sign-
+//   out unmounts every screen), and Realtime auth is read again then, which
+//   clears it after sign-out. Another person's id (account switch) replaces it.
+// - Pings are debounced (trailing, PING_DEBOUNCE_MS): a broadcast to 100
+//   clients pings the coach 100 times and becomes one refetch.
+// - Poll only: a join that is refused or fails (a server without the policy,
+//   an expired token, no network) and a channel the server closes (its token
+//   expired) are removed silently. The screens' 60 s poll and focus refresh
+//   carry on, and the next screen or token refresh joins again. A joined
+//   channel that drops with the network rejoins by itself.
 
 import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
+import { secureStorage } from './secureStorage';
+
+export const PING_DEBOUNCE_MS = 1000;
 
 let client: SupabaseClient | null = null;
 
 function getClient(): SupabaseClient {
   if (!client) {
     client = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-      auth: {
-        // Realtime client doesn't need to manage its own session \u2014 we use
-        // anon role + Broadcast which doesn't touch RLS-protected tables.
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
+      // The app keeps its own session (services/api.ts); this client only joins Realtime.
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       realtime: {
-        params: {
-          eventsPerSecond: 5,
-        },
+        params: { eventsPerSecond: 5 },
+        accessToken: () => secureStorage.getItem('supabase_token'),
       },
     });
   }
   return client;
 }
 
-/**
- * Subscribe to message-arrived pings for the given user. Returns an unsubscribe
- * function that callers MUST invoke on unmount to free the WebSocket.
- *
- * The handler is called whenever the backend broadcasts on the user's channel
- * \u2014 either because they received a new message, or one of their own outbound
- * messages was acknowledged. Either way the right response is "refetch".
- *
- * `onThreadUpdated` (messaging v2) receives the distinct `thread-updated`
- * event the backend sends for read receipts, edits, deletes and pins. The
- * channel is public, so the backend sends an empty payload `{}` (no ids, no
- * text): every `thread-updated` event is a refetch signal, never a banner or
- * a sound. Older ID-bearing payloads (`{ kind, thread_client_id, message_id }`)
- * are still read when present. It rides the same channel, so no second
- * WebSocket subscription is opened.
- */
-export type ThreadUpdateKind = 'read' | 'edited' | 'deleted' | 'pinned' | 'unpinned';
-
-export interface ThreadUpdatedPing {
-  /** Null for the current empty payload; set only by older ID-bearing payloads. */
-  kind: ThreadUpdateKind | null;
-  /** Thread key (the client id of the coach <-> client thread), or null when the payload carries no ids. */
-  threadClientId: string | null;
-  messageId: string | null;
+interface Listener {
+  onPing: () => void;
+  onThreadUpdated?: () => void;
 }
 
-const THREAD_UPDATE_KINDS: ReadonlySet<string> = new Set(['read', 'edited', 'deleted', 'pinned', 'unpinned']);
+const listeners = new Set<Listener>();
+let topic: string | null = null;
+let channel: RealtimeChannel | null = null;
+let leaving: Promise<unknown> = Promise.resolve();
 
-/**
- * Parse the broadcast envelope. Any `thread-updated` envelope is a refresh
- * signal, including the empty payload the backend sends today; ids are read
- * only when present and well formed. Only a non-object message is dropped (null).
- */
-export function parseThreadUpdated(message: unknown): ThreadUpdatedPing | null {
-  const env = message && typeof message === 'object' ? (message as Record<string, unknown>) : null;
-  if (!env) return null;
-  const p = env.payload && typeof env.payload === 'object' ? (env.payload as Record<string, unknown>) : {};
-  const kind = typeof p.kind === 'string' && THREAD_UPDATE_KINDS.has(p.kind) ? (p.kind as ThreadUpdateKind) : null;
-  return {
-    kind,
-    threadClientId: typeof p.thread_client_id === 'string' && p.thread_client_id ? p.thread_client_id : null,
-    messageId: typeof p.message_id === 'string' && p.message_id ? p.message_id : null,
+function debounced(pick: (l: Listener) => (() => void) | undefined) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
   };
+  const ping = () => {
+    cancel();
+    timer = setTimeout(() => {
+      timer = null;
+      for (const l of [...listeners]) {
+        try {
+          pick(l)?.();
+        } catch {
+          // A handler failure never reaches the realtime client.
+        }
+      }
+    }, PING_DEBOUNCE_MS);
+  };
+  return { ping, cancel };
+}
+const newMessage = debounced((l) => l.onPing);
+const threadUpdated = debounced((l) => l.onThreadUpdated);
+
+function drop(ch: RealtimeChannel | null): void {
+  if (!ch || ch !== channel) return;
+  channel = null;
+  // Awaited by the next join: realtime-js would hand back a channel still leaving.
+  leaving = getClient().removeChannel(ch).catch(() => undefined);
 }
 
+async function join(myTopic: string): Promise<void> {
+  await leaving;
+  const { realtime } = getClient();
+  await realtime.setAuth();
+  // Signed out, another person meanwhile, or already joined: nothing to do.
+  const token = realtime.accessTokenValue;
+  if (topic !== myTopic || channel || !token) return;
+  let joined = false;
+  const ch = getClient()
+    .channel(myTopic, { config: { private: true, broadcast: { self: false } } })
+    .on('broadcast', { event: 'new-message' }, newMessage.ping)
+    .on('broadcast', { event: 'thread-updated' }, threadUpdated.ping);
+  channel = ch;
+  ch.subscribe((status: string) => {
+    if (status === 'SUBSCRIBED') joined = true;
+    else if (ch === channel && (!joined || status === 'CLOSED')) {
+      drop(ch);
+      // A token refresh landed meanwhile: join again with the new token.
+      if (realtime.accessTokenValue !== token) void join(myTopic).catch(() => undefined);
+    }
+  });
+}
+
+/** After a token refresh: the open channel gets the new token, or a lost one joins again. */
+export function refreshRealtimeAuth(): void {
+  if (!client) return;
+  if (topic && !channel) void join(topic).catch(() => undefined);
+  else void client.realtime.setAuth().catch(() => undefined);
+}
+
+function leaveAll(): void {
+  listeners.clear();
+  topic = null;
+  newMessage.cancel();
+  threadUpdated.cancel();
+  drop(channel);
+  if (client) void client.realtime.setAuth().catch(() => undefined);
+}
+
+/**
+ * Listen for message pings on the signed-in person's own topic. `userId` is
+ * their backend User.id. `onPing` runs for `new-message`, `onThreadUpdated`
+ * (optional) for `thread-updated` (read receipts, edits, deletes, pins); each
+ * at most once per PING_DEBOUNCE_MS burst. Either way the answer is "refetch".
+ * Returns the unsubscribe that callers MUST invoke on unmount or blur.
+ */
 export function subscribeToMessages(
   userId: string,
   onPing: () => void,
-  onThreadUpdated?: (ping: ThreadUpdatedPing) => void,
+  onThreadUpdated?: () => void,
 ): () => void {
   if (!userId) return () => {};
-
-  const supabase = getClient();
-  const channelName = `messages:${userId}`;
-
-  let channel: RealtimeChannel | null = null;
-  try {
-    channel = supabase
-      .channel(channelName, {
-        config: {
-          // Broadcast self=false is the default \u2014 we don't want to bounce our
-          // own outgoing pings back to ourselves. The backend is the only sender.
-          broadcast: { self: false },
-        },
-      })
-      .on('broadcast', { event: 'new-message' }, () => {
-        try {
-          onPing();
-        } catch {
-          // Handler failures must never propagate into the realtime client \u2014
-          // they would tear down the entire WebSocket.
-        }
-      });
-    if (onThreadUpdated) {
-      channel = channel.on('broadcast', { event: 'thread-updated' }, (message: unknown) => {
-        try {
-          const ping = parseThreadUpdated(message);
-          if (ping) onThreadUpdated(ping);
-        } catch {
-          // Same isolation rule as the new-message handler.
-        }
-      });
-    }
-    channel = channel.subscribe();
-  } catch {
-    // If Realtime fails to initialise (no network, blocked WebSocket, etc.)
-    // we silently fall back to the caller's polling loop. Returning a noop
-    // unsubscribe keeps the call site uniform.
-    return () => {};
-  }
-
+  const myTopic = `messages:user:${userId}`;
+  if (topic && topic !== myTopic) leaveAll();
+  topic = myTopic;
+  const listener: Listener = { onPing, onThreadUpdated };
+  listeners.add(listener);
+  if (!channel) void join(myTopic).catch(() => undefined);
   return () => {
-    try {
-      if (channel) supabase.removeChannel(channel);
-    } catch {
-      /* noop */
-    }
+    if (listeners.delete(listener) && listeners.size === 0) leaveAll();
   };
 }

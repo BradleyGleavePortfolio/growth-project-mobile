@@ -68,11 +68,15 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
   (`ClientConsultationPrivacy.test.tsx`).
 - Summary card on Client detail shows the status line ("Completed Oct 1, 2026",
   or "In progress") and flags readiness yes answers before any tap.
+- Heading: the client's name from the route (Client detail), else the read's
+  `client_name` (a flag alert tap, whose row stores no name; the server sends
+  it only to a reader with live access). The line keeps its height while the
+  read loads and says "Client" only when neither has a name (FLAG-2).
 
 
 ## Signed out and onboarding
 
-`ConsultationOnboardingNavigator` (single flow, `ConsultationFlow`) replaces the lean flow when `consultationOnboarding` is on (ON in the clinic profile). It reads and writes `/me/onboarding/*` and finishes only through `POST /me/onboarding/complete` (live). Verdict: works, gate confirmed.
+`ConsultationOnboardingNavigator` (single flow, `ConsultationFlow`) is the onboarding for every new client (RootNavigator B14; the unmounted lean flow was deleted in ONBQ-TILES). It reads and writes `/me/onboarding/*` and finishes only through `POST /me/onboarding/complete` (live). Verdict: works, gate confirmed.
 
 | Route | Role | Stack | Entry point | Backend route(s), prod status | Flag | Verdict |
 |---|---|---|---|---|---|---|
@@ -85,12 +89,6 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `AcceptInvite` | Signed out | Auth | Invite link (deep link) | none (local or static) |  | Works: deep link only by design |
 | `AuthCallback` | Signed out | Auth | OAuth / magic link return (deep link) | none (local or static) |  | Works: deep link only by design |
 | `SupportInbox` | Signed out | Auth | MessagesScreen, SettingsScreen, LoginScreen +2 | none (local or static) |  | Works, reachable |
-| `LeanQ1` | New client | Lean onboarding | RootNavigator (onboarding, consultation flag off) | `PUT /profile` on backend main |  | Works, reachable |
-| `LeanQ2` | New client | Lean onboarding | LeanQ1GoalScreen | `PUT /profile` on backend main |  | Works, reachable |
-| `LeanQ3` | New client | Lean onboarding | LeanQ2ExperienceScreen | `PUT /profile` on backend main |  | Works, reachable |
-| `LeanQ4` | New client | Lean onboarding | LeanQ3IntentScreen | none (local or static) |  | Works, reachable |
-| `LeanQ5` | New client | Lean onboarding | LeanQ4MetricsScreen | none (local or static) |  | Works, reachable |
-| `LeanQ6` | New client | Lean onboarding | LeanQ5Screen | `PUT /profile` on backend main |  | Works, reachable |
 | `Welcome` | New client | Day 1 onboarding | AcceptInviteScreen; deep link | `PATCH /notifications/preferences` on backend main<br>`PATCH /users/me/preferences` on backend main<br>`PUT /profile` on backend main |  | Works, reachable |
 | `CoachPairing` | New client | Day 1 onboarding | WelcomeScreen | `PATCH /notifications/preferences` on backend main<br>`PATCH /users/me/preferences` on backend main<br>`PUT /profile` on backend main |  | Works, reachable |
 | `Goals` | New client | Day 1 onboarding | CoachPairingScreen | `PATCH /notifications/preferences` on backend main<br>`PATCH /users/me/preferences` on backend main<br>`PUT /profile` on backend main |  | Works, reachable |
@@ -146,7 +144,6 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `Widgets` | Client | More tab | MoreScreen, ProfileScreen | `POST /fasting/start` on backend main |  | Works, reachable |
 | `Report` | Client | More tab | MoreScreen, ProfileScreen, ProgressScreen | `GET /log/daily` live (401)<br>`GET /weight/history` live (401) |  | Works, reachable |
 | `Learn` | Client | More tab | MoreScreen, ProfileScreen | `GET /lessons` live (401)<br>`POST /lessons/:p/complete` on backend main |  | Works, reachable |
-| `Plan` | Client | More tab | More > Meal plan | `GET /me/meal-plan/today` live (401)<br>`GET /meal-plans` live (401) |  | Wired in this PR (was unreachable) |
 | `TrustCenter` | Client | More tab | SettingsScreen | `GET /v1/me/data-export/status` live (401)<br>`POST /v1/me/data-export/request` on backend main |  | Works, reachable |
 | `DeleteAccount` | Client | More tab | RomanAiConsentScreen, SettingsScreen | `GET /log/daily` live (401)<br>`GET /me/delete-account/status` live (401)<br>`GET /nutrition/water` live (401)<br>`GET /profile` live (401)<br>+11 more, none missing |  | Works, reachable |
 | `RomanAiConsent` | Client | More tab | SettingsScreen | `GET /me/ai-consent` live (401)<br>`DELETE /me/ai-consent/roman` on backend main<br>`POST /me/ai-consent/roman` on backend main |  | Works, reachable |
@@ -164,7 +161,7 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `NotificationPreferences` | Client | More tab | SettingsScreen; push tap | `PATCH /notifications/preferences` on backend main |  | Works, reachable |
 | `SupportInbox` | Client | More tab | MessagesScreen, SettingsScreen, LoginScreen +2 | none (local or static) |  | Works, reachable |
 | `ClientMacros` | Client | More tab | More > Macro targets | `GET /me/macros/current` live (401) |  | Wired in this PR (was unreachable) |
-| `ClientDailyMealPlan` | Client | More tab | dropRow | `GET /me/meal-plan/today` live (401) |  | Works, reachable |
+| `ClientDailyMealPlan` | Client | More tab | More > Meal plan; dropRow | `GET /me/meal-plan/today` live (401) |  | Works, reachable |
 | `ClientWorkoutViewer` | Client | More tab | Workout tab > assignments (cross-tab navigate) | `GET /assignments/:p` live (401)<br>`GET /assignments/me` live (401)<br>`GET /workout-plans/:p/assignments` live (401)<br>`GET /workout-plans/:p` live (401)<br>+7 more, none missing |  | Works, reachable |
 | `WorkoutAssignmentDetail` | Client | More tab | ClientWorkoutViewerScreen, dropRow | `GET /assignments/:p` live (401)<br>`GET /assignments/me` live (401)<br>`GET /workout-plans/:p/assignments` live (401)<br>`GET /workout-plans/:p` live (401)<br>+7 more, none missing |  | Works, reachable |
 | `ClientBookingRequest` | Client | More tab | none | `GET /scheduling/coaches/:p/availability` live (401)<br>`GET /scheduling/coaches/:p/session-types` live (401)<br>`GET /scheduling/providers` live (401)<br>`GET /scheduling/sessions/:p` live (401)<br>+12 more, none missing |  | Owned by #325 (calendar): entry lands there; not edited here |
@@ -233,7 +230,6 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `CoachAvailabilityEditor` | Coach, sub-coach | Clients tab | SettingsScreen | `GET /scheduling/coaches/:p/availability` live (401)<br>`GET /scheduling/coaches/:p/session-types` live (401)<br>`GET /scheduling/providers` live (401)<br>`GET /scheduling/sessions/:p` live (401)<br>+12 more, none missing |  | Works, reachable |
 | `CoachBookingInbox` | Coach, sub-coach | Clients tab | SettingsScreen | `GET /scheduling/coaches/:p/availability` live (401)<br>`GET /scheduling/coaches/:p/session-types` live (401)<br>`GET /scheduling/providers` live (401)<br>`GET /scheduling/sessions/:p` live (401)<br>+12 more, none missing |  | Works, reachable |
 | `AIWorkoutDraft` | Coach, sub-coach | Clients tab | CoachAiSection | `GET /coach/ai/drafts/:p` live (401)<br>`GET /coach/ai/drafts` live (401)<br>`GET /coach/ai/status` live (401)<br>`POST /coach/ai/client-insight` on backend main<br>+5 more, none missing |  | Works, reachable |
-| `AIMealPlanDraft` | Coach, sub-coach | Clients tab | CoachAiSection | `GET /coach/ai/drafts/:p` live (401)<br>`GET /coach/ai/drafts` live (401)<br>`GET /coach/ai/status` live (401)<br>`POST /coach/ai/client-insight` on backend main<br>+5 more, none missing |  | Works, reachable |
 | `ClientInsight` | Coach, sub-coach | Clients tab | CoachAiSection | `GET /coach/ai/drafts/:p` live (401)<br>`GET /coach/ai/drafts` live (401)<br>`GET /coach/ai/status` live (401)<br>`POST /coach/ai/client-insight` on backend main<br>+5 more, none missing |  | Works, reachable |
 | `PendingAiDrafts` | Coach, sub-coach | Clients tab | ClientDetailScreen | none (local or static) |  | Works, reachable |
 | `NotificationCenter` | Coach, sub-coach | Clients tab | HomeHeaderActions; push tap | `GET /notifications/preferences` live (401)<br>`GET /notifications/unread-count` live (401)<br>`GET /notifications` live (401)<br>`PATCH /notifications/preferences` on backend main<br>+2 more, none missing |  | Works, reachable |
