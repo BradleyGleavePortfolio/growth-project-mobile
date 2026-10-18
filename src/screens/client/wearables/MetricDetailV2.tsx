@@ -114,7 +114,7 @@ export default function MetricDetailV2({ metric, bucket, title, goal, unit }: Pr
     <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back to Health and sleep"
       style={styles.back} testID="metric-detail-back">
       <Ionicons name="chevron-back" size={24} color={sc.textOnAccent} />
-      <Text style={[styles.backText, { color: sc.textOnAccent }]} numberOfLines={1}>Health and sleep</Text>
+      <Text style={[styles.backText, styles.shrink, { color: sc.textOnAccent }]}>Health and sleep</Text>
     </Pressable>
   ) : <View />;
   const share = card && !failed ? (
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, minHeight: layout.touchMin },
   back: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: layout.touchMin, marginLeft: -spacing.xs, flexShrink: 1 },
   backText: { ...typography.bodyMd },
-  share: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: layout.touchMin, paddingHorizontal: spacing.lg, borderWidth: 1, borderRadius: radius.button },
+  share: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: layout.touchMin, paddingHorizontal: spacing.md, borderWidth: 1, borderRadius: radius.button },
   pressed: { opacity: 0.8 },
   rows: { gap: spacing.lg, marginTop: spacing.md },
   shape: { borderRadius: radius.card },
@@ -251,11 +251,12 @@ const styles = StyleSheet.create({
   tab: { minHeight: layout.touchMin, minWidth: layout.touchMin, justifyContent: 'center' },
   underline: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderRadius: radius.chip },
   figure: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.md },
-  hero: { ...typography.display, fontVariant: ['tabular-nums'] },
+  hero: { ...typography.display, fontVariant: ['lining-nums', 'tabular-nums'] },
   none: { ...typography.h2, marginVertical: spacing.sm },
   body1: { ...typography.body },
   strong: { fontFamily: 'Inter_600SemiBold' },
   grow: { flex: 1 },
+  shrink: { flexShrink: 1 },
   end: { textAlign: 'right' },
   body: { padding: spacing.lg, gap: spacing.lg },
   card: { borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, padding: spacing.lg, gap: spacing.xs },

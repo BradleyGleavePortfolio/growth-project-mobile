@@ -28,9 +28,8 @@ export function shortCount(n: number): string {
 const weekday = (d: Date, form: 'short' | 'long') => d.toLocaleDateString('en-US', { weekday: form });
 
 const monthDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-/** Month: the first day, the 1st of a month between (if not crowding an end), and today. */
-const marks = (days: readonly StepDay[]) => days.flatMap((d, i) =>
-  (i === 0 || i === days.length - 1 || (d.date.getDate() === 1 && i > 3 && i < days.length - 4) ? [i] : []));
+/** Month's date marks between the first day and today: the 1st of a month, if not crowding an end. */
+const mids = (days: readonly StepDay[]) => days.flatMap((d, i) => (d.date.getDate() === 1 && i > 3 && i < days.length - 4 ? [i] : []));
 
 /** MOCK-HEALTH-69: "Steps, last 7 days: {list}. Starter goal {n}." */
 export function weekLabel(days: readonly StepDay[], goal: number, title = 'Steps'): string {
@@ -72,7 +71,6 @@ export default function WeekStepBars({ days, goal, reduceMotion, title, dark, go
     ? [sc.textOnAccent, sc.textOnMastheadMuted, sc.data.leaf, sc.data.plannedOnDark]
     : [sc.textPrimary, sc.textMuted, sc.data.moss, sc.data.planned];
   const gap = month ? 3 : spacing.sm;
-  const marked = month ? marks(days) : [];
 
   return (
     <Animated.View style={{ opacity: fade }} accessible accessibilityRole="image" accessibilityLabel={weekLabel(days, goal, title)} testID="week-step-bars">
@@ -99,25 +97,30 @@ export default function WeekStepBars({ days, goal, reduceMotion, title, dark, go
           </View>
         ))}
       </View>
-      <View style={[styles.days, { gap }]}>
-        {days.map((d, i) => {
-          const end = month && i === 0 ? styles.start : month && i === today ? styles.end : null;
-          return (
-            <View key={d.date.toISOString()} style={[styles.dayCell, end]}>
-              {!month || marked.includes(i) ? (
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  numberOfLines={1}
-                  style={[styles.day, month && styles.mark, end && { textAlign: i === 0 ? 'left' : 'right' },
-                    { color: i === today ? ink : muted }, i === today && styles.dayToday]}
-                >
-                  {month ? monthDay(d.date) : weekday(d.date, 'short')}
-                </Text>
-              ) : null}
-            </View>
-          );
-        })}
-      </View>
+      {month ? (
+        <View style={styles.marks}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.mark, { color: muted }]}>{monthDay(days[0].date)}</Text>
+          {mids(days).map((i) => (
+            <Text key={i} maxFontSizeMultiplier={1.3}
+              style={[styles.mark, styles.mid, { color: muted, left: `${((i + 0.5) / days.length) * 100}%` as const }]}>
+              {monthDay(days[i].date)}
+            </Text>
+          ))}
+          <Text maxFontSizeMultiplier={1.3} style={[styles.mark, styles.dayToday, { color: ink }]}>{monthDay(days[today].date)}</Text>
+        </View>
+      ) : (
+        <View style={[styles.days, { gap }]}>
+          {days.map((d, i) => (
+            <Text
+              key={d.date.toISOString()}
+              maxFontSizeMultiplier={1.3}
+              style={[styles.day, { color: i === today ? ink : muted }, i === today && styles.dayToday]}
+            >
+              {weekday(d.date, 'short')}
+            </Text>
+          ))}
+        </View>
+      )}
       {bare ? null : (
         <View style={styles.key}>
           {goalUnit ? (
@@ -156,11 +159,10 @@ const styles = StyleSheet.create({
   empty: { width: '100%', height: 10, borderWidth: 1, borderStyle: 'dashed', borderRadius: radius.control },
   dashed: { borderWidth: 1, borderStyle: 'dashed' },
   days: { flexDirection: 'row', marginTop: spacing.sm },
-  dayCell: { flex: 1, alignItems: 'center' },
-  start: { alignItems: 'flex-start' },
-  end: { alignItems: 'flex-end' },
-  day: { ...typography.bodySmall, textAlign: 'center' },
-  mark: { width: 72 }, // wider than its thin bar: it overhangs both sides (the ends overhang inwards)
+  day: { ...typography.bodySmall, flex: 1, textAlign: 'center' },
+  marks: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm },
+  mark: { ...typography.bodySmall },
+  mid: { position: 'absolute', top: 0, width: 72, marginLeft: -36, textAlign: 'center' }, // centred on its bar
   dayToday: { fontFamily: 'Inter_600SemiBold' },
   key: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, marginTop: spacing.md },
   keyItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
