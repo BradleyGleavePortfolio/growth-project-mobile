@@ -216,7 +216,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
           {data.loading ? <QuietLoading label={c['C4-S-136']} rows={3} testID="week-loading" /> : null}
           {data.failed && !data.offline ? <View testID="week-error" accessibilityRole="alert">
             <Text style={body}>{c['C4-S-130']}</Text>
-            <TextLink label={c['C1-S-47']} onPress={onRefresh} testID="week-retry" />
+            <TextLink label={c['C1-S-47']} tone="ink" onPress={onRefresh} testID="week-retry" />
           </View> : null}
           {next ? <View>
             <Text style={[styles.overline, ink]}>{c['C4-S-03']}</Text>
@@ -242,7 +242,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
               {checkOn(day) ? <View style={[styles.row, { borderColor: sc.border }]} testID={`week-checkin-${day}`}>
                 <Text style={body}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
               </View> : null}
-              {day === today ? <TextLink label={c['C4S1-S-02']} align="start" testID="week-checkin-open"
+              {day === today ? <TextLink label={c['C4S1-S-02']} tone="ink" align="start" testID="week-checkin-open"
                 onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
               {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
                 !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?
