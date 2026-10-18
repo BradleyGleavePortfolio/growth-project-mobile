@@ -389,7 +389,15 @@ it.each([...settingsAndRootJumps(true), ...settingsAndRootJumps(false)])('coachT
 
 // CHATS-MESSAGES (LO-NAV N3 on m#780; owner COACH-CHAT-BACK op 1): a chat opened from Overview, Money, a charge or the
 // daily brief opens like an inbox chat. Flag on: in Messages over the inbox, with Messages selected; Back lands on the
-// inbox, then on where the coach was. Off: in Clients over the list, as today. Each row is a fresh launch.
+// inbox, then on where the coach was. Off: in Clients over the list, as today. Each row is a fresh launch; flag on, the
+// outside entries also run with another client's chat and its contact page left open in Messages (Sol B1: the chat is
+// reused, the contact page closed, the inbox still beneath) and with Broadcasts left open (kept; the chat opens over it).
+const OTHER = { clientId: 'client-2', clientName: 'Ben' };
+const LEFT_OPEN: Record<string, { opened: [string, object][]; kept: string[] }> = {
+  nothing: { opened: [], kept: [] },
+  'a chat and its contact page': { opened: [['ClientMessages', OTHER], ['ContactView', { contactId: OTHER.clientId, displayName: OTHER.clientName }]], kept: [] },
+  Broadcasts: { opened: [['CoachBroadcasts', {}]], kept: ['CoachBroadcasts'] },
+};
 const ENTRIES: [probe: string, on: Target, off: Target][] = [
   ['MessagesScreen', ['Messages'], ['Messages']],
   ['command-center/CommandCenterScreen', ['CommandCenter'], ['CommandCenter']],
@@ -398,22 +406,28 @@ const ENTRIES: [probe: string, on: Target, off: Target][] = [
   ['CoachBriefScreen', ['SettingsStack', 'CoachBrief'], ['SettingsStack', 'CoachBrief']],
 ];
 
-it.each([true, false].flatMap((on) => ENTRIES.map(([probe, home, homeOff]) => [on, probe, on ? home : homeOff] as const)))(
-  'coachTabsV2 %s: a chat from %s opens over the inbox (off: the client list) and Back lands there', async (on, probe, [tab, screen]) => {
-    mockFlags.coachTabsV2 = on;
-    mockCommandCenter.__USING_MOCK_DATA = false; // what ships
-    const view = await mount();
-    await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
-    await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
-    const [chatTab, root] = on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', 'ClientsList'];
-    expect([focusedTab(), stackOf(chatTab), ref.getCurrentRoute()?.params]).toEqual([chatTab, [root, 'ClientMessages'], CHAT]);
-    expect(view.getByRole('tab', { name: on ? MESSAGES_TAB : /^Clients, tab/ })).toBeSelected();
-    await act(async () => ref.goBack());
-    expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([chatTab, root]);
-    if (!on || tab === 'Messages') return;
-    await act(async () => ref.goBack());
-    expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([tab, screen ?? ROOTS[tab] ?? tab]);
-  });
+it.each([
+  ...[true, false].flatMap((on) => ENTRIES.map(([probe, home, homeOff]) => [on, probe, 'nothing', on ? home : homeOff] as const)),
+  ...['a chat and its contact page', 'Broadcasts'].flatMap((left) => ENTRIES.slice(1).map(([probe, home]) => [true, probe, left, home] as const)),
+])('coachTabsV2 %s: a chat from %s (left open in Messages: %s) opens over the inbox (off: the list); Back lands there', async (on, probe, left, [tab, screen]) => {
+  mockFlags.coachTabsV2 = on;
+  mockCommandCenter.__USING_MOCK_DATA = false; // what ships
+  const view = await mount();
+  const { opened, kept } = LEFT_OPEN[left];
+  for (const [name, params] of opened) await act(async () => ref.navigate('Messages', { screen: name, params, initial: false }));
+  if (opened.length) expect(stackOf('Messages')).toEqual(['MessagesInbox', ...opened.map(([name]) => name)]);
+  await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
+  await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
+  const [chatTab, root] = on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', 'ClientsList'];
+  const stack = [root, ...kept, 'ClientMessages'];
+  expect([focusedTab(), stackOf(chatTab), ref.getCurrentRoute()?.params]).toEqual([chatTab, stack, CHAT]);
+  expect(view.getByRole('tab', { name: on ? MESSAGES_TAB : /^Clients, tab/ })).toBeSelected();
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([chatTab, stack[stack.length - 2]]);
+  if (!on || tab === 'Messages' || kept.length) return;
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([tab, screen ?? ROOTS[tab] ?? tab]);
+});
 
 it('every chat opened outside Clients goes through coachInbox.ts, and every file that does is a row above', () => {
   const callers = SOURCES.filter(([file, source]) => file !== 'coachInbox.ts' && /\b(openInboxChat|chatTarget)\(/.test(source));
