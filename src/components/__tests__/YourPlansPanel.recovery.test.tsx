@@ -20,7 +20,8 @@ jest.mock('../../services/api', () => ({
 jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
 
-import YourPlansPanel, { YOUR_PLANS_QUERY_KEY } from '../purchase/YourPlansPanel';
+import YourPlansPanel from '../purchase/YourPlansPanel';
+import { YOUR_PLANS_QUERY_KEY } from '../../lib/packagePayment';
 import { queryClient } from '../../services/queryClient';
 
 const ID = 'purchase-1';

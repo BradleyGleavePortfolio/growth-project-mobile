@@ -20,8 +20,8 @@ import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { messageCoachLabel } from '../../components/home/HomeHeaderActions';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
-import { YOUR_PLANS_COPY, YOUR_PLANS_QUERY_KEY, planPrice } from '../../components/purchase/YourPlansPanel';
-import { listClientPlans, type ClientPlan } from '../../lib/packagePayment';
+import { YOUR_PLANS_COPY, planPrice } from '../../components/purchase/YourPlansPanel';
+import { YOUR_PLANS_QUERY_KEY, listClientPlans, type ClientPlan } from '../../lib/packagePayment';
 import { subscribeJoin } from '../../lib/joinPackage';
 import { planDate } from '../../lib/planActions';
 import { prepareSignOutConfirm, signOut } from '../../services/authActions';
@@ -138,7 +138,7 @@ export default function YouScreen() {
     queryKey: [...YOUR_PLANS_QUERY_KEY, userId],
     queryFn: listClientPlans,
     enabled: !!userId,
-    staleTime: Infinity, // fresh until You re-reads it or End / Keep on Your plans outdates it
+    staleTime: Infinity, // fresh until You re-reads it or a plan change outdates it (plansChanged)
     meta: { persist: false }, // never a charge from a read saved to the phone on an earlier visit
   });
   const { refetch: refetchPlans } = plans;
@@ -157,7 +157,7 @@ export default function YouScreen() {
   const weekDone = segments.length > 0 ? YOU_COPY.done(doneCount, segments.length) : null;
   const name = user?.name?.trim() ?? '';
   const initial = name.charAt(0).toUpperCase();
-  // Only from a read that worked and nothing has outdated since (End / Keep on Your plans).
+  // Only from a read that worked and nothing has outdated since (a purchase, End, Keep or a code join).
   const charge = plans.isSuccess && !plans.isStale ? nextCharge(plans.data) : null;
 
   const open = (item: MoreItem) => {
