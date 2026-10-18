@@ -294,7 +294,7 @@ export type MoreStackParamList = {
   DeleteAccount: undefined;
   /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
   RomanAiConsent: undefined;
-  /** B-SHARE-127: Settings > Privacy > Coach sharing (four toggles). */
+  /** B-SHARE-127: Settings > Privacy > Coach sharing (read-only: what the coach sees). */
   CoachSharing: undefined;
   /** Your conversations with Roman: list, open, delete (backend #635). Not behind the Roman chat flag. */
   RomanConversations: undefined;
@@ -374,8 +374,11 @@ export type MoreStackParamList = {
   BlockedUsers: undefined;
   /** Client-facing checkout for a coach's package share link. */
   PackageCheckout: { shareToken: string };
-  /** PR-HK-1-mobile — Wearable Connections Hub (manage health data sources). */
-  Connections: undefined;
+  /**
+   * PR-HK-1-mobile — Wearable Connections Hub (manage health data sources).
+   * A6: a cloud tracker's return link may carry a single-use ticket.
+   */
+  Connections: { ticket?: string; provider?: string; status?: string } | undefined;
   /** PR-HK-3a — Wearables bucket shell (Fitness | Recovery segmented switcher). */
   Health: { bucket?: 'fitness' | 'recovery' } | undefined;
   /** PR-HK-3a — shared metric drill-down (compare sources + glow-drag chart). */

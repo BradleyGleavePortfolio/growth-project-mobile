@@ -26,6 +26,8 @@ import { coachAiConsentApi, type CoachAiConsentApi } from '../../api/coachAiCons
 import { isLiveRomanGrant } from '../../lib/consultation/aiConsent';
 import { COACH_AI_CONSENT_COPY } from '../../lib/ai/coachAiConsentCopy';
 import { logger } from '../../utils/logger';
+import { Screen, ScreenTopBar } from '../../ui';
+import RomanLoadingSkeleton from './RomanLoadingSkeleton';
 
 export interface RomanConsentGateProps {
   surface: 'client' | 'coach';
@@ -98,7 +100,18 @@ function CoachRomanGate({ children, coachApi = coachAiConsentApi, testID = 'roma
     };
   }, [coachApi]);
 
-  if (off === null) return null;
+  if (off === null) {
+    return (
+      <Screen
+        edges={['top']}
+        scroll={false}
+        header={<ScreenTopBar onBack={navigation ? () => navigation.goBack() : undefined} />}
+        testID={`${testID}-loading`}
+      >
+        <RomanLoadingSkeleton />
+      </Screen>
+    );
+  }
   if (!off) return <>{children}</>;
   const { title, body, button } = COACH_AI_CONSENT_COPY.off;
   return (
