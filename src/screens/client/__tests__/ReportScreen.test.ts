@@ -17,25 +17,12 @@ function lineIndex(pattern: RegExp): number {
 }
 
 describe('ReportScreen — audit P0-1 TDZ fix', () => {
-  it('imports Colors strictly before any reference to it', () => {
-    // Pure parse-time check: read the file, locate the import line, and
-    // ensure no `Colors.foo` reference appears before it. This is the
-    // *exact* TDZ shape the audit flagged.
-    const importIdx = lineIndex(/^import\s*\{\s*Colors\s*\}\s*from\s*'\.\.\/\.\.\/constants\/colors'/);
-    const firstUseIdx = lines.findIndex(
-      (l, i) => i !== importIdx && /\bColors\.[A-Za-z]/.test(l),
-    );
-    expect(importIdx).toBeGreaterThan(-1);
-    expect(firstUseIdx).toBeGreaterThan(-1);
-    // The import must come strictly before any use of Colors at module scope.
-    expect(importIdx).toBeLessThan(firstUseIdx);
-  });
-
-  it('still imports the canonical Colors module exactly once', () => {
-    const matches = SRC.match(
-      /^import\s*\{\s*Colors\s*\}\s*from\s*'\.\.\/\.\.\/constants\/colors';/gm,
-    );
-    expect(matches).toHaveLength(1);
+  it('has no Colors reference left to hit before its import', () => {
+    // C8 found 1 removed the only Colors use (a red weight gain), so the TDZ
+    // shape the audit flagged cannot come back without a new import.
+    const importIdx = lineIndex(/^import\s*\{\s*Colors\s*\}/);
+    const firstUseIdx = lineIndex(/\bColors\.[A-Za-z]/);
+    expect(firstUseIdx === -1 || (importIdx > -1 && importIdx < firstUseIdx)).toBe(true);
   });
 
   it('uses the locale-aware getTodayString helper for the daily macros fetch', () => {

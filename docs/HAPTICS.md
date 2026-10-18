@@ -58,6 +58,7 @@ When the toggle changes:
 | Location | Method | Trigger |
 |---|---|---|
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
+| `progress/ProgressV2` and `LogWeightSheetV2` (C8V2-2B, `clientProgressV2` off by default) | `selection()`; `success()`; `warning()`; `error()` | Week / Month / All and each 0.1 stepper; once when the server saves the weigh-in (the Save tap itself fires nothing); a weight outside the range; the save fails |
 | `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
 | Overview gear, Calendar gear, Messages Community button (COACHTABS) | `softImpact()` | Opens Settings, Hours and rules, Community |
 | `wearables/HealthFitnessTab` (HEALTH-1, `healthPages` off by default) | `selection()`; `error()` | Opens the device row, Steps, a card or Connect; Try again fails |

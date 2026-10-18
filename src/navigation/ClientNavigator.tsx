@@ -132,7 +132,7 @@ import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
 import WearablesShell from '../screens/client/wearables/WearablesShell';
 import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
 import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
-import { colors, typography } from '../theme/tokens';
+import { colors, lightTokens, typography } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 // v1-5 Community client tab. The whole stack + tab are gated behind
 // featureFlags.communityTab (default OFF). When the flag is OFF the tab is not
@@ -407,14 +407,15 @@ export type MoreStackParamList = {
  * Opened from More they get a native header with only the back chevron, so
  * the way back is always visible and the safe area is respected.
  */
-function backOnlyHeader(title = '') {
+/** `onMasthead`: the C8 v2 Progress page starts on the deep forest masthead, so its bar does too (ForestStatusBar paints the inset). */
+function backOnlyHeader(title = '', onMasthead = false) {
   return {
     headerShown: true,
     title,
     headerBackTitle: 'Back',
     headerShadowVisible: false,
-    headerStyle: { backgroundColor: colors.bone },
-    headerTintColor: colors.ink,
+    headerStyle: { backgroundColor: onMasthead ? lightTokens.surface.masthead : colors.bone },
+    headerTintColor: onMasthead ? lightTokens.textOnAccent : colors.ink,
   } as const;
 }
 
@@ -550,7 +551,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
-      <MoreStackNav.Screen name="Progress" options={backOnlyHeader()}>
+      <MoreStackNav.Screen name="Progress" options={backOnlyHeader('', featureFlags.clientProgressV2)}>
         {({ navigation, route }) => <ProgressScreen logWeightAt={route.params?.logWeightAt} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('logged_first_weight');
         }} />}
