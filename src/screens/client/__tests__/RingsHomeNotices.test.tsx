@@ -121,7 +121,8 @@ it.each<[NoticeId, string]>([
   mockDue.add(id);
   await render(<RingsHomeScreen {...props} />);
   expect(await screen.findByText(`${id} ${given}`)).toBeTruthy();
-  const at = (testID: string) => JSON.stringify(screen.toJSON()).indexOf(`"${testID}"`);
+  const tree = JSON.stringify(screen.toJSON(), (k, v) => (k === 'refreshControl' ? undefined : v)); // an element, not a node
+  const at = (testID: string) => tree.indexOf(`"${testID}"`);
   expect(at('home-tiles')).toBeGreaterThan(0);
   expect(at('home-notice-slot')).toBeGreaterThan(at('home-tiles'));
 });
