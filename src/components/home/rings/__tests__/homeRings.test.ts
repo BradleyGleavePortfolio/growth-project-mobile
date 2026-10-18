@@ -1,4 +1,4 @@
-import { foodDial, formatCount, formatHm, sleepDial, trainDial, weekBounds } from '../homeRings';
+import { foodDial, formatCount, formatHm, hasHealthSource, sleepDial, trainDial, weekBounds } from '../homeRings';
 
 describe('UI-1 Home dials: each its own number, never invented', () => {
   it('formats counts and sleep the way the mockup does', () => {
@@ -65,21 +65,23 @@ describe('UI-1 Home dials: each its own number, never invented', () => {
       .toMatchObject({ value: '0 of 1' });
   });
 
-  const ok = { health: 'ok', checkIn: 'ok' } as const;
-  it('Sleep: recovered and asleep from Health, then the check-in, then Connect (never "coming soon")', () => {
-    expect(sleepDial({ recovery: 78, asleepMin: 440, checkInHours: 6, reads: ok })).toEqual({
+  const ok = { reads: { health: 'ok', checkIn: 'ok' }, noSource: false } as const;
+  it('Sleep: recovered and asleep from Health, then the check-in, then Connect only with no source (never "coming soon")', () => {
+    expect(sleepDial({ recovery: 78, asleepMin: 440, checkInHours: 6, ...ok })).toEqual({
       value: '78%', unit: 'recovered', sub: '7 h 20 m asleep', progress: 0.78, source: 'health',
     });
-    expect(sleepDial({ recovery: null, asleepMin: 440, checkInHours: null, reads: ok })).toMatchObject({ value: '7.3', unit: 'h asleep', source: 'health' });
-    expect(sleepDial({ recovery: null, asleepMin: null, checkInHours: 7.5, reads: ok })).toMatchObject({ value: '7.5', unit: 'h asleep', source: 'checkin' });
-    const none = sleepDial({ recovery: null, asleepMin: null, checkInHours: null, reads: ok });
+    expect(sleepDial({ recovery: null, asleepMin: 440, checkInHours: null, ...ok })).toMatchObject({ value: '7.3', unit: 'h asleep', source: 'health' });
+    expect(sleepDial({ recovery: null, asleepMin: null, checkInHours: 7.5, ...ok })).toMatchObject({ value: '7.5', unit: 'h asleep', source: 'checkin' });
+    // #HEALTH-PAGES: a connected client with nothing for last night keeps the dash.
+    expect(sleepDial({ recovery: null, asleepMin: null, checkInHours: null, ...ok })).toMatchObject({ value: '—', source: 'unknown' });
+    const none = sleepDial({ recovery: null, asleepMin: null, checkInHours: null, ...ok, noSource: true });
     expect(none).toEqual({ value: 'Connect', unit: '', sub: '', progress: 0, source: 'none' });
     expect(JSON.stringify(none)).not.toMatch(/soon/i);
   });
 
   it('Sleep: "—", never Connect, while a read is pending or failed; a verified check-in still shows', () => {
     const dash = { value: '—', unit: '', sub: '', progress: 0, source: 'unknown' };
-    const empty = { recovery: null, asleepMin: null, checkInHours: null };
+    const empty = { recovery: null, asleepMin: null, checkInHours: null, noSource: true };
     expect(sleepDial({ ...empty, reads: { health: 'pending', checkIn: 'ok' } })).toEqual(dash);
     expect(sleepDial({ ...empty, reads: { health: 'failed', checkIn: 'ok' } })).toEqual(dash);
     expect(sleepDial({ ...empty, reads: { health: 'ok', checkIn: 'pending' } })).toEqual(dash);
@@ -90,5 +92,15 @@ describe('UI-1 Home dials: each its own number, never invented', () => {
       .toMatchObject({ value: '7.5', unit: 'h asleep', source: 'checkin' });
     // Data already read stays, even if the latest refresh failed.
     expect(sleepDial({ ...empty, recovery: 78, reads: { health: 'failed', checkIn: 'failed' } })).toMatchObject({ value: '78%', source: 'health' });
+  });
+
+  it('hasHealthSource: a listed connection or any sample is a source; an empty answer or no answer is not', () => {
+    const answer = (providers: number, samples: number) => ({
+      version: 1 as const, user_id: 'u1', bucket: 'SLEEP_RECOVERY' as const, window: { from: '', to: '' },
+      freshness: { providers: Array.from({ length: providers }, () => ({ provider: 'OURA' as const, last_synced_at: null, status: 'never_synced' as const })) },
+      series: [{ metric: 'HRV_MS' as const, unit: 'ms', provider_used: null, sample_count: samples, samples: [] }],
+    });
+    expect([hasHealthSource(answer(1, 0)), hasHealthSource(answer(0, 3)), hasHealthSource(answer(0, 0)), hasHealthSource(undefined)])
+      .toEqual([true, true, false, false]);
   });
 });

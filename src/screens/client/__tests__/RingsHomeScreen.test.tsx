@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
 
@@ -8,6 +10,7 @@ const mockAssignments = jest.fn();
 let mockRomanChat = true;
 let mockRecovery: number | null = null;
 let mockAsleep: number | null = null;
+let mockSleepData: object | undefined;
 let mockCheckIn: unknown = null;
 let mockSleepRead: 'ok' | 'failed' | 'pending' = 'ok';
 let mockCheckInRead: 'ok' | 'failed' | 'pending' = 'ok';
@@ -27,7 +30,7 @@ jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => ({ c
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockDay }));
 jest.mock('../../../hooks/useWearableSamples', () => ({
-  useWearableSamples: () => ({ data: undefined, isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn() }),
+  useWearableSamples: () => ({ data: mockSleepData, isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn() }),
 }));
 jest.mock('../../../hooks/useApi', () => ({
   ...jest.requireActual('../../../hooks/useApi'),
@@ -78,7 +81,7 @@ const { start: weekStart } = require('../../../components/home/rings/homeRings')
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockUser.profile = { workout_days_per_week: 3 };
-  mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockCheckIn = null; mockSleepRead = 'ok'; mockCheckInRead = 'ok';
+  mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockSleepData = undefined; mockCheckIn = null; mockSleepRead = 'ok'; mockCheckInRead = 'ok';
   mockDay.loadError = null;
   mockHistory.mockResolvedValue({ data: [] });
   mockAssignments.mockResolvedValue([
@@ -113,53 +116,56 @@ it('coached: three dials with their own numbers and one forest button', async ()
   });
 });
 
+// Every tap lands on a real screen: navigate() from Home resolves in the Home stack, then the tab bar.
+const NAV = readFileSync(join(__dirname, '../../../navigation/ClientNavigator.tsx'), 'utf8');
+const screensIn = (nav: string): Record<string, string> => Object.fromEntries(
+  [...NAV.slice(NAV.indexOf(`<${nav}.Navigator`), NAV.indexOf(`</${nav}.Navigator>`))
+    .matchAll(new RegExp(`<${nav}\\.Screen\\s+name="(\\w+)"(?:\\s+component=\\{(\\w+)\\})?`, 'g'))].map((m) => [m[1], m[2] ?? '']));
+const TAB_STACK: Record<string, string> = { Home: 'HomeStackNav', WorkoutTab: 'WorkoutStackNav', MoreTab: 'MoreStackNav' };
+function lands([name, params]: readonly unknown[]): boolean {
+  const nested = (params as { screen?: string } | undefined)?.screen;
+  if (typeof name !== 'string') return false;
+  if (name in screensIn('HomeStackNav')) return true;
+  return name in screensIn('Tab') && (!nested || nested in screensIn(TAB_STACK[name] ?? ''));
+}
+const NO_SOURCE = { freshness: { providers: [] }, series: [] };
+const A_SOURCE = { freshness: { providers: [] }, series: [{ metric: 'HRV_MS', sample_count: 1, samples: [] }] };
+const HEALTH = ['Health', { bucket: 'recovery' }] as const;
+const CONNECTIONS = ['Connections'] as const;
+
+// #HEALTH-PAGES: Recovery in every state; Connections only once Health answered with no source at all.
+// [state, what Health returned, Health read, check-in hours, check-in read, the dial's spoken label, where the tap lands]
 it.each([
-  ['home-dial-food', ['Log']],
-  ['home-dial-train', ['WorkoutTab']],
-  ['home-dial-sleep', ['MoreTab', { screen: 'Connections', initial: false }]],
-] as const)('%s opens a real screen, with a light haptic', async (testID, destination) => {
+  ['Food', 'nothing', 'ok', null, 'ok', 'Food, 820 kcal left, 1,030 of 1,850', ['Log']],
+  ['Train', 'nothing', 'ok', null, 'ok', 'Train, 1 of 2 workouts, This week', ['WorkoutTab']],
+  ['Sleep, last night from Health', 'last night', 'ok', null, 'ok', 'Sleep, 78% recovered, 7 h 20 m asleep', HEALTH],
+  ['Sleep, a source but nothing for last night', 'a source', 'ok', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, a source and the check-in', 'a source', 'ok', 7.5, 'ok', 'Sleep, 7.5 h asleep', HEALTH],
+  ['Sleep, no source and the check-in', 'nothing', 'ok', 7.5, 'ok', 'Sleep, 7.5 h asleep', CONNECTIONS],
+  ['Sleep, no source and no check-in', 'nothing', 'ok', null, 'ok', 'Sleep, Connect', CONNECTIONS],
+  ['Sleep, no source, check-in loading', 'nothing', 'ok', null, 'pending', 'Sleep, —', CONNECTIONS],
+  ['Sleep, no source, check-in failed', 'nothing', 'ok', null, 'failed', 'Sleep, —', CONNECTIONS],
+  ['Sleep, Health loading', 'nothing', 'pending', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, Health failed', 'nothing', 'failed', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, Health failed and the check-in', 'nothing', 'failed', 6.5, 'ok', 'Sleep, 6.5 h asleep', HEALTH],
+] as const)('%s: the tap lands on a real screen, with a light haptic', async (_, health, healthRead, hours, checkInRead, label, to) => {
+  mockSleepData = healthRead !== 'ok' ? undefined : health === 'nothing' ? NO_SOURCE : A_SOURCE;
+  if (health === 'last night') { mockRecovery = 78; mockAsleep = 440; }
+  mockSleepRead = healthRead; mockCheckInRead = checkInRead; mockCheckIn = hours ? { sleep_hours: hours } : null;
   await render(<HomeScreen />);
   await screen.findByLabelText('Start Full Body A');
-  await fireEvent.press(screen.getByTestId(testID));
-  expect(mockNavigate).toHaveBeenCalledWith(...destination);
+  await fireEvent.press(screen.getByLabelText(label));
+  expect(mockNavigate).toHaveBeenLastCalledWith(...to);
+  expect(lands(to)).toBe(true);
   expect(HapticService.selection).toHaveBeenCalledTimes(1);
-});
-
-it('Sleep with Health data shows recovered and asleep and opens Sleep and recovery', async () => {
-  mockRecovery = 78; mockAsleep = 440;
-  await render(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep'));
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
-});
-
-it('Sleep falls back to the check-in, and with neither shows Connect, never "coming soon"', async () => {
-  mockCheckIn = { sleep_hours: 7.5 };
-  const view = await render(<HomeScreen />);
-  expect(await screen.findByLabelText('Sleep, 7.5 h asleep')).toBeTruthy();
-  mockCheckIn = null;
-  await view.rerender(<HomeScreen />);
-  expect(await screen.findByLabelText('Sleep, Connect')).toBeTruthy();
   expect(screen.queryByText(/coming soon/i)).toBeNull();
 });
 
-it.each([
-  ['loading', 'pending', 'ok'],
-  ['failed', 'failed', 'ok'],
-  ['check-in loading', 'ok', 'pending'],
-  ['check-in failed', 'ok', 'failed'],
-] as const)('Sleep while its read is %s shows "—", never Connect, and opens Sleep and recovery', async (_, sleepRead, checkInRead) => {
-  mockSleepRead = sleepRead; mockCheckInRead = checkInRead;
-  await render(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Sleep, —'));
-  expect(screen.queryByText('Connect')).toBeNull();
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
-});
-
-it('Sleep keeps a verified check-in when the Health read failed', async () => {
-  mockSleepRead = 'failed'; mockCheckIn = { sleep_hours: 6.5 };
-  await render(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Sleep, 6.5 h asleep'));
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'recovery' } });
+it('opened from Home, Back lands on Home: the Home stack holds the same Health page and inner routes as You', () => {
+  const home = screensIn('HomeStackNav');
+  const you = screensIn('MoreStackNav');
+  for (const name of ['Health', 'WearableMetricDetail', 'Connections']) expect([name, home[name]]).toEqual([name, you[name]]);
+  expect(home.Health).toBe('WearablesShell');
 });
 
 it.each([

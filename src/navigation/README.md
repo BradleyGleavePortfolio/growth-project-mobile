@@ -144,6 +144,7 @@ New screen names added to `HomeStackParamList`:
 | `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
 | `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + the fixed quiet hours (read-only) |
 | `MessagesInbox` | `MessagesInboxScreen` | C3B-S2: the client's Messages list (coach and Roman), opened from Home while `c3StyleB` and Roman chat are on |
+| `Health`, `WearableMetricDetail`, `Connections` | `WearablesShell`, `MetricDetailScreen`, `ConnectionsScreen` | #HEALTH-PAGES: the same Health page and its two inner routes as You's, opened from the rings Home Sleep dial, so Back lands on Home (the You rows keep Back to You) |
 
 The legacy `Notifications` screen name (pointing to the old `NotificationsScreen`) is preserved for backward-compat.
 
