@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 type Row = Record<string, any>;
-const mockDb = { meals: [] as Row[], plans: [] as Row[], assignments: [] as Row[], clients: [] as Row[], fail: {} as Record<string, unknown>, log: [] as string[] };
+const mockDb = { meals: [] as Row[], plans: [] as Row[], assignments: [] as Row[], clients: [] as Row[], foods: [] as Row[], fail: {} as Record<string, unknown>, log: [] as string[] };
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn(), popTo: jest.fn(), dispatch: jest.fn() };
 let mockFlag = true;
 let mockGuard: ((e: { data: { action: unknown } }) => void) | undefined;
@@ -15,6 +15,7 @@ let mockPick = new Date();
 function mockRoute(method: string, url: string, body: Row = {}): Promise<{ data: unknown }> {
   const key = `${method} ${url}`; mockDb.log.push(key);
   if (key in mockDb.fail) return mockDb.fail[key] === 'hang' ? new Promise(() => {}) : Promise.reject(mockDb.fail[key]);
+  if (url.startsWith('/foods/')) return Promise.resolve({ data: { results: mockDb.foods.filter((f) => f.name.toLowerCase().includes(new URLSearchParams(url.split('?')[1]).get('q'))) } });
   const [, , kind, id, sub] = url.split('/');
   const live = (rows: Row[]) => rows.filter((r) => !r.archived_at);
   const meal = live(mockDb.meals).find((m) => m.id === id);
@@ -45,7 +46,8 @@ function mockRoute(method: string, url: string, body: Row = {}): Promise<{ data:
   else data = plan(Object.assign(p as Row, body));
   return Promise.resolve({ data });
 }
-jest.mock('../../../../services/api', () => ({ __esModule: true, coachApi: { getClients: () => Promise.resolve({ data: mockDb.clients }) }, default: { get: (u: string) => mockRoute('GET', u),
+jest.mock('../../../../services/api', () => ({ __esModule: true, coachApi: { getClients: () => Promise.resolve({ data: mockDb.clients }) },
+  foodApi: { search: (q: string, n: number) => mockRoute('GET', `/foods/search?q=${encodeURIComponent(q)}&limit=${n}`) }, default: { get: (u: string) => mockRoute('GET', u),
   post: (u: string, b: Row) => mockRoute('POST', u, b), patch: (u: string, b: Row) => mockRoute('PATCH', u, b), delete: (u: string) => mockRoute('DELETE', u) } }));
 jest.mock('../../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../../config/featureFlags');
@@ -100,6 +102,8 @@ beforeEach(() => {
     { id: 'p2', coach_id: 'coach', name: 'Rest day', notes: null, archived_at: null, slots: [slot('s3', 'm3', 'snack', 0)] },
   ];
   mockDb.assignments = [assign('p1', 'c1'), assign('p1', 'c3'), assign('p1', 'c2', '2020-01-31T00:00:00.000Z'), { ...assign('p2', 'c1'), starts_on: toIsoDate(day(3)) }];
+  mockDb.foods = [['f1', 'Chicken breast, grilled', 165, 31, 0, 3.6], ['f2', 'Chicken soup'], ['f3', 'Chicken skin', 900, 10, 0, 98]]
+    .map(([id, name, calories, protein_g, carbs_g, fat_g]) => ({ id, name, calories, protein_g, carbs_g, fat_g, nutrient_basis: 'PER_100G' }));
   mockDb.clients = [['c1', 'Maya Chen'], ['c2', 'Jordan Lee'], ['c3', 'Leo Park'], ['c4', 'Nina Shah']].map(([id, name]) => ({ id, name, email: `${id}@x.test` }));
   Object.assign(mockDb, { fail: {}, log: [] });
 });
@@ -365,4 +369,47 @@ it('Assign conflicts: the same plan blocks, an overlap (any start day) explains,
   await fireEvent.press(s.getByTestId('assign-submit'));
   expect(await s.findByText('This day plan was archived.')).toBeTruthy();
   expect([haptic('error').mock.calls.length, mockNav.popTo.mock.calls.length]).toEqual([2, 0]);
+});
+
+it("#MEAL-2: the picker lists the coach's meals first, then the food bank; a food becomes a meal at the portion picked and fills the slot", async () => {
+  const s = await open(MealPicker, { planId: 'p1' });
+  expect([await s.findByText('Your meals'), s.getByText('Food bank'), s.getByText('Search above to add a food at the portion you pick.')]).toBeTruthy();
+  await fireEvent.changeText(s.getByTestId('pick-search'), 'chicken');
+  expect(await s.findByLabelText('Chicken breast, grilled, Per 100g · 165 kcal · P 31 · C 0 · F 4')).toBeTruthy();
+  expect(s.getAllByText(/Chicken|Overnight/).map((t) => t.props.children)).toEqual(['Chicken rice bowl', 'Chicken breast, grilled', 'Chicken skin']);
+  await fireEvent.press(s.getByTestId('food-0'));
+  await fireEvent.changeText(s.getByLabelText('Food quantity'), '150');
+  await fireEvent.press(s.getByLabelText('Portion unit g'));
+  await fireEvent.press(s.getByText('Use this food'));
+  await waitFor(() => expect(mockNav.goBack).toHaveBeenCalledTimes(1));
+  expect(mockDb.meals[3]).toMatchObject({ id: 'm4', name: 'Chicken breast, grilled', description: '150 g', calories_kcal: 248, protein_g: 47, carbs_g: 0, fats_g: 5 });
+  expect(slots()).toEqual(['m1 breakfast 0', 'm2 lunch 1', 'm4 dinner 2']);
+});
+
+it.each<[string, number, string, Row]>([
+  ['a portion past the meal limits', 1, 'Up to 2,000 kcal, 300 g protein, 400 g carbs and 200 g fat.', {}],
+  ['a save that fails', 0, 'That did not save. Check your connection, then try again.', { 'POST /coach/meal-templates': { message: 'Network Error', isAxiosError: true } }],
+])('#MEAL-2: %s keeps the portion open with a message and changes nothing', async (_, i, message, fail) => {
+  Object.assign(mockDb.fail, fail);
+  const s = await open(MealPicker, { planId: 'p1', index: 1 });
+  await fireEvent.changeText(await s.findByTestId('pick-search'), 'chicken');
+  await fireEvent.press(await s.findByTestId(`food-${i}`));
+  await fireEvent.changeText(s.getByLabelText('Food quantity'), '300');
+  await fireEvent.press(s.getByLabelText('Portion unit g'));
+  await fireEvent.press(s.getByText('Use this food'));
+  expect(await s.findByText(message)).toBeTruthy();
+  expect([mockDb.meals.length, slots(), mockNav.goBack.mock.calls.length]).toEqual([3, ['m1 breakfast 0', 'm2 lunch 1'], 0]);
+});
+
+it("#MEAL-2: the coach's meals stay when the food bank fails or finds nothing", async () => {
+  mockDb.fail['GET /foods/search?q=chicken&limit=20'] = { response: { status: 500, data: {} } };
+  const s = await open(MealPicker, { planId: 'p1' });
+  await fireEvent.changeText(await s.findByTestId('pick-search'), 'chicken');
+  expect([await s.findByText('The food bank didn’t load.'), s.getByTestId('pick-m2')]).toBeTruthy();
+  delete mockDb.fail['GET /foods/search?q=chicken&limit=20'];
+  await fireEvent.press(s.getByText('Try again'));
+  expect(await s.findByTestId('food-1')).toBeTruthy();
+  await fireEvent.changeText(s.getByTestId('pick-search'), 'zzz');
+  expect(await s.findByText('No foods match “zzz”.')).toBeTruthy();
+  expect([s.queryByText('Your meals'), s.queryByTestId('pick-m2')]).toEqual([null, null]);
 });

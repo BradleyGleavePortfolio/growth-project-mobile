@@ -87,7 +87,7 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `log/DailySummaryBar.tsx` | Food log hero: the overline (Calories left / over target / eaten), one serif display number with lining tabular figures, then the quiet macro bars. |
 | `log/MealSectionCard.tsx` | Hairline meal section: serif meal title, tabular kcal, entry rows (tap = edit, long-press = delete) and a forest "Add food" text action. No meal icons, no fills. |
 | `log/FoodSearchModal.tsx`, `FoodSearchView.tsx` | Search-and-pick modal backed by `foodApi.search`. |
-| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen. |
+| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen (the coach meal picker passes its own confirm label, hint and limit notice). |
 | `log/ManualFoodEntryForm.tsx` | Free-form entry (name, macros, serving) for foods not in the catalogue. |
 | `mealplan/LogPlannedMealButton.tsx` | "Log this meal" on every planned meal (`ClientDailyMealPlanScreen`). One tap adds the meal to today's food log when the plan gives calories, protein, carbs and fat and its slot is breakfast, lunch, dinner or a snack; otherwise a sheet asks only for what the plan does not say (the meal, a missing value), so a missing value is never logged as zero. Same write as the Food log's manual entry (`utils/log/logSubmit`): online it creates the food and the entry and offers Undo; offline it queues them like the Food log. Tests: `mealplan/__tests__/LogPlannedMealButton.test.tsx`, `screens/client/__tests__/MealPlanLogThisMeal.test.tsx`. |
 
@@ -189,7 +189,7 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 | `log/DailySummaryBar.tsx` | Macro / calorie summary header for the Log screen. |
 | `log/MealSectionCard.tsx` | Per-meal card with add-food and entry list. |
 | `log/FoodSearchModal.tsx`, `FoodSearchView.tsx` | Search-and-pick modal backed by `foodApi.search`. |
-| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen. |
+| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen (the coach meal picker passes its own confirm label, hint and limit notice). |
 | `log/ManualFoodEntryForm.tsx` | Free-form entry (name, macros, serving) for foods not in the catalogue. |
 
 ### Domain-specific

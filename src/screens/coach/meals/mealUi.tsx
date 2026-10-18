@@ -9,6 +9,7 @@ import { useScreenInsets } from '../../../ui/layout/Screen';
 import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isConnectionFailure } from '../../../ui/states/QuietStates';
+import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { toIsoDate } from '../../../api/programsApi';
 import type { DailyMealPlan, MealTemplate, SlotLabel } from '../../../api/mealTemplatesApi';
 import type { MealPlanRun } from '../../../hooks/useMealTemplates';
@@ -48,6 +49,7 @@ export function Masthead({ title, sub, onBack, children }: { title: React.ReactN
   const top = useScreenInsets().top + layout.statusBarGap;
   return (
     <View style={[s.mast, { backgroundColor: sc.surface.masthead, paddingTop: top }]}>
+      <ForestStatusBar />
       {onBack ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} hitSlop={8}
           style={({ pressed }) => [s.back, pressed && s.pressed]}>
