@@ -226,10 +226,13 @@ it("the file reused for another client (as Overview opens it): A's late read or 
   await act(async () => lateRead(summary('Sam Rivera', alertOf('roman_crisis_reply'))));
   expect([view.queryByText(LINES[0][1]), view.getAllByTestId('file-safety-alert').length]).toEqual([null, 1]);
   await open(params);
-  await fireEvent.press(await view.findByTestId('file-safety-dismiss')); // A's crisis alert; the server is slow
+  // A's crisis alert; the server is slow (the press resolves when Dismiss does, so it is awaited at the end).
+  const pressed = fireEvent.press(await view.findByTestId('file-safety-dismiss'));
+  expect(dismiss).toHaveBeenCalledWith('alert-roman_crisis_reply');
   await open(B);
   expect(await view.findByText(lineB)).toBeTruthy();
   await act(async () => lateDismiss({ data: { ok: true } }));
+  await pressed;
   expect(view.getByText(lineB)).toBeTruthy(); // B's alert stays
   expect(summaryRead.mock.calls.map(([id]) => id)).toEqual(['client-test', 'client-b', 'client-test', 'client-b']); // no re-read of A
   await fireEvent.press(view.getByTestId('file-safety-message'));
