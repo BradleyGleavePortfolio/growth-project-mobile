@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   back: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', minHeight: layout.touchMin, gap: 4, marginLeft: -6 },
   backLabel: { ...typography.body },
   pressed: { opacity: 0.6 },
-  gap: { height: 4 },
+  gap: { height: 8 },
   heading: { ...typography.h3, marginTop: 16, marginBottom: 6 },
   item: { flexDirection: 'row', gap: 10, paddingLeft: 4, marginBottom: 4 },
   body: { ...typography.body },
