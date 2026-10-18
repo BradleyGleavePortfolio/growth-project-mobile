@@ -351,7 +351,7 @@ describe('openSupportFrom', () => {
     const tabs = nav(['ClientsStack', 'SettingsStack']);
     const clients = nav(['ClientDetail'], tabs);
     expect(openSupportFrom(clients)).toBe(true);
-    expect(tabs.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SupportInbox' });
+    expect(tabs.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SupportInbox', initial: false });
   });
 
   it('no navigator holds it: false', async () => {

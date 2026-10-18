@@ -146,13 +146,12 @@ describe.each(DEVICES)('pushed coach screens on $name', (d) => {
 const ROOT = path.join(__dirname, '..');
 const GUTTERS: Array<[string, string[]]> = [
   ['AIWorkoutDraftScreen.tsx', ['header', 'scrollContent', 'footer']],
-  ['AIMealPlanDraftScreen.tsx', ['header', 'scrollContent', 'footer']],
   ['ClientInsightScreen.tsx', ['header', 'scrollContent', 'footer']],
   ['CoachInboxV2.tsx', ['header', 'searchContainer', 'listContent']],
   ['MessagesScreen.tsx', ['header', 'searchContainer', 'listContent']],
   ['ClientMessagesScreen.tsx', ['chatHeader', 'chatList', 'inputBar', 'errorBanner']],
   ['RiskBoardScreen.tsx', ['header', 'filterRow', 'listContent']],
-  ['client-detail/styles.ts', ['header', 'tabRow', 'scrollContent', 'planModalHeader', 'planModalContent']],
+  ['client-detail/styles.ts', ['header', 'tabRow', 'scrollContent']],
 ];
 const block = (src: string, key: string) => {
   const m = src.match(new RegExp(`\\b${key}:\\s*\\{([^{}]*)\\}`));

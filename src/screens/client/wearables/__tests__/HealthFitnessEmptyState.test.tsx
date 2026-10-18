@@ -21,6 +21,17 @@ function setOS(os: string) {
 afterEach(() => setOS(originalOS));
 
 describe('HealthFitnessEmptyState (AUDIT-11-125)', () => {
+  it.each([['ios', 'Apple Health'], ['android', 'Health Connect']])('card-only on %s reuses the prompt without activity rows', async (os, source) => {
+    setOS(os);
+    const onConnect = jest.fn();
+    await render(<HealthFitnessEmptyState tone="warm" reduceMotion cardOnly onConnect={onConnect} />);
+    expect(screen.getByText('See your fitness in one place')).toBeTruthy();
+    expect(screen.queryByText('No sample yet')).toBeNull();
+    expect(screen.queryByLabelText('Connect a tracker')).toBeNull();
+    await fireEvent.press(screen.getByLabelText(`Connect ${source}`));
+    expect(onConnect).toHaveBeenCalledTimes(1);
+  });
+
   it('iPhone: names Apple Health only, and Connect opens Connections', async () => {
     setOS('ios');
     const onConnect = jest.fn();
