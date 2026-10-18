@@ -39,14 +39,7 @@ export function ProgressTab({
               <Text style={styles.progressStatLabel}>Latest</Text>
             </View>
             <View style={styles.progressStat}>
-              <Text
-                style={[
-                  styles.progressStatValue,
-                  {
-                    color: change <= 0 ? colors.success : colors.warning,
-                  },
-                ]}
-              >
+              <Text style={styles.progressStatValue}>
                 {change > 0 ? '+' : ''}{change.toFixed(1)}
               </Text>
               <Text style={styles.progressStatLabel}>Change</Text>

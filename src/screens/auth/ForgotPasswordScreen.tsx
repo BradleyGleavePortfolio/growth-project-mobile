@@ -13,6 +13,9 @@ import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { authApi } from '../../services/api';
 import { useTheme } from '../../theme/ThemeProvider';
 import { lightTokens, radius, type SemanticTokens } from '../../theme/tokens';
+import { Headline, Lede, PrimaryButton, Screen, TextLink } from '../../ui';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { authStyleB, FieldCard, RoundBack, styleBFieldStyles } from './AuthStyleB';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'ForgotPassword'>;
@@ -49,6 +52,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       // and a refused mail send. A completed request proves submission,
       // not email delivery; do not promise a link that may never arrive.
       setSubmitted(true);
+      if (authStyleB()) void HapticService.softImpact();
     } catch (err) {
       const msg =
         (err as { response?: { data?: { message?: string } }; message?: string })?.response
@@ -60,6 +64,50 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       setLoading(false);
     }
   };
+
+  // C7 Style B (firstRunV2): same request and wording; the sent state is a forest card (softImpact).
+  if (authStyleB()) {
+    const f = styleBFieldStyles(colors);
+    const onForest = { color: colors.textOnAccent };
+    return (
+      <Screen
+        testID="forgot-password-b"
+        header={<RoundBack onBack={() => navigation.goBack()} testID="forgot-back" />}
+        footer={
+          submitted ? (
+            <>
+              <PrimaryButton label="Back to login" onPress={() => navigation.navigate('Login')} testID="forgot-back-to-login" />
+              <TextLink label="Contact support" tone="accent" onPress={() => navigation.navigate('SupportInbox')} testID="forgot-support" />
+            </>
+          ) : (
+            <PrimaryButton label="Send reset link" onPress={handleReset} loading={loading} testID="forgot-send" />
+          )
+        }
+      >
+        <Headline style={styles.bTitle}>Reset password</Headline>
+        <Lede style={styles.bLede}>Enter your email to request a reset link</Lede>
+        <FieldCard label="EMAIL">
+          <TextInput style={f.input} value={email} editable={!submitted} onChangeText={(v) => { setEmail(v); if (error) setError(''); }}
+            placeholder="your@email.com" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none"
+            autoCorrect={false} accessibilityLabel="Email" textContentType="emailAddress" />
+        </FieldCard>
+        {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
+        {submitted ? (
+          <View style={[styles.bSent, { backgroundColor: colors.surface.forestBand }]} accessible accessibilityRole="alert" testID="forgot-sent">
+            <View style={styles.bSentRow}>
+              <Ionicons name="checkmark" size={20} color={colors.textOnAccent} />
+              <Text style={[styles.bSentTitle, onForest]}>Reset request submitted</Text>
+            </View>
+            <Text style={[styles.successText, styles.bSentBody, onForest]}>Check your inbox and spam folder</Text>
+            <Text style={[styles.successText, styles.bSentBody, { color: colors.textOnMastheadMuted }]}>
+              The request for {email.trim()} was submitted. For account privacy, this screen cannot confirm whether an email was
+              sent. If no reset link arrives, contact support.
+            </Text>
+          </View>
+        ) : null}
+      </Screen>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
@@ -252,5 +300,11 @@ const makeStyles = (colors: SemanticTokens) =>
     color: colors.textPrimary,
     marginTop: 4,
   },
+  bTitle: { marginTop: 8 },
+  bLede: { marginBottom: 24 },
+  bSent: { borderRadius: radius.card, padding: 20, marginTop: 12, gap: 8 },
+  bSentRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bSentTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 22 },
+  bSentBody: { textAlign: 'left', paddingHorizontal: 0 },
 
   });

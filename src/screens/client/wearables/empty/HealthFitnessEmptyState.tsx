@@ -27,6 +27,8 @@ interface Props {
   readonly targets?: ActivityTargets;
   readonly tone: BucketTone;
   readonly reduceMotion: boolean;
+  /** Flagged Fitness tab already draws the activity rows in its masthead. */
+  readonly cardOnly?: boolean;
   /**
    * Opens Connections. AUDIT-11-125: omitted in the coach embed (a coach's
    * client view has no Connections route), which then shows coach copy and no
@@ -47,12 +49,14 @@ function connectBody(): string {
 export default function HealthFitnessEmptyState({
   onConnect,
   targets,
+  cardOnly = false,
 }: Props) {
   const { semanticColors: sc } = useTheme();
+  const connectLabel = cardOnly ? `Connect ${Platform.OS === 'android' ? 'Health Connect' : 'Apple Health'}` : 'Connect a tracker';
 
   return (
-    <View style={styles.container}>
-      <ActivityBars targets={targets} />
+    <View style={cardOnly ? [styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }] : styles.container}>
+      {!cardOnly && <ActivityBars targets={targets} />}
 
       {onConnect == null ? (
         <>
@@ -64,7 +68,7 @@ export default function HealthFitnessEmptyState({
         </>
       ) : (
         <>
-          <Text style={[styles.title, { color: sc.textPrimary }]}>See your fitness in one place</Text>
+          <Text style={[styles.title, cardOnly && styles.cardTitle, { color: sc.textPrimary }]}>See your fitness in one place</Text>
           <Text style={[styles.body, { color: sc.textMuted }]}>{connectBody()}</Text>
         </>
       )}
@@ -73,15 +77,16 @@ export default function HealthFitnessEmptyState({
         <Pressable
           onPress={onConnect}
           accessibilityRole="button"
-          accessibilityLabel="Connect a tracker"
+          accessibilityLabel={connectLabel}
           style={({ pressed }) => [
             styles.cta,
+            cardOnly && styles.cardCta,
             { backgroundColor: sc.accent },
             pressed && styles.ctaPressed,
           ]}
         >
           <Ionicons name="add-circle-outline" size={18} color={sc.textOnAccent} />
-          <Text style={[styles.ctaText, { color: sc.textOnAccent }]}>Connect a tracker</Text>
+          <Text style={[styles.ctaText, cardOnly && styles.cardCtaText, { color: sc.textOnAccent }]}>{connectLabel}</Text>
         </Pressable>
       )}
     </View>
@@ -89,6 +94,10 @@ export default function HealthFitnessEmptyState({
 }
 
 const styles = StyleSheet.create({
+  card: { alignItems: 'center', padding: spacing.lg, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
+  cardTitle: { marginTop: 0 },
+  cardCta: { paddingHorizontal: spacing.md },
+  cardCtaText: { flexShrink: 1, textAlign: 'center' },
   container: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,

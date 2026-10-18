@@ -8,6 +8,8 @@
  */
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Spacing } from '../../theme';
 import { lightTokens, radius, typography } from '../../theme/tokens';
@@ -30,22 +32,29 @@ interface Props {
   selected: IntendedRole | null;
   onSelect: (role: IntendedRole) => void;
   disabled?: boolean;
+  /** 'tiles': C7 Style B (firstRunV2): surface tiles, the chosen one filled forest with a check; selection haptic. */
+  variant?: 'rows' | 'tiles';
 }
 
-export default function RoleChoice({ selected, onSelect, disabled = false }: Props) {
+export default function RoleChoice({ selected, onSelect, disabled = false, variant = 'rows' }: Props) {
   const { semanticColors: colors = lightTokens } = useTheme();
+  const tiles = variant === 'tiles';
   return (
     <View
       testID="role-choice"
       accessibilityRole="radiogroup"
-      style={[styles.group, { borderColor: colors.border }]}
+      style={tiles ? styles.tiles : [styles.group, { borderColor: colors.border }]}
     >
       {ROLE_CHOICE_OPTIONS.map((o) => {
         const checked = selected === o.role;
+        const filled = tiles && checked;
         return (
           <TouchableOpacity
             key={o.role}
-            onPress={() => onSelect(o.role)}
+            onPress={() => {
+              if (tiles) void HapticService.selection();
+              onSelect(o.role);
+            }}
             disabled={disabled}
             activeOpacity={0.7}
             accessibilityRole="radio"
@@ -53,18 +62,31 @@ export default function RoleChoice({ selected, onSelect, disabled = false }: Pro
             accessibilityHint={o.body}
             accessibilityState={{ checked, disabled }}
             testID={`role-choice-${o.role}`}
-            style={[styles.row, { borderColor: colors.border }]}
+            style={
+              tiles
+                ? [styles.tile, { backgroundColor: filled ? colors.surface.forestBand : colors.bgSurface, borderColor: filled ? colors.surface.forestBand : colors.border }]
+                : [styles.row, { borderColor: colors.border }]
+            }
           >
             <View style={styles.text}>
-              <Text style={[styles.title, { color: colors.textPrimary }]}>{o.title}</Text>
-              <Text style={[styles.body, { color: colors.textMuted }]}>{o.body}</Text>
+              <Text style={[styles.title, { color: filled ? colors.textOnAccent : colors.textPrimary }]}>{o.title}</Text>
+              <Text style={[styles.body, { color: filled ? colors.textOnMastheadMuted : colors.textMuted }]}>{o.body}</Text>
             </View>
+            {tiles ? (
+              <View
+                testID={`role-choice-${o.role}-radio`}
+                style={[styles.check, { backgroundColor: filled ? colors.textOnAccent : 'transparent', borderColor: filled ? colors.textOnAccent : colors.textMuted }]}
+              >
+                {filled ? <Ionicons name="checkmark" size={16} color={colors.surface.forestBand} /> : null}
+              </View>
+            ) : (
             <View
               testID={`role-choice-${o.role}-radio`}
               style={[styles.radio, { borderColor: checked ? colors.accent : colors.textMuted }]}
             >
               {checked ? <View style={[styles.radioDot, { backgroundColor: colors.accent }]} /> : null}
             </View>
+            )}
           </TouchableOpacity>
         );
       })}
@@ -97,4 +119,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioDot: { width: RADIO / 2, height: RADIO / 2, borderRadius: radius.chip },
+  tiles: { gap: 12 },
+  tile: { minHeight: 88, flexDirection: 'row', alignItems: 'center', padding: Spacing.lg, borderRadius: radius.card, borderWidth: 1 },
+  check: { width: 28, height: 28, borderRadius: radius.chip, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });
