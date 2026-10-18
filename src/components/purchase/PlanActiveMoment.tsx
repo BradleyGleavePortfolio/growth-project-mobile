@@ -177,10 +177,9 @@ export default function PlanActiveMoment({
     onSeeUnlocks && featureFlags.deliverables && row
       ? () => onSeeUnlocks(row.id)
       : null;
-  const lines = [
-    paid ? { label: COPY.paid, value: paid, id: "paid" } : null,
-    next ? { label: COPY.nextCharge, value: next, id: "next" } : null,
-  ].filter((l): l is { label: string; value: string; id: string } => !!l);
+  const lines: { id: string; label: string; value: string }[] = [];
+  if (paid) lines.push({ id: "paid", label: COPY.paid, value: paid });
+  if (next) lines.push({ id: "next", label: COPY.nextCharge, value: next });
 
   return (
     <View
