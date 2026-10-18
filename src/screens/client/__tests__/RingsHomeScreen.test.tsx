@@ -53,6 +53,7 @@ jest.mock('../../../hooks/useWearableSamples', () => ({
 jest.mock('../../../hooks/useHolisticInsights', () => ({ useHolisticInsights: () => mockInsights() }));
 const mockRead = (data: unknown) => ({ data, isSuccess: true, refetch: jest.fn() });
 jest.mock('../../../hooks/useWearableConnections', () => ({ useWearableConnections: () => ({ ...mockConnectionReads[mockConnections], refetch: jest.fn() }) }));
+jest.mock('../../../hooks/useDeviceHealthOnOpen', () => ({ useDeviceHealthOnOpen: jest.fn() })); // RingsHomeNotices.test
 jest.mock('../../../hooks/useApi', () => ({
   ...jest.requireActual('../../../hooks/useApi'),
   useTodayCheckIn: () => ({ data: mockCheckIn, isSuccess: mockCheckInRead === 'ok', isError: mockCheckInRead === 'failed', refetch: jest.fn() }),
@@ -91,7 +92,8 @@ jest.mock('../../../components/coachless/CoachlessHomeSlot', () => ({
   __esModule: true,
   default: ({ part }: { part: string }) => require('react').createElement(require('react-native').Text, null, `coachless-slot-${part}`),
 }));
-// Today's Home sections (not rendered while the flag is on).
+// Today's Home sections; the notices sit in the rings Home's slot (RingsHomeNotices.test).
+jest.mock('../../../components/home/ProfileNudge', () => () => null);
 jest.mock('../../../entitlements/dunning/DunningBanner', () => ({ DunningBanner: () => null }));
 jest.mock('../../../components/home/HolisticInsightsTile', () => () => null);
 jest.mock('../../../components/home/PushPermissionCard', () => () => null);

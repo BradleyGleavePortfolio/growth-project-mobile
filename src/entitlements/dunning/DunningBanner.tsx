@@ -7,6 +7,7 @@ import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from
 import { disputePauseFacts } from './dunningErrorCopy';
 import { useDunning } from './DunningLockoutProvider';
 import { isDisputeCycle, isRefundCycle, lockoutTitle } from './DunningLockoutScreen';
+import { useNoticeSlot } from '../../components/home/HomeNoticeSlot';
 
 /**
  * The lock date, only while it is still ahead and the lock is not waived
@@ -88,8 +89,9 @@ export function DunningBanner({
 
   const status = dunning?.status;
   const lockedHere = presentation === 'locked';
-  if (!dunning || !status || !status.enabled) return null;
-  if (lockedHere ? !dunning.locked : status.state !== 'past_due') return null;
+  const due = !!dunning && !!status && status.enabled && (lockedHere ? dunning.locked : status.state === 'past_due');
+  const shown = useNoticeSlot('dunning', due); // one notice at a time on the rings Home
+  if (!shown || !dunning || !status) return null;
   const copy = lockedHere ? lockedCopy(status) : bannerCopy(status);
   const dispute = isDisputeCycle(status);
 
