@@ -1626,6 +1626,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         {/* COACH-AI-CONSENT: the coach form's last item, right above Create account (owner mockup 1). */}
         {isCoachSignup ? (
           <Checkbox
+            variant="tan"
             checked={romanOn}
             onToggle={() => setRomanOn((v) => !v)}
             label={COACH_AI_CONSENT_COPY.title}
