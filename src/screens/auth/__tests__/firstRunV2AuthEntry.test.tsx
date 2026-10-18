@@ -157,24 +157,41 @@ it('Sign in: Google keeps "or", the existing-account question and its call', asy
   await waitFor(() => expect(mockGoogle).toHaveBeenCalledWith());
 });
 
-it('Create account, code optional: no code action or field; the same register request', async () => {
-  const view = await create(nav());
-  await fireEvent.press(await view.findByTestId('role-choice-client'));
-  expect(HapticService.selection).toHaveBeenCalledTimes(1);
-  expect(view.queryByTestId('role-choice-invite-code')).toBeNull();
-  expect(view.getByText('Have a code from your coach? You enter it right after you sign up.')).toBeTruthy();
-  await fireEvent.press(view.getByTestId('role-choice-continue'));
-  expect(view.queryByTestId('invite-code-input')).toBeNull();
-  expect(view.getByText('Minimum 8 characters, 1 uppercase, 1 number, 1 special')).toBeTruthy();
+const fill = async (view: Awaited<ReturnType<typeof create>>) => {
   await fireEvent.changeText(view.getByLabelText('Full name'), 'Jordan');
   await fireEvent.changeText(view.getByLabelText('Email'), 'jordan@example.com');
   await fireEvent.changeText(view.getByLabelText('Password'), 'Secret1!');
   await fireEvent.press(view.getByTestId('create-account-submit'));
+};
+
+it('Create account, code optional: no role-step code action; the optional code field shows; no code sends register', async () => {
+  const view = await create(nav());
+  await fireEvent.press(await view.findByTestId('role-choice-client'));
+  expect(HapticService.selection).toHaveBeenCalledTimes(1);
+  expect(view.queryByTestId('role-choice-invite-code')).toBeNull();
+  expect(view.getByText('No coach code yet? You can add one after you sign up.')).toBeTruthy();
+  await fireEvent.press(view.getByTestId('role-choice-continue'));
+  expect(view.getByTestId('invite-code-input').props.value).toBe('');
+  expect(view.getByText('INVITE CODE (OPTIONAL)')).toBeTruthy();
+  expect(view.getByText('Minimum 8 characters, 1 uppercase, 1 number, 1 special')).toBeTruthy();
+  await fill(view);
   await waitFor(() =>
     expect(mockApi.register).toHaveBeenCalledWith({ name: 'Jordan', email: 'jordan@example.com', password: 'Secret1!', phone: undefined }, 'client'),
   );
   expect(mockApi.signupWithCode).not.toHaveBeenCalled();
   expect(await view.findByTestId('create-account-verify')).toBeTruthy();
+});
+
+it('Create account, code optional: a typed code submits today\'s signup-with-code request', async () => {
+  const view = await create(nav());
+  await fireEvent.press(await view.findByTestId('role-choice-client'));
+  await fireEvent.press(view.getByTestId('role-choice-continue'));
+  await fireEvent.changeText(view.getByTestId('invite-code-input'), ' TGP-R8N3VW5 ');
+  await fill(view);
+  await waitFor(() => expect(mockApi.signupWithCode).toHaveBeenCalledTimes(1));
+  expect(mockApi.signupWithCode.mock.calls[0][0]).toMatchObject({ name: 'Jordan', email: 'jordan@example.com', password: 'Secret1!', invite_code: 'TGP-R8N3VW5' });
+  expect(mockApi.getInvitePreview).toHaveBeenCalledWith('TGP-R8N3VW5');
+  expect(mockApi.register).not.toHaveBeenCalled();
 });
 
 it('Create account keeps the code field when the policy requires it', async () => {
@@ -196,10 +213,7 @@ it('Create account keeps the code action and field when the policy does not answ
 it('Create account from a join link keeps the code and today\'s signup-with-code request', async () => {
   const view = await create(nav(), { invite_code: 'TGP-R8N3VW5' });
   expect((await view.findByTestId('invite-code-input')).props.value).toBe('TGP-R8N3VW5');
-  await fireEvent.changeText(view.getByLabelText('Full name'), 'Jordan');
-  await fireEvent.changeText(view.getByLabelText('Email'), 'jordan@example.com');
-  await fireEvent.changeText(view.getByLabelText('Password'), 'Secret1!');
-  await fireEvent.press(view.getByTestId('create-account-submit'));
+  await fill(view);
   await waitFor(() => expect(mockApi.signupWithCode).toHaveBeenCalledTimes(1));
   expect(mockApi.signupWithCode.mock.calls[0][0]).toMatchObject({ email: 'jordan@example.com', invite_code: 'TGP-R8N3VW5' });
   expect(mockApi.register).not.toHaveBeenCalled();

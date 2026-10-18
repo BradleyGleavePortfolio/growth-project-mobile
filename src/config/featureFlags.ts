@@ -589,11 +589,11 @@ export const featureFlags = {
   // ─── C7 Style B — sign-in and first run (MOCKUP3/C7, index-b-join) ───────
   /**
    * Slice 1: Welcome, Sign in, role choice, Create account, Forgot and Reset
-   * password drawn in Style B. Create account drops the code field only while
-   * the signup policy says the code is optional and no code came with the
-   * screen; the code is asked right after sign-up (RoleSelection). Every
-   * sign-in, sign-up and reset request is unchanged. OFF by default; with it
-   * off every auth screen is exactly main's.
+   * password drawn in Style B. Create account keeps today's optional code
+   * field (owner #C7-JOIN op 2); the role step drops "I have an invite code"
+   * only while the signup policy says the code is optional. Every sign-in,
+   * sign-up and reset request is unchanged. OFF by default; with it off every
+   * auth screen is exactly main's.
    *
    * env: EXPO_PUBLIC_FF_FIRST_RUN_V2
    */

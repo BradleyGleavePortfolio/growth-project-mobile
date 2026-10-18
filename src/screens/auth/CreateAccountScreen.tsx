@@ -184,7 +184,7 @@ function canonicalEmailFrom(data: unknown, submitted: string): string {
 
 export default function CreateAccountScreen({ navigation, route }: Props) {
   const { semanticColors: colors = lightTokens } = useTheme();
-  // C7 Style B (firstRunV2): the same form drawn as field cards; see codeAfterSignUp below.
+  // C7 Style B (firstRunV2): the same form drawn as field cards; see hideCodeAction below.
   const v2 = authStyleB();
   const bField = useMemo(() => styleBFieldStyles(colors), [colors]);
   const styles = useMemo(() => (v2 ? { ...makeStyles(colors), ...bField } : makeStyles(colors)), [colors, v2, bField]);
@@ -228,12 +228,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [requireInviteCode, setRequireInviteCode] = useState(
     () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
   );
-  // MOCKUP3 C7 index-b-join section 7: with firstRunV2 on, the code is asked
-  // right after sign-up (RoleSelection) only while a policy answer from the
-  // server says it is optional. No answer, a code-required policy, or a code
-  // in hand (join link, or typed before the answer came) keeps today's field.
-  const codeAfterSignUp = v2 && !requireInviteCode && getLastKnownSignupPolicy()?.inviteCodeRequired === false;
-  const hideCode = codeAfterSignUp && !arrivedWithCode && !hasTypedCode;
+  // Owner #C7-JOIN op 2 (MOCKUP3 C7 index-b-join section 9): with firstRunV2 on,
+  // Create account keeps today's optional code field; the role step drops "I have
+  // an invite code" only while a policy answer from the server says the code is
+  // optional. No answer or a code-required policy keeps today's role step.
+  const hideCodeAction = v2 && !requireInviteCode && getLastKnownSignupPolicy()?.inviteCodeRequired === false;
   // Google is hidden until the server advertises it in `providers`.
   const [googleEnabled, setGoogleEnabled] = useState(
     () => getLastKnownSignupPolicy()?.googleEnabled === true,
@@ -1188,7 +1187,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               disabled={!roleDraft}
               testID="role-choice-continue"
             />
-            {codeAfterSignUp ? null : (
+            {hideCodeAction ? null : (
             <TextLink
               label="I have an invite code"
               tone="ink"
@@ -1224,12 +1223,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               setError('');
             }}
           />
-          {codeAfterSignUp && roleDraft !== 'coach' ? (
-            <Text style={styles.roleNote} testID="role-choice-code-after-sign-up">
-              Have a code from your coach? You enter it right after you sign up.
-            </Text>
-          ) : null}
-          {!codeAfterSignUp && roleDraft === 'client' ? (
+          {roleDraft === 'client' ? (
             <Text style={styles.roleNote} testID="role-choice-coachless-note">
               No coach code yet? You can add one after you sign up.
             </Text>
@@ -1466,7 +1460,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {isCoachSignup || hideCode ? null : (
+        {isCoachSignup ? null : (
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>
               {requireInviteCode ? 'INVITE CODE' : 'INVITE CODE (OPTIONAL)'}
