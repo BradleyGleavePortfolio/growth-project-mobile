@@ -815,6 +815,9 @@ export default function CoachNavigator() {
       options={{
         title: 'Clients',
         tabBarAccessibilityLabel: 'Clients',
+        // COACHTABS-CLIENTS-ROOT: Clients opens with the app even when the coach lands on another tab, so a
+        // jump into a Clients screen (a chat, Invite codes, a push) opens on top of the client list.
+        lazy: false,
         tabBarIcon: ({ color, size }) => (
           <Ionicons name="people-outline" size={size} color={color} />
         ),

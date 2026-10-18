@@ -93,7 +93,7 @@ import { secureStorage } from '../../../services/secureStorage';
 import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../../../lib/signupRoleNotice';
 import { COACH_SIGNUP_UNCONFIRMED_KEY, rememberUnconfirmedCoachSignup } from '../../../lib/coachSignupAttempt';
-import { darkTokens, lightTokens } from '../../../theme/tokens';
+import { colors, darkTokens, lightTokens } from '../../../theme/tokens';
 
 function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };
@@ -598,6 +598,7 @@ describe('CreateAccountScreen', () => {
       const utils = await renderScreen(undefined, 'coach');
       const box = utils.getByTestId('create-account-roman');
       expect(box.props.accessibilityState).toMatchObject({ checked: false });
+      expect(StyleSheet.flatten(box.props.style).backgroundColor).toBe(colors.cream);
       // In the form (its last item), never in the pinned footer that holds Create account.
       expect(within(utils.getByTestId('create-account-register-scroll')).getByTestId('create-account-roman')).toBeTruthy();
       expect(within(utils.getByTestId('create-account-register-footer')).queryByTestId('create-account-roman')).toBeNull();
