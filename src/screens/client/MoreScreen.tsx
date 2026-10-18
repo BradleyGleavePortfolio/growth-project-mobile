@@ -31,7 +31,7 @@ type MoreItem = {
   section: string;
   // Either a screen inside a sibling tab's stack (opened through the tab
   // navigator) or a nested screen inside the More stack.
-  target: { type: 'tab'; tab: string; screen: string } | { type: 'stack'; screen: string };
+  target: { type: 'tab'; tab: string; screen: string } | { type: 'stack'; screen: string; params?: object };
   a11yHint: string;
   // When true, the row renders Roman's face (RomanAvatar) in place of the
   // Ionicons glyph — the face+voice rule for the Roman-branded row.
@@ -52,7 +52,7 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
     label: 'Meal plan',
     description: 'View meal plans',
     section: 'Your plan',
-    target: { type: 'stack', screen: 'Plan' },
+    target: { type: 'stack', screen: 'ClientDailyMealPlan' },
     a11yHint: 'Opens your meal plan',
   },
   {
@@ -229,11 +229,13 @@ function showsWearableRows(): boolean {
 
 const WEARABLE_MORE_ITEMS: MoreItem[] = [
   {
-    icon: 'heart-outline',
-    label: 'Health and sleep',
-    description: 'View activity, heart rate and sleep',
+    // HEALTH-1 (owner #SLEEP-PLACE op 2): with healthPages on (read when the row is drawn), the
+    // main way into Sleep and recovery opens Health and sleep on its Recovery tab. Off, main's row.
+    get icon(): MoreItem['icon'] { return featureFlags.healthPages ? 'moon-outline' : 'heart-outline'; },
+    get label() { return featureFlags.healthPages ? 'Sleep and recovery' : 'Health and sleep'; },
+    get description() { return featureFlags.healthPages ? 'Recovery estimate, activity and heart rate' : 'View activity, heart rate and sleep'; },
     section: 'Health and devices',
-    target: { type: 'stack', screen: 'Health' },
+    get target(): MoreItem['target'] { return featureFlags.healthPages ? { type: 'stack', screen: 'Health', params: { bucket: 'recovery' } } : { type: 'stack', screen: 'Health' }; },
     a11yHint: 'Opens your health and sleep data',
     tutorialTarget: 'more-health',
   },
@@ -255,13 +257,15 @@ export default function MoreScreen() {
   const items = useMemo<MoreItem[]>(
     () => {
       const roman = featureFlags.romanChat ? [ROMAN_MORE_ITEM] : [];
+      // TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here.
+      const plan = featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
       // The clinic tutorial spotlights the wearables rows, so they stay at the
       // top there (unchanged); elsewhere they follow the plan rows.
       if (featureFlags.clientTutorial) {
-        return [...WEARABLE_MORE_ITEMS, ...roman, ...PLAN_MORE_ITEMS, ...MORE_ITEMS];
+        return [...WEARABLE_MORE_ITEMS, ...roman, ...plan, ...MORE_ITEMS];
       }
       const wearables = showsWearableRows() ? WEARABLE_MORE_ITEMS : [];
-      return [...roman, ...PLAN_MORE_ITEMS, ...wearables, ...MORE_ITEMS];
+      return [...roman, ...plan, ...wearables, ...MORE_ITEMS];
     },
     [],
   );
@@ -270,7 +274,8 @@ export default function MoreScreen() {
 
   const handlePress = (item: MoreItem) => {
     if (item.target.type === 'stack') {
-      navigation.navigate(item.target.screen);
+      if (item.target.params) navigation.navigate(item.target.screen, item.target.params);
+      else navigation.navigate(item.target.screen);
       return;
     }
     // A screen in another tab's stack: go through the tab navigator and keep

@@ -195,7 +195,7 @@ describe('ClientNavigator wiring (from the code)', () => {
 
   it.each([
     'WorkoutScreen', 'ActiveWorkoutScreen', 'WorkoutHistoryEditScreen', 'ClientWorkoutViewerScreen',
-    'WorkoutAssignmentDetailScreen', 'PlanScreen', 'ClientDailyMealPlanScreen', 'FastingScreen',
+    'WorkoutAssignmentDetailScreen', 'ClientDailyMealPlanScreen', 'FastingScreen',
     'LogScreen', 'ClientMacrosScreen', 'HabitsScreen', 'RoutineBuilderScreen',
   ])('%s is open to every client', (name) => {
     expect(wrapped(name)?.[1]).toBeTruthy();

@@ -15,6 +15,7 @@ import * as Clipboard from 'expo-clipboard';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { gold, lightTokens } from '../../../theme/tokens';
 import { StyleBBubble, dayB, timeB } from '../../../components/messaging/StyleBThread';
+import { featureFlags } from '../../../config/featureFlags';
 
 jest.mock('../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../config/featureFlags');
@@ -163,6 +164,26 @@ describe('client MessagesScreen with c3StyleB ON', () => {
     expect(flat(u.getByLabelText(/Message: answer/))).toMatchObject({ backgroundColor: lightTokens.accent, minHeight: 44 });
     expect(flat(u.getByLabelText(/Message: from the coach/)).backgroundColor).toBe('#F1E8D5');
     expect(flat(u.getByLabelText('Send message'))).toMatchObject({ width: 44, height: 44 });
+  });
+
+  it('ROMANMARK: each drafted coach message carries the mark on its bottom inner corner; typed, voice, deleted and own rows none', async () => {
+    Object.defineProperty(featureFlags, 'romanDraftMark', { value: true });
+    mockList.mockResolvedValue({ data: [
+      row({ id: 'd1', sender_id: 'coach-9', body: 'First draft', ai_draft_id: 'a1' }),
+      row({ id: 'd2', sender_id: 'coach-9', body: 'Edited draft', ai_draft_id: 'a2', edited_at: recent }),
+      row({ id: 'typed', sender_id: 'coach-9', body: 'Typed' }),
+      row({ id: 'voice', sender_id: 'coach-9', body: '', ai_draft_id: 'a3', voice_url: 'voice.m4a' }),
+      row({ id: 'gone', sender_id: 'coach-9', body: null, ai_draft_id: 'a4', deleted: true }),
+      row({ id: 'own', sender_id: 'client-1', body: 'answer', ai_draft_id: 'a5' }),
+    ] });
+    try {
+      const u = await render(<MessagesScreen />);
+      await waitFor(() => expect(u.getAllByLabelText('Roman helped draft this message. Coach sent it.')).toHaveLength(2));
+      expect(flat(u.getAllByTestId('roman-draft-mark')[0])).toMatchObject({ width: 44, height: 44, right: 0 });
+      await fireEvent.press(u.getAllByTestId('roman-draft-mark')[0]);
+      expect(flat(u.getByText('Drafted by Roman'))).toMatchObject({ fontStyle: 'italic', textDecorationLine: 'underline' });
+      expect(u.getAllByText(timeB(recent)).length).toBeGreaterThan(0); // times stay under the bubbles, as on every Style B row
+    } finally { Object.defineProperty(featureFlags, 'romanDraftMark', { value: false }); }
   });
 
   it('keeps every pathway: contact, back, mute, copy, reply, report, send (softImpact)', async () => {
@@ -484,6 +505,7 @@ describe('Style B motion and reach', () => {
     timing.mockRestore();
   });
 
+  // C3B-S2: Home's entry reads the flag to open the client Messages list (HomeHeaderActions.test).
   it('coach side unchanged: only the client thread reads c3StyleB or the Style B parts', () => {
     const src = path.resolve(__dirname, '../../..');
     const hits: string[] = [];
@@ -492,6 +514,6 @@ describe('Style B motion and reach', () => {
       if (e.isDirectory()) { if (e.name !== '__tests__') walk(f); } else if (/\.tsx?$/.test(e.name) && /c3StyleB|StyleBThread/.test(fs.readFileSync(f, 'utf8'))) hits.push(path.relative(src, f));
     });
     walk(src);
-    expect(hits.sort()).toEqual(['components/messaging/StyleBThread.tsx', 'config/featureFlags.ts', 'hooks/useMessageOutbox.ts', 'screens/client/MessagesScreen.tsx', 'services/messageOutbox.ts']);
+    expect(hits.sort()).toEqual(['components/home/HomeHeaderActions.tsx', 'components/messaging/StyleBThread.tsx', 'config/featureFlags.ts', 'hooks/useMessageOutbox.ts', 'screens/client/MessagesScreen.tsx', 'services/messageOutbox.ts']);
   });
 });

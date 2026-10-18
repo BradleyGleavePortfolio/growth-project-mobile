@@ -342,6 +342,28 @@ describe('Truthful client copy and routes/actions parity', () => {
       await press(s, 'Log weight'); await press(s, 'Close log weight modal');
     },
   );
+  it('SHARE-A: with shareSheetV2 on, Share opens the sheet over Progress and the ShareCard route is not used', async () => {
+    const flags = jest.requireMock('../config/featureFlags').featureFlags as Record<string, boolean>;
+    flags.shareSheetV2 = true;
+    try {
+      mockWeights = Array.from({ length: 14 }, (_, offset) => {
+        const d = new Date(); d.setDate(d.getDate() - offset);
+        return { id: String(offset), date: require('../utils/date').bucketDateLocal(d), weight_lbs: 180 };
+      });
+      const { QueryClient, QueryClientProvider } = require('@tanstack/react-query');
+      const s = await render(React.createElement(QueryClientProvider, { client: new QueryClient() }, React.createElement(ProgressScreen)));
+      await waitFor(() => expect(s.getByText('14 days in a row with a weigh-in')).toBeTruthy());
+      await press(s, 'Share 14 days in a row with a weigh-in');
+      expect(mockNavigate).not.toHaveBeenCalledWith('ShareCard', expect.anything());
+      expect(s.getByText('Share this card')).toBeTruthy();
+      const day = (o: number) => { const d = new Date(); d.setDate(d.getDate() - o); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
+      expect(s.getByLabelText(`Picture of your card: 14 days in a row with a weigh-in, ${day(13)} to ${day(0)}.`)).toBeTruthy();
+      await press(s, 'Dismiss');
+      expect(s.queryByText('Share this card')).toBeNull();
+    } finally {
+      flags.shareSheetV2 = false;
+    }
+  });
   it('keeps every Profile route and names only granted sharing scopes', async () => {
     const s = await render(React.createElement(ProfileScreen));
     expect(s.queryByText('Day 7 of 30.')).toBeNull();

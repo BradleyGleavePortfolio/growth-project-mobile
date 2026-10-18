@@ -10,6 +10,7 @@ jest.mock('../../services/api', () => ({
 
 import api from '../../services/api';
 import { workoutBuilderApi } from '../workoutBuilderApi';
+import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
 
 const mockApi = jest.mocked(api);
 
@@ -62,4 +63,24 @@ it('fails the load on an unreadable page instead of showing an empty list', asyn
   await expect(workoutBuilderApi.listMyAssignments()).rejects.toThrow(
     'Your workouts could not be read. Pull to try again.',
   );
+});
+
+// K3FIX-SNAPSHOT: frozen prescriptions on later pages reach the screens as sent.
+it('keeps the frozen rows and name of every page, an empty frozen list included', async () => {
+  const live = { id: 'pe-1', workout_plan_id: 'plan-x', exercise_external_id: 'live', order: 1, sets: 9,
+    reps_or_duration_seconds: 9, weight_lbs: null, rest_seconds: null, superset_group_id: null, notes: null };
+  const frozen = (id: string, rows: unknown[]) => ({
+    ...row(id), workout_plan: { ...row(id).workout_plan, exercises: [live] },
+    exercises: rows, snapshot_source: true, snapshot: { plan_name: `Frozen ${id}`, plan_type: 'strength' },
+  });
+  const { id: _id, workout_plan_id: _p, ...frozenRow } = { ...live, exercise_external_id: 'bench', sets: 3 };
+  mockApi.get
+    .mockResolvedValueOnce({ data: { items: [frozen('a', [frozenRow])], nextCursor: 'c1' } })
+    .mockResolvedValueOnce({ data: { items: [frozen('b', [])], nextCursor: null } });
+  const list = await workoutBuilderApi.listMyAssignments();
+  expect(list.map(assignmentPrescription)).toMatchObject([
+    { name: 'Frozen a', exercises: [{ exercise_external_id: 'bench', sets: 3 }] },
+    { name: 'Frozen b', exercises: [] },
+  ]);
+  expect(mockApi.get).toHaveBeenCalledTimes(2);
 });

@@ -21,11 +21,14 @@
  *      when given, is a whole number from 1 to 100.
  *   2. src/config/purchaseSurfaces.ts matches the reviewed hash in
  *      scripts/purchase-policy.sha256.
- *   3. The REMOTE EAS project variable EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES
- *      in the target environment is exactly "true" (`eas env:get`, flag
- *      removed from the child's environment, exactly one `NAME=true` record;
- *      missing, empty, masked, duplicate, unparsable and failed lookups all
- *      refuse). A locally exported value is never trusted.
+ *   3. EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES is exactly "true" in the
+ *      bundle this update would ship, and that value comes only from the EAS
+ *      records of step 5 (the publish child never gets the flag, so eas update
+ *      takes the EAS value). Missing, empty, masked, secret, conflicting and
+ *      failed listings all refuse. A locally exported value is never trusted.
+ *      `eas env:get` is not used: its "not found" is only a log line, and npx
+ *      in CI logs "... was not found and will be installed" on the same stream
+ *      (device-loop run 38968985863).
  *   4. The same flag is not set to anything other than "true" in the local
  *      shell.
  *   5. The bundle this update would ship is the bundle the binary was built
@@ -33,6 +36,7 @@
  *      `{ ...process.env, ...EAS plaintext and sensitive values }` and never
  *      sees `secret` values (EAS builders only). The guard reads both scopes
  *      with `eas env:list <e> --format short --scope <s> --include-sensitive`
+ *      (stdout only; the project scope is the query eas update itself runs)
  *      and refuses when a name that reaches the bundle (every EXPO_PUBLIC_*
  *      and every eas.json profile env name):
  *        - has a secret, file, masked or unrevealed record (the update could
@@ -85,6 +89,10 @@ const SENTRY_PLUGIN = '@sentry/react-native/expo';
 const POLICY_FILE = path.join('src', 'config', 'purchaseSurfaces.ts');
 const LOCK_FILE = path.join('scripts', 'purchase-policy.sha256');
 const METADATA_FILE = 'eas-update-metadata.json';
+// Every eas command runs this exact release through npx, the same version
+// .github/workflows/device-loop.yml installs (deviceLoop.test.js keeps them
+// equal). Bump both together.
+const EAS_CLI = 'eas-cli@25.0.0';
 const PLATFORMS = ['ios', 'android'];
 // Source maps written more than this long before the publish started belong
 // to an older export (clock granularity margin only).
@@ -207,20 +215,6 @@ function checkPolicyHash(root = ROOT) {
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*m/g;
 
-/**
- * Parse `eas env:get <env> --variable-name FLAG --format short` output.
- * Returns { value } only for exactly one well-formed `FLAG=<value>` line.
- */
-function parseRemoteValue(stdout, stderr) {
-  const out = String(stdout || '').replace(ANSI, '');
-  const err = String(stderr || '').replace(ANSI, '');
-  if (/not found/i.test(out) || /not found/i.test(err)) return { error: `${FLAG} not found in the EAS environment` };
-  const lines = out.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.startsWith(`${FLAG}=`));
-  if (lines.length === 0) return { error: `no ${FLAG} record in eas env:get output` };
-  if (lines.length > 1) return { error: `ambiguous: ${lines.length} ${FLAG} records` };
-  return { value: lines[0].slice(FLAG.length + 1) };
-}
-
 /** Fixed description of a value that is not "true" (never the value itself). */
 function flagValueCategory(value) {
   if (value === undefined || value === null) return 'is unset';
@@ -228,12 +222,6 @@ function flagValueCategory(value) {
   if (!v.trim()) return 'is empty';
   if (/^\*{3,}/.test(v)) return 'is masked (sensitive or secret), so it cannot be confirmed';
   return 'holds a value other than "true" (not printed)';
-}
-
-function checkEnvValue(value) {
-  return value === 'true'
-    ? []
-    : [`${FLAG} ${flagValueCategory(value)} in the target EAS environment; it must be exactly "true". Fix: eas env:update --variable-name ${FLAG} --variable-environment <environment> --scope project --value true --visibility plaintext (or eas env:create), then re-run.`];
 }
 
 /** The lookup child never sees a locally exported flag. */
@@ -276,13 +264,13 @@ function classifyRecord(value) {
 }
 
 function readRemoteList(environment, scope, run = defaultRun, parentEnv = process.env) {
-  const res = run('npx', ['eas-cli', 'env:list', environment, '--format', 'short', '--scope', scope, '--include-sensitive'], {
+  const res = run('npx', [EAS_CLI, 'env:list', environment, '--format', 'short', '--scope', scope, '--include-sensitive'], {
     capture: true,
     env: lookupEnv(parentEnv),
   });
   if (!res || res.error || res.status !== 0) {
     return {
-      error: `eas env:list ${environment} --scope ${scope} --include-sensitive failed (status ${res && res.status}). Fix: run npx eas-cli login with an account that can read this project's ${environment} variables, check the network, then re-run.`,
+      error: `eas env:list ${environment} --scope ${scope} --include-sensitive failed (status ${res && res.status}). Fix: run npx ${EAS_CLI} login with an account that can read this project's ${environment} variables, check the network, then re-run.`,
     };
   }
   return { vars: parseEnvList(res.stdout) };
@@ -310,7 +298,7 @@ function unreadableFix(cls, name, scope, environment) {
   if (cls === 'secret') {
     return `Fix: eas env:update --variable-name ${name} --variable-environment ${environment} --scope ${scope} --visibility sensitive (an EXPO_PUBLIC_* value is readable in the app bundle anyway), then re-run.`;
   }
-  if (cls === 'sensitive') return 'Fix: make sure npx eas-cli runs eas-cli 16 or newer (npm i -g eas-cli@latest), then re-run.';
+  if (cls === 'sensitive') return 'Fix: log in (or set EXPO_TOKEN) as an Expo account that can read this project\'s sensitive variables, then re-run.';
   return `Fix: set a real string value (eas env:update --variable-name ${name} --variable-environment ${environment} --scope ${scope} --value <value>) or delete it (eas env:delete --variable-name ${name} --variable-environment ${environment} --scope ${scope}), then re-run.`;
 }
 
@@ -436,7 +424,7 @@ function checkBundleValues(root, target, channel, effective, unresolved = new Se
     }
   }
   if (!unresolved.has(FLAG) && effective[FLAG] !== 'true') {
-    errors.push(`${FLAG} ${flagValueCategory(effective[FLAG])} in the bundle this update would ship; it must be exactly "true". Fix: keep exactly one plaintext record with the value true in EAS environment "${target.environment}", then re-run.`);
+    errors.push(`${FLAG} ${flagValueCategory(effective[FLAG])} in the bundle this update would ship; it must be exactly "true". Fix: keep exactly one plaintext record with the value true in EAS environment "${target.environment}" (eas env:create --environment ${target.environment} --name ${FLAG} --value true --visibility plaintext, or eas env:update on the existing record), then re-run.`);
   }
   return errors;
 }
@@ -588,18 +576,10 @@ function uploadSourceMaps(ctx) {
   return 0;
 }
 
+// A captured lookup keeps stderr on the terminal: eas-cli prints values only
+// to stdout, and npm or eas-cli notices stay readable instead of hidden.
 function defaultRun(cmd, args, opts = {}) {
-  return spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', stdio: opts.capture ? 'pipe' : 'inherit', env: opts.env || process.env });
-}
-
-function readRemoteFlag(environment, run = defaultRun, parentEnv = process.env) {
-  const res = run(
-    'npx',
-    ['eas-cli', 'env:get', environment, '--variable-name', FLAG, '--format', 'short', '--scope', 'project', '--non-interactive'],
-    { capture: true, env: lookupEnv(parentEnv) },
-  );
-  if (!res || res.error || res.status !== 0) return { error: `eas env:get failed (status ${res && res.status})` };
-  return parseRemoteValue(res.stdout, res.stderr);
+  return spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', stdio: opts.capture ? ['pipe', 'pipe', 'inherit'] : 'inherit', env: opts.env || process.env });
 }
 
 function readBothScopes(environment, run, env) {
@@ -693,17 +673,10 @@ function main(argv, deps = {}) {
     return uploadSourceMaps({ run, log, distDir, plan, channel: args.channel, environment: args.environment, baseEnv: publishEnv(env, target) });
   }
 
-  const remote = readRemoteFlag(args.environment, run, env);
-  const envErrors = remote.error ? [remote.error] : checkEnvValue(remote.value);
-  if (envErrors.length) {
-    envErrors.forEach(log);
-    log(`could not confirm ${FLAG}="true" in EAS environment "${args.environment}" (fails closed)`);
-    return 1;
-  }
   const lists = readBothScopes(args.environment, run, env);
   if (lists.errors.length) {
     lists.errors.forEach(log);
-    log(`could not read EAS environment "${args.environment}" to compare it with eas.json build.${target.profile}.env (fails closed)`);
+    log(`could not read EAS environment "${args.environment}", so neither ${FLAG}="true" nor eas.json build.${target.profile}.env parity can be confirmed (fails closed)`);
     return 1;
   }
   const remoteCheck = analyzeRemote(target, args.channel, lists.remoteByScope);
@@ -723,7 +696,7 @@ function main(argv, deps = {}) {
     return 0;
   }
   const since = now();
-  const pubArgs = ['eas-cli', 'update', '--channel', args.channel, '--environment', args.environment, '--message', args.message, '--source-maps', 'true', '--emit-metadata'];
+  const pubArgs = [EAS_CLI, 'update', '--channel', args.channel, '--environment', args.environment, '--message', args.message, '--source-maps', 'true', '--emit-metadata'];
   if (rollout !== undefined) pubArgs.push('--rollout-percentage', String(rollout));
   const pub = run('npx', pubArgs, { env: publishEnv(env, target) });
   if (!pub || pub.status == null || pub.status !== 0) {
@@ -740,7 +713,7 @@ function main(argv, deps = {}) {
 }
 
 module.exports = {
-  parseArgs, checkArgs, loadChannels, checkPolicyHash, checkEnvValue, parseRemoteValue, readRemoteFlag, lookupEnv, policyHash,
+  parseArgs, checkArgs, loadChannels, checkPolicyHash, lookupEnv, policyHash, EAS_CLI,
   parseEnvList, readRemoteList, classifyRecord, analyzeRemote, checkBundleValues, publishEnv, bundleEnv, rolloutPercentage,
   resolveSentryToken, sentryProjectConfig, checkDistSourceMaps, sentryUploadScript, readUpdateIds, sentryPluginEnvFileError, main,
   SENTRY_PLUGIN_ENV_FILE,

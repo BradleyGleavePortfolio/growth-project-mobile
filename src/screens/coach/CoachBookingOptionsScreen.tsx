@@ -22,7 +22,7 @@ import {
   useUpdateBookingOptions,
 } from '../../hooks/useCalendar';
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 
 /** Mirrors backend BOOKING_OPTION_LIMITS; the server's own limits win when sent. */
@@ -355,10 +355,10 @@ export default function CoachBookingOptionsScreen() {
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
   label: { ...typography.caption, marginTop: spacing.xl, marginBottom: spacing.xs },
-  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 2, padding: spacing.md, marginTop: spacing.sm, ...typography.body },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.input, padding: spacing.md, marginTop: spacing.sm, ...typography.body },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   flex: { flex: 1 },
-  unit: { minHeight: 44, borderWidth: 1, borderRadius: 2, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center', marginTop: spacing.sm },
+  unit: { minHeight: 44, borderWidth: 1, borderRadius: radius.input, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center', marginTop: spacing.sm },
   fieldError: { marginTop: spacing.xs },
   primary: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: spacing.lg },
   secondary: { minHeight: 44, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: spacing.sm },

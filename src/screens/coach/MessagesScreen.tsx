@@ -20,6 +20,7 @@ import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import CoachInboxV2 from './CoachInboxV2';
+import { openInboxChat } from '../../navigation/coachInbox';
 import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
 import { CommunityReportsEntry } from './CommunityReportsEntry';
 import { CommunityEntry } from './CommunityEntry';
@@ -77,9 +78,8 @@ function LegacyCoachMessages() {
     useCallback(() => {
       loadUnread();
 
-      // Subscribe to message-arrived pings on the coach's own channel.
-      // The backend broadcasts to messages:{userId} for both inbound (client
-      // → coach) and acknowledgement events.
+      // Subscribe to message-arrived pings on the coach's own private topic
+      // (messages:user:<id>): the backend pings both people in every chat.
       const unsubscribe = currentUser?.id
         ? subscribeToMessages(currentUser.id, loadUnread)
         : () => {};
@@ -185,12 +185,7 @@ function LegacyCoachMessages() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.convoCard}
-            onPress={() =>
-              navigation.navigate('ClientsStack', {
-                screen: 'ClientMessages',
-                params: { clientId: item.id, clientName: item.name },
-              })
-            }
+            onPress={() => openInboxChat(navigation, item.id, item.name)}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={`Open messages with ${item.name}${item.unread ? `, ${item.unread} unread` : ''}`}

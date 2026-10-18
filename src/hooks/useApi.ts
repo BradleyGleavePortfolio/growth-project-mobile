@@ -35,7 +35,6 @@ import {
   logApi,
   checkInsApi,
   coachApi,
-  mealPlansApi,
   messagesApi,
 } from '../services/api';
 import { bucketDateLocal } from '../utils/date';
@@ -429,16 +428,5 @@ export function usePostClientGuidelines() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['coach', 'guidelines', vars.clientId] });
     },
-  });
-}
-
-// mealPlansApi.list returns the meal plans visible to the current user. For a
-// coach this is everything they authored; for a client this is everything
-// assigned to them. Filter by client_id in callers when a coach picks a roster
-// member.
-export function useMealPlans() {
-  return useQuery<unknown[]>({
-    queryKey: ['meal-plans', 'list'],
-    queryFn: async () => (await mealPlansApi.list()).data,
   });
 }
