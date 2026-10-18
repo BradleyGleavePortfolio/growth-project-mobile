@@ -95,6 +95,7 @@ When the toggle changes:
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
 | `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
+| `purchase/PlanActiveMoment` (`clientBillingV2` on) | `success()` | Once, when the plan-is-active moment appears after a confirmed purchase |
 
 ## Architecture
 
