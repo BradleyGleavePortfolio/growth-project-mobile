@@ -29,13 +29,14 @@ describe('readThreadV2Fields / replyQuoteText', () => {
     const quote = { id: 'm0', sender_id: 'c1', kind: 'text', preview: 'hi' };
     expect(
       readThreadV2Fields({ reply_to: quote, edited_at: 'e', pinned_at: 'p', client_message_id: 'k1' }),
-    ).toEqual({ reply_to: quote, deleted: false, edited_at: 'e', pinned_at: 'p', client_message_id: 'k1' });
+    ).toEqual({ reply_to: quote, deleted: false, edited_at: 'e', pinned_at: 'p', client_message_id: 'k1', drafted: false });
     expect(readThreadV2Fields({ id: 'a' })).toEqual({
       reply_to: null,
       deleted: false,
       edited_at: null,
       pinned_at: null,
       client_message_id: null,
+      drafted: false,
     });
     expect(readThreadV2Fields({ reply_to: { id: 'm', kind: 'image', preview: '' } }).reply_to).toBeNull();
     expect(readThreadV2Fields({ deleted_at: '2026-10-05T10:00:00Z' }).deleted).toBe(true);

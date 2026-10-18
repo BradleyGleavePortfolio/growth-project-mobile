@@ -59,9 +59,10 @@ import { pushPrimerDismissedKey } from '../../../components/home/PushPermissionC
 
 type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 async function mount() {
-  const navigation: Pick<Nav, 'navigate' | 'addListener'> = {
+  const navigation: Pick<Nav, 'navigate' | 'addListener' | 'isFocused'> = {
     navigate: jest.fn(),
     addListener: () => () => undefined,
+    isFocused: () => true,
   };
   return await render(<ClientsListScreen navigation={navigation as Nav} />);
 }

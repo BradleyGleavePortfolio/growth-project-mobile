@@ -128,10 +128,9 @@ export function calendarErrorMessage(
   }
   const w = audienceWords(audience);
   if (status === 401) return `Your login expired before the app could ${operation}. Log in again, then check ${w.home}.`;
-  if (status === 402) {
-    return audience === 'coach'
-      ? 'Your plan does not include this scheduling action. Open Membership in Profile and more, or contact support.'
-      : 'Your coaching plan does not allow this scheduling action. Open Membership in Profile and more, or message your coach.';
+  // Owner TM-P1: coaches have no plan, so a coach 402 takes the generic line below.
+  if (status === 402 && audience !== 'coach') {
+    return 'Your coaching plan does not allow this scheduling action. Open Membership in Profile and more, or message your coach.';
   }
   if (status === 403) {
     return audience === 'coach'

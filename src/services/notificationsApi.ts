@@ -51,6 +51,8 @@ export interface AppNotification {
   actionScreen?: string;
   /** Serialisable params passed to the target screen. */
   actionParams?: Record<string, string>;
+  /** Validated by the shared incoming-link receiver when tapped. */
+  deepLink?: string;
 }
 
 export interface NotificationPage {
@@ -352,6 +354,7 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
     (rawKind === 'drip_released' && actionScreen === 'Deliverables'
       ? stringParams({ purchaseId: payload.client_purchase_id })
       : undefined);
+  const deepLink = r.deepLink ?? r.deep_link ?? payload.deepLink ?? payload.deep_link;
   return {
     id: r.id,
     kind: appKindFor(rawKind),
@@ -361,6 +364,7 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
     createdAt,
     ...(actionScreen ? { actionScreen } : {}),
     ...(actionParams ? { actionParams } : {}),
+    ...(typeof deepLink === 'string' ? { deepLink } : {}),
   };
 }
 

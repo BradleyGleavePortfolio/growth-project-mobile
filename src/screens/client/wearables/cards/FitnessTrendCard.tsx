@@ -94,6 +94,7 @@ export default function FitnessTrendCard({
           <RevolutGlowChart
             data={chartData}
             tone={tone}
+            variant={meta.summary === 'sum' ? 'bar' : 'line'}
             reduceMotion={reduceMotion}
             onSelect={setSelected}
             accessibilityLabel={`${meta.label} trend. Drag to scrub by day.`}

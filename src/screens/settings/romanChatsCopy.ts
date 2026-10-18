@@ -19,7 +19,7 @@ export const ROMAN_CHATS_COPY = {
   entryLabel: 'Your conversations with Roman',
   entryHint: 'See, open and delete your past conversations with Roman',
   intro:
-    'Your conversations with Roman are kept until you delete them or your account. Your coach never sees them. Deleting a conversation removes it for good.',
+    'Your conversations with Roman are kept until you delete them or your account. Your coach never sees them. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you. Deleting a conversation removes it for good.',
   empty: 'You have no conversations with Roman. Each day you talk with Roman, that conversation shows up here.',
   loading: 'Loading your conversations with Roman',
   loadingMore: 'Loading older conversations',
@@ -50,6 +50,9 @@ export const ROMAN_CHATS_COPY = {
   confirmAllTitle: 'Delete all your conversations with Roman?',
   confirmAllBody:
     'This permanently deletes every conversation you have had with Roman, from every day. It cannot be undone. Your plan, your logs and your messages with your coach stay as they are.',
+  /** K1-5 (owner "k1-5 - approved"): a client with no coach is told what stays, with no coach in it. */
+  confirmAllBodyNoCoach:
+    'This permanently deletes every conversation you have had with Roman, from every day. It cannot be undone. Your plan and your logs stay as they are.',
   confirmAllTypeLabel: 'Type DELETE to confirm',
   confirmAllWord: 'DELETE',
 

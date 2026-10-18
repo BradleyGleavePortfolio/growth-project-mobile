@@ -11,7 +11,6 @@ jest.mock('../AuthNavigator', () => () => null);
 jest.mock('../ClientNavigator', () => () => null);
 jest.mock('../CoachNavigator', () => () => null);
 jest.mock('../OnboardingNavigator', () => () => null);
-jest.mock('../LeanOnboardingNavigator', () => () => null);
 jest.mock('../../components/OfflineBanner', () => () => null);
 jest.mock('../../screens/client/Day1WinScreen', () => () => null);
 jest.mock('../../services/support/crisp.service', () => ({
@@ -130,5 +129,15 @@ describe('RootNavigator linking config — behavioral routing (R26)', () => {
     ).not.toThrow();
     const state = resolve(`https://${INVITE_UNIVERSAL_HOST}/p/%E0%A4%A`);
     expect(findRoute(state, 'PackageCheckout')).toBeUndefined();
+  });
+
+  // A6 (AUTHB-05): a cloud tracker return that Android hands to the app.
+  it('routes tgp://wearables/connected to Connections with the returned ticket', () => {
+    const route = findRoute(
+      resolve('tgp://wearables/connected?status=ok&provider=OURA&ticket=tk_1-a'),
+      'Connections',
+    );
+    expect(route?.params).toEqual({ status: 'ok', provider: 'OURA', ticket: 'tk_1-a' });
+    expect(findRoute(resolve('tgp://wearables/connected?status=error'), 'Connections')).toBeTruthy();
   });
 });

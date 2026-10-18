@@ -38,6 +38,7 @@
  * short reference only.
  */
 import api from "../services/api";
+import { queryClient } from "../services/queryClient";
 import { captureError } from "../services/sentry";
 import { errorStatus } from "../types/common";
 import { shortReference, supportReferenceOf } from "../utils/correlation";
@@ -373,6 +374,11 @@ export async function getClientPlan(
   return normalizePlan(res?.data);
 }
 
+/** The plans read that other screens summarise (You's Your plans row). */
+export const YOUR_PLANS_QUERY_KEY = ["your-plans"] as const;
+/** A plan was bought, ended, kept or granted by a code: every summary of the plans is out of date (and reads again). */
+export const plansChanged = (): void => void queryClient.invalidateQueries({ queryKey: YOUR_PLANS_QUERY_KEY });
+
 export async function listClientPlans(): Promise<ClientPlan[]> {
   const res = await api.get<{ plans?: unknown[] }>(SUBSCRIPTIONS_PATH);
   const plans = Array.isArray(res?.data?.plans) ? res.data.plans : [];
@@ -618,6 +624,11 @@ export const PACKAGE_PAYMENT_COPY = {
     "Your free plan is added. It can take a minute to show in the app. Choose Continue to carry on.",
   checkAgain: "Check again",
   continue: "Continue",
+  // C5 slice 2, Style C success moment (clientBillingV2).
+  done: "Done",
+  seeWhatUnlocks: "See what unlocks",
+  paid: "Paid",
+  nextCharge: "Next charge",
   successTitle: "Your plan is active",
   successTrialTitle: "Your trial has started",
   successFreeTitle: "Your free plan is added",
