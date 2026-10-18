@@ -16,6 +16,7 @@ import {
   type JoinOutcome,
 } from '../../lib/joinPackage';
 import { QuietRow, QuietSection } from '../../ui';
+import { useNoticeSlot } from '../home/HomeNoticeSlot';
 
 export default function FinishJoining() {
   const user = useCurrentUser();
@@ -41,7 +42,8 @@ export default function FinishJoining() {
     if (pending && coachId) void clearPendingJoin();
   }, [coachId, pending]);
 
-  if (!pending || !user || coachId) return null;
+  const shown = useNoticeSlot('finishJoining', !!pending && !!user && !coachId); // one notice at a time on the rings Home
+  if (!shown || !pending) return null;
   return (
     <QuietSection testID="finish-joining">
       <QuietRow

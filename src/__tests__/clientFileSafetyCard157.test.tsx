@@ -6,7 +6,8 @@
  * alert rows; a sub-coach and the owner read null) and test/coach-alerts.service.spec.ts (Dismiss refuses a client
  * outside the coach's scope). Here the app shows exactly what the server sends.
  * CLIENTFILE-FIX (agent 157): a reused file never shows a late read for the client before, and both Message {first}
- * buttons open the chat in Messages (#CARD-MESSAGE-DEST op 1).
+ * buttons open the chat in Messages (#CARD-MESSAGE-DEST op 1). CARD-MSG (agent 158): so do Summary's Messages and Logs'
+ * Send feedback (#CARD-MESSAGE-ALL op 1); the two stand-ins below press through to the file's onOpenMessages.
  */
 import React from 'react';
 import { Alert } from 'react-native';
@@ -47,10 +48,13 @@ jest.mock('../api/macrosApi', () => ({ macrosApi: { currentForClient: jest.fn() 
 function mockMarker(id: string) {
   return () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, id);
 }
-jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: ({ profile, totals }: { profile: { name?: string } | null; totals: { calories: number } }) =>
-  jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, `summary-body ${profile?.name} ${totals.calories}`) }));
+jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: ({ profile, totals, onOpenMessages }: {
+  profile: { name?: string } | null; totals: { calories: number }; onOpenMessages: () => void;
+}) => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, { onPress: onOpenMessages },
+  `summary-body ${profile?.name} ${totals.calories}`) }));
 jest.mock('../screens/coach/client-detail/WorkoutsTab', () => ({ WorkoutsTab: mockMarker('workouts-body') }));
-jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: mockMarker('logs-body') }));
+jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: ({ onOpenMessages }: { onOpenMessages: () => void }) =>
+  jest.requireActual('react').createElement(jest.requireActual('react-native').Text, { onPress: onOpenMessages }, 'logs-body') }));
 jest.mock('../screens/coach/client-detail/TimelineTab', () => ({ TimelineTab: mockMarker('timeline-body') }));
 jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: mockMarker('progress-body') }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => null }));
@@ -179,6 +183,22 @@ it.each(BOTH)('coachTabsV2 %s: Message Sam on the card opens the chat (on: in Me
     ? [['MessagesInbox', 'ClientMessages'], ['ClientsList', 'ClientDetail']]
     : [undefined, ['ClientsList', 'ClientDetail', 'ClientMessages']]);
 });
+
+it.each(BOTH.flatMap((on) => [[on, 'Summary', /^summary-body/], [on, 'Logs', /^logs-body/]] as const))(
+  "coachTabsV2 %s: %s's chat button opens the chat as the file's Message does (on: in Messages over the inbox; off: over the file, as on main)",
+  async (on, tab, body) => {
+    mockFlags.coachTabsV2 = on;
+    openAlert = null;
+    const view = await mount();
+    await fireEvent.press(await view.findByLabelText(tab));
+    await fireEvent.press(view.getByText(body)); // SummaryTab's Messages pill / FoodLogReviewSection's Send feedback
+    expect([root().routes[root().index].name, ref.getCurrentRoute()?.name, ref.getCurrentRoute()?.params])
+      .toEqual([on ? 'Messages' : 'ClientsStack', 'ClientMessages', CHAT]);
+    expect([stackOf('Messages'), stackOf('ClientsStack')]).toEqual(on
+      ? [['MessagesInbox', 'ClientMessages'], ['ClientsList', 'ClientDetail']]
+      : [undefined, ['ClientsList', 'ClientDetail', 'ClientMessages']]);
+  },
+);
 
 it('Dismiss clears the alert on the server, then the card shows the next open one, and hides when none is left', async () => {
   const view = await mount();
