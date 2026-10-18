@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -202,4 +202,36 @@ it('a failed Dismiss keeps the card and says so in the Actions queue words, with
   expect(view.getByText(LINES[0][1])).toBeTruthy();
   await waitFor(() => expect(view.getByTestId('file-safety-dismiss').props.accessibilityState).toMatchObject({ disabled: false, busy: false }));
   expect(summaryRead).toHaveBeenCalledTimes(1); // no read after a failed Dismiss
+});
+
+it("the file reused for another client (as Overview opens it): A's late read or late Dismiss never touches B's card", async () => {
+  const B = { clientId: 'client-b', clientName: 'Alex Kim' };
+  const lineB = LINES[1][1].replace('Sam', 'Alex');
+  const summary = (name: string, alert: unknown) => ({ data: { client_name: name, profile: {}, today: {}, open_safety_alert: alert } });
+  let lateRead: (v: unknown) => void = () => undefined;
+  let lateDismiss: (v: unknown) => void = () => undefined;
+  let firstA = true;
+  summaryRead.mockImplementation((id: string) => {
+    if (id === B.clientId) return Promise.resolve(summary(B.clientName, alertOf('roman_urgent_reply')));
+    if (firstA) { firstA = false; return new Promise((r) => { lateRead = r; }); }
+    return Promise.resolve(summary('Sam Rivera', alertOf('roman_crisis_reply')));
+  });
+  dismiss.mockImplementation(() => new Promise((r) => { lateDismiss = r; }));
+  const view = await mount();
+  const key = ref.getCurrentRoute()?.key;
+  const open = (to: typeof params) => act(async () => ref.navigate('ClientsStack', { screen: 'ClientDetail', params: to }));
+  await open(B); // A's first read still in flight
+  expect(ref.getCurrentRoute()?.key).toBe(key); // the same file, now B's
+  expect(await view.findByText(lineB)).toBeTruthy();
+  await act(async () => lateRead(summary('Sam Rivera', alertOf('roman_crisis_reply'))));
+  expect([view.queryByText(LINES[0][1]), view.getAllByTestId('file-safety-alert').length]).toEqual([null, 1]);
+  await open(params);
+  await fireEvent.press(await view.findByTestId('file-safety-dismiss')); // A's crisis alert; the server is slow
+  await open(B);
+  expect(await view.findByText(lineB)).toBeTruthy();
+  await act(async () => lateDismiss({ data: { ok: true } }));
+  expect(view.getByText(lineB)).toBeTruthy(); // B's alert stays
+  expect(summaryRead.mock.calls.map(([id]) => id)).toEqual(['client-test', 'client-b', 'client-test', 'client-b']); // no re-read of A
+  await fireEvent.press(view.getByTestId('file-safety-message'));
+  expect([ref.getCurrentRoute()?.name, ref.getCurrentRoute()?.params]).toEqual(['ClientMessages', B]);
 });

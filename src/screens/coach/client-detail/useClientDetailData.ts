@@ -43,14 +43,14 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
   }, [refreshing]);
   const [isArchived, setIsArchived] = useState<boolean | null>(null);
   const [archiveStatusError, setArchiveStatusError] = useState<string | null>(null);
-  // SAFETY-CARD: the summary's open Roman safety alert (b#1075), sent only to the client's current coach.
-  // Cleared when the routed client changes, and a late read for the last client is dropped, so one client's
-  // alert never shows on another's file.
-  const [safetyAlert, setSafetyAlert] = useState<OpenSafetyAlert | null>(null);
+  // SAFETY-CARD: the summary's open Roman safety alert (b#1075), sent only to the client's current coach. Each
+  // write names its client and only the routed client's shows, and a late read or Dismiss for a client the file
+  // no longer shows changes nothing (Sol B1), so one client's alert never shows on another's file.
+  const [safety, setSafety] = useState<{ clientId: string; alert: OpenSafetyAlert | null } | null>(null);
+  const safetyAlert = safety?.clientId === clientId ? safety.alert : null;
   const shownClient = useRef(clientId);
   useEffect(() => {
     shownClient.current = clientId;
-    setSafetyAlert(null);
   }, [clientId]);
   const loadArchiveStatus = useCallback(async (refresh = false) => {
     setArchiveStatusError(null);
@@ -81,7 +81,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
 
       const res = await coachApi.getClientSummary(clientId, today);
       const data = res.data;
-      if (shownClient.current === clientId) setSafetyAlert(openAlertOf(data));
+      if (shownClient.current === clientId) setSafety({ clientId, alert: openAlertOf(data) });
       if (data.error) return;
       // Set profile
       setProfile(data.profile ? {
@@ -372,9 +372,10 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
   /** Dismiss (the Actions queue's route, scoped to this coach); throws on failure. Then the next open alert, if any. */
   const dismissSafetyAlert = useCallback(async (alertId: string) => {
     await commandCenterApi.dismissAlert(alertId);
-    setSafetyAlert(null);
+    if (shownClient.current !== clientId) return; // the file shows another client now
+    setSafety((shown) => (shown?.alert?.alert_id === alertId ? { clientId, alert: null } : shown));
     coachApi.getClientSummary(clientId, getTodayString()).then((res) => {
-      if (shownClient.current === clientId) setSafetyAlert(openAlertOf(res.data));
+      if (shownClient.current === clientId) setSafety({ clientId, alert: openAlertOf(res.data) });
     }, () => undefined);
   }, [clientId]);
 
