@@ -6,9 +6,9 @@
  */
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { dehydrate, hydrate, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { dehydrate, hydrate, onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-let mockSamples: (p: { bucket: string }) => object = () => ({});
+let mockSamples: (p: GetSamplesParams) => object = () => ({});
 jest.mock('../../../../hooks/useWearableSamples', () => ({ useWearableSamples: (p: { bucket: string }) => mockSamples(p) }));
 let mockConnections: object[] | undefined;
 jest.mock('../../../../hooks/useWearableConnections', () => ({
@@ -144,7 +144,7 @@ it.each([null, 0, 500])('shows So far only when today has a reading (%s), includ
 it('offline in a later hour restores the newest own Fitness and heart data with its saved time', async () => {
   mockOnline = false;
   mockUser = { id: 'self' };
-  mockSamples = () => ({ data: undefined, isLoading: false, isError: false, refetch: mockRefetch, dataUpdatedAt: 0 });
+  mockSamples = jest.requireActual('../../../../hooks/useWearableSamples').useWearableSamples;
   const before = newClient();
   const hour = 60 * 60_000;
   const oldEnd = Math.floor(Date.now() / hour) * hour;
@@ -163,11 +163,20 @@ it('offline in a later hour restores the newest own Fitness and heart data with 
   }, { updatedAt: saved });
   const client = newClient();
   hydrate(client, dehydrate(before));
-  await show(client);
-  expect(screen.getByLabelText('Steps, 975 steps. Starter goal: 5,000 steps')).toBeTruthy();
-  expect(screen.getByText('55')).toBeTruthy();
-  expect(screen.getByText(`You're offline. Showing your last synced data from ${savedAt(saved)}.`)).toBeTruthy();
-  expect(screen.queryByTestId('health-fitness-error')).toBeNull();
+  onlineManager.setOnline(false);
+  try {
+    const view = await show(client);
+    expect(screen.getByLabelText('Steps, 975 steps. Starter goal: 5,000 steps')).toBeTruthy();
+    expect(screen.getByText('55 bpm')).toBeTruthy();
+    expect(screen.getByText(`You're offline. Showing your last synced data from ${savedAt(saved)}.`)).toBeTruthy();
+    expect(screen.queryByTestId('health-fitness-error')).toBeNull();
+    expect(client.getQueryCache().findAll().filter((q) => q.state.fetchStatus === 'paused')).toHaveLength(2);
+    await view.unmount();
+  } finally {
+    client.clear();
+    before.clear();
+    onlineManager.setOnline(true);
+  }
 });
 
 it.each([

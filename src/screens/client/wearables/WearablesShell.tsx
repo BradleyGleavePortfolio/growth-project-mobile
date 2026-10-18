@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   // on Recovery; on Fitness the tab's own masthead carries on under it.
   masthead: { paddingHorizontal: layout.gutter, gap: spacing.xs, paddingBottom: spacing.sm },
   mastheadEnd: { borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, paddingBottom: spacing.lg, marginBottom: spacing.md },
-  backV2: { width: undefined, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: spacing.xs, marginLeft: -spacing.xs },
+  backV2: { width: 'auto', flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: spacing.xs, marginLeft: -spacing.xs },
   backLabel: { ...typography.bodyMd },
   header: {
     flexDirection: 'row',

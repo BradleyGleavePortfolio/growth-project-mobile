@@ -493,6 +493,7 @@ describe('WearablesShell Back', () => {
     mockRouteParams = { bucket: 'recovery' };
     await render(<WearablesShell />);
     expect(screen.getByText('Back to You')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('health-back').props.style)).toMatchObject({ width: 'auto', height: 44 });
     await fireEvent.press(screen.getByLabelText('Back to You'));
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(screen.queryByLabelText('Back')).toBeNull();
