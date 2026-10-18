@@ -236,6 +236,8 @@ function ClientFile({ navigation, route }: Props) {
     ]);
   // #CARD-MESSAGE-DEST op 1: both Message {first} buttons (pinned, six tabs only; the safety card) open the chat in Messages.
   const openChat = () => openInboxChat(navigation, clientId, clientName);
+  // #CARD-MESSAGE-ALL op 1: Summary's Messages and Logs' Send feedback go the same way with the six tabs; off, over the file.
+  const openThread = styleC ? openChat : () => navigation.navigate('ClientMessages', { clientId, clientName });
   const fileHead = (rounded?: boolean) => (
     <FileHead
       name={clientName} onBack={() => navigation.goBack()} rounded={rounded} archived={isArchived === true}
@@ -436,12 +438,7 @@ function ClientFile({ navigation, route }: Props) {
             clientId={clientId}
             clientName={clientName}
             nudgeSuccess={nudgeSuccess}
-            onOpenMessages={() =>
-              navigation.navigate('ClientMessages', {
-                clientId,
-                clientName,
-              })
-            }
+            onOpenMessages={openThread}
             onOpenNudge={() => {
               setShowNudgeModal(true);
               setNudgeError('');
@@ -472,7 +469,7 @@ function ClientFile({ navigation, route }: Props) {
           <FoodLogReviewSection
             clientId={clientId}
             profile={profile}
-            onOpenMessages={() => navigation.navigate('ClientMessages', { clientId, clientName })}
+            onOpenMessages={openThread}
             colors={colors}
             styles={styles}
           />
