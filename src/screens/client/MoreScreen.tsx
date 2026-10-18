@@ -23,6 +23,7 @@ import { isAndroidHealthConnectEnabled } from '../../config/healthConnect';
 // Canonical avatar lives in the roman/ lane (D-013).
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
+import { LearnDoor } from './learn/LearnParts';
 import type { TutorialTargetId } from '../../tutorial/tutorialSteps';
 type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -294,7 +295,8 @@ export default function MoreScreen() {
         role="list"
       >
         {sections.map((section) => (
-          <View key={section} style={styles.section}>
+          <LearningWrap key={section} door={featureFlags.learnHub && section === 'Learning'}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle} accessibilityRole="header">{section}</Text>
             {items.filter((item) => item.section === section).map((item) => (
               // Keep list semantics and each row's button action (R3 P1-3).
@@ -326,10 +328,16 @@ export default function MoreScreen() {
               </View>
             ))}
           </View>
+          </LearningWrap>
         ))}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+// LEARN-A (flag learnHub): the Learning group waits for the coach's guidelines or a lesson.
+function LearningWrap({ door, children }: { door: boolean; children: React.ReactNode }): React.ReactElement {
+  return door ? <LearnDoor>{children}</LearnDoor> : <>{children}</>;
 }
 
 function TutorialTargetWrap({

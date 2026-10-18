@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography } from '../../../theme/tokens';
+import { useLearn } from './learnData';
 
 const BACK: Record<string, string> = { MoreIndex: 'You', Learn: 'Learn', WorkoutMain: 'Train' };
 
@@ -21,6 +22,12 @@ export function LearnBack({ navigation, onDark = false }: { navigation: Navigati
       <Text style={[styles.backLabel, { color }]}>{label}</Text>
     </Pressable>
   );
+}
+
+/** The You list's Learn row shows only once the coach has written guidelines or a lesson (#LEARN-COACHLESS op 1). */
+export function LearnDoor({ children }: { children: React.ReactNode }) {
+  const { lessons, guidelines } = useLearn();
+  return lessons.length > 0 || (guidelines !== null && guidelines !== 'plan') ? <>{children}</> : null;
 }
 
 const HEADING = /^(?:#{1,3}\s+(.+)|\*\*(.+)\*\*)$/;

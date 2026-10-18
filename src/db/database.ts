@@ -11,7 +11,7 @@ import * as SQLite from 'expo-sqlite';
 import { initWorkoutTables, seedExercisesIfNeeded } from './workoutDb';
 import { initNotificationsTable } from './notificationsDb';
 import { initHabitsTables } from './habitsDb';
-import { initEducationTables, seedLessonsIfNeeded } from './educationDb';
+import { initEducationTables } from './educationDb';
 import { initCommunityTables } from './communityDb';
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -183,7 +183,7 @@ export async function initDatabase(): Promise<void> {
   // code re-seeding 200 foods + 75 recipes (with hotlinked Unsplash URLs and
   // a malformed slug) on every cold start while no screen ever read the rows.
   // Foods and recipes are now fetched live via the server API.
-  await seedLessonsIfNeeded();
+  // seedLessonsIfNeeded removed (LEARN-A): no screen read the seeded rows; lessons come from GET /lessons.
   // seedCommunityIfNeeded() removed — community feed is now backend-driven (see useCommunityFeed).
   await seedExercisesIfNeeded();
 }
