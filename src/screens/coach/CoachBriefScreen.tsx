@@ -34,6 +34,7 @@ import {
   type CoachBriefActionItem,
 } from '../../api/coachBriefApi';
 import type { CoachTabParamList } from '../../navigation/CoachNavigator';
+import { chatTarget } from '../../navigation/coachInbox';
 // §2.3 Coach Brief — Roman delivers the morning brief beside his face.
 // FACE+VOICE: RomanBriefCard co-locates <RomanAvatar /> with the brief text.
 import RomanBriefCard from '../../components/roman/RomanBriefCard';
@@ -100,12 +101,7 @@ export function actionTarget(
   const clientName = item.client_name ?? 'Client';
   switch (item.type) {
     case 'message_unread':
-      return clientId
-        ? {
-            tab: 'ClientsStack',
-            params: { screen: 'ClientMessages', params: { clientId, clientName }, initial: false },
-          }
-        : null;
+      return clientId ? chatTarget(clientId, clientName) : null;
     // An older server may still send a workout item. Nothing in the app
     // approves a workout, so it opens the client's workout history
     // (S-BRIEF-124 B-398-1) and never says approve.

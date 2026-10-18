@@ -60,10 +60,20 @@ const CHAT = { clientId: 'client-1', clientName: 'Sam' };
 type Tap = (navigation: NavigationProp<ParamListBase>) => void;
 const chatTap: Tap = (n) => require('../coachInbox').openInboxChat(n, CHAT.clientId, CHAT.clientName);
 let inboxTap = chatTap; // the inbox's chat row; the header-entry rows swap in Broadcasts or Community reports
+// CHATS-MESSAGES: the daily brief's unread-reply row navigates to the real actionTarget, as CoachBriefScreen does.
+const briefTap: Tap = (n) => {
+  const item = { type: 'message_unread', client_id: CHAT.clientId, client_name: CHAT.clientName, detail: 'd', priority: 1 };
+  const { tab, params } = jest.requireActual('../../screens/coach/CoachBriefScreen').actionTarget(item);
+  n.navigate(tab, params);
+};
 const PROBES: [string, Tap][] = [
   ['MessagesScreen', (n) => inboxTap(n)],
   ['ClientDetailScreen', (n) => n.navigate('ClientMessages', CHAT)],
   ['ClientMessagesScreen', (n) => n.navigate('ContactView', { contactId: CHAT.clientId, displayName: CHAT.clientName })],
+  ['command-center/CommandCenterScreen', chatTap], // Overview's reply rows and its Inbox (openThread)
+  ['money/MoneyScreen', chatTap], // Message on an attention row
+  ['money/MoneyChargeScreen', chatTap], // Message <client> on a charge
+  ['CoachBriefScreen', briefTap],
 ];
 for (const [name, go] of PROBES) {
   jest.doMock(`../../screens/coach/${name}`, () => ({ __esModule: true, default: probe(`../screens/coach/${name}`, go) }));
@@ -375,4 +385,43 @@ it.each([...settingsAndRootJumps(true), ...settingsAndRootJumps(false)])('coachT
   if (toRoot) return;
   await act(async () => ref.goBack());
   expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([j.tab, root]);
+});
+
+// CHATS-MESSAGES (LO-NAV N3 on m#780; owner COACH-CHAT-BACK op 1): a chat opened from Overview, Money, a charge or the
+// daily brief opens like an inbox chat. Flag on: in Messages over the inbox, with Messages selected; Back lands on the
+// inbox, then on where the coach was. Off: in Clients over the list, as today. Each row is a fresh launch.
+const ENTRIES: [probe: string, on: Target, off: Target][] = [
+  ['MessagesScreen', ['Messages'], ['Messages']],
+  ['command-center/CommandCenterScreen', ['CommandCenter'], ['CommandCenter']],
+  ['money/MoneyScreen', ['MoneyStack'], ['SettingsStack', 'CoachMoney']],
+  ['money/MoneyChargeScreen', ['MoneyStack', 'CoachMoneyCharge'], ['SettingsStack', 'CoachMoneyCharge']],
+  ['CoachBriefScreen', ['SettingsStack', 'CoachBrief'], ['SettingsStack', 'CoachBrief']],
+];
+
+it.each([true, false].flatMap((on) => ENTRIES.map(([probe, home, homeOff]) => [on, probe, on ? home : homeOff] as const)))(
+  'coachTabsV2 %s: a chat from %s opens over the inbox (off: the client list) and Back lands there', async (on, probe, [tab, screen]) => {
+    mockFlags.coachTabsV2 = on;
+    mockCommandCenter.__USING_MOCK_DATA = false; // what ships
+    const view = await mount();
+    await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
+    await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
+    const [chatTab, root] = on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', 'ClientsList'];
+    expect([focusedTab(), stackOf(chatTab), ref.getCurrentRoute()?.params]).toEqual([chatTab, [root, 'ClientMessages'], CHAT]);
+    expect(view.getByRole('tab', { name: on ? MESSAGES_TAB : /^Clients, tab/ })).toBeSelected();
+    await act(async () => ref.goBack());
+    expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([chatTab, root]);
+    if (!on || tab === 'Messages') return;
+    await act(async () => ref.goBack());
+    expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([tab, screen ?? ROOTS[tab] ?? tab]);
+  });
+
+it('every chat opened outside Clients goes through coachInbox.ts, and every file that does is a row above', () => {
+  const callers = SOURCES.filter(([file, source]) => file !== 'coachInbox.ts' && /\b(openInboxChat|chatTarget)\(/.test(source));
+  const rows = [...ENTRIES.map(([probe]) => `${path.basename(probe)}.tsx`), 'CoachInboxV2.tsx']; // MessagesScreen renders CoachInboxV2
+  expect(callers.map(([file]) => file).sort()).toEqual(rows.sort());
+  // Only the navigator, the chat itself and Clients screens that open a chat over themselves name the route.
+  const naming = SOURCES.filter(([, source]) => /["']ClientMessages["']/.test(source)).map(([file]) => file);
+  expect(naming.sort()).toEqual(
+    ['ClientDetailScreen.tsx', 'ClientInsightScreen.tsx', 'ClientMessagesScreen.tsx', 'CoachNavigator.tsx', 'CoachSafetyAlertScreen.tsx', 'coachInbox.ts'].sort(),
+  );
 });

@@ -84,10 +84,8 @@ import { CsvFileError, shareCsvFile } from "../../../lib/money/csvFile";
 import { authEvents } from "../../../utils/authEvents";
 import KpiTile from "../../../components/command-center/KpiTile";
 import AlertRow from "../../../components/command-center/AlertRow";
-import type {
-  CoachTabParamList,
-  SettingsStackParamList,
-} from "../../../navigation/CoachNavigator";
+import type { SettingsStackParamList } from "../../../navigation/CoachNavigator";
+import { openInboxChat } from "../../../navigation/coachInbox";
 import { useSection } from "./useSection";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MoneyBack from "./MoneyBack";
@@ -232,14 +230,8 @@ export default function MoneyScreen({
     setRefreshing(false);
   }, [summary, attention, charges, payouts, roster, connect]);
 
-  const tabNav =
-    navigation.getParent<NativeStackNavigationProp<CoachTabParamList>>();
   const messageClient = (a: AttentionItem) => {
-    if (!a.client) return;
-    tabNav?.navigate("ClientsStack", {
-      screen: "ClientMessages",
-      params: { clientId: a.client.id, clientName: a.client.name },
-    });
+    if (a.client) openInboxChat(navigation, a.client.id, a.client.name);
   };
   const openStripeSetup = () =>
     navigation.navigate("CoachSetup", { section: "get_paid" });

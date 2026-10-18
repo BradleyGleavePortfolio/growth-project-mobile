@@ -180,6 +180,7 @@ describe('CoachInboxV2', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', {
       screen: 'ClientMessages',
       params: { clientId: 'client-2', clientName: 'Ben Ode' },
+      initial: false,
     });
   });
 
