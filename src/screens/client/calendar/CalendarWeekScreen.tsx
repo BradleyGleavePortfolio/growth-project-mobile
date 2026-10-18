@@ -15,6 +15,7 @@ import { checkInsApi } from '../../../services/api';
 import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { useMyWorkoutAssignments } from '../../../hooks/useWorkoutBuilder';
 import { withProtectedScreen } from '../../../entitlements/withProtectedScreen';
+import { useClientNeedsCoach } from '../../../components/coachless/JoinCoachState';
 import { useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { formatDayLabel, formatRange, formatTime, zonesDiffer } from '../../../calendar/calendarTime';
@@ -41,17 +42,21 @@ export type CalendarWeekData = {
   refreshing: boolean;
   offline: boolean;
   hasData: boolean;
+  /** No coach: own logs and plans only; Book opens the existing coach lock. */
+  coachless?: boolean;
 };
 
 const active = (s: CoachingSession) => ['requested', 'scheduled', 'pending_provider'].includes(s.status);
 const dayDate = (day: string) => new Date(`${day}T12:00:00`);
 
-function CalendarWeekScreen({ navigation }: Props) {
-  const coaches = useMyCoaches();
-  const sessions = useMySessions();
-  const past = usePastSessions();
+function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachless?: boolean }) {
+  // Scheduling routes need a coach (402 otherwise): a coachless client never calls them.
+  const coaches = useMyCoaches(!coachless);
+  const sessions = useMySessions(50, !coachless);
+  const past = usePastSessions(!coachless);
   const workouts = useMyWorkoutAssignments();
-  const types = useBookableTypes(coaches.data?.[0]?.coach_id);
+  const coachList = coachless ? [] : coaches.data ?? [];
+  const types = useBookableTypes(coachList[0]?.coach_id);
   const from = getLocalWeekStart();
   const to = addDays(from, 6);
   const checkIns = useQuery<CheckIn[]>({
@@ -59,14 +64,15 @@ function CalendarWeekScreen({ navigation }: Props) {
     queryFn: async () => (await checkInsApi.list({ from, to, limit: 7 })).data,
   });
   const network = useNetworkStatus();
-  const queries = [coaches, workouts, checkIns, sessions, past];
+  const own = [workouts, checkIns];
+  const queries = coachless ? own : [coaches, sessions, past, ...own];
   // Native tab focus must refresh after booking, completing a workout or saving a check-in.
   const refreshRef = useRef(() => {});
   refreshRef.current = () => { queries.forEach((q) => { void q.refetch(); }); };
   useFocusEffect(useCallback(() => { refreshRef.current(); }, []));
   const data: CalendarWeekData = {
-    coaches: coaches.data ?? [],
-    sessions: [...(sessions.data ?? []), ...(past.data?.pages.flat() ?? [])],
+    coaches: coachList,
+    sessions: coachless ? [] : [...(sessions.data ?? []), ...(past.data?.pages.flat() ?? [])],
     workouts: workouts.data ?? [],
     checkIns: checkIns.data ?? [],
     descriptions: Object.fromEntries((types.data ?? []).filter((t) => t.description).map((t) => [t.id, t.description!])),
@@ -74,22 +80,26 @@ function CalendarWeekScreen({ navigation }: Props) {
     failed: queries.some((q) => q.isError),
     refreshing: queries.some((q) => q.isRefetching),
     offline: !network.isOnline || network.isInternetReachable === false,
-    hasData: [sessions, workouts, checkIns].some((q) => q.data !== undefined),
+    hasData: (coachless ? own : [sessions, ...own]).some((q) => q.data !== undefined),
+    coachless,
   };
   return <CalendarWeekPage data={data} onRefresh={() => refreshRef.current()}
     onSession={(id) => navigation.navigate('CalendarSession', { sessionId: id })}
-    onBook={(coachId) => navigation.navigate('CalendarBook', { coachId })} />;
+    onBook={(coachId) => navigation.navigate('CalendarBook', coachId ? { coachId } : {})} />;
 }
 
-// Match CalendarHome: no scheduling hook mounts before access is confirmed.
-export default withProtectedScreen(CalendarWeekScreen);
+const ProtectedWeek = withProtectedScreen(CalendarWeekScreen);
+/** #COACHLESS-CAL op 1: no coach, own week; coached clients keep Calendar home's gate. */
+export default function CalendarWeekRoot(props: Props) {
+  return useClientNeedsCoach() ? <CalendarWeekScreen {...props} coachless /> : <ProtectedWeek {...props} />;
+}
 
 /** Shared real view for fixture-backed web previews; no fixtures in the app. */
 export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   data: CalendarWeekData;
   onRefresh: () => void;
   onSession: (id: string) => void;
-  onBook: (coachId: string) => void;
+  onBook: (coachId?: string) => void;
 }) {
   const { semanticColors: sc } = useTheme();
   const nav = useNavigation<NavigationProp<ParamListBase>>();
@@ -146,8 +156,8 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
     <Screen edges={['top']} style={{ backgroundColor: sc.surface.masthead }} contentStyle={styles.content}
       testID="calendar-week"
       refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={onRefresh} tintColor={sc.textOnAccent} />}
-      footer={coach ? <View style={[styles.footer, { backgroundColor: sc.bgPrimary }]}>
-        <PrimaryButton label={c['C4-S-09']} onPress={() => onBook(coach.coach_id)}
+      footer={coach || data.coachless ? <View style={[styles.footer, { backgroundColor: sc.bgPrimary }]}>
+        <PrimaryButton label={c['C4-S-09']} onPress={() => onBook(coach?.coach_id)}
           testID="week-book" disabled={data.offline} />
       </View> : undefined}>
       <View style={styles.masthead}>
