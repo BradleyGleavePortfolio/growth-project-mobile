@@ -5,6 +5,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import CoachAiConsentSheet from '../../../components/ai/CoachAiConsentSheet';
 import { AI_CONSENT_SHEET_COPY } from '../../../components/ai/AiConsentSheet';
 import { coachAiConsentApi, type CoachAiConsentApi } from '../../../api/coachAiConsentApi';
@@ -52,6 +53,7 @@ export function CoachRomanSwitch({ colors, styles, api = coachAiConsentApi }: { 
     <>
       {/* The whole row toggles (88 pt target); the Switch stays the one accessible element. */}
       <Pressable style={styles.row} onPress={() => toggle(!on)} disabled={busy} accessible={false} testID="coach-settings-roman-ai">
+        <Ionicons name="shield-checkmark-outline" size={20} color={colors.textSecondary} accessible={false} testID="coach-settings-roman-ai-icon" />
         <View style={{ flex: 1 }}>
           <Text style={styles.rowLabel}>{COPY.switchLabel}</Text>
           <Text style={styles.rowSubLabel}>{COPY.switchHint}</Text>
@@ -74,6 +76,7 @@ export function CoachRomanSwitch({ colors, styles, api = coachAiConsentApi }: { 
           {AI_CONSENT_SHEET_COPY.unavailable}
         </Text>
       ) : null}
+      <View style={styles.divider} testID="coach-settings-roman-ai-divider" />
       <CoachAiConsentSheet
         visible={asking}
         api={api}

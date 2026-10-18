@@ -81,6 +81,8 @@ jest.mock('../../../../services/health/onDeviceSync', () => {
 });
 
 import ConnectProviderSheet, { onDeviceDisclosure } from '../ConnectProviderSheet';
+import { wearablesConnectionsApi } from '../../../../api/wearablesConnectionsApi';
+import { HapticService } from '../../../../ui/haptics/haptics.service';
 import { subscribeTutorialSignals } from '../../../../tutorial/tutorialEvents';
 import type { TutorialSignal } from '../../../../tutorial/types';
 
@@ -176,6 +178,86 @@ describe('ConnectProviderSheet — cloud OAuth provider', () => {
     expect(mockConnectOnDevice).not.toHaveBeenCalled();
   });
 
+});
+
+// A6 (AUTHB-05): the callback sends back a single-use ticket; the signed-in
+// app finishes the link, and only that makes the tracker connected.
+describe('ConnectProviderSheet — finishing a returned cloud link (A6)', () => {
+  let complete: jest.SpyInstance;
+  let success: jest.SpyInstance;
+  const returnedWith = (ticket: string) => ({
+    type: 'success',
+    url: `tgp://wearables/connected?status=ok&provider=OURA&ticket=${ticket}`,
+  });
+  beforeEach(() => {
+    complete = jest.spyOn(wearablesConnectionsApi, 'completeOauth');
+    success = jest.spyOn(HapticService, 'success').mockResolvedValue(undefined);
+    mockStartOauthMutateAsync.mockResolvedValue({
+      authorizationUrl: 'https://provider.example/oauth',
+      state: 'csrf-1',
+    });
+  });
+  afterEach(() => {
+    complete.mockRestore();
+    success.mockRestore();
+  });
+
+  it('finishes the link with the returned ticket, then closes with a success haptic', async () => {
+    complete.mockResolvedValue('OURA');
+    mockOpenAuthSessionAsync.mockResolvedValue(returnedWith('tk-ok'));
+    const onClose = jest.fn();
+    const onConnected = jest.fn();
+    await render(
+      <ConnectProviderSheet provider="OURA" visible onClose={onClose} onConnected={onConnected} />,
+    );
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(complete).toHaveBeenCalledWith('tk-ok');
+    expect(success).toHaveBeenCalledTimes(1);
+    expect(onConnected).toHaveBeenCalledTimes(1);
+    expect(mockInvalidate).toHaveBeenCalled();
+    expect(tutorialSignals).toContain('wearable_connected');
+  });
+
+  it('a refused or expired ticket keeps the sheet open with the failed-return copy; Continue starts again', async () => {
+    complete.mockRejectedValue(httpError(400, { message: 'Invalid or expired wearable link.' }));
+    mockOpenAuthSessionAsync.mockResolvedValue(returnedWith('tk-refused'));
+    const onClose = jest.fn();
+    await render(<ConnectProviderSheet provider="OURA" visible onClose={onClose} />);
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/The sign-in with Oura did not finish\. Tap Continue to try again\./),
+      ).toBeTruthy(),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    expect(success).not.toHaveBeenCalled();
+    expect(tutorialSignals).not.toContain('wearable_connected');
+
+    mockOpenAuthSessionAsync.mockResolvedValue({ type: 'cancel' });
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+    await waitFor(() => expect(mockStartOauthMutateAsync).toHaveBeenCalledTimes(2));
+  });
+
+  it('finishes a ticket the app link delivered, once, even when the sign-in window returns it too', async () => {
+    complete.mockResolvedValue('OURA');
+    const onClose = jest.fn();
+    await render(
+      <ConnectProviderSheet provider="OURA" visible onClose={onClose} returnTicket="tk-link" />,
+    );
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(complete).toHaveBeenCalledWith('tk-link');
+    expect(success).toHaveBeenCalledTimes(1);
+
+    mockOpenAuthSessionAsync.mockResolvedValue(returnedWith('tk-link'));
+    const reads = mockInvalidate.mock.calls.length;
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+    await waitFor(() => expect(mockInvalidate.mock.calls.length).toBeGreaterThan(reads));
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**
