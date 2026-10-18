@@ -36,6 +36,7 @@ import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@r
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
+import { openInboxChat } from '../../navigation/coachInbox';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { layout, radius } from '../../theme/tokens';
@@ -180,8 +181,7 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   }, [threads, clients, filter, hasNextPage, data, searchQuery]);
 
   const openThread = useCallback(
-    (clientId: string, clientName: string) =>
-      navigation.navigate('ClientsStack', { screen: 'ClientMessages', params: { clientId, clientName } }),
+    (clientId: string, clientName: string) => openInboxChat(navigation, clientId, clientName),
     [navigation],
   );
 
