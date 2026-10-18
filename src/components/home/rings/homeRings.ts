@@ -3,7 +3,7 @@
  * Each dial is its own number, never a combined score. Pure, so every rule is
  * unit tested: no invented data, "—" while a read is pending or failed, and the
  * Sleep dial never says "coming soon" (an empty ring and "Connect" instead, only
- * once Health answered with no source at all and the check-in with no hours).
+ * once the client's connections list none connected and the check-in has no hours).
  */
 import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
@@ -91,9 +91,9 @@ export function trainDial(input: {
 export type SleepSource = 'health' | 'checkin' | 'none' | 'unknown';
 export type ReadState = 'pending' | 'failed' | 'ok';
 
-/** #HEALTH-PAGES: Health has a source once it lists a connection or returned any sample. */
-export const hasHealthSource = (data: WearableSamplesResponse | undefined): boolean =>
-  !!data && (data.freshness.providers.length > 0 || data.series.some((s) => s.sample_count > 0));
+/** #RINGS-CONNECT: no source only once the client's connections answered with none connected, never from one bucket's data. */
+export const noHealthSource = (connections: { isSuccess: boolean; data?: ReadonlyArray<{ status: string }> }): boolean =>
+  connections.isSuccess && !connections.data?.some((c) => c.status === 'connected');
 
 /** Whole-UTC-day records keep their calendar date; other samples use the local end (wake) day. */
 export function lastNightSleep(
@@ -124,7 +124,7 @@ export function sleepDial(input: {
   asleepMin: number | null;
   checkInHours: number | null | undefined;
   reads: { health: ReadState; checkIn: ReadState };
-  /** Health answered with no source at all: the one state that may say "Connect" (and opens Connections). */
+  /** noHealthSource: the one state that may say "Connect" (and opens Connections). */
   noSource: boolean;
 }): DialView & { source: SleepSource } {
   if (input.recovery !== null) {

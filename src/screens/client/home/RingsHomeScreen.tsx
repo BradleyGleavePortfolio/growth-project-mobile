@@ -15,6 +15,7 @@ import { layout, typography } from '../../../theme/tokens';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useTodayCheckIn } from '../../../hooks/useApi';
 import { useWearableSamples } from '../../../hooks/useWearableSamples';
+import { useWearableConnections } from '../../../hooks/useWearableConnections';
 import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
 import type { ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilderApi';
@@ -23,7 +24,7 @@ import { PrimaryButton } from '../../../ui';
 import HomeHeaderActions from '../../../components/home/HomeHeaderActions';
 import CoachlessHomeSlot from '../../../components/coachless/CoachlessHomeSlot';
 import HomeDial from '../../../components/home/rings/HomeDial';
-import { foodDial, hasHealthSource, lastNightSleep, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
+import { foodDial, lastNightSleep, noHealthSource, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
 import { homeDateLine } from '../homeDate';
 
 /** The raw workout reads behind the Train dial (null = that read failed). */
@@ -60,20 +61,22 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
     { enabled: !!currentUser },
   );
   const checkIn = useTodayCheckIn(today, !!currentUser);
+  const connections = useWearableConnections();
   const { refetch: refetchSleep } = sleepRead;
   const { refetch: refetchCheckIn } = checkIn;
+  const { refetch: refetchConnections } = connections;
   const refresh = useCallback(async () => {
-    await Promise.all([onRefresh(), refetchSleep(), refetchCheckIn()]);
-  }, [onRefresh, refetchSleep, refetchCheckIn]);
+    await Promise.all([onRefresh(), refetchSleep(), refetchCheckIn(), refetchConnections()]);
+  }, [onRefresh, refetchSleep, refetchCheckIn, refetchConnections]);
 
   const food = foodDial({ ready: day.ready && !day.error, eaten: day.calories, target: day.calorieTarget });
   const train = trainDial({
     now: new Date(), assignments: workout.assignments, history: workout.history,
     daysPerWeek: currentUser?.profile?.workout_days_per_week, loading: workout.exists === 'loading',
   });
-  // #HEALTH-PAGES: Connections only once Health answered with no source at all; every other state
-  // opens Recovery. Both sit in the Home stack, so Back lands on Home.
-  const noSource = readState(sleepRead) === 'ok' && !hasHealthSource(sleepRead.data);
+  // #RINGS-CONNECT: Connections only when the client's connections list none connected; every other
+  // state opens Recovery. Both sit in the Home stack, so Back lands on Home.
+  const noSource = noHealthSource(connections);
   const sleep = sleepDial({
     ...lastNightSleep(sleepRead.data, now, timeZone),
     checkInHours: Number((checkIn.data as { sleep_hours?: number | string | null } | null | undefined)?.sleep_hours) || null,
