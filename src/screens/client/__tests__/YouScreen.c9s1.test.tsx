@@ -140,7 +140,7 @@ describe('You home', () => {
     await draw();
     expect(screen.getByText('You')).toBeTruthy();
     expect(screen.getByText('Your details, your coach and your account.')).toBeTruthy();
-    expect(screen.getByText('Member since March 2026')).toBeTruthy();
+    expect(screen.getByText('Member since March\u00a02026')).toBeTruthy();
     expect(mockRing).toEqual({ segments: ['done'], label: 'This week, 1 of 1 done' });
     // The ring speaks the week; the line under the name is the same words, hidden from the reader.
     expect(screen.getByText('This week · 1 of 1 done', { includeHiddenElements: true })).toBeTruthy();

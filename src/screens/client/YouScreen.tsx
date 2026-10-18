@@ -124,7 +124,7 @@ export function nextChargeLine(plans: ReadonlyArray<ClientPlan> | undefined): st
 function memberSince(createdAt?: string): string | null {
   const d = createdAt ? new Date(createdAt) : null;
   if (!d || Number.isNaN(d.getTime())) return null;
-  return YOU_COPY.memberSince(new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(d));
+  return YOU_COPY.memberSince(new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(d).replace(' ', '\u00a0'));
 }
 
 interface CoachCard {
