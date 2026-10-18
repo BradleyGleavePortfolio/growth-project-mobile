@@ -167,6 +167,7 @@ it.each([
   ['Sleep, connected, Health failed and the check-in', 'connected', 'failed', 6.5, 'ok', 'Sleep, 6.5 h asleep', HEALTH],
   ['Sleep, no connection', 'none', 'nothing', null, 'ok', 'Sleep, Connect', CONNECTIONS],
   ['Sleep, only a disconnected or expired connection', 'disconnected or expired', 'nothing', null, 'ok', 'Sleep, Connect', CONNECTIONS],
+  ['Sleep, no connection, last night still in Health', 'none', 'last night', null, 'ok', 'Sleep, 78% recovered, 7 h 20 m asleep', HEALTH],
   ['Sleep, no connection and the check-in', 'none', 'nothing', 7.5, 'ok', 'Sleep, 7.5 h asleep', CONNECTIONS],
   ['Sleep, no connection, check-in loading', 'none', 'nothing', null, 'pending', 'Sleep, —', CONNECTIONS],
   ['Sleep, no connection, check-in failed', 'none', 'nothing', null, 'failed', 'Sleep, —', CONNECTIONS],
