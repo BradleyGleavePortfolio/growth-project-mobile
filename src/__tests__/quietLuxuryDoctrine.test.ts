@@ -41,6 +41,9 @@ const ALLOWLIST_LEADERBOARD_REFERENCE: Set<string> = new Set([
   path.join(ROOT, 'screens', 'community', 'CommunityTabScreen.tsx'),
   path.join(ROOT, 'screens', 'community', 'communityNavTypes.ts'),
   path.join(ROOT, 'screens', 'community', '__tests__', 'communityLeaderboardEntry.test.tsx'),
+  // C6-M1S: the same opt-in leaderboard row on Community Home (behind communityHomeV2).
+  path.join(ROOT, 'components', 'community', 'SpaceTree.tsx'),
+  path.join(ROOT, 'screens', 'community', '__tests__', 'CommunityHomeScreen.test.tsx'),
 ]);
 
 function walk(dir: string): string[] {

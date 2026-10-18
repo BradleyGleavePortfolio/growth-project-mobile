@@ -118,7 +118,7 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
     // Health has no steps today; every other state opens Health and fitness. Both sit in the Home stack.
     <HomeTile key="steps" label="Steps" view={steps} testID="home-tile-steps" prompt={steps.value === 'Connect'}
       onPress={() => (noSource && !todaySteps ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'fitness' }))} />,
-    <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits', { tab: 'checkin' })} />,
+    <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits', { initialTab: 'checkin' })} />,
   ];
   const pairs: React.ReactNode[][] = [];
   for (let i = 0; i < tiles.length; i += 2) pairs.push(tiles.slice(i, i + 2));

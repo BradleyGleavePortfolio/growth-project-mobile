@@ -7,7 +7,8 @@
  */
 import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
-import { DEFAULT_SLEEP_NEED_MIN } from '../../../screens/client/wearables/recoveryData';
+import { DEFAULT_SLEEP_NEED_MIN, recoveryScore, sleepDeficit } from '../../../screens/client/wearables/recoveryData';
+import type { WearableSamplesResponse } from '../../../api/wearablesSamplesApi';
 
 /** value: serif number in the ring; unit: the line under it; sub: muted line under the label ('' = none). */
 export interface DialView { value: string; unit: string; sub: string; progress: number }
@@ -93,6 +94,30 @@ export type ReadState = 'pending' | 'failed' | 'ok';
 /** #RINGS-CONNECT: no source only once the client's connections answered with none connected, never from one bucket's data. */
 export const noHealthSource = (connections: { isSuccess: boolean; data?: ReadonlyArray<{ status: string }> }): boolean =>
   connections.isSuccess && !connections.data?.some((c) => c.status === 'connected');
+
+/** Whole-UTC-day records keep their calendar date; other samples use the local end (wake) day. */
+export function lastNightSleep(
+  data: WearableSamplesResponse | undefined,
+  now: Date,
+  timeZone: string,
+): { recovery: number | null; asleepMin: number | null } {
+  const today = bucketDateLocal(now, timeZone);
+  const night = data && {
+    ...data,
+    series: data.series.map((series) => ({
+      ...series,
+      samples: series.samples.filter((sample) => {
+        const day = sample.start_at.slice(0, 10);
+        if (sample.start_at === `${day}T00:00:00.000Z` && sample.end_at === `${day}T23:59:59.999Z`) {
+          return day === today;
+        }
+        const at = new Date(sample.end_at);
+        return !Number.isNaN(at.getTime()) && bucketDateLocal(at, timeZone) === today;
+      }),
+    })),
+  };
+  return { recovery: recoveryScore(night), asleepMin: sleepDeficit(night)?.asleepMinutes ?? null };
+}
 
 export function sleepDial(input: {
   recovery: number | null;

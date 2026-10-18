@@ -54,7 +54,6 @@ export function habitsSummary(done: number, total: number): string {
   return `${cap(word(done))} of ${word(total)} done today.`;
 }
 
-/** initialTab: Home's Check-in tile opens the Daily check-in tab (UI-1). */
 export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSaved?: () => void; initialTab?: TabMode }) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);

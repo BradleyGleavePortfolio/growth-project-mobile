@@ -214,6 +214,7 @@ export type ApiWorkoutSession = {
   id: string;
   user_id: string;
   date: string;
+  workout_name?: string | null;
   notes?: string | null;
   duration_min?: number | null;
   exercises: ApiWorkoutExercise[];

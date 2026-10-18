@@ -8,7 +8,7 @@
  * target lands.
  */
 import React from 'react';
-import { Platform, Text } from 'react-native';
+import { Alert, Platform, Text, TextInput } from 'react-native';
 import {
   NavigationContainer, createNavigationContainerRef, useNavigation, type NavigationProp, type ParamListBase,
 } from '@react-navigation/native';
@@ -60,14 +60,52 @@ const CHAT = { clientId: 'client-1', clientName: 'Sam' };
 type Tap = (navigation: NavigationProp<ParamListBase>) => void;
 const chatTap: Tap = (n) => require('../coachInbox').openInboxChat(n, CHAT.clientId, CHAT.clientName);
 let inboxTap = chatTap; // the inbox's chat row; the header-entry rows swap in Broadcasts or Community reports
+// CHATS-MESSAGES: the daily brief's unread-reply row opens the real actionTarget, as CoachBriefScreen does.
+const briefTap: Tap = (n) => {
+  const item = { type: 'message_unread', client_id: CHAT.clientId, client_name: CHAT.clientName, detail: 'd', priority: 1 };
+  require('../coachInbox').openTarget(n, jest.requireActual('../../screens/coach/CoachBriefScreen').actionTarget(item));
+};
 const PROBES: [string, Tap][] = [
   ['MessagesScreen', (n) => inboxTap(n)],
-  ['ClientDetailScreen', (n) => n.navigate('ClientMessages', CHAT)],
-  ['ClientMessagesScreen', (n) => n.navigate('ContactView', { contactId: CHAT.clientId, displayName: CHAT.clientName })],
+  ['command-center/CommandCenterScreen', chatTap], // Overview's reply rows and its Inbox (openThread)
+  ['money/MoneyScreen', chatTap], // Message on an attention row
+  ['money/MoneyChargeScreen', chatTap], // Message <client> on a charge
+  ['CoachBriefScreen', briefTap],
 ];
 for (const [name, go] of PROBES) {
   jest.doMock(`../../screens/coach/${name}`, () => ({ __esModule: true, default: probe(`../screens/coach/${name}`, go) }));
 }
+// SAFETY-CARD, #CARD-MESSAGE-DEST: a client's file also opens the chat from its two Message {first} buttons (pinned, and
+// on the safety card), with openInboxChat as ClientDetailScreen.tsx does.
+const FileProbe = probe('../screens/coach/ClientDetailScreen', (n) => n.navigate('ClientMessages', CHAT));
+const CardProbe = probe('safety card Message', chatTap);
+jest.doMock('../../screens/coach/ClientDetailScreen', () => ({ __esModule: true, default: () => <><FileProbe /><CardProbe /></> }));
+// The chat opens its contact page and keeps unsent text through the hook ClientMessagesScreen.tsx uses (Sol B1).
+jest.doMock('../../screens/coach/ClientMessagesScreen', () => ({
+  __esModule: true,
+  default: function ChatProbe() {
+    const navigation = useNavigation<NavigationProp<ParamListBase>>();
+    const [text, setText] = React.useState('');
+    require('../coachInbox').useKeepUnsentChat(text.trim() !== '');
+    const contact = () => navigation.navigate('ContactView', { contactId: CHAT.clientId, displayName: CHAT.clientName });
+    return (
+      <>
+        <Text onPress={contact}>../screens/coach/ClientMessagesScreen</Text>
+        <TextInput accessibilityLabel="Message text" value={text} onChangeText={setText} />
+      </>
+    );
+  },
+}));
+// The broadcast composer guards unsent text the way BroadcastComposerScreen.tsx:88 does (usePreventRemove).
+let mockUnsent = false;
+const mockDiscardAsk = jest.fn();
+jest.doMock('../../screens/coach/broadcasts/BroadcastComposerScreen', () => ({
+  __esModule: true,
+  default: function ComposerProbe() {
+    require('@react-navigation/native').usePreventRemove(mockUnsent, mockDiscardAsk);
+    return <Text>composer</Text>;
+  },
+}));
 jest.doMock('../../screens/coach/ed/FirstPaymentWowHost', () => ({
   __esModule: true, default: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -91,6 +129,7 @@ beforeEach(() => {
   mockTeam.hasSubCoaches = true;
   HapticService.selection.mockClear();
   inboxTap = chatTap;
+  mockUnsent = false;
 });
 afterAll(() => Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS }));
 
@@ -278,6 +317,21 @@ it("flag on: a chat opened from a client's file stays in Clients; Back returns t
   expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['ClientsStack', 'ClientDetail']);
 });
 
+it.each([true, false])("coachTabsV2 %s: Message on a client file's safety card opens the chat in Messages over the inbox, the file kept in Clients (off: over the file); Back lands there", async (on) => {
+  mockFlags.coachTabsV2 = on;
+  mockCommandCenter.__USING_MOCK_DATA = false; // what ships
+  const view = await mount();
+  await act(async () => ref.navigate('ClientsStack', { screen: 'ClientDetail', params: CHAT }));
+  await fireEvent.press(view.getByText('safety card Message'));
+  const [stacks, back] = on
+    ? [['Messages', ['MessagesInbox', 'ClientMessages'], ['ClientsList', 'ClientDetail']], ['Messages', 'MessagesInbox']]
+    : [['ClientsStack', undefined, ['ClientsList', 'ClientDetail', 'ClientMessages']], ['ClientsStack', 'ClientDetail']];
+  expect([focusedTab(), stackOf('Messages'), stackOf('ClientsStack')]).toEqual(stacks);
+  expect(ref.getCurrentRoute()?.params).toEqual(CHAT);
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(back);
+});
+
 it("flag off: Messages is today's single screen; its chat opens in Clients and Back lands on the client list", async () => {
   mockFlags.coachTabsV2 = false;
   mockCommandCenter.__USING_MOCK_DATA = false;
@@ -375,4 +429,119 @@ it.each([...settingsAndRootJumps(true), ...settingsAndRootJumps(false)])('coachT
   if (toRoot) return;
   await act(async () => ref.goBack());
   expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([j.tab, root]);
+});
+
+// CHATS-MESSAGES (LO-NAV N3 on m#780; owner COACH-CHAT-BACK op 1): a chat opened from Overview, Money, a charge or the
+// daily brief opens like an inbox chat. Flag on: in Messages over the inbox, with Messages selected; Back lands on the
+// inbox, then on where the coach was. Off: in Clients over the list, as today. Each row is a fresh launch; flag on, the
+// outside entries also run with every Messages child left open (Sol B1): it closes, the same inbox stays right beneath
+// and the chat is a fresh one (never the other client's).
+const OTHER = { clientId: 'client-2', clientName: 'Ben' };
+const LEFT_OPEN: Record<string, [string, object][]> = {
+  nothing: [],
+  'a chat and its contact page': [['ClientMessages', OTHER], ['ContactView', { contactId: OTHER.clientId, displayName: OTHER.clientName }]],
+  'Broadcasts and a new broadcast': [['CoachBroadcasts', {}], ['CoachBroadcastComposer', {}]],
+  'Community reports and a reported post': [['CoachCommunityModeration', {}], ['CoachCommunityPostDetail', { postId: 'post-1' }]],
+};
+const messagesKeys = () => ref.getRootState().routes.find((r) => r.name === 'Messages')?.state?.routes.map((r) => r.key) ?? [];
+const ENTRIES: [probe: string, on: Target, off: Target][] = [
+  ['MessagesScreen', ['Messages'], ['Messages']],
+  ['command-center/CommandCenterScreen', ['CommandCenter'], ['CommandCenter']],
+  ['money/MoneyScreen', ['MoneyStack'], ['SettingsStack', 'CoachMoney']],
+  ['money/MoneyChargeScreen', ['MoneyStack', 'CoachMoneyCharge'], ['SettingsStack', 'CoachMoneyCharge']],
+  ['CoachBriefScreen', ['SettingsStack', 'CoachBrief'], ['SettingsStack', 'CoachBrief']],
+];
+
+it.each([
+  ...[true, false].flatMap((on) => ENTRIES.map(([probe, home, homeOff]) => [on, probe, 'nothing', on ? home : homeOff] as const)),
+  ...Object.keys(LEFT_OPEN).slice(1).flatMap((left) => ENTRIES.slice(1).map(([probe, home]) => [true, probe, left, home] as const)),
+])('coachTabsV2 %s: a chat from %s (left open in Messages: %s) opens over the inbox (off: the list); Back lands there', async (on, probe, left, [tab, screen]) => {
+  mockFlags.coachTabsV2 = on;
+  mockCommandCenter.__USING_MOCK_DATA = false; // what ships
+  const view = await mount();
+  const opened = LEFT_OPEN[left];
+  for (const [name, params] of opened) await act(async () => ref.navigate('Messages', { screen: name, params, initial: false }));
+  if (opened.length) expect(stackOf('Messages')).toEqual(['MessagesInbox', ...opened.map(([name]) => name)]);
+  const before = messagesKeys();
+  await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
+  await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
+  const [chatTab, root] = on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', 'ClientsList'];
+  expect([focusedTab(), stackOf(chatTab), ref.getCurrentRoute()?.params]).toEqual([chatTab, [root, 'ClientMessages'], CHAT]);
+  if (opened.length) expect([messagesKeys()[0], before.includes(messagesKeys()[1])]).toEqual([before[0], false]);
+  expect(view.getByRole('tab', { name: on ? MESSAGES_TAB : /^Clients, tab/ })).toBeSelected();
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([chatTab, root]);
+  if (!on || tab === 'Messages') return;
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual([tab, screen ?? ROOTS[tab] ?? tab]);
+});
+
+it.each(ENTRIES.slice(1))('flag on: an unsent broadcast left open in Messages asks before a chat from %s closes it', async (probe, [tab, screen]) => {
+  mockUnsent = true;
+  mockDiscardAsk.mockClear();
+  const view = await mount();
+  await act(async () => ref.navigate('Messages', { screen: 'CoachBroadcasts', initial: false }));
+  await act(async () => ref.navigate('Messages', { screen: 'CoachBroadcastComposer' }));
+  await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
+  await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
+  expect(mockDiscardAsk).toHaveBeenCalledTimes(1); // Keep editing: nothing closes and Messages opens on the composer
+  expect([focusedTab(), stackOf('Messages')]).toEqual(['Messages', ['MessagesInbox', 'CoachBroadcasts', 'CoachBroadcastComposer']]);
+  await act(async () => ref.dispatch(mockDiscardAsk.mock.calls[0][0].data.action)); // Discard: the chat on the inbox
+  expect([stackOf('Messages'), ref.getCurrentRoute()?.params]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT]);
+});
+
+// Sol B1 (round 3): unsent text in a chat left open in Messages (this client's, another's, or another's under its
+// contact page) asks before a chat from outside closes it, in the broadcast composer's words. Keep editing: nothing
+// closes, and Messages opens where it was, the chat keeping its text. Discard: the new chat, fresh, on the same inbox.
+const DRAFTS = [[CHAT.clientName, CHAT, false], [OTHER.clientName, OTHER, false], [`${OTHER.clientName} under the contact page`, OTHER, true]] as const;
+it.each(ENTRIES.slice(1).flatMap(([probe, home]) => DRAFTS.map(([name, left, contact]) => [probe, name, left, contact, home] as const)))(
+  'flag on: unsent text in a chat left open in Messages asks before a chat from %s closes it (left open: %s)',
+  async (probe, _name, left, contact, [tab, screen]) => {
+    const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const view = await mount();
+    await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: left, initial: false }));
+    await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+    const page = { contactId: left.clientId, displayName: left.clientName };
+    if (contact) await act(async () => ref.navigate('Messages', { screen: 'ContactView', params: page }));
+    const kept = messagesKeys();
+    await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
+    await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
+    expect(ask.mock.calls.map(([title, message, buttons]) => [title, message, buttons?.map((b) => [b.text, b.style])])).toEqual([[
+      'Discard this message?', 'Leaving removes the text from this message.', [['Keep editing', 'cancel'], ['Discard', 'destructive']],
+    ]]);
+    expect([focusedTab(), messagesKeys(), ref.getCurrentRoute()?.params]).toEqual(['Messages', kept, contact ? page : left]); // Keep editing
+    expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('See you at six');
+    await act(async () => ask.mock.calls[0][2]?.[1]?.onPress?.()); // Discard
+    expect([stackOf('Messages'), messagesKeys()[0], kept.includes(messagesKeys()[1]), ref.getCurrentRoute()?.params])
+      .toEqual([['MessagesInbox', 'ClientMessages'], kept[0], false, CHAT]);
+    expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('');
+    ask.mockRestore();
+  },
+);
+
+it('flag on: Back from a chat with unsent text goes straight back, as today', async () => {
+  const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const view = await mount();
+  await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: CHAT, initial: false }));
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+  await act(async () => ref.goBack());
+  expect([ask.mock.calls.length, focusedTab(), stackOf('Messages')]).toEqual([0, 'Messages', ['MessagesInbox']]);
+  ask.mockRestore();
+});
+
+it('the real chat arms the same guard with its own unsent text', () => {
+  const chat = SOURCES.find(([file]) => file === 'ClientMessagesScreen.tsx')?.[1];
+  expect(chat).toMatch(/^ {2}useKeepUnsentChat\(inputText\.trim\(\) !== ''\);$/m);
+});
+
+it('every chat opened outside Clients goes through coachInbox.ts, and every file that does is a row above', () => {
+  const callers = SOURCES.filter(([file, source]) => file !== 'coachInbox.ts' && /\b(openInboxChat|chatTarget)\(/.test(source));
+  // MessagesScreen renders CoachInboxV2; ClientDetailScreen's safety card has its own row (SAFETY-CARD) above.
+  const rows = [...ENTRIES.map(([probe]) => `${path.basename(probe)}.tsx`), 'CoachInboxV2.tsx', 'ClientDetailScreen.tsx'];
+  expect(callers.map(([file]) => file).sort()).toEqual(rows.sort());
+  // Only the navigator, the chat itself and Clients screens that open a chat over themselves name the route.
+  const naming = SOURCES.filter(([, source]) => /["']ClientMessages["']/.test(source)).map(([file]) => file);
+  expect(naming.sort()).toEqual(
+    ['ClientDetailScreen.tsx', 'ClientInsightScreen.tsx', 'ClientMessagesScreen.tsx', 'CoachNavigator.tsx', 'CoachSafetyAlertScreen.tsx', 'coachInbox.ts'].sort(),
+  );
 });

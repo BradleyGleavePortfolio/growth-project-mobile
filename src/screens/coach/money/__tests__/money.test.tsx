@@ -487,9 +487,10 @@ describe("MoneyScreen", () => {
     await findByText("TGP fee (2%)");
     await findByText("Sam's payment did not go through");
     await fireEvent.press(getByTestId("money-attention-failed_payment-p1"));
-    expect(mockParentNavigate).toHaveBeenCalledWith("ClientsStack", {
+    expect(mockNavigate).toHaveBeenCalledWith("ClientsStack", {
       screen: "ClientMessages",
       params: { clientId: "u_sam", clientName: "Sam" },
+      initial: false,
     });
     await fireEvent.press(
       getByTestId("money-attention-stripe_requirements-acct"),
@@ -748,9 +749,10 @@ describe("Charges list and breakdown", () => {
     await findByLabelText("Net to you: $46.30");
     await findByLabelText("TGP fee (2%): minus $0.98");
     await fireEvent.press(getByTestId("money-charge-message"));
-    expect(mockParentNavigate).toHaveBeenCalledWith("ClientsStack", {
+    expect(mockNavigate).toHaveBeenCalledWith("ClientsStack", {
       screen: "ClientMessages",
       params: { clientId: "u_sam", clientName: "Sam" },
+      initial: false,
     });
   });
 });

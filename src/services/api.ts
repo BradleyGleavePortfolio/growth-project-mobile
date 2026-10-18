@@ -878,8 +878,9 @@ export const coachApi = {
   },
   archiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/archive`),
   unarchiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/unarchive`),
-  getClientTimeline: (clientId: string, days?: number) =>
-    api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}`),
+  getClientTimeline: (clientId: string, days?: number, mealsCursor?: string) =>
+    api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}${mealsCursor ? `${days ? '&' : '?'}mealsCursor=${encodeURIComponent(mealsCursor)}` : ''}`),
+  getClientWeek: (clientId: string) => api.get(`/coach/clients/${clientId}/week`),
   getClientSummary: (clientId: string, date = getTodayString()) =>
     api.get(`/coach/clients/${clientId}/summary?date=${encodeURIComponent(date)}`),
   getGuidelines: (clientId: string) =>
@@ -1088,6 +1089,8 @@ export const lessonsApi = {
   getAll: () => api.get('/lessons'),
   create: (data: Record<string, unknown>) => api.post('/lessons', data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/lessons/${id}`, data),
+  /** The coach deletes a lesson they wrote (204); anyone else gets 404 or 403. */
+  remove: (id: string) => api.delete(`/lessons/${id}`),
   complete: (id: string) => api.post(`/lessons/${id}/complete`),
   getRecommended: () => api.get('/lessons/recommended'),
 };

@@ -67,6 +67,7 @@ jest.mock('@react-navigation/native', () => {
     ...actual,
     useNavigation: () => ({ goBack: mockGoBack, navigate: mockNavigate }),
     useRoute: () => ({ params: { clientId: 'client-1', clientName: 'Alice Smith' } }),
+    usePreventRemove: jest.fn(), // rendered outside a navigator
     useFocusEffect: (cb: () => () => void) => {
       const R = require('react');
       // eslint-disable-next-line react-hooks/exhaustive-deps
