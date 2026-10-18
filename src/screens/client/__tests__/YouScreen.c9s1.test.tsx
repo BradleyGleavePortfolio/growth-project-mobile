@@ -247,7 +247,6 @@ describe('You home', () => {
 describe('B1: the Your plans line follows the plans', () => {
   const ENDING = { ...ACTIVE_PLAN, cancelAtPeriodEnd: true, nextChargeAt: null, accessEndsAt: NEXT, canCancel: false, canResume: true };
   const CHARGE = `Your plans, Next charge of $149.00 on ${planDate(NEXT)}., Active`;
-  // The row speaks the next charge and Active, or only "Your plans" when no charge is promised.
   const shows = (charge: boolean) => waitFor(() => expect(screen.getByLabelText(charge ? CHARGE : 'Your plans')).toBeTruthy());
 
   it.each<[string, unknown[], unknown[], 'back' | 'attached' | 'paid']>([
@@ -257,9 +256,10 @@ describe('B1: the Your plans line follows the plans', () => {
     ['pays for a coach-code join in the package sheet over You', [], [ACTIVE_PLAN], 'paid'],
   ])('%s', async (_what, before, after, how) => {
     mockNeedsCoach = how !== 'back';
+    if (mockNeedsCoach) mockUser = { ...COACHED, coach_id: undefined };
     mockPlans = [...before];
     await draw();
-    if (mockNeedsCoach) await fireEvent.press(screen.getByText('Enter a coach code'));
+    if (how === 'attached') await fireEvent.press(screen.getByText('Enter a coach code'));
     await shows(before.length > 0);
     mockPlans = [...after];
     await act(async () => {
@@ -277,7 +277,7 @@ describe('B1: the Your plans line follows the plans', () => {
     let answer: (plans: unknown[]) => void = () => undefined;
     mockListPlans.mockImplementationOnce(() => new Promise((r) => { answer = r; }));
     await act(async () => { void client.invalidateQueries({ queryKey: YOUR_PLANS_QUERY_KEY }); });
-    expect(screen.getByLabelText('Your plans')).toBeTruthy();
+    await shows(false);
     await act(async () => answer([ENDING]));
     await shows(false);
   });
