@@ -81,6 +81,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Independent Style C calendar week rollout; off in every build unless explicitly enabled."
+    },
     "EXPO_PUBLIC_FF_CLIENT_CALENDAR": {
       "kind": "flag",
       "default": "off",
