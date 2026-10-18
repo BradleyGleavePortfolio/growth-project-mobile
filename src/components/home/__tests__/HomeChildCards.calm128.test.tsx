@@ -113,7 +113,7 @@ it('Home passes the section look and keeps the card order', () => {
   const src = fs.readFileSync(path.join(__dirname, '../../../screens/client/HomeScreen.tsx'), 'utf8');
   expect(src).toContain('<DunningBanner surface="HomeScreen" presentation="section" />');
   expect(src).toContain('<PushPermissionCard presentation="section" />');
-  const order = ['<DunningBanner', '<CoachlessHomeSlot', '<PendingInviteBanner', '<PushPermissionCard', 'showProfileNudge ?', '<CoachIntroductionBanner', '<FullMacrosIntroCard', '<TutorialHomeSlot', '<HolisticInsightsTile'];
+  const order = ['<DunningBanner', '<CoachlessHomeSlot', '<PendingInviteBanner', '<PushPermissionCard', '<ProfileNudge', '<CoachIntroductionBanner', '<FullMacrosIntroCard', '<TutorialHomeSlot', '<HolisticInsightsTile'];
   const at = order.map((o) => src.indexOf(o, src.indexOf('home-number-grid')));
   expect(at.every((v, i) => v > 0 && (i === 0 || v > at[i - 1]))).toBe(true);
 });
