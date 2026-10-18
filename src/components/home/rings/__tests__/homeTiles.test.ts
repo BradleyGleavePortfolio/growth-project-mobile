@@ -82,7 +82,7 @@ describe('habitsTile', () => {
 describe('checkInTile', () => {
   it("names today's mood, then energy and sleep", () => {
     expect(checkInTile({ mood: 4, energy: 3, sleep_hours: 7.5 })).toMatchObject({ value: 'Good', sub: 'Energy normal, slept 7.5\u00a0h' }); // the h never wraps alone
-    expect(checkInTile({ mood: 5, sleep_hours: '6.25' }).sub).toBe('Slept 6.3 h');
+    expect(checkInTile({ mood: 5, sleep_hours: '6.25' }).sub).toBe('Slept 6.3\u00a0h');
   });
   it('dashes with no check-in today', () => {
     expect(checkInTile(null).value).toBe('—');

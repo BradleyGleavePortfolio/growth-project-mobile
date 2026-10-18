@@ -138,6 +138,14 @@ it('with every notice due, the failed payment shows alone under the dials and th
   expect(screen.getByText(/^dunning /).props.children).toContain('"surface":"HomeScreen","presentation":"section"');
 });
 
+it('Finish joining shows ahead of the notifications ask, and Finish your profile waits behind both (#RINGS-JOIN-FIRST)', async () => {
+  (['profile', 'push', 'finishJoining'] as const).forEach((id) => mockDue.add(id));
+  await render(<RingsHomeScreen {...props} />);
+  expect(await screen.findByText(/^finishJoining /)).toBeTruthy();
+  expect(screen.queryByText(/^push /)).toBeNull();
+  expect(screen.queryByText(/^profile /)).toBeNull();
+});
+
 it('refreshes on open: a refocus and a return to the foreground re-read every dial and tile; Health on this phone on each return to the app', async () => {
   mockRefreshOnDevice.mockResolvedValueOnce({ kind: 'imported', postedCount: 3, complete: true });
   await render(<RingsHomeScreen {...props} />);
