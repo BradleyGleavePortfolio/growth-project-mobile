@@ -168,7 +168,7 @@ export type CoachTabParamList = {
   // `| undefined` preserves existing no-arg navigate('ClientsStack') callers.
   ClientsStack: NavigatorScreenParams<ClientsStackParamList> | undefined;
   Templates: undefined;
-  Messages: undefined;
+  Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
   // R27: typed nested nav so navigate('SettingsStack', { screen: 'Billing' })
   // type-checks against SettingsStackParamList. Plain `undefined` left
   // navigate('SettingsStack', ... as never) as the only way to deep-link
@@ -328,6 +328,10 @@ export type SettingsStackParamList = {
   CreditPackCheckout: { preselect?: number | 'custom' } | undefined;
 };
 
+/** COACH-CHAT-BACK (owner op 1) — with the six tabs: the inbox and what opens from it (chats, Broadcasts, Community reports). */
+export type MessagesStackParamList = { MessagesInbox: undefined } & Pick<ClientsStackParamList, 'ClientMessages' | 'ContactView' |
+  'CoachBroadcasts' | 'CoachBroadcastComposer' | 'CoachCommunityModeration' | 'CoachCommunityPostDetail'>;
+
 /** Phase 11 / Track 7 — team management stack param list. */
 export type TeamStackParamList = {
   TeamManagement: undefined;
@@ -346,6 +350,7 @@ const ClientsStack = createNativeStackNavigator<ClientsStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 const TeamStack = createNativeStackNavigator<TeamStackParamList>();
 const CalendarStack = createNativeStackNavigator<CalendarStackParamList>();
+const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
 
 // ─── Phase 9: unread count polling for the coach bell icon ───────────────────
 
@@ -680,6 +685,10 @@ function CalendarStackNavigator() {
         name="CoachBookingInbox"
         component={CoachBookingInboxScreen}
         options={({ navigation }) => ({
+          // The tab root names itself like the other tab roots (no empty band).
+          headerTitle: 'Calendar',
+          headerTitleAlign: 'left',
+          headerTitleStyle: styles.calendarTitle,
           headerRight: () => (
             <Pressable
               onPress={() => {
@@ -702,6 +711,27 @@ function CalendarStackNavigator() {
       <CalendarStack.Screen name="CoachAppointmentTypes" component={CoachAppointmentTypesScreen} />
       <CalendarStack.Screen name="CoachTimeOff" component={CoachTimeOffScreen} />
     </CalendarStack.Navigator>
+  );
+}
+
+/**
+ * COACH-CHAT-BACK (owner op 1: "Chats get their own place in the Messages tab,
+ * like any inbox") — with the six tabs a chat, Broadcasts or Community reports
+ * opened from Messages opens here, so Back returns to Messages. A chat opened
+ * from a client's file stays in Clients. Headers match the Clients stack's.
+ */
+function MessagesStackNavigator() {
+  const header = (title: string) => ({ headerShown: true, title, headerBackTitle: 'Back' });
+  return (
+    <MessagesStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.background } }}>
+      <MessagesStack.Screen name="MessagesInbox" component={MessagesScreen} />
+      <MessagesStack.Screen name="ClientMessages" component={ClientMessagesScreen} />
+      <MessagesStack.Screen name="ContactView" component={ContactView} />
+      <MessagesStack.Screen name="CoachBroadcasts" component={CoachBroadcastsScreen} options={header('Broadcasts')} />
+      <MessagesStack.Screen name="CoachBroadcastComposer" component={BroadcastComposerScreen} options={header('New broadcast')} />
+      <MessagesStack.Screen name="CoachCommunityModeration" component={CoachCommunityModerationScreen} options={header('Community reports')} />
+      <MessagesStack.Screen name="CoachCommunityPostDetail" component={CoachCommunityPostDetailScreen} options={header('Reported post')} />
+    </MessagesStack.Navigator>
   );
 }
 
@@ -815,6 +845,9 @@ export default function CoachNavigator() {
       options={{
         title: 'Clients',
         tabBarAccessibilityLabel: 'Clients',
+        // COACHTABS-CLIENTS-ROOT: Clients opens with the app even when the coach lands on another tab, so a
+        // jump into a Clients screen (a chat, Invite codes, a push) opens on top of the client list.
+        lazy: false,
         tabBarIcon: ({ color, size }) => (
           <Ionicons name="people-outline" size={size} color={color} />
         ),
@@ -947,7 +980,7 @@ export default function CoachNavigator() {
       )}
       <Tab.Screen
         name="Messages"
-        component={MessagesScreen}
+        component={tabsV2 ? MessagesStackNavigator : MessagesScreen}
         options={{
           tabBarAccessibilityLabel: unreadBadge !== undefined
             ? `Messages, ${unreadBadge}`
@@ -1019,6 +1052,7 @@ export default function CoachNavigator() {
 }
 
 const styles = StyleSheet.create({
+  calendarTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 28 },
   headerGear: {
     width: 44,
     height: 44,
@@ -1026,8 +1060,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bellButton: {
-    marginRight: 16,
-    padding: 4,
+    // 44 pt target; the glyph stays where it was (12 + 8 = 16 + 4).
+    marginRight: 12,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bellWrap: {
     position: 'relative',

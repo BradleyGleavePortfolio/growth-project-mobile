@@ -16,7 +16,8 @@
  */
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { NavigationContext, NavigationRouteContext } from '@react-navigation/native';
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -72,7 +73,11 @@ let mockCoachless = false;
 jest.mock('../../../../hooks/useCoachlessClient', () => ({ useCoachlessClient: () => mockCoachless }));
 
 import ConnectionsScreen, { buildRows } from '../ConnectionsScreen';
-import { configFor, type WearableProvider } from '../../../../api/wearablesConnectionsApi';
+import {
+  claimReturnTicket,
+  configFor,
+  type WearableProvider,
+} from '../../../../api/wearablesConnectionsApi';
 import { disconnectConfirmCopy } from '../disconnectCopy';
 import { emptyImportMessage } from '../onDeviceCopy';
 import { OnDeviceSessionChangedError } from '../../../../services/health/sessionFence';
@@ -518,5 +523,53 @@ describe('ConnectionsScreen — server-listed cloud trackers (B-WEARLIST-125)', 
       .map((r) => r.provider)
       .sort();
     expect(names).toEqual(['APPLE_HEALTHKIT', 'OURA', 'POLAR']);
+  });
+});
+
+// A6 (AUTHB-05): Android can hand a cloud tracker's return link to the app
+// (also after a restart); Connections opens that tracker's sheet to finish it.
+describe('ConnectionsScreen — a cloud tracker return link (A6)', () => {
+  async function openWith(params: Record<string, string>) {
+    const setParams = jest.fn();
+    const nav = { canGoBack: () => false, setParams } as unknown as React.ContextType<
+      typeof NavigationContext
+    >;
+    await render(
+      <NavigationContext.Provider value={nav}>
+        <NavigationRouteContext.Provider value={{ key: 'connections', name: 'Connections', params }}>
+          <ConnectionsScreen />
+        </NavigationRouteContext.Provider>
+      </NavigationContext.Provider>,
+    );
+    return setParams;
+  }
+
+  beforeEach(() => mockUseWearableConnections.mockReturnValue(queryResult({ data: [] })));
+
+  it("opens that tracker's sheet with the ticket and clears the link from the route", async () => {
+    const setParams = await openWith({ status: 'ok', provider: 'OURA', ticket: 'tk-screen' });
+    expect(sheetProps.visible).toBe(true);
+    expect(sheetProps.provider).toBe('OURA');
+    expect(sheetProps.returnTicket).toBe('tk-screen');
+    expect(setParams).toHaveBeenCalledWith({
+      ticket: undefined,
+      provider: undefined,
+      status: undefined,
+    });
+
+    await act(async () => (sheetProps.onClose as () => void)());
+    expect(sheetProps.visible).toBe(false);
+    expect(sheetProps.returnTicket).toBeNull();
+  });
+
+  it.each([
+    ['a ticket the sign-in window already took', 'OURA', 'tk-claimed'],
+    ['an on-device source', 'APPLE_HEALTHKIT', 'tk-device'],
+    ['an unknown tracker', 'NOPE', 'tk-unknown'],
+  ])('opens nothing for %s', async (_label, provider, ticket) => {
+    claimReturnTicket('tk-claimed');
+    await openWith({ status: 'ok', provider, ticket });
+    expect(sheetProps.visible).toBe(false);
+    expect(sheetProps.returnTicket).toBeNull();
   });
 });
