@@ -14,6 +14,7 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, typography } from '../../../theme/tokens';
 import { Headline, PrimaryButton } from '../../../ui';
 import { errorMessage } from '../../../types/common';
+import { useReduceMotion } from '../wearables/components/useReduceMotion';
 import type { WeightLog } from '../../../types';
 import { lastWas, monthDay, one, toLbs, toUnit, type WeightUnit } from './progressV2';
 
@@ -34,6 +35,7 @@ export interface LogWeightSheetV2Props {
 export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachName, onClose, onSaved }: LogWeightSheetV2Props) {
   const { semanticColors: sc } = useTheme();
   const { width } = useWindowDimensions();
+  const reduce = useReduceMotion(); // index-v2 section 7: the sheet slides up, or fades with Reduce Motion
   const [text, setText] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -85,7 +87,7 @@ export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachN
     </Pressable>
   );
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={reduce ? 'fade' : 'slide'} onRequestClose={onClose} testID="log-weight-modal">
       <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={[s.fill, s.end, { backgroundColor: sc.overlay }]} onPress={Keyboard.dismiss} accessible={false}>
           <Pressable style={[s.sheet, { backgroundColor: sc.bgSurface }]} onPress={Keyboard.dismiss} accessible={false} testID="log-weight-sheet">

@@ -99,6 +99,7 @@ it('a kg client sees kilograms everywhere; the server still gets pounds', async 
   await waitFor(() => expect(v.getByText('kg trend')).toBeTruthy());
   expect(lastChart().unit).toBe('kg');
   await fireEvent.press(v.getByLabelText('Log weight'));
+  expect(v.getByTestId('log-weight-modal').props.animationType).toBe('fade'); // Reduce Motion is on in this suite
   expect(v.getByLabelText('Weight in kilograms').props.value).toBe('79.8');
   await fireEvent.press(v.getByLabelText('0.1 kg more'));
   expect(v.getByLabelText('Weight in kilograms').props.value).toBe('79.9');
