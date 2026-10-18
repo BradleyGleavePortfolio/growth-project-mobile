@@ -1,5 +1,7 @@
 # Components
 
+`ForegroundNotificationBanner` keeps either push URL field on its existing store payload. Tapping a URL-bearing banner uses the same trusted, role-aware receiver as a native push tap; no external URL or untrusted host is opened. Its layout, copy, timing and non-URL action handling are unchanged.
+
 CAC-POLISH: `roman/RomanLoadingSkeleton.tsx` is the existing Roman loading state shared by the first coach-consent read and the room read, with the same spoken label and Reduce Motion support. The initial consent read keeps a working Back action; it never mounts the room early. `ai/AiRefusalNotice.tsx` uses `radius.card` (16) for every refusal card, compact or full, and `radius.button` (12) for every primary and secondary action; refusal handling and wording are unchanged.
 
 Shared, screen-agnostic UI. Anything that more than one screen renders, or anything that owns its own animation / lifecycle, lives here. Tokenised — no hardcoded hex, no inline radius / shadow values.

@@ -116,6 +116,8 @@ export function installForegroundHandler(): () => void {
   // Write to the in-app banner store instead.
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
     const { title, body } = notification.request.content;
+    const data = notification.request.content.data;
+    const deepLink = data?.deepLink ?? data?.deep_link;
     foregroundBannerStore.getState().showBanner({
       title: title ?? '',
       body: body ?? '',
@@ -124,6 +126,7 @@ export function installForegroundHandler(): () => void {
       // includes them. Fall through to undefined if absent.
       actionScreen: (notification.request.content.data?.actionScreen as string) ?? undefined,
       actionParams: (notification.request.content.data?.actionParams as Record<string, string>) ?? undefined,
+      ...(typeof deepLink === 'string' ? { deepLink } : {}),
     });
   });
 

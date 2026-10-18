@@ -9,6 +9,7 @@ const mockGetPerms = jest.fn();
 const mockRequestPerms = jest.fn();
 const mockGetToken = jest.fn();
 const mockAddResponse = jest.fn();
+const mockAddReceived = jest.fn((_cb: unknown) => ({ remove: jest.fn() }));
 const mockGetLast = jest.fn();
 const mockClearLast = jest.fn(() => Promise.resolve());
 jest.mock('expo-notifications', () => ({
@@ -17,7 +18,7 @@ jest.mock('expo-notifications', () => ({
   getExpoPushTokenAsync: () => mockGetToken(),
   setNotificationChannelAsync: jest.fn(),
   setNotificationHandler: jest.fn(),
-  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationReceivedListener: (cb: unknown) => mockAddReceived(cb),
   addNotificationResponseReceivedListener: (cb: unknown) => mockAddResponse(cb),
   getLastNotificationResponseAsync: () => mockGetLast(),
   clearLastNotificationResponseAsync: () => mockClearLast(),
@@ -28,7 +29,9 @@ import {
   registerForPushNotifications,
   installNotificationResponseHandler,
   fallbackScreenForKind,
+  installForegroundHandler,
 } from '../pushNotifications';
+import { foregroundBannerStore } from '../../store/foregroundBannerStore';
 
 function response(id: string, data: Record<string, unknown>) {
   return { notification: { request: { identifier: id, content: { data } } } };
@@ -107,6 +110,17 @@ describe('installNotificationResponseHandler', () => {
     expect(onResponse).toHaveBeenCalledTimes(1);
     again();
   });
+});
+
+it.each(['deepLink', 'deep_link'])('keeps %s on foreground banner payloads for the shared URL receiver', (key) => {
+  const stop = installForegroundHandler();
+  const listener = mockAddReceived.mock.calls[mockAddReceived.mock.calls.length - 1]?.[0] as (n: unknown) => void;
+  listener({ request: { identifier: 'meal', content: { title: 'Plan note', body: '',
+    data: { [key]: 'tgp://meal-plan/137c1340-c8a2-45d6-a006-7a6e695ed845' },
+  } } });
+  expect(foregroundBannerStore.getState().banner?.deepLink).toBe('tgp://meal-plan/137c1340-c8a2-45d6-a006-7a6e695ed845');
+  stop();
+  foregroundBannerStore.getState().reset();
 });
 
 describe('AUDIT-09-125: a push without actionScreen still opens a screen', () => {
