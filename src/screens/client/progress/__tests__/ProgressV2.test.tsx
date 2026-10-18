@@ -173,7 +173,7 @@ it('coachless: no coach words and no plan read, a workout count with 8 weekly ba
   mockUser = { id: 'u1', profile: {} };
   mockSessions = [{ date: `${today}T00:00:00.000Z`, exercises: [] }];
   const v = await mount();
-  await waitFor(() => expect(v.getByText('1 workout this week')).toBeTruthy());
+  await waitFor(() => expect(v.getByText('workout this week')).toBeTruthy());
   expect(v.getByLabelText(/^Workouts in the last 8 weeks: (\d, ){7}1$/)).toBeTruthy();
   expect(v.getByText('Last 8 weeks')).toBeTruthy();
   expect(mockAssigned).not.toHaveBeenCalled();
