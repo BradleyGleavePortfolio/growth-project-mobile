@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, renderHook, waitFor, within } from '@testing-library/react-native';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { useClientDetailData } from '../screens/coach/client-detail/useClientDetailData';
@@ -8,6 +8,7 @@ import { coachApi } from '../services/api';
 import type { Props } from '../screens/coach/client-detail/types';
 import { testColors } from '../screens/client/wearables/recoveryTestColors';
 import { HapticService } from '../ui/haptics/haptics.service';
+import { layout } from '../theme/tokens';
 
 jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) =>
@@ -125,6 +126,33 @@ it.each([
   expect(navigate).toHaveBeenCalledWith('ClientMessages', params);
   await fireEvent.press(actions.getByText('arrow-back'));
   expect(goBack).toHaveBeenCalledTimes(1);
+});
+
+// UIFIX-BACKLABEL: the flag-off file header's Back is a named button, so VoiceOver and TalkBack say "Back" ("Back" is
+// the Style C masthead's existing label, client-detail/StyleCFile.tsx:38), and it still goes back.
+it('UIFIX-BACKLABEL: the header Back is announced as the "Back" button and goes back', async () => {
+  const view = await render(<ClientDetailScreen {...props} />);
+  const actions = within(await view.findByTestId('client-file-header-actions'));
+  await fireEvent.press(actions.getByRole('button', { name: 'Back' }));
+  expect(goBack).toHaveBeenCalledTimes(1);
+});
+
+// FILEHEAD-44: every control in the file header is itself at least 44 by 44 pt (owner minimum), not a smaller box
+// stretched by hitSlop, and each still reaches its destination.
+it('FILEHEAD-44: Back, Open messages and Archive client are full 44 pt frames that keep their destinations', async () => {
+  const view = await render(<ClientDetailScreen {...props} />);
+  await view.findByLabelText('Archive client');
+  const actions = within(view.getByTestId('client-file-header-actions'));
+  for (const name of ['Back', 'Open messages', 'Archive client']) {
+    const button = actions.getByRole('button', { name });
+    const s = StyleSheet.flatten(button.props.style);
+    const frame = [Math.max(Number(s.width ?? 0), Number(s.minWidth ?? 0)), Math.max(Number(s.height ?? 0), Number(s.minHeight ?? 0))];
+    expect([name, frame.every((side) => side >= layout.touchMin), button.props.hitSlop]).toEqual([name, true, undefined]);
+    await fireEvent.press(button);
+  }
+  expect(goBack).toHaveBeenCalledTimes(1);
+  expect(navigate).toHaveBeenCalledWith('ClientMessages', props.route.params);
+  expect(confirm()).toBeDefined();
 });
 
 it('Summary Workouts opens this client Workouts tab and its builder path carries the client and copied plan', async () => {

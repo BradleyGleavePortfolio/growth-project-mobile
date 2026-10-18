@@ -37,6 +37,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_C3_STYLE_B: process.env.EXPO_PUBLIC_FF_C3_STYLE_B,
   EXPO_PUBLIC_FF_CLIENT_CALENDAR: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR,
   EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2,
+  EXPO_PUBLIC_FF_CLIENT_HOME_RINGS: process.env.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
@@ -83,6 +84,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_TEAM_MODE: process.env.EXPO_PUBLIC_FF_TEAM_MODE,
   EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF: process.env.EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF,
   EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS: process.env.EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS,
+  EXPO_PUBLIC_FF_YOU_TAB_V2: process.env.EXPO_PUBLIC_FF_YOU_TAB_V2,
   EXPO_PUBLIC_NOTIFICATIONS_MOCK: process.env.EXPO_PUBLIC_NOTIFICATIONS_MOCK,
 } as const;
 
@@ -434,6 +436,12 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
   mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
+  // UI-1 (owner 10-09, V1_1_UI_SPEC; v1 since owner 10-17 "home-v1"): the rings
+  // and tiles client Home. Default off and set by no eas.json profile until the
+  // owner switches it on in its own PR; off renders today's Home unchanged.
+  //
+  // env: EXPO_PUBLIC_FF_CLIENT_HOME_RINGS
+  clientHomeRings: readFlag('EXPO_PUBLIC_FF_CLIENT_HOME_RINGS', false),
   // ─── Roman P3 — backend-authority gates ──────────────────────────────────
   // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
   // expose authoritatively, so each is held behind its own backend-live gate
@@ -669,6 +677,15 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_LEARN_HUB
    */
   learnHub: readFlag('EXPO_PUBLIC_FF_LEARN_HUB', false),
+
+  // ─── C9-S1 — the You tab home in Style C (MOCK-C9) ──────────────────────
+  /**
+   * The You tab as MOCK-C9 Style C (owner pick C9 = Style C); the tab, the title and the
+   * screen reader all say You. OFF UNCONDITIONALLY; off, the tab is exactly main's More list.
+   *
+   * env: EXPO_PUBLIC_FF_YOU_TAB_V2
+   */
+  youTabV2: readFlag('EXPO_PUBLIC_FF_YOU_TAB_V2', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

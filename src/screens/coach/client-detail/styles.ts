@@ -50,6 +50,8 @@ export const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center', alignItems: 'center',
   },
   textAction: { minHeight: layout.touchMin, minWidth: layout.touchMin, justifyContent: 'center', alignItems: 'center' },
+  // A full 44 pt Back; -10 keeps the 24 pt arrow on the gutter line.
+  backBtn: { minHeight: layout.touchMin, minWidth: layout.touchMin, justifyContent: 'center', alignItems: 'center', marginLeft: -10 },
   tabScroll: { flexGrow: 0, flexShrink: 0, marginBottom: 16 },
   tabRow: { paddingHorizontal: layout.gutter, gap: 8 },
   tab: {
