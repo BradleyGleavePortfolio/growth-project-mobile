@@ -19,6 +19,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { messagingV2Api, toMessagingError, type MessagingApiError, type ThreadMessage } from '../api/messagingV2Api';
 import type { ShareSnapshot } from '../api/shareCardApi';
 import { newClientMessageId } from '../components/messaging/threadV2';
+import { featureFlags } from '../config/featureFlags';
 import { isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { readUserCacheSync } from '../lib/userCache';
 
@@ -142,6 +143,9 @@ export async function sendViaOutbox(uid: string, body: string, replyToId: string
   commit(uid, [...items, { key: newClientMessageId(), body, replyToId, createdAt: new Date().toISOString() }]);
   return drainOutbox(uid);
 }
+
+/** Whose thread outbox Send to {coach} uses: the client's, only with Style B on (the legacy thread has none). */
+export const cardOutboxUser = (uid: string | undefined): string | undefined => (featureFlags.c3StyleB ? uid : undefined);
 
 /**
  * Send to {coach} (SHARE-B): the card joins the end of the line under the sheet's key (a second tap sends that one again,

@@ -18,7 +18,7 @@ import { AnalyticsEvents } from '../../analytics/events';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
-import { sendCardViaOutbox, takeBackRefused } from '../../services/messageOutbox';
+import { cardOutboxUser, sendCardViaOutbox, takeBackRefused } from '../../services/messageOutbox';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { track } from '../../lib/analytics';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -72,7 +72,7 @@ export default function ShareSheet({ card, onClose }: { card: ShareCardContent |
 
   const user = useCurrentUser();
   const coachId = user?.coach_id ?? null;
-  const outboxUid = featureFlags.c3StyleB ? user?.id : undefined;
+  const outboxUid = cardOutboxUser(user?.id);
   const offline = !isEffectivelyOnline(useNetworkStatus());
   const sendOn = featureFlags.shareSendV1 && coachId != null && !unavailable;
   const coach = useQuery({

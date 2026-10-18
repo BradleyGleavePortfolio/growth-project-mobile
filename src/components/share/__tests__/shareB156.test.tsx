@@ -13,6 +13,7 @@ const mockTakeBack = jest.fn();
 jest.mock('../../../services/messageOutbox', () => ({
   sendCardViaOutbox: (...a: unknown[]) => mockSendCard(...a),
   takeBackRefused: (...a: unknown[]) => mockTakeBack(...a),
+  cardOutboxUser: (uid?: string) => (mockFlags.c3StyleB ? uid : undefined),
 }));
 jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///tmp/card.png') }));
 jest.mock('expo-sharing', () => ({ shareAsync: jest.fn(async () => undefined), isAvailableAsync: jest.fn(async () => true) }));
