@@ -57,8 +57,8 @@ type Feed = {
   events: TimelineEvent[];
   next: string | null;
   status: 'loading' | 'ready' | 'failed';
-  noAnswer: boolean; // the last request got no answer (offline, dropped, timed out)
-  more: 'idle' | 'busy' | 'failed';
+  noAnswer: boolean; // the last full load got no answer (offline, dropped, timed out)
+  more: 'idle' | 'busy' | 'failed' | 'noAnswer'; // older days; noAnswer is a failure with no answer
   refreshing: boolean;
 };
 const START: Feed = { events: [], next: null, status: 'loading', noAnswer: false, more: 'idle', refreshing: false };
@@ -117,10 +117,10 @@ export default function TimelinePage() {
       if (!live.current) return;
       setFeed((f) => {
         const seen = new Set(f.events.map((e) => e.id));
-        return { ...f, events: [...f.events, ...r.events.filter((e) => !seen.has(e.id))], next: r.nextCursor, more: 'idle', noAnswer: false };
+        return { ...f, events: [...f.events, ...r.events.filter((e) => !seen.has(e.id))], next: r.nextCursor, more: 'idle' };
       });
     } catch (err) {
-      if (live.current) setFeed((f) => ({ ...f, more: 'failed', noAnswer: isConnectionFailure(err) }));
+      if (live.current) setFeed((f) => ({ ...f, more: isConnectionFailure(err) ? 'noAnswer' : 'failed' }));
     }
   }, []);
 
@@ -224,9 +224,9 @@ export default function TimelinePage() {
       ListFooterComponent={
         feed.more === 'busy' ? (
           <ActivityIndicator color={sc.textMuted} style={styles.more} />
-        ) : feed.more === 'failed' ? (
+        ) : feed.more !== 'idle' ? (
           <View style={styles.gutter}>
-            <QuietError message={failedLine(feed.noAnswer)} onRetry={() => void loadMore()} layout="inline" testID="timeline-more-error" />
+            <QuietError message={failedLine(feed.more === 'noAnswer')} onRetry={() => void loadMore()} layout="inline" testID="timeline-more-error" />
           </View>
         ) : null
       }
@@ -261,8 +261,8 @@ const styles = StyleSheet.create({
   skeletonRow: { alignItems: 'flex-start' },
   icon: { width: 20 },
   rowText: { flex: 1, gap: 2 },
-  rowTitle: { ...typography.bodyMd },
-  rowBody: { ...typography.bodySmall },
+  rowTitle: { ...typography.bodyMd, lineHeight: 22 },
+  rowBody: { ...typography.bodySmall, lineHeight: 20 },
   empty: { ...typography.h2, paddingTop: spacing.xl },
   more: { paddingVertical: spacing.xl },
 });

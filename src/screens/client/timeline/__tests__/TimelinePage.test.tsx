@@ -127,12 +127,15 @@ describe('TimelinePage', () => {
   it('older days page in once, and a failed page retries in place', async () => {
     mockFetch
       .mockResolvedValueOnce(page([WEIGH], 'c1'))
-      .mockRejectedValueOnce(refused)
+      .mockRejectedValueOnce(noAnswer)
       .mockResolvedValue(page([WEIGH, MISSED]));
     await render(<TimelinePage />);
     await waitFor(() => expect(screen.getByText('Weighed in at 82.4 kg')).toBeTruthy());
     await fireEvent(screen.getByTestId('timeline-page'), 'endReached');
     await waitFor(() => expect(screen.getByTestId('timeline-more-error')).toBeTruthy());
+    expect(screen.getByText(`${TIMELINE_COPY.failed} ${TIMELINE_COPY.noAnswer}`)).toBeTruthy();
+    // Older days failed, not newer ones: no offline line, and the loaded days stay.
+    expect(screen.queryByTestId('timeline-offline')).toBeNull();
     expect(screen.getByText('Weighed in at 82.4 kg')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('timeline-more-error-retry'));
     await waitFor(() => expect(screen.getByText('No check-in')).toBeTruthy());
