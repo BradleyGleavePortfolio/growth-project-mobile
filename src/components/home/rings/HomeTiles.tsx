@@ -25,17 +25,18 @@ import { seriesPoints } from '../../../screens/client/wearables/seriesSummary';
 import { parseWeightLogRow, weightHistoryRows } from '../../../screens/client/progress/weightHistory';
 import HomeTile from './HomeTile';
 import { checkInTile, habitsTile, proteinTile, stepsTile, waterTile, weightTile } from './homeTiles';
-import { hasHealthSource } from './homeRings';
 
 export interface HomeTilesProps {
   day: { ready: boolean; protein?: number; carbs?: number; fat?: number; proteinTarget?: number; simple: boolean; waterOz: number };
   checkIn: unknown;
   refreshing: boolean;
+  /** #RINGS-CONNECT: the client's connections list none connected (noHealthSource, read once on Home). */
+  noSource: boolean;
 }
 
 const WATER_NOT_SAVED = ' oz of water was not saved. Check the connection, then add it again.';
 
-export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) {
+export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTilesProps) {
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
@@ -76,7 +77,7 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
   const todaySteps = seriesPoints(stepsSeries).filter((p) => new Date(p.x).toISOString().slice(0, 10) === today).pop();
   const steps = stepsTile({
     today: todaySteps ? Math.round(todaySteps.y) : null,
-    connected: !fitness.isSuccess || hasHealthSource(fitness.data),
+    connected: !noSource,
     goal: STARTER_GOALS.STEPS,
     source: stepsSeries?.provider_used ? PROVIDER_CONFIG[stepsSeries.provider_used]?.displayName ?? null : null,
   });
@@ -106,10 +107,10 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
       {body.points.length > 1 ? <Sparkline points={body.points} color={sc.accent} /> : null}
     </HomeTile>,
     <HomeTile key="habits" label="Habits" view={habitView} testID="home-tile-habits" onPress={() => navigation.navigate('Habits')} />,
-    // #HEALTH-PAGES (the Sleep dial's rule): Connections only once Health answered with no source at all;
+    // #RINGS-CONNECT (the Sleep dial's rule): Connections only when the client's connections list none connected;
     // every other state opens Health and fitness. Both sit in the Home stack, so Back lands on Home.
     <HomeTile key="steps" label="Steps" view={steps} testID="home-tile-steps" prompt={steps.value === 'Connect'}
-      onPress={() => (steps.value === 'Connect' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'fitness' }))} />,
+      onPress={() => (noSource ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'fitness' }))} />,
     <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits', { tab: 'checkin' })} />,
   ];
   const pairs: React.ReactNode[][] = [];
