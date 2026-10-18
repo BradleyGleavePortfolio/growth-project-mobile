@@ -4,14 +4,16 @@
  * from a server before LEARN-B is said in today's words in the card, and the lessons stay open.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type DimensionValue } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography, type SemanticTokens } from '../../../theme/tokens';
 import { Overline, PrimaryButton, QuietTextButton, Screen, useScreenInsets } from '../../../ui';
-import { QuietError, QuietLoading, isConnectionFailure } from '../../../ui/states/QuietStates';
+import { QuietError, isConnectionFailure } from '../../../ui/states/QuietStates';
+import { Skeleton } from '../../../ui/skeletons/Skeleton';
+import FadeInView from '../../../components/FadeInView';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { LearnBack, LessonMark } from './LearnParts';
@@ -58,11 +60,25 @@ export default function LearnScreen() {
   else if (!known && learn.error) {
     body = <QuietError layout="inline" message={isConnectionFailure(learn.error) ? `${copy.failed} ${copy.noAnswer}` : copy.failed}
       onRetry={() => void refetch()} testID="learn-error" />;
-  } else if (!known) body = <QuietLoading label={copy.loading} rows={4} testID="learn-loading" />;
-  else if (!learn.hasContent) body = empty;
+  } else if (!known) {
+    const bar = (width: DimensionValue, height = 12) => <Skeleton width={width} height={height} borderRadius={radius.chip} />;
+    body = (
+      <View accessible accessibilityLabel={copy.loading} testID="learn-loading">
+        <View style={[s.card, s.skel]}>{bar('30%')}{bar('100%', 14)}{bar('70%', 14)}{bar('35%')}</View>
+        <View style={[s.list, s.section]}>
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={[s.row, i > 0 && s.rowLine]}>
+              <Skeleton width={28} height={28} borderRadius={radius.chip} />
+              <View style={[s.rowText, s.skel]}>{bar('65%', 14)}{bar('35%')}</View>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  } else if (!learn.hasContent) body = empty;
   else {
     body = (
-      <>
+      <FadeInView duration={300}>
         {g ? (
           <View style={s.card} testID="learn-guidelines">
             <Overline style={s.ink}>Your guidelines</Overline>
@@ -112,7 +128,7 @@ export default function LearnScreen() {
             </View>
           </View>
         ) : null}
-      </>
+      </FadeInView>
     );
   }
 
@@ -159,6 +175,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', minHeight: layout.rowMinHeight, paddingVertical: 14, paddingHorizontal: 16, gap: 14 },
   rowLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
   rowText: { flex: 1 },
+  skel: { gap: 10 },
   rowTitle: { ...typography.bodyMd, color: sc.textPrimary },
   pressed: { opacity: 0.7 },
 });

@@ -105,6 +105,13 @@ describe('Learn', () => {
     expect(screen.getByText('Read lesson 2')).toBeTruthy();
   });
 
+  it('holds one spoken skeleton while the reads are in flight, with no button', async () => {
+    lessons.getAll.mockImplementation(() => new Promise(() => {}) as never);
+    await show(LearnScreen);
+    expect(await screen.findByLabelText("Loading Sam's guidelines and lessons")).toBeTruthy();
+    expect(screen.queryByText(/Read lesson/)).toBeNull();
+  });
+
   it('with nothing written yet says so and offers the coach thread', async () => {
     lessons.getAll.mockImplementation(() => ok([]) as never);
     guidelines.mockImplementation(() => ok(null) as never);
