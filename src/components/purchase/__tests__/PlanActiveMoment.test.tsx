@@ -102,7 +102,8 @@ describe('PlanActiveMoment', () => {
       `Next charge, ${formatPlanDate(new Date(NEXT))}`,
     );
     expect(view.getByText('Your plan is active')).toBeTruthy();
-    await waitFor(() => expect(view.getByText('S')).toBeTruthy());
+    // The mark is decorative (hidden from screen readers), so hidden elements are included.
+    await waitFor(() => expect(view.getByText('S', { includeHiddenElements: true })).toBeTruthy());
     expect(mockSuccessHaptic).toHaveBeenCalledTimes(1);
   });
 
@@ -121,7 +122,7 @@ describe('PlanActiveMoment', () => {
       data: [row({ first_charge_cents: undefined, billing_type: 'one_time', current_period_end: null })],
     });
     const old = await render(<PlanActiveMoment success={success()} onContinue={jest.fn()} />);
-    await waitFor(() => expect(mockGetPurchases).toHaveBeenCalled());
+    await waitFor(() => expect(old.getByText('S', { includeHiddenElements: true })).toBeTruthy());
     expect(old.queryByTestId('payment-success-receipt')).toBeNull();
     expect(old.queryByText('$149.00')).toBeNull();
   });
@@ -192,7 +193,7 @@ describe('PurchaseFeedback success with clientBillingV2', () => {
       <PurchaseFeedback purchase={purchase} onContinue={jest.fn()} onOpenPlan={jest.fn()} />,
     );
     await waitFor(() => expect(on.getByTestId('payment-success-paid')).toBeTruthy());
-    expect(on.getByTestId('coach-mark')).toBeTruthy();
+    expect(on.getByTestId('coach-mark', { includeHiddenElements: true })).toBeTruthy();
     on.unmount();
 
     mockFlags.clientBillingV2 = false;

@@ -318,12 +318,10 @@ let mockRouteParams: { purchaseId: string; packageName?: string } = {
 const mockFlagOverrides: { clientBillingV2?: boolean } = {};
 jest.mock('../config/featureFlags', () => {
   const actual = jest.requireActual('../config/featureFlags');
-  return {
-    ...actual,
-    get featureFlags() {
-      return { ...actual.featureFlags, ...mockFlagOverrides };
-    },
-  };
+  // A real accessor: an object-spread getter would be read once at mock time.
+  return Object.defineProperty({ ...actual }, 'featureFlags', {
+    get: () => ({ ...actual.featureFlags, ...mockFlagOverrides }),
+  });
 });
 
 jest.mock('@react-navigation/native', () => ({
@@ -759,7 +757,7 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
       mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
       const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
       await waitFor(() => expect(getByText('$199.00 paid')).toBeTruthy());
-      expect(getByTestId('coach-mark')).toBeTruthy();
+      expect(getByTestId('coach-mark', { includeHiddenElements: true })).toBeTruthy();
       await fireEvent.press(getByTestId('purchase-unpack-done'));
       expect(mockParentNavigate).toHaveBeenCalledWith('Home');
       await fireEvent.press(getByTestId('purchase-unpack-go-to-deliverables'));
