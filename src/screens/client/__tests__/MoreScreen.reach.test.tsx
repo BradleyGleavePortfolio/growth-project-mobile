@@ -65,11 +65,15 @@ function stackRoutes(stackVar: string): string[] {
   return Array.from(NAV.matchAll(re), (m) => m[1]);
 }
 
+// The Style C Timeline flag is off for every test unless one turns it on.
+afterEach(() => {
+  mockFlags.clientTimelineV2 = false;
+});
+
 describe("More: your plan rows (S-REACH)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFlags.romanChat = false;
-    mockFlags.clientTimelineV2 = false;
   });
 
   it("lists the six plan surfaces", () => {
