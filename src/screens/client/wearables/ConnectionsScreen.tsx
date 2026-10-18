@@ -29,11 +29,13 @@
  * disconnect. Every interactive element carries an accessibilityLabel + role.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { NavigationContext } from '@react-navigation/native';
+import { NavigationContext, NavigationRouteContext } from '@react-navigation/native';
 import {
   configFor,
+  isOnDeviceProvider,
+  returnTicketClaimed,
   WEARABLE_PROVIDERS,
   type WearableConnection,
   type WearableProvider,
@@ -361,6 +363,23 @@ export default function ConnectionsScreen() {
     null,
   );
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [returnTicket, setReturnTicket] = useState<string | null>(null);
+
+  // A6 (AUTHB-05): a cloud tracker's return link opened the app here (Android
+  // can hand it to the app instead of the sign-in window, also after a
+  // restart): open that tracker's sheet, which finishes the link.
+  const route = React.useContext(NavigationRouteContext);
+  const returned = route?.params as { ticket?: string; provider?: string } | undefined;
+  useEffect(() => {
+    const ticket = returned?.ticket;
+    const provider = WEARABLE_PROVIDERS.find((p) => p === returned?.provider);
+    if (!ticket) return;
+    navigation?.setParams({ ticket: undefined, provider: undefined, status: undefined });
+    if (provider == null || isOnDeviceProvider(provider) || returnTicketClaimed(ticket)) return;
+    setSheetProvider(provider);
+    setSheetVisible(true);
+    setReturnTicket(ticket);
+  }, [returned?.ticket, returned?.provider, navigation]);
 
   // S14 B-317-5: app storage only (no health store read) — does THIS phone
   // sync the platform source for the signed-in person?
@@ -392,6 +411,7 @@ export default function ConnectionsScreen() {
   const closeSheet = useCallback(() => {
     setSheetVisible(false);
     setSheetProvider(null);
+    setReturnTicket(null);
   }, []);
 
   // S14 round 4b (C-317-4): Disconnect asks first. Cancel is the default;
@@ -514,6 +534,7 @@ export default function ConnectionsScreen() {
         onClose={closeSheet}
         onConnected={closeSheet}
         coachless={coachless}
+        returnTicket={returnTicket}
       />
       <DisconnectConfirmDialog
         provider={confirmProvider}

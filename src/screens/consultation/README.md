@@ -1,16 +1,21 @@
 # Consultation onboarding (consult-v1)
 
-The full personal-training consultation a new client completes before their first day: Roman's welcome, a single "I agree" box straight after it, eight chapters of questions, the readiness screening, a summary, and the macro and plan reveals. It replaces the lean flow when `featureFlags.consultationOnboarding` is on.
+CAC-POLISH: the shared `Checkbox` has an opt-in `variant="tan"` using the canonical cream fill for the approved coach sign-up card. Its default remains unfilled; checked, disabled, accessibility and toggle behaviour are unchanged.
+
+The full personal-training consultation a new client completes before their first day: Roman's welcome, a single "I agree" box straight after it, eight chapters of questions, the readiness screening, a summary, and the macro and plan reveals. Every new client gets it (RootNavigator B14); the unmounted lean flow it replaced was deleted (ONBQ-TILES).
 
 ## Rollout and rollback
 
 | Flag | Env var | Default | Clinic build |
 | --- | --- | --- | --- |
 | `consultationOnboarding` | `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` | off in every general build (not `isDev`) | on, via the `clinic` profile in `eas.json` |
+| `consultTilesV2` | `EXPO_PUBLIC_FF_CONSULT_TILES_V2` | off in every build | off; no profile sets it (see Quiet Tiles) |
 
-`RootNavigator` mounts `ConsultationOnboardingNavigator` for `authState === 'onboarding'` when the flag is on, and `LeanOnboardingNavigator` when it is off. Rollback is the flag; no code path changes for flag-off builds.
+`RootNavigator` mounts `ConsultationOnboardingNavigator` for `authState === 'onboarding'` for every new client (B14). The consultation can only finish from the plan reveal, which is reached only after a successful `POST /me/onboarding/complete`.
 
-The lean flow's skip-to-finish path (LeanQ2 "Skip, I'll set this later" calling `finalizeLeanOnboarding`) is not reachable with the flag on. The consultation can only finish from the plan reveal, which is reached only after a successful `POST /me/onboarding/complete`.
+## Quiet Tiles (`consultTilesV2`, ONBQ-TILES)
+
+Owner pick MOCK-ONBQ option A, path op 1: the questions that match onboarding questions 2 to 6 (T1, B1, B2, B3, B4, N1, N2; `TILE_SCREENS` in `QuestionScreen.tsx`) take the Quiet Tiles look when the flag is on. Rows are cream tiles (`colors.cream`, `radius.card`, 64 pt), the chosen one forest with a white check disc; N2 chips are cream pills, forest with a check when chosen; B3's Imperial and Metric are two pills; the B2, B3 and B4 wheels sit in cream cards (`radius.card`) with their label inside. A tile, pill or unit tap plays `HapticService.selection()`. Answers, order, auto-advance (280 ms), skips and the body sent to `PUT /me/onboarding/consultation` are the same with the flag on or off (`consultTilesV2.test.tsx`). The frame (Back, Finish later, chapter progress) and every other screen are unchanged. AgeCheckScreen reuses B2, so it shows the card too.
 
 ## Architecture
 
@@ -27,7 +32,7 @@ The lean flow's skip-to-finish path (LeanQ2 "Skip, I'll set this later" calling 
 | `QuestionScreen.tsx` | Renders one screen from its definition. Templates: `intro` (T-A), `rows` (T-B), `chips` (T-C), `dob` / `measure` / `goalWeight` (T-D wheels), `yesno` (T-E), `consent` (P0), `message` (P8). |
 | `AgeCheckScreen.tsx` | AGEGATE16: the once-only age step for a client who reached the app without a date of birth (RootNavigator `'age_check'`). B2 without its chapter eyebrow, no Back or Finish later; Continue at 16 or older saves only `date_of_birth` (`PUT /profile`), caches it and re-runs the bootstrap; under 16 is the prototype 45 stop screen, nothing saved. A failed save shows the Edit profile "Couldn't save" alert and stays. FIXAGE2 R6: no wheel starts chosen (`Wheel` `value` null rests at `anchor`, every row the same full-strength muted text, none enlarged; FIXAGE3); Continue stays off until month, day and year are picked. R9: the question has one "Account and support" link opening the shared `ActionMenu` sheet with the four ways out (FIXAGE3); the stop screen shows the four rows and has no top-bar Back ("Change my date of birth" is the same action). |
 | `RevealScreens.tsx` | Summary (T-F), preparing state, macro reveal and plan reveal (T-G), paused state, completion problem state. Active semantic theme, hairline sections, Inter supporting copy and tabular serif targets; the illustrative week is labelled suggested and setup errors make no timing promise. All edits, explanations, support and completion actions retained (`consultationQuietLook.test.tsx`). |
-| `components.tsx` | `AnalyticsExcluded`, Frame (safe-area insets and footer spacing from `src/ui` Screen, the shared `ScreenTopBar` with an underlined "Finish later"), chapter progress bar, unfilled hairline rows/chips, wheels (VoiceOver `adjustable`), checkbox, Roman's line. `PrimaryButton`, `TextLink` and the question `Headline` are the shared `src/ui` primitives (DS-PRIMITIVES-133, #577), re-exported. Corners come from the semantic radius tokens (chips `radius.chip`, inputs `radius.input`, checkbox cards `radius.card`, boxes `radius.control`). `useConsultationStyles` follows the active semantic theme; primary buttons use its forest accent in launch light mode. Legacy `s`/`palette` exports remain semantic-light defaults for untouched consumers. Consent wording/handlers, analytics exclusion and 280ms STEP_MS are unchanged. |
+| `components.tsx` | `AnalyticsExcluded`, Frame (safe-area insets and footer spacing from `src/ui` Screen, the shared `ScreenTopBar` with an underlined "Finish later"), chapter progress bar, unfilled hairline rows/chips (or Quiet Tiles, unit pills and the `wheelCard` style with `consultTilesV2`), wheels (VoiceOver `adjustable`), checkbox, Roman's line. `PrimaryButton`, `TextLink` and the question `Headline` are the shared `src/ui` primitives (DS-PRIMITIVES-133, #577), re-exported. Corners come from the semantic radius tokens (chips `radius.chip`, inputs `radius.input`, checkbox cards `radius.card`, boxes `radius.control`). `useConsultationStyles` follows the active semantic theme; primary buttons use its forest accent in launch light mode. Legacy `s`/`palette` exports remain semantic-light defaults for untouched consumers. Consent wording/handlers, analytics exclusion and 280ms STEP_MS are unchanged. |
 | `src/navigation/ConsultationOnboardingNavigator.tsx` | Mounts the flow with the cached user; on finish stores `onboarding_complete`, marks the cached profile `onboardingCompleted` (the backend key that `profileOnboardingCompleted` reads, #320), and emits `authEvents` so `RootNavigator` re-bootstraps straight into the app (with the flag on the old Day-1 flow and Day-1 win are skipped; Opus B-05). A native stack (Consultation, DeleteAccount, DataExport), so the under-16 stop and paused screens open the real Delete my account and Download my data screens (AGEDELETE). |
 | `src/lib/consultation/aiConsent.ts` | Box 2 grant body (`client-ai-v4`, copy hash, platform) and the one-retry, non-blocking grant. |
 | `src/api/aiConsentApi.ts` | `GET /me/ai-consent`, `POST` / `DELETE /me/ai-consent/roman` (backend R2a). Never throws; 404 / 503 is `unavailable`. |
@@ -120,7 +125,7 @@ Every failure says what happened and offers a next step that works; known status
 
 - Roman's chapter lines use the serif italic voice (`ROMAN_VOICE_FONT`, Cormorant Garamond 400 italic from the font package the app already ships; regular serif until it loads), 18/25, never clipped.
 - Wheels show serif numerals: the selected value 28/34 in ink, neighbours fading (`wheelOpacity`: 1, 0.6, 0.3), the hairline band behind the selected value.
-- B3 Imperial / Metric are quiet text tabs with a forest underline, not a second filled control. They open on the phone's region (`defaultMeasureUnit`: US, Liberia and Myanmar imperial, everywhere else metric, unknown imperial), the rule the lean flow had; a resumed answer keeps its unit.
+- B3 Imperial / Metric are quiet text tabs with a forest underline, not a second filled control (with `consultTilesV2` on they are two pills, the chosen one forest, as the owner picked). They open on the phone's region (`defaultMeasureUnit`: US, Liberia and Myanmar imperial, everywhere else metric, unknown imperial), the rule the lean flow had; a resumed answer keeps its unit.
 - S1 and N3 (`big`) use the large two-column grid (56 pt, serif numerals). Chips are pills (owner 17:07: rounded corners).
 - Coach names: a coached client sees the coach's name from the server or the coach-sharing notice. A coachless client (`coachless`, from `!user.coach_id` in the navigator; owner 15:29) gets `COACHLESS_COPY` in place of every line that names a coach, and P8's "Your coach will be told" line is dropped. P0 is never changed this way (its copy is hashed).
 - P8 opens "Thanks for answering honestly, {first}." with Roman: "That helps me keep you safe."
@@ -157,6 +162,7 @@ npx jest src/lib/consultation src/screens/consultation --maxWorkers=1
 - `src/navigation/__tests__/consultationAccountExits.test.tsx`: AGEDELETE, every refused path (under-16 stop; Finish later on B2; stop, Change, Finish later) reaches Download my data and Delete my account and returns by Go back and Android back; every request on the way, and each route the two screens call, is on the backend's before-age allow list.
 - `src/__tests__/rootNavigatorAgeGate16.test.tsx`: the real `RootNavigator` asks a client with no date of birth once, never a confirmed client, a coach, an owner or setup; the server's 403 opens the step from the app.
 - `src/screens/consultation/__tests__/consultationParity133.test.tsx`: prototype parity at 360x800 and 390x844 (Roman's italic voice, quiet unit tabs and region default, serif wheels and band, the large grid, P8), and the coachless copy never naming a coach.
+- `src/screens/consultation/__tests__/consultTilesV2.test.tsx`: Quiet Tiles off and on (tiles, pills, wheel cards, the selection haptic), every tap on T1, B1 to B4, N1 and N2, and the same saved body with the flag on or off through the real flow.
 
 ## Problem and paused screens
 

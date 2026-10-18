@@ -38,7 +38,6 @@ export function FoodLogReviewSection({
 }) {
   const [days, setDays] = useState<7 | 14 | 30>(7);
   const [meals, setMeals] = useState<RecordedFoodEntry[]>([]);
-  const [shared, setShared] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const currentTarget = useCurrentMacrosForClient(clientId);
@@ -52,7 +51,6 @@ export function FoodLogReviewSection({
     try {
       const result = await loadCoachFoodReview(clientId, days);
       setMeals(result.meals);
-      setShared(result.shared);
     } catch (err) {
       console.error('FoodLogReviewSection: load failed', err);
       setError(err instanceof FoodReviewUnavailableError
@@ -123,14 +121,9 @@ export function FoodLogReviewSection({
         <View style={styles.emptyCard}>
           <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
           <Text style={styles.emptyText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={load} accessibilityRole="button">
-            <Text style={styles.retryBtnText}>Retry</Text>
+          <TouchableOpacity style={styles.textAction} onPress={load} accessibilityRole="button">
+            <Text style={styles.actionPillText}>Retry</Text>
           </TouchableOpacity>
-        </View>
-      ) : !shared ? (
-        <View style={styles.emptyCard}>
-          <Ionicons name="lock-closed-outline" size={32} color={colors.textMuted} />
-          <Text style={styles.emptyText}>Food logs are not shared with this coach.</Text>
         </View>
       ) : grouped.length === 0 ? (
         <View style={styles.emptyCard}>

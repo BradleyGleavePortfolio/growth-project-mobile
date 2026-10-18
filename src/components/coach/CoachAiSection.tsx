@@ -34,7 +34,7 @@ import type { CoachAiDraftType, CoachAiStatus } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
 import AiRefusalNotice from '../ai/AiRefusalNotice';
 import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
-import { layout } from '../../theme/tokens';
+import { layout, radius } from '../../theme/tokens';
 
 // How long the post-timeout poll runs (2 extra minutes) and the interval.
 const POLL_INTERVAL_MS = 10_000;
@@ -427,10 +427,11 @@ export default function CoachAiSection({
             />
 
             <Text style={styles.fieldLabel}>Days per week</Text>
-            <View style={styles.chipRow}>
+            <View style={styles.optionRow} testID="coach-ai-workout-days-row">
               {DAYS_PER_WEEK_OPTIONS.map((d) => (
                 <Chip
                   key={d}
+                  expand
                   active={daysPerWeek === d}
                   label={String(d)}
                   onPress={() => setDaysPerWeek(d)}
@@ -500,10 +501,11 @@ export default function CoachAiSection({
           <ModalHeader title="Generate weekly insight" onClose={closeModal} />
           <ScrollView contentContainerStyle={styles.modalContent}>
             <Text style={styles.fieldLabel}>Window</Text>
-            <View style={styles.chipRow}>
+            <View style={styles.optionRow} testID="coach-ai-insight-window-row">
               {INSIGHT_WINDOWS.map((w) => (
                 <Chip
                   key={w}
+                  expand
                   active={windowDays === w}
                   label={`${w} days`}
                   onPress={() => setWindowDays(w)}
@@ -630,17 +632,19 @@ function Chip({
   label,
   onPress,
   testID,
+  expand = false,
 }: {
   active: boolean;
   label: string;
   onPress: () => void;
   testID?: string;
+  expand?: boolean;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <TouchableOpacity
-      style={[styles.chip, active && styles.chipActive]}
+      style={[styles.chip, expand && styles.optionChip, active && styles.chipActive]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
@@ -725,7 +729,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 8,
       paddingVertical: 3,
       backgroundColor: colors.surfaceElevated,
-      borderRadius: 4,
+      borderRadius: radius.chip,
     },
     offlinePillText: {
       fontFamily: 'Inter_500Medium',
@@ -752,13 +756,14 @@ const makeStyles = (colors: ThemeColors) =>
       marginBottom: 8,
     },
     cta: {
+      minHeight: layout.touchMin,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
       paddingVertical: 14,
       paddingHorizontal: 14,
       backgroundColor: colors.primaryPale,
-      borderRadius: 4,
+      borderRadius: radius.button,
     },
     ctaDisabled: {
       backgroundColor: colors.surfaceElevated,
@@ -812,11 +817,22 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 8,
       marginBottom: 4,
     },
+    optionRow: {
+      flexDirection: 'row',
+      flexWrap: 'nowrap',
+      gap: 2,
+      marginBottom: 4,
+    },
+    optionChip: { flex: 1 },
     chip: {
+      minHeight: layout.touchMin,
+      minWidth: layout.touchMin,
+      alignItems: 'center',
+      justifyContent: 'center',
       paddingVertical: 6,
       paddingHorizontal: 12,
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.input,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -841,9 +857,9 @@ const makeStyles = (colors: ThemeColors) =>
       marginVertical: 4,
     },
     stepperBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 4,
+      width: layout.touchMin,
+      height: layout.touchMin,
+      borderRadius: radius.button,
       backgroundColor: colors.primaryPale,
       justifyContent: 'center',
       alignItems: 'center',
@@ -865,7 +881,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 4,
+      borderRadius: radius.input,
       padding: 12,
       fontSize: 14,
       color: colors.textPrimary,
@@ -881,8 +897,9 @@ const makeStyles = (colors: ThemeColors) =>
       marginTop: 12,
     },
     submitBtn: {
+      minHeight: layout.touchMin,
       backgroundColor: colors.primary,
-      borderRadius: 4,
+      borderRadius: radius.button,
       paddingVertical: 14,
       alignItems: 'center',
       marginTop: 20,
@@ -902,7 +919,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 12,
       paddingHorizontal: 14,
       backgroundColor: colors.surfaceElevated,
-      borderRadius: 4,
+      borderRadius: radius.card,
       marginBottom: 8,
     },
     timeoutBannerText: {
@@ -912,6 +929,9 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     timeoutInboxBtn: {
+      minHeight: layout.touchMin,
+      minWidth: layout.touchMin,
+      justifyContent: 'center',
       alignSelf: 'flex-start' as const,
       marginTop: 4,
     },
@@ -923,13 +943,14 @@ const makeStyles = (colors: ThemeColors) =>
       letterSpacing: 0.4,
     },
     draftReadyBanner: {
+      minHeight: layout.touchMin,
       flexDirection: 'row' as const,
       alignItems: 'center',
       gap: 8,
       paddingVertical: 12,
       paddingHorizontal: 14,
       backgroundColor: colors.primaryPale,
-      borderRadius: 4,
+      borderRadius: radius.button,
       marginBottom: 8,
     },
     draftReadyText: {

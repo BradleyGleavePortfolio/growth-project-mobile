@@ -462,8 +462,13 @@ export interface SemanticTokens {
     leaf: string; fern: string; moss: string; forest: string; deep: string;
     peak: string; peakInk: string; planned: string; plannedOnDark: string;
     missed: string; missedOnDark: string; trackLight: string;
+    trend: string; range: string; weighIn: string; goal: string;
+    frameOnDark: string; pending: string;
   };
 }
+
+// C8 v2 role aliases reuse the C1 v2 leaf, never a new colour.
+const chartLeaf = '#A3C46A';
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
 export const lightTokens: SemanticTokens = {
@@ -489,9 +494,11 @@ export const lightTokens: SemanticTokens = {
   surface: { masthead: brand[800], forestBand: brand[600], sage: semantic.success.bg, sageLine: '#C9D8CD' },
   textOnMastheadMuted: brand[100],
   data: {
-    leaf: '#A3C46A', fern: '#7FA653', moss: '#4E7A3F', forest: brand[600], deep: brand[800],
+    leaf: chartLeaf, fern: '#7FA653', moss: '#4E7A3F', forest: brand[600], deep: brand[800],
     peak: gold[300], peakInk: gold[800], planned: '#857F75', plannedOnDark: brand[300],
     missed: '#6B675F', missedOnDark: colors.stone, trackLight: '#E6DFD3', // missed = textMuted
+    trend: chartLeaf, range: brand[500], weighIn: brand[100], goal: gold[300],
+    frameOnDark: brand[300], pending: chartLeaf,
   },
 };
 
