@@ -321,7 +321,7 @@ it('tiles show the real numbers: protein with carbs and fat, water to the Food l
   expect(screen.getByLabelText('Weight, 168.4 lb, Down 1.2 lb in 30 days')).toBeTruthy();
   expect(screen.getByTestId('home-tile-weight-trend')).toBeTruthy();
   expect(screen.getByLabelText('Habits, 2 of 3, Water and Steps done. Stretch open.')).toBeTruthy();
-  expect(screen.getByLabelText('Check-in, Good, Energy normal, slept 7.5 h')).toBeTruthy();
+  expect(screen.getByLabelText('Check-in, Good, Energy normal, slept 7.5\u00a0h')).toBeTruthy();
 });
 
 it('the water chip adds 8 oz with a success haptic, and an error haptic when it was not saved', async () => {
