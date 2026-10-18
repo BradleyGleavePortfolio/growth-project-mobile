@@ -243,6 +243,9 @@ type RetryableConfig = AxiosRequestConfig & {
   // Mobile #331 A-331-7: the session generation (sessionFence) whose token
   // this request was first sent with. A replay must still be in it.
   _sessionGeneration?: number;
+  // LEARN-A: a read whose 402 its screen says in its own words (Learn's
+  // guidelines) rejects to the caller without opening the plans sheet.
+  quietPaywall?: boolean;
 };
 
 /** Request options for a request bound to one account (see accountBinding.ts). */
@@ -486,7 +489,7 @@ api.interceptors.response.use(
 
       if (data?.error === 'CLIENT_ENTITLEMENT_REQUIRED') {
         const requestUrl = (error.config as { url?: string })?.url;
-        if (!isEntitlementEndpoint(requestUrl)) {
+        if (!isEntitlementEndpoint(requestUrl) && !(error.config as RetryableConfig | undefined)?.quietPaywall) {
           entitlementEvents.emitRequired({
             status: 402,
             code: data.error,
@@ -881,8 +884,8 @@ export const coachApi = {
     api.get(`/coach/clients/${clientId}/summary?date=${encodeURIComponent(date)}`),
   getGuidelines: (clientId: string) =>
     api.get(`/coach/guidelines/${clientId}`),
-  getMyGuidelines: () =>
-    api.get('/coach/my-guidelines'),
+  getMyGuidelines: (config?: RetryableConfig) =>
+    api.get('/coach/my-guidelines', config),
   postGuidelines: (clientId: string, guidelines: string) =>
     api.post(`/coach/guidelines/${clientId}`, { guidelines }),
   getAlerts: () => api.get('/coach/alerts'),
