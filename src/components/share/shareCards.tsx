@@ -9,12 +9,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { radius, typography, withAlpha } from '../../theme/tokens';
 import { addDays, formatDate } from '../../utils/date';
+import type { ShareSnapshot } from '../../api/shareCardApi';
 import type { ShareCardContent } from './ShareSheet';
 
 const short = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 /** A weigh-in run of `days` days ending on `end` (YYYY-MM-DD); `shown` is the number as Progress says it ("60+"). */
-export function runCard(days: number, end: string, shown: string): ShareCardContent {
+export function runCard(days: number, end: string, shown: string): ShareCardContent & { snapshot: ShareSnapshot } {
   const start = addDays(end, 1 - days);
   return {
     type: 'streak',
@@ -36,7 +37,7 @@ export function runCard(days: number, end: string, shown: string): ShareCardCont
 }
 
 /** A recent best: `lift` at `weight` lb, the heaviest in the last 50 saved workouts, on `day` (YYYY-MM-DD). */
-export function bestCard(lift: string, weight: number, day: string): ShareCardContent {
+export function bestCard(lift: string, weight: number, day: string): ShareCardContent & { snapshot: ShareSnapshot } {
   const lb = weight.toLocaleString();
   return {
     type: 'pr',
@@ -56,7 +57,7 @@ export function bestCard(lift: string, weight: number, day: string): ShareCardCo
 }
 
 /** The forest card: eyebrow (gold with a star only for a recent best), the content, a hairline, the app name. */
-function Frame({ eyebrow, star, children }: { eyebrow: string; star?: boolean; children: React.ReactNode }) {
+export function Frame({ eyebrow, star, children }: { eyebrow: string; star?: boolean; children: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={[s.card, { backgroundColor: sc.surface.masthead }]}>
@@ -71,7 +72,7 @@ function Frame({ eyebrow, star, children }: { eyebrow: string; star?: boolean; c
   );
 }
 
-const Figure = ({ value, unit }: { value: string; unit: string }) => (
+export const Figure = ({ value, unit }: { value: string; unit: string }) => (
   <View style={s.figure}>
     <Ink text={value} style={s.number} />
     <Ink text={unit} style={s.unit} />
@@ -90,7 +91,7 @@ function Bars({ days }: { days: number }) {
   );
 }
 
-function Ink({ text, style, muted }: { text: string; style: TextStyle; muted?: boolean }) {
+export function Ink({ text, style, muted }: { text: string; style: TextStyle; muted?: boolean }) {
   const { semanticColors: sc } = useTheme();
   return <Text style={[style, { color: muted ? sc.textOnMastheadMuted : sc.textOnAccent }]}>{text}</Text>;
 }
