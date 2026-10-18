@@ -98,6 +98,8 @@ When the toggle changes:
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
 | `habits/ring/HabitsRing` (HB-B1, `habitsRing` off by default) | `softImpact()`; `success()`; `selection()`; `mediumImpact()`; `error()` | A tick (the part draws); the tick that completes today's ring, instead; an untick or the Check-in tab; an idea tile on the first run (success when the server creates it); a tick or an idea the server refuses |
 | `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
+| `HomeTile` (rings Home) | `selection()` | A tile opens its screen |
+| `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |
 | `purchase/PlanActiveMoment` (`clientBillingV2` on) | `success()` | Once, when the plan-is-active moment appears after a confirmed purchase |
 
 ## Architecture

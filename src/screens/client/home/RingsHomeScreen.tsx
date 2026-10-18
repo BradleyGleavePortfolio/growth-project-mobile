@@ -3,8 +3,8 @@
  * rendered by HomeScreen when featureFlags.clientHomeRings is on. HomeScreen keeps the
  * day and workout reads; this layout shows the coach row and bell (coachless: Roman
  * locked), the date, three dials (each its own number and screen), Join a coach for a
- * coachless client (m#654) and the day's one forest button. Roman's line, the tiles,
- * Edit tiles and the notice slot follow in the next UI-1 pull requests.
+ * coachless client (m#654), Roman's line (coachless: locked), the day's one forest
+ * button and the tiles. Edit tiles and the notice slot follow in the next UI-1 pull request.
  */
 import React, { useCallback } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -25,6 +25,8 @@ import HomeHeaderActions from '../../../components/home/HomeHeaderActions';
 import CoachlessHomeSlot from '../../../components/coachless/CoachlessHomeSlot';
 import HomeDial from '../../../components/home/rings/HomeDial';
 import { foodDial, lastNightSleep, noHealthSource, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
+import HomeRomanLine from '../../../components/home/rings/HomeRomanLine';
+import HomeTiles, { type HomeTilesProps } from '../../../components/home/rings/HomeTiles';
 import { homeDateLine } from '../homeDate';
 
 /** The raw workout reads behind the Train dial (null = that read failed). */
@@ -34,7 +36,7 @@ export interface RingsWorkoutReads {
 }
 
 export interface RingsHomeScreenProps {
-  day: { ready: boolean; error: string | null; retrying: boolean; calories: number | undefined; calorieTarget: number | undefined };
+  day: HomeTilesProps['day'] & { error: string | null; retrying: boolean; calories: number | undefined; calorieTarget: number | undefined };
   workout: RingsWorkoutReads & { exists: boolean | 'loading'; label: string; hint: string; onContinue: () => void };
   refreshing: boolean;
   onRefresh: () => Promise<void>;
@@ -109,6 +111,8 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             onPress={() => (noSource && sleep.source !== 'health' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'recovery' }))} />
         </View>
         <CoachlessHomeSlot part="join" />
+        {/* Once the user is known, so a coached client never sees Roman locked first. */}
+        {currentUser ? <HomeRomanLine coached={!!currentUser.coach_id} /> : null}
         <View style={styles.cta}>
           {workout.exists === 'loading' ? (
             <QuietLoading label="Loading" rows={1} testID="cta-skeleton" />
@@ -119,6 +123,7 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             <PrimaryButton label="Log a meal →" accessibilityLabel="Log a meal" onPress={() => navigation.navigate('Log')} testID="home-explore-cta" />
           )}
         </View>
+        <HomeTiles day={{ ...day, ready: day.ready && !day.error }} checkIn={checkIn.data} refreshing={refreshing} noSource={noSource} />
       </ScrollView>
     </SafeAreaView>
   );
