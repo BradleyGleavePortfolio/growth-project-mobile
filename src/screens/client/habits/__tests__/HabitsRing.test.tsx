@@ -14,6 +14,9 @@ const mockLog = jest.fn();
 const mockCreate = jest.fn();
 const mockNavigate = jest.fn();
 const mockSetOptions = jest.fn();
+// One navigation object, as React Navigation gives; setOptions also feeds the Host's header slot below.
+let mockHeader: ((o: { headerRight?: () => React.ReactNode }) => void) | undefined;
+const mockNav = { navigate: (...a: unknown[]) => mockNavigate(...a), setOptions: (o: object) => { mockSetOptions(o); mockHeader?.(o); } };
 const mockRing = jest.fn();
 let mockCoachless = false;
 jest.mock('../../../../services/api', () => ({
@@ -35,7 +38,7 @@ jest.mock('../../../../entitlements/EntitlementProvider', () => ({
   useEntitlement: () => ({ entitlementActive: true, status: 'active', confirmedActive: true, refreshEntitlement: jest.fn() }),
 }));
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: mockNavigate, setOptions: mockSetOptions }),
+  useNavigation: () => mockNav,
   useFocusEffect: jest.fn(),
 }));
 jest.mock('../../../../config/featureFlags', () => ({ featureFlags: { habitsRing: true, romanCompetencePill: false } }));
@@ -77,15 +80,19 @@ const SUMMARY = {
   days: [[4, 4], [4, 3], [3, 2], [3, 0], [3, 0], [2, 0], [0, 0]].map(([planned, done], i) => ({ date: `2026-10-${12 + i}`, planned, done })),
 };
 
+function Host() {
+  const [right, setRight] = React.useState<(() => React.ReactNode) | undefined>(undefined);
+  mockHeader = (o) => { if ('headerRight' in o) setRight(() => o.headerRight); };
+  return <>{right?.()}<HabitsScreen /></>;
+}
 const mount = async () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const v = await render(<QueryClientProvider client={qc}><HabitsScreen /></QueryClientProvider>);
+  const v = await render(<QueryClientProvider client={qc}><Host /></QueryClientProvider>);
   await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
   return v;
 };
 const flags = featureFlags as { habitsRing: boolean };
 const lastRing = (id: string) => [...mockRing.mock.calls].reverse().find(([p]) => p.testID === id)?.[0];
-const headerRight = () => [...mockSetOptions.mock.calls].reverse().find(([o]) => o.headerRight)?.[0].headerRight;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -157,16 +164,17 @@ it('a tick the server refuses goes back, with a calm line and the error haptic',
 
 it('header: forest with Habits selected; Check-in opens today\'s check-in tab and the header goes back to bone', async () => {
   const v = await mount();
-  await waitFor(() => expect(headerRight()).toBeTruthy());
+  await waitFor(() => expect(v.getByTestId('habits-ring-tab-habits')).toBeTruthy());
   expect(mockSetOptions).toHaveBeenCalledWith(expect.objectContaining({ headerStyle: { backgroundColor: lightTokens.surface.masthead }, headerTintColor: lightTokens.textOnAccent }));
-  const tabs = await render(headerRight()());
-  expect(tabs.getByTestId('habits-ring-tab-habits').props.accessibilityState).toEqual({ selected: true });
-  await fireEvent.press(tabs.getByText('Check-in'));
+  expect(v.getByTestId('habits-ring-tab-habits').props.accessibilityState).toEqual({ selected: true });
+  await fireEvent.press(v.getByTestId('habits-ring-tab-checkin'));
   expect(HapticService.selection).toHaveBeenCalled();
   await waitFor(() => expect(v.getByTestId('checkin-save')).toBeTruthy());
   expect(mockSetOptions).toHaveBeenLastCalledWith({ headerStyle: { backgroundColor: colors.bone }, headerTintColor: colors.ink, headerRight: undefined });
+  expect(v.queryByTestId('habits-ring-tab-habits')).toBeNull();
   await fireEvent.press(v.getByTestId('habits-tab-habits'));
   await waitFor(() => expect(v.getByTestId('habits-ring-screen')).toBeTruthy());
+  expect(v.getByTestId('habits-ring-tab-habits')).toBeTruthy();
 });
 
 it('Add habit under the tiles opens today\'s Add habit sheet', async () => {
