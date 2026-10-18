@@ -6,8 +6,8 @@ SHARE-A (owner 10-17 #SHARE-SEND op 1): with `featureFlags.shareSheetV2` (off in
 registered. Share on the Progress run line and under each recent best on the Session summary opens
 `src/components/share/ShareSheet.tsx` over the screen, with `runCard` / `bestCard` from `shareCards.tsx` (number, words,
 dates, app name; each says what is in it and what is not). Coached with `featureFlags.shareSendV1` (off), Send to {coach}
-posts `{ card: { type: 'share', snapshot }, client_message_id }` to `POST /messages` (`src/api/shareCardApi.ts`, backend
-SHARE-BE). The outbox retains a NO_COACH_ASSIGNED card and waits for a valid current coach; other permanent 4xx refusals
+posts `{ card: { type: 'share', snapshot }, client_message_id }` to `POST /messages` (backend SHARE-BE) through the
+client's thread outbox (`services/messageOutbox` `sendCardViaOutbox`, SHARE-B). The outbox retains a NO_COACH_ASSIGNED card and waits for a valid current coach; other permanent 4xx refusals
 use the unavailable path.
 
 SHARE-B (same flag): thread rows carry `card` (`readShareCard` keeps a `share` card it can draw). Both threads draw it

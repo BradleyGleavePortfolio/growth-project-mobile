@@ -64,7 +64,7 @@ interface Message {
   parent_message_id?: string | null;
   /** messaging v2 (flag ON); absent on legacy rows. */
   v2?: ThreadV2Fields;
-  /** Style B: a row from the outbox (services/messageOutbox), not on the server yet. */
+  /** A row from the outbox (services/messageOutbox: Style B sends, or a SHARE-B card), not on the server yet. */
   outbox?: 'sending' | 'waiting' | 'failed';
 }
 
@@ -213,7 +213,7 @@ export default function MessagesScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.id, loadCoachReview, styleB]);
+  }, [currentUser?.id, loadCoachReview]);
 
   const onThreadChanged = useCallback(() => {
     void load();
