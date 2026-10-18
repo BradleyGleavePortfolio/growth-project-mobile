@@ -139,6 +139,7 @@ const mockNavigate = jest.fn();
 const mockSetParams = jest.fn();
 const mockGoBack = jest.fn();
 let mockCanGoBack = false;
+let mockUnder = 'MoreIndex';
 let mockRouteParams: { bucket?: 'fitness' | 'recovery' } = {};
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -146,8 +147,9 @@ jest.mock('@react-navigation/native', () => ({
     setParams: mockSetParams,
     goBack: mockGoBack,
     canGoBack: () => mockCanGoBack,
+    getState: () => ({ routes: [{ key: 'under', name: mockUnder }, { key: 'health', name: 'Health' }] }),
   }),
-  useRoute: () => ({ params: mockRouteParams }),
+  useRoute: () => ({ key: 'health', params: mockRouteParams }),
 }));
 
 import WearablesShell from '../WearablesShell';
@@ -171,7 +173,7 @@ beforeEach(() => {
   mockNavigate.mockReset();
   mockSetParams.mockReset();
   mockGoBack.mockReset();
-  mockCanGoBack = false;
+  mockCanGoBack = false; mockUnder = 'MoreIndex';
   mockRouteParams = {};
   mockUseWearableConnections.mockReturnValue({
     data: [
@@ -487,16 +489,21 @@ describe('WearablesShell', () => {
 // B-HEALTHBACK-135 (B29): the More stack hides the native header and iOS has
 // no hardware back, so the pushed shell draws the coach screens' Back (m#638).
 describe('WearablesShell Back', () => {
-  it('uses the same Back to You words on screen and aloud only with healthPages on', async () => {
+  // Back names the place it returns to: You only over the You menu; the Home stack's copy (Sleep dial, Steps tile) says "Back".
+  it.each([
+    ['the You row', 'MoreIndex', 'Back to You', 'Back'],
+    ['Home (Sleep dial or Steps tile)', 'HomeMain', 'Back', 'Back to You'],
+  ])('opened from %s (over %s), Back reads and speaks "%s" with healthPages on', async (_, under, label, other) => {
     mockHealthPagesFlag = true;
     mockCanGoBack = true;
+    mockUnder = under;
     mockRouteParams = { bucket: 'recovery' };
     await render(<WearablesShell />);
-    expect(screen.getByText('Back to You')).toBeTruthy();
+    expect(screen.getByText(label)).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('health-back').props.style)).toMatchObject({ width: 'auto', height: 44 });
-    await fireEvent.press(screen.getByLabelText('Back to You'));
+    await fireEvent.press(screen.getByLabelText(label));
     expect(mockGoBack).toHaveBeenCalledTimes(1);
-    expect(screen.queryByLabelText('Back')).toBeNull();
+    expect(screen.queryByLabelText(other)).toBeNull();
   });
   /** The first announced node (a label or a text) in render order. */
   const firstAnnounced = (n: unknown): string | undefined => {
