@@ -66,15 +66,15 @@ it.each([
   ['the flag is off', { healthPages: false, shareSendV1: true }, { metric: 'STEPS', bucket: 'HEALTH_FITNESS' }],
   ['a coach reads a client', { healthPages: true, shareSendV1: true }, { metric: 'STEPS', bucket: 'HEALTH_FITNESS', clientId: 'c1' }],
   ['a reading has no starter goal', { healthPages: true, shareSendV1: true }, { metric: 'RESTING_HEART_RATE', bucket: 'SLEEP_RECOVERY' }],
-])('keeps the earlier Metric detail when %s', (_, flags, params) => {
+])('keeps the earlier Metric detail when %s', async (_, flags, params) => {
   [mockFlags, mockParams] = [flags, params];
-  show();
+  await show();
   expect(screen.getByTestId('metric-detail')).toBeTruthy();
   expect(screen.queryByTestId('metric-detail-v2')).toBeNull();
 });
 
-it('board 5, Week: the average a day not counting today, the week before, bars with the goal line, Goal and Recent days', () => {
-  show();
+it('board 5, Week: the average a day not counting today, the week before, bars with the goal line, Goal and Recent days', async () => {
+  await show();
   expect(screen.getByLabelText('Back to Health and sleep')).toBeTruthy();
   expect(screen.getByText('Health and sleep')).toBeTruthy();
   expect(screen.getByText('Average a day, not counting today')).toBeTruthy();
@@ -93,10 +93,10 @@ it('board 5, Week: the average a day not counting today, the week before, bars w
   expect(screen.getAllByText(/^\d[\d,]* steps$/)).toHaveLength(8); // the goal and 7 days
 });
 
-it('Month: one selection haptic, 30 bars and the dates averaged', () => {
-  show();
-  fireEvent.press(screen.getByTestId('metric-range-month'));
-  fireEvent.press(screen.getByTestId('metric-range-month'));
+it('Month: one selection haptic, 30 bars and the dates averaged', async () => {
+  await show();
+  await fireEvent.press(screen.getByTestId('metric-range-month'));
+  await fireEvent.press(screen.getByTestId('metric-range-month'));
   expect(haptic().selection).toHaveBeenCalledTimes(1);
   expect(screen.getByTestId('metric-range-month').props.accessibilityState).toEqual({ selected: true });
   expect(screen.getAllByTestId('week-step-bar')).toHaveLength(29);
@@ -105,9 +105,9 @@ it('Month: one selection haptic, 30 bars and the dates averaged', () => {
   expect(screen.getByText('Reached on 29 of 30 days with data')).toBeTruthy();
 });
 
-it('no reading in the days averaged: No sample yet, never 0, and no Share', () => {
+it('no reading in the days averaged: No sample yet, never 0, and no Share', async () => {
   mockSamples = () => ok([0, 20]);
-  show();
+  await show();
   expect(screen.getByText('No sample yet')).toBeTruthy();
   expect(screen.queryByText('0')).toBeNull();
   expect(screen.queryByText(/a day than the week before/)).toBeNull();
@@ -116,8 +116,8 @@ it('no reading in the days averaged: No sample yet, never 0, and no Share', () =
 });
 
 it('board 6: Share opens one sheet on a Last 7 days card with no Send (no server kind), soft haptic', async () => {
-  show();
-  fireEvent.press(screen.getByTestId('metric-detail-share'));
+  await show();
+  await fireEvent.press(screen.getByTestId('metric-detail-share'));
   expect(haptic().softImpact).toHaveBeenCalledTimes(1);
   expect(await screen.findByText('Share this card')).toBeTruthy();
   expect(screen.getByText('Last 7 days')).toBeTruthy();
@@ -131,9 +131,9 @@ it('board 6: Share opens one sheet on a Last 7 days card with no Send (no server
   expect(screen.getByText("Opens your phone's share options with a picture of this card.")).toBeTruthy();
 });
 
-it('board 11, offline: the saved series with the warm saved-data card', () => {
+it('board 11, offline: the saved series with the warm saved-data card', async () => {
   mockOnline = false;
-  show();
+  await show();
   expect(screen.getByTestId('metric-detail-saved')).toBeTruthy();
   expect(screen.getByText(/^You're offline\. Showing your last synced data from .+\.$/)).toBeTruthy();
   expect(screen.getByText('7,600')).toBeTruthy();
@@ -141,9 +141,9 @@ it('board 11, offline: the saved series with the warm saved-data card', () => {
 
 it('a failed load is a calm error with Try again; a failed retry is the error haptic', async () => {
   mockSamples = () => ({ data: undefined, isLoading: false, isError: true, error: new Error('Network Error'), dataUpdatedAt: 0, refetch: mockRefetch });
-  show();
+  await show();
   expect(screen.queryByTestId('metric-detail-share')).toBeNull();
-  fireEvent.press(screen.getByTestId('metric-detail-error-state-retry'));
+  await fireEvent.press(screen.getByTestId('metric-detail-error-state-retry'));
   await waitFor(() => expect(haptic().error).toHaveBeenCalledTimes(1));
 });
 
