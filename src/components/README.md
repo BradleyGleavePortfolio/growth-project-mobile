@@ -1,5 +1,7 @@
 # Components
 
+`ForegroundNotificationBanner` keeps either push URL field on its existing store payload. Tapping a URL-bearing banner uses the same trusted, role-aware receiver as a native push tap; no external URL or untrusted host is opened. Its layout, copy, timing and non-URL action handling are unchanged.
+
 C8V2-2A adds opt-in `variant="dark"` on `progress/WeightTrendChart` and
 `progress/PeriodTabs`, requiring `clientProgressV2` (off by default).
 `weightTrend.ts` smooths full history in pounds before 7D/30D/All filtering.

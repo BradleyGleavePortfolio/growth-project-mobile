@@ -30,6 +30,7 @@ const isDev =
  */
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: process.env.EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2,
+  EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2,
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
@@ -39,6 +40,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
+  EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
   EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
@@ -98,6 +100,8 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 export const featureFlags = {
   /** C8 v2 chart parts; off in every build until the Progress page is ready. */
   clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', false),
+  /** TIMELINE: the Style C Timeline page, its door on Progress and its push route; off in every build. */
+  clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', false),
   /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
   romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
   /** Team management stays hidden for launch, including in development. */
@@ -111,6 +115,15 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_COACH_TABS_V2
    */
   coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', false),
+
+  /**
+   * LEARN-B (#LEARN-LESSONS op 1): the coach's Lessons editor in Programs
+   * (title, text, optional video link, order, delete). Default off; off,
+   * Programs is today's.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_LESSONS
+   */
+  coachLessons: readFlag('EXPO_PUBLIC_FF_COACH_LESSONS', false),
 
   /**
    * CRISIS-BTN (owner "#CRISIS-2B - all 3 buttons"): Call 911, Call 988, Text

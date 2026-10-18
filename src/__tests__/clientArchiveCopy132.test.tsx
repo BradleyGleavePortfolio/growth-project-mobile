@@ -94,6 +94,13 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+it('an ID-only app link uses the scoped summary name rather than a blank client heading', async () => {
+  const view = await render(<ClientDetailScreen {...props} route={{
+    ...props.route, params: { clientId: 'client-test', clientName: '' },
+  }} />);
+  expect(await view.findByText('Test client')).toBeTruthy();
+});
+
 it.each([
   ['Christopher Martinez', false],
   ['Jessica Richardson', false],

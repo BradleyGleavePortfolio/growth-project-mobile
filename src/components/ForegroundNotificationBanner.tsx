@@ -25,6 +25,7 @@ import { useForegroundBanner } from '../store/foregroundBannerStore';
 import { useTheme } from '../theme/ThemeProvider';
 import type { IoniconName } from '../types/common';
 import { featureFlags } from '../config/featureFlags';
+import { routePushTap } from '../services/pushTapRouter';
 
 const AUTO_DISMISS_MS = 4000;
 
@@ -97,7 +98,9 @@ export default function ForegroundNotificationBanner() {
     const actionScreen = banner?.actionScreen;
     const actionParams = banner?.actionParams;
     animateOut(() => {
-      if (actionScreen === 'AIGuide') {
+      if (banner?.deepLink !== undefined) {
+        routePushTap(actionScreen, actionParams, banner.notificationId, banner.deepLink);
+      } else if (actionScreen === 'AIGuide') {
         navigation.navigate('MoreTab', {
           screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
         });
