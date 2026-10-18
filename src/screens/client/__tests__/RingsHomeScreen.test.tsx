@@ -35,9 +35,11 @@ jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => ({ c
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: Object.assign(() => mockDay, { getState: () => mockDay }) }));
 jest.mock('../../../hooks/useWearableSamples', () => ({
-  useWearableSamples: (args: { bucket: string }) => (args.bucket === 'HEALTH_FITNESS'
-    ? (mockFitness ? { data: mockFitness, isSuccess: true, refetch: jest.fn() } : { data: undefined, refetch: jest.fn() })
-    : { data: mockSleepData, isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn() }),
+  // Both Health reads (Sleep and Steps) answer, wait or fail together.
+  useWearableSamples: (args: { bucket: string }) => ({
+    data: args.bucket === 'HEALTH_FITNESS' ? mockFitness : mockSleepData,
+    isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn(),
+  }),
 }));
 jest.mock('../../../hooks/useHolisticInsights', () => ({ useHolisticInsights: () => mockInsights() }));
 const mockRead = (data: unknown) => ({ data, isSuccess: true, refetch: jest.fn() });
@@ -147,11 +149,17 @@ function lands([name, params]: readonly unknown[]): boolean {
 }
 const NO_SOURCE = { freshness: { providers: [] }, series: [] };
 const A_SOURCE = { freshness: { providers: [] }, series: [{ metric: 'HRV_MS', sample_count: 1, samples: [] }] };
+const STEPS_TODAY = {
+  series: [{ metric: 'STEPS', provider_used: 'APPLE_HEALTHKIT', sample_count: 1, samples: [],
+    buckets: [{ bucket_start: `${getTodayString()}T00:00:00.000Z`, agg: 6412 }] }],
+  freshness: { providers: [{ provider: 'APPLE_HEALTHKIT' }] },
+};
 const HEALTH = ['Health', { bucket: 'recovery' }] as const;
+const FITNESS = ['Health', { bucket: 'fitness' }] as const;
 const CONNECTIONS = ['Connections'] as const;
 
-// #HEALTH-PAGES: Recovery in every state; Connections only once Health answered with no source at all.
-// [state, what Health returned, Health read, check-in hours, check-in read, the dial's spoken label, where the tap lands]
+// #HEALTH-PAGES: Health in every state; Connections only once Health answered with no source at all.
+// [state, what Health returned, Health read, check-in hours, check-in read, the dial's or tile's spoken label, where the tap lands]
 it.each([
   ['Food', 'nothing', 'ok', null, 'ok', 'Food, 820 kcal left, 1,030 of 1,850', ['Log']],
   ['Train', 'nothing', 'ok', null, 'ok', 'Train, 1 of 2 workouts, This week', ['WorkoutTab']],
@@ -165,13 +173,24 @@ it.each([
   ['Sleep, Health loading', 'nothing', 'pending', null, 'ok', 'Sleep, —', HEALTH],
   ['Sleep, Health failed', 'nothing', 'failed', null, 'ok', 'Sleep, —', HEALTH],
   ['Sleep, Health failed and the check-in', 'nothing', 'failed', 6.5, 'ok', 'Sleep, 6.5 h asleep', HEALTH],
+  ['Protein', 'nothing', 'ok', null, 'ok', 'Protein, 73 g of 150, Carbs 100 g, Fat 38 g', ['Log']],
+  ['Water', 'nothing', 'ok', null, 'ok', 'Water, 48 of 100 oz', ['Log']],
+  ['Weight', 'nothing', 'ok', null, 'ok', 'Weight, 168.4 lb, Down 1.2 lb in 30 days', ['MoreTab', { screen: 'Progress', initial: false }]],
+  ['Habits', 'nothing', 'ok', null, 'ok', 'Habits, 2 of 3, Water and Steps done. Stretch open.', ['Habits']],
+  ['Steps today', 'steps today', 'ok', null, 'ok', 'Steps, 6,412, Of 5,000, Apple Health', FITNESS],
+  ['Steps, a source but no steps today', 'a source', 'ok', null, 'ok', 'Steps, —', FITNESS],
+  ['Steps, no source', 'nothing', 'ok', null, 'ok', 'Steps, Connect', CONNECTIONS],
+  ['Steps, Health loading', 'nothing', 'pending', null, 'ok', 'Steps, —', FITNESS],
+  ['Steps, Health failed', 'nothing', 'failed', null, 'ok', 'Steps, —', FITNESS],
+  ['Check-in', 'nothing', 'ok', null, 'ok', 'Check-in, —', ['Habits', { tab: 'checkin' }]],
 ] as const)('%s: the tap lands on a real screen, with a light haptic', async (_, health, healthRead, hours, checkInRead, label, to) => {
   mockSleepData = healthRead !== 'ok' ? undefined : health === 'nothing' ? NO_SOURCE : A_SOURCE;
+  mockFitness = health === 'steps today' ? STEPS_TODAY : mockSleepData;
   if (health === 'last night') { mockRecovery = 78; mockAsleep = 440; }
   mockSleepRead = healthRead; mockCheckInRead = checkInRead; mockCheckIn = hours ? { sleep_hours: hours } : null;
   await render(<HomeScreen />);
   await screen.findByLabelText('Start Full Body A');
-  await fireEvent.press(screen.getByLabelText(label));
+  await fireEvent.press(await screen.findByLabelText(label));
   expect(mockNavigate).toHaveBeenLastCalledWith(...to);
   expect(lands(to)).toBe(true);
   expect(HapticService.selection).toHaveBeenCalledTimes(1);
@@ -249,38 +268,6 @@ it('tiles show the real numbers: protein with carbs and fat, water to the Food l
   expect(screen.getByTestId('home-tile-weight-trend')).toBeTruthy();
   expect(screen.getByLabelText('Habits, 2 of 3, Water and Steps done. Stretch open.')).toBeTruthy();
   expect(screen.getByLabelText('Check-in, Good, Energy normal, slept 7.5 h')).toBeTruthy();
-});
-
-it.each([
-  ['home-tile-protein', ['Log']],
-  ['home-tile-water', ['Log']],
-  ['home-tile-weight', ['MoreTab', { screen: 'Progress', initial: false }]],
-  ['home-tile-habits', ['Habits']],
-  ['home-tile-checkin', ['Habits', { tab: 'checkin' }]],
-] as const)('%s opens a real screen, with a light haptic', async (testID, destination) => {
-  await render(<HomeScreen />);
-  await screen.findByLabelText('Start Full Body A');
-  await fireEvent.press(screen.getByTestId(testID));
-  expect(mockNavigate).toHaveBeenCalledWith(...destination);
-  expect(HapticService.selection).toHaveBeenCalledTimes(1);
-});
-
-it('Steps: "—" while Health loads, Connect without Health (connected devices), steps today (Health and fitness)', async () => {
-  const view = await render(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Steps, —'));
-  expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'fitness' } });
-  mockFitness = { series: [], freshness: { providers: [] } };
-  await view.rerender(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Steps, Connect'));
-  expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'Connections', initial: false });
-  mockFitness = {
-    series: [{ metric: 'STEPS', provider_used: 'APPLE_HEALTHKIT', samples: [],
-      buckets: [{ bucket_start: `${getTodayString()}T00:00:00.000Z`, agg: 6412 }] }],
-    freshness: { providers: [{ provider: 'APPLE_HEALTHKIT' }] },
-  };
-  await view.rerender(<HomeScreen />);
-  await fireEvent.press(await screen.findByLabelText('Steps, 6,412, Of 5,000, Apple Health'));
-  expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'Health', initial: false, params: { bucket: 'fitness' } });
 });
 
 it('the water chip adds 8 oz with a success haptic, and an error haptic when it was not saved', async () => {

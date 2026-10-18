@@ -25,6 +25,7 @@ import { seriesPoints } from '../../../screens/client/wearables/seriesSummary';
 import { parseWeightLogRow, weightHistoryRows } from '../../../screens/client/progress/weightHistory';
 import HomeTile from './HomeTile';
 import { checkInTile, habitsTile, proteinTile, stepsTile, waterTile, weightTile } from './homeTiles';
+import { hasHealthSource } from './homeRings';
 
 export interface HomeTilesProps {
   day: { ready: boolean; protein?: number; carbs?: number; fat?: number; proteinTarget?: number; simple: boolean; waterOz: number };
@@ -75,7 +76,7 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
   const todaySteps = seriesPoints(stepsSeries).filter((p) => new Date(p.x).toISOString().slice(0, 10) === today).pop();
   const steps = stepsTile({
     today: todaySteps ? Math.round(todaySteps.y) : null,
-    connected: !fitness.isSuccess || (fitness.data?.freshness.providers.length ?? 0) > 0,
+    connected: !fitness.isSuccess || hasHealthSource(fitness.data),
     goal: STARTER_GOALS.STEPS,
     source: stepsSeries?.provider_used ? PROVIDER_CONFIG[stepsSeries.provider_used]?.displayName ?? null : null,
   });
@@ -89,8 +90,6 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
     if (useClientStore.getState().loadError?.endsWith(WATER_NOT_SAVED)) void HapticService.error();
     else void HapticService.success();
   };
-  const open = (screen: string, params?: object) => () =>
-    navigation.navigate('MoreTab', params ? { screen, initial: false, params } : { screen, initial: false });
 
   const tiles = [
     <HomeTile key="protein" label="Protein" view={protein} testID="home-tile-protein" onPress={() => navigation.navigate('Log')} />,
@@ -103,13 +102,14 @@ export default function HomeTiles({ day, checkIn, refreshing }: HomeTilesProps) 
           <Text style={[styles.chipText, { color: sc.textPrimary }]}>{metric ? `${glass} ml` : `${glass} oz`}</Text>
         </Pressable>
       } />,
-    <HomeTile key="weight" label="Weight" view={body} testID="home-tile-weight" onPress={open('Progress')}>
+    <HomeTile key="weight" label="Weight" view={body} testID="home-tile-weight" onPress={() => navigation.navigate('MoreTab', { screen: 'Progress', initial: false })}>
       {body.points.length > 1 ? <Sparkline points={body.points} color={sc.accent} /> : null}
     </HomeTile>,
     <HomeTile key="habits" label="Habits" view={habitView} testID="home-tile-habits" onPress={() => navigation.navigate('Habits')} />,
-    // Connections only once Health answered with no source; pending or failed opens Health and fitness.
+    // #HEALTH-PAGES (the Sleep dial's rule): Connections only once Health answered with no source at all;
+    // every other state opens Health and fitness. Both sit in the Home stack, so Back lands on Home.
     <HomeTile key="steps" label="Steps" view={steps} testID="home-tile-steps" prompt={steps.value === 'Connect'}
-      onPress={steps.value === 'Connect' ? open('Connections') : open('Health', { bucket: 'fitness' })} />,
+      onPress={() => (steps.value === 'Connect' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'fitness' }))} />,
     <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits', { tab: 'checkin' })} />,
   ];
   const pairs: React.ReactNode[][] = [];
