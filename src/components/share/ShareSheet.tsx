@@ -4,7 +4,9 @@
  * the picture. No sharing switches: each card says what is in it and what is not. Coached with featureFlags.shareSendV1:
  * Send to {coach} (filled) and Share outside the app (outline); otherwise one filled Share outside the app. A busy
  * button keeps its size and says what is happening; failures are calm gold words in place, never an alert. Haptics:
- * soft on a tap, success once only when the server confirms a send, error when a picture or a send fails.
+ * soft on a tap, success once only when the server confirms a send, error when a picture or a send fails. SHARE-B: Send
+ * goes through the client's thread outbox (either thread style), so offline the card waits in the thread and sends on
+ * reconnect.
  */
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -12,10 +14,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
 import api from '../../services/api';
-import { sendShareCard, type ShareSnapshot } from '../../api/shareCardApi';
+import type { ShareSnapshot } from '../../api/shareCardApi';
 import { AnalyticsEvents } from '../../analytics/events';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { sendCardViaOutbox, takeBackRefused } from '../../services/messageOutbox';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { track } from '../../lib/analytics';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -38,6 +42,14 @@ type Icon = React.ComponentProps<typeof Ionicons>['name'];
 /** A 400 on send is a server without share cards (SoT A5 rule 5): Send stays away until the app restarts. */
 let sendUnavailable = false;
 
+/** SHARE-B: through the thread outbox, so offline the card waits; one the server refuses leaves it ("not available"). */
+async function viaOutbox(uid: string, snapshot: ShareSnapshot, key: string) {
+  const result = await sendCardViaOutbox(uid, snapshot, key);
+  if (result !== 'refused') return result;
+  takeBackRefused(uid, key);
+  return 'unavailable' as const;
+}
+
 export default function ShareSheet({ card, onClose }: { card: ShareCardContent | null; onClose: () => void }) {
   const { semanticColors: sc } = useTheme();
   const insets = useScreenInsets();
@@ -59,7 +71,10 @@ export default function ShareSheet({ card, onClose }: { card: ShareCardContent |
     setFailed(null);
   }
 
-  const coachId = useCurrentUser()?.coach_id ?? null;
+  const user = useCurrentUser();
+  const coachId = user?.coach_id ?? null;
+  const uid = user?.id; // Send goes through this client's thread outbox, in either thread style
+  const offline = !isEffectivelyOnline(useNetworkStatus());
   const sendOn = featureFlags.shareSendV1 && coachId != null && !unavailable;
   const coach = useQuery({
     queryKey: ['wearables', 'coach-name', coachId],
@@ -81,7 +96,12 @@ export default function ShareSheet({ card, onClose }: { card: ShareCardContent |
   const outside = (c: ShareCardContent) => run('picture', c, () => sharePicture(cardRef, { card_type: c.type }, 'Share your card'));
   const send = (c: ShareCardContent) => run('send', c, async () => {
     if (sendKey.current.card !== c) sendKey.current = { card: c, id: randomUUID() };
-    const result = await sendShareCard(c.snapshot, sendKey.current.id);
+    if (!uid) return null; // Send shows only to a signed-in coached client
+    const result = await viaOutbox(uid, c.snapshot, sendKey.current.id);
+    if (result === 'waiting') { // board 8: it waits in the thread and sends on reconnect
+      if (live.current === c) onClose();
+      return null;
+    }
     if (result === 'unavailable') {
       sendUnavailable = true;
       setUnavailable(true);
@@ -128,7 +148,8 @@ export default function ShareSheet({ card, onClose }: { card: ShareCardContent |
                 : (
                   <View style={s.foot}>
                     <Text style={[s.footText, { color: sc.textMuted }]}>
-                      {canSend ? `${coachFirst} sees this card in your messages.` : "Opens your phone's share options with a picture of this card."}
+                      {canSend && offline ? "You're offline. It sends when you reconnect."
+                        : canSend ? `${coachFirst} sees this card in your messages.` : "Opens your phone's share options with a picture of this card."}
                     </Text>
                   </View>
                 )}

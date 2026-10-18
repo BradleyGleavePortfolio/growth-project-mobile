@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
 import { messagingV2Api, type InboxThread } from '../../api/messagingV2Api';
+import { inboxLine } from '../../components/messaging/threadV2';
 import { COMMUNITY_REPORT_CRISIS_LINE } from '../../api/communitySafetyApi';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
@@ -44,8 +45,7 @@ export function previewOf(t: InboxThread | undefined): string | null {
   if (t.blocked_by_me) return 'Blocked';
   const m = t.last_message;
   if (!m) return 'No messages yet';
-  const body = m.kind === 'deleted' ? 'Message deleted' : m.kind === 'voice' ? 'Voice note' : m.preview || 'Message';
-  return m.is_mine ? `You: ${body}` : body;
+  return m.is_mine ? `You: ${inboxLine(m)}` : inboxLine(m);
 }
 
 /** Roman messages left today, or null when the answer is missing or malformed (an older backend: no line). */

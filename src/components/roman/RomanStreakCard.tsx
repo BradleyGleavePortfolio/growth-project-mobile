@@ -22,7 +22,7 @@ import {
   type RomanStreakTier,
   type RomanVoiceMode,
 } from '../../lib/roman/copy';
-import { colors, spacing, typography } from '../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../theme/tokens';
 
 export interface RomanStreakCardProps {
   /** Milestone tier reached (3 / 7 / 30). */
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl,
     backgroundColor: colors.cream,
-    borderRadius: 4,
+    borderRadius: radius.card,
   },
   copy: {
     ...typography.h4,

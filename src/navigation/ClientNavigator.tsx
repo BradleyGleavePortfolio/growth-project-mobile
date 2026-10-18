@@ -65,6 +65,7 @@ import LearnLessonScreen from '../screens/client/learn/LearnLessonScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
+import YouScreen from '../screens/client/YouScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
@@ -221,6 +222,10 @@ export type HomeStackParamList = {
   ContactView: MoreStackParamList['ContactView'];
   /** C3B-S2: the Messages list (coach and Roman), opened from Home while Style B is on. */
   MessagesInbox: undefined;
+  /** #HEALTH-PAGES: the same Health page (and its two inner routes), opened from the rings Home. */
+  Health: MoreStackParamList['Health'];
+  WearableMetricDetail: MoreStackParamList['WearableMetricDetail'];
+  Connections: MoreStackParamList['Connections'];
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -472,6 +477,11 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         component={NotificationPreferencesScreen}
         options={{ headerShown: false }}
       />
+      {/* #HEALTH-PAGES: the rings Home opens the one Health page here, so its Back lands on Home (the You
+          row keeps its own, Back to You); its metric detail and Connections come along so no tap inside dead-ends. */}
+      <HomeStackNav.Screen name="Health" component={WearablesShell} />
+      <HomeStackNav.Screen name="WearableMetricDetail" component={MetricDetailScreen} />
+      <HomeStackNav.Screen name="Connections" component={ConnectionsScreen} />
     </HomeStackNav.Navigator>
   );
 }
@@ -527,7 +537,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <MoreStackNav.Screen name="MoreIndex"    component={MoreScreen} />
+      {/* C9-S1: the You home (MOCK-C9 Style C) behind featureFlags.youTabV2. */}
+      <MoreStackNav.Screen name="MoreIndex"    component={featureFlags.youTabV2 ? YouScreen : MoreScreen} />
       <MoreStackNav.Screen name="ProfileMain"  component={ProfileScreen} />
       <MoreStackNav.Screen name="EditProfile"  component={EditProfileScreen} />
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
@@ -834,7 +845,8 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
       <Tab.Screen
         name="MoreTab"
         options={{
-          tabBarAccessibilityLabel: 'Profile and more',
+          // C9-S1: the tab, the title and the screen reader all say You.
+          tabBarAccessibilityLabel: featureFlags.youTabV2 ? 'You' : 'Profile and more',
           title: 'You',
           tabBarIcon: ({ color }) => (
             <Ionicons name="person-outline" size={24} color={color} />
