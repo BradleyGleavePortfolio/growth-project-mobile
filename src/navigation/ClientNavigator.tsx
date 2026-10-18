@@ -221,6 +221,10 @@ export type HomeStackParamList = {
   ContactView: MoreStackParamList['ContactView'];
   /** C3B-S2: the Messages list (coach and Roman), opened from Home while Style B is on. */
   MessagesInbox: undefined;
+  /** #HEALTH-PAGES: the same Health page (and its two inner routes), opened from the rings Home. */
+  Health: MoreStackParamList['Health'];
+  WearableMetricDetail: MoreStackParamList['WearableMetricDetail'];
+  Connections: MoreStackParamList['Connections'];
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -472,6 +476,11 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         component={NotificationPreferencesScreen}
         options={{ headerShown: false }}
       />
+      {/* #HEALTH-PAGES: the rings Home opens the one Health page here, so its Back lands on Home (the You
+          row keeps its own, Back to You); its metric detail and Connections come along so no tap inside dead-ends. */}
+      <HomeStackNav.Screen name="Health" component={WearablesShell} />
+      <HomeStackNav.Screen name="WearableMetricDetail" component={MetricDetailScreen} />
+      <HomeStackNav.Screen name="Connections" component={ConnectionsScreen} />
     </HomeStackNav.Navigator>
   );
 }
