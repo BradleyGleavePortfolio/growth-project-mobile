@@ -1,3 +1,5 @@
+import { Alert } from 'react-native';
+import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import type { NavigationAction, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { featureFlags } from '../config/featureFlags';
 
@@ -51,6 +53,25 @@ export function openTarget(navigation: TabJump, { tab, params }: { tab: string; 
 
 export const openInboxChat = (navigation: TabJump, clientId: string, clientName: string): void =>
   openTarget(navigation, chatTarget(clientId, clientName));
+
+/**
+ * Sol B1 (round 3): a chat left open in Messages with unsent text asks before openTarget's reset closes it, with the
+ * broadcast composer's prompt (BroadcastComposerScreen.tsx:88). Keep editing keeps the chat and its text, and Messages
+ * opens on it; Discard runs the reset. Any other removal (Back, the tab press) goes straight through, as today.
+ */
+export function useKeepUnsentChat(unsent: boolean): void {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  usePreventRemove(featureFlags.coachTabsV2 === true && unsent, ({ data: { action } }) => {
+    if (action.type !== 'RESET' || action.target !== navigation.getState()?.key) {
+      navigation.dispatch(action);
+      return;
+    }
+    Alert.alert('Discard this message?', 'Leaving removes the text from this message.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(action) },
+    ]);
+  });
+}
 
 /** The Messages header's Broadcasts and Community reports follow the same rule as a chat. */
 export function openInboxScreen(navigation: NavigationProp<ParamListBase>, screen: 'CoachBroadcasts' | 'CoachCommunityModeration'): void {

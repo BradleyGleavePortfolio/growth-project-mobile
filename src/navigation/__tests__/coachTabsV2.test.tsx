@@ -8,7 +8,7 @@
  * target lands.
  */
 import React from 'react';
-import { Platform, Text } from 'react-native';
+import { Alert, Platform, Text, TextInput } from 'react-native';
 import {
   NavigationContainer, createNavigationContainerRef, useNavigation, type NavigationProp, type ParamListBase,
 } from '@react-navigation/native';
@@ -68,7 +68,6 @@ const briefTap: Tap = (n) => {
 const PROBES: [string, Tap][] = [
   ['MessagesScreen', (n) => inboxTap(n)],
   ['ClientDetailScreen', (n) => n.navigate('ClientMessages', CHAT)],
-  ['ClientMessagesScreen', (n) => n.navigate('ContactView', { contactId: CHAT.clientId, displayName: CHAT.clientName })],
   ['command-center/CommandCenterScreen', chatTap], // Overview's reply rows and its Inbox (openThread)
   ['money/MoneyScreen', chatTap], // Message on an attention row
   ['money/MoneyChargeScreen', chatTap], // Message <client> on a charge
@@ -77,6 +76,22 @@ const PROBES: [string, Tap][] = [
 for (const [name, go] of PROBES) {
   jest.doMock(`../../screens/coach/${name}`, () => ({ __esModule: true, default: probe(`../screens/coach/${name}`, go) }));
 }
+// The chat opens its contact page and keeps unsent text through the hook ClientMessagesScreen.tsx uses (Sol B1).
+jest.doMock('../../screens/coach/ClientMessagesScreen', () => ({
+  __esModule: true,
+  default: function ChatProbe() {
+    const navigation = useNavigation<NavigationProp<ParamListBase>>();
+    const [text, setText] = React.useState('');
+    require('../coachInbox').useKeepUnsentChat(text.trim() !== '');
+    const contact = () => navigation.navigate('ContactView', { contactId: CHAT.clientId, displayName: CHAT.clientName });
+    return (
+      <>
+        <Text onPress={contact}>../screens/coach/ClientMessagesScreen</Text>
+        <TextInput accessibilityLabel="Message text" value={text} onChangeText={setText} />
+      </>
+    );
+  },
+}));
 // The broadcast composer guards unsent text the way BroadcastComposerScreen.tsx:88 does (usePreventRemove).
 let mockUnsent = false;
 const mockDiscardAsk = jest.fn();
@@ -454,6 +469,47 @@ it.each(ENTRIES.slice(1))('flag on: an unsent broadcast left open in Messages as
   expect([focusedTab(), stackOf('Messages')]).toEqual(['Messages', ['MessagesInbox', 'CoachBroadcasts', 'CoachBroadcastComposer']]);
   await act(async () => ref.dispatch(mockDiscardAsk.mock.calls[0][0].data.action)); // Discard: the chat on the inbox
   expect([stackOf('Messages'), ref.getCurrentRoute()?.params]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT]);
+});
+
+// Sol B1 (round 3): unsent text in a chat left open in Messages (this client's or another's) asks before a chat from
+// outside closes it, in the broadcast composer's words. Keep editing: nothing closes, and Messages opens on that chat
+// with its text. Discard: the new chat, fresh, on the same inbox.
+it.each(ENTRIES.slice(1).flatMap(([probe, home]) => [CHAT, OTHER].map((left) => [probe, left.clientName, left, home] as const)))(
+  'flag on: unsent text in a chat left open in Messages asks before a chat from %s closes it (left open: %s)',
+  async (probe, _name, left, [tab, screen]) => {
+    const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const view = await mount();
+    await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: left, initial: false }));
+    await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+    const kept = messagesKeys();
+    await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
+    await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
+    expect(ask.mock.calls.map(([title, message, buttons]) => [title, message, buttons?.map((b) => [b.text, b.style])])).toEqual([[
+      'Discard this message?', 'Leaving removes the text from this message.', [['Keep editing', 'cancel'], ['Discard', 'destructive']],
+    ]]);
+    expect([focusedTab(), messagesKeys(), ref.getCurrentRoute()?.params]).toEqual(['Messages', kept, left]); // Keep editing
+    expect(view.getByLabelText('Message text').props.value).toBe('See you at six');
+    await act(async () => ask.mock.calls[0][2]?.[1]?.onPress?.()); // Discard
+    expect([stackOf('Messages'), messagesKeys()[0], kept.includes(messagesKeys()[1]), ref.getCurrentRoute()?.params])
+      .toEqual([['MessagesInbox', 'ClientMessages'], kept[0], false, CHAT]);
+    expect(view.getByLabelText('Message text').props.value).toBe('');
+    ask.mockRestore();
+  },
+);
+
+it('flag on: Back from a chat with unsent text goes straight back, as today', async () => {
+  const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const view = await mount();
+  await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: CHAT, initial: false }));
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+  await act(async () => ref.goBack());
+  expect([ask.mock.calls.length, focusedTab(), stackOf('Messages')]).toEqual([0, 'Messages', ['MessagesInbox']]);
+  ask.mockRestore();
+});
+
+it('the real chat arms the same guard with its own unsent text', () => {
+  const chat = SOURCES.find(([file]) => file === 'ClientMessagesScreen.tsx')?.[1];
+  expect(chat).toMatch(/\n  useKeepUnsentChat\(inputText\.trim\(\) !== ''\);\n/);
 });
 
 it('every chat opened outside Clients goes through coachInbox.ts, and every file that does is a row above', () => {

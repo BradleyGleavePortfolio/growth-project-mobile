@@ -21,6 +21,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
 
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { useKeepUnsentChat } from '../../navigation/coachInbox';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { layout, radius } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
@@ -89,6 +90,8 @@ export default function ClientMessagesScreen() {
   // v2 idempotent send: a failed send keeps its device key for the same text,
   // so tapping Send again replays it and can never post a duplicate.
   const unsentRef = useRef<{ text: string; key: string } | null>(null);
+  // A chat opened from outside Messages closes this one first; unsent text asks before it goes (Sol B1).
+  useKeepUnsentChat(inputText.trim() !== '');
 
   const blockStore = useBlockedUsersStore();
   const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
