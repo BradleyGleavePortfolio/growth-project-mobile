@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -160,6 +161,21 @@ it('successfully empty week is honest; completed rows say Done', async () => {
   await r.unmount();
   const done = await page({ workouts: [{ ...workout, completed_at: stamp }] });
   expect(within(done.getByTestId('week-workout-assignment-own')).getByText('Done')).toBeTruthy();
+});
+
+it.each([
+  ['loading', { loading: true, sessions: [], workouts: [], checkIns: [], hasData: false }],
+  ['empty', { sessions: [], workouts: [], checkIns: [] }],
+  ['error', { failed: true, sessions: [], workouts: [], checkIns: [] }],
+  ['offline', { offline: true }],
+  ['full', {}],
+] as const)('%s: the tan page is solid to the footer and stays opaque while a day tap inks in', async (_state, data) => {
+  const r = await page(data);
+  await fireEvent.press(r.getByTestId(`week-day-${addDays(getLocalWeekStart(), 6)}`));
+  const style = StyleSheet.flatten(r.getByTestId('week-page').props.style);
+  expect(style).toEqual(expect.objectContaining({ flexGrow: 1 }));
+  expect(style.minHeight).toBeUndefined();
+  expect(style.opacity).toBeUndefined();
 });
 
 it('an entitled client reads every signed-in-client list, including past sessions and appointment types', async () => {

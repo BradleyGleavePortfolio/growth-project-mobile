@@ -181,45 +181,48 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
           ))}
         </ScrollView>
       </View>
-      <Animated.View style={[styles.page, { backgroundColor: sc.bgPrimary, opacity: fade }]}>
-        {data.offline ? <Text accessibilityRole="alert" style={body}>{c[data.hasData ? 'C4S1-S-01' : 'C4S1-S-03']}</Text> : null}
-        {data.loading ? <QuietLoading label={c['C4-S-136']} rows={3} testID="week-loading" /> : null}
-        {data.failed && !data.offline ? <View testID="week-error" accessibilityRole="alert">
-          <Text style={body}>{c['C4-S-130']}</Text>
-          <TextLink label={c['C1-S-47']} onPress={onRefresh} testID="week-retry" />
-        </View> : null}
-        {next ? <View>
-          <Text style={[styles.overline, ink]}>{c['C4-S-03']}</Text>
-          {sessionCard(next, true)}
-        </View> : null}
-        {!data.loading && !data.failed && !data.offline && data.hasData && noItems ? <Text style={body} testID="week-empty">{c['C4-S-131']}</Text> : null}
-        {days.filter((day) => day >= selected).map((day) => (
-          <View key={day} style={styles.daySection} testID={`week-agenda-${day}`}>
-            <Text style={[styles.date, ink]} accessibilityRole="header">{dayLabel(day)}{day === today ? ` · ${c['C4-S-82']}` : ''}</Text>
-            {sessions.filter((s) => sessionDay(s) === day).map((s) => sessionCard(s))}
-            {workoutsOn(day).map((w) => (
-              <Pressable key={w.id} accessibilityRole="button" testID={`week-workout-${w.id}`}
-                accessibilityLabel={`${w.snapshot?.plan_name ?? w.workout_plan.name}, ${w.completed_at ? c['C4-S-138'] : c['C4-S-137']}`}
-                style={[styles.row, { borderColor: sc.border }]}
-                onPress={() => { void HapticService.softImpact(); nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id }, initial: false }); }}>
-                <View style={styles.rowText}>
-                  <Text style={[styles.small, ink]}>{c['C4-S-84']}</Text>
-                  <Text style={[styles.bodyStrong, ink]}>{w.snapshot?.plan_name ?? w.workout_plan.name}</Text>
-                </View>
-                <Text style={[styles.small, ink]}>{w.completed_at ? c['C4-S-138'] : c['C4-S-137']}</Text>
-              </Pressable>
-            ))}
-            {checkOn(day) ? <View style={[styles.row, { borderColor: sc.border }]} testID={`week-checkin-${day}`}>
-              <Text style={body}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
-            </View> : null}
-            {day === today ? <TextLink label={c['C4S1-S-02']} align="start" testID="week-checkin-open"
-              onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
-            {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
-              !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?
-              <Text style={body}>{c['C4-S-89']}</Text> : null}
-          </View>
-        ))}
-      </Animated.View>
+      {/* Solid tan page to the footer; only its content inks in (LO-769R B1). */}
+      <View style={[styles.page, { backgroundColor: sc.bgPrimary }]} testID="week-page">
+        <Animated.View style={{ opacity: fade }}>
+          {data.offline ? <Text accessibilityRole="alert" style={body}>{c[data.hasData ? 'C4S1-S-01' : 'C4S1-S-03']}</Text> : null}
+          {data.loading ? <QuietLoading label={c['C4-S-136']} rows={3} testID="week-loading" /> : null}
+          {data.failed && !data.offline ? <View testID="week-error" accessibilityRole="alert">
+            <Text style={body}>{c['C4-S-130']}</Text>
+            <TextLink label={c['C1-S-47']} onPress={onRefresh} testID="week-retry" />
+          </View> : null}
+          {next ? <View>
+            <Text style={[styles.overline, ink]}>{c['C4-S-03']}</Text>
+            {sessionCard(next, true)}
+          </View> : null}
+          {!data.loading && !data.failed && !data.offline && data.hasData && noItems ? <Text style={body} testID="week-empty">{c['C4-S-131']}</Text> : null}
+          {days.filter((day) => day >= selected).map((day) => (
+            <View key={day} style={styles.daySection} testID={`week-agenda-${day}`}>
+              <Text style={[styles.date, ink]} accessibilityRole="header">{dayLabel(day)}{day === today ? ` · ${c['C4-S-82']}` : ''}</Text>
+              {sessions.filter((s) => sessionDay(s) === day).map((s) => sessionCard(s))}
+              {workoutsOn(day).map((w) => (
+                <Pressable key={w.id} accessibilityRole="button" testID={`week-workout-${w.id}`}
+                  accessibilityLabel={`${w.snapshot?.plan_name ?? w.workout_plan.name}, ${w.completed_at ? c['C4-S-138'] : c['C4-S-137']}`}
+                  style={[styles.row, { borderColor: sc.border }]}
+                  onPress={() => { void HapticService.softImpact(); nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id }, initial: false }); }}>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.small, ink]}>{c['C4-S-84']}</Text>
+                    <Text style={[styles.bodyStrong, ink]}>{w.snapshot?.plan_name ?? w.workout_plan.name}</Text>
+                  </View>
+                  <Text style={[styles.small, ink]}>{w.completed_at ? c['C4-S-138'] : c['C4-S-137']}</Text>
+                </Pressable>
+              ))}
+              {checkOn(day) ? <View style={[styles.row, { borderColor: sc.border }]} testID={`week-checkin-${day}`}>
+                <Text style={body}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
+              </View> : null}
+              {day === today ? <TextLink label={c['C4S1-S-02']} align="start" testID="week-checkin-open"
+                onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
+              {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
+                !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?
+                <Text style={body}>{c['C4-S-89']}</Text> : null}
+            </View>
+          ))}
+        </Animated.View>
+      </View>
     </Screen>
   );
 }
@@ -235,7 +238,7 @@ const styles = StyleSheet.create({
   dayNumber: { ...typography.h2 },
   marks: { flexDirection: 'row', gap: 2, height: 8, marginTop: 4 },
   mark: { width: 7, height: 3 },
-  page: { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: spacing.xl, minHeight: 400 },
+  page: { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: spacing.xl, flexGrow: 1 },
   body: { ...typography.body, fontSize: 14, lineHeight: 22 },
   bodyStrong: { ...typography.body, fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 23 },
   small: { ...typography.caption, letterSpacing: 0, flexShrink: 1 },
