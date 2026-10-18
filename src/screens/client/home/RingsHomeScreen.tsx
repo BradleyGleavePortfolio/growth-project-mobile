@@ -24,13 +24,9 @@ import { recoveryScore, sleepDeficit } from '../wearables/recoveryData';
 import HomeHeaderActions from '../../../components/home/HomeHeaderActions';
 import CoachlessHomeSlot from '../../../components/coachless/CoachlessHomeSlot';
 import HomeDial from '../../../components/home/rings/HomeDial';
-<<<<<<< HEAD
-import { foodDial, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
+import { foodDial, hasHealthSource, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
 import HomeRomanLine from '../../../components/home/rings/HomeRomanLine';
 import HomeTiles, { type HomeTilesProps } from '../../../components/home/rings/HomeTiles';
-=======
-import { foodDial, hasHealthSource, sleepDial, trainDial, type DialView, type ReadState } from '../../../components/home/rings/homeRings';
->>>>>>> origin/op140/ui1-home-rings-tiles
 import { homeDateLine } from '../homeDate';
 
 /** The raw workout reads behind the Train dial (null = that read failed). */
