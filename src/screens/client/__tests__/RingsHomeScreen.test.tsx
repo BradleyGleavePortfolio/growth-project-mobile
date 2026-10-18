@@ -199,6 +199,8 @@ it.each([
   ['Steps, connected, Health failed', 'connected', 'failed', null, 'ok', 'Steps, —', FITNESS],
   ['Steps, no connection', 'none', 'nothing', null, 'ok', 'Steps, Connect', CONNECTIONS],
   ['Steps, no connection, steps today still in Health', 'none', 'steps today', null, 'ok', 'Steps, 6,412, Of 5,000, Apple Health', FITNESS],
+  ['Steps, no connection, Health loading', 'none', 'loading', null, 'ok', 'Steps, —', CONNECTIONS],
+  ['Steps, no connection, Health failed', 'none', 'failed', null, 'ok', 'Steps, —', CONNECTIONS],
   ['Steps, only a disconnected or expired connection', 'disconnected or expired', 'nothing', null, 'ok', 'Steps, Connect', CONNECTIONS],
   ['Steps, connections loading', 'loading', 'nothing', null, 'ok', 'Steps, —', FITNESS],
   ['Steps, connections failed', 'failed', 'nothing', null, 'ok', 'Steps, —', FITNESS],

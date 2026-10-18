@@ -77,7 +77,8 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
   const todaySteps = seriesPoints(stepsSeries).filter((p) => new Date(p.x).toISOString().slice(0, 10) === today).pop();
   const steps = stepsTile({
     today: todaySteps ? Math.round(todaySteps.y) : null,
-    connected: !noSource,
+    // The Sleep dial's rule: "Connect" only once Health answered with no steps today and no source is connected.
+    connected: !noSource || !fitness.isSuccess,
     goal: STARTER_GOALS.STEPS,
     source: stepsSeries?.provider_used ? PROVIDER_CONFIG[stepsSeries.provider_used]?.displayName ?? null : null,
   });
@@ -108,9 +109,9 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
     </HomeTile>,
     <HomeTile key="habits" label="Habits" view={habitView} testID="home-tile-habits" onPress={() => navigation.navigate('Habits')} />,
     // #RINGS-CONNECT (the Sleep dial's rule): Connections only when the client's connections list none connected and
-    // Health has no steps today ("Connect"); every other state opens Health and fitness. Both sit in the Home stack.
+    // Health has no steps today; every other state opens Health and fitness. Both sit in the Home stack.
     <HomeTile key="steps" label="Steps" view={steps} testID="home-tile-steps" prompt={steps.value === 'Connect'}
-      onPress={() => (steps.value === 'Connect' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'fitness' }))} />,
+      onPress={() => (noSource && !todaySteps ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'fitness' }))} />,
     <HomeTile key="checkin" label="Check-in" view={checkInTile(checkIn)} testID="home-tile-checkin" onPress={() => navigation.navigate('Habits', { tab: 'checkin' })} />,
   ];
   const pairs: React.ReactNode[][] = [];
