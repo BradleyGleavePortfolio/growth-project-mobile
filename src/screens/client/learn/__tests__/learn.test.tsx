@@ -46,14 +46,14 @@ const ok = <T,>(data: T) => Promise.resolve({ data });
 const lessons = jest.mocked(lessonsApi);
 const guidelines = jest.mocked(coachApi.getMyGuidelines);
 
-function show(Comp: React.ComponentType) {
+async function show(Comp: React.ComponentType) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   const tree = () => (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, bottom: 34, left: 0, right: 0 } }}>
       <QueryClientProvider client={client}><Comp /></QueryClientProvider>
     </SafeAreaProvider>
   );
-  const view = render(tree());
+  const view = await render(tree());
   return { ...view, again: () => view.rerender(tree()) };
 }
 
@@ -74,7 +74,7 @@ describe('Learn', () => {
   });
 
   it('shows the coach, the guidelines card and the numbered lessons with one next step', async () => {
-    show(LearnScreen);
+    await show(LearnScreen);
     expect(await screen.findByText('1 of 3 done')).toBeTruthy();
     expect(screen.getByText('From Sam')).toBeTruthy();
     expect(screen.getByText("Sam's guidelines and lessons for you.")).toBeTruthy();
@@ -87,18 +87,18 @@ describe('Learn', () => {
     expect(screen.getByText('Video')).toBeTruthy();
     expect(guidelines).toHaveBeenCalledWith({ quietPaywall: true });
 
-    fireEvent.press(screen.getByText('Read all'));
+    await fireEvent.press(screen.getByText('Read all'));
     expect(mockNav.navigate).toHaveBeenLastCalledWith('CoachGuidelines');
-    fireEvent.press(screen.getByLabelText('Lesson 3, Sleep and training, not complete'));
+    await fireEvent.press(screen.getByLabelText('Lesson 3, Sleep and training, not complete'));
     expect(HapticService.selection).toHaveBeenCalledTimes(1);
     expect(mockNav.navigate).toHaveBeenLastCalledWith('LearnLesson', { id: 'l3' });
-    fireEvent.press(screen.getByText('Read lesson 2'));
+    await fireEvent.press(screen.getByText('Read lesson 2'));
     expect(mockNav.navigate).toHaveBeenLastCalledWith('LearnLesson', { id: 'l2' });
   });
 
   it("says an older server's 402 in today's words with no plans button, and the lessons stay open", async () => {
     guidelines.mockImplementation(() => Promise.reject({ response: { status: 402, data: { error: 'CLIENT_ENTITLEMENT_REQUIRED' } } }));
-    show(LearnScreen);
+    await show(LearnScreen);
     expect(await screen.findByText(GUIDELINES_PLAN_TITLE)).toBeTruthy();
     expect(screen.queryByText('View plans')).toBeNull();
     expect(screen.queryByText('Read all')).toBeNull();
@@ -110,17 +110,17 @@ describe('Learn', () => {
     guidelines.mockImplementation(() => ok(null) as never);
     const parent = { navigate: jest.fn() };
     mockNav.getParent.mockReturnValue(parent);
-    show(LearnScreen);
+    await show(LearnScreen);
     expect(await screen.findByText('Nothing from Sam yet')).toBeTruthy();
     expect(screen.getByText('When Sam adds guidelines or a lesson, they show here.')).toBeTruthy();
     expect(screen.queryByText(/Read lesson/)).toBeNull();
-    fireEvent.press(screen.getByText('Message Sam'));
+    await fireEvent.press(screen.getByText('Message Sam'));
     expect(parent.navigate).toHaveBeenCalledWith('Home', { screen: 'Messages', initial: false });
   });
 
   it('without a coach asks the server nothing and shows no coach thread', async () => {
     mockUser = { id: 'me', coach_id: null };
-    show(LearnScreen);
+    await show(LearnScreen);
     expect(await screen.findByText('Nothing from your coach yet')).toBeTruthy();
     expect(screen.queryByText('Message your coach')).toBeNull();
     expect(lessons.getAll).not.toHaveBeenCalled();
@@ -129,26 +129,26 @@ describe('Learn', () => {
 
   it('a failed read is one calm sentence and Try again', async () => {
     lessons.getAll.mockImplementationOnce(() => Promise.reject({ response: { status: 500 } }));
-    show(LearnScreen);
+    await show(LearnScreen);
     expect(await screen.findByText("Sam's guidelines and lessons did not load.")).toBeTruthy();
-    fireEvent.press(screen.getByText('Try again'));
+    await fireEvent.press(screen.getByText('Try again'));
     expect(await screen.findByText('1 of 3 done')).toBeTruthy();
   });
 
   it('names the connection only when there was no answer', async () => {
     lessons.getAll.mockImplementationOnce(() => Promise.reject({ message: 'Network Error' }));
-    show(LearnScreen);
+    await show(LearnScreen);
     expect(await screen.findByText("Sam's guidelines and lessons did not load. Check the connection and try again.")).toBeTruthy();
   });
 
   it('offline on first open is one sentence and loads by itself once back online', async () => {
     mockOnline = false;
     lessons.getAll.mockImplementationOnce(() => Promise.reject({ message: 'Network Error' }));
-    const view = show(LearnScreen);
+    const view = await show(LearnScreen);
     expect(await screen.findByText('Guidelines and lessons load when you are back online.')).toBeTruthy();
     expect(screen.queryByText('Try again')).toBeNull();
     mockOnline = true;
-    view.again();
+    await view.again();
     expect(await screen.findByText('1 of 3 done')).toBeTruthy();
     expect(lessons.getAll).toHaveBeenCalledTimes(2);
   });
@@ -159,11 +159,11 @@ describe('Learn lesson view', () => {
     mockParams = { id: 'l2' };
     let save: (v: unknown) => void = () => undefined;
     lessons.complete.mockImplementation(() => new Promise((r) => { save = r; }) as never);
-    show(LearnLessonScreen);
+    await show(LearnLessonScreen);
     expect(await screen.findByText('Lesson 2 of 3 · from Sam')).toBeTruthy();
     expect(screen.getByText('Protein, simply')).toBeTruthy();
     expect(screen.getByText('Reading · about 1 min')).toBeTruthy();
-    fireEvent.press(screen.getByText('Mark as complete'));
+    await fireEvent.press(screen.getByText('Mark as complete'));
     expect(lessons.complete).toHaveBeenCalledWith('l2');
     expect(screen.queryByText('Lesson 2 of 3 complete.')).toBeNull();
     save({ data: {} });
@@ -172,20 +172,20 @@ describe('Learn lesson view', () => {
     expect(screen.queryByText('Mark as complete')).toBeNull();
     expect(screen.getByText('Next: Sleep and training')).toBeTruthy();
     expect(screen.getByText('Lesson 3 of 3 · Video')).toBeTruthy();
-    fireEvent.press(screen.getByText('Next: Sleep and training'));
+    await fireEvent.press(screen.getByText('Next: Sleep and training'));
     expect(mockNav.dispatch).toHaveBeenCalledWith({ type: 'REPLACE', payload: { name: 'LearnLesson', params: { id: 'l3' } } });
   });
 
   it('after the last lesson says all are complete with no next row; a done lesson opens without the button', async () => {
     lessons.getAll.mockImplementation(() => ok([row('l1', 'One', true), row('l2', 'Two', false)]) as never);
     mockParams = { id: 'l2' };
-    const first = show(LearnLessonScreen);
-    fireEvent.press(await screen.findByText('Mark as complete'));
+    const first = await show(LearnLessonScreen);
+    await fireEvent.press(await screen.findByText('Mark as complete'));
     expect(await screen.findByText("All 2 of Sam's lessons are complete.")).toBeTruthy();
     expect(screen.queryByText(/^Next:/)).toBeNull();
-    first.unmount();
+    await first.unmount();
     mockParams = { id: 'l1' };
-    show(LearnLessonScreen);
+    await show(LearnLessonScreen);
     expect(await screen.findByText('Lesson 1 of 2 complete.')).toBeTruthy();
     expect(screen.queryByText('Mark as complete')).toBeNull();
   });
@@ -193,8 +193,8 @@ describe('Learn lesson view', () => {
   it('a failed save keeps the sentence above the button, with one error haptic', async () => {
     lessons.complete.mockImplementation(() => Promise.reject({ message: 'Network Error' }));
     mockParams = { id: 'l2' };
-    show(LearnLessonScreen);
-    fireEvent.press(await screen.findByText('Mark as complete'));
+    await show(LearnLessonScreen);
+    await fireEvent.press(await screen.findByText('Mark as complete'));
     expect(await screen.findByText('Lesson completion did not save. Check your connection and try again.')).toBeTruthy();
     expect(HapticService.error).toHaveBeenCalledTimes(1);
     expect(HapticService.success).not.toHaveBeenCalled();
