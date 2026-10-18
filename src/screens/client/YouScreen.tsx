@@ -1,19 +1,8 @@
 /**
- * YouScreen — the You tab home in MOCK-C9 Style C, slice 1 (owner pick C9 =
- * Style C), behind featureFlags.youTabV2 (off; off, the tab is MoreScreen).
- *
- *   - Masthead (surface.masthead): You, the lede, your initial inside the week
- *     ring (program sessions this week, as on Today; no sessions, no ring),
- *     your name, Member since and Edit (today's Profile).
- *   - Your coach on sage with Message {coach} (Home > Messages); a client with
- *     no coach gets Join a coach, whose button opens the existing
- *     CoachCodeSheet (the C7 join, unchanged here).
- *   - Account (Your plans), Settings (Notifications), Health and devices, and
- *     Support, which keeps today's More rows until their new homes ship
- *     (MOCK-C9 section 4). Profile leaves: Edit opens it.
- *   - Sign out (today's confirm) and the version line.
- *
- * Coachless clients get every row; only Roman needs a coach (owner 10-17).
+ * YouScreen — the You tab home, MOCK-C9 Style C slice 1 (C9-S1), behind featureFlags.youTabV2 (off: MoreScreen).
+ * Masthead (week ring, name, Edit = today's Profile), Your coach or Join a coach (the existing CoachCodeSheet),
+ * then Account, Settings, Health and devices and Support (today's More rows until their homes ship), Sign out.
+ * Coachless clients get every row; only Roman needs a coach (owner 10-17). Detail: src/screens/client/README.md.
  */
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -31,11 +20,10 @@ import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { messageCoachLabel } from '../../components/home/HomeHeaderActions';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
-import { YOUR_PLANS_COPY, YOUR_PLANS_QUERY_KEY } from '../../components/purchase/YourPlansPanel';
+import { YOUR_PLANS_COPY, YOUR_PLANS_QUERY_KEY, planPrice } from '../../components/purchase/YourPlansPanel';
 import { listClientPlans, type ClientPlan } from '../../lib/packagePayment';
 import { subscribeJoin } from '../../lib/joinPackage';
 import { planDate } from '../../lib/planActions';
-import { money } from '../../lib/planTerms';
 import { prepareSignOutConfirm, signOut } from '../../services/authActions';
 import { warningTap } from '../../utils/haptics';
 import { featureFlags } from '../../config/featureFlags';
@@ -46,25 +34,16 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import {
   MORE_ITEMS,
-  PLAN_MORE_ITEMS,
   ROMAN_MORE_ITEM,
   WEARABLE_MORE_ITEMS,
+  planMoreItems,
   showsWearableRows,
   type MoreItem,
 } from './MoreScreen';
 
-/**
- * Owner 10-17 "#SLEEP-PLACE op 2": the main way into Sleep and recovery is a
- * row in You under Health and devices. The Sleep page is not built yet, so
- * this slot stays empty and no row is drawn (no button that leads nowhere).
- * When the page ships, this becomes its row, first in Health and devices.
- */
-export const SLEEP_AND_RECOVERY_ROW: MoreItem | null = null;
-
 export const YOU_COPY = {
   title: 'You',
   lede: 'Your details, your coach and your account.',
-  memberSince: (date: string) => `Member since ${date}`,
   thisWeek: 'This week',
   done: (n: number, total: number) => `${n} of ${total} done`,
   edit: 'Edit',
@@ -112,19 +91,18 @@ export function weekSegments(
     .map(({ a, at }) => (a.completed_at ? 'done' : at < today ? 'missed' : 'planned'));
 }
 
-/** "Next charge of $149.00 on November 14." for the renewing active plan that charges soonest. */
-export function nextChargeLine(plans: ReadonlyArray<ClientPlan> | undefined): string | null {
-  const at = (p: ClientPlan) => Date.parse(p.nextChargeAt ?? '');
-  const [plan] = (plans ?? [])
-    .filter((p) => p.state === 'active' && !p.cancelAtPeriodEnd && p.nextChargeAt)
-    .sort((a, b) => at(a) - at(b));
-  return plan ? YOUR_PLANS_COPY.renews(money(plan.amountCents, plan.currency), planDate(plan.nextChargeAt)) : null;
-}
+const chargeAt = (p: ClientPlan) => Date.parse((p.state === 'trialing' ? p.trialEndsAt ?? p.nextChargeAt : p.nextChargeAt) ?? '');
 
-function memberSince(createdAt?: string): string | null {
-  const d = createdAt ? new Date(createdAt) : null;
-  if (!d || Number.isNaN(d.getTime())) return null;
-  return YOU_COPY.memberSince(new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(d).replace(' ', '\u00a0'));
+/** Your plans' own line for the soonest charge of the renewing plans (active, or a trial that converts),
+ * not the newest purchase the server lists first. Only an active plan is tagged Active; none, no line. */
+export function nextCharge(plans: ReadonlyArray<ClientPlan> | undefined): { line: string; tag: string | null } | null {
+  const [plan] = (plans ?? [])
+    .filter((p) => (p.state === 'active' || p.state === 'trialing') && !p.cancelAtPeriodEnd && !Number.isNaN(chargeAt(p)))
+    .sort((a, b) => chargeAt(a) - chargeAt(b));
+  if (!plan) return null;
+  return plan.state === 'trialing'
+    ? { line: YOUR_PLANS_COPY.trial(planPrice(plan), planDate(plan.trialEndsAt)), tag: null }
+    : { line: YOUR_PLANS_COPY.renews(planPrice(plan), planDate(plan.nextChargeAt)), tag: YOU_COPY.active };
 }
 
 interface CoachCard {
@@ -179,12 +157,12 @@ export default function YouScreen() {
   const weekDone = segments.length > 0 ? YOU_COPY.done(doneCount, segments.length) : null;
   const name = user?.name?.trim() ?? '';
   const initial = name.charAt(0).toUpperCase();
-  const since = memberSince(user?.createdAt);
-  const chargeLine = plans.isSuccess && !plans.isStale ? nextChargeLine(plans.data) : null; // a read that worked, not outdated
+  // Only from a read that worked and nothing has outdated since (End / Keep on Your plans).
+  const charge = plans.isSuccess && !plans.isStale ? nextCharge(plans.data) : null;
 
   const open = (item: MoreItem) => {
     if (item.target.type === 'stack') {
-      navigation.navigate(item.target.screen);
+      navigation.navigate(item.target.screen, item.target.params);
       return;
     }
     // Another tab's screen: keep that stack's first screen underneath, so Back works.
@@ -230,7 +208,6 @@ export default function YouScreen() {
       >
         <View style={styles.fill}>
           {name ? <Text style={styles.name}>{name}</Text> : null}
-          {since ? <Text style={styles.mastheadMuted}>{since}</Text> : null}
           {weekDone ? (
             <Text style={styles.weekLine} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
               {`${YOU_COPY.thisWeek} · ${weekDone}`}
@@ -324,13 +301,12 @@ export default function YouScreen() {
     </View>
   );
 
-  const health = showsWearableRows()
-    ? [...(SLEEP_AND_RECOVERY_ROW ? [SLEEP_AND_RECOVERY_ROW] : []), ...WEARABLE_MORE_ITEMS]
-    : [];
+  // #SLEEP-PLACE op 2: with healthPages on, the first row is Sleep and recovery (More's own row).
+  const health = showsWearableRows() ? WEARABLE_MORE_ITEMS : [];
   // Today's More rows stay until their homes ship; Profile's home is Edit above.
   const kept = [
     ...(featureFlags.romanChat ? [ROMAN_MORE_ITEM] : []),
-    ...PLAN_MORE_ITEMS,
+    ...planMoreItems(),
     ...MORE_ITEMS.filter((item) => item.target.screen !== 'ProfileMain'),
   ];
 
@@ -344,7 +320,7 @@ export default function YouScreen() {
       <View style={styles.body}>
         {coachCard}
         {section(YOU_COPY.account, row('plans', 'ticket-outline', YOU_COPY.yourPlans, () => navigation.navigate('ClientPackages'), {
-          detail: chargeLine, tag: chargeLine ? YOU_COPY.active : null, first: true,
+          detail: charge?.line, tag: charge?.tag, first: true,
         }))}
         {section(YOU_COPY.settings, row('notifications', 'notifications-outline', YOU_COPY.notifications,
           () => navigation.navigate('NotificationSettings'), { detail: YOU_COPY.notificationsDetail, first: true }))}
@@ -391,7 +367,6 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   avatarText: { ...typography.h1, color: sc.textOnAccent },
   identityText: { flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: layout.touchMin, gap: 12 },
   name: { ...typography.h1, color: sc.textOnAccent },
-  mastheadMuted: { ...typography.body, color: sc.textOnMastheadMuted },
   weekLine: { ...typography.bodyMd, color: sc.textOnAccent },
   edit: { ...typography.bodyMd, color: sc.textOnAccent, textDecorationLine: 'underline' },
   editUnder: { marginTop: 8 },

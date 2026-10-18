@@ -97,6 +97,10 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
   },
 ];
 
+/** TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here (More and You). */
+export const planMoreItems = (): MoreItem[] =>
+  featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
+
 export const MORE_ITEMS: MoreItem[] = [
   {
     icon: 'people-outline',
@@ -257,8 +261,7 @@ export default function MoreScreen() {
   const items = useMemo<MoreItem[]>(
     () => {
       const roman = featureFlags.romanChat ? [ROMAN_MORE_ITEM] : [];
-      // TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here.
-      const plan = featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
+      const plan = planMoreItems();
       // The clinic tutorial spotlights the wearables rows, so they stay at the
       // top there (unchanged); elsewhere they follow the plan rows.
       if (featureFlags.clientTutorial) {

@@ -670,11 +670,8 @@ export const featureFlags = {
 
   // ─── C9-S1 — the You tab home in Style C (MOCK-C9) ──────────────────────
   /**
-   * The You tab as MOCK-C9 Style C (owner pick C9 = Style C): your name and
-   * week on a deep-forest masthead, your coach (or Join a coach), then
-   * Account, Settings, Health and devices and Support. The tab, the title and
-   * the screen reader all say You. OFF UNCONDITIONALLY; with it off the tab is
-   * exactly main's More list.
+   * The You tab as MOCK-C9 Style C (owner pick C9 = Style C); the tab, the title and the
+   * screen reader all say You. OFF UNCONDITIONALLY; off, the tab is exactly main's More list.
    *
    * env: EXPO_PUBLIC_FF_YOU_TAB_V2
    */

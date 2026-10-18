@@ -96,6 +96,10 @@ export const YOUR_PLANS_COPY = {
     "Confirming this plan with Stripe. It shows here within a minute.",
 } as const;
 
+/** "$149.00 a month": a plan's price as Your plans says it (You's Your plans row too). */
+export const planPrice = (p: ClientPlan) =>
+  `${money(p.amountCents, p.currency)} ${cadenceCopy(p.interval ?? "month", p.intervalCount)}`;
+
 function afterCancel(p: ClientPlan, o: CancelOutcome): ClientPlan {
   return o.outcome === "scheduled"
     ? {
@@ -393,7 +397,7 @@ export default function YourPlansPanel({
         </View>
       ) : null}
       {visible.map((plan) => {
-        const amount = `${money(plan.amountCents, plan.currency)} ${cadenceCopy(plan.interval ?? "month", plan.intervalCount)}`;
+        const amount = planPrice(plan);
         const receipt = outcomes[plan.purchaseId];
         const line = receipt
           ? PLAN_ACTION_COPY.outcome(receipt.result, receipt.trial)

@@ -1,8 +1,5 @@
-/**
- * C9-S1: the You home (MOCK-C9 Style C) behind featureFlags.youTabV2. Every
- * tap lands on a registered route; coachless clients get every row (only
- * Roman needs a coach); the Sleep and recovery slot draws nothing yet.
- */
+/** C9-S1: the You home (MOCK-C9 Style C) behind featureFlags.youTabV2. Every tap lands on a registered route, coachless
+ * clients get every row (only Roman needs a coach), the Your plans row never promises a charge the plans no longer back. */
 import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -66,7 +63,7 @@ jest.mock('../../../ui/charts', () => ({
   },
 }));
 
-import YouScreen, { SLEEP_AND_RECOVERY_ROW, nextChargeLine, weekSegments } from '../YouScreen';
+import YouScreen, { nextCharge, weekSegments } from '../YouScreen';
 import { planDate } from '../../../lib/planActions';
 import { clearPendingJoin } from '../../../lib/joinPackage';
 import { YOUR_PLANS_QUERY_KEY } from '../../../components/purchase/YourPlansPanel';
@@ -74,13 +71,14 @@ import { YOUR_PLANS_QUERY_KEY } from '../../../components/purchase/YourPlansPane
 const NAV = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'navigation', 'ClientNavigator.tsx'), 'utf8');
 const stackRoutes = (v: string) => Array.from(NAV.matchAll(new RegExp(`<${v}\\.Screen\\s+name="(\\w+)"`, 'g')), (m) => m[1]);
 
-const COACHED = { id: 'u1', email: 'jordan@example.test', name: 'Jordan Lee', role: 'student', coach_id: 'c1', createdAt: '2026-03-04T12:00:00Z' };
+const COACHED = { id: 'u1', email: 'jordan@example.test', name: 'Jordan Lee', role: 'student', coach_id: 'c1' };
 const NEXT = '2026-11-14T12:00:00Z';
 const ACTIVE_PLAN = {
   purchaseId: 'p1', packageId: 'k1', packageName: 'Strength', state: 'active', entitlementActive: true, amountCents: 14900,
   currency: 'usd', interval: 'month', intervalCount: 1, nextChargeAt: NEXT, cancelAtPeriodEnd: false, accessEndsAt: null,
   trialEndsAt: null, canCancel: true, canResume: false, checkoutState: null,
 };
+const RENEWS = `Next charge of $149.00 a month on ${planDate(NEXT)}.`;
 
 const REAL_OS = Platform.OS;
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
@@ -122,13 +120,23 @@ describe('week ring and plan line', () => {
     ], now)).toEqual(['done', 'missed', 'planned', 'planned']);
   });
 
-  it('names the next charge only for a renewing active plan', () => {
-    expect(nextChargeLine([ACTIVE_PLAN as never])).toBe(`Next charge of $149.00 on ${planDate(NEXT)}.`);
-    expect(nextChargeLine([{ ...ACTIVE_PLAN, cancelAtPeriodEnd: true } as never])).toBeNull();
-    expect(nextChargeLine([])).toBeNull();
-    // The server lists the newest purchase first; the older plan charges sooner, so it is the one named.
-    const SOONER = { ...ACTIVE_PLAN, purchaseId: 'p0', amountCents: 4900, nextChargeAt: '2026-10-30T12:00:00Z' };
-    expect(nextChargeLine([ACTIVE_PLAN, SOONER] as never)).toBe(`Next charge of $49.00 on ${planDate(SOONER.nextChargeAt)}.`);
+  // The server lists the newest purchase first; the line names the charge that comes first, in Your plans' words.
+  const SOONER = { ...ACTIVE_PLAN, purchaseId: 'p0', amountCents: 4900, nextChargeAt: '2026-10-30T12:00:00Z' };
+  const TRIAL = { ...SOONER, purchaseId: 'p2', state: 'trialing', nextChargeAt: '2026-10-24T12:00:00Z', trialEndsAt: '2026-10-24T12:00:00Z' };
+  const LATE_TRIAL = { ...TRIAL, nextChargeAt: '2026-11-20T12:00:00Z', trialEndsAt: '2026-11-20T12:00:00Z' };
+  const trialLine = (at: string) => `Free trial until ${planDate(at)}, then $49.00 a month.`;
+  it.each<[string, unknown[], string | null, string | null]>([
+    ['one renewing plan', [ACTIVE_PLAN], RENEWS, 'Active'],
+    ['an ending plan', [{ ...ACTIVE_PLAN, cancelAtPeriodEnd: true, nextChargeAt: null }], null, null],
+    ['no plans', [], null, null],
+    ['payment overdue or still confirming', [{ ...ACTIVE_PLAN, state: 'past_due' }, { ...ACTIVE_PLAN, state: 'confirming' }], null, null],
+    ['two renewals, the older one sooner', [ACTIVE_PLAN, SOONER], `Next charge of $49.00 a month on ${planDate(SOONER.nextChargeAt)}.`, 'Active'],
+    ['a trial only', [TRIAL], trialLine(TRIAL.trialEndsAt), null],
+    ['a trial that bills before the active plan', [ACTIVE_PLAN, TRIAL], trialLine(TRIAL.trialEndsAt), null],
+    ['an active plan that bills before the trial', [LATE_TRIAL, ACTIVE_PLAN], RENEWS, 'Active'],
+    ['an ended trial and an active plan', [{ ...TRIAL, cancelAtPeriodEnd: true }, ACTIVE_PLAN], RENEWS, 'Active'],
+  ])('%s', (_what, plans, line, tag) => {
+    expect(nextCharge(plans as never)).toEqual(line ? { line, tag } : null);
   });
 });
 
@@ -140,7 +148,6 @@ describe('You home', () => {
     await draw();
     expect(screen.getByText('You')).toBeTruthy();
     expect(screen.getByText('Your details, your coach and your account.')).toBeTruthy();
-    expect(screen.getByText('Member since March\u00a02026')).toBeTruthy();
     expect(mockRing).toEqual({ segments: ['done'], label: 'This week, 1 of 1 done' });
     // The ring speaks the week; the line under the name is the same words, hidden from the reader.
     expect(screen.getByText('This week · 1 of 1 done', { includeHiddenElements: true })).toBeTruthy();
@@ -153,7 +160,7 @@ describe('You home', () => {
     await fireEvent.press(screen.getByText('Message Sam'));
     expect(mockParentNavigate).toHaveBeenLastCalledWith('Home', { screen: 'Messages', initial: false });
 
-    const plansLabel = `Your plans, Next charge of $149.00 on ${planDate(NEXT)}., Active`;
+    const plansLabel = `Your plans, ${RENEWS}, Active`;
     await fireEvent.press(await screen.findByLabelText(plansLabel));
     expect(mockNavigate).toHaveBeenLastCalledWith('ClientPackages');
     await fireEvent.press(screen.getByLabelText('Notifications, Coach messages, reminders and quiet hours'));
@@ -178,9 +185,18 @@ describe('You home', () => {
       if (stack) expect(more).toContain(stack[0]);
       else expect(tabs[tab[0]]).toContain(tab[1].screen);
     }
-    // Profile's home is Edit; the Sleep slot draws nothing until its page ships.
-    expect(screen.queryByText('Profile')).toBeNull();
-    expect(SLEEP_AND_RECOVERY_ROW).toBeNull();
+    expect(screen.queryByText('Profile')).toBeNull(); // Profile's home is Edit
+  });
+
+  it('#SLEEP-PLACE op 2: Sleep and recovery leads Health and devices and opens Recovery; #TIMELINE-DOOR op 1: no Timeline row', async () => {
+    mockFlags.healthPages = true;
+    mockFlags.clientTimelineV2 = true;
+    await draw();
+    const rows = screen.getAllByTestId(/^you-row-/).map((r) => r.props.accessibilityLabel.split(',')[0]);
+    expect(rows.slice(2, 4)).toEqual(['Sleep and recovery', 'Connected devices']);
+    expect(rows).not.toContain('Timeline');
+    await fireEvent.press(screen.getByLabelText(/^Sleep and recovery,/));
+    expect(mockNavigate).toHaveBeenLastCalledWith('Health', { bucket: 'recovery' });
   });
 
   it("coachless: Join a coach opens the coach-code sheet; every row stays (Roman opens today's Roman works with a coach page)", async () => {
@@ -246,7 +262,7 @@ describe('You home', () => {
 
 describe('B1: the Your plans line follows the plans', () => {
   const ENDING = { ...ACTIVE_PLAN, cancelAtPeriodEnd: true, nextChargeAt: null, accessEndsAt: NEXT, canCancel: false, canResume: true };
-  const CHARGE = `Your plans, Next charge of $149.00 on ${planDate(NEXT)}., Active`;
+  const CHARGE = `Your plans, ${RENEWS}, Active`;
   const shows = (charge: boolean) => waitFor(() => expect(screen.getByLabelText(charge ? CHARGE : 'Your plans')).toBeTruthy());
 
   it.each<[string, unknown[], unknown[], 'back' | 'attached' | 'paid']>([
