@@ -69,6 +69,7 @@ describe("More: your plan rows (S-REACH)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFlags.romanChat = false;
+    mockFlags.clientTimelineV2 = false;
   });
 
   it("lists the six plan surfaces", () => {
@@ -135,6 +136,13 @@ describe("More: your plan rows (S-REACH)", () => {
     // Roman's row still says what he is for.
     expect(screen.getByText("Ask Roman about your plan and targets")).toBeTruthy();
     expect(screen.getByLabelText("Roman").props.accessibilityHint).toBe("Opens a conversation with Roman");
+  });
+
+  it("with the Style C Timeline, its row leaves You for Progress (#TIMELINE-DOOR op 1)", async () => {
+    mockFlags.clientTimelineV2 = true;
+    await render(<MoreScreen />);
+    expect(screen.queryByLabelText("Timeline")).toBeNull();
+    expect(screen.getByLabelText("Progress")).toBeTruthy();
   });
 });
 

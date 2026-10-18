@@ -31,9 +31,9 @@ const WEIGHT_EVENT: TimelineEvent = {
   lane: 'body',
   eventType: 'weight_logged',
   at: '2025-10-01T08:00:00.000Z',
-  title: 'Weight logged — 185.0 lbs',
-  body: '-0.5 lbs from previous entry',
-  metadata: { weightLbs: 185.0, deltaLbs: -0.5, streakDays: 3 },
+  title: 'Weighed in at 185.0 lb',
+  body: 'Trend 185.4 lb',
+  metadata: { weightLbs: 185.0, trendLbs: 185.4 },
 };
 
 const STREAK_EVENT: TimelineEvent = {
@@ -44,16 +44,6 @@ const STREAK_EVENT: TimelineEvent = {
   title: '7-day check-in streak reached',
   body: '7 consecutive days of check-ins completed.',
   metadata: { streakDays: 7, threshold: 7 },
-};
-
-const COACH_NOTE: TimelineEvent = {
-  id: 'ev_coach_1',
-  lane: 'coach',
-  eventType: 'coach_text_note',
-  at: '2025-10-06T14:00:00.000Z',
-  title: 'Note from Coach Alex',
-  body: 'Great week. Keep the momentum going.',
-  metadata: { messageId: 'msg_001', coachName: 'Coach Alex' },
 };
 
 const MISS_EVENT: TimelineEvent = {
@@ -67,9 +57,9 @@ const MISS_EVENT: TimelineEvent = {
 };
 
 const FULL_RESPONSE: TimelineResponse = {
-  events: [STREAK_EVENT, COACH_NOTE, WEIGHT_EVENT, MISS_EVENT],
+  events: [STREAK_EVENT, WEIGHT_EVENT, MISS_EVENT],
   nextCursor: null,
-  total: 4,
+  total: 3,
 };
 
 const EMPTY_RESPONSE: TimelineResponse = {
@@ -93,17 +83,17 @@ describe('TimelineScreen', () => {
 
   // ── Loading and rendering ──────────────────────────────────────────────────
 
-  it('renders lane filter chips: All, Body, Wins, Coach, Friction', async () => {
+  it('renders lane filter chips: All, Body, Wins, Friction; no Coach chip (#TIMELINE-COACH op 1)', async () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
-    const { getByText } = await renderScreen();
+    const { getByText, queryByText } = await renderScreen();
 
     await waitFor(() => {
       expect(getByText('All')).toBeTruthy();
       expect(getByText('Body')).toBeTruthy();
       expect(getByText('Wins')).toBeTruthy();
-      expect(getByText('Coach')).toBeTruthy();
       expect(getByText('Friction')).toBeTruthy();
     });
+    expect(queryByText('Coach')).toBeNull();
   });
 
   it('renders event titles from API response', async () => {
@@ -112,8 +102,7 @@ describe('TimelineScreen', () => {
 
     await waitFor(() => {
       expect(getByText('7-day check-in streak reached')).toBeTruthy();
-      expect(getByText('Note from Coach Alex')).toBeTruthy();
-      expect(getByText('Weight logged — 185.0 lbs')).toBeTruthy();
+      expect(getByText('Weighed in at 185.0 lb')).toBeTruthy();
       expect(getByText('3 missed check-ins')).toBeTruthy();
     });
   });
@@ -196,7 +185,7 @@ describe('TimelineScreen', () => {
     mockFetch.mockResolvedValue({ ...FULL_RESPONSE, nextCursor: 'next-page' });
     const screen = await renderScreen();
     expect(await screen.findByLabelText('Wins lane: 7-day check-in streak reached. 8 Oct 2025')).toBeTruthy();
-    for (const [label, lane] of [['Wins', 'win'], ['Coach', 'coach'], ['Friction', 'friction']]) {
+    for (const [label, lane] of [['Wins', 'win'], ['Friction', 'friction']]) {
       await fireEvent.press(screen.getByText('All'));
       await fireEvent.press(screen.getByText(label));
       expect(mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[0]?.lanes).toEqual([lane]);

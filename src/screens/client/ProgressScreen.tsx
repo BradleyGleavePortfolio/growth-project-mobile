@@ -118,7 +118,7 @@ export function formatLogDate(date: string): string {
   return `${LOG_DATE_WEEKDAYS[d.getDay()]} ${d.getDate()} ${LOG_DATE_MONTHS[d.getMonth()]}`;
 }
 
-export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
+export default function ProgressScreen({ onSaved, logWeightAt }: { onSaved?: () => void; logWeightAt?: number }) {
   const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -130,6 +130,10 @@ export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [period, setPeriod] = useState<Period>('30D');
   const [showLogModal, setShowLogModal] = useState(false);
+  // TIMELINE: Log weight on the Timeline's empty state opens this sheet.
+  useEffect(() => {
+    if (logWeightAt) setShowLogModal(true);
+  }, [logWeightAt]);
   const [newWeight, setNewWeight] = useState('');
   const [newNotes, setNewNotes] = useState('');
   // B1 (FW-BODY-128): Save is disabled while the POST is in flight so a
@@ -573,6 +577,10 @@ export default function ProgressScreen({ onSaved }: { onSaved?: () => void }) {
 
         {/* Round 3: Progress lives inside MoreStack, so Report is a sibling. The
             single quiet link at the foot, as in the reference. */}
+        {/* TIMELINE (#TIMELINE-DOOR op 1): the Timeline's door, at the foot. */}
+        {featureFlags.clientTimelineV2 ? (
+          <QuietRow label="Timeline" detail="Weigh-ins and wins, newest first." onPress={() => navigation.navigate('Timeline')} accessibilityHint="Opens your timeline" style={styles.reportRow} testID="progress-timeline" />
+        ) : null}
         <QuietRow label="View progress report" onPress={() => navigation.navigate('Report')} style={styles.reportRow} />
       </Screen>
 
