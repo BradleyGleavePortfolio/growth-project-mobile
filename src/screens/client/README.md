@@ -132,6 +132,13 @@ Roman's tour runs over these real screens. See `src/tutorial/README.md`.
 (`onDeviceDisclosure`) and `DisconnectConfirmDialog` (`disconnectConfirmCopy`). A client with no coach is not told about a
 coach; the Connect line says what the data is for and that a coach they join can see it. Coached copy is unchanged.
 
+### Cloud tracker link bound to the person who started it (A6, AUTHB-05)
+
+The server callback no longer attaches the tracker; it sends the browser back to `tgp://wearables/connected` with a
+single-use ticket. `ConnectProviderSheet` finishes the link with `POST oauth/complete` (success: haptic, the sheet closes,
+the row reads Connected; a refused or expired ticket: the existing "did not finish" line with Continue). When Android hands
+the return to the app instead, the `Connections` route opens that tracker's sheet with the ticket; each ticket is finished once.
+
 ## Data flow
 
 ```
