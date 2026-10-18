@@ -75,7 +75,8 @@ const PROBES: [string, Tap][] = [
 for (const [name, go] of PROBES) {
   jest.doMock(`../../screens/coach/${name}`, () => ({ __esModule: true, default: probe(`../screens/coach/${name}`, go) }));
 }
-// SAFETY-CARD: a client's file also opens the chat from its safety card, with openInboxChat as ClientDetailScreen.tsx does.
+// SAFETY-CARD, #CARD-MESSAGE-DEST: a client's file also opens the chat from its two Message {first} buttons (pinned, and
+// on the safety card), with openInboxChat as ClientDetailScreen.tsx does.
 const FileProbe = probe('../screens/coach/ClientDetailScreen', (n) => n.navigate('ClientMessages', CHAT));
 const CardProbe = probe('safety card Message', chatTap);
 jest.doMock('../../screens/coach/ClientDetailScreen', () => ({ __esModule: true, default: () => <><FileProbe /><CardProbe /></> }));

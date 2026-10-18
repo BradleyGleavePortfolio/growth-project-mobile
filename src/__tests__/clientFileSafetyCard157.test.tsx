@@ -5,6 +5,8 @@
  * there: backend test/rls/open-safety-alert-rls.spec.ts (another coach's summary is "Client not found" and reads 0
  * alert rows; a sub-coach and the owner read null) and test/coach-alerts.service.spec.ts (Dismiss refuses a client
  * outside the coach's scope). Here the app shows exactly what the server sends.
+ * CLIENTFILE-FIX (agent 157): a reused file never shows a late read for the client before, and both Message {first}
+ * buttons open the chat in Messages (#CARD-MESSAGE-DEST op 1).
  */
 import React from 'react';
 import { Alert } from 'react-native';
@@ -45,7 +47,8 @@ jest.mock('../api/macrosApi', () => ({ macrosApi: { currentForClient: jest.fn() 
 function mockMarker(id: string) {
   return () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, id);
 }
-jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: mockMarker('summary-body') }));
+jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: ({ profile, totals }: { profile: { name?: string } | null; totals: { calories: number } }) =>
+  jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, `summary-body ${profile?.name} ${totals.calories}`) }));
 jest.mock('../screens/coach/client-detail/WorkoutsTab', () => ({ WorkoutsTab: mockMarker('workouts-body') }));
 jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: mockMarker('logs-body') }));
 jest.mock('../screens/coach/client-detail/TimelineTab', () => ({ TimelineTab: mockMarker('timeline-body') }));
@@ -202,6 +205,41 @@ it('a failed Dismiss keeps the card and says so in the Actions queue words, with
   expect(view.getByText(LINES[0][1])).toBeTruthy();
   await waitFor(() => expect(view.getByTestId('file-safety-dismiss').props.accessibilityState).toMatchObject({ disabled: false, busy: false }));
   expect(summaryRead).toHaveBeenCalledTimes(1); // no read after a failed Dismiss
+});
+
+it.each(BOTH)("coachTabsV2 %s: the file reused for B while A's first read is slow: A's late read changes nothing on B's file", async (on) => {
+  mockFlags.coachTabsV2 = on;
+  openAlert = null;
+  const B = { clientId: 'client-b', clientName: 'Alex Kim' };
+  const summary = (name: string, kcal: number) => ({ data: { client_name: name, profile: {}, today: { total_calories: kcal } } });
+  let lateA: (v: unknown) => void = () => undefined;
+  summaryRead.mockImplementation((id: string) => (id === B.clientId ? Promise.resolve(summary(B.clientName, 1400))
+    : new Promise((r) => { lateA = r; })));
+  const view = await mount();
+  const key = ref.getCurrentRoute()?.key;
+  await act(async () => ref.navigate('ClientsStack', { screen: 'ClientDetail', params: B })); // as Overview or a push opens it
+  expect(ref.getCurrentRoute()?.key).toBe(key); // the same file, now B's
+  await fireEvent.press(await view.findByLabelText('Summary'));
+  expect(view.getByText('summary-body Alex Kim 1400')).toBeTruthy();
+  await act(async () => lateA(summary('Sam Rivera', 2600)));
+  expect([view.queryByText(/Sam Rivera/), view.getByText('summary-body Alex Kim 1400')]).toEqual([null, expect.anything()]);
+});
+
+it.each(BOTH)('coachTabsV2 %s: the pinned Message Sam opens the chat in Messages, as the card does (off: none pinned; the file opens it over itself, as on main)', async (on) => {
+  mockFlags.coachTabsV2 = on;
+  openAlert = null;
+  const view = await mount();
+  await view.findByText('paused-plans');
+  if (on) await fireEvent.press(view.getByTestId('file-message'));
+  else {
+    expect(view.queryByTestId('file-message')).toBeNull();
+    await fireEvent.press(view.getByLabelText('Open messages'));
+  }
+  expect([root().routes[root().index].name, ref.getCurrentRoute()?.name, ref.getCurrentRoute()?.params])
+    .toEqual([on ? 'Messages' : 'ClientsStack', 'ClientMessages', CHAT]);
+  expect([stackOf('Messages'), stackOf('ClientsStack')]).toEqual(on
+    ? [['MessagesInbox', 'ClientMessages'], ['ClientsList', 'ClientDetail']]
+    : [undefined, ['ClientsList', 'ClientDetail', 'ClientMessages']]);
 });
 
 it("the file reused for another client (as Overview opens it): A's late read or late Dismiss never touches B's card", async () => {
