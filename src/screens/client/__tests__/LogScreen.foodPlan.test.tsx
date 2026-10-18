@@ -1,5 +1,4 @@
-// UI-3 with the flag on: a coached client's plan checklist logs the plan meal in one tap, and
-// "Something else" opens the food search with recent foods (until a coach swap list exists).
+// UI-3, flag on: the plan checklist logs the plan meal in one tap; "Something else" opens the food search with recent foods.
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -38,14 +37,16 @@ jest.mock('../../../services/foodLogQueue', () => ({ flush: jest.fn() }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../components/FoodImage', () => ({ __esModule: true, default: () => null }));
 
-const show = () => render(<QueryClientProvider client={new QueryClient()}><LogScreen /></QueryClientProvider>);
+const show = (onSaved?: () => void) => render(<QueryClientProvider client={new QueryClient()}><LogScreen onSaved={onSaved} /></QueryClientProvider>);
 
 it('logs the plan meal in one tap', async () => {
-  await show();
+  const onSaved = jest.fn();
+  await show(onSaved);
   await fireEvent.press(await screen.findByText('Ate it as planned'));
   await waitFor(() => expect(logApi.logFood).toHaveBeenCalledWith(expect.objectContaining({ meal_type: 'snack', food_item_id: 'food-new' })));
   expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Greek yogurt bowl' }));
   expect(await screen.findByText('Greek yogurt bowl added to Snacks.')).toBeTruthy();
+  expect(onSaved).toHaveBeenCalledTimes(1); // FIRSTWIN-MEAL: a confirmed online plan meal save hands off once
 });
 
 it('opens the food search with recent foods from Something else', async () => {

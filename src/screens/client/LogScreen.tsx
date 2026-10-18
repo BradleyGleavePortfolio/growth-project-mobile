@@ -433,8 +433,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     }
   };
 
-  // UI-3 "Ate it as planned": one tap logs the coach's plan meal into its meal with the same
-  // manual-entry write (and offline queue) as LogPlannedMealButton on the meal plan screen.
+  // UI-3 "Ate it as planned": one tap logs the plan meal with LogPlannedMealButton's write (offline queue included).
   const logPlanned = async (slot: DaySlot) => {
     if (!currentUser || foodSaving) return;
     const v = (x: number) => String(Math.round(x * 10) / 10);
@@ -456,6 +455,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       HapticService.success();
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: slot.mealType, source: 'meal_plan' });
       setSavedMessage(`${slot.name} added to ${mealLabel(slot.mealType)}.`);
+      onSaved?.();
     } catch (err) {
       console.error('LogScreen: plan meal log failed', err);
       HapticService.error();
@@ -632,8 +632,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           />
         }
       >
-        {/* UI-3: behind featureFlags.foodPlanChecklist the day's plan checklist shows first; with no plan
-            to show it renders this Food log (its children below) unchanged. */}
+        {/* UI-3: behind featureFlags.foodPlanChecklist the day's plan checklist shows first; with no plan, this Food log. */}
         <FoodDayGate
           on={featureFlags.foodPlanChecklist && !!currentUser}
           coached={!!currentUser?.coach_id}
