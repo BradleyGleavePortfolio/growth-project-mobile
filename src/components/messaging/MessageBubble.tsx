@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
 import { typography, radius } from '../../theme/tokens';
+import { RomanDraftFrame, romanMarked, romanMarkedBubble, type RomanDraftContext } from './RomanDraftMark';
 
 export interface BubbleMessage {
   id: string;
@@ -33,6 +34,7 @@ export interface BubbleMessage {
   deleted?: boolean;
   edited?: boolean;
   pinned?: boolean;
+  drafted?: boolean;
 }
 
 export interface MessageBubbleProps {
@@ -42,6 +44,7 @@ export interface MessageBubbleProps {
   showTimestamp?: boolean;
   onLongPress: (m: BubbleMessage) => void;
   onPressParent?: (parentId: string) => void;
+  draftContext?: RomanDraftContext;
 }
 
 export function MessageBubble({
@@ -51,9 +54,11 @@ export function MessageBubble({
   showTimestamp = true,
   onLongPress,
   onPressParent,
+  draftContext,
 }: MessageBubbleProps): React.ReactElement {
   const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const marked = romanMarked(message, draftContext);
 
   const handleLongPress = (): void => {
     HapticService.selection();
@@ -74,6 +79,7 @@ export function MessageBubble({
         message.pending ? styles.rowPending : undefined,
       ]}
     >
+      <RomanDraftFrame marked={marked} isMe={isMe} context={draftContext} width={78} inset={14} onLongPress={handleLongPress}>
       <Pressable
         onLongPress={handleLongPress}
         delayLongPress={350}
@@ -87,6 +93,7 @@ export function MessageBubble({
         style={({ pressed }) => [
           styles.bubble,
           isMe ? styles.bubbleMe : styles.bubbleThem,
+          marked && romanMarkedBubble,
           pressed && styles.bubblePressed,
         ]}
       >
@@ -131,6 +138,7 @@ export function MessageBubble({
           ) : null}
         </Text>}
       </Pressable>
+      </RomanDraftFrame>
 
       {receipt ? <View style={styles.receiptWrap}>{receipt}</View> : null}
     </View>
@@ -145,7 +153,6 @@ const makeStyles = (colors: ThreadColors) =>
     rowPending: { opacity: 1 },
 
     bubble: {
-      maxWidth: '78%',
       borderRadius: radius.card,
       minHeight: 44,
       paddingHorizontal: 14,

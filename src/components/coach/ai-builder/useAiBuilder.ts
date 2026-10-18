@@ -53,6 +53,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied, clientId }: 
   const [proposal, setProposal] = useState<AiBuilderProposal | null>(null);
   const [kept, setKept] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [romanOff, setRomanOff] = useState(false); // COACH-AI-CONSENT: the coach's own Roman is off; the sheet shows CAC-5
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopStages = useCallback(() => void (timer.current && clearInterval(timer.current)), []);
   useEffect(() => stopStages, [stopStages]);
@@ -61,12 +62,14 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied, clientId }: 
     const e = toAiBuilderError(err);
     fireAiHaptic('error');
     setError(describeAiBuilderError(e.code, e.resetsAt));
+    setRomanOff(e.code === 'coach_consent_required');
   }, []);
 
   const propose = useCallback(
     async (args: { instruction: string; quickAction?: AiBuilderQuickAction; injuryArea?: AiBuilderInjuryArea }) => {
       if (!planId || phase === 'thinking' || phase === 'applying') return;
       fireAiHaptic('medium');
+      setRomanOff(false);
       setError(null); setProposal(null); setPhase('thinking'); setStage(0); setStages(aiStages(!!args.injuryArea || !!clientId)); stopStages();
       timer.current = setInterval(() => setStage((s) => Math.min(s + 1, AI_STAGES.length - 1)), AI_STAGE_MS);
       try {
@@ -129,7 +132,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied, clientId }: 
     }
   }, [proposal]);
 
-  return { visible: status.loaded && status.value !== null, status: status.value ?? null, statusError: status.error ?? null, checking: !!status.checking, retryStatus: loadStatus, phase, stage, stages, proposal, kept, acceptedIds, error, propose, toggle, apply, discard };
+  return { visible: status.loaded && status.value !== null, status: status.value ?? null, statusError: status.error ?? null, checking: !!status.checking, retryStatus: loadStatus, phase, stage, stages, proposal, kept, acceptedIds, error, romanOff, propose, toggle, apply, discard };
 }
 
 export type AiBuilderController = ReturnType<typeof useAiBuilder>;

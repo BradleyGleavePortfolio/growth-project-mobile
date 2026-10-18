@@ -1,8 +1,9 @@
 /**
  * Settings > Privacy > Roman and AI: Roman memory on by default (R11-C2B, owner 2026-10-07 10:18).
- * A "Roman's memory" switch at the very bottom: ON for a client-ai-v5 grant; off grants client-ai-v4
- * (Roman stays allowed); on re-grants the server's v5 copy and sha256.
- * Allow grants v5 while the server offers it, otherwise v4 exactly.
+ * A "Roman's memory" switch at the very bottom: ON for a client-ai-v5 grant; off grants the base copy
+ * (Roman stays allowed); on grants the server's memory copy and sha256.
+ * B-A (FIXCONSENT2, b#1047): every new choice is made in the copies asked for (coached client-ai-v6 / v7),
+ * whatever is on file, its exact text shown before it is sent, and the write sends the same ask.
  * R11-C2C (owner 2026-10-07 11:46): Roman's notes are deleted only with the account. No line says
  * that turning memory off deletes them, and there is no control that deletes notes.
  */
@@ -19,8 +20,17 @@ import RomanAiConsentScreen, {
   ROMAN_AI_COPY,
 } from '../RomanAiConsentScreen';
 import { parseStatus, type AiConsentOutcome, type AiConsentStatusResponse } from '../../../api/aiConsentApi';
-import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
-import { resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
+// A server (or a live grant) of the client-ai-v4 / v5 generation, before owner 57c: the app reads and
+// grants it with its own copies (see RomanAiConsent57c.test.tsx for client-ai-v6 / v7).
+import {
+  AI_CONSENT_CHECKBOX_LABEL,
+  AI_CONSENT_PRE57C_COPY_SHA256 as AI_CONSENT_COPY_SHA256,
+  AI_CONSENT_PARAGRAPH_PRE57C as AI_CONSENT_PARAGRAPH,
+  AI_CONSENT_SAFETY_EXCEPTION,
+  AI_CONSENT_COPY_SHA256 as V6_COPY_SHA,
+  AI_CONSENT_MEMORY_COPY_SHA256 as V7_COPY_SHA,
+} from '../../../lib/consultation/copy';
+import { resetAiLedgerWritesForTests, romanFamily } from '../../../lib/consultation/aiConsent';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../utils/haptics', () => ({ lightTap: jest.fn(), warningTap: jest.fn(), selectionTap: jest.fn() }));
@@ -37,6 +47,9 @@ jest.mock('../../../services/sentry', () => ({ captureError: jest.fn(), setSentr
 // Backend src/ai-consent/ai-consent.constants.ts CLIENT_AI_CONSENT_V5_PARAGRAPH (owner D1), verbatim.
 const V5_PARAGRAPH =
   "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Roman may keep notes and summaries about your training, preferences and circumstances to personalise his replies. Deleting a chat removes its messages but not these notes; deleting your account removes them. Roman may also learn your coach's methods, including from your coach's private session notes, and information about your training may help with that without identifying you. Roman never quotes those notes or shows you another client's information. Your coach never sees your conversations with Roman or his notes about you. Your conversations with Roman are kept until you delete them or delete your account.";
+// K2 (owner 57c): Settings shows client-ai-v4 / v5 text with the exception (client-ai-v6 / v7's words).
+const SHOWN_V4 = `${AI_CONSENT_PARAGRAPH} ${AI_CONSENT_SAFETY_EXCEPTION}`;
+const SHOWN_V5 = V5_PARAGRAPH.replace('his notes about you. ', `his notes about you. ${AI_CONSENT_SAFETY_EXCEPTION} `);
 const V5_PARAGRAPH_SHA = '768ae3451fd1fbd22c65fd7758b51604a9ee0696c6ae7fab694c8238a6584782';
 const V5_COPY_SHA = '8c19fca94c2455094c47b1802bb6693aff47d24c7b6df3b256d0a0e8e90fe8ee';
 const LABEL_SHA = 'a'.repeat(64);
@@ -94,6 +107,16 @@ const V5_HOLDER = body({
   scope: 'memory',
   memory_on: true,
 });
+
+/** B-A (b#1047): the copies this screen asks for (flag off), offered whatever is on file; each write sends the GET's ask. */
+const COACHED = romanFamily(false);
+const ASK = { crisis: false };
+const V7_COPY = { ...V5_COPY, version: 'client-ai-v7', paragraph: { text: SHOWN_V5, sha256: V5_PARAGRAPH_SHA }, sha256: V7_COPY_SHA };
+const V6_COPY = { ...V4_COPY, version: 'client-ai-v6', paragraph: { text: SHOWN_V4, sha256: 'b'.repeat(64) }, sha256: V6_COPY_SHA };
+const V4_V7_COPY = body({ ...LIVE_V4, memory_on: true, memory_copy: V7_COPY });
+const V4_V7_UPGRADE = body({ ...LIVE_V4, memory_on: true, upgrade: V7_COPY });
+const LIVE_V6 = body({ ...LIVE_V4, version: 'client-ai-v6', current_version: 'client-ai-v6', copy: V6_COPY, memory_on: true, memory_copy: V7_COPY });
+const V7_HOLDER = body({ ...LIVE_V4, version: 'client-ai-v7', current_version: 'client-ai-v7', copy: V7_COPY, scope: 'memory', memory_on: true });
 
 function makeApi(first: AiConsentStatusResponse, grant: AiConsentOutcome = { kind: 'ok', status: V5_HOLDER }) {
   return {
@@ -175,18 +198,19 @@ describe("the Roman's memory switch (R11-C2B)", () => {
       'roman-ai-delete-account',
       'roman-ai-memory-row',
     ]);
-    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(V5_PARAGRAPH);
+    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V5);
     expect(r.getByTestId('roman-ai-withdraw')).toBeTruthy();
     expect(choiceOf(V5_HOLDER)).toEqual({ choice: 'allowed', withdrawable: true });
   });
 
-  it('switch off asks first, then grants client-ai-v4 (Roman stays allowed); nothing says the notes are deleted', async () => {
-    const api = makeApi(V5_HOLDER, { kind: 'ok', status: V4_MEMORY_COPY });
+  it('switch off asks first, then grants client-ai-v6 (Roman stays allowed); nothing says the notes are deleted', async () => {
+    const api = makeApi(V5_HOLDER, { kind: 'ok', status: LIVE_V6 });
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-memory-row'));
     await fireEvent(memorySwitch(r), 'valueChange', false);
     expect(lastAlert().title).toBe(ROMAN_AI_COPY.confirmMemoryOffTitle);
-    expect(lastAlert().message).toBe(ROMAN_AI_COPY.confirmMemoryOffBody);
+    // B-A: the client-ai-v6 paragraph this records is shown before it is sent, after the memory-off words.
+    expect(lastAlert().message).toBe(`${ROMAN_AI_COPY.confirmMemoryOffBody}\n\n${SHOWN_V4}`);
     // Cancel (or dismissing the alert) sends nothing.
     expect(lastAlert().buttons.map((b) => b.text)).toEqual([ROMAN_AI_COPY.cancel, ROMAN_AI_COPY.memoryOff]);
     expect(lastAlert().buttons[0].onPress).toBeUndefined();
@@ -198,42 +222,43 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     await fireEvent(memorySwitch(r), 'valueChange', false);
     confirmLastAlert(ROMAN_AI_COPY.memoryOff);
     await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256, platform });
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: V6_COPY_SHA, platform }, ASK);
     expect(api.withdrawRoman).not.toHaveBeenCalled();
     await waitFor(() => expect(r.getByTestId('roman-ai-notice').props.children).toBe(ROMAN_AI_COPY.memoryOffDone));
     expect(memorySwitch(r).props.value).toBe(false);
     expect(r.getByTestId('roman-ai-state').props.children).toBe('Allowed');
-    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
-    expect(lastAlert().message).not.toMatch(/delet/i);
+    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V4);
+    // R11-C2C: the memory-off words never say the notes are deleted (the agreement text after them is about chats).
+    expect(lastAlert().message.replace(SHOWN_V4, '')).not.toMatch(/delet/i);
     expect(r.getByTestId('roman-ai-notice').props.children).not.toMatch(/delet/i);
     expect(r.queryByTestId(/notes?-delete|delete-notes?/)).toBeNull();
   });
 
   it.each([
-    ['memory_copy (b#835)', V4_MEMORY_COPY],
-    ['upgrade (R11-C1 server)', V4_WITH_OFFER],
-  ])('switch on from %s asks with the v5 text, then re-grants client-ai-v5 with the server sha256', async (_l, first) => {
-    const api = makeApi(first);
+    ['memory_copy (b#1047)', V4_V7_COPY],
+    ['upgrade', V4_V7_UPGRADE],
+  ])('switch on from %s asks with the v7 text as sent, then grants client-ai-v7 with the server sha256', async (_l, first) => {
+    const api = makeApi(first, { kind: 'ok', status: V7_HOLDER });
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-memory-row'));
     expect(memorySwitch(r).props.value).toBe(false);
     // The first choice stays as it was: still Allowed under the v4 text.
     expect(r.getByTestId('roman-ai-state').props.children).toBe('Allowed');
-    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
+    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V4);
     await fireEvent(memorySwitch(r), 'valueChange', true);
     expect(lastAlert().title).toBe(ROMAN_AI_COPY.confirmMemoryOnTitle);
-    expect(lastAlert().message).toBe(V5_PARAGRAPH);
+    expect(lastAlert().message).toBe(SHOWN_V5);
     expect(api.grantRoman).not.toHaveBeenCalled();
     confirmLastAlert(ROMAN_AI_COPY.memoryOn);
     await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v5', copy_sha256: V5_COPY_SHA, platform });
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v7', copy_sha256: V7_COPY_SHA, platform }, ASK);
     await waitFor(() => expect(memorySwitch(r).props.value).toBe(true));
-    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(V5_PARAGRAPH);
+    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V5);
     expect(r.getByText(ROMAN_AI_COPY.allowedMemoryBody)).toBeTruthy();
   });
 
   it('409 CONSENT_VERSION_MISMATCH on switch on re-reads and says the wording changed', async () => {
-    const api = makeApi(V4_MEMORY_COPY, { kind: 'version_mismatch' });
+    const api = makeApi(V4_V7_COPY, { kind: 'version_mismatch' });
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-memory-row'));
     await fireEvent(memorySwitch(r), 'valueChange', true);
@@ -243,7 +268,9 @@ describe("the Roman's memory switch (R11-C2B)", () => {
   });
 
   it.each([
-    ['memory off on the server', body({ ...LIVE_V4, memory_copy: V5_COPY })],
+    ['a v5 copy for a v4 holder (a server before b#1047 offers the copies on file)', V4_MEMORY_COPY],
+    ['a v5 upgrade for a v4 holder (the same)', V4_WITH_OFFER],
+    ['memory off on the server', body({ ...LIVE_V4, memory_copy: V7_COPY })],
     ['the 10-06 server (upgrade for everyone, no memory_on)', V4_OLD_SERVER],
     ['no v5 copy sent', V4_NO_OFFER],
     ['a v5 copy with another sha256', body({ ...LIVE_V4, memory_on: true, memory_copy: { ...V5_COPY, sha256: 'c'.repeat(64) } })],
@@ -253,44 +280,46 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     const r = await renderScreen(makeApi(status));
     await waitFor(() => r.getByTestId(/^roman-ai-(allowed|not_allowed)$/));
     expect(r.queryByTestId('roman-ai-memory-row')).toBeNull();
-    expect(memorySwitchOf(status)).toBeNull();
+    expect(memorySwitchOf(status, COACHED)).toBeNull();
   });
 
   it('a v5 status without its text is not Allowed here and has no switch', () => {
     const noText = body({ ...LIVE_V4, version: 'client-ai-v5', current_version: 'client-ai-v5', copy: null });
     expect(isMemoryAllowed(noText)).toBe(false);
     expect(choiceOf(noText).choice).toBe('update_app');
-    expect(memorySwitchOf(noText)).toBeNull();
-    expect(memorySwitchOf(V5_HOLDER)).toEqual({ on: true, onCopy: null });
-    expect(memorySwitchOf(V4_MEMORY_COPY)?.onCopy?.sha256).toBe(V5_COPY_SHA);
+    expect(memorySwitchOf(noText, COACHED)).toBeNull();
+    expect(memorySwitchOf(V5_HOLDER, COACHED)).toEqual({ on: true, onCopy: null });
+    expect(memorySwitchOf(V4_V7_COPY, COACHED)?.onCopy?.sha256).toBe(V7_COPY_SHA);
+    expect(memorySwitchOf(V4_MEMORY_COPY, romanFamily(false, true))).toBeNull();
   });
 });
 
-describe('Allow grants client-ai-v5 while the server offers it (same Roman consent, memory on by default)', () => {
-  it('not allowed + memory on: the v5 text, and Allow grants client-ai-v5 with the server sha256', async () => {
-    const api = makeApi(body({ memory_on: true, memory_copy: V5_COPY }));
+describe('Allow grants the memory copy while the server offers it (same Roman consent, memory on by default)', () => {
+  it('not allowed + memory on: the v7 text as sent, and Allow grants client-ai-v7 with the server sha256', async () => {
+    const api = makeApi(body({ memory_on: true, memory_copy: V7_COPY }), { kind: 'ok', status: V7_HOLDER });
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-not_allowed'));
-    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(V5_PARAGRAPH);
+    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V5);
     expect(r.queryByTestId('roman-ai-memory-row')).toBeNull();
     await fireEvent.press(r.getByTestId('roman-ai-allow'));
     expect(lastAlert().message).toBe(AI_CONSENT_CHECKBOX_LABEL.replace(/^Optional: /, ''));
     confirmLastAlert('Allow');
     await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v5', copy_sha256: V5_COPY_SHA, platform });
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v7', copy_sha256: V7_COPY_SHA, platform }, ASK);
   });
 
-  it('otherwise Allow still grants client-ai-v4 with this build\u2019s copy hash (the current production server)', async () => {
-    const api = makeApi(body({ upgrade: V5_COPY, memory_on: true }), { kind: 'ok', status: V4_NO_OFFER });
+  it('otherwise Allow grants client-ai-v6 with this build\u2019s copy hash, never a v4 / v5 copy on file', async () => {
+    const api = makeApi(body({ upgrade: V5_COPY, memory_on: true, memory_copy: V5_COPY }), { kind: 'ok', status: LIVE_V6 });
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-not_allowed'));
-    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
-    expect(allowCopyOf(body({ upgrade: V5_COPY, memory_on: true }))).toBeNull();
+    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V4);
+    expect(allowCopyOf(body({ upgrade: V5_COPY, memory_on: true, memory_copy: V5_COPY }), COACHED)).toBeNull();
     await fireEvent.press(r.getByTestId('roman-ai-allow'));
     confirmLastAlert('Allow');
     await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
     expect(api.grantRoman.mock.calls[0]).toEqual([
-      expect.objectContaining({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256 }),
+      expect.objectContaining({ version: 'client-ai-v6', copy_sha256: V6_COPY_SHA }),
+      ASK,
     ]);
   });
 });

@@ -38,6 +38,7 @@ import {
 import type { ProgramsNav } from "./types";
 import MealPlansHome from "../meals/MealPlansHome";
 import { ProgramsTabs, type ProgramsHalf } from "../meals/mealUi";
+import { CoachLessonsEntry } from "../CoachLessons";
 
 type Tab = "programs" | "saved";
 
@@ -102,6 +103,7 @@ export default function ProgramsLibraryScreen() {
         )}
       </View>
       {featureFlags.mealPlansV2 ? <ProgramsTabs value="workouts" onChange={setHalf} /> : null}
+      <CoachLessonsEntry />
       {aiEntry.visible && featureFlags.mwbAutosave ? (
         <View style={styles.row}>
           <SmallButton

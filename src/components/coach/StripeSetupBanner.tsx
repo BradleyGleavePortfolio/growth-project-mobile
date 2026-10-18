@@ -87,7 +87,7 @@ export default function StripeSetupBanner() {
   }, [dismissedKey]);
 
   const handlePress = useCallback(() => {
-    navigation.navigate('SettingsStack', { screen: 'Billing' });
+    navigation.navigate('SettingsStack', { screen: 'Billing', initial: false }); // Settings home stays beneath
   }, [navigation]);
 
   if (!visible) return null;

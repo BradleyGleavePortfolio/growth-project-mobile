@@ -7,8 +7,6 @@ import { bucketDateLocal, getTodayString } from '../../../utils/date';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientProfile, FoodLog, WeightLog } from '../../../types';
 import {
-  normaliseServerPlans,
-  type CoachMealPlan,
   type TimelineEvent,
   type WeekSummary,
   type WorkoutSession,
@@ -16,10 +14,9 @@ import {
 import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
 
 export function useClientDetailData(clientId: string, colors: ThemeColors, coachId?: string) {
-  const [profile, setProfile] = useState<ClientProfile | null>(null);
+  const [profile, setProfile] = useState<(ClientProfile & { name?: string }) | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
-  const [foodShared, setFoodShared] = useState(true);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -62,10 +59,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     void loadArchiveStatus();
   }, [loadArchiveStatus]);
 
-  const [serverMealPlans, setServerMealPlans] = useState<CoachMealPlan[]>([]);
-  const [mealPlansLoading, setMealPlansLoading] = useState(false);
-  const [mealPlansError, setMealPlansError] = useState<string | null>(null);
-
   const loadData = useCallback(async () => {
     try {
       if (!refreshingRef.current) setIsLoading(true);
@@ -75,7 +68,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       const res = await coachApi.getClientSummary(clientId, today);
       const data = res.data;
       if (data.error) return;
-      setFoodShared(data.consent?.food_macros !== false);
       // Set profile
       setProfile(data.profile ? {
         ...data.profile,
@@ -139,20 +131,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       setLoadError(errorMessage(err, 'Could not load this client. Please try again.'));
     } finally {
       setIsLoading(false);
-    }
-  }, [clientId]);
-
-  const loadServerMealPlans = useCallback(async () => {
-    setMealPlansLoading(true);
-    setMealPlansError(null);
-    try {
-      const res = await coachApi.listClientMealPlans(clientId);
-      setServerMealPlans(normaliseServerPlans(res.data));
-    } catch (err) {
-      console.error('ClientDetailScreen: listClientMealPlans failed', err);
-      setMealPlansError(errorMessage(err, 'Could not load meal plans.'));
-    } finally {
-      setMealPlansLoading(false);
     }
   }, [clientId]);
 
@@ -380,7 +358,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     profile,
     foodLogs,
     totals,
-    foodShared,
     weightLogs,
     workoutSessions,
     timeline,
@@ -399,11 +376,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     setTimeline,
     setWeekSummaries,
     setRefreshing,
-    serverMealPlans,
-    mealPlansLoading,
-    mealPlansError,
     loadData,
-    loadServerMealPlans,
     loadTimeline,
     loadWeeklySummaries,
     markCheckInReviewed,

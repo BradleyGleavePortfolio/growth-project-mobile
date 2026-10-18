@@ -14,7 +14,7 @@ import {
   useMyAvailabilityOverrides,
   useSchedulingTimezone,
 } from '../../hooks/useCalendar';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
 import { calendarDateInZone } from '../../calendar/calendarTime';
@@ -194,11 +194,11 @@ export default function CoachTimeOffScreen() {
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
   label: { ...typography.caption, marginTop: spacing.lg, marginBottom: spacing.xs },
-  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 2, padding: spacing.md, ...typography.body },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.input, padding: spacing.md, ...typography.body },
   switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg },
   timeRow: { flexDirection: 'row', gap: spacing.md },
   timeCol: { flex: 1 },
   primary: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: spacing.lg },
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 4, padding: spacing.md, marginTop: spacing.md },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: spacing.md, marginTop: spacing.md },
   secondary: { minHeight: 44, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: spacing.sm },
 });

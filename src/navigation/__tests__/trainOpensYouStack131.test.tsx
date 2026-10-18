@@ -41,7 +41,9 @@ jest.mock('../../services/api', () => ({
     deleteWorkout: async () => ({}),
   },
 }));
-let mockAssignments: Array<{ id: string; completed_at: string | null; workout_plan: { name: string } }> = [];
+let mockAssignments: Array<{
+  id: string; completed_at: string | null; workout_plan: { name: string }; snapshot?: { plan_name: string };
+}> = [];
 jest.mock('../../hooks/useWorkoutBuilder', () => ({
   useMyWorkoutAssignments: () => ({ data: mockAssignments, refetch: async () => ({}) }),
 }));
@@ -121,6 +123,14 @@ describe('Train opens coach workouts above the You menu (m#542 B1 / B-542-SOL-13
     });
     await waitFor(() => expect(youStack(ref.getRootState() as StateLike)).toEqual(['MoreIndex']));
     expect(view.getByText(YOU_MENU)).toBeTruthy();
+  });
+
+  it('K3FIX-SNAPSHOT: the pending workout keeps its frozen name after the coach renames the plan', async () => {
+    mockAssignments = [{ id: 'a1', completed_at: null, workout_plan: { name: 'Upper body A v2' }, snapshot: { plan_name: 'Upper body A' } }];
+    const { view } = await openTrain();
+    expect(await view.findByLabelText('Open assigned workout: Upper body A')).toBeTruthy();
+    expect(view.getByText('Upper body A')).toBeTruthy();
+    expect(view.queryByText('Upper body A v2')).toBeNull();
   });
 });
 

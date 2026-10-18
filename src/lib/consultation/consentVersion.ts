@@ -21,9 +21,10 @@
  * with D2; it must become 'consult-consent-v3' with this copy) and rejects any other P0 with 409
  * consent_missing, so the two sides move together. Any change to the P0
  * text needs a new version here AND on the backend.
- * v5 (owner C-6a, 2026-10-12): v3 without paragraph 3's clinic sentence.
+ * v5 (owner C-6a, 2026-10-12): v3 without paragraph 3's referral-partner sentence.
+ * v7 (owner 57c, 2026-10-12): v5 with the safety-reply exception in paragraph 4 (client-ai-v6).
  */
-export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v5' as const;
+export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v7' as const;
 
 // Title of the consent screen (P0). Lives here, a module with no imports, so
 // the screen definition (definitions.ts) and the hashed copy (copy.ts) share
@@ -37,31 +38,58 @@ export const CONSENT_TITLE = 'Before we start';
  * 20:32, OR-110-1); v3 named a fixed retention period, which was never true. The P0 version
  * moved to consult-consent-v3 with it, because the whole screen's text
  * changed (backend #607 must accept consult-consent-v3).
+ * v6 (owner 57c, 2026-10-12): v4 plus the safety-reply exception sentence; the app asks the server for
+ * it with GET ?variant=safety_exception.
  */
-export const AI_CONSENT_VERSION = 'client-ai-v4' as const;
+export const AI_CONSENT_VERSION = 'client-ai-v6' as const;
 
 /**
  * Optional Roman memory permission (backend R11-C1, owner D1 10-06). The app holds no text for it: the
  * server sends it as `upgrade` only while Roman memory is on, and Settings > Privacy > Roman and AI shows
  * that text and grants this version with the server's sha256. First consent stays AI_CONSENT_VERSION.
  */
-export const AI_CONSENT_MEMORY_VERSION = 'client-ai-v5' as const;
+export const AI_CONSENT_MEMORY_VERSION = 'client-ai-v7' as const;
+
+/**
+ * The coached versions before owner 57c (client-ai-v4 / v5). A grant of them stays live; the server
+ * keeps answering such a client with these copies, and this build still shows them.
+ */
+export const AI_CONSENT_PRE57C_VERSION = 'client-ai-v4' as const;
+export const AI_CONSENT_PRE57C_MEMORY_VERSION = 'client-ai-v5' as const;
 
 /**
  * R11-C2B (owner 10-07 10:18, Roman memory on by default): the P0 screen version when box 2 shows the
  * server's client-ai-v5 paragraph (backend consult-consent-v6: the v5 screen with that paragraph 4;
- * consult-consent-v4 before owner C-6a).
- * Otherwise P0 stays CONSULT_CONSENT_COPY_VERSION with today's v4 paragraph.
+ * consult-consent-v4 before owner C-6a, v6 before owner 57c).
+ * Otherwise P0 stays CONSULT_CONSENT_COPY_VERSION with this build's base paragraph.
  */
-export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v6' as const;
+export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v8' as const;
 
 /**
- * Owner 62 (Option 1, 2026-10-12): a client with no coach sees the coach-free P0 (the v5 / v6 text
- * with every coach sentence or clause removed) and the coach-free box 2 copies. Same rules and scopes
- * as the coached versions above; the backend accepts and pins all of them.
+ * CRISIS-APP-COPY (owner op 1, backend b#1041): client-ai-v6 / v7 and P0 v7 / v8 with the approved crisis
+ * sentence right after the exception. The app asks GET ?variant=crisis_alert exactly while the server's
+ * `roman_crisis_alert` flag is on, and shows (and records) these only when the server answers with them.
  */
-export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v5-coach-free' as const;
-export const CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION = 'consult-consent-v6-coach-free' as const;
+export const AI_CONSENT_CRISIS_VERSION = 'client-ai-v8' as const;
+export const AI_CONSENT_CRISIS_MEMORY_VERSION = 'client-ai-v9' as const;
+export const CONSULT_CONSENT_CRISIS_COPY_VERSION = 'consult-consent-v9' as const;
+export const CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v10' as const;
+
+/**
+ * Owner 62 (Option 1, 2026-10-12): a client with no coach sees the coach-free P0 (the coached text
+ * with every coach sentence or clause removed). Owner 62y2 (Option 1): without paragraph 4 and box 2
+ * (no Roman choice), footer "Nothing is sent until you continue." (consult-consent-v7-coach-free).
+ * W-CONSENT asks the coached box 2 again under "Before you join a coach", so the record names that whole
+ * screen (FIX684): consult-consent-v8-coach-free, or v9-coach-free when box 2 shows the server's memory
+ * paragraph. A stored v7-coach-free record stays as it is (#CRISIS-OLD-CONSENT op 1: nobody is asked again).
+ * The coach-free box 2 versions stay known so a grant recorded before is still read correctly.
+ */
+export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v8-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION = 'consult-consent-v9-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION = 'consult-consent-v7-coach-free' as const;
+/** FIXCONSENT (b#1046): v8 / v9-coach-free with paragraph 4 of consult-consent-v9 / v10 (the crisis copies answered). */
+export const CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION = 'consult-consent-v10-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v11-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_VERSION = 'client-ai-v4-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_MEMORY_VERSION = 'client-ai-v5-coach-free' as const;
 

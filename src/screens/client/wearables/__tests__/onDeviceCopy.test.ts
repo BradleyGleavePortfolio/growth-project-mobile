@@ -15,6 +15,8 @@ jest.mock('../../../../lib/consultation/report', () => ({
 import {
   WEARABLES_SUPPORT_EMAIL,
   cloudConnectFailureMessage,
+  cloudFinishFailureMessage,
+  cloudReturnTicket,
   cloudSessionLockedMessage,
   connectFailureMessage,
   ctaLabelFor,
@@ -278,5 +280,33 @@ describe('S-WEAR-3: permission states', () => {
     expect(ctaLabelFor({ action: 'resume' })).toBe('Try again');
     expect(ctaLabelFor({ action: 'login' })).toBe('Log in again');
     expect(ctaLabelFor({ action: 'open_settings' })).toBe('Open Health Connect');
+  });
+});
+
+describe('cloudFinishFailureMessage (A6, AUTHB-05)', () => {
+  const didNotFinish = 'Oura isn\'t connected. The sign-in with Oura did not finish. Tap Continue to try again.';
+
+  it('a refused, expired or used ticket (400) or a drifted reply did not finish, with Continue', () => {
+    for (const err of [httpError(400, {}), new Error('drift')]) {
+      expect(cloudFinishFailureMessage(err, 'Oura')).toEqual({ text: didNotFinish, action: 'connect' });
+    }
+    expect(mockReportUnexpected).not.toHaveBeenCalled();
+  });
+
+  it('any other failure gets the cloud connect copy for its status', () => {
+    expect(cloudFinishFailureMessage(networkError(), 'Oura').text).toMatch(/Check your internet connection/);
+    expect(cloudFinishFailureMessage(httpError(401, {}), 'Oura').action).toBe('login');
+    expect(cloudFinishFailureMessage(httpError(500, {}, 'req-a6'), 'Oura').text).toMatch(/Reference /);
+    expect(mockReportUnexpected).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('cloudReturnTicket (A6, AUTHB-05)', () => {
+  it('reads the single-use ticket a good return carries, and nothing else', () => {
+    expect(cloudReturnTicket('tgp://wearables/connected?status=ok&provider=OURA&ticket=aB3_-x')).toBe(
+      'aB3_-x',
+    );
+    expect(cloudReturnTicket('tgp://wearables/connected?status=error')).toBeNull();
+    expect(cloudReturnTicket(undefined)).toBeNull();
   });
 });

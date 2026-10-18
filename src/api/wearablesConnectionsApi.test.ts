@@ -16,6 +16,8 @@
 
 import {
   wearablesConnectionsApi,
+  claimReturnTicket,
+  returnTicketClaimed,
   configFor,
   isOnDeviceProvider,
   providerAuthModel,
@@ -152,6 +154,29 @@ describe('wearablesConnectionsApi.startOauth', () => {
       data: { authorizationUrl: 'https://example.com/auth' },
     });
     await expect(wearablesConnectionsApi.startOauth('WHOOP')).rejects.toThrow();
+  });
+});
+
+// A6 (AUTHB-05): the signed-in app finishes a returned link with its ticket.
+describe('wearablesConnectionsApi.completeOauth', () => {
+  it('POSTs /oauth/complete with { ticket } and returns the provider', async () => {
+    api.post.mockResolvedValueOnce({ data: { success: true, provider: 'OURA' } });
+    await expect(wearablesConnectionsApi.completeOauth('t-1')).resolves.toBe('OURA');
+    expect(api.post).toHaveBeenCalledWith('/v1/wearables/connections/oauth/complete', {
+      ticket: 't-1',
+    });
+  });
+
+  it('throws (Zod) on a drifted response', async () => {
+    api.post.mockResolvedValueOnce({ data: { success: true, provider: 'NOPE' } });
+    await expect(wearablesConnectionsApi.completeOauth('t-2')).rejects.toThrow();
+  });
+
+  it('claims a returned ticket once per app run', () => {
+    expect(returnTicketClaimed('t-claim')).toBe(false);
+    expect(claimReturnTicket('t-claim')).toBe(true);
+    expect(claimReturnTicket('t-claim')).toBe(false);
+    expect(returnTicketClaimed('t-claim')).toBe(true);
   });
 });
 

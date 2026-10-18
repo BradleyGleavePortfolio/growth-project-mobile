@@ -26,6 +26,7 @@
  */
 import { featureFlags } from '../config/featureFlags';
 import { creditPacksHidden } from '../config/purchaseSurfaces';
+import { incomingLinkPath, isPublicLinkPath, resolveAppLink } from '../navigation/incomingLinks';
 
 export interface PushNavigator {
   isReady(): boolean;
@@ -56,8 +57,12 @@ interface Target {
    * opened by a push still reaches Settings, sign out and account deletion).
    */
   initial?: false;
+  /** true when `screen` is its stack's root: back to the open one, never a second copy (LO-773 N4). */
+  pop?: true;
   /** Fixed params for a root-only target (merged over the push's own). */
   params?: Record<string, string>;
+  /** The stack routes set under `screen`, so Back walks them (TIMELINE: Timeline over Progress). */
+  beneath?: string[];
 }
 
 type Resolver = () => Target | null;
@@ -69,7 +74,11 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   // Legacy name: the Home stack's Notifications stub resolves to the center.
   Notifications: () => ({ root: 'Home', screen: 'NotificationCenter' }),
   Habits: () => ({ root: 'Home', screen: 'Habits' }),
-  Timeline: () => ({ root: 'MoreTab', screen: 'Timeline' }),
+  // TIMELINE (#TIMELINE-DOOR op 1): the Style C Timeline opens over Progress, its door; off, over You.
+  Timeline: () =>
+    featureFlags.clientTimelineV2
+      ? { root: 'MoreTab', screen: 'Timeline', beneath: ['MoreIndex', 'Progress'] }
+      : { root: 'MoreTab', screen: 'Timeline' },
   MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex' }),
   // Legacy Guidance notifications open Roman when available, otherwise You.
   AIGuide: () => ({
@@ -98,13 +107,17 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
 
 /** Coach destinations. Root = CoachNavigator tab names. */
 export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
-  Messages: () => ({ root: 'Messages' }),
+  // COACH-CHAT-BACK: with the six tabs Messages is a stack; a message push opens its inbox, not a chat left open there.
+  Messages: () => (featureFlags.coachTabsV2 ? { root: 'Messages', screen: 'MessagesInbox', pop: true } : { root: 'Messages' }),
   NotificationCenter: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   Notifications: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
   // S-SCHED: coach booking pushes open the booking inbox.
   // COACHTABS: with the six tabs the booking inbox is the Calendar tab's root.
-  CoachBookingInbox: () => ({ root: featureFlags.coachTabsV2 ? 'CalendarStack' : 'ClientsStack', screen: 'CoachBookingInbox' }),
+  CoachBookingInbox: () =>
+    featureFlags.coachTabsV2
+      ? { root: 'CalendarStack', screen: 'CoachBookingInbox', pop: true }
+      : { root: 'ClientsStack', screen: 'CoachBookingInbox' },
   // B-R1F: a Roman safety alert push or inbox row sent before 57d opens
   // Command Center > Actions.
   CoachActionQueue: () => ({ root: 'CommandCenter', params: { tab: 'action-queue' } }),
@@ -125,8 +138,8 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   // (whose gated wrapper would only say the packs are not sold here).
   CreditPackCheckout: () =>
     creditPacksHidden()
-      ? { root: 'SettingsStack', screen: 'SettingsHome' }
-      : { root: 'SettingsStack', screen: 'CreditPackCheckout' },
+      ? { root: 'SettingsStack', screen: 'SettingsHome', pop: true }
+      : { root: 'SettingsStack', screen: 'CreditPackCheckout', initial: false },
   CommunityEventDetail: () =>
     featureFlags.coachCommunity && featureFlags.communityEvents
       ? { root: 'CommunityStack', screen: 'CoachCommunityEvents' }
@@ -153,6 +166,8 @@ const SCREEN_NAME = /^[A-Za-z][A-Za-z0-9]{0,63}$/;
 interface PendingTap {
   screen: string;
   params?: Record<string, string>;
+  path?: string;
+  waitForSignIn?: boolean;
   /** The signed-in user the tap belongs to; null while bootstrap is unknown. */
   ownerUserId: string | null;
 }
@@ -232,11 +247,11 @@ export function attachPushNavigator(nav: PushNavigator): () => void {
 export function setPushSession(next: PushSession): void {
   session = next;
   if (!pending) return;
-  if (next.kind === 'signedOut') {
+  if (next.kind === 'signedOut' && !pending.waitForSignIn) {
     pending = null;
     return;
   }
-  if (next.kind === 'unknown') return;
+  if (next.kind === 'unknown' || next.kind === 'signedOut') return;
   const uid = next.userId;
   if (pending.ownerUserId === null) {
     pending.ownerUserId = uid;
@@ -244,6 +259,7 @@ export function setPushSession(next: PushSession): void {
     pending = null;
     return;
   }
+  if (uid !== null) pending.waitForSignIn = false;
   flushPendingPushTap();
 }
 
@@ -251,7 +267,18 @@ export function routePushTap(
   actionScreen?: string,
   actionParams?: unknown,
   notificationId?: string,
+  deepLink?: string,
 ): void {
+  if (deepLink !== undefined) {
+    const path = incomingLinkPath(deepLink);
+    if (path === null) return;
+    // Specific action screens (safety alerts, bookings) retain their richer
+    // params. A generic inbox fallback must not swallow a real app link.
+    if (!actionScreen || actionScreen === 'NotificationCenter') {
+      routeAppLink(path, false, notificationId);
+      return;
+    }
+  }
   if (!actionScreen || typeof actionScreen !== 'string' || !SCREEN_NAME.test(actionScreen)) return;
   if (notificationId) {
     if (seen.has(notificationId)) return;
@@ -264,6 +291,21 @@ export function routePushTap(
     screen: actionScreen,
     params: decodePushParams(actionParams),
     ownerUserId: sessionUserId(session),
+  };
+  flushPendingPushTap();
+}
+
+/** Shared queue for cold-start URLs, foreground opens and push URL payloads. */
+export function routeAppLink(path: string, waitForSignIn = true, notificationId?: string): void {
+  if (isPublicLinkPath(path)) return;
+  if (!waitForSignIn && session.kind === 'signedOut') return;
+  if (notificationId) {
+    if (seen.has(notificationId)) return;
+    rememberId(notificationId);
+  }
+  pending = {
+    screen: waitForSignIn ? '' : 'NotificationCenter', path, ownerUserId: sessionUserId(session),
+    waitForSignIn: waitForSignIn && (session.kind === 'unknown' || session.kind === 'signedOut'),
   };
   flushPendingPushTap();
 }
@@ -289,8 +331,16 @@ export function flushPendingPushTap(): boolean {
   // frame between an auth-state change and the navigator commit).
   if (!routeNames.includes(ROLE_ANCHOR[session.role])) return false;
 
-  const { screen, params } = pending;
+  const { screen, params, path } = pending;
   pending = null;
+  if (path !== undefined) {
+    const target = resolveAppLink(path, session.role);
+    // A trusted but unsupported push URL keeps its existing inbox fallback.
+    // URL opens have no fallback, and untrusted origins never enter the queue.
+    if (!target) return screen ? deliver(navigator, session.role, routeNames, screen, params) : false;
+    if (!routeNames.includes(target.root)) return false;
+    return deliverTarget(navigator, target, target.params);
+  }
   // Unroutable target: dropped rather than crashing (deliver returns false).
   deliver(navigator, session.role, routeNames, screen, params);
   return true;
@@ -307,12 +357,21 @@ function deliver(
   if (!routeNames.includes(target.root)) {
     target = resolvePushTarget(role, 'NotificationCenter');
   }
+  return deliverTarget(nav, target, params);
+}
+
+function deliverTarget(nav: PushNavigator, target: Target, params?: Record<string, string>): boolean {
   try {
-    if (target.screen) {
+    if (target.screen && target.beneath) {
+      nav.navigate(target.root, {
+        state: { routes: [...target.beneath.map((name) => ({ name })), { name: target.screen, params }] },
+      });
+    } else if (target.screen) {
       nav.navigate(target.root, {
         screen: target.screen,
         params,
         ...(target.initial === false ? { initial: false } : {}),
+        ...(target.pop ? { pop: true } : {}),
       });
     } else {
       nav.navigate(target.root, target.params ? { ...params, ...target.params } : params);
