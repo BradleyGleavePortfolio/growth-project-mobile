@@ -22,7 +22,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import { romanGenericError } from '../../lib/roman/copy';
-import { colors, spacing, typography } from '../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../theme/tokens';
 
 export interface RomanErrorBannerProps {
   /**
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.cream,
-    borderRadius: 4,
+    borderRadius: radius.card,
     borderLeftWidth: 3,
     borderLeftColor: colors.error,
   },

@@ -1,4 +1,7 @@
 import React from 'react';
+import { readdirSync, readFileSync } from 'fs';
+import { join, resolve } from 'path';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { z } from 'zod';
 import RomanAdjustmentCard from '../RomanAdjustmentCard';
@@ -6,6 +9,11 @@ import RomanAdjustmentsSection from '../RomanAdjustmentsSection';
 import { ADJUST_CLIENT_UNDO_SECONDS, ADJUST_ERROR_FALLBACKS, adjustErrorView } from '../romanAdjustCopy';
 import type { RomanAdjustment } from '../../../../api/romanAdjustApi';
 import { captureError } from '../../../../services/sentry';
+import { radius } from '../../../../theme/tokens';
+import RomanBriefCard from '../../RomanBriefCard';
+import RomanErrorBanner from '../../RomanErrorBanner';
+import RomanStreakCard from '../../RomanStreakCard';
+import RomanWorkoutCompleteCard from '../../RomanWorkoutCompleteCard';
 
 jest.mock('../../../../services/sentry', () => ({ captureError: jest.fn() }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({
@@ -401,4 +409,24 @@ describe('RomanAdjustmentsSection', () => {
     await fireEvent.press(r.getByTestId('roman-adjust-section-retry'));
     await waitFor(() => expect(r.getByTestId('roman-adjust-card-p1')).toBeTruthy());
   });
+});
+
+// ROMAN-RADIUS (owner: "nice rounded corners, luxurious, not rectangles"): every Roman card is a 16 pt card and its
+// buttons are 12 pt buttons, and no file under components/roman sets a literal radius again.
+it('ROMAN-RADIUS: Roman cards use radius.card, their buttons radius.button, and no Roman file has a literal radius', async () => {
+  const r = await render(<>
+    <RomanWorkoutCompleteCard mode="default" testID="workout" />
+    <RomanStreakCard tier={3} firstName="Sam" mode="default" testID="streak" />
+    <RomanBriefCard coachName="Marcus" clientCount={6} mode="default" testID="brief" />
+    <RomanErrorBanner testID="toast" />
+    <RomanAdjustmentCard proposal={proposal()} onSettled={jest.fn()} onChanged={jest.fn()} deps={{ now: () => NOW }} />
+  </>);
+  const corner = (id: string) => StyleSheet.flatten(r.getByTestId(id).props.style).borderRadius;
+  for (const id of ['workout', 'streak', 'brief', 'toast', 'roman-adjust-card']) expect([id, corner(id)]).toEqual([id, radius.card]);
+  for (const id of ['approve', 'edit-open', 'dismiss']) expect([id, corner(`roman-adjust-card-${id}`)]).toEqual([id, radius.button]);
+  const dir = resolve(__dirname, '../..');
+  const files = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => f.endsWith('.tsx') && !f.includes('__tests__'));
+  expect(files.length).toBeGreaterThan(20);
+  const literal = files.filter((f) => /border\w*Radius:\s*\d/.test(readFileSync(join(dir, f), 'utf8')));
+  expect(literal).toEqual([]);
 });
