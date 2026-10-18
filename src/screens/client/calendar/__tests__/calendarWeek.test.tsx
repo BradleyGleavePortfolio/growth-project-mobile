@@ -165,13 +165,13 @@ it('successfully empty week is honest; completed rows say Done', async () => {
   expect(within(done.getByTestId('week-workout-assignment-own')).getByText('Done')).toBeTruthy();
 });
 
-it.each([
+it.each<[string, Partial<CalendarWeekData>]>([
   ['loading', { loading: true, sessions: [], workouts: [], checkIns: [], hasData: false }],
   ['empty', { sessions: [], workouts: [], checkIns: [] }],
   ['error', { failed: true, sessions: [], workouts: [], checkIns: [] }],
   ['offline', { offline: true }],
   ['full', {}],
-] as const)('%s: the tan page is solid to the footer and stays opaque while a day tap inks in', async (_state, data) => {
+])('%s: the tan page is solid to the footer and stays opaque while a day tap inks in', async (_state, data) => {
   const r = await page(data);
   await fireEvent.press(r.getByTestId(`week-day-${addDays(getLocalWeekStart(), 6)}`));
   const style = StyleSheet.flatten(r.getByTestId('week-page').props.style);
