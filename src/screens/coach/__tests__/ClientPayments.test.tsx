@@ -357,7 +357,7 @@ describe("entry and parity (COACH-PAY-M-130)", () => {
   it("the client page passes Payments only while coach_payment_actions is on; the route is registered once", () => {
     const src = (...p: string[]) => fs.readFileSync(path.resolve(__dirname, "..", "..", "..", ...p), "utf8");
     expect(src("screens", "coach", "ClientDetailScreen.tsx")).toMatch(
-      /onOpenPayments=\{\s*serverFlags\.flags\.coach_payment_actions\s*\?\s*\(\) => navigation\.navigate\('ClientPayments', \{ clientId, clientName: route\.params\.clientName \}\)\s*:\s*undefined/,
+      /onOpenPayments=\{\s*serverFlags\.flags\.coach_payment_actions\s*\?\s*\(\) => navigation\.navigate\('ClientPayments', \{ clientId, clientName \}\)\s*:\s*undefined/,
     );
     const nav = src("navigation", "CoachNavigator.tsx");
     expect(nav.match(/name="ClientPayments"/g)).toHaveLength(1);

@@ -257,13 +257,15 @@ export default function MoreScreen() {
   const items = useMemo<MoreItem[]>(
     () => {
       const roman = featureFlags.romanChat ? [ROMAN_MORE_ITEM] : [];
+      // TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here.
+      const plan = featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
       // The clinic tutorial spotlights the wearables rows, so they stay at the
       // top there (unchanged); elsewhere they follow the plan rows.
       if (featureFlags.clientTutorial) {
-        return [...WEARABLE_MORE_ITEMS, ...roman, ...PLAN_MORE_ITEMS, ...MORE_ITEMS];
+        return [...WEARABLE_MORE_ITEMS, ...roman, ...plan, ...MORE_ITEMS];
       }
       const wearables = showsWearableRows() ? WEARABLE_MORE_ITEMS : [];
-      return [...roman, ...PLAN_MORE_ITEMS, ...wearables, ...MORE_ITEMS];
+      return [...roman, ...plan, ...wearables, ...MORE_ITEMS];
     },
     [],
   );

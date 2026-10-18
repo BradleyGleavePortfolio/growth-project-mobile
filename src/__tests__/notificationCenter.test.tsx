@@ -15,9 +15,9 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { routeInAppNotification } from '../services/pushTapRouter';
+import { routeInAppNotification, routePushTap } from '../services/pushTapRouter';
 import { featureFlags } from '../config/featureFlags';
-jest.mock('../services/pushTapRouter', () => ({ routeInAppNotification: jest.fn(() => false) }));
+jest.mock('../services/pushTapRouter', () => ({ routeInAppNotification: jest.fn(() => false), routePushTap: jest.fn() }));
 jest.mock('react-native/Libraries/Components/RefreshControl/RefreshControl', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -216,6 +216,15 @@ describe('NotificationCenterScreen', () => {
     // Should not show the empty state.
     expect(queryByText('No notifications.')).toBeNull();
   });
+
+  it.each(['tgp://meal-plan/137c1340-c8a2-45d6-a006-7a6e695ed845', 'https://unknown.example/meal-plan/one'])(
+    'sends row URLs only to the shared trusted receiver: %s', (deepLink) => {
+      routeNotification({ id: 'meal', kind: 'coach', title: 'Note', body: '', read: false,
+        createdAt: new Date().toISOString(), actionScreen: 'NotificationCenter', deepLink }, { navigate: mockNavigate });
+      expect(routePushTap).toHaveBeenCalledWith('NotificationCenter', undefined, undefined, deepLink);
+      expect(mockNavigate).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([true, false])('legacy Guidance fallback redirects with Roman=%s', (roman) => {
     const flag = jest.replaceProperty(featureFlags, 'romanChat', roman);
