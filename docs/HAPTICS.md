@@ -79,6 +79,7 @@ When the toggle changes:
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
 | `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |
 | Consultation T1, B1, B3, N1, N2 (`consultTilesV2` on) | `selection()` | A tile, chip, or Imperial / Metric tap (ONBQ-TILES) |
+| `roman/RomanCrisisActions` (CRISIS-BTN, `crisisActions` on) | `softImpact()` | Call 911, Call 988, Text 988 or Message <coach> under Roman's marked crisis reply; none when the reply arrives |
 
 ## Architecture
 
