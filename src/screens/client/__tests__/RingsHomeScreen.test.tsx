@@ -3,14 +3,13 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
+import type { WearableSamplesResponse } from '../../../api/wearablesSamplesApi';
 
 const mockNavigate = jest.fn();
 const mockHistory = jest.fn();
 const mockAssignments = jest.fn();
 let mockRomanChat = true;
-let mockRecovery: number | null = null;
-let mockAsleep: number | null = null;
-let mockSleepData: object | undefined;
+let mockSleepData: WearableSamplesResponse | undefined;
 let mockCheckIn: unknown = null;
 let mockSleepRead: 'ok' | 'failed' | 'pending' = 'ok';
 let mockCheckInRead: 'ok' | 'failed' | 'pending' = 'ok';
@@ -50,11 +49,6 @@ jest.mock('../../../entitlements/EntitlementProvider', () => ({
   useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
 }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
-jest.mock('../wearables/recoveryData', () => ({
-  DEFAULT_SLEEP_NEED_MIN: 480,
-  recoveryScore: () => mockRecovery,
-  sleepDeficit: () => (mockAsleep === null ? null : { asleepMinutes: mockAsleep }),
-}));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
   useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
@@ -91,7 +85,7 @@ const { start: weekStart } = require('../../../components/home/rings/homeRings')
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockUser.profile = { workout_days_per_week: 3 };
-  mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockSleepData = undefined; mockCheckIn = null; mockSleepRead = 'ok'; mockCheckInRead = 'ok';
+  mockRomanChat = true; mockSleepData = undefined; mockCheckIn = null; mockSleepRead = 'ok'; mockCheckInRead = 'ok';
   mockConnections = 'connected';
   mockDay.loadError = null;
   mockHistory.mockResolvedValue({ data: [] });
@@ -139,8 +133,22 @@ function lands([name, params]: readonly unknown[]): boolean {
   if (name in screensIn('HomeStackNav')) return true;
   return name in screensIn('Tab') && (!nested || nested in screensIn(TAB_STACK[name] ?? ''));
 }
+function sleepData(day: string): WearableSamplesResponse {
+  const start_at = `${day}T00:00:00.000Z`;
+  const end_at = `${day}T23:59:59.999Z`;
+  return {
+    version: 1, user_id: 'u1', bucket: 'SLEEP_RECOVERY', window: { from: start_at, to: end_at },
+    freshness: { providers: [] },
+    series: [
+      { metric: 'READINESS_SCORE', unit: 'score', provider_used: 'OURA', sample_count: 1,
+        samples: [{ start_at, end_at, value: 78, provider: 'OURA' }] },
+      { metric: 'SLEEP_TOTAL_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1,
+        samples: [{ start_at, end_at, value: 440, provider: 'OURA' }] },
+    ],
+  };
+}
 // The sleep bucket names no provider and no sample, as the backend answers for a source that synced only steps.
-const NO_SLEEP = { freshness: { providers: [] }, series: [] };
+const NO_SLEEP: WearableSamplesResponse = { ...sleepData('2020-01-01'), series: [] };
 const HEALTH = ['Health', { bucket: 'recovery' }] as const;
 const CONNECTIONS = ['Connections'] as const;
 
@@ -151,6 +159,7 @@ it.each([
   ['Food', 'connected', 'nothing', null, 'ok', 'Food, 820 kcal left, 1,030 of 1,850', ['Log']],
   ['Train', 'none', 'nothing', null, 'ok', 'Train, 1 of 2 workouts, This week', ['WorkoutTab']],
   ['Sleep, connected, last night', 'connected', 'last night', null, 'ok', 'Sleep, 78% recovered, 7 h 20 m asleep', HEALTH],
+  ['Sleep, connected, only an older night', 'connected', 'older night', null, 'ok', 'Sleep, —', HEALTH],
   ['Sleep, connected, no sleep in Health (steps only)', 'connected', 'nothing', null, 'ok', 'Sleep, —', HEALTH],
   ['Sleep, connected and the check-in', 'connected', 'nothing', 7.5, 'ok', 'Sleep, 7.5 h asleep', HEALTH],
   ['Sleep, connected, Health loading', 'connected', 'loading', null, 'ok', 'Sleep, —', HEALTH],
@@ -167,8 +176,8 @@ it.each([
 ] as const)('%s: the tap lands on a real screen, with a light haptic', async (_, connections, health, hours, checkInRead, label, to) => {
   mockConnections = connections;
   mockSleepRead = health === 'loading' ? 'pending' : health === 'failed' ? 'failed' : 'ok';
-  mockSleepData = mockSleepRead === 'ok' ? NO_SLEEP : undefined;
-  if (health === 'last night') { mockRecovery = 78; mockAsleep = 440; }
+  mockSleepData = mockSleepRead !== 'ok' ? undefined
+    : health === 'nothing' ? NO_SLEEP : sleepData(health === 'last night' ? getTodayString() : '2020-01-01');
   mockCheckInRead = checkInRead; mockCheckIn = hours ? { sleep_hours: hours } : null;
   await render(<HomeScreen />);
   await screen.findByLabelText('Start Full Body A');
@@ -184,6 +193,25 @@ it('opened from Home, Back lands on Home: the Home stack holds the same Health p
   const you = screensIn('MoreStackNav');
   for (const name of ['Health', 'WearableMetricDetail', 'Connections']) expect([name, home[name]]).toEqual([name, you[name]]);
   expect(home.Health).toBe('WearablesShell');
+});
+
+it('Sleep with only an older night shows the existing dash, no number and no fill, never Connect', async () => {
+  mockSleepData = sleepData('2020-01-01');
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Sleep, —')).toBeTruthy();
+  expect(screen.queryByText('78%')).toBeNull();
+  expect(screen.queryByText('7 h 20 m asleep')).toBeNull();
+  expect(screen.queryByTestId('home-dial-sleep-fill')).toBeNull();
+  expect(screen.queryByText('Connect')).toBeNull();
+});
+
+it('Sleep keeps the ring text limit (115%, so 130% never runs into the ring) and two-line supporting layout', async () => {
+  mockSleepData = sleepData(getTodayString());
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Sleep, 78% recovered, 7 h 20 m asleep')).toHaveStyle({ minHeight: 44, width: '33%' });
+  expect(screen.getByText('78%').props.maxFontSizeMultiplier).toBe(1.15);
+  expect(screen.getByText('recovered').props.maxFontSizeMultiplier).toBe(1.15);
+  expect(screen.getByText('7 h 20 m asleep').props.numberOfLines).toBe(2);
 });
 
 it.each([
