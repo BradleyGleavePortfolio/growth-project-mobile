@@ -51,7 +51,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { StyleBBubble, StyleBDayMark, StyleBFirstCard, StyleBHeader, StyleBLoading, StyleBQueued, dayB } from '../../components/messaging/StyleBThread';
 import { useMessageOutbox } from '../../hooks/useMessageOutbox';
-import { drainOutbox, isTransient, sendViaOutbox, settleOutbox, takeBackRefused, type OutboxEvent } from '../../services/messageOutbox';
+import { drainOutbox, isTransient, outboxOn, sendViaOutbox, settleOutbox, takeBackRefused, type OutboxEvent } from '../../services/messageOutbox';
 
 interface Message {
   id: string;
@@ -186,7 +186,7 @@ export default function MessagesScreen() {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
       const list = normalizeList(res.data, currentUser?.id);
-      if (styleB && currentUser?.id) settleOutbox(currentUser.id, list.map((m) => m.v2?.client_message_id));
+      if (outboxOn() && currentUser?.id) settleOutbox(currentUser.id, list.map((m) => m.v2?.client_message_id));
       setMessages((prev) => mergeById(list, reconcilePending(prev, list)));
       setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
@@ -415,8 +415,9 @@ export default function MessagesScreen() {
     }
   };
 
-  // Style B outbox (services/messageOutbox): rows not on the server yet sit under the thread. The first that failed
-  // holds the ones after it; offline they wait for the signal, which the app-level drain sends thread open or not.
+  // The outbox (services/messageOutbox; Style B: every send, SHARE-B: a card in either style): rows not on the server yet
+  // sit under the thread. The first that failed holds the ones after it; offline they wait for the signal, which the
+  // app-level drain sends thread open or not.
   const onOutbox = (ev: OutboxEvent) => {
     if (ev.type === 'taken') void load();
     else if (ev.type === 'sent') {
@@ -435,7 +436,7 @@ export default function MessagesScreen() {
       if (ev.manual) Alert.alert('Message not sent', ev.error.userMessage);
     }
   };
-  const outboxItems = useMessageOutbox(styleB ? currentUser?.id : null, onOutbox);
+  const outboxItems = useMessageOutbox(outboxOn() ? currentUser?.id : null, onOutbox);
   // A tap sends from the head again; on a message the server can never accept, it takes the text back to the composer.
   const retryOutbox = (key?: string | null) => {
     const uid = currentUser?.id;
@@ -792,7 +793,15 @@ export default function MessagesScreen() {
 
           let receiptNode: React.ReactNode = null;
           if (isMe) {
-            if (item.pending && item.v2?.client_message_id) {
+            if (item.outbox === 'waiting' || item.outbox === 'sending') {
+              // SHARE-B, Style B off: a card from the outbox; offline it waits and the app-level drain sends it.
+              receiptNode = item.outbox === 'sending' ? null : (
+                <View style={styles.receiptRow}>
+                  <Ionicons name="time-outline" size={10} color={textOnPrimaryFaint} />
+                  <Text style={styles.receiptTextPending}>Waiting to send</Text>
+                </View>
+              );
+            } else if (item.pending && item.v2?.client_message_id) {
               // v2: a pending bubble is a send that failed; it waits for the
               // user (long press, Send again with the same key).
               receiptNode = (
@@ -931,7 +940,7 @@ export default function MessagesScreen() {
           onReport={handleOpenReport}
           onRetry={(m) => {
             const key = m.v2?.client_message_id;
-            if (styleB) retryOutbox(key);
+            if (styleB || actionTarget?.outbox) retryOutbox(key); // SHARE-B: an outbox card replays through the outbox
             else if (key) void sendV2(m.body, key, actionTarget?.parent_message_id ?? null, m.id);
           }}
           muteOpen={muteMenu}

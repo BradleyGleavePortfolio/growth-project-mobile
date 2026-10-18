@@ -13,7 +13,6 @@ const mockTakeBack = jest.fn();
 jest.mock('../../../services/messageOutbox', () => ({
   sendCardViaOutbox: (...a: unknown[]) => mockSendCard(...a),
   takeBackRefused: (...a: unknown[]) => mockTakeBack(...a),
-  cardOutboxUser: (uid?: string) => (mockFlags.c3StyleB ? uid : undefined),
 }));
 jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///tmp/card.png') }));
 jest.mock('expo-sharing', () => ({ shareAsync: jest.fn(async () => undefined), isAvailableAsync: jest.fn(async () => true) }));
@@ -104,7 +103,8 @@ it('board 6: an inbox row whose newest message is a card says "Shared a card"; f
   expect(inboxLine(last({ card_type: 'share' }))).toBe('Message');
 });
 
-it('board 8: offline the sheet says it sends on reconnect; Send puts the card in the outbox and closes, with no success haptic', async () => {
+it.each([true, false])('board 8 (c3StyleB %s): offline the sheet says it sends on reconnect; Send puts the card in the outbox and closes, no success haptic', async (styleB) => {
+  mockFlags.c3StyleB = styleB; // either thread style: the outbox carries the card (MessagesScreenStyleB SHARE-B rows)
   NetInfo.__setState({ isConnected: false, isInternetReachable: false });
   mockSendCard.mockResolvedValueOnce('waiting');
   const s = await sheet();

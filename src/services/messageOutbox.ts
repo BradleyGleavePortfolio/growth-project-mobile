@@ -12,7 +12,8 @@
  *   Sign-out handles it like the food and workout queues (authActions SESSION-KEEP-130): one bounded try to send, the
  *   confirm names what is still unsent, then sign-out removes it, saved and in memory. Nothing waits across accounts.
  * - SHARE-B: Send to {coach} puts a share card in the same line (sendCardViaOutbox): offline it waits in the thread and
- *   sends on reconnect like a message. A card has no text, so a refused one simply leaves.
+ *   sends on reconnect like a message, in either thread style, so the outbox also runs with shareSendV1 (outboxOn).
+ *   A card has no text, so a refused one simply leaves.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
@@ -144,8 +145,8 @@ export async function sendViaOutbox(uid: string, body: string, replyToId: string
   return drainOutbox(uid);
 }
 
-/** Whose thread outbox Send to {coach} uses: the client's, only with Style B on (the legacy thread has none). */
-export const cardOutboxUser = (uid: string | undefined): string | undefined => (featureFlags.c3StyleB ? uid : undefined);
+/** The outbox runs with Style B (every send) or with Send to {coach} (SHARE-B: cards, in either thread style). */
+export const outboxOn = (): boolean => featureFlags.c3StyleB || featureFlags.shareSendV1;
 
 /**
  * Send to {coach} (SHARE-B): the card joins the end of the line under the sheet's key (a second tap sends that one again,
