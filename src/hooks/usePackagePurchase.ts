@@ -85,6 +85,9 @@ export interface PurchaseSuccess {
   kind: "subscription" | "trial" | "one_time" | "free";
   title: string;
   body: string;
+  /** C5-S1: the package bought and, when known, its purchase row. */
+  packageId: string;
+  purchaseId: string | null;
 }
 
 export interface PriceChange {
@@ -505,6 +508,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           dateCopy(plan.trialEndsAt) ?? dateCopy(pkg.quote?.firstChargeAt);
         return {
           kind: "trial",
+          packageId: pkg.id,
+          purchaseId: plan.purchaseId,
           title: PACKAGE_PAYMENT_COPY.successTrialTitle,
           body: PACKAGE_PAYMENT_COPY.successBody(
             plan.packageName || pkg.name,
@@ -515,6 +520,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       const next = dateCopy(plan.nextChargeAt);
       return {
         kind: "subscription",
+        packageId: pkg.id,
+        purchaseId: plan.purchaseId,
         title: PACKAGE_PAYMENT_COPY.successTitle,
         body: PACKAGE_PAYMENT_COPY.successBody(
           plan.packageName || pkg.name,
@@ -744,6 +751,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
             finishSuccess(
               {
                 kind: "one_time",
+                packageId: u.pkg.id,
+                purchaseId: null,
                 title: PACKAGE_PAYMENT_COPY.successTitle,
                 body: PACKAGE_PAYMENT_COPY.successBody(u.pkg.name, null),
               },
@@ -805,6 +814,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       }
       finishSuccess({
         kind: "free",
+        packageId: pkg.id,
+        purchaseId: null,
         title: PACKAGE_PAYMENT_COPY.successFreeTitle,
         body: PACKAGE_PAYMENT_COPY.successBody(pkg.name, null),
       });
@@ -861,6 +872,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       if (active) {
         finishSuccess({
           kind: "one_time",
+          packageId: pkg.id,
+          purchaseId: null,
           title: PACKAGE_PAYMENT_COPY.successTitle,
           body: PACKAGE_PAYMENT_COPY.successBody(pkg.name, null),
         });

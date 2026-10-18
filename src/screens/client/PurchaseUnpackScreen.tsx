@@ -16,7 +16,11 @@
  *       recurring next-charge) is reconciled from
  *       `clientPaymentsApi.getPurchases()` + `getPackages()` because the
  *       drops endpoint intentionally does not carry receipt fields. The
- *       amount paid is the purchase row's own amount_cents + currency.
+ *       amount paid is the server's first_charge_cents for the purchase
+ *       (C5-S1; amount_cents of a subscription is its renewal). With
+ *       clientBillingV2 on, the header is the Style C masthead (serif
+ *       name, "{amount} paid", the coach's initial) and the footer is
+ *       Done with a View deliverables link.
  *
  * Sections:
  *   • Receipt header — package name, amount paid, "Next charge {date}"
@@ -76,7 +80,10 @@ import {
   buyerStatusOf,
   routeForDrop,
 } from './deliverables/dropRow';
-import { formatCurrencyCents } from '../../utils/currency';
+import { paidAmount } from '../../lib/planTerms';
+import { featureFlags } from '../../config/featureFlags';
+import { CoachMark } from '../../components/purchase/PlanActiveMoment';
+import { AccentRule, PrimaryButton, TextLink } from '../../ui';
 import api from '../../services/api';
 import { logger } from '../../utils/logger';
 
@@ -106,16 +113,11 @@ function buildReceipt(
     ? packages.find((p) => p.id === purchase.package_id) ?? null
     : null;
   const packageName = packageNameOverride ?? pkg?.name ?? null;
-  // "{amount} paid" is what the server recorded for THIS purchase, never the
-  // package's current price. No recorded amount, or a trial that has charged
-  // nothing yet, shows no amount rather than a guessed one.
+  // "{amount} paid" is what the server says THIS purchase's checkout charged
+  // (first_charge_cents), never the package's price or a subscription's
+  // renewal. Unknown, or a trial that has charged nothing, shows no amount.
   const amountDisplay =
-    purchase &&
-    Number.isInteger(purchase.amount_cents) &&
-    purchase.currency &&
-    purchase.status !== 'trialing'
-      ? formatCurrencyCents(purchase.amount_cents, purchase.currency)
-      : null;
+    purchase && purchase.status !== 'trialing' ? paidAmount(purchase) : null;
   // `interval` on the CoachPackage is the source of truth for recurring vs
   // one_time (the purchase row carries the period_end but not the type).
   const recurring = !!pkg && pkg.type === 'recurring';
@@ -201,7 +203,24 @@ function PurchaseUnpackContent({
   }, [dropsResult]);
 
   // ─── Receipt header ──────────────────────────────────────────────────
-  const ReceiptHeader = (
+  const ReceiptHeader = featureFlags.clientBillingV2 ? (
+    <View testID="purchase-unpack-receipt">
+      <View style={styles.mastRow}>
+        <View style={styles.mastText}>
+          {receipt.packageName ? (
+            <Text style={styles.mastName} accessibilityRole="header">
+              {receipt.packageName}
+            </Text>
+          ) : null}
+          {receipt.amountDisplay ? (
+            <Text style={styles.mastPaid}>{receipt.amountDisplay} paid</Text>
+          ) : null}
+        </View>
+        <CoachMark name={coachName} size={44} />
+      </View>
+      <AccentRule />
+    </View>
+  ) : (
     <View style={styles.receiptCard} testID="purchase-unpack-receipt">
       <View style={styles.celebrateRow}>
         <Ionicons name="checkmark-circle" size={28} color={tokens.colors.forest} />
@@ -398,6 +417,16 @@ function PurchaseUnpackContent({
         </>
       ) : null}
 
+      {featureFlags.clientBillingV2 ? (
+        <View style={styles.footerV2}>
+          <PrimaryButton label="Done" onPress={onDone} testID="purchase-unpack-done" />
+          <TextLink
+            label="View deliverables"
+            onPress={onGoToDeliverables}
+            testID="purchase-unpack-go-to-deliverables"
+          />
+        </View>
+      ) : (
       <View style={styles.footerCtas}>
         <TouchableOpacity
           style={styles.ctaSecondary}
@@ -416,6 +445,7 @@ function PurchaseUnpackContent({
           <Text style={styles.ctaPrimaryText}>Done</Text>
         </TouchableOpacity>
       </View>
+      )}
     </Screen>
   );
 }
@@ -633,6 +663,17 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       gap: 10,
       marginTop: 28,
     },
+    // C5 Style C (clientBillingV2): masthead and footer.
+    mastRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    mastText: { flex: 1 },
+    mastName: { ...tokens.typography.h1, color: semanticColors.textPrimary },
+    mastPaid: {
+      ...tokens.typography.body,
+      color: semanticColors.textMuted,
+      fontVariant: ['tabular-nums'],
+      marginTop: 2,
+    },
+    footerV2: { marginTop: 28, gap: 8, alignItems: 'center' },
     ctaPrimary: {
       flex: 1,
       backgroundColor: semanticColors.accent,

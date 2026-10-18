@@ -38,6 +38,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_CALENDAR: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
+  EXPO_PUBLIC_FF_CLIENT_BILLING_V2: process.env.EXPO_PUBLIC_FF_CLIENT_BILLING_V2,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
@@ -102,6 +103,8 @@ export const featureFlags = {
   clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', false),
   /** TIMELINE: the Style C Timeline page, its door on Progress and its push route; off in every build. */
   clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', false),
+  /** C5: the Style C buying pages (slice 2: the success moment and what unlocks); off in every build. */
+  clientBillingV2: readFlag('EXPO_PUBLIC_FF_CLIENT_BILLING_V2', false),
   /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
   romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
   /** Team management stays hidden for launch, including in development. */

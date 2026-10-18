@@ -618,6 +618,11 @@ export const PACKAGE_PAYMENT_COPY = {
     "Your free plan is added. It can take a minute to show in the app. Choose Continue to carry on.",
   checkAgain: "Check again",
   continue: "Continue",
+  // C5 slice 2, Style C success moment (clientBillingV2).
+  done: "Done",
+  seeWhatUnlocks: "See what unlocks",
+  paid: "Paid",
+  nextCharge: "Next charge",
   successTitle: "Your plan is active",
   successTrialTitle: "Your trial has started",
   successFreeTitle: "Your free plan is added",
