@@ -8,6 +8,18 @@ import type { ClientWorkoutAssignmentWithPlan } from '../../../../api/workoutBui
 import { addDays, getLocalWeekStart, getTodayString } from '../../../../utils/date';
 
 const mockNavigate = jest.fn();
+let mockCoachless = false;
+let mockEntitled = true;
+const mockMessageCoach = jest.fn();
+const mockOpenPlans = jest.fn();
+jest.mock('../../../../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => ({
+    entitlementActive: mockEntitled, status: mockEntitled ? 'active' : 'inactive',
+    confirmedActive: mockEntitled, messageCoach: mockMessageCoach, openPlans: mockOpenPlans,
+  }),
+}));
+jest.mock('../../../../hooks/useCoachlessClient', () => ({ useCoachlessClient: () => mockCoachless }));
+jest.mock('../../../../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => true }));
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({ navigate: mockNavigate }),
@@ -36,6 +48,8 @@ jest.mock('../../../../ui/haptics/haptics.service', () => ({
 import { schedulingApi } from '../../../../api/schedulingApi';
 import { workoutBuilderApi } from '../../../../api/workoutBuilderApi';
 import { checkInsApi } from '../../../../services/api';
+import { entitlementEvents } from '../../../../entitlements/entitlementEvents';
+import { COACHLESS_TITLE, COACH_MANAGED_TITLE } from '../../../../entitlements/PaywallSheet';
 import CalendarWeekScreen, { CalendarWeekPage, type CalendarWeekData } from '../CalendarWeekScreen';
 import { WEEK_COPY as c } from '../calendarWeekCopy';
 
@@ -58,6 +72,14 @@ const refresh = jest.fn();
 const openSession = jest.fn();
 const book = jest.fn();
 const clients: QueryClient[] = [];
+const screen = async () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(qc);
+  // @ts-expect-error Test navigator supplies only the one method this screen calls.
+  const navigation: NativeStackNavigationProp<CalendarStackParamList, 'CalendarHome'> = { navigate: mockNavigate };
+  return render(<QueryClientProvider client={qc}><CalendarWeekScreen navigation={navigation}
+    route={{ key: 'home', name: 'CalendarHome' }} /></QueryClientProvider>);
+};
 const page = (data: Partial<CalendarWeekData> = {}) => render(
   <CalendarWeekPage data={{ ...base, ...data }} onRefresh={refresh} onSession={openSession} onBook={book} />,
 );
@@ -65,6 +87,8 @@ afterEach(async () => {
   await cleanup();
   clients.splice(0).forEach((q) => q.clear());
   jest.clearAllMocks();
+  mockEntitled = true;
+  mockCoachless = false;
 });
 
 it('every week day selects a real agenda; notification, booking and own workout routes are real', async () => {
@@ -78,7 +102,7 @@ it('every week day selects a real agenda; notification, booking and own workout 
   }
   await fireEvent.press(r.getByTestId(`week-day-${today}`));
   await fireEvent.press(r.getByTestId('week-workout-assignment-own'));
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'assignment-own' } });
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'assignment-own' }, initial: false });
   expect(r.getByText('Frozen plan')).toBeTruthy();
   expect(r.queryByText('Live plan')).toBeNull();
   await fireEvent.press(r.getByTestId('week-session-session-own'));
@@ -86,9 +110,9 @@ it('every week day selects a real agenda; notification, booking and own workout 
   await fireEvent.press(r.getByTestId('week-book'));
   expect(book).toHaveBeenCalledWith('coach-own');
   await fireEvent.press(r.getByTestId('week-notifications'));
-  expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter' });
+  expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', initial: false });
   await fireEvent.press(r.getByTestId('week-checkin-open'));
-  expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Habits', params: { initialTab: 'checkin' } });
+  expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false });
 });
 
 it('next session opens real detail even if outside this week, without duplicating pages', async () => {
@@ -100,7 +124,7 @@ it('next session opens real detail even if outside this week, without duplicatin
   expect(r.getByText('The coach’s actual session description.')).toBeTruthy();
 });
 
-it('coachless clients keep workouts, saved check-ins, today entry and notifications without a lock', async () => {
+it('the diary view supports workouts, saved check-ins, today entry and notifications without session rows', async () => {
   const r = await page({ coaches: [], sessions: [] });
   expect(r.getByTestId('week-workout-assignment-own')).toBeTruthy();
   expect(r.getByTestId(`week-checkin-${today}`)).toBeTruthy();
@@ -138,21 +162,52 @@ it('successfully empty week is honest; completed rows say Done', async () => {
   expect(within(done.getByTestId('week-workout-assignment-own')).getByText('Done')).toBeTruthy();
 });
 
-it('reads only signed-in-client lists, including retained session history without a coach', async () => {
-  jest.mocked(schedulingApi.listMyCoaches).mockResolvedValue([]);
+it('an entitled client reads every signed-in-client list, including past sessions and appointment types', async () => {
+  jest.mocked(schedulingApi.listMyCoaches).mockResolvedValue(base.coaches);
   jest.mocked(schedulingApi.listMySessions).mockResolvedValue([]);
+  jest.mocked(schedulingApi.listSessionTypes).mockResolvedValue([]);
   jest.mocked(workoutBuilderApi.listMyAssignments).mockResolvedValue([workout]);
   jest.mocked(checkInsApi.list).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof checkInsApi.list>>);
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  clients.push(qc);
-  // @ts-expect-error Test navigator supplies only the one method this screen calls.
-  const navigation: NativeStackNavigationProp<CalendarStackParamList, 'CalendarHome'> = { navigate: mockNavigate };
-  const r = await render(<QueryClientProvider client={qc}><CalendarWeekScreen navigation={navigation}
-    route={{ key: 'home', name: 'CalendarHome' }} /></QueryClientProvider>);
+  const r = await screen();
   await waitFor(() => expect(r.getByTestId('week-workout-assignment-own')).toBeTruthy());
+  await waitFor(() => expect(schedulingApi.listSessionTypes).toHaveBeenCalledWith('coach-own'));
+  expect(schedulingApi.listMyCoaches).toHaveBeenCalledWith();
   expect(workoutBuilderApi.listMyAssignments).toHaveBeenCalledWith();
   expect(checkInsApi.list).toHaveBeenCalledWith({ from: getLocalWeekStart(), to: addDays(getLocalWeekStart(), 6), limit: 7 });
   expect(schedulingApi.listMySessions).toHaveBeenCalledWith(50);
   expect(schedulingApi.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', before: undefined, beforeId: undefined });
   expect(r.queryByTestId('week-error')).toBeNull();
+});
+
+it.each([
+  ['coachless', true, COACHLESS_TITLE],
+  ['unpaid', false, COACH_MANAGED_TITLE],
+] as const)('%s clients see main’s access state without any 402 scheduling read or paywall event', async (_label, coachless, title) => {
+  mockEntitled = false;
+  mockCoachless = coachless;
+  const emit = jest.spyOn(entitlementEvents, 'emitRequired');
+  const denied = async () => {
+    entitlementEvents.emitRequired({ status: 402, code: 'CLIENT_ENTITLEMENT_REQUIRED', message: 'Access required' });
+    throw Object.assign(new Error('Access required'), { response: { status: 402 } });
+  };
+  jest.mocked(schedulingApi.listMyCoaches).mockImplementation(denied);
+  jest.mocked(schedulingApi.listMySessions).mockImplementation(denied);
+  jest.mocked(schedulingApi.listSessionTypes).mockImplementation(denied);
+  const r = await screen();
+  expect(r.getByText(title)).toBeTruthy();
+  // Walk every scheduling read in the audit, including the dependent types read.
+  for (const read of [
+    () => expect(schedulingApi.listMyCoaches).not.toHaveBeenCalled(),
+    () => expect(schedulingApi.listMySessions).not.toHaveBeenCalledWith(50),
+    () => expect(schedulingApi.listMySessions).not.toHaveBeenCalledWith(20, { scope: 'past', before: undefined, beforeId: undefined }),
+    () => expect(schedulingApi.listSessionTypes).not.toHaveBeenCalled(),
+  ]) read();
+  expect(schedulingApi.listMySessions).not.toHaveBeenCalled();
+  expect(r.queryByTestId('week-error')).toBeNull();
+  expect(r.queryByTestId('calendar-week')).toBeNull();
+  expect(emit).not.toHaveBeenCalled();
+  await fireEvent.press(r.getByTestId('protected-screen-message-coach'));
+  expect(mockMessageCoach).toHaveBeenCalledTimes(1);
+  expect(mockOpenPlans).not.toHaveBeenCalled();
+  emit.mockRestore();
 });

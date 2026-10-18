@@ -14,6 +14,7 @@ import type { ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilde
 import { checkInsApi } from '../../../services/api';
 import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { useMyWorkoutAssignments } from '../../../hooks/useWorkoutBuilder';
+import { withProtectedScreen } from '../../../entitlements/withProtectedScreen';
 import { useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { formatDayLabel, formatRange, formatTime, zonesDiffer } from '../../../calendar/calendarTime';
@@ -45,7 +46,7 @@ export type CalendarWeekData = {
 const active = (s: CoachingSession) => ['requested', 'scheduled', 'pending_provider'].includes(s.status);
 const dayDate = (day: string) => new Date(`${day}T12:00:00`);
 
-export default function CalendarWeekScreen({ navigation }: Props) {
+function CalendarWeekScreen({ navigation }: Props) {
   const coaches = useMyCoaches();
   const sessions = useMySessions();
   const past = usePastSessions();
@@ -79,6 +80,9 @@ export default function CalendarWeekScreen({ navigation }: Props) {
     onSession={(id) => navigation.navigate('CalendarSession', { sessionId: id })}
     onBook={(coachId) => navigation.navigate('CalendarBook', { coachId })} />;
 }
+
+// Match CalendarHome: no scheduling hook mounts before access is confirmed.
+export default withProtectedScreen(CalendarWeekScreen);
 
 /** Shared real view for fixture-backed web previews; no fixtures in the app. */
 export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
@@ -150,7 +154,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
         <View style={styles.header}>
           <Text accessibilityRole="header" style={[styles.title, { color: sc.textOnAccent }]}>{c['C4-S-01']}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={c['C4-S-44']} testID="week-notifications"
-            style={styles.bell} onPress={() => { void HapticService.softImpact(); nav.navigate('Home', { screen: 'NotificationCenter' }); }}>
+            style={styles.bell} onPress={() => { void HapticService.softImpact(); nav.navigate('Home', { screen: 'NotificationCenter', initial: false }); }}>
             <Ionicons name="notifications-outline" size={24} color={sc.textOnAccent} />
           </Pressable>
         </View>
@@ -197,7 +201,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
               <Pressable key={w.id} accessibilityRole="button" testID={`week-workout-${w.id}`}
                 accessibilityLabel={`${w.snapshot?.plan_name ?? w.workout_plan.name}, ${w.completed_at ? c['C4-S-138'] : c['C4-S-137']}`}
                 style={[styles.row, { borderColor: sc.border }]}
-                onPress={() => { void HapticService.softImpact(); nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id } }); }}>
+                onPress={() => { void HapticService.softImpact(); nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id }, initial: false }); }}>
                 <View style={styles.rowText}>
                   <Text style={[styles.small, ink]}>{c['C4-S-84']}</Text>
                   <Text style={[styles.bodyStrong, ink]}>{w.snapshot?.plan_name ?? w.workout_plan.name}</Text>
@@ -209,7 +213,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
               <Text style={body}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
             </View> : null}
             {day === today ? <TextLink label={c['C4S1-S-02']} align="start" testID="week-checkin-open"
-              onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' } })} /> : null}
+              onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
             {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
               !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?
               <Text style={body}>{c['C4-S-89']}</Text> : null}
