@@ -292,24 +292,22 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
   });
 });
 
-// HEALTH-1 (owner #SLEEP-PLACE op 2): healthPages is read when the module loads,
-// so a fresh copy is loaded with it on. Off, every test above is main's row.
+// HEALTH-1 (owner #SLEEP-PLACE op 2): the row reads healthPages when it is drawn.
+// Off, every test above is main's row.
 describe("More: Sleep and recovery row (HEALTH-1, healthPages on)", () => {
-  let rtl = { render, fireEvent, screen };
-  let FlagOnMore = MoreScreen;
-  mockFlags.healthPages = true;
-  jest.isolateModules(() => {
-    rtl = require("@testing-library/react-native");
-    FlagOnMore = require("../MoreScreen").default;
+  afterEach(() => {
+    mockFlags.healthPages = false;
+    mockHealthConnectBuild = false;
   });
-  mockFlags.healthPages = false;
 
   it("reads Sleep and recovery and opens Health and sleep on Recovery", async () => {
     jest.clearAllMocks();
-    await rtl.render(<FlagOnMore />);
-    expect(rtl.screen.queryByLabelText("Health and sleep")).toBeNull();
-    expect(rtl.screen.getByText("Recovery estimate, activity and heart rate")).toBeTruthy();
-    await rtl.fireEvent.press(rtl.screen.getByLabelText("Sleep and recovery"));
+    mockFlags.healthPages = true;
+    mockHealthConnectBuild = true; // the rows show on either platform
+    await render(<MoreScreen />);
+    expect(screen.queryByLabelText("Health and sleep")).toBeNull();
+    expect(screen.getByText("Recovery estimate, activity and heart rate")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Sleep and recovery"));
     expect(mockNavigate).toHaveBeenLastCalledWith("Health", { bucket: "recovery" });
   });
 });

@@ -229,23 +229,15 @@ function showsWearableRows(): boolean {
 
 const WEARABLE_MORE_ITEMS: MoreItem[] = [
   {
-    icon: 'heart-outline',
-    label: 'Health and sleep',
-    description: 'View activity, heart rate and sleep',
+    // HEALTH-1 (owner #SLEEP-PLACE op 2): with healthPages on (read when the row is drawn), the
+    // main way into Sleep and recovery opens Health and sleep on its Recovery tab. Off, main's row.
+    get icon(): MoreItem['icon'] { return featureFlags.healthPages ? 'moon-outline' : 'heart-outline'; },
+    get label() { return featureFlags.healthPages ? 'Sleep and recovery' : 'Health and sleep'; },
+    get description() { return featureFlags.healthPages ? 'Recovery estimate, activity and heart rate' : 'View activity, heart rate and sleep'; },
     section: 'Health and devices',
-    target: { type: 'stack', screen: 'Health' },
+    get target(): MoreItem['target'] { return featureFlags.healthPages ? { type: 'stack', screen: 'Health', params: { bucket: 'recovery' } } : { type: 'stack', screen: 'Health' }; },
     a11yHint: 'Opens your health and sleep data',
     tutorialTarget: 'more-health',
-    // HEALTH-1 (owner #SLEEP-PLACE op 2): the main way into Sleep and recovery
-    // opens Health and sleep on its Recovery tab. Off, the row is main's.
-    ...(featureFlags.healthPages
-      ? {
-          icon: 'moon-outline' as const,
-          label: 'Sleep and recovery',
-          description: 'Recovery estimate, activity and heart rate',
-          target: { type: 'stack' as const, screen: 'Health', params: { bucket: 'recovery' } },
-        }
-      : {}),
   },
   {
     icon: 'watch-outline',
