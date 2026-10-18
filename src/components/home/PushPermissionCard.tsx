@@ -25,6 +25,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
 import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
 import { useTutorialStore } from '../../tutorial/tutorialStore';
+import { useNoticeSlot } from './HomeNoticeSlot';
 
 export const pushPrimerDismissedKey = (userId: string) => `push_primer_dismissed:${userId}`;
 
@@ -75,7 +76,8 @@ export default function PushPermissionCard({
     };
   }, [userId, tourBusy]);
 
-  if (!visible || !userId || tourBusy) return null;
+  const shown = useNoticeSlot('push', visible && !!userId && !tourBusy); // one notice at a time on the rings Home
+  if (!shown || !userId) return null;
 
   const dismiss = async () => {
     setVisible(false);

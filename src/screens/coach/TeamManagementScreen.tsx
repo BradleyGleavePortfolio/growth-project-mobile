@@ -1,13 +1,10 @@
 /**
  * TeamManagementScreen
  *
- * Tier-gated (Scale plan or higher). Displays the head coach's sub-coach
- * roster with a capacity bar (assigned / max clients) and an engagement
- * score badge for each sub-coach. Tapping a row navigates to
- * SubCoachDetailScreen.
+ * Displays the head coach's sub-coach roster with an engagement score badge
+ * for each sub-coach. Tapping a row navigates to SubCoachDetailScreen.
  *
- * Shown only when plan_tier is 'scale' or 'enterprise'. All other plan
- * tiers see an upgrade prompt.
+ * No coach plan gate and no plan-based client cap (owner TM-P1: zero locks).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -22,78 +19,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
 import { subCoachApi, SubCoachSummary } from '../../api/subCoachApi';
-import { coachTeamApi } from '../../api/coachTeamApi';
-import { authApi } from '../../services/api';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 import SubCoachInviteModal from './SubCoachInviteModal';
 import LoadFailedNotice from '../../components/coach/LoadFailedNotice';
-import { digitalPurchasesHidden } from '../../config/purchaseSurfaces';
 import { featureFlags } from '../../config/featureFlags';
 import { Screen } from '../../ui';
 import { radius } from '../../theme/tokens';
-
-const SCALE_TIERS = ['scale', 'enterprise'];
-
-// Read the head coach's own plan tier from /auth/me, falling back to the
-// cached user_data blob if the network call fails. The previous code inferred
-// tier from `data[0].coach_profile.plan_tier`, which broke on the empty case
-// (head coach with zero sub-coaches saw the upgrade gate even on Scale).
-async function resolveHeadCoachTier(): Promise<string> {
-  try {
-    const me = await authApi.me();
-    const tier =
-      (me.data as { plan_tier?: string; profile?: { plan_tier?: string } } | undefined)
-        ?.plan_tier ||
-      (me.data as { profile?: { plan_tier?: string } } | undefined)?.profile?.plan_tier;
-    if (tier) return tier;
-  } catch {
-    // fall through to cache
-  }
-  try {
-    const raw = await AsyncStorage.getItem('user_data');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      const cached: string | undefined =
-        parsed?.plan_tier || parsed?.profile?.plan_tier;
-      if (cached) return cached;
-    }
-  } catch {
-    // ignore
-  }
-  return 'flat_300';
-}
-
-function CapacityBar({
-  assigned,
-  max,
-}: {
-  assigned: number;
-  max: number;
-}) {
-  const pct = max > 0 ? Math.min(1, assigned / max) : 0;
-  const barColor =
-    pct >= 1
-      ? Colors.error
-      : pct >= 0.8
-        ? Colors.warning
-        : Colors.primary;
-
-  return (
-    <View style={styles.capacityContainer}>
-      <View style={styles.capacityTrack}>
-        <View
-          style={[styles.capacityFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: barColor }]}
-        />
-      </View>
-      <Text style={styles.capacityLabel} accessibilityLabel={`${assigned} of ${max} clients`}>
-        {assigned} / {max}
-      </Text>
-    </View>
-  );
-}
 
 function ScoreBadge({ score }: { score: number }) {
   const bg =
@@ -129,37 +62,9 @@ function SubCoachRow({
       <View style={styles.rowMain}>
         <Text style={styles.rowName}>{item.name}</Text>
         <Text style={styles.rowEmail}>{item.email}</Text>
-        <CapacityBar
-          assigned={item.capacity.assignedClients}
-          max={item.capacity.maxClients}
-        />
       </View>
       <ScoreBadge score={item.engagement.score} />
     </Pressable>
-  );
-}
-
-export function UpgradeGate({ purchasesHidden = digitalPurchasesHidden() }: { purchasesHidden?: boolean } = {}) {
-  // Digital purchases hidden: neutral access information only, no upgrade instruction.
-  if (purchasesHidden) {
-    return (
-      <View style={styles.gate} testID="team-gate-neutral">
-        <Text style={styles.gateTitle}>Team management</Text>
-        <Text style={styles.gateBody}>
-          Team management is not included in your current plan. Your clients and
-          coaching are unchanged.
-        </Text>
-      </View>
-    );
-  }
-  return (
-    <View style={styles.gate} testID="team-gate-upgrade">
-      <Text style={styles.gateTitle}>Scale plan required</Text>
-      <Text style={styles.gateBody}>
-        Team management is available on the Scale plan and above. Upgrade to
-        add sub-coaches and delegate clients.
-      </Text>
-    </View>
   );
 }
 
@@ -170,34 +75,11 @@ export default function TeamManagementScreen() {
   const [subCoaches, setSubCoaches] = useState<SubCoachSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [planTier, setPlanTier] = useState<string>('flat_300');
   const [inviteOpen, setInviteOpen] = useState(false);
-  // P0-3 — remaining seat headroom for the invite modal's `maxClients`
-  // clamp. `null` means "unknown" (team profile not yet loaded / endpoint
-  // not configured); the modal skips the clamp in that case rather than
-  // blocking.
-  const [remainingSeats, setRemainingSeats] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    // Always resolve the head coach's tier from their own profile, regardless
-    // of whether sub-coaches exist yet.
-    const tier = await resolveHeadCoachTier();
-    setPlanTier(tier);
-    // P0-3 — fetch seat headroom in parallel with the roster. A failure here
-    // is non-fatal: the modal degrades to "no clamp" rather than blocking
-    // invites, but on the happy path we surface the exact remaining-seat
-    // count so the head coach sees structured headroom feedback.
-    void coachTeamApi.getProfile().then((profileResult) => {
-      if (profileResult.ok) {
-        const headroom =
-          profileResult.data.client_capacity - profileResult.data.clients_assigned;
-        setRemainingSeats(headroom >= 0 ? headroom : 0);
-      } else {
-        setRemainingSeats(null);
-      }
-    });
     try {
       const res = await subCoachApi.listSubCoaches();
       setSubCoaches(res.data ?? []);
@@ -221,8 +103,6 @@ export default function TeamManagementScreen() {
     },
     [navigation],
   );
-
-  const isGated = !SCALE_TIERS.includes(planTier);
 
   // COACHTABS: with the six tabs Team opens from Clients, so it draws the
   // coach Back (arrow, 44 pt) and returns there.
@@ -248,16 +128,6 @@ export default function TeamManagementScreen() {
 
   // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
   // inset (Android edge-to-edge included); the tab bar owns the bottom.
-  if (isGated) {
-    return (
-      <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="team-management">
-        {back}
-        <Text style={styles.header}>Team</Text>
-        <UpgradeGate />
-      </Screen>
-    );
-  }
-
   return (
     <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="team-management">
       {back}
@@ -308,7 +178,6 @@ export default function TeamManagementScreen() {
           void load();
         }}
         existingEmails={subCoaches.map((s) => s.email)}
-        remainingSeats={remainingSeats ?? undefined}
       />
     </Screen>
   );
@@ -378,29 +247,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
   },
-  capacityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  capacityTrack: {
-    flex: 1,
-    height: 4,
-    backgroundColor: Colors.divider,
-    borderRadius: radius.chip,
-    overflow: 'hidden',
-  },
-  capacityFill: {
-    height: '100%',
-    borderRadius: radius.chip,
-  },
-  capacityLabel: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    minWidth: 44,
-    textAlign: 'right',
-  },
   badge: {
     width: 44,
     height: 44,
@@ -412,23 +258,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: Colors.textOnPrimary,
-  },
-  gate: {
-    flex: 1,
-    paddingTop: 40,
-    alignItems: 'center',
-  },
-  gateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 12,
-  },
-  gateBody: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
   },
   emptyText: {
     fontSize: 15,
