@@ -29,7 +29,6 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/client/HomeScreen';
 import HabitsScreen from '../screens/client/HabitsScreen';
 import LogScreen from '../screens/client/LogScreen';
-import PlanScreen from '../screens/client/PlanScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
 import RecipeDetailScreen from '../screens/client/RecipeDetailScreen';
 import GroceryListScreen from '../screens/client/GroceryListScreen';
@@ -61,6 +60,8 @@ import NotificationsScreen from '../screens/client/NotificationsScreen';
 import MessagesScreen from '../screens/client/MessagesScreen';
 import MessagesInboxScreen from '../screens/client/MessagesInboxScreen';
 import EducationScreen from '../screens/client/EducationScreen';
+import LearnScreen from '../screens/client/learn/LearnScreen';
+import LearnLessonScreen from '../screens/client/learn/LearnLessonScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
@@ -180,7 +181,6 @@ const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen, OW
 const ProtectedWorkoutHistoryEditScreen = withProtectedScreen(WorkoutHistoryEditScreen, OWN);
 const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutViewerScreen, OWN);
 const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen, OWN);
-const ProtectedPlanScreen = withProtectedScreen(PlanScreen, OWN);
 const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen, OWN);
 const ProtectedFastingScreen = withProtectedScreen(FastingScreen, OWN);
 const ProtectedLogScreen = withProtectedScreen(LogScreen, OWN);
@@ -288,10 +288,12 @@ export type MoreStackParamList = {
   Widgets:     undefined;
   Report:      undefined;
   Learn:       undefined;
+  /** LEARN-A (flag learnHub): one lesson, and the guidelines page opened from Learn's Read all. */
+  LearnLesson: { id: string };
+  CoachGuidelines: undefined;
   GroceryList: undefined;
   ShoppingList: undefined;
   PrepGuide:   undefined;
-  Plan:        undefined;
   TrustCenter: undefined;
   DeleteAccount: undefined;
   /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
@@ -394,8 +396,8 @@ export type MoreStackParamList = {
 // ─── Stack navigators ─────────────────────────────────────────────────────────
 
 /**
- * S-REACH: screens that used to be tabs (Plan, Progress) or had no menu entry
- * (ClientMacros, Habits, Timeline) draw their own title but no back control.
+ * S-REACH: screens that used to be tabs (Progress) or had no menu entry
+ * (ClientMacros, ClientDailyMealPlan, Habits, Timeline) draw their own title but no back control.
  * Opened from More they get a native header with only the back chevron, so
  * the way back is always visible and the safe area is respected.
  */
@@ -545,8 +547,13 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="AddCoachCode" component={AddCoachCodeScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
       <MoreStackNav.Screen name="Report"       component={ReportScreen} />
-      <MoreStackNav.Screen name="Learn"        component={EducationScreen} />
-      <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="Learn"        component={featureFlags.learnHub ? LearnScreen : EducationScreen} />
+      {featureFlags.learnHub && (
+        <>
+          <MoreStackNav.Screen name="LearnLesson" component={LearnLessonScreen} />
+          <MoreStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
+        </>
+      )}
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
@@ -586,8 +593,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           {() => <RomanChatScreen surface="client" />}
         </MoreStackNav.Screen>
       )}
-      {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
-      <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
+      {/* Phase 11 — Share Card. With featureFlags.shareSheetV2 (SHARE-A) the route goes: Share opens ShareSheet in place. */}
+      {featureFlags.shareSheetV2 ? null : <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />}
       {/* Phase 11 — Notification category preferences (push taxonomy). */}
       <MoreStackNav.Screen name="NotificationPreferences" component={NotificationCategoryPreferencesScreen} />
       {/* Full notification settings (Mute all, per-category switches) for client Settings. */}
@@ -604,7 +611,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           in a follow-up; route registration first so deep-links
           work today). */}
       <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets')} />
-      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} />
+      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. The old

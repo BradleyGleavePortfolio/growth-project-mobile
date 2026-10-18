@@ -15,19 +15,20 @@ import { AccentRule, Headline, Lede, Overline, PrimaryButton, Screen, TextLink }
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { authStyleB } from './AuthStyleB';
+import { useStatusBarBand } from '../../components/StatusBarBand';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Welcome'>;
 };
 
 /**
- * C7 Style B (firstRunV2): the forest peak screen. Main's dark status-bar line
- * stays (the app's cream StatusBarBand sits on top; screens pushed over Welcome
- * inherit it). The title rises 8 pt and fades in over 250 ms (Reduce Motion: a
+ * C7 Style B (firstRunV2): forest to the top edge, with light status icons
+ * only while focused. The title rises 8 pt and fades in over 250 ms (Reduce Motion: a
  * 150 ms fade only); Get started plays mediumImpact (primary CTA).
  */
 function WelcomeStyleB({ navigation }: Props) {
-  const { semanticColors: sc = lightTokens, colorScheme } = useTheme();
+  const { semanticColors: sc = lightTokens } = useTheme();
+  useStatusBarBand(sc.surface.forestBand);
   const reduced = useReducedMotion();
   const shown = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -58,7 +59,6 @@ function WelcomeStyleB({ navigation }: Props) {
         </>
       }
     >
-      <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={sc.bgPrimary} />
       <Overline style={{ color: sc.textOnMastheadMuted }} testID="welcome-eyebrow">Personal training, in your pocket</Overline>
       <Animated.View style={{ opacity: shown, transform: [{ translateY: rise }] }} testID="welcome-title-motion">
         <Headline level="display" style={[{ marginTop: 12 }, onForest]}>

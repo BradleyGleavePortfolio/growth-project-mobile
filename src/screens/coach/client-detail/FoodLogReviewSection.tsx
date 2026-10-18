@@ -27,14 +27,12 @@ export function FoodLogReviewSection({
   clientId,
   profile,
   onOpenMessages,
-  onOpenMealPlans,
   colors,
   styles,
 }: {
   clientId: string;
   profile?: ClientProfile | null;
   onOpenMessages?: () => void;
-  onOpenMealPlans?: () => void;
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
@@ -101,11 +99,6 @@ export function FoodLogReviewSection({
         {onOpenMessages ? (
           <TouchableOpacity style={styles.actionPill} onPress={onOpenMessages} accessibilityRole="button">
             <Text style={styles.actionPillText}>Send feedback</Text>
-          </TouchableOpacity>
-        ) : null}
-        {onOpenMealPlans ? (
-          <TouchableOpacity style={styles.actionPill} onPress={onOpenMealPlans} accessibilityRole="button">
-            <Text style={styles.actionPillText}>Meal plans</Text>
           </TouchableOpacity>
         ) : null}
         <TouchableOpacity

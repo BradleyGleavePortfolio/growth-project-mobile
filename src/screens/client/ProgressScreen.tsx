@@ -41,6 +41,8 @@ import HapticPressable from '../../components/HapticPressable';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import type { ShareCardMilestone } from '../share/ShareCardScreen';
+import ShareSheet, { type ShareCardContent } from '../../components/share/ShareSheet';
+import { runCard } from '../../components/share/shareCards';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { radius, typography, type SemanticTokens } from '../../theme/tokens';
@@ -150,6 +152,8 @@ export default function ProgressScreen({ onSaved, logWeightAt }: { onSaved?: () 
   const [heightCm, setHeightCm] = useState<number | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [loggingStreak, setLoggingStreak] = useState(0);
+  // SHARE-A (featureFlags.shareSheetV2): the card the share sheet is open on, over this screen.
+  const [shareCard, setShareCard] = useState<ShareCardContent | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // ED.4 (audit R3 P3): the chart-error retry calls loadData directly, but
   // `refreshing` only reflects pull-to-refresh — so the retry button stayed
@@ -418,12 +422,17 @@ export default function ProgressScreen({ onSaved, logWeightAt }: { onSaved?: () 
                 intent="light"
                 style={styles.inlineLink}
                 onPress={() => {
+                  track(AnalyticsEvents.REFERRAL_SHARE_INITIATED, { source: 'progress_screen' });
+                  // The run ends on the latest weigh-in (today, or yesterday when today has none yet).
+                  if (featureFlags.shareSheetV2 && lastLog) {
+                    setShareCard(runCard(loggingStreak, lastLog.date, runCount));
+                    return;
+                  }
                   const milestone: ShareCardMilestone = {
                     variant: 'streak',
                     value: runCount,
                     label: 'days in a row with a weigh-in',
                   };
-                  track(AnalyticsEvents.REFERRAL_SHARE_INITIATED, { source: 'progress_screen' });
                   navigation.navigate('ShareCard', { milestone } as never);
                 }}
                 accessibilityRole="button"
@@ -583,6 +592,7 @@ export default function ProgressScreen({ onSaved, logWeightAt }: { onSaved?: () 
         ) : null}
         <QuietRow label="View progress report" onPress={() => navigation.navigate('Report')} style={styles.reportRow} />
       </Screen>
+      {featureFlags.shareSheetV2 ? <ShareSheet card={shareCard} onClose={() => setShareCard(null)} /> : null}
 
       {/* Weight Log Modal. B1 (FW-BODY-128): the sheet rides above the
           iPhone number pad (KeyboardAvoidingView), tapping outside the fields

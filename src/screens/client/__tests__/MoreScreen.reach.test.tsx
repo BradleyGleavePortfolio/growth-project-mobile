@@ -103,7 +103,7 @@ describe("More: your plan rows (S-REACH)", () => {
   it("stack rows push inside More; cross-tab rows go through the tab bar and keep the stack root", async () => {
     await render(<MoreScreen />);
     await fireEvent.press(screen.getByLabelText("Meal plan"));
-    expect(mockNavigate).toHaveBeenCalledWith("Plan");
+    expect(mockNavigate).toHaveBeenCalledWith("ClientDailyMealPlan");
     await fireEvent.press(screen.getByLabelText("Macro targets"));
     expect(mockNavigate).toHaveBeenCalledWith("ClientMacros");
     await fireEvent.press(screen.getByLabelText("Progress"));
@@ -212,7 +212,7 @@ describe("More: Health and sleep / Connected devices (AUDIT-11-125)", () => {
 describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
   const originalOS = Platform.OS;
   const stackRows = [
-    ["Meal plan", "Plan"], ["Macro targets", "ClientMacros"], ["Progress", "Progress"],
+    ["Meal plan", "ClientDailyMealPlan"], ["Macro targets", "ClientMacros"], ["Progress", "Progress"],
     ["Timeline", "Timeline"], ["Membership", "Membership"],
     ["Recipes", "Recipes"], ["Fasting", "Fast"], ["Community", "Community"],
     ["Profile", "ProfileMain"], ["Settings", "Settings"], ["Report", "Report"],
