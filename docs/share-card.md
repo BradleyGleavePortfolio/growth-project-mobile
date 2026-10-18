@@ -7,8 +7,14 @@ registered. Share on the Progress run line and under each recent best on the Ses
 `src/components/share/ShareSheet.tsx` over the screen, with `runCard` / `bestCard` from `shareCards.tsx` (number, words,
 dates, app name; each says what is in it and what is not). Coached with `featureFlags.shareSendV1` (off), Send to {coach}
 posts `{ card: { type: 'share', snapshot }, client_message_id }` to `POST /messages` (`src/api/shareCardApi.ts`, backend
-SHARE-BE; a 400 is a server without share cards and a 409 no current coach, so Send goes). The thread bubble and
-outbox are mobile PR B.
+SHARE-BE; a 400 is a server without share cards and a 409 no current coach, so Send goes).
+
+SHARE-B (same flag): thread rows carry `card` (`readShareCard` keeps a `share` card it can draw). Both threads draw it
+as the same forest card under "Shared progress" on cream (`SharedCard`), the client's on the right and the coach's
+view on the left; the coach inbox, and the client's, say "Shared a card" when the newest message is one. With
+`featureFlags.c3StyleB` the sheet sends through the thread outbox, so offline the card waits in the thread
+("Waiting to send") and sends on reconnect; a failed one says "Not sent. Tap to send again" in the sheet and in the
+thread.
 
 ## Implementation
 

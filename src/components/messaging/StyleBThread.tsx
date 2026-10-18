@@ -2,7 +2,8 @@
  * Style B "Focus" parts for the client's coach thread (C3B-THREAD, behind featureFlags.c3StyleB; MOCK-C3 slice 1). Coach
  * screens keep MessageBubble. Client bubbles are forest, the coach's cream. A failed send is warm (gold line, never red)
  * with a visible tap to send again; a message written offline has a dashed edge and waits. New messages slide in 250 ms
- * on the decel curve; with Reduce Motion they fade in 150 ms instead.
+ * on the decel curve; with Reduce Motion they fade in 150 ms instead. A shared card (SHARE-B) sits on cream on both
+ * sides, with the same edges while it waits or fails.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, TouchableOpacity, View, type DimensionValue } from 'react-native';
@@ -13,6 +14,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { colors as palette, gold, layout, motion, radius, typography, withAlpha } from '../../theme/tokens';
 import type { BubbleMessage } from './MessageBubble';
 import { RomanDraftFrame, romanMarked, romanMarkedBubble, type RomanDraftContext } from './RomanDraftMark';
+import { SharedCard, sharedCardLabel } from '../share/shareCards';
 
 export type SendState = 'sent' | 'failed' | 'waiting';
 
@@ -110,7 +112,8 @@ export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent,
   };
   const failed = isMe && state === 'failed';
   const waiting = isMe && state === 'waiting';
-  const filled = isMe && !failed && !waiting;
+  const card = message.deleted ? undefined : message.card;
+  const filled = isMe && !failed && !waiting && !card;
   const text = filled ? c.onMine : c.ink;
   const enter = useRef(new Animated.Value(animateIn ? 0 : 1)).current;
   useEffect(() => {
@@ -137,11 +140,12 @@ export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent,
         accessibilityRole="button"
         accessibilityLabel={message.deleted
           ? 'Message deleted.'
-          : `Message: ${message.body}.${message.edited ? ' Edited.' : ''}${message.pinned ? ' Pinned.' : ''} Long press for actions.`}
+          : `${card ? sharedCardLabel(card) : `Message: ${message.body}.`}${message.edited ? ' Edited.' : ''}${message.pinned ? ' Pinned.' : ''} Long press for actions.`}
         accessibilityHint="Long press for message actions."
         style={({ pressed }) => [
           s.bubble,
-          { backgroundColor: filled ? c.mine : isMe ? c.surface : c.theirs },
+          { backgroundColor: filled ? c.mine : isMe && !card ? c.surface : c.theirs },
+          card && s.card,
           failed && [s.edge, { borderColor: c.warmEdge }],
           waiting && [s.edge, s.dashed, { borderColor: c.muted }],
           filled && groupEnd && s.tail,
@@ -156,7 +160,7 @@ export function StyleBBubble({ message, isMe, state, groupEnd, readAt, showSent,
         ) : null}
         {message.deleted
           ? <Text style={[s.body, s.deleted, { color: filled ? c.onMine : c.muted }]}>Message deleted</Text>
-          : <Text style={[s.body, { color: text }]}>{message.body}</Text>}
+          : card ? <SharedCard card={card} /> : <Text style={[s.body, { color: text }]}>{message.body}</Text>}
       </Pressable>
       </RomanDraftFrame>
       {!failed && !waiting && meta ? <Text style={[s.meta, { color: c.muted }]}>{meta}</Text> : null}
@@ -244,6 +248,7 @@ const s = StyleSheet.create({
   // 44 x 44 pt at least: a one-letter reply ("k") is still a full tap and long-press target. Width: RomanDraftFrame.
   bubble: { minWidth: layout.touchMin, minHeight: layout.touchMin, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'center' },
   tail: { borderBottomRightRadius: radius.control },
+  card: { width: 288, maxWidth: '100%', padding: 12 },
   edge: { borderWidth: 1 },
   dashed: { borderStyle: 'dashed' },
   pressed: { opacity: 0.85 },

@@ -10,14 +10,17 @@
  *   - incoming messages align left on the page, without a bubble fill
  *   - replies render a quoted parent stub above the bubble body
  *   - the long-press hold triggers a selection haptic
+ *   - a shared card (SHARE-B) draws on cream on either side, the coach's view of a client's Send to {coach}
  */
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
-import { typography, radius } from '../../theme/tokens';
+import { colors as palette, typography, radius } from '../../theme/tokens';
 import { RomanDraftFrame, romanMarked, romanMarkedBubble, type RomanDraftContext } from './RomanDraftMark';
+import { SharedCard, sharedCardLabel } from '../share/shareCards';
+import type { ShareSnapshot } from '../../api/shareCardApi';
 
 export interface BubbleMessage {
   id: string;
@@ -35,6 +38,8 @@ export interface BubbleMessage {
   edited?: boolean;
   pinned?: boolean;
   drafted?: boolean;
+  /** SHARE-B: the share card this message is (it has no text). */
+  card?: ShareSnapshot;
 }
 
 export interface MessageBubbleProps {
@@ -59,6 +64,7 @@ export function MessageBubble({
   const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const marked = romanMarked(message, draftContext);
+  const card = message.deleted ? undefined : message.card;
 
   const handleLongPress = (): void => {
     HapticService.selection();
@@ -87,12 +93,12 @@ export function MessageBubble({
         accessibilityLabel={
           message.deleted
             ? 'Message deleted.'
-            : `Message: ${message.body}.${message.edited ? ' Edited.' : ''}${message.pinned ? ' Pinned.' : ''} Long press for actions.`
+            : `${card ? sharedCardLabel(card) : `Message: ${message.body}.`}${message.edited ? ' Edited.' : ''}${message.pinned ? ' Pinned.' : ''} Long press for actions.`
         }
         accessibilityHint="Long press for message actions."
         style={({ pressed }) => [
           styles.bubble,
-          isMe ? styles.bubbleMe : styles.bubbleThem,
+          card ? styles.bubbleCard : isMe ? styles.bubbleMe : styles.bubbleThem,
           marked && romanMarkedBubble,
           pressed && styles.bubblePressed,
         ]}
@@ -126,6 +132,8 @@ export function MessageBubble({
 
         {message.deleted ? (
           <Text style={[styles.body, styles.bodyDeleted, isMe && styles.timeMe]}>Message deleted</Text>
+        ) : card ? (
+          <SharedCard card={card} />
         ) : (
           <Text style={[styles.body, isMe && styles.bodyMe]}>{message.body}</Text>
         )}
@@ -162,6 +170,7 @@ const makeStyles = (colors: ThreadColors) =>
     bubbleThem: {
       backgroundColor: colors.background,
     },
+    bubbleCard: { backgroundColor: palette.cream, width: 288, maxWidth: '100%', padding: 12 },
     bubblePressed: { opacity: 0.85 },
 
     body: { ...typography.body, color: colors.textPrimary },

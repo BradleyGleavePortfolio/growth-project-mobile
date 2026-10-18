@@ -440,7 +440,7 @@ export default function MessagesScreen() {
   const retryOutbox = (key?: string | null) => {
     const uid = currentUser?.id;
     const back = uid && key ? takeBackRefused(uid, key) : undefined;
-    if (back) setInputText((t) => (t ? `${t}\n${back.body}` : back.body));
+    if (back) setInputText((t) => (t && back.body ? `${t}\n${back.body}` : t || back.body)); // a card has no text to put back
     else if (uid) void drainOutbox(uid, true);
   };
   const shown = useMemo(() => {
@@ -448,7 +448,8 @@ export default function MessagesScreen() {
     const rows = outboxItems.map((i): Message => {
       const state = i.failed ? 'failed' : online && !held ? 'sending' : 'waiting';
       held ||= !!i.failed && !i.refused;
-      const row = normalizeMessage({ id: `pending_${i.key}`, sender_id: currentUser?.id, body: i.body, client_message_id: i.key, created_at: i.createdAt }, currentUser?.id);
+      const card = i.card && { card_type: 'share', snapshot: i.card }; // SHARE-B: a waiting Send to {coach}
+      const row = normalizeMessage({ id: `pending_${i.key}`, sender_id: currentUser?.id, body: i.body, client_message_id: i.key, created_at: i.createdAt, card }, currentUser?.id);
       return { ...row, pending: true, parent_message_id: i.replyToId, outbox: state };
     });
     return rows.length ? [...messages, ...rows] : messages;
