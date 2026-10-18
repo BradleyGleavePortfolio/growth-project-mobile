@@ -9,7 +9,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { dehydrate, hydrate, onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 let mockSamples: (p: GetSamplesParams) => object = () => ({});
-jest.mock('../../../../hooks/useWearableSamples', () => ({ useWearableSamples: (p: { bucket: string }) => mockSamples(p) }));
+jest.mock('../../../../hooks/useWearableSamples', () => ({ useWearableSamples: (p: GetSamplesParams) => mockSamples(p) }));
 let mockConnections: object[] | undefined;
 jest.mock('../../../../hooks/useWearableConnections', () => ({
   useWearableConnections: () => ({ data: mockConnections, refetch: jest.fn() }),
