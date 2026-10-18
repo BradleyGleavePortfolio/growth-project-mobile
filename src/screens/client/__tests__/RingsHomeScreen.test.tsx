@@ -14,6 +14,15 @@ let mockSleepData: object | undefined;
 let mockCheckIn: unknown = null;
 let mockSleepRead: 'ok' | 'failed' | 'pending' = 'ok';
 let mockCheckInRead: 'ok' | 'failed' | 'pending' = 'ok';
+// What GET /v1/wearables/connections answered (useQuery's shape); only a listed 'connected' row is a source.
+const mockConnectionReads = {
+  connected: { isSuccess: true, data: [{ provider: 'APPLE_HEALTHKIT', status: 'connected' }] },
+  none: { isSuccess: true, data: [] },
+  'disconnected or expired': { isSuccess: true, data: [{ provider: 'OURA', status: 'disconnected' }, { provider: 'WHOOP', status: 'expired' }] },
+  loading: { isSuccess: false },
+  failed: { isSuccess: false, isError: true },
+};
+let mockConnections: keyof typeof mockConnectionReads = 'connected';
 const mockUser: { id: string; coach_id: string; profile: Record<string, unknown> } = { id: 'u1', coach_id: 'c1', profile: {} };
 const mockDay = {
   foodLogs: [], dailyTotals: { calories: 1030 }, waterOz: 0, selectedDate: getTodayString(), hasLoadedDay: true,
@@ -32,6 +41,7 @@ jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockDay }
 jest.mock('../../../hooks/useWearableSamples', () => ({
   useWearableSamples: () => ({ data: mockSleepData, isSuccess: mockSleepRead === 'ok', isError: mockSleepRead === 'failed', refetch: jest.fn() }),
 }));
+jest.mock('../../../hooks/useWearableConnections', () => ({ useWearableConnections: () => ({ ...mockConnectionReads[mockConnections], refetch: jest.fn() }) }));
 jest.mock('../../../hooks/useApi', () => ({
   ...jest.requireActual('../../../hooks/useApi'),
   useTodayCheckIn: () => ({ data: mockCheckIn, isSuccess: mockCheckInRead === 'ok', isError: mockCheckInRead === 'failed', refetch: jest.fn() }),
@@ -82,6 +92,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockUser.profile = { workout_days_per_week: 3 };
   mockRomanChat = true; mockRecovery = null; mockAsleep = null; mockSleepData = undefined; mockCheckIn = null; mockSleepRead = 'ok'; mockCheckInRead = 'ok';
+  mockConnections = 'connected';
   mockDay.loadError = null;
   mockHistory.mockResolvedValue({ data: [] });
   mockAssignments.mockResolvedValue([
@@ -128,30 +139,36 @@ function lands([name, params]: readonly unknown[]): boolean {
   if (name in screensIn('HomeStackNav')) return true;
   return name in screensIn('Tab') && (!nested || nested in screensIn(TAB_STACK[name] ?? ''));
 }
-const NO_SOURCE = { freshness: { providers: [] }, series: [] };
-const A_SOURCE = { freshness: { providers: [] }, series: [{ metric: 'HRV_MS', sample_count: 1, samples: [] }] };
+// The sleep bucket names no provider and no sample, as the backend answers for a source that synced only steps.
+const NO_SLEEP = { freshness: { providers: [] }, series: [] };
 const HEALTH = ['Health', { bucket: 'recovery' }] as const;
 const CONNECTIONS = ['Connections'] as const;
 
-// #HEALTH-PAGES: Recovery in every state; Connections only once Health answered with no source at all.
-// [state, what Health returned, Health read, check-in hours, check-in read, the dial's spoken label, where the tap lands]
+// #RINGS-CONNECT: "Connect" and Connections only when the client's connections list none connected;
+// a connected client with nothing for the dial keeps "—" and opens Recovery; every other state opens Recovery.
+// [state, connections, what Health returned, check-in hours, check-in read, the dial's spoken label, where the tap lands]
 it.each([
-  ['Food', 'nothing', 'ok', null, 'ok', 'Food, 820 kcal left, 1,030 of 1,850', ['Log']],
-  ['Train', 'nothing', 'ok', null, 'ok', 'Train, 1 of 2 workouts, This week', ['WorkoutTab']],
-  ['Sleep, last night from Health', 'last night', 'ok', null, 'ok', 'Sleep, 78% recovered, 7 h 20 m asleep', HEALTH],
-  ['Sleep, a source but nothing for last night', 'a source', 'ok', null, 'ok', 'Sleep, —', HEALTH],
-  ['Sleep, a source and the check-in', 'a source', 'ok', 7.5, 'ok', 'Sleep, 7.5 h asleep', HEALTH],
-  ['Sleep, no source and the check-in', 'nothing', 'ok', 7.5, 'ok', 'Sleep, 7.5 h asleep', CONNECTIONS],
-  ['Sleep, no source and no check-in', 'nothing', 'ok', null, 'ok', 'Sleep, Connect', CONNECTIONS],
-  ['Sleep, no source, check-in loading', 'nothing', 'ok', null, 'pending', 'Sleep, —', CONNECTIONS],
-  ['Sleep, no source, check-in failed', 'nothing', 'ok', null, 'failed', 'Sleep, —', CONNECTIONS],
-  ['Sleep, Health loading', 'nothing', 'pending', null, 'ok', 'Sleep, —', HEALTH],
-  ['Sleep, Health failed', 'nothing', 'failed', null, 'ok', 'Sleep, —', HEALTH],
-  ['Sleep, Health failed and the check-in', 'nothing', 'failed', 6.5, 'ok', 'Sleep, 6.5 h asleep', HEALTH],
-] as const)('%s: the tap lands on a real screen, with a light haptic', async (_, health, healthRead, hours, checkInRead, label, to) => {
-  mockSleepData = healthRead !== 'ok' ? undefined : health === 'nothing' ? NO_SOURCE : A_SOURCE;
+  ['Food', 'connected', 'nothing', null, 'ok', 'Food, 820 kcal left, 1,030 of 1,850', ['Log']],
+  ['Train', 'none', 'nothing', null, 'ok', 'Train, 1 of 2 workouts, This week', ['WorkoutTab']],
+  ['Sleep, connected, last night', 'connected', 'last night', null, 'ok', 'Sleep, 78% recovered, 7 h 20 m asleep', HEALTH],
+  ['Sleep, connected, no sleep in Health (steps only)', 'connected', 'nothing', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, connected and the check-in', 'connected', 'nothing', 7.5, 'ok', 'Sleep, 7.5 h asleep', HEALTH],
+  ['Sleep, connected, Health loading', 'connected', 'loading', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, connected, Health failed', 'connected', 'failed', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, connected, Health failed and the check-in', 'connected', 'failed', 6.5, 'ok', 'Sleep, 6.5 h asleep', HEALTH],
+  ['Sleep, no connection', 'none', 'nothing', null, 'ok', 'Sleep, Connect', CONNECTIONS],
+  ['Sleep, only a disconnected or expired connection', 'disconnected or expired', 'nothing', null, 'ok', 'Sleep, Connect', CONNECTIONS],
+  ['Sleep, no connection and the check-in', 'none', 'nothing', 7.5, 'ok', 'Sleep, 7.5 h asleep', CONNECTIONS],
+  ['Sleep, no connection, check-in loading', 'none', 'nothing', null, 'pending', 'Sleep, —', CONNECTIONS],
+  ['Sleep, no connection, check-in failed', 'none', 'nothing', null, 'failed', 'Sleep, —', CONNECTIONS],
+  ['Sleep, connections loading', 'loading', 'nothing', null, 'ok', 'Sleep, —', HEALTH],
+  ['Sleep, connections failed', 'failed', 'nothing', null, 'ok', 'Sleep, —', HEALTH],
+] as const)('%s: the tap lands on a real screen, with a light haptic', async (_, connections, health, hours, checkInRead, label, to) => {
+  mockConnections = connections;
+  mockSleepRead = health === 'loading' ? 'pending' : health === 'failed' ? 'failed' : 'ok';
+  mockSleepData = mockSleepRead === 'ok' ? NO_SLEEP : undefined;
   if (health === 'last night') { mockRecovery = 78; mockAsleep = 440; }
-  mockSleepRead = healthRead; mockCheckInRead = checkInRead; mockCheckIn = hours ? { sleep_hours: hours } : null;
+  mockCheckInRead = checkInRead; mockCheckIn = hours ? { sleep_hours: hours } : null;
   await render(<HomeScreen />);
   await screen.findByLabelText('Start Full Body A');
   await fireEvent.press(screen.getByLabelText(label));

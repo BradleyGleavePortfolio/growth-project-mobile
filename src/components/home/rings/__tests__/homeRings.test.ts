@@ -1,4 +1,4 @@
-import { foodDial, formatCount, formatHm, hasHealthSource, sleepDial, trainDial, weekBounds } from '../homeRings';
+import { foodDial, formatCount, formatHm, noHealthSource, sleepDial, trainDial, weekBounds } from '../homeRings';
 
 describe('UI-1 Home dials: each its own number, never invented', () => {
   it('formats counts and sleep the way the mockup does', () => {
@@ -94,13 +94,9 @@ describe('UI-1 Home dials: each its own number, never invented', () => {
     expect(sleepDial({ ...empty, recovery: 78, reads: { health: 'failed', checkIn: 'failed' } })).toMatchObject({ value: '78%', source: 'health' });
   });
 
-  it('hasHealthSource: a listed connection or any sample is a source; an empty answer or no answer is not', () => {
-    const answer = (providers: number, samples: number) => ({
-      version: 1 as const, user_id: 'u1', bucket: 'SLEEP_RECOVERY' as const, window: { from: '', to: '' },
-      freshness: { providers: Array.from({ length: providers }, () => ({ provider: 'OURA' as const, last_synced_at: null, status: 'never_synced' as const })) },
-      series: [{ metric: 'HRV_MS' as const, unit: 'ms', provider_used: null, sample_count: samples, samples: [] }],
-    });
-    expect([hasHealthSource(answer(1, 0)), hasHealthSource(answer(0, 3)), hasHealthSource(answer(0, 0)), hasHealthSource(undefined)])
-      .toEqual([true, true, false, false]);
+  it('noHealthSource: only an answered connection list with nothing connected; pending or failed is never "no source"', () => {
+    const read = (isSuccess: boolean, ...status: string[]) => noHealthSource({ isSuccess, data: status.map((s) => ({ status: s })) });
+    expect([read(true), read(true, 'disconnected', 'expired'), read(true, 'expired', 'connected'), read(false), noHealthSource({ isSuccess: false })])
+      .toEqual([true, true, false, false, false]);
   });
 });
