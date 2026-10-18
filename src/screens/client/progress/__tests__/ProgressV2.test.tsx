@@ -10,7 +10,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ProgressScreen from '../../ProgressScreen';
 import { getTodayString } from '../../../../utils/date';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
-import { lastWas, trendMove, trendSentence } from '../progressV2';
+import { lastWas, latestBest, trainingWeek, trendMove, trendSentence, weeklyWorkouts } from '../progressV2';
 import type { WeightLog } from '../../../../types';
 
 const today = getTodayString();
@@ -19,13 +19,18 @@ const ago = (n: number, from = today) => new Date(Date.parse(`${from}T00:00:00Z`
 let mockLogs: Array<{ id: string; date: string; weight_lbs: number }> = [];
 let mockUser: { id: string; coach_id?: string; profile: Record<string, unknown> } = { id: 'u1', profile: {} };
 let mockCoachless = false;
+let mockSessions: unknown[] = [];
+let mockAssignments: unknown[] = [];
 const mockLog = jest.fn(async (_body: unknown): Promise<unknown> => ({}));
 const mockHistory = jest.fn(async (): Promise<unknown> => ({ data: { logs: mockLogs } }));
+const mockAssigned = jest.fn(async () => mockAssignments);
 const mockNavigate = jest.fn();
 const mockChart = jest.fn();
 jest.mock('../../../../services/api', () => ({
   weightApi: { getHistory: () => mockHistory(), log: (body: unknown) => mockLog(body) },
+  workoutApi: { getAll: jest.fn(async () => ({ data: mockSessions })) },
 }));
+jest.mock('../../../../api/workoutBuilderApi', () => ({ workoutBuilderApi: { listMyAssignments: () => mockAssigned() } }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../../hooks/useCoachlessClient', () => ({ useCoachlessClient: () => mockCoachless }));
 jest.mock('../../../../hooks/useCalendar', () => ({ useMyCoaches: () => ({ data: [{ coach_id: 'c1', name: 'Sam Rivera', timezone: null }] }) }));
@@ -39,6 +44,14 @@ jest.mock('../../wearables/components/useReduceMotion', () => ({ useReduceMotion
 jest.mock('../../../../theme/ThemeProvider', () => {
   const tokens = require('../../../../theme/tokens');
   return { useTheme: () => ({ colorScheme: 'light', colors: tokens.colors, semanticColors: tokens.lightTokens }) };
+});
+jest.mock('../../../../ui/charts/StyleCMarks', () => {
+  const { createElement } = require('react');
+  const { View } = require('react-native');
+  return {
+    PeakStar: () => createElement(View, { testID: 'peak-star' }),
+    SegmentedRing: ({ label }: { label: string }) => createElement(View, { testID: 'ring', accessibilityLabel: label }),
+  };
 });
 jest.mock('../../../../components/progress/WeightTrendChartDark', () => (props: Record<string, unknown>) => {
   mockChart(props);
@@ -56,6 +69,8 @@ beforeEach(() => {
   mockLogs = [180, 178, 177, 176].map((w, i) => ({ id: String(i), date: `${ago([40, 20, 7, 1][i])}T00:00:00.000Z`, weight_lbs: w }));
   mockUser = { id: 'u1', coach_id: 'c1', profile: { target_weight_lbs: 170 } };
   mockCoachless = false;
+  mockSessions = [];
+  mockAssignments = [];
 });
 
 it('flag on: the masthead, the trend, the period sentence and the tabs, in pounds', async () => {
@@ -136,11 +151,32 @@ it('Log weight: prefilled, steppers, the last weigh-in, sharing line, close, val
   await waitFor(() => expect(v.getByText(/^175\.5 lb at .+\. Sam sees it\.$/)).toBeTruthy());
 });
 
-it('coachless: the same page with no coach words', async () => {
+it('Strength names a new best only when it beats an earlier session; Training shows the planned week', async () => {
+  mockSessions = [
+    { date: `${ago(10)}T00:00:00.000Z`, exercises: [{ exercise_name: 'Back squat', weight_per_set: [175], reps_per_set: [5] }] },
+    { date: `${ago(3)}T00:00:00.000Z`, exercises: [{ exercise_name: 'Back squat', weight_per_set: [185, 180], reps_per_set: [5, 5] }] },
+  ];
+  mockAssignments = [
+    { scheduled_for: `${today}T12:00:00`, completed_at: `${today}T13:00:00` },
+    { scheduled_for: `${today}T18:00:00`, completed_at: null },
+  ];
+  const v = await mount();
+  await waitFor(() => expect(v.getByText('185 lb \u00d7 5')).toBeTruthy());
+  expect(v.getByText('New best')).toBeTruthy();
+  expect(v.getByText(/^Back squat, \w{3} \d+$/)).toBeTruthy();
+  expect(v.getByText('1 of 2 done')).toBeTruthy();
+  expect(v.getByText('This week')).toBeTruthy();
+  expect(v.queryByLabelText(/^Workouts in the last 8 weeks/)).toBeNull();
+});
+it('coachless: no coach words and no plan read, a workout count with 8 weekly bars', async () => {
   mockCoachless = true;
   mockUser = { id: 'u1', profile: {} };
+  mockSessions = [{ date: `${today}T00:00:00.000Z`, exercises: [] }];
   const v = await mount();
-  await waitFor(() => expect(v.getByText('lb trend')).toBeTruthy());
+  await waitFor(() => expect(v.getByText('1 workout this week')).toBeTruthy());
+  expect(v.getByLabelText(/^Workouts in the last 8 weeks: (\d, ){7}1$/)).toBeTruthy();
+  expect(v.getByText('Last 8 weeks')).toBeTruthy();
+  expect(mockAssigned).not.toHaveBeenCalled();
   await fireEvent.press(v.getByLabelText('Log weight'));
   expect(v.queryByText(/sees/)).toBeNull();
   await fireEvent.press(v.getByLabelText('Save weight log entry'));
@@ -152,6 +188,7 @@ it('empty and failed reads say so, Try again reads again; the Timeline and repor
   const v = await mount();
   await waitFor(() => expect(v.getByText('No weigh-ins yet. The first one sets the starting point.')).toBeTruthy());
   expect(v.queryByTestId('progress-weight-chart')).toBeNull();
+  expect(v.queryByTestId('progress-strength')).toBeNull();
   await fireEvent.press(v.getByTestId('progress-timeline'));
   expect(mockNavigate).toHaveBeenLastCalledWith('Timeline');
   await fireEvent.press(v.getByTestId('progress-report'));
@@ -179,5 +216,17 @@ describe('progressV2 words and numbers', () => {
     expect(lastWas(log('2026-10-12', 169.1), 'lb', '2026-10-14')).toBe('Monday was 169.1 lb');
     expect(lastWas(log('2026-10-06', 169.1), 'kg', '2026-10-14')).toBe('October 6 was 76.7 kg');
     expect(lastWas(log('2026-10-14', 169.1), 'lb', '2026-10-14')).toBeNull();
+  });
+  it('a first lift is a best set but not a new best', () => {
+    expect(latestBest([{ date: '2026-10-01', exercises: [{ exercise_name: 'Row', weight_per_set: [100], reps_per_set: [8] }] }]))
+      .toMatchObject({ name: 'Row', weight: 100, reps: 8, isNew: false });
+    expect(latestBest([{ date: '2026-10-01', exercises: [{ exercise_name: 'Row', weight_per_set: [0], reps_per_set: [8] }] }])).toBeNull();
+  });
+  it('counts weeks from Monday and plans only this week', () => {
+    const wed = '2026-10-14';
+    const counts = weeklyWorkouts([{ date: '2026-10-12' }, { date: '2026-10-11' }, { date: '2026-10-05' }, { date: '2026-08-01' }], wed);
+    expect(counts).toEqual([0, 0, 0, 0, 0, 0, 2, 1]);
+    expect(trainingWeek([{ scheduled_for: '2026-10-08T12:00:00', completed_at: null }], wed)).toBeNull();
+    expect(trainingWeek([{ scheduled_for: '2026-10-13T12:00:00', completed_at: 'x' }], wed)).toMatchObject({ done: 1, total: 1 });
   });
 });

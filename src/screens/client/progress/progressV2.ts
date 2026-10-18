@@ -2,8 +2,11 @@
  * C8 v2 PR 2b: the Progress page's numbers and sentences. Pounds in (the
  * server stores weight_lbs); every word is in the client's own unit
  * (profile.weight_unit, lb unless it says kg). Up and down read alike.
+ * Strength and Training read the client's own workouts and plan.
  */
 import { weightPeriod, weightTrend, type WeightPeriod, type WeightSample } from '../../../components/progress/weightTrend';
+import { workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
+import { bucketDateLocal } from '../../../utils/date';
 import type { WeightLog } from '../../../types';
 
 export type WeightUnit = 'lb' | 'kg';
@@ -55,4 +58,53 @@ export function lastWas(log: WeightLog | null, unit: WeightUnit, today: string):
   const ago = (dayX(today) - dayX(log.date)) / DAY;
   const when = ago < 7 ? WEEKDAYS[utc(dayX(log.date)).getUTCDay()] : monthDay(log.date);
   return `${when} was ${one(toUnit(log.weight, unit))} ${unit}`;
+}
+
+export interface Session {
+  date: string;
+  exercises?: Array<{ exercise_name: string; weight_per_set?: number[] | null; reps_per_set?: number[] | null }> | null;
+}
+export interface BestSet { name: string; weight: number; reps: number; date: string; isNew: boolean }
+
+/**
+ * The newest best set in the last 50 workouts (heaviest, then most reps). It
+ * is a "New best" only when it beat an earlier session of the same lift; a
+ * new best wins the tile over a first-ever lift.
+ */
+export function latestBest(sessions: Session[]): BestSet | null {
+  const best = new Map<string, BestSet>();
+  const sets: BestSet[] = [];
+  [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => s.exercises?.forEach((e) => {
+    const top = (e.weight_per_set ?? []).map((w, i) => ({ w, r: e.reps_per_set?.[i] ?? 0 }))
+      .filter((x) => x.w > 0 && x.r > 0).sort((a, b) => b.w - a.w || b.r - a.r)[0];
+    const prev = best.get(e.exercise_name);
+    if (!top || (prev && (top.w < prev.weight || (top.w === prev.weight && top.r <= prev.reps)))) return;
+    const set = { name: e.exercise_name, weight: top.w, reps: top.r, date: s.date.slice(0, 10), isNew: !!prev };
+    best.set(e.exercise_name, set);
+    sets.push(set);
+  }));
+  return sets.filter((s) => s.isNew).pop() ?? sets.pop() ?? null;
+}
+
+const mondayOf = (today: string) => dayX(today) - ((utc(dayX(today)).getUTCDay() + 6) % 7) * DAY;
+
+/** This week's planned sessions as the coach file's ring (Monday first); null when none is planned. */
+export function trainingWeek(rows: Array<{ scheduled_for: string; completed_at: string | null }>, today: string): WorkoutWeek | null {
+  const start = mondayOf(today);
+  const week = rows.map((a) => ({ day: bucketDateLocal(new Date(a.scheduled_for)), completed_at: a.completed_at }))
+    .filter((a) => dayX(a.day) >= start && dayX(a.day) < start + 7 * DAY);
+  if (!week.length) return null;
+  return workoutWeek({ week_start: new Date(start).toISOString().slice(0, 10), today, assignments: week });
+}
+
+/** Workouts in each of the last 8 weeks, oldest first; the last is this week (from Monday). */
+export function weeklyWorkouts(sessions: Session[], today: string): number[] {
+  const start = mondayOf(today);
+  const counts = Array<number>(8).fill(0);
+  sessions.forEach((s) => {
+    const x = dayX(s.date);
+    const ago = Math.max(0, Math.ceil((start - x) / (7 * DAY)));
+    if (ago < 8 && x <= dayX(today)) counts[7 - ago] += 1;
+  });
+  return counts;
 }
