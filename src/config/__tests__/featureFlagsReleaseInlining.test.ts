@@ -204,6 +204,12 @@ describe('feature-flag readers survive release inlining', () => {
         }),
       ).featureFlags as Record<string, boolean>;
 
+    it('C8 chart parts default off and opt in only at build time', () => {
+      expect(build({ EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: undefined }).clientProgressV2).toBe(false);
+      expect(build({ EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: 'true' }).clientProgressV2).toBe(true);
+      expect(build({ EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: 'false' }).clientProgressV2).toBe(false);
+    });
+
     it('missing → hard-false kill switches stay OFF', () => {
       const flags = build({});
       expect(flags.extensionImport).toBe(false);

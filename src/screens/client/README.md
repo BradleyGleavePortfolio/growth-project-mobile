@@ -1,5 +1,9 @@
 # Client screens
 
+C8V2-2A supplies dark weight-chart parts behind `clientProgressV2` (off).
+ProgressScreen is unchanged; C8 PR 2b will opt into the parts with full history
+and the authorized goal. Coachless clients use the same chart and period controls.
+
 Chart contract (PEAKCHARTS): Health & Fitness, Sleep & Recovery, metric detail
 and Progress use lines or daily-total bars, never area fills, gradients or
 glow. Shared chart fixes cover the client screens and coach health embeds;
@@ -59,6 +63,8 @@ For a live session that cannot be changed, the existing started note is selected
 WEARCOPY: the shared HRV and sleep-consistency cards report the latest HRV reading and measured bedtime span, not recovery, readiness or schedule quality. Their existing client and coach callers share the same copy. The client duration banner retains its existing visibility threshold and shows time asleep plus the numeric difference from the 8-hour sleep reference, never a personalized sleep need or a closeness judgment. No scoring, data access or layout changes.
 
 `wearables/HealthFitnessScreen.tsx` uses `cards/ActivityBars.tsx` instead of activity rings in loaded, loading and empty states. Each QuietBar shows the latest actual daily value and its sample date; completed missing samples show an absent value, not zero, while initial queries say “Loading samples”. `wearables/starterGoals.ts` is the sole fallback: 5,000 steps, 20 exercise minutes and 250 active kcal, visibly labelled “Starter goal”. Explicit typed coach/client targets override each fallback. The current API exposes no activity-target storage or goal editor, so no edit button is shown. Heart, Workouts, Body and Steps detail routes, refresh/retry, AI slot and Connections CTA remain; coach embeds stay read-only.
+
+Health and sleep, slice 1 (HEALTH-1, `featureFlags.healthPages`, off in every build; off, all of this is main's): the More row reads "Sleep and recovery" and opens `Health` with `bucket: 'recovery'`; `wearables/WearablesShell.tsx` draws a forest masthead (Back "You", underlined `BucketSwitcher onDark` tabs) and on Fitness mounts `wearables/HealthFitnessTab.tsx`: today's Steps, Active energy and Exercise minutes toward starter goals per local day ("No sample yet", never zero), the device row, `cards/WeekStepBars.tsx` (7 days, today open, dashed No data slots), Heart, Workouts, Body, the coach line for coached clients only, and loading, offline, error with Try again. Existing endpoints only. Test: `wearables/__tests__/healthPages155.test.tsx`.
 
 Back on Health (B-HEALTHBACK-135, B29): the More stack hides the native header and iOS has no hardware back, so `wearables/WearablesShell.tsx` (Health and sleep) and `wearables/MetricDetailScreen.tsx` (loaded, loading and error) draw the coach screens' Back (m#638): `arrow-back` 24 in `textPrimary`, a 44 x 44 `layout.touchMin` box labelled "Back", first in the title block under the Screen top, shown only when `navigation.canGoBack()`. Every other route on both screens is unchanged. Tests: `wearables/__tests__/WearablesShell.test.tsx`, `wearables/__tests__/metricDetailRedesign133.test.tsx`.
 
@@ -130,6 +136,13 @@ Roman's tour runs over these real screens. See `src/tutorial/README.md`.
 `wearables/ConnectionsScreen.tsx` reads `useCoachlessClient()` and passes `coachless` to `ConnectProviderSheet`
 (`onDeviceDisclosure`) and `DisconnectConfirmDialog` (`disconnectConfirmCopy`). A client with no coach is not told about a
 coach; the Connect line says what the data is for and that a coach they join can see it. Coached copy is unchanged.
+
+### Cloud tracker link bound to the person who started it (A6, AUTHB-05)
+
+The server callback no longer attaches the tracker; it sends the browser back to `tgp://wearables/connected` with a
+single-use ticket. `ConnectProviderSheet` finishes the link with `POST oauth/complete` (success: haptic, the sheet closes,
+the row reads Connected; a refused or expired ticket: the existing "did not finish" line with Continue). When Android hands
+the return to the app instead, the `Connections` route opens that tracker's sheet with the ticket; each ticket is finished once.
 
 ## Data flow
 

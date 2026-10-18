@@ -134,7 +134,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
 
   const openReview = useCallback(() => {
     track(AnalyticsEvents.IMPORT_REVIEW_OPENED, { platform: platformId });
-    navigation.navigate('ClientsStack', { screen: 'ClientsList' });
+    navigation.navigate('ClientsStack', { screen: 'ClientsList', pop: true }); // LO-773 N4: no second list
   }, [navigation, platformId]);
 
   // Auto-mint once on mount; the hook's single-flight guard makes this safe.
