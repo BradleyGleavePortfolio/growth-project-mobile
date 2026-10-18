@@ -1,10 +1,11 @@
 /** LEARN-A: the back control, the coach's text and the lesson marks, shared by the Learn pages. */
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useIsFocused, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography } from '../../../theme/tokens';
+import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useLearn } from './learnData';
 
 const BACK: Record<string, string> = { MoreIndex: 'You', Learn: 'Learn', WorkoutMain: 'Train' };
@@ -24,10 +25,24 @@ export function LearnBack({ navigation, onDark = false }: { navigation: Navigati
   );
 }
 
-/** The You list's Learn row shows only once the coach has written guidelines or a lesson (#LEARN-COACHLESS op 1). */
+/**
+ * The You list's Learn row shows only once the coach has written guidelines or a lesson (#LEARN-COACHLESS op 1).
+ * It is the only door, so while it is hidden a You list kept in the background asks again when it is back in
+ * view or the phone is back online (the first mount has just asked).
+ */
 export function LearnDoor({ children }: { children: React.ReactNode }) {
-  const { lessons, guidelines } = useLearn();
-  return lessons.length > 0 || (guidelines !== null && guidelines !== 'plan') ? <>{children}</> : null;
+  const { lessons, guidelines, refetch } = useLearn();
+  const shown = lessons.length > 0 || (guidelines !== null && guidelines !== 'plan');
+  const focused = useIsFocused();
+  const online = isEffectivelyOnline(useNetworkStatus());
+  const latest = useRef({ shown, refetch });
+  latest.current = { shown, refetch };
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current && focused && online && !latest.current.shown) void latest.current.refetch();
+    asked.current = true;
+  }, [focused, online]);
+  return shown ? <>{children}</> : null;
 }
 
 const HEADING = /^(?:#{1,3}\s+(.+)|\*\*(.+)\*\*)$/;

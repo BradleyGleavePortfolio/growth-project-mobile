@@ -11,7 +11,12 @@ import { GUIDELINES_PLAN_TITLE } from '../learnData';
 
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), getParent: jest.fn(), getState: jest.fn() };
 let mockUser: { id: string; coach_id?: string | null } = { id: 'me', coach_id: 'c1' };
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav }));
+let mockFocused = true;
+let mockOnline = true;
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useIsFocused: () => mockFocused }));
+jest.mock('../../../../hooks/useNetworkStatus', () => ({
+  useNetworkStatus: () => ({ online: mockOnline }), isEffectivelyOnline: (n: { online: boolean }) => n.online,
+}));
 jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: new Proxy({}, { get: (_t, k: string) => k === 'learnHub' }),
 }));
@@ -41,18 +46,20 @@ const answer = (rows: unknown[], guide: unknown) => {
 
 async function show(Comp: React.ComponentType) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  await render(
+  const tree = () => (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 360, height: 800 }, insets: { top: 24, bottom: 16, left: 0, right: 0 } }}>
       <QueryClientProvider client={client}><Comp /></QueryClientProvider>
-    </SafeAreaProvider>,
+    </SafeAreaProvider>
   );
+  const view = await render(tree());
   await waitFor(() => expect(client.isFetching()).toBe(0));
   await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+  return () => view.rerender(tree());
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockUser = { id: 'me', coach_id: 'c1' };
+  mockUser = { id: 'me', coach_id: 'c1' }; mockFocused = true; mockOnline = true;
   mockNav.getParent.mockReturnValue(null);
   mockNav.getState.mockReturnValue({ index: 1, routes: [{ name: 'Learn' }, { name: 'CoachGuidelines' }] });
   jest.mocked(api.get).mockImplementation(() => Promise.resolve({ data: { name: 'Sam Lee' } }) as never);
@@ -75,6 +82,20 @@ describe('Learn door on the You list (#LEARN-DOOR op 2, #LEARN-COACHLESS op 1)',
       expect(mockNav.navigate).toHaveBeenCalledWith('Learn');
     }
   });
+
+  it.each([['comes back into view', 'focus'], ['is back online after a failed read', 'online']])(
+    'hidden, then the coach writes: the row appears when You %s, without a restart', async (_label, how) => {
+      answer([], null);
+      if (how === 'online') { mockOnline = false; lessons.mockImplementation(() => Promise.reject(new Error('Network Error')) as never); }
+      const again = await show(MoreScreen);
+      expect(screen.queryByLabelText('Learn')).toBeNull();
+      expect(lessons).toHaveBeenCalledTimes(1);
+      if (how === 'focus') { mockFocused = false; await again(); }
+      answer([LESSON], GUIDE);
+      if (how === 'focus') mockFocused = true; else mockOnline = true;
+      await again();
+      expect(await screen.findByLabelText('Learn')).toBeTruthy();
+    });
 
   it('without a coach the row stays hidden and nothing is read', async () => {
     mockUser = { id: 'me', coach_id: null };
