@@ -73,7 +73,7 @@ export default function MoneyAIPool({ query, onBuy, quiet = false }: Props) {
       {onBuy && quiet ? (
         <QuietTextButton label="Buy more credits" onPress={buy("softImpact")} accessibilityHint={HINT} testID="money-buy-credits" style={styles.quietBuy} />
       ) : onBuy ? (
-        <PrimaryButton label="Buy more credits" haptic={false} onPress={buy("mediumImpact")} accessibilityHint={HINT} testID="money-buy-credits" style={styles.buy} />
+        <PrimaryButton label="Buy more credits" accessibilityLabel="Buy more AI credits" haptic={false} onPress={buy("mediumImpact")} accessibilityHint={HINT} testID="money-buy-credits" style={styles.buy} />
       ) : null}
     </View>
   );

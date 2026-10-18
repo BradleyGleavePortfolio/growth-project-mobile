@@ -321,12 +321,14 @@ export default function MoneyScreen({
   const firstLoad =
     !anyLoaded && [summary, connect].some((x) => x.loading) && isOnline;
 
-  // PK-2: on both Money states. While the Stripe setup card shows its filled
+  // PK-2: on both Money states, the page's one "Buy more credits" (PK-2a: two
+  // taps from the Money tab). Hidden like every credit-pack entry where the
+  // build may not sell packs. While the Stripe setup card shows its filled
   // button, buying is the quiet text action, so one filled button per page.
   const aiPool = (
     <MoneyAIPool
       query={aiBudget}
-      onBuy={creditPacksHidden() ? undefined : () => navigation.navigate("CreditPackCheckout")}
+      onBuy={creditPacksHidden() ? undefined : () => navigation.navigate("CreditPackCheckout", undefined)}
       quiet={!!c && !stripeActive}
     />
   );
@@ -910,21 +912,6 @@ export default function MoneyScreen({
           >
             <Text style={styles.footerText}>Packages</Text>
           </TouchableOpacity>
-          {/* PK-2a: "Buy more credits" is two taps from the Money tab (tab, then
-              this row). Same gate as every credit-pack entry: hidden where the
-              build may not sell packs (iOS store builds without the US link,
-              Android release builds without the Android link). */}
-          {creditPacksHidden() ? null : (
-            <TouchableOpacity
-              onPress={() => navigation.navigate("CreditPackCheckout", undefined)}
-              style={styles.footerRow}
-              accessibilityRole="button"
-              accessibilityLabel="Buy more AI credits"
-              testID="money-buy-credits"
-            >
-              <Text style={styles.footerText}>Buy more credits</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </ScrollView>
     </SafeAreaView>
