@@ -589,8 +589,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           {() => <RomanChatScreen surface="client" />}
         </MoreStackNav.Screen>
       )}
-      {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
-      <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
+      {/* Phase 11 — Share Card. With featureFlags.shareSheetV2 (SHARE-A) the route goes: Share opens ShareSheet in place. */}
+      {featureFlags.shareSheetV2 ? null : <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />}
       {/* Phase 11 — Notification category preferences (push taxonomy). */}
       <MoreStackNav.Screen name="NotificationPreferences" component={NotificationCategoryPreferencesScreen} />
       {/* Full notification settings (Mute all, per-category switches) for client Settings. */}
