@@ -112,6 +112,7 @@ const GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate(CreditPackCheckoutS
 // shell so the §2.6 celebration can overlay any tab when the coach's first
 // payment INSERT lands (flag-gated; MMKV once-only).
 import FirstPaymentWowHost from '../screens/coach/ed/FirstPaymentWowHost';
+import CoachAiConsentHost from '../components/ai/CoachAiConsentHost';
 import CoachSetupScreen from '../screens/coach/setup/CoachSetupScreen';
 // Stream 2 — Coach AI execution drafts inbox (draft.client_message,
 // draft.assign_workout, draft.assign_meal_plan, draft.send_notification).
@@ -818,6 +819,9 @@ export default function CoachNavigator() {
       options={{
         title: 'Clients',
         tabBarAccessibilityLabel: 'Clients',
+        // COACHTABS-CLIENTS-ROOT: Clients opens with the app even when the coach lands on another tab, so a
+        // jump into a Clients screen (a chat, Invite codes, a push) opens on top of the client list.
+        lazy: false,
         tabBarIcon: ({ color, size }) => (
           <Ionicons name="people-outline" size={size} color={color} />
         ),
@@ -1014,6 +1018,8 @@ export default function CoachNavigator() {
         }}
       />
     </Tab.Navigator>
+    {/* COACH-AI-CONSENT: asked once over coach Home, when the server says never asked. */}
+    <CoachAiConsentHost />
     </CoachTeamEntryContext.Provider>
     </FirstPaymentWowHost>
   );

@@ -91,6 +91,10 @@ import {
 import { layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import ResendVerificationLink from './ResendVerificationLink';
 import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar, TextLink } from '../../ui';
+import { Checkbox } from '../consultation/components';
+import { coachAiConsentApi, markCoachAskedAtSignUp } from '../../api/coachAiConsentApi';
+import { COACH_AI_CONSENT_COPY } from '../../lib/ai/coachAiConsentCopy';
+import { logger } from '../../utils/logger';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -248,6 +252,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   // repeats it.
   const [coachRequestNotApplied, setCoachRequestNotApplied] = useState(false);
   const [loading, setLoading] = useState(false);
+  // COACH-AI-CONSENT (owner op 2 item 1): the optional Roman box, unticked by default.
+  const [romanOn, setRomanOn] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
   const [recheckLoading, setRecheckLoading] = useState(false);
@@ -702,6 +708,16 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       await purgePersistedQueryCacheForAllUsers();
       await clearRoleSelectionPending();
       await clearSignupRoleNotice();
+      // COACH-AI-CONSENT: ticked grants now the account exists; empty records nothing. Either way
+      // this run never opens the one-time sheet (the box was the ask).
+      if (coachAttempt) {
+        markCoachAskedAtSignUp(userIdOf(user as { id?: unknown } | null | undefined));
+        if (romanOn) {
+          void coachAiConsentApi.grant().then((out) => {
+            if (out.kind !== 'ok') logger.warn('CreateAccount.coachAiGrant', out.kind);
+          });
+        }
+      }
       authEvents.emit();
       return 'success';
     }
@@ -1582,6 +1598,18 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             textContentType="telephoneNumber"
           />
         </View>
+
+        {/* COACH-AI-CONSENT: the coach form's last item, right above Create account (owner mockup 1). */}
+        {isCoachSignup ? (
+          <Checkbox
+            variant="tan"
+            checked={romanOn}
+            onToggle={() => setRomanOn((v) => !v)}
+            label={COACH_AI_CONSENT_COPY.title}
+            detail={COACH_AI_CONSENT_COPY.paragraph}
+            testID="create-account-roman"
+          />
+        ) : null}
 
         {keyboardOpen ? (
           <View style={styles.inlineFooter} testID="create-account-inline-footer">{footerContent}</View>
