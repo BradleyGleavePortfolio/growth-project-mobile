@@ -124,19 +124,24 @@ describe('TimelinePage', () => {
     expect(screen.queryByTestId('timeline-offline')).toBeNull();
   });
 
-  it('older days page in once, and a failed page retries in place', async () => {
+  it('older days page in once, and a failed page says so and retries in place', async () => {
     mockFetch
       .mockResolvedValueOnce(page([WEIGH], 'c1'))
       .mockRejectedValueOnce(noAnswer)
+      .mockRejectedValueOnce(refused)
       .mockResolvedValue(page([WEIGH, MISSED]));
     await render(<TimelinePage />);
     await waitFor(() => expect(screen.getByText('Weighed in at 82.4 kg')).toBeTruthy());
     await fireEvent(screen.getByTestId('timeline-page'), 'endReached');
     await waitFor(() => expect(screen.getByTestId('timeline-more-error')).toBeTruthy());
-    expect(screen.getByText(`${TIMELINE_COPY.failed} ${TIMELINE_COPY.noAnswer}`)).toBeTruthy();
-    // Older days failed, not newer ones: no offline line, and the loaded days stay.
+    // The owner's words (10-18): what failed, plus what to do when there was no answer.
+    expect(screen.getByText('Older days did not load. Check the connection and try again.')).toBeTruthy();
+    // Older days failed, not newer ones: no offline line, no whole-page failure, and the loaded days stay.
     expect(screen.queryByTestId('timeline-offline')).toBeNull();
+    expect(screen.queryByText(/Your timeline did not load/)).toBeNull();
     expect(screen.getByText('Weighed in at 82.4 kg')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('timeline-more-error-retry'));
+    await waitFor(() => expect(screen.getByText('Older days did not load.')).toBeTruthy());
     await fireEvent.press(screen.getByTestId('timeline-more-error-retry'));
     await waitFor(() => expect(screen.getByText('No check-in')).toBeTruthy());
     expect(mockFetch).toHaveBeenLastCalledWith({ sinceDays: 365, limit: 20, lanes: ['body', 'win', 'friction'], cursor: 'c1' });

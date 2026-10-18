@@ -26,6 +26,7 @@ export const TIMELINE_COPY = {
   logWeight: 'Log weight',
   offline: 'Newer days load when you are back online.',
   failed: 'Your timeline did not load.',
+  olderFailed: 'Older days did not load.',
   noAnswer: 'Check the connection and try again.',
 } as const;
 
@@ -139,7 +140,7 @@ export default function TimelinePage() {
     wasOnline.current = online;
   }, [online, load]);
 
-  const failedLine = (noAnswer: boolean) => (noAnswer ? `${TIMELINE_COPY.failed} ${TIMELINE_COPY.noAnswer}` : TIMELINE_COPY.failed);
+  const failedLine = (line: string, noAnswer: boolean) => (noAnswer ? `${line} ${TIMELINE_COPY.noAnswer}` : line);
   const masthead = (
     <View style={[styles.masthead, { backgroundColor: sc.surface.masthead }]}>
       <Text accessibilityRole="header" style={[styles.title, { color: sc.textOnAccent }]}>{TIMELINE_COPY.title}</Text>
@@ -187,7 +188,7 @@ export default function TimelinePage() {
           <Text style={[styles.empty, { color: sc.textPrimary }]}>{TIMELINE_COPY.empty}</Text>
         ) : (
           <View style={styles.list}>
-            <QuietError message={failedLine(feed.noAnswer)} onRetry={() => void load()} layout="inline" testID="timeline-error" />
+            <QuietError message={failedLine(TIMELINE_COPY.failed, feed.noAnswer)} onRetry={() => void load()} layout="inline" testID="timeline-error" />
           </View>
         )}
       </Screen>
@@ -227,7 +228,7 @@ export default function TimelinePage() {
           <ActivityIndicator color={sc.textMuted} style={styles.more} />
         ) : feed.more !== 'idle' ? (
           <View style={styles.gutter}>
-            <QuietError message={failedLine(feed.more === 'noAnswer')} onRetry={() => void loadMore()} layout="inline" testID="timeline-more-error" />
+            <QuietError message={failedLine(TIMELINE_COPY.olderFailed, feed.more === 'noAnswer')} onRetry={() => void loadMore()} layout="inline" testID="timeline-more-error" />
           </View>
         ) : null
       }
