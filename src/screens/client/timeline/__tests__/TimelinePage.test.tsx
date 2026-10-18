@@ -16,7 +16,7 @@ jest.mock('../../../../hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ isOnline: mockOnline, isInternetReachable: null }),
   isEffectivelyOnline: (s: { isOnline: boolean }) => s.isOnline,
 }));
-const mockNav = { navigate: jest.fn(), setOptions: jest.fn() };
+const mockNav = { popTo: jest.fn(), setOptions: jest.fn() };
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav }));
 
 import TimelinePage, { TIMELINE_COPY, dayHeading, groupByDay } from '../TimelinePage';
@@ -40,7 +40,7 @@ const refused = Object.assign(new Error('Request failed'), { response: { status:
 
 beforeEach(() => {
   mockFetch.mockReset();
-  mockNav.navigate.mockClear();
+  mockNav.popTo.mockClear();
   mockNav.setOptions.mockClear();
   mockOnline = true;
 });
@@ -93,7 +93,7 @@ describe('TimelinePage', () => {
     await render(<TimelinePage />);
     await waitFor(() => expect(screen.getByText(TIMELINE_COPY.empty)).toBeTruthy());
     await fireEvent.press(screen.getByTestId('timeline-log-weight'));
-    expect(mockNav.navigate).toHaveBeenCalledWith('Progress', { logWeightAt: expect.any(Number) });
+    expect(mockNav.popTo).toHaveBeenCalledWith('Progress', { logWeightAt: expect.any(Number) });
   });
 
   it('error: what failed and Try again; no answer adds what to do', async () => {

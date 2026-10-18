@@ -158,7 +158,8 @@ export default function TimelinePage() {
         footer={empty ? (
           <PrimaryButton
             label={TIMELINE_COPY.logWeight}
-            onPress={() => navigation.navigate('Progress', { logWeightAt: Date.now() })}
+            // Back to the Progress page beneath (its door), with its weigh-in sheet open.
+            onPress={() => navigation.popTo('Progress', { logWeightAt: Date.now() })}
             testID="timeline-log-weight"
           />
         ) : undefined}
