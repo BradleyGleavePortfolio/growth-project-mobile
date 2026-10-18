@@ -41,6 +41,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
+  EXPO_PUBLIC_FF_CONSULT_TILES_V2: process.env.EXPO_PUBLIC_FF_CONSULT_TILES_V2,
   EXPO_PUBLIC_FF_CRISIS_ACTIONS: process.env.EXPO_PUBLIC_FF_CRISIS_ACTIONS,
   EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: process.env.EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE,
   EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES: process.env.EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES,
@@ -55,6 +56,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS,
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
+  EXPO_PUBLIC_FF_HEALTH_PAGES: process.env.EXPO_PUBLIC_FF_HEALTH_PAGES,
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
@@ -594,6 +596,24 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_C3_STYLE_B
    */
   c3StyleB: readFlag('EXPO_PUBLIC_FF_C3_STYLE_B', false),
+
+  // ─── ONBQ-TILES — consultation questions in Quiet Tiles ──────────────────
+  /**
+   * Owner pick MOCK-ONBQ option A (path op 1): the consultation questions
+   * T1, B1 to B4, N1 and N2 drawn as cream tiles, pills and wheel cards.
+   * Answers, order, skips and the saved body are the same either way. OFF
+   * UNCONDITIONALLY; off, the questions are exactly main's.
+   *
+   * env: EXPO_PUBLIC_FF_CONSULT_TILES_V2
+   */
+  consultTilesV2: readFlag('EXPO_PUBLIC_FF_CONSULT_TILES_V2', false),
+  /**
+   * HEALTH-1 (owner 10-17 #HEALTH-PAGES op 1, #SLEEP-PLACE op 2): the You row
+   * Sleep and recovery opens Health and sleep on Recovery; the Fitness tab gets
+   * the forest masthead. Off in every build; off, both are main's.
+   * env: EXPO_PUBLIC_FF_HEALTH_PAGES
+   */
+  healthPages: readFlag('EXPO_PUBLIC_FF_HEALTH_PAGES', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

@@ -1,6 +1,7 @@
 /**
- * finalizeLeanOnboarding — Bridge between the lean onboarding screens
- * (LeanQ1–Q4) and the backend profile + macro-target store.
+ * finalizeLeanOnboarding — Bridge between the lean onboarding answers
+ * (saved by the lean screens, deleted in ONBQ-TILES) and the backend
+ * profile + macro-target store.
  *
  * Background
  * ──────────
@@ -12,9 +13,6 @@
  *
  * Called from
  * ───────────
- * - `LeanQ4MetricsScreen.finishOnboarding` (the canonical "save & continue")
- * - `LeanQ1`, `LeanQ2`, `LeanQ3` skip handlers (so any path that flips
- *   `onboarding_complete` also tries the backend post)
  * - `useLeanOnboardingReconcile` on app open (retry if the previous attempt
  *   bailed offline)
  *
