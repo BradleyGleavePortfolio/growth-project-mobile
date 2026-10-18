@@ -16,6 +16,8 @@ writes, coach lock or screen wiring. Full state frames remain C8 PR 13.
 
 CAC-POLISH: `roman/RomanLoadingSkeleton.tsx` is the existing Roman loading state shared by the first coach-consent read and the room read, with the same spoken label and Reduce Motion support. The initial consent read keeps a working Back action; it never mounts the room early. `ai/AiRefusalNotice.tsx` uses `radius.card` (16) for every refusal card, compact or full, and `radius.button` (12) for every primary and secondary action; refusal handling and wording are unchanged.
 
+ROMAN-RADIUS: Roman's cards (`RomanWorkoutCompleteCard`, `RomanStreakCard`, `RomanBriefCard`, the `RomanErrorBanner` toast, `adjust/RomanAdjustmentCard`) use `radius.card` (16), the adjustment card's actions `radius.button` (12) and its chips `radius.chip`; no file under `roman/` sets a literal radius (guard in `adjust/__tests__/RomanAdjustmentCard.test.tsx`).
+
 Shared, screen-agnostic UI. Anything that more than one screen renders, or anything that owns its own animation / lifecycle, lives here. Tokenised — no hardcoded hex, no inline radius / shadow values.
 
 ## Purpose

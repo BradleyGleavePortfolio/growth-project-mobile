@@ -324,7 +324,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerActions} testID="client-file-header-actions">
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <View style={styles.headerButtons}>
