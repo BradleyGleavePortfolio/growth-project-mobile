@@ -34,6 +34,27 @@ and count, pinned title, event start and challenge end; no author name, post bod
 post timestamp or engagement count is invented. “Pinned post” does not imply its
 author is the client's coach.
 
+`CommunityHomeScreen.tsx` (C6-M1S, `featureFlags.communityHomeV2`, default off; off,
+the tab opens on the shell below) is the Forest Pop Community Home (C6CHAT-S-V2 c01,
+MOCK-COMMX2). A deep masthead holds the community's gold monogram and name (GET
+/community/workspaces/:id, "Community" until it loads) and Search with `communitySearch`.
+The segment on a forest track is Home, then Challenges with `communityChallenges` (the
+embedded Challenges list); Activity takes its place between them when its feed ships,
+and one segment draws no control. The leaf pill slides 180 ms with a selection tick;
+Reduce Motion moves it at once. Home is `components/community/SpaceTree`: a Spaces
+section (the server's spaces in its order, announcement spaces with a megaphone, the
+rest with #; Leaderboard with a Private chip for coached clients; Classroom with
+`communityClassroom`) and Direct messages (the coach's first name and "Your coach",
+opening the C3 coach thread, with its `/messages/unread-count` in a leaf badge capped at
+99+), then Community safety. Sections fold. Spaces render flat and carry no count until
+B-LAYERS (layers) and B3 (per-space unread) ship; section spaces wait for layers. A space
+row opens `CommunitySpace` with its id; with the flag on that page draws Back and "Open
+space list" (`SpaceDrawer`): a deep drawer with the same tree, the open space on a leaf
+edge, "Jump to a space or person" filtering by name, 250 ms slide (Reduce Motion: fade);
+a space picked there replaces the open one, so Back returns Home. Loading is a still
+skeleton; a failed read shows the error with Try again (error tick if it fails again).
+Tests: `CommunityHomeScreen.test.tsx`.
+
 The shell retains Today, Hall, Cohorts, Challenges and Messages behind their
 existing flags, with underlined text segments and real unread counts. Safety and
 coach-gated leaderboard stay visible; Find and Classroom open their existing

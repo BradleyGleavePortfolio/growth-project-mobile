@@ -171,6 +171,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_COMMUNITY_HOME_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (C6-M1S: the Forest Pop Community Home)."
+    },
     "EXPO_PUBLIC_FF_COMMUNITY_SEARCH": {
       "kind": "flag",
       "default": "off",
