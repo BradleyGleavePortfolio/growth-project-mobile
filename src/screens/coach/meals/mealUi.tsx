@@ -1,6 +1,6 @@
 /** MEALBUILD (MOCK-K5 Style C): the meal-plan screens' masthead, tabs, numbers and states (Style C roles, theme/README). */
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -10,7 +10,8 @@ import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isConnectionFailure } from '../../../ui/states/QuietStates';
 import { toIsoDate } from '../../../api/programsApi';
-import type { DailyMealPlanAssignment, MealTemplate } from '../../../api/mealTemplatesApi';
+import type { DailyMealPlan, MealTemplate, SlotLabel } from '../../../api/mealTemplatesApi';
+import type { MealPlanRun } from '../../../hooks/useMealTemplates';
 import type { ProgramsNav } from '../programs/types';
 
 export type ProgramsHalf = 'workouts' | 'plans' | 'meals';
@@ -25,11 +26,22 @@ export const dayTotals = (slots: { meal_template: Macros }[]): Macros => slots.r
   calories_kcal: t.calories_kcal + m.calories_kcal, protein_g: t.protein_g + m.protein_g,
   carbs_g: t.carbs_g + m.carbs_g, fats_g: t.fats_g + m.fats_g,
 }), { calories_kcal: 0, protein_g: 0, carbs_g: 0, fats_g: 0 });
-/** Clients whose assignment runs today or later. */
-export const clientsOn = (rows: DailyMealPlanAssignment[], today = toIsoDate(new Date())) =>
-  new Set(rows.filter((a) => !a.ends_on || a.ends_on.slice(0, 10) >= today).map((a) => a.client_id));
+/** The runs covering `day` for a client, newest first: the client sees every one, in this order (getTodayForClient, ClientDailyMealPlanScreen). */
+export const covering = (runs: MealPlanRun[], client: string, day: string) => runs
+  .filter((r) => r.client === client && r.from <= day && (!r.to || r.to >= day)).sort((a, b) => b.from.localeCompare(a.from));
+/** Clients who see `planId` today or on a later day. */
+export const clientsOn = (runs: MealPlanRun[], planId: string, today = toIsoDate(new Date())) =>
+  new Set(runs.filter((r) => r.plan.id === planId && (!r.to || r.to >= today)).map((r) => r.client));
 export const saveFailed = (err: unknown) => `That did not save. ${isConnectionFailure(err)
   ? 'Check your connection, then try again.' : 'Try again in a moment.'}`;
+export const httpStatus = (err: unknown) => (err as { response?: { status?: number } } | null)?.response?.status;
+/** The plan PATCH answers 400 when a slot's meal was archived (validateSlotTemplates). */
+export const planSaveFailed = (err: unknown) =>
+  httpStatus(err) === 400 ? 'A meal in this plan was archived. Swap it, then try again.' : saveFailed(err);
+export const SLOT_NAMES: Record<SlotLabel, string> = {
+  breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack', preworkout: 'Pre-workout', postworkout: 'Post-workout',
+};
+export const sortedSlots = (p: DailyMealPlan) => [...p.slots].sort((a, b) => a.order - b.order);
 
 export function Masthead({ title, sub, onBack, children }: { title: React.ReactNode; sub?: string; onBack?: () => void; children?: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
@@ -109,14 +121,49 @@ export const OfflineNote = ({ at }: { at: number }) => (
     { hour: 'numeric', minute: '2-digit' })}. Saving needs a connection.`}</Notice>
 );
 
-export function FirstCard({ title, body }: { title: string; body: string }) {
+export function FirstCard({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={[s.card, { backgroundColor: sc.surface.sage }]}>
       <Text accessibilityRole="header" style={[s.cardTitle, { color: sc.textPrimary }]}>{title}</Text>
       <Text style={[typography.body, { color: sc.textPrimary }]}>{body}</Text>
+      {children}
     </View>
   );
+}
+
+/**
+ * Masthead choice chips, one picked (cream fill, ink text); selection haptic. `pick` ends the row with a chip that
+ * opens a date picker; when the choice is none of the items, that chip is the picked one and says it (`chosen`).
+ */
+export function Chips<T extends string | number>({ items, value, onChange, label, scroll, pick }: { items: [T, string][]; value: T; onChange: (v: T) => void; label: string;
+  scroll?: boolean; pick?: { label: string; open: boolean; onPress: () => void; chosen?: string } }) {
+  const { semanticColors: sc } = useTheme();
+  const look = (on: boolean) => ({ borderColor: on ? sc.bgSurface : sc.data.plannedOnDark, backgroundColor: on ? sc.bgSurface : 'transparent' });
+  const ink = (on: boolean) => [on ? typography.bodyMd : typography.body, { color: on ? sc.textPrimary : sc.textOnAccent }];
+  const row = (
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[s.chips, scroll && s.oneRow]}>
+      {items.map(([key, text]) => {
+        const on = key === value;
+        return (
+          <Pressable key={String(key)} accessibilityRole="radio" accessibilityLabel={text} accessibilityState={{ checked: on }}
+            onPress={() => { if (!on) { void HapticService.selection(); onChange(key); } }}
+            style={({ pressed }) => [s.chip, look(on), pressed && s.pressed]}>
+            <Text style={ink(on)}>{text}</Text>
+          </Pressable>
+        );
+      })}
+      {pick ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={pick.label} accessibilityValue={pick.chosen ? { text: pick.chosen } : undefined}
+          accessibilityState={{ expanded: pick.open, selected: !!pick.chosen }} onPress={() => { void HapticService.selection(); pick.onPress(); }}
+          style={({ pressed }) => [s.chip, s.pick, look(!!pick.chosen), pressed && s.pressed]}>
+          <Ionicons name="calendar-outline" size={18} color={pick.chosen ? sc.textPrimary : sc.textOnAccent} />
+          <Text style={ink(!!pick.chosen)}>{pick.chosen ?? 'Pick a date'}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+  return scroll ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.bleed} contentContainerStyle={s.bleedPad}>{row}</ScrollView> : row;
 }
 
 export const mealStyles = StyleSheet.create({
@@ -130,6 +177,10 @@ export const mealStyles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent', borderRadius: radius.card, padding: 20, gap: 12 },
   cardTitle: { ...typography.h2, fontSize: 26, lineHeight: 33 },
   ghost: { height: 112 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }, oneRow: { flexWrap: 'nowrap' },
+  bleed: { marginHorizontal: -layout.gutter }, bleedPad: { paddingHorizontal: layout.gutter },
+  chip: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: 16, borderWidth: 1, borderRadius: radius.button },
+  pick: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   notice: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
 });
 const s = mealStyles;

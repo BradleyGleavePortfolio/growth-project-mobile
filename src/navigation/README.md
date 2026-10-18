@@ -40,7 +40,7 @@ MOBILE-DEEPLINK: `incomingLinks.ts` validates the complete URL before any routin
 
 ## Data flow
 
-`CoachMealTemplates` stays unregistered (MEAL-TEMPLATES-ROUTE-132). With `EXPO_PUBLIC_FF_MEAL_PLANS_V2` on (MEALBUILD), the Programs stack registers `MealEditor` (`CoachMealTemplatesScreen`, now the meal editor) and Programs shows Workouts, Meal plans and Meals; off, Programs is unchanged.
+`CoachMealTemplates` stays unregistered (MEAL-TEMPLATES-ROUTE-132). With `EXPO_PUBLIC_FF_MEAL_PLANS_V2` on (MEALBUILD), the Programs stack registers `MealEditor` (`CoachMealTemplatesScreen`, now the meal editor), `DayPlanBuilder`, `MealPicker` and `MealPlanAssign` and Programs shows Workouts, Meal plans and Meals; off, Programs is unchanged.
 
 `ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts'`. Omission opens Summary, and route updates also select the tab on an already-mounted screen.
 
