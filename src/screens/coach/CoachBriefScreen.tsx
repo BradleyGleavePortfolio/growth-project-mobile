@@ -34,7 +34,7 @@ import {
   type CoachBriefActionItem,
 } from '../../api/coachBriefApi';
 import type { CoachTabParamList } from '../../navigation/CoachNavigator';
-import { chatTarget } from '../../navigation/coachInbox';
+import { chatTarget, openTarget } from '../../navigation/coachInbox';
 // §2.3 Coach Brief — Roman delivers the morning brief beside his face.
 // FACE+VOICE: RomanBriefCard co-locates <RomanAvatar /> with the brief text.
 import RomanBriefCard from '../../components/roman/RomanBriefCard';
@@ -90,8 +90,6 @@ type LoadState =
   | { kind: 'throttled' };
 
 type BriefNav = NavigationProp<CoachTabParamList>;
-/** actionTarget builds nested params per tab; navigate's tuple overloads cannot take a union. */
-type LooseNavigate = (name: keyof CoachTabParamList, params?: object) => void;
 
 /** Where an action item opens. null = informational row (no tap). */
 export function actionTarget(
@@ -441,7 +439,7 @@ function ActionRow({ item }: { item: CoachBriefActionItem }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.actionRow, pressed && styles.actionRowPressed]}
-      onPress={() => (navigation.navigate as LooseNavigate).call(navigation, target.tab, target.params)}
+      onPress={() => openTarget(navigation, target)}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint="Opens the screen for this item"
