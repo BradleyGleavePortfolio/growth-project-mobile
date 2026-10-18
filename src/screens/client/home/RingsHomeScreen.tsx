@@ -152,9 +152,9 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
         <HomeNoticeSlot style={styles.notices}>
           <DunningBanner surface="HomeScreen" presentation="section" />
           <PendingInviteBanner />
-          <FinishJoining />
           <ProfileNudge hasCoachPlan={workout.hasCoachPlan} hasTargets={(day.calorieTarget ?? 0) > 0} />
           <PushPermissionCard presentation="section" />
+          <FinishJoining />
           <CoachIntroductionBanner />
           <FullMacrosIntroCard carbsG={day.carbsTarget} fatG={day.fatTarget} />
           <TutorialHomeSlot part="reoffer" />

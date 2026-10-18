@@ -7,11 +7,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
-/**
- * Most urgent first: the spec's dunning, pending invite, finish your profile, push permission, with
- * Finish joining (a paid coach join waiting on its payment) beside the invite it continues.
- */
-export const NOTICE_RANK = ['dunning', 'invite', 'finishJoining', 'profile', 'push', 'coachIntro', 'fullMacros', 'tourReoffer'] as const;
+/** Most urgent first, the spec's order: dunning, pending invite, finish your profile, push permission, then the rest. */
+export const NOTICE_RANK = ['dunning', 'invite', 'profile', 'push', 'finishJoining', 'coachIntro', 'fullMacros', 'tourReoffer'] as const;
 export type NoticeId = (typeof NOTICE_RANK)[number];
 
 const Slot = createContext<{ shown: NoticeId | undefined; report: (id: NoticeId, due: boolean) => void } | null>(null);

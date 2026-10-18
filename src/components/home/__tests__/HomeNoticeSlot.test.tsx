@@ -44,8 +44,8 @@ beforeEach(() => {
   __resetMacroDisplayStoreForTests();
 });
 
-it('one at a time, most urgent first: dunning, invite, Finish joining, profile, push, then the rest; each dismissal shows the next', async () => {
-  expect(NOTICE_RANK).toEqual(['dunning', 'invite', 'finishJoining', 'profile', 'push', 'coachIntro', 'fullMacros', 'tourReoffer']);
+it("one at a time, most urgent first in the spec's order (dunning, invite, profile, push, then the rest); each dismissal shows the next", async () => {
+  expect(NOTICE_RANK).toEqual(['dunning', 'invite', 'profile', 'push', 'finishJoining', 'coachIntro', 'fullMacros', 'tourReoffer']);
   await render(<HomeNoticeSlot style={{ marginTop: 24 }}>{everyNotice}</HomeNoticeSlot>);
   for (const id of NOTICE_RANK) {
     expect(visible()).toEqual([id]); // with dunning and the invite both due, only dunning
