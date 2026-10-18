@@ -79,7 +79,7 @@ it('board 5, Week: the average a day not counting today, the week before, bars w
   await show();
   expect(screen.getByLabelText('Back to Health and sleep')).toBeTruthy();
   expect(screen.getByText('Health and sleep')).toBeTruthy();
-  expect(screen.getByText('Average a day, not counting today')).toBeTruthy();
+  expect(screen.getByText('Average per Day')).toBeTruthy();
   expect(screen.getByText('7,600')).toBeTruthy();
   expect(screen.getByText('steps a day')).toBeTruthy();
   expect(screen.getByText('600 more a day than the week before')).toBeTruthy();

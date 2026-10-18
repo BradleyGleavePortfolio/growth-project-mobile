@@ -170,8 +170,8 @@ export default function MetricDetailV2({ metric, bucket, title, goal, unit }: Pr
                 ))}
               </View>
               <View accessible testID="metric-hero"
-                accessibilityLabel={`Average a day, not counting today: ${average == null ? 'No sample yet' : `${amount(average)} a day`}${sub ? `. ${sub}` : ''}`}>
-                <Text style={[styles.body1, { color: sc.textOnMastheadMuted }]}>Average a day, not counting today</Text>
+                accessibilityLabel={`Average per Day: ${average == null ? 'No sample yet' : `${amount(average)} a day`}${sub ? `. ${sub}` : ''}`}>
+                <Text style={[styles.body1, { color: sc.textOnMastheadMuted }]}>Average per Day</Text>
                 {average == null ? (
                   <Text style={[styles.none, { color: sc.textOnMastheadMuted }]}>No sample yet</Text>
                 ) : (
