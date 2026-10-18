@@ -58,9 +58,11 @@ When the toggle changes:
 | Location | Method | Trigger |
 |---|---|---|
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
+| `progress/ProgressV2` and `LogWeightSheetV2` (C8V2-2B, `clientProgressV2` off by default) | `selection()`; `success()`; `warning()`; `error()` | Week / Month / All and each 0.1 stepper; once when the server saves the weigh-in (the Save tap itself fires nothing); a weight outside the range; the save fails |
 | `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
 | Overview gear, Calendar gear, Messages Community button (COACHTABS) | `softImpact()` | Opens Settings, Hours and rules, Community |
 | `wearables/HealthFitnessTab` (HEALTH-1, `healthPages` off by default) | `selection()`; `error()` | Opens the device row, Steps, a card or Connect; Try again fails |
+| `wearables/MetricDetailV2` (HEALTH-2, `healthPages` off by default) | `selection()`; `softImpact()`; `error()` | Week or Month changes; Share opens the sheet (its own haptics are `ShareSheet`'s); Try again fails |
 | `messaging/RomanDraftMark` (Roman draft mark, both threads and C3 Style B) | `selection()` | Show or fold the draft line, open its explanation, or forward a long press to message actions (flag off by default) |
 | `ActiveWorkoutScreen` | `heavyImpact()` | Workout saved successfully |
 | `ActiveWorkoutScreen` | `error()` | Workout save failed |
@@ -73,10 +75,11 @@ When the toggle changes:
 | `AgeCheckScreen` | `error()` | Date of birth save API failure |
 | `CoachAiConsentSheet` (COACH-AI-CONSENT) | `success()` | The coach's Roman grant is saved (Allow, Try again) |
 | `CoachSafetyAlertScreen` | `warning()` | A Roman safety alert opens (card, push or inbox row), once it shows |
+| `client-detail/SafetyAlertCard` (SAFETY-CARD) | `softImpact()`; `success()`; `error()` | Message {first} on the client file's safety card; the server confirms or refuses Dismiss. None when the card appears |
 | `MessagesScreen` (client, `c3StyleB` on) | `softImpact()` | Send tapped |
 | `MessagesScreen` (client, `c3StyleB` on) | `error()` | A send fails while online (once per failure; it holds the messages after it; none while offline, the message waits) |
 | `MessagesScreen` (client, `c3StyleB` on) | `success()` | The coach's read lands while the thread is open |
-| `share/ShareSheet` (SHARE-A, `shareSheetV2` off by default) | `softImpact()`; `success()`; `error()` | A tap on Send to {coach}, Share outside the app or the Session summary Share link; once, only when the server confirms a send (none for Share outside the app: the app cannot know whether the person finished); a picture or a send fails |
+| `share/ShareSheet` (SHARE-A, `shareSheetV2` off by default) | `softImpact()`; `success()`; `error()` | A tap on Send to {coach}, Share outside the app or the Session summary Share link; once, only when the server confirms a send (none for Share outside the app: the app cannot know whether the person finished; none when the card waits offline in the thread outbox, SHARE-B); a picture or a send fails |
 | `ShareCardScreen` (flag off) | `error()` | The picture could not be made or the share failed (the success haptic before the picture is gone) |
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
 | `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |
@@ -92,6 +95,9 @@ When the toggle changes:
 | `LearnScreen` lesson rows (`learnHub` on) | `selection()` | A lesson opens |
 | `LearnLessonScreen` (`learnHub` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
+| `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
+| `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
+| `purchase/PlanActiveMoment` (`clientBillingV2` on) | `success()` | Once, when the plan-is-active moment appears after a confirmed purchase |
 
 ## Architecture
 

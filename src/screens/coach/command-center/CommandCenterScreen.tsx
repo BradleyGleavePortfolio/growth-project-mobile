@@ -7,9 +7,9 @@
 // inactive, AA on bone; accentText active) on 44 pt tall tabs.
 // COACH-HOME-134: the shared Screen owns the top inset (insets + 12 pt, iOS and Android alike).
 //
-// Navigation into client-level detail (ClientDetail, ClientMessages) is
-// handled by navigating up to the ClientsStack in CoachNavigator via the
-// onSelectClient / onOpenThread props passed to child screens.
+// Navigation into client-level detail (ClientDetail) is handled by navigating
+// up to the ClientsStack in CoachNavigator via the onSelectClient prop passed to
+// child screens; a chat (onOpenThread) opens through openInboxChat.
 
 import React from 'react';
 import {
@@ -35,6 +35,7 @@ import CoachHomeCards from './CoachHomeCards';
 import { coachHomeSources } from './coachHomeSources';
 import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
 import { featureFlags } from '../../../config/featureFlags';
+import { openInboxChat } from '../../../navigation/coachInbox';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 
 export type CommandCenterTab =
@@ -55,7 +56,7 @@ const TABS: { key: CommandCenterTab; label: string }[] = [
 interface Props {
   /** Navigate to client detail screen (up to ClientsStack). */
   onSelectClient?: (userId: string, displayName: string) => void;
-  /** Navigate to existing ClientMessages screen (up to ClientsStack). */
+  /** Open a client's chat (default: openInboxChat, in Messages with the six tabs). */
   onOpenThread?: (clientId: string, clientName: string) => void;
   /** Pre-select a tab on mount. Defaults to 'overview'. */
   initialTab?: CommandCenterTab;
@@ -79,8 +80,9 @@ export default function CommandCenterScreen({
     if (routeParams?.tab === 'action-queue') setActiveTab('action-queue');
   }, [routeParams]);
   // AUDIT-13-125: the Overview tab mounts this screen with no props, so every
-  // client row and inbox thread was a dead tap. Default to the Clients stack
-  // (`initial: false` keeps the Clients list under it for Back).
+  // client row and inbox thread was a dead tap. A row defaults to the Clients
+  // stack (`initial: false` keeps the Clients list under it for Back); a thread
+  // opens through openInboxChat (CHATS-MESSAGES).
   const navigation = useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
   const { semanticColors: sc } = useTheme();
   const selectClient =
@@ -92,13 +94,7 @@ export default function CommandCenterScreen({
         initial: false,
       }));
   const openThread =
-    onOpenThread ??
-    ((clientId: string, clientName: string) =>
-      navigation.navigate('ClientsStack', {
-        screen: 'ClientMessages',
-        params: { clientId, clientName },
-        initial: false,
-      }));
+    onOpenThread ?? ((clientId: string, clientName: string) => openInboxChat(navigation, clientId, clientName));
   // Same Money route as the Home's Money card (B-332-7: `initial: false`).
   // COACHTABS: with the six tabs it switches to the Money tab's root.
   const openMoney = () =>

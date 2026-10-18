@@ -18,6 +18,8 @@ import { PACKAGE_PAYMENT_COPY } from "../../lib/packagePayment";
 import { money } from "../../lib/planTerms";
 import type { PackagePurchase } from "../../hooks/usePackagePurchase";
 import PlanTermsBlock from "./PlanTermsBlock";
+import PlanActiveMoment from "./PlanActiveMoment";
+import { featureFlags } from "../../config/featureFlags";
 
 export interface PurchaseFeedbackProps {
   purchase: PackagePurchase;
@@ -27,6 +29,8 @@ export interface PurchaseFeedbackProps {
   onOpenPlan: (purchaseId: string | null) => void;
   /** B-343-3: the action's label when it does not open the plan itself. */
   openPlanLabel?: string;
+  /** C5 Style C: open what the purchase unlocks (surfaces in the More stack). */
+  onSeeUnlocks?: (purchaseId: string) => void;
 }
 
 export default function PurchaseFeedback({
@@ -34,6 +38,7 @@ export default function PurchaseFeedback({
   onContinue,
   onOpenPlan,
   openPlanLabel = PACKAGE_PAYMENT_COPY.openPlan,
+  onSeeUnlocks,
 }: PurchaseFeedbackProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
@@ -71,7 +76,13 @@ export default function PurchaseFeedback({
         </Text>
       ) : null}
 
-      {state.phase === "success" && state.success ? (
+      {state.phase === "success" && state.success && featureFlags.clientBillingV2 ? (
+        <PlanActiveMoment
+          success={state.success}
+          onContinue={onContinue}
+          onSeeUnlocks={onSeeUnlocks}
+        />
+      ) : state.phase === "success" && state.success ? (
         <View
           style={styles.success}
           testID="payment-success"

@@ -177,6 +177,16 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
     navigation.navigate('ClientPackages');
   }, [navigation, purchase]);
 
+  // C5 Style C: close this sheet onto Membership plans, then open what the
+  // purchase unlocks above it (Back lands on the list with the new plan).
+  const seeUnlocks = useCallback(
+    (purchaseId: string) => {
+      leave();
+      navigation.navigate('PurchaseUnpack', { purchaseId });
+    },
+    [leave, navigation],
+  );
+
   const phase = purchase.state.phase;
   const hidePay =
     phase === 'success' ||
@@ -225,7 +235,12 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
           purchaseSlot={
             <>
               {sellable && !hidePay ? <PlanTermsBlock pkg={sellable} /> : null}
-              <PurchaseFeedback purchase={purchase} onContinue={leave} onOpenPlan={leave} />
+              <PurchaseFeedback
+                purchase={purchase}
+                onContinue={leave}
+                onOpenPlan={leave}
+                onSeeUnlocks={seeUnlocks}
+              />
             </>
           }
         />

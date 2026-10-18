@@ -66,8 +66,8 @@ export function savedAt(ms: number, now: Date = new Date()): string {
 const find = (data: SamplesResponse | undefined, metric: WearableMetricType) => data?.series.find((s) => s.metric === metric);
 const has = (s: SampleSeries | undefined) => (s?.sample_count ?? 0) > 0;
 
-/** Offline only: retain the latest own series when a new hour changes the query window. */
-function useFitnessSamples(params: GetSamplesParams, online: boolean, userId: string | undefined) {
+/** Offline only: retain the latest own series when a new hour changes the query window (also MetricDetailV2). */
+export function useFitnessSamples(params: GetSamplesParams, online: boolean, userId: string | undefined) {
   const query = useWearableSamples(params);
   const client = useQueryClient();
   const saved = !online && !query.data && userId

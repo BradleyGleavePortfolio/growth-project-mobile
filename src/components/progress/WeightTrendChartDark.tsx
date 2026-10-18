@@ -16,22 +16,29 @@ export interface WeightTrendDarkProps {
   goal?: { value: number; coachName?: string };
   through?: number;
   height?: number;
+  /** The client's unit. Data and goal stay pounds in; only the drawing and words convert. */
+  unit?: 'lb' | 'kg';
   testID?: string;
 }
 const date = (x: number) => new Date(x).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const pounds = (n: number) => n.toFixed(1);
 
 export default function WeightTrendChartDark({
-  data, period = 'All', overview = false, goal, through = Date.now(), height = 248, testID,
+  data, period = 'All', overview = false, goal: goalLbs, through = Date.now(), height = 248, unit = 'lb', testID,
 }: WeightTrendDarkProps) {
   const { semanticColors: sc } = useTheme();
-  const days = useMemo(() => weightPeriod(weightTrend(data, through), period), [data, through, period]);
+  // Smooth in pounds (2a rules), then scale every drawn value to the client's unit.
+  const k = unit === 'kg' ? 0.45359237 : 1;
+  const days = useMemo(() => weightPeriod(weightTrend(data, through), period).map((p) => ({
+    ...p, y: p.y * k, low: p.low * k, high: p.high * k, weight: p.weight == null ? undefined : p.weight * k,
+  })), [data, through, period, k]);
+  const goal = goalLbs && { ...goalLbs, value: Math.round(goalLbs.value * k * 10) / 10 };
   const last = days[days.length - 1];
   const first = days[0];
   const showGoal = goal != null && (overview || period !== '7D');
   const band = !overview && !!last && last.count > 1;
   const goalLabel = showGoal ? goal.coachName
-    ? `Goal ${goal.value} lb, set with ${goal.coachName}` : `Your goal ${goal.value} lb` : '';
+    ? `Goal ${goal.value} ${unit}, set with ${goal.coachName}` : `Your goal ${goal.value} ${unit}` : '';
   const [selectedX, setSelectedX] = useState<number | null>(null);
   const selected = days.find((p) => p.x === selectedX);
   const reduceMotion = useReduceMotion();
@@ -44,22 +51,22 @@ export default function WeightTrendChartDark({
     return () => animation.stop();
   }, [period, reduceMotion, opacity]);
   if (!last) return <View testID={testID} />;
-  const range = `Usual range today: ${pounds(last.low)} to ${pounds(last.high)} lb`;
+  const range = `Usual range today: ${pounds(last.low)} to ${pounds(last.high)} ${unit}`;
   const heading = period === '7D' ? 'Weight trend this week' : period === '30D'
     ? 'Weight trend for 30 days' : `Weight trend since ${date(data.length ? Math.min(...data.map((p) => p.x)) : first.x)}`;
   const delta = last.y - first.y;
-  const change = Math.round(delta * 10) === 0 ? 'Steady' : `${delta < 0 ? 'Down' : 'Up'} ${pounds(Math.abs(delta))} lb`;
+  const change = Math.round(delta * 10) === 0 ? 'Steady' : `${delta < 0 ? 'Down' : 'Up'} ${pounds(Math.abs(delta))} ${unit}`;
   const lastReading = [...days].reverse().find((p) => p.weight != null)
     ?? weightTrend(data, through).filter((p) => p.weight != null).pop();
   const missed = last.gap && last.weight == null;
   const label = last.count === 1
-    ? `First weigh-in, ${pounds(last.y)} lb, ${date(lastReading?.x ?? first.x)}. This is your starting point.`
+    ? `First weigh-in, ${pounds(last.y)} ${unit}, ${date(lastReading?.x ?? first.x)}. This is your starting point.`
     : missed && lastReading
-    ? `${heading}. Last weigh-in ${date(lastReading.x)}, trend ${pounds(last.y)} lb.${showGoal ? ` ${goalLabel}.` : ''}`
-    : `${heading}, now ${pounds(last.y)} lb, ${change}.${band ? ` ${range}.` : ''}${showGoal ? ` ${goalLabel}.` : ''}`;
+    ? `${heading}. Last weigh-in ${date(lastReading.x)}, trend ${pounds(last.y)} ${unit}.${showGoal ? ` ${goalLabel}.` : ''}`
+    : `${heading}, now ${pounds(last.y)} ${unit}, ${change}.${band ? ` ${range}.` : ''}${showGoal ? ` ${goalLabel}.` : ''}`;
   const describe = (index: number) => {
     const p = days[index];
-    return `${date(p.x)}, Trend ${pounds(p.y)}, ${p.weight == null ? 'No weigh-ins.' : `Weigh-in ${pounds(p.weight)} lb${p.pending ? ', on this phone' : ''}.`}`;
+    return `${date(p.x)}, Trend ${pounds(p.y)}, ${p.weight == null ? 'No weigh-ins.' : `Weigh-in ${pounds(p.weight)} ${unit}${p.pending ? ', on this phone' : ''}.`}`;
   };
   const text = { color: sc.textOnMastheadMuted };
   const legend: Array<[string, string, 'line' | 'dot' | 'band' | 'dash']> = [
@@ -69,7 +76,8 @@ export default function WeightTrendChartDark({
   ];
   return (
     <View style={{ backgroundColor: sc.bgPrimary }}>
-    <View testID={testID} style={{ backgroundColor: sc.surface.masthead, paddingHorizontal: 24, paddingBottom: 16 }}>
+    <View testID={testID} style={{ backgroundColor: sc.surface.masthead, paddingHorizontal: 24, paddingBottom: 24,
+      borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet }}>
       <Animated.View style={{ opacity }}>
         <TgpLineChart key={period} data={days} height={height} accessibilityLabel={label} xFormatter={date}
           themeOverride={{ primary: sc.data.trend, textMuted: sc.textOnMastheadMuted, border: sc.surface.forestBand }}

@@ -16,7 +16,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import { romanWorkoutComplete, type RomanVoiceMode } from '../../lib/roman/copy';
-import { colors, spacing, typography } from '../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../theme/tokens';
 
 export interface RomanWorkoutCompleteCardProps {
   /** default | celebration (personal best) | error (finished but unsaved). */
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl,
     backgroundColor: colors.cream,
-    borderRadius: 4,
+    borderRadius: radius.card,
   },
   copy: {
     ...typography.h4,

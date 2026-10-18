@@ -66,6 +66,7 @@ import LearnGuidelinesScreen from '../screens/client/learn/LearnGuidelinesScreen
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
+import YouScreen from '../screens/client/YouScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
@@ -132,7 +133,7 @@ import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
 import WearablesShell from '../screens/client/wearables/WearablesShell';
 import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
 import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
-import { colors, typography } from '../theme/tokens';
+import { colors, lightTokens, typography } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 // v1-5 Community client tab. The whole stack + tab are gated behind
 // featureFlags.communityTab (default OFF). When the flag is OFF the tab is not
@@ -158,6 +159,7 @@ import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
 import { logger } from '../utils/logger';
 // S-SCHED — client Calendar tab (featureFlags.clientCalendar, default OFF).
 import CalendarHomeScreen from '../screens/client/calendar/CalendarHomeScreen';
+import CalendarWeekScreen from '../screens/client/calendar/CalendarWeekScreen';
 import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
@@ -210,7 +212,7 @@ const TAB_BUTTON_PADDING = 5;
 
 export type HomeStackParamList = {
   HomeMain: undefined;
-  Habits: undefined;
+  Habits: { initialTab?: 'checkin' } | undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
   Messages: { openCoachCode?: boolean } | undefined;
@@ -222,6 +224,10 @@ export type HomeStackParamList = {
   ContactView: MoreStackParamList['ContactView'];
   /** C3B-S2: the Messages list (coach and Roman), opened from Home while Style B is on. */
   MessagesInbox: undefined;
+  /** #HEALTH-PAGES: the same Health page (and its two inner routes), opened from the rings Home. */
+  Health: MoreStackParamList['Health'];
+  WearableMetricDetail: MoreStackParamList['WearableMetricDetail'];
+  Connections: MoreStackParamList['Connections'];
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -402,14 +408,15 @@ export type MoreStackParamList = {
  * Opened from More they get a native header with only the back chevron, so
  * the way back is always visible and the safe area is respected.
  */
-function backOnlyHeader(title = '') {
+/** `onMasthead`: the C8 v2 Progress page starts on the deep forest masthead, so its bar does too (ForestStatusBar paints the inset). */
+function backOnlyHeader(title = '', onMasthead = false) {
   return {
     headerShown: true,
     title,
     headerBackTitle: 'Back',
     headerShadowVisible: false,
-    headerStyle: { backgroundColor: colors.bone },
-    headerTintColor: colors.ink,
+    headerStyle: { backgroundColor: onMasthead ? lightTokens.surface.masthead : colors.bone },
+    headerTintColor: onMasthead ? lightTokens.textOnAccent : colors.ink,
   } as const;
 }
 
@@ -433,7 +440,7 @@ function CalendarStackNavigator() {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <CalendarStackNav.Screen name="CalendarHome" component={ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
+      <CalendarStackNav.Screen name="CalendarHome" component={featureFlags.clientCalendarV2 ? CalendarWeekScreen : ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
       <CalendarStackNav.Screen name="CalendarBook" component={ProtectedCalendarBookScreen} />
       <CalendarStackNav.Screen name="CalendarSession" component={ProtectedCalendarSessionScreen} />
     </CalendarStackNav.Navigator>
@@ -453,7 +460,7 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
-        {({ navigation }) => <ProtectedHabitsScreen onSaved={() => {
+        {({ navigation, route }) => <ProtectedHabitsScreen key={route.params?.initialTab ?? 'habits'} initialTab={route.params?.initialTab} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_checkin');
         }} />}
       </HomeStackNav.Screen>
@@ -473,6 +480,11 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         component={NotificationPreferencesScreen}
         options={{ headerShown: false }}
       />
+      {/* #HEALTH-PAGES: the rings Home opens the one Health page here, so its Back lands on Home (the You
+          row keeps its own, Back to You); its metric detail and Connections come along so no tap inside dead-ends. */}
+      <HomeStackNav.Screen name="Health" component={WearablesShell} />
+      <HomeStackNav.Screen name="WearableMetricDetail" component={MetricDetailScreen} />
+      <HomeStackNav.Screen name="Connections" component={ConnectionsScreen} />
     </HomeStackNav.Navigator>
   );
 }
@@ -528,7 +540,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <MoreStackNav.Screen name="MoreIndex"    component={MoreScreen} />
+      {/* C9-S1: the You home (MOCK-C9 Style C) behind featureFlags.youTabV2. */}
+      <MoreStackNav.Screen name="MoreIndex"    component={featureFlags.youTabV2 ? YouScreen : MoreScreen} />
       <MoreStackNav.Screen name="ProfileMain"  component={ProfileScreen} />
       <MoreStackNav.Screen name="EditProfile"  component={EditProfileScreen} />
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
@@ -539,7 +552,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
-      <MoreStackNav.Screen name="Progress" options={backOnlyHeader()}>
+      <MoreStackNav.Screen name="Progress" options={backOnlyHeader('', featureFlags.clientProgressV2)}>
         {({ navigation, route }) => <ProgressScreen logWeightAt={route.params?.logWeightAt} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('logged_first_weight');
         }} />}
@@ -835,7 +848,8 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
       <Tab.Screen
         name="MoreTab"
         options={{
-          tabBarAccessibilityLabel: 'Profile and more',
+          // C9-S1: the tab, the title and the screen reader all say You.
+          tabBarAccessibilityLabel: featureFlags.youTabV2 ? 'You' : 'Profile and more',
           title: 'You',
           tabBarIcon: ({ color }) => (
             <Ionicons name="person-outline" size={24} color={color} />

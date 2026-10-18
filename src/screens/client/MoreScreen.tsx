@@ -25,7 +25,7 @@ import RomanAvatar from '../../components/roman/RomanAvatar';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
 import { LearnDoor } from './learn/LearnParts';
 import type { TutorialTargetId } from '../../tutorial/tutorialSteps';
-type MoreItem = {
+export type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   description: string;
@@ -98,7 +98,11 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
   },
 ];
 
-const MORE_ITEMS: MoreItem[] = [
+/** TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here (More and You). */
+export const planMoreItems = (): MoreItem[] =>
+  featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
+
+export const MORE_ITEMS: MoreItem[] = [
   {
     icon: 'people-outline',
     label: 'Community',
@@ -197,7 +201,7 @@ const MORE_ITEMS: MoreItem[] = [
  * the MoreStack 'RomanChat' screen, which itself is registered only behind the
  * same flag (ClientNavigator).
  */
-const ROMAN_MORE_ITEM: MoreItem = {
+export const ROMAN_MORE_ITEM: MoreItem = {
   icon: 'sparkles-outline',
   label: 'Roman',
   // Roman is not "your AI" — he is Roman, shared across surfaces (identity
@@ -220,7 +224,7 @@ const ROMAN_MORE_ITEM: MoreItem = {
  * read a phone health store: always on iPhone, and on Android only in a build
  * with Health Connect (the clinic profile), or with the tutorial on as before.
  */
-function showsWearableRows(): boolean {
+export function showsWearableRows(): boolean {
   return (
     featureFlags.clientTutorial ||
     Platform.OS === 'ios' ||
@@ -228,7 +232,7 @@ function showsWearableRows(): boolean {
   );
 }
 
-const WEARABLE_MORE_ITEMS: MoreItem[] = [
+export const WEARABLE_MORE_ITEMS: MoreItem[] = [
   {
     // HEALTH-1 (owner #SLEEP-PLACE op 2): with healthPages on (read when the row is drawn), the
     // main way into Sleep and recovery opens Health and sleep on its Recovery tab. Off, main's row.
@@ -258,8 +262,7 @@ export default function MoreScreen() {
   const items = useMemo<MoreItem[]>(
     () => {
       const roman = featureFlags.romanChat ? [ROMAN_MORE_ITEM] : [];
-      // TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here.
-      const plan = featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
+      const plan = planMoreItems();
       // The clinic tutorial spotlights the wearables rows, so they stay at the
       // top there (unchanged); elsewhere they follow the plan rows.
       if (featureFlags.clientTutorial) {

@@ -72,6 +72,7 @@ import BodyNumbers, { type BodyNumberCell } from '../../components/progress/Body
 import QuietBar from '../../ui/progress/QuietBar';
 import { Headline, Lede, PrimaryButton, QuietOverline, QuietRow, QuietSection, Screen } from '../../ui';
 import { featureFlags } from '../../config/featureFlags';
+import ProgressV2 from './progress/ProgressV2';
 // §2.7 Streak milestone — Roman marks 3 / 7 / 30-day logging streaks in his
 // voice, beside his face (RomanStreakCard co-locates <RomanAvatar />). Gated
 // behind featureFlags.romanChat (default OFF), the dedicated Roman flag.
@@ -120,7 +121,14 @@ export function formatLogDate(date: string): string {
   return `${LOG_DATE_WEEKDAYS[d.getDay()]} ${d.getDate()} ${LOG_DATE_MONTHS[d.getMonth()]}`;
 }
 
-export default function ProgressScreen({ onSaved, logWeightAt }: { onSaved?: () => void; logWeightAt?: number }) {
+type ProgressProps = { onSaved?: () => void; logWeightAt?: number };
+
+/** C8 v2 (clientProgressV2): the Style C page in progress/ProgressV2.tsx; off, this screen as it was. */
+export default function ProgressScreen(props: ProgressProps) {
+  return featureFlags.clientProgressV2 ? <ProgressV2 {...props} /> : <LegacyProgressScreen {...props} />;
+}
+
+function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
   const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -335,17 +343,12 @@ export default function ProgressScreen({ onSaved, logWeightAt }: { onSaved?: () 
   const since = firstLog ? formatSince(firstLog.date) : null;
 
   // BMI (U2): server height first (height_cm on the history response), then
-  // the cached macro-target height in inches. Monochrome: a category is a
-  // word, not a warning colour.
+  // the cached macro-target height in inches. Monochrome, and no category
+  // word (C8 found 3, eating-disorder safety: index-v2 item 6).
   let bmi: number | null = null;
-  let bmiCategory: string | null = null;
   const heightM = heightCm ? heightCm / 100 : macroTargets?.height ? macroTargets.height * 0.0254 : null;
   if (latestWeight && heightM) {
     bmi = latestWeight * 0.453592 / (heightM * heightM); // lbs to kg / m^2
-    if (bmi < 18.5) bmiCategory = 'Underweight';
-    else if (bmi < 25) bmiCategory = 'Normal';
-    else if (bmi < 30) bmiCategory = 'Overweight';
-    else bmiCategory = 'Obese';
   }
   const tdee = macroTargets?.tdee ? Math.round(macroTargets.tdee) : null;
 
@@ -490,7 +493,7 @@ export default function ProgressScreen({ onSaved, logWeightAt }: { onSaved?: () 
           ) : null}
           {bmi !== null || tdee !== null ? (
             <View style={styles.measures}>
-              {bmi !== null && <QuietRow label="BMI" detail={bmiCategory ?? undefined} value={bmi.toFixed(1)} />}
+              {bmi !== null && <QuietRow label="BMI" value={bmi.toFixed(1)} />}
               {tdee !== null && <QuietRow label="Daily energy need" value={`${tdee.toLocaleString('en-US')} kcal`} />}
             </View>
           ) : null}
