@@ -90,9 +90,8 @@ import CoachBroadcastsScreen from '../screens/coach/broadcasts/CoachBroadcastsSc
 // M-FEATURED-123 — owner-only featured coach editor (Settings > Owner).
 import FeaturedCoachEditorScreen from '../screens/coach/featured/FeaturedCoachEditorScreen';
 import BroadcastComposerScreen from '../screens/coach/broadcasts/BroadcastComposerScreen';
-// Coach AI v1 — generate/edit/approve workout, meal, insight drafts per client.
+// Coach AI v1 — generate/edit/approve workout and insight drafts per client.
 import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
-import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
 import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
@@ -196,7 +195,7 @@ export type SafetyAlertParams = {
 export type ClientsStackParamList = {
   ClientsList: undefined;
   /** initialTab: opens on that tab (the daily brief opens Workouts). */
-  ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' | 'mealplan' };
+  ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' };
   /**
    * S14 round 3: the coach-only wearable coaching prompts for one client,
    * opened from the client's Health tab. Registered only behind
@@ -251,8 +250,6 @@ export type ClientsStackParamList = {
   FeaturedCoachEditor:      undefined;
   /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
   AIWorkoutDraft:  { draftId: string; clientId: string; clientName: string };
-  /** Coach AI v1 — review/edit/approve AI-generated meal plan draft. */
-  AIMealPlanDraft: { draftId: string; clientId: string; clientName: string };
   /** Coach AI v1 — render an AI-generated weekly insight for a client. */
   ClientInsight:   { draftId: string; clientId: string; clientName: string };
   /** Stream 2 — inbox of pending AI execution drafts (messages,
@@ -516,10 +513,6 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="AIWorkoutDraft"
         component={AIWorkoutDraftScreen}
-      />
-      <ClientsStack.Screen
-        name="AIMealPlanDraft"
-        component={AIMealPlanDraftScreen}
       />
       <ClientsStack.Screen
         name="ClientInsight"

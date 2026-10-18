@@ -106,6 +106,16 @@
       "default": "off",
       "reason": "C8 v2 chart parts stay off until the Progress page integration is ready."
     },
+    "EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "TIMELINE: the Style C Timeline page and its door on Progress stay off until the owner turns them on."
+    },
+    "EXPO_PUBLIC_FF_COACH_LESSONS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (LEARN-B: the coach Lessons editor in Programs)."
+    },
     "EXPO_PUBLIC_FF_COACH_TABS_V2": {
       "kind": "flag",
       "default": "off",
@@ -216,6 +226,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key. On only for builds offered solely on the US App Store (credit packs open Stripe Checkout in the system browser)."
     },
+    "EXPO_PUBLIC_FF_LEARN_HUB": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Learn: the coach's guidelines and lessons, MOCK-LEARN, LEARN-A). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_MWB_AUTOSAVE": {
       "kind": "flag",
       "default": "off",
@@ -275,6 +290,16 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_SHARE_SEND_V1": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Send to coach on the share sheet, SHARE-A). Off in every EAS profile until backend SHARE-BE and mobile PR B ship."
+    },
+    "EXPO_PUBLIC_FF_SHARE_SHEET_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (one share sheet from Progress and the Session summary, SHARE-A). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_TEAM_MODE": {
       "kind": "flag",

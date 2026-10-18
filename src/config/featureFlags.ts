@@ -30,6 +30,7 @@ const isDev =
  */
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: process.env.EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2,
+  EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2,
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
@@ -39,6 +40,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
+  EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
   EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
@@ -62,6 +64,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
+  EXPO_PUBLIC_FF_LEARN_HUB: process.env.EXPO_PUBLIC_FF_LEARN_HUB,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
   EXPO_PUBLIC_FF_MWB_PROGRAMS: process.env.EXPO_PUBLIC_FF_MWB_PROGRAMS,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
@@ -74,6 +77,8 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH: process.env.EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH,
   EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE,
   EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER: process.env.EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER,
+  EXPO_PUBLIC_FF_SHARE_SEND_V1: process.env.EXPO_PUBLIC_FF_SHARE_SEND_V1,
+  EXPO_PUBLIC_FF_SHARE_SHEET_V2: process.env.EXPO_PUBLIC_FF_SHARE_SHEET_V2,
   EXPO_PUBLIC_FF_TEAM_MODE: process.env.EXPO_PUBLIC_FF_TEAM_MODE,
   EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF: process.env.EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF,
   EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS: process.env.EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS,
@@ -95,6 +100,8 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 export const featureFlags = {
   /** C8 v2 chart parts; off in every build until the Progress page is ready. */
   clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', false),
+  /** TIMELINE: the Style C Timeline page, its door on Progress and its push route; off in every build. */
+  clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', false),
   /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
   romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
   /** Team management stays hidden for launch, including in development. */
@@ -108,6 +115,15 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_COACH_TABS_V2
    */
   coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', false),
+
+  /**
+   * LEARN-B (#LEARN-LESSONS op 1): the coach's Lessons editor in Programs
+   * (title, text, optional video link, order, delete). Default off; off,
+   * Programs is today's.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_LESSONS
+   */
+  coachLessons: readFlag('EXPO_PUBLIC_FF_COACH_LESSONS', false),
 
   /**
    * CRISIS-BTN (owner "#CRISIS-2B - all 3 buttons"): Call 911, Call 988, Text
@@ -618,6 +634,14 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_HEALTH_PAGES
    */
   healthPages: readFlag('EXPO_PUBLIC_FF_HEALTH_PAGES', false),
+  /**
+   * SHARE-A (#SHARE-SEND op 1): Share on Progress and the Session summary opens
+   * one ShareSheet over the screen; no ShareCard route. Off in every build.
+   * env: EXPO_PUBLIC_FF_SHARE_SHEET_V2
+   */
+  shareSheetV2: readFlag('EXPO_PUBLIC_FF_SHARE_SHEET_V2', false),
+  /** SHARE-A: Send to {coach} on the ShareSheet (backend SHARE-BE). Off in every build. env: EXPO_PUBLIC_FF_SHARE_SEND_V1 */
+  shareSendV1: readFlag('EXPO_PUBLIC_FF_SHARE_SEND_V1', false),
 
   // ─── C7 Style B — sign-in and first run (MOCKUP3/C7, index-b-join) ───────
   /**
@@ -631,6 +655,17 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_FIRST_RUN_V2
    */
   firstRunV2: readFlag('EXPO_PUBLIC_FF_FIRST_RUN_V2', false),
+
+  // ─── LEARN-A — Learn: the coach's guidelines and lessons (MOCK-LEARN) ───
+  /**
+   * Learn as one page for what the client's coach wrote: the guidelines card,
+   * the numbered lessons with one next step, and the lesson view with Mark as
+   * complete (boards 3, 4, 11-13). The server is the only record of
+   * completions. OFF in every build; with it off Learn is exactly main's.
+   *
+   * env: EXPO_PUBLIC_FF_LEARN_HUB
+   */
+  learnHub: readFlag('EXPO_PUBLIC_FF_LEARN_HUB', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

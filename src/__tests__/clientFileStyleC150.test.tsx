@@ -42,11 +42,9 @@ jest.mock('../screens/coach/client-detail/WorkoutsTab', () => ({ WorkoutsTab: mo
 jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: mockMarker('logs-body') }));
 jest.mock('../screens/coach/client-detail/TimelineTab', () => ({ TimelineTab: mockMarker('timeline-body') }));
 jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: mockMarker('progress-body') }));
-jest.mock('../screens/coach/client-detail/MealPlanTab', () => ({ MealPlanTab: () => null }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => null }));
 jest.mock('../screens/coach/client-detail/SleepRecoveryTab', () => ({ SleepRecoveryTab: () => null }));
 jest.mock('../screens/coach/client-detail/WeeklySummaryTab', () => ({ WeeklySummaryTab: () => null }));
-jest.mock('../screens/coach/client-detail/PlanFormModal', () => ({ PlanFormModal: () => null }));
 jest.mock('../screens/coach/client-detail/NudgeModal', () => ({ NudgeModal: () => null }));
 jest.mock('../components/coach/ai-execution/AskAiActionSheet', () => ({ AskAiActionSheet: () => null }));
 jest.mock('../components/coach/DisputePausedPlansCard', () => ({ DisputePausedPlansCard: () => null }));
@@ -59,7 +57,7 @@ let summary: Record<string, unknown>;
 let timeline: Record<string, unknown>;
 let clientWeek: { week_start: string; today: string; assignments: unknown[] };
 const params = { clientId: 'client-test', clientName: 'Test client' };
-const TABS = ['week', 'summary', 'logs', 'mealplan', 'progress', 'healthFitness', 'sleepRecovery', 'workouts', 'timeline', 'weekly'];
+const TABS = ['week', 'summary', 'logs', 'progress', 'healthFitness', 'sleepRecovery', 'workouts', 'timeline', 'weekly'];
 // Every render is the app's real stack (Clients, the file, the thread) under the app's status band, on a 47 pt notch.
 const Stack = createNativeStackNavigator<ClientsStackParamList>();
 const ref = createNavigationContainerRef<ClientsStackParamList>();
