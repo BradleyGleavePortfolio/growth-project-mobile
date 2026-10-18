@@ -14,7 +14,9 @@ import type { ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilde
 import { checkInsApi } from '../../../services/api';
 import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { useMyWorkoutAssignments } from '../../../hooks/useWorkoutBuilder';
+import { useWorkouts, type ApiWorkoutSession } from '../../../hooks/useApi';
 import { withProtectedScreen } from '../../../entitlements/withProtectedScreen';
+import { useClientNeedsCoach } from '../../../components/coachless/JoinCoachState';
 import { useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { formatDayLabel, formatRange, formatTime, zonesDiffer } from '../../../calendar/calendarTime';
@@ -35,23 +37,30 @@ export type CalendarWeekData = {
   sessions: CoachingSession[];
   workouts: ClientWorkoutAssignmentWithPlan[];
   checkIns: CheckIn[];
+  /** Workouts the client logged (Quick Workout, own routines, coach plans). */
+  logs?: ApiWorkoutSession[];
   descriptions?: Record<string, string>;
   loading: boolean;
   failed: boolean;
   refreshing: boolean;
   offline: boolean;
   hasData: boolean;
+  /** No coach: own logs and plans only; Book opens the existing coach lock. */
+  coachless?: boolean;
 };
 
 const active = (s: CoachingSession) => ['requested', 'scheduled', 'pending_provider'].includes(s.status);
 const dayDate = (day: string) => new Date(`${day}T12:00:00`);
 
-function CalendarWeekScreen({ navigation }: Props) {
-  const coaches = useMyCoaches();
-  const sessions = useMySessions();
-  const past = usePastSessions();
+function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachless?: boolean }) {
+  // Scheduling routes need a coach (402 otherwise): a coachless client never calls them.
+  const coaches = useMyCoaches(!coachless);
+  const sessions = useMySessions(50, !coachless);
+  const past = usePastSessions(!coachless);
   const workouts = useMyWorkoutAssignments();
-  const types = useBookableTypes(coaches.data?.[0]?.coach_id);
+  const logs = useWorkouts(50); // GET /workouts, newest first: covers any week of training.
+  const coachList = coachless ? [] : coaches.data ?? [];
+  const types = useBookableTypes(coachList[0]?.coach_id);
   const from = getLocalWeekStart();
   const to = addDays(from, 6);
   const checkIns = useQuery<CheckIn[]>({
@@ -59,37 +68,43 @@ function CalendarWeekScreen({ navigation }: Props) {
     queryFn: async () => (await checkInsApi.list({ from, to, limit: 7 })).data,
   });
   const network = useNetworkStatus();
-  const queries = [coaches, workouts, checkIns, sessions, past];
+  const own = [workouts, checkIns, logs];
+  const queries = coachless ? own : [coaches, sessions, past, ...own];
   // Native tab focus must refresh after booking, completing a workout or saving a check-in.
   const refreshRef = useRef(() => {});
   refreshRef.current = () => { queries.forEach((q) => { void q.refetch(); }); };
   useFocusEffect(useCallback(() => { refreshRef.current(); }, []));
   const data: CalendarWeekData = {
-    coaches: coaches.data ?? [],
-    sessions: [...(sessions.data ?? []), ...(past.data?.pages.flat() ?? [])],
+    coaches: coachList,
+    sessions: coachless ? [] : [...(sessions.data ?? []), ...(past.data?.pages.flat() ?? [])],
     workouts: workouts.data ?? [],
     checkIns: checkIns.data ?? [],
+    logs: logs.data ?? [],
     descriptions: Object.fromEntries((types.data ?? []).filter((t) => t.description).map((t) => [t.id, t.description!])),
     loading: queries.some((q) => q.isPending && q.fetchStatus === 'fetching'),
     failed: queries.some((q) => q.isError),
     refreshing: queries.some((q) => q.isRefetching),
     offline: !network.isOnline || network.isInternetReachable === false,
-    hasData: [sessions, workouts, checkIns].some((q) => q.data !== undefined),
+    hasData: (coachless ? own : [sessions, ...own]).some((q) => q.data !== undefined),
+    coachless,
   };
   return <CalendarWeekPage data={data} onRefresh={() => refreshRef.current()}
     onSession={(id) => navigation.navigate('CalendarSession', { sessionId: id })}
-    onBook={(coachId) => navigation.navigate('CalendarBook', { coachId })} />;
+    onBook={(coachId) => navigation.navigate('CalendarBook', coachId ? { coachId } : {})} />;
 }
 
-// Match CalendarHome: no scheduling hook mounts before access is confirmed.
-export default withProtectedScreen(CalendarWeekScreen);
+const ProtectedWeek = withProtectedScreen(CalendarWeekScreen);
+/** #COACHLESS-CAL op 1: no coach, own week; coached clients keep Calendar home's gate. */
+export default function CalendarWeekRoot(props: Props) {
+  return useClientNeedsCoach() ? <CalendarWeekScreen {...props} coachless /> : <ProtectedWeek {...props} />;
+}
 
 /** Shared real view for fixture-backed web previews; no fixtures in the app. */
 export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   data: CalendarWeekData;
   onRefresh: () => void;
   onSession: (id: string) => void;
-  onBook: (coachId: string) => void;
+  onBook: (coachId?: string) => void;
 }) {
   const { semanticColors: sc } = useTheme();
   const nav = useNavigation<NavigationProp<ParamListBase>>();
@@ -113,14 +128,27 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   const next = sessions.find((s) => active(s) && Date.parse(s.end_at) > Date.now());
   const coach = data.coaches[0];
   const sessionDay = (s: CoachingSession) => bucketDateLocal(new Date(s.start_at));
-  const workoutsOn = (day: string) => data.workouts.filter((w) => bucketDateLocal(new Date(w.scheduled_for)) === day);
+  const planName = (w: ClientWorkoutAssignmentWithPlan) => w.snapshot?.plan_name || w.workout_plan.name;
+  // Finishing a coach plan also saves its log (same day, same name): show that workout once.
+  const logs = (data.logs ?? []).filter((l) => !data.workouts.some((w) => w.completed_at &&
+    bucketDateLocal(new Date(w.completed_at)) === l.date.slice(0, 10) && planName(w) === l.workout_name));
+  const workoutsOn = (day: string) => [
+    ...data.workouts.filter((w) => bucketDateLocal(new Date(w.scheduled_for)) === day).map((w) => ({
+      id: w.id, testID: `week-workout-${w.id}`, name: planName(w), done: !!w.completed_at,
+      open: () => nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id }, initial: false }),
+    })),
+    ...logs.filter((l) => l.date.slice(0, 10) === day).map((l) => ({
+      id: l.id, testID: `week-log-${l.id}`, name: l.workout_name || c['C4-S-84'], done: true,
+      open: () => nav.navigate('WorkoutTab', { screen: 'WorkoutHistoryEdit', params: { workout: JSON.stringify(l) }, initial: false }),
+    })),
+  ];
   const checkOn = (day: string) => data.checkIns.some((row) => row.date.slice(0, 10) === day);
   const dayLabel = (day: string) => formatDayLabel(dayDate(day));
   const ink = { color: sc.textPrimary };
   // Use primary ink for small supporting text: never low-contrast stone on tan.
   const body = [styles.body, ink];
   const noItems = !sessions.some((s) => days.includes(sessionDay(s))) &&
-    !data.workouts.some((w) => days.includes(bucketDateLocal(new Date(w.scheduled_for)))) && !data.checkIns.length;
+    !days.some((day) => workoutsOn(day).length) && !data.checkIns.length;
   const sessionCard = (s: CoachingSession, hero = false) => {
     const owner = data.coaches.find((item) => item.coach_id === s.coach_id);
     const name = owner?.name ?? s.coach_name;
@@ -146,8 +174,8 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
     <Screen edges={['top']} style={{ backgroundColor: sc.surface.masthead }} contentStyle={styles.content}
       testID="calendar-week"
       refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={onRefresh} tintColor={sc.textOnAccent} />}
-      footer={coach ? <View style={[styles.footer, { backgroundColor: sc.bgPrimary }]}>
-        <PrimaryButton label={c['C4-S-09']} onPress={() => onBook(coach.coach_id)}
+      footer={coach || data.coachless ? <View style={[styles.footer, { backgroundColor: sc.bgPrimary }]}>
+        <PrimaryButton label={c['C4-S-09']} onPress={() => onBook(coach?.coach_id)}
           testID="week-book" disabled={data.offline} />
       </View> : undefined}>
       <View style={styles.masthead}>
@@ -188,7 +216,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
           {data.loading ? <QuietLoading label={c['C4-S-136']} rows={3} testID="week-loading" /> : null}
           {data.failed && !data.offline ? <View testID="week-error" accessibilityRole="alert">
             <Text style={body}>{c['C4-S-130']}</Text>
-            <TextLink label={c['C1-S-47']} onPress={onRefresh} testID="week-retry" />
+            <TextLink label={c['C1-S-47']} tone="ink" onPress={onRefresh} testID="week-retry" />
           </View> : null}
           {next ? <View>
             <Text style={[styles.overline, ink]}>{c['C4-S-03']}</Text>
@@ -200,21 +228,21 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
               <Text style={[styles.date, ink]} accessibilityRole="header">{dayLabel(day)}{day === today ? ` · ${c['C4-S-82']}` : ''}</Text>
               {sessions.filter((s) => sessionDay(s) === day).map((s) => sessionCard(s))}
               {workoutsOn(day).map((w) => (
-                <Pressable key={w.id} accessibilityRole="button" testID={`week-workout-${w.id}`}
-                  accessibilityLabel={`${w.snapshot?.plan_name ?? w.workout_plan.name}, ${w.completed_at ? c['C4-S-138'] : c['C4-S-137']}`}
+                <Pressable key={w.id} accessibilityRole="button" testID={w.testID}
+                  accessibilityLabel={`${w.name}, ${w.done ? c['C4-S-138'] : c['C4-S-137']}`}
                   style={[styles.row, { borderColor: sc.border }]}
-                  onPress={() => { void HapticService.softImpact(); nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id }, initial: false }); }}>
+                  onPress={() => { void HapticService.softImpact(); w.open(); }}>
                   <View style={styles.rowText}>
                     <Text style={[styles.small, ink]}>{c['C4-S-84']}</Text>
-                    <Text style={[styles.bodyStrong, ink]}>{w.snapshot?.plan_name ?? w.workout_plan.name}</Text>
+                    <Text style={[styles.bodyStrong, ink]}>{w.name}</Text>
                   </View>
-                  <Text style={[styles.small, ink]}>{w.completed_at ? c['C4-S-138'] : c['C4-S-137']}</Text>
+                  <Text style={[styles.small, ink]}>{w.done ? c['C4-S-138'] : c['C4-S-137']}</Text>
                 </Pressable>
               ))}
               {checkOn(day) ? <View style={[styles.row, { borderColor: sc.border }]} testID={`week-checkin-${day}`}>
                 <Text style={body}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
               </View> : null}
-              {day === today ? <TextLink label={c['C4S1-S-02']} align="start" testID="week-checkin-open"
+              {day === today ? <TextLink label={c['C4S1-S-02']} tone="ink" align="start" testID="week-checkin-open"
                 onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
               {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
                 !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?

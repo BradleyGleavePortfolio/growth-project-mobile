@@ -26,4 +26,7 @@ it('no checked-in build profile enables V2; legacy root remains the flag-off bra
   const nav = fs.readFileSync(path.join(root, 'navigation/ClientNavigator.tsx'), 'utf8');
   expect(nav).toContain('featureFlags.clientCalendarV2 ? CalendarWeekScreen : ProtectedCalendarHomeScreen');
   expect(nav).toContain("initialTab={route.params?.initialTab}");
+  // COACHLESS-CAL: booking keeps main's gate, so a coachless Book tap meets the existing coach lock.
+  expect(nav).toContain('const ProtectedCalendarBookScreen = withProtectedScreen(CalendarBookScreen);');
+  expect(nav).toContain('name="CalendarBook" component={ProtectedCalendarBookScreen}');
 });
