@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useCoachFlagged } from '../../hooks/useCoachCommunity';
+import { openInboxScreen } from '../../navigation/coachInbox';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 
@@ -13,7 +14,7 @@ import { useTheme } from '../../theme/ThemeProvider';
  * Community safety promises a review within 24 hours. The coach Community tab
  * is off in the store build, so without this entry no coach screen opened the
  * report queue. It opens the existing moderation queue (Hide / Warn / Ban /
- * Dismiss) registered in the Clients stack and shows the open count.
+ * Dismiss) in the Messages stack (six tabs) or the Clients stack, and shows the open count.
  *
  * Shown only when GET /community/moderation/flagged answers: hidden while the
  * community API is off (503), on a backend without the route (404), and while
@@ -31,11 +32,8 @@ export function CommunityReportsEntry() {
       : `Open community reports, ${open} waiting for review`;
   return (
     <Pressable
-      // `initial: false` keeps the client list under the queue, so a Clients
-      // stack opened here for the first time still has its root.
-      onPress={() =>
-        navigation.navigate('ClientsStack', { screen: 'CoachCommunityModeration', initial: false })
-      }
+      // COACH-CHAT-BACK: in the Messages stack with the six tabs; off, in Clients over the client list.
+      onPress={() => openInboxScreen(navigation, 'CoachCommunityModeration')}
       accessibilityRole="button"
       accessibilityLabel={label}
       style={[styles.button, { borderColor: open > 0 ? colors.error : colors.border }]}

@@ -19,9 +19,11 @@ interface Props {
   readonly rhrSeries: SampleSeries | undefined;
   readonly tone: BucketTone;
   readonly onPress?: () => void;
+  /** HEALTH-1: what a connected source that sends no heart rate says. */
+  readonly emptyText?: string;
 }
 
-export default function HeartCard({ rhrSeries, tone, onPress }: Props) {
+export default function HeartCard({ rhrSeries, tone, onPress, emptyText }: Props) {
   const toneTk = toneTokens(tone);
   const meta = metricMeta('RESTING_HEART_RATE_BPM');
 
@@ -38,7 +40,7 @@ export default function HeartCard({ rhrSeries, tone, onPress }: Props) {
     <WearableCard title="Heart" icon="heart-outline" accent={toneTk.accent} onPress={onPress}>
       {headline === null ? (
         <Text style={styles.prompt}>
-          Connect a heart-rate source to see your resting heart rate trend.
+          {emptyText ?? 'Connect a heart-rate source to see your resting heart rate trend.'}
         </Text>
       ) : (
         <View style={styles.row}>

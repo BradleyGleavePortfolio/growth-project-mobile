@@ -76,7 +76,6 @@ jest.mock('../navigation/ClientNavigator', () => {
   return () => React.createElement(Text, { testID: 'nav-client' }, 'client');
 });
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
-jest.mock('../navigation/LeanOnboardingNavigator', () => () => null);
 jest.mock('../navigation/CoachWizardNavigator', () => () => null);
 jest.mock('../navigation/Day1OnboardingNavigator', () => {
   const React = jest.requireActual('react');

@@ -71,6 +71,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (client coach thread in Style B, C3B-THREAD). Off in every EAS profile until the owner turns it on."
     },
+    "EXPO_PUBLIC_FF_CONSULT_TILES_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (consultation questions T1, B1-B4, N1, N2 in Quiet Tiles, ONBQ-TILES). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT": {
       "kind": "flag",
       "default": "on in dev, off in release",
@@ -175,6 +180,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_HEALTH_PAGES": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Health and sleep slice 1, HEALTH-1). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_IMPORT_REVIEW": {
       "kind": "flag",
