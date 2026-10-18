@@ -55,6 +55,8 @@ jest.mock('../../../services/health/onDeviceSync', () => ({
   deviceSourceForPlatform: () => 'APPLE_HEALTHKIT',
   refreshOnDevice: (...args: unknown[]) => mockRefreshOnDevice(...args),
 }));
+let mockGeneration = 1;
+jest.mock('../../../services/health/sessionFence', () => ({ currentAuthGeneration: () => mockGeneration }));
 jest.mock('../../../utils/logger', () => ({ logger: { warn: jest.fn(), log: jest.fn(), error: jest.fn() } }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => ({ logWater: jest.fn() }) }));
 jest.mock('../../../components/home/HomeHeaderActions', () => () => null);
@@ -153,6 +155,16 @@ it('refreshes on open: a refocus and a return to the foreground re-read every di
   await settle();
   expect(mockInvalidate).toHaveBeenCalledTimes(1); // nothing new posted: nothing refetched
   expect(onRefresh).not.toHaveBeenCalled(); // quiet: no pull spinner
+});
+
+it('a Health read that settles after a sign-out or account switch refetches nothing (C-317-a)', async () => {
+  let posted: (o: object) => void = () => undefined;
+  mockRefreshOnDevice.mockReturnValueOnce(new Promise((resolve) => { posted = resolve; }));
+  await render(<RingsHomeScreen {...props} />);
+  mockGeneration += 1;
+  await act(async () => posted({ kind: 'imported', postedCount: 3, complete: true }));
+  await settle();
+  expect(mockInvalidate).not.toHaveBeenCalled();
 });
 
 it('one Health read at a time, and a failed one logs nothing it carries', async () => {
