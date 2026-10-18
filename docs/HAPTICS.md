@@ -92,6 +92,8 @@ When the toggle changes:
 | `LearnScreen` lesson rows (`learnHub` on) | `selection()` | A lesson opens |
 | `LearnLessonScreen` (`learnHub` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
+| `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
+| `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
 | `purchase/PlanActiveMoment` (`clientBillingV2` on) | `success()` | Once, when the plan-is-active moment appears after a confirmed purchase |
 
 ## Architecture

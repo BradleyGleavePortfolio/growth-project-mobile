@@ -15,6 +15,10 @@
  * label, same RomanChat destination, no second avatar) when Roman chat is
  * on, and stays empty otherwise.
  *
+ * `layout="rings"` (UI-1 rings Home): a coachless client sees Roman locked
+ * ("Opens with a coach") instead of "Ask Roman" (139-15). The tap opens Roman's
+ * existing lock screen (Join a coach), never a chat (owner 10-17: no dead tap).
+ *
  * The coach name comes from `GET /v1/clients/me/coach` (same endpoint as
  * CoachIntroductionBanner); any failure keeps the generic label.
  *
@@ -32,7 +36,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientUnreadCount } from '../../hooks/useClientUnreadCount';
 import NotificationBadge from '../NotificationBadge';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import { logger } from '../../utils/logger';
 import { featureFlags } from '../../config/featureFlags';
 import RomanAvatar from '../roman/RomanAvatar';
@@ -42,7 +46,20 @@ export function messageCoachLabel(coachName?: string | null): string {
   return first ? `Message ${first}` : 'Message your coach';
 }
 
-export default function HomeHeaderActions() {
+/** Roman's monogram, dimmed, with an ink lock badge: Roman opens with a coach (139-15). */
+export function LockedRomanAvatar({ size = 28 }: { size?: number }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <View style={{ width: size, height: size }} testID="roman-locked-avatar">
+      <View style={styles.dimmed}><RomanAvatar size={size} /></View>
+      <View style={[styles.lock, { backgroundColor: sc.textPrimary, borderColor: sc.bgPrimary }]}>
+        <Ionicons name="lock-closed" size={10} color={sc.bgPrimary} />
+      </View>
+    </View>
+  );
+}
+
+export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'classic' | 'rings' } = {}) {
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
@@ -114,8 +131,10 @@ export default function HomeHeaderActions() {
   // "Ask Roman" flash first (U1 on m#618).
   const userKnown = currentUser !== null;
 
+  const rings = layout === 'rings';
+
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, rings && styles.ringsRow]}>
       {hasCoach ? (
         <Pressable
           onPress={openMessages}
@@ -128,10 +147,19 @@ export default function HomeHeaderActions() {
           ]}
         >
           <Ionicons name="chatbubble-ellipses-outline" size={24} color={sc.textPrimary} />
-          <Text style={[typography.bodySmall, styles.messageText, { color: sc.textPrimary }]}>
+          <Text style={[rings ? typography.bodyMd : typography.bodySmall, styles.messageText, { color: sc.textPrimary }]}>
             {label}
           </Text>
           <NotificationBadge count={unreadMessages} />
+        </Pressable>
+      ) : userKnown && rings && featureFlags.romanChat ? (
+        <Pressable onPress={openRoman} accessibilityRole="button" accessibilityLabel="Roman. Opens with a coach"
+          testID="home-roman-locked-header" style={({ pressed }) => [styles.message, { opacity: pressed ? 0.85 : 1 }]}>
+          <LockedRomanAvatar />
+          <View style={styles.lockedText}>
+            <Text style={[typography.bodyMd, styles.lockedName, { color: sc.textPrimary }]}>Roman</Text>
+            <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Opens with a coach</Text>
+          </View>
         </Pressable>
       ) : userKnown && featureFlags.romanChat ? (
         <Pressable
@@ -185,5 +213,14 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   messageText: { marginLeft: 8, flexShrink: 1 },
+  ringsRow: { marginBottom: 20 },
+  lockedText: { marginLeft: 12, flexShrink: 1 },
+  lockedName: { lineHeight: 22 },
+  // Paler, as drawn, while Roman's "R" keeps 4.5:1 on its gold circle.
+  dimmed: { opacity: 0.8 },
+  lock: {
+    position: 'absolute', right: -5, bottom: -5, width: 18, height: 18, borderRadius: radius.chip, borderWidth: 2,
+    alignItems: 'center', justifyContent: 'center',
+  },
   bell: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', position: 'relative' },
 });
