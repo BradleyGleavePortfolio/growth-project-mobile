@@ -47,6 +47,7 @@ const mockSuccessHaptic = jest.fn(async () => undefined);
 jest.mock('../../../ui/haptics/haptics.service', () => ({
   HapticService: {
     success: () => mockSuccessHaptic(),
+    softImpact: jest.fn(async () => undefined),
     lightImpact: jest.fn(async () => undefined),
     mediumImpact: jest.fn(async () => undefined),
     selection: jest.fn(async () => undefined),
