@@ -48,7 +48,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
   const user = useCurrentUser();
   const coachless = useCoachlessClient();
   const coaches = useMyCoaches(!coachless).data;
-  const coachName = coachless ? undefined : firstName((coaches?.find((c) => c.coach_id === user?.coach_id) ?? coaches?.[0])?.name);
+  const coachName = coachless ? undefined : firstName(coaches?.find((c) => c.coach_id === user?.coach_id)?.name);
 
   const from = mondayOf(getTodayString());
   const summary = useQuery<HabitSummary>({
@@ -114,7 +114,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
       void (done + 1 === parts.length ? HapticService.success() : HapticService.softImpact());
     } else void HapticService.selection();
     busy.current.add(h.id);
-    logHabit.mutateAsync({ id: h.id, date: today, completed: next }).then(
+    logHabit.mutateAsync({ id: h.id, date: today, completed: next, value: next ? h.target_value || 1 : 0 }).then(
       () => { if (next) onSaved?.(); },
       () => {
         setShown((m) => { const rest = { ...m }; delete rest[h.id]; return rest; });

@@ -70,7 +70,7 @@ const habit = (id: string, name: string, extra: Record<string, unknown>) => ({
 });
 const HABITS = [
   habit('h1', 'Drink 8 glasses of water', { logs: [log(TODAY)], run_days: 12, assigned_by_coach_id: 'c1', week: { planned: 7, done: 3 } }),
-  habit('h2', 'Walk 30 minutes', { best_run_days: 9, assigned_by_coach_id: 'c1', week: { planned: 7, done: 2 } }),
+  habit('h2', 'Walk 30 minutes', { target_value: 8, best_run_days: 9, assigned_by_coach_id: 'c1', week: { planned: 7, done: 2 } }),
   habit('h3', 'Stretch 10 minutes', { schedule_kind: 'days', schedule_days: [1, 3, 5], logs: [log(TODAY)], run_days: 6, week: { planned: 3, done: 2 } }),
   habit('h4', 'Lights out by 11', { schedule_kind: 'days', schedule_days: [0, 1, 2, 4], week: { planned: 4, done: 2 } }),
   habit('h5', 'Read', { schedule_kind: 'times_per_week', times_per_week: 2, logs: [log('2026-10-12'), log('2026-10-13')], week: { planned: 2, done: 2 } }),
@@ -129,7 +129,7 @@ it('the last tick closes the ring: the part draws, success haptic, logged for th
   const v = await mount();
   await waitFor(() => expect(v.getByTestId('habits-ring-tile-h2')).toBeTruthy());
   await fireEvent.press(v.getByTestId('habits-ring-tile-h2'));
-  expect(mockLog).toHaveBeenCalledWith('h2', { date: TODAY, completed: true });
+  expect(mockLog).toHaveBeenCalledWith('h2', { date: TODAY, completed: true, value: 8 });
   expect(HapticService.success).toHaveBeenCalledTimes(1);
   expect(v.getByLabelText('Today, 3 of 3 habits done')).toBeTruthy();
   expect(lastRing('habits-ring')).toMatchObject({ drawIndex: 1, event: `h2:${TODAY}:1` });
@@ -142,7 +142,7 @@ it('a tick that does not close the day is a soft tap; an untick is a selection a
   const v = await mount();
   await waitFor(() => expect(v.getByTestId('habits-ring-tile-h1')).toBeTruthy());
   await fireEvent.press(v.getByTestId('habits-ring-tile-h1'));
-  expect(mockLog).toHaveBeenCalledWith('h1', { date: TODAY, completed: false });
+  expect(mockLog).toHaveBeenCalledWith('h1', { date: TODAY, completed: false, value: 0 });
   expect(HapticService.selection).toHaveBeenCalledTimes(1);
   expect(v.getByLabelText('Today, 1 of 3 habits done')).toBeTruthy();
   await waitFor(() => expect(mockLog).toHaveBeenCalledTimes(1));
