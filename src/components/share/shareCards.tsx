@@ -128,7 +128,7 @@ const s = StyleSheet.create({
   eyebrow: { ...typography.eyebrow },
   lift: { ...typography.h2, marginTop: 12 },
   figure: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: 12, marginTop: 16 },
-  number: { ...typography.display, fontVariant: ['tabular-nums'] },
+  number: { ...typography.display, fontVariant: ['lining-nums', 'tabular-nums'] }, // lining, as the boards: "14", not "I4"
   unit: { ...typography.body },
   bars: { flexDirection: 'row', height: 28, marginTop: 12 },
   bar: { flex: 1, borderRadius: radius.control },
