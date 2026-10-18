@@ -235,15 +235,21 @@ it("the file reused for another client (as Overview opens it): A's late read or 
   await open(params);
   // A's crisis alert; the server is slow, and the press's act stays open until Dismiss answers. TEST-LEAK: the acts
   // inside it close first and the server answers outside them, so the press's act closes last, in order.
-  const pressed = fireEvent.press(await view.findByTestId('file-safety-dismiss'));
+  const mark = (m: string) => console.log(`TEST-LEAK-DIAG ${m}`); // DIAG (temporary)
+  mark('before press');
+  await fireEvent.press(await view.findByTestId('file-safety-dismiss'));
+  mark('after press');
   expect(dismiss).toHaveBeenCalledWith('alert-roman_crisis_reply');
   await open(B);
+  mark('after open B');
   expect(await view.findByText(lineB)).toBeTruthy();
-  lateDismiss({ data: { ok: true } });
-  await pressed;
+  mark('after find B');
+  await act(async () => lateDismiss({ data: { ok: true } }));
+  mark('after late dismiss');
   expect(view.getByText(lineB)).toBeTruthy(); // B's alert stays
   expect(summaryRead.mock.calls.map(([id]) => id)).toEqual(['client-test', 'client-b', 'client-test', 'client-b']); // no re-read of A
   await fireEvent.press(view.getByTestId('file-safety-message'));
+  mark('after message');
   expect([ref.getCurrentRoute()?.name, ref.getCurrentRoute()?.params]).toEqual(['ClientMessages', B]);
 });
 
