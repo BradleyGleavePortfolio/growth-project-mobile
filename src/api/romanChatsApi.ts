@@ -37,6 +37,7 @@ import {
 } from '../services/accountBinding';
 import { supportReferenceOf } from '../utils/correlation';
 import type { RomanMessage, RomanSurface } from './romanApi';
+import { RomanSafetyActionsWireSchema, safetyActionsConfig, toSafetyActions } from './romanSafetyActions';
 
 /** Backend default and maximum page size (roman.constants.ts). */
 export const ROMAN_CHATS_PAGE_LIMIT = 30;
@@ -81,6 +82,7 @@ const RomanTranscriptMessageSchema = z
     content: z.string(),
     interrupted: z.boolean(),
     createdAt: IsoSchema,
+    safety_actions: RomanSafetyActionsWireSchema,
   })
   .strict();
 
@@ -281,19 +283,24 @@ export const romanChatsApi: RomanChatsApi = {
       const res = await api.get<unknown>(`/roman/sessions/${encodeURIComponent(id)}/messages`, {
         ...config,
         params: pageParams(opts),
+        ...safetyActionsConfig(),
       });
       const parsed = RomanTranscriptPageSchema.safeParse(res?.data);
       if (!parsed.success) return { ok: false, failure: drift(res) };
       return {
         ok: true,
         value: {
-          messages: parsed.data.messages.map((m) => ({
-            id: m.id,
-            role: m.role === 'roman' ? 'assistant' : 'user',
-            content: m.content,
-            interrupted: m.interrupted,
-            createdAt: m.createdAt,
-          })),
+          messages: parsed.data.messages.map((m): RomanMessage => {
+            const safetyActions = toSafetyActions(m.safety_actions);
+            return {
+              id: m.id,
+              role: m.role === 'roman' ? 'assistant' : 'user',
+              content: m.content,
+              interrupted: m.interrupted,
+              createdAt: m.createdAt,
+              ...(safetyActions ? { safetyActions } : {}),
+            };
+          }),
           nextCursor: parsed.data.nextCursor,
         },
       };

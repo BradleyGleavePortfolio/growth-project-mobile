@@ -22,12 +22,15 @@
  *   - DELETE /v1/wearables/connections/:provider
  *       → { success, provider }  (soft-disconnect).
  *
+ *   - POST   /v1/wearables/connections/oauth/complete  { ticket }
+ *       → { success, provider }  (A6, AUTHB-05).
+ *
  * NOTE on the OAuth callback: the provider redirects to the SERVER callback
- * (`GET /v1/wearables/connections/oauth/callback?code&state`) — the in-app
- * auth session carries the user's JWT so that route stays authenticated. The
- * mobile app does NOT call the callback itself; it opens `authorizationUrl`
- * and, when the auth session returns, re-fetches the connection list to learn
- * the result. There is therefore no client method for the callback by design.
+ * (`GET /v1/wearables/connections/oauth/callback?code&state`). The app does
+ * NOT call the callback itself; it opens `authorizationUrl`. A6 (AUTHB-05):
+ * the callback attaches nothing; it sends the browser back with a single-use
+ * ticket, and the signed-in app finishes the link with `oauth/complete`, which
+ * the server accepts only from the person who started it.
  *
  * Every response is validated with Zod at the boundary (#8 phantom-validation):
  * a wire shape that drifts from the backend DTO throws instead of silently
@@ -325,6 +328,30 @@ function isKnownCloudProvider(id: string): id is WearableProvider {
   return parsed.success && !isOnDeviceProvider(parsed.data);
 }
 
+/** A6 (AUTHB-05): `POST oauth/complete` → `{ success, provider }`. */
+const completeOauthResultSchema = z.object({
+  success: z.literal(true),
+  provider: providerSchema,
+});
+
+/**
+ * A6: tickets this app run has started finishing. Each is single-use, and on
+ * Android the return can reach both the sign-in window and the app link, so
+ * only the first claim finishes it.
+ */
+const claimedReturnTickets = new Set<string>();
+
+/** True the first time a returned ticket is claimed, false after. */
+export function claimReturnTicket(ticket: string): boolean {
+  if (claimedReturnTickets.has(ticket)) return false;
+  claimedReturnTickets.add(ticket);
+  return true;
+}
+
+export function returnTicketClaimed(ticket: string): boolean {
+  return claimedReturnTickets.has(ticket);
+}
+
 // ─── Client ──────────────────────────────────────────────────────────────────
 
 const BASE = '/v1/wearables/connections';
@@ -368,6 +395,17 @@ export const wearablesConnectionsApi = {
     }
     const res = await api.post<unknown>(`${BASE}/oauth/start`, { provider });
     return startOauthResultSchema.parse(res.data);
+  },
+
+  /**
+   * A6 (AUTHB-05): finish a cloud connect link with the single-use ticket the
+   * server callback sent back. The server attaches it only for the person who
+   * started it; a foreign, expired or used ticket is a 400.
+   * @throws ZodError on a drifted response.
+   */
+  async completeOauth(ticket: string): Promise<WearableProvider> {
+    const res = await api.post<unknown>(`${BASE}/oauth/complete`, { ticket });
+    return completeOauthResultSchema.parse(res.data).provider;
   },
 
   /**

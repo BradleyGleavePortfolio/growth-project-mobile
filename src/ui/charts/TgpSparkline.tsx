@@ -19,9 +19,8 @@
 
 import React, { useMemo } from 'react';
 import { View } from 'react-native';
-import Svg, { Polyline, Path } from 'react-native-svg';
+import Svg, { Polyline } from 'react-native-svg';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { Colors } from '../../constants/colors';
 
 export interface ChartDataPoint {
   x: number;
@@ -50,10 +49,9 @@ export default function TgpSparkline({
   const theme = useTheme();
   const colors: ThemeColors = { ...theme.colors, ...themeOverride };
   const strokeColor = color ?? colors.primary;
-  const areaColor = colors.primaryPale || Colors.primaryPale;
 
-  const { linePts, areaPath } = useMemo(() => {
-    if (data.length < 2) return { linePts: '', areaPath: '' };
+  const linePts = useMemo(() => {
+    if (data.length < 2) return '';
     const ys = data.map((d) => d.y);
     const xs = data.map((d) => d.x);
     const minY = Math.min(...ys);
@@ -66,15 +64,7 @@ export default function TgpSparkline({
     const toX = (x: number) => ((x - minX) / rangeX) * width;
     const toY = (y: number) => height - ((y - minY) / rangeY) * height;
 
-    const pts = data.map((d) => `${toX(d.x)},${toY(d.y)}`).join(' ');
-    const first = data[0];
-    const last = data[data.length - 1];
-    let d = `M ${toX(first.x)},${height}`;
-    d += ` L ${toX(first.x)},${toY(first.y)}`;
-    data.forEach((pt) => { d += ` L ${toX(pt.x)},${toY(pt.y)}`; });
-    d += ` L ${toX(last.x)},${height} Z`;
-
-    return { linePts: pts, areaPath: d };
+    return data.map((d) => `${toX(d.x)},${toY(d.y)}`).join(' ');
   }, [data, width, height]);
 
   if (data.length < 2) {
@@ -84,7 +74,6 @@ export default function TgpSparkline({
   return (
     <View accessibilityLabel={accessibilityLabel} accessibilityRole="image">
       <Svg width={width} height={height}>
-        <Path d={areaPath} fill={areaColor} fillOpacity={0.35} />
         <Polyline
           points={linePts}
           fill="none"

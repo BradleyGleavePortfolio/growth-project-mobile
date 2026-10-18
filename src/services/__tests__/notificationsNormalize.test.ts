@@ -22,6 +22,7 @@ describe('normalizeNotification (S-SCHED-2 live rows)', () => {
       createdAt: '2027-03-01T10:00:00.000Z',
       actionScreen: 'CalendarSession',
       actionParams: { sessionId: 's-1' },
+      deepLink: 'tgp://calendar/session/s-1',
     });
   });
 
@@ -38,6 +39,11 @@ describe('normalizeNotification (S-SCHED-2 live rows)', () => {
     expect(n?.read).toBe(true);
     expect(n?.title).toBe('Session reminder');
     expect(n?.actionParams).toEqual({ sessionId: 's-2' });
+  });
+
+  it.each(['deepLink', 'deep_link'])('retains %s on a meal-plan row for the shared receiver', (key) => {
+    const deepLink = 'tgp://meal-plan/137c1340-c8a2-45d6-a006-7a6e695ed845';
+    expect(normalizeNotification({ id: 'meal', kind: 'meal_plan_assigned', [key]: deepLink })?.deepLink).toBe(deepLink);
   });
 
   it('passes AppNotification-shaped items through and drops unusable rows', () => {

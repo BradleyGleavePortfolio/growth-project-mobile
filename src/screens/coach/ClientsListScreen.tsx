@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import PushPermissionCard from '../../components/home/PushPermissionCard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { CoachTeamEntryContext } from '../../navigation/coachTeamEntry';
+import { coachLandingTab } from '../../navigation/coachLanding';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
@@ -81,8 +83,9 @@ export default function ClientsListScreen({ navigation }: Props) {
 
   // Coming back from a client (archived, messaged, reviewed a check-in) or
   // from another tab that reloaded the shared list: refresh in place. The
-  // first focus is the mount, already loaded above.
-  const focusedOnce = useRef(false);
+  // first focus is the mount, already loaded above, unless the list mounted
+  // unseen (with the six tabs Clients opens with the app): then it is a visit.
+  const focusedOnce = useRef(!navigation.isFocused());
   const coachId = currentUser?.id;
   useEffect(
     () =>
@@ -188,6 +191,9 @@ export default function ClientsListScreen({ navigation }: Props) {
   // pill is not shown to them (no dead end).
   const canSeeRiskBoard = currentUser?.role === 'coach' || currentUser?.role === 'owner';
   const goToRiskBoard = () => navigation.navigate('RiskBoard');
+  // COACHTABS (owner 10-15: "team is a switch to flip under clients in v1.1"):
+  // with the six tabs Team is not a tab; a Team Mode head coach opens it here.
+  const teamEntry = useContext(CoachTeamEntryContext);
 
   const emptyList = searchQuery ? (
     <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
@@ -242,18 +248,36 @@ export default function ClientsListScreen({ navigation }: Props) {
         </Text>
       </View>
 
+      {teamEntry ? (
+        <HapticPressable
+          intent="light"
+          onPress={() => navigation.getParent()?.navigate('TeamStack')}
+          style={styles.teamRow}
+          accessibilityRole="button"
+          accessibilityLabel="Team"
+          testID="clients-team-entry"
+        >
+          <Ionicons name="briefcase-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.teamRowText}>Team</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </HapticPressable>
+      ) : null}
+
       {/* C-S-PUSH-3: the coach landing screen carries the same deferred push
           ask as client Home (once per account, dismissible, OS prompt only on
-          tap), so client messages and new-client alerts reach a fresh install. */}
-      <View style={styles.pushCardWrap}>
-        <PushPermissionCard audience="coach" />
-      </View>
+          tap), so client messages and new-client alerts reach a fresh install.
+          COACHLAND: only while Clients is the landing (coachTabsV2 off). */}
+      {coachLandingTab() === 'ClientsStack' ? (
+        <View style={styles.pushCardWrap}>
+          <PushPermissionCard audience="coach" />
+        </View>
+      ) : null}
 
       {/* Psych #2: Trust as Emotion — coach-side privacy context banner */}
       <View style={styles.privacyBanner}>
         <Ionicons name="shield-checkmark-outline" size={16} color={colors.textSecondary} style={{ marginTop: 1 }} />
         <Text style={styles.privacyBannerText}>
-          Clients choose what they share with you. Anything not shared stays private.
+          You see your clients' workouts, food logs, weigh-ins and check-ins while you coach them.
         </Text>
       </View>
 
@@ -398,6 +422,17 @@ const makeStyles = (colors: ThemeColors) =>
   pushCardWrap: {
     paddingHorizontal: 24,
   },
+  teamRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: layout.touchMin,
+    marginHorizontal: 24,
+    marginBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  teamRowText: { ...typography.body, flex: 1, color: colors.textPrimary },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -463,6 +498,8 @@ const makeStyles = (colors: ThemeColors) =>
   filterChip: {
     paddingHorizontal: 8,
     minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 2,
     borderColor: colors.background,

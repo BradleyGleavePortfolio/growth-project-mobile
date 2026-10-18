@@ -267,6 +267,15 @@ export default function ClientPackagesScreen() {
     void load();
   }, [purchase, load]);
 
+  // C5 Style C: from the success moment to what the purchase unlocks.
+  const seeUnlocks = useCallback(
+    (purchaseId: string) => {
+      finishPurchase();
+      navigation.navigate('PurchaseUnpack', { purchaseId });
+    },
+    [finishPurchase, navigation],
+  );
+
   const handleUpdateCard = useCallback(() => {
     // OR-110-2: the native card screen (Stripe PaymentSheet, TGP theme)
     // replaces the Stripe-hosted portal webview. In dunning it also pays the
@@ -428,7 +437,7 @@ export default function ClientPackagesScreen() {
           <Text style={styles.gateTitle}>No self-serve plans yet</Text>
           <Text style={styles.gateBody}>
             Your coach handles access directly. Message them to start or
-            change a plan — no payment is taken inside the app until they
+            change a plan. No payment is taken inside the app until they
             enable it.
           </Text>
           <TouchableOpacity
@@ -513,6 +522,7 @@ export default function ClientPackagesScreen() {
                     purchase={purchase}
                     onContinue={finishPurchase}
                     onOpenPlan={finishPurchase}
+                    onSeeUnlocks={seeUnlocks}
                   />
                 ) : null}
                 {!sellable && !current ? (

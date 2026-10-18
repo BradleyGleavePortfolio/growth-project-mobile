@@ -48,7 +48,7 @@ The corresponding iOS notes live alongside each item in parentheses where they d
 > - Personal info: account IDs (User IDs) are sent with analytics and crash reports; consultation answers (date of birth, sex)
 >   are Other info.
 > - Health and fitness: readiness/injury answers, check-ins, sleep and heart data, plus Health Connect reads where a profile
->   enables it (the `production` profile has Health Connect off).
+>   enables it (the `production` and `clinic` profiles have Health Connect on; `preview` has it off).
 > - Device or other IDs: the Expo push token is uploaded after the person allows notifications.
 > - Financial info: purchase, renewal, refund and invoice metadata (Stripe holds card numbers).
 > - Analytics (PostHog) and diagnostics (Sentry) start automatically when configured, so they are not "optional" unless an

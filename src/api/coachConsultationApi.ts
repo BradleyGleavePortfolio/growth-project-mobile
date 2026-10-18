@@ -57,6 +57,11 @@ export const ConsultationViewSchema = z.object({
     version: z.string().nullable(),
     agreed_at: z.string().nullable(),
   }),
+  /**
+   * The client's display name (backend FLAG-2), sent only to a reader with
+   * live access. Optional so a server without it still parses.
+   */
+  client_name: z.string().nullable().optional(),
 });
 
 export type ConsultationView = z.infer<typeof ConsultationViewSchema>;

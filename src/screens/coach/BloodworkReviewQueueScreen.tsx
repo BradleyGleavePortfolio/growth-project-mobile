@@ -71,7 +71,7 @@ export default function BloodworkReviewQueueScreen() {
     label: string,
   ) => {
     if (!canTransition(from, to)) {
-      Alert.alert('Action not available', `Cannot move panel from ${from} to ${to}.`);
+      Alert.alert('Action not available', `Cannot move panel from ${prettyState(from)} to ${prettyState(to)}.`);
       return;
     }
     Alert.alert('Recorded locally', `${label} for panel ${panelId}. Wired to backend in a follow-up.`);
@@ -186,7 +186,7 @@ function prettyState(state: BloodworkReviewState): string {
     case 'draft_client_entered': return 'Draft';
     case 'submitted': return 'Submitted';
     case 'needs_source': return 'Needs source';
-    case 'needs_clinician_context': return 'Clinician referral';
+    case 'needs_clinician_context': return 'Doctor referral';
     case 'coach_reviewed': return 'Reviewed';
     case 'hidden_from_client': return 'Hidden';
     case 'disputed_flagged': return 'Disputed';

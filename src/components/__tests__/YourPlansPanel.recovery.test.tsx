@@ -21,6 +21,8 @@ jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
 
 import YourPlansPanel from '../purchase/YourPlansPanel';
+import { YOUR_PLANS_QUERY_KEY } from '../../lib/packagePayment';
+import { queryClient } from '../../services/queryClient';
 
 const ID = 'purchase-1';
 const PLAN = {
@@ -121,6 +123,22 @@ describe('B-344-3 the newest answer wins', () => {
     await r.unmount();
     await act(async () => { release({ data: PLAN }); });
     expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('m#775 B1: End and Keep outdate every other summary of the plans', () => {
+  it.each([
+    ['end', PLAN, cancelResult({ outcome: 'scheduled', access_ends_at: '2026-11-02T12:00:00.000Z' })],
+    ['keep', ENDING, { data: PLAN }],
+  ])('%s invalidates the shared Your plans key, so You re-reads its Your plans line', async (action, plan, answer) => {
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+    mockGet.mockResolvedValue(ok(plan));
+    mockPost.mockResolvedValue(answer);
+    autoConfirm();
+    const r = await render(<YourPlansPanel />);
+    await waitFor(() => expect(r.getByTestId(`your-plan-${action}-${ID}`)).toBeTruthy());
+    await fireEvent.press(r.getByTestId(`your-plan-${action}-${ID}`));
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: YOUR_PLANS_QUERY_KEY }));
   });
 });
 

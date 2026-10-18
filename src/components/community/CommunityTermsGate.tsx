@@ -16,7 +16,8 @@
  * page (TERMS_URL).
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
@@ -45,8 +46,11 @@ type GateState = 'loading' | 'needed' | 'agreed';
 
 export default function CommunityTermsGate({
   children,
+  onBack,
 }: {
   children: React.ReactNode;
+  /** COACHTABS: coaches open Community from Messages; Back leaves without agreeing. */
+  onBack?: () => void;
 }): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const user = useCurrentUser();
@@ -103,6 +107,17 @@ export default function CommunityTermsGate({
       edges={['top']}
       testID="community-terms-gate"
     >
+      {onBack ? (
+        <Pressable
+          onPress={onBack}
+          style={styles.back}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          testID="community-terms-back"
+        >
+          <Ionicons name="arrow-back" size={24} color={sc.textPrimary} />
+        </Pressable>
+      ) : null}
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={[styles.title, { color: sc.textPrimary }]} accessibilityRole="header">
           {COMMUNITY_TERMS_COPY.title}
@@ -165,6 +180,7 @@ export function withCommunityTerms<P extends object>(
 }
 
 const styles = StyleSheet.create({
+  back: { width: 44, height: 44, justifyContent: 'center', marginLeft: spacing.md },
   safe: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing.lg, gap: spacing.md },

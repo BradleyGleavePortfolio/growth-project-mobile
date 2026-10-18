@@ -1,7 +1,7 @@
 /**
  * coachAiApi — Coach AI v1 client
  *
- * Typed client for the eight endpoints under `/coach/ai/*` introduced by
+ * Typed client for the seven endpoints under `/coach/ai/*` introduced by
  * the backend branch `feat/coach-ai-engine-v1-backend`. All calls route
  * through the shared axios instance so JWT attach + 401-refresh stay
  * uniform with the rest of the app.
@@ -9,7 +9,6 @@
  * Endpoints:
  *   GET    /coach/ai/status                              status()
  *   POST   /coach/ai/workout-program                     generateWorkout()
- *   POST   /coach/ai/meal-plan                           generateMealPlan()
  *   POST   /coach/ai/client-insight                      generateInsight()
  *   GET    /coach/ai/drafts/:draftId                     getDraft()
  *   POST   /coach/ai/drafts/:draftId/approve             approveDraft()
@@ -34,11 +33,9 @@ import type {
   Draft,
   EditInput,
   GenerateInsightInput,
-  GenerateMealPlanInput,
   GenerateWorkoutInput,
   GeneratedPayload,
   InsightPayload,
-  MealPlanPayload,
   RejectInput,
   WorkoutPayload,
 } from '../types/coachAi';
@@ -60,12 +57,12 @@ export interface PendingDraftSummary {
   createdAt: string;
 }
 
-// C-1: a 4-week workout / 7-day meal plan generation typically takes
+// C-1: a 4-week workout generation typically takes
 // 25–60 s on Anthropic + a Fly cold start. The shared axios client
 // defaults to 30 s, so the mobile aborts on the slow path; the backend
 // completes regardless and persists an orphan draft the coach has no
 // way to recover (no `listDrafts` surface). Bump the per-call timeout
-// for the three generate endpoints only — the rest of the AI surface
+// for the two generate endpoints only — the rest of the AI surface
 // (status, get/edit/approve/reject) stays on the global 30 s.
 const AI_GENERATE_TIMEOUT_MS = 120_000;
 
@@ -80,12 +77,6 @@ export const coachAiApi = {
   /** Generate a workout program draft for a client. */
   generateWorkout: (input: GenerateWorkoutInput) =>
     api.post<Draft<WorkoutPayload>>('/coach/ai/workout-program', input, {
-      timeout: AI_GENERATE_TIMEOUT_MS,
-    }),
-
-  /** Generate a meal plan draft for a client. */
-  generateMealPlan: (input: GenerateMealPlanInput) =>
-    api.post<Draft<MealPlanPayload>>('/coach/ai/meal-plan', input, {
       timeout: AI_GENERATE_TIMEOUT_MS,
     }),
 

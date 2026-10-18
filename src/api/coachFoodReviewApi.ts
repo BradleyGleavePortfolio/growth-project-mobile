@@ -19,7 +19,6 @@ export interface RecordedFoodEntry {
 
 interface FoodTimelinePage {
   meals?: RecordedFoodEntry[];
-  consent?: { food_macros?: boolean };
   error?: string;
 }
 
@@ -43,9 +42,6 @@ export async function loadCoachFoodReview(clientId: string, days: 7 | 14 | 30) {
     if (data.error) {
       throw new FoodReviewUnavailableError('This client is not available. Return to Clients and select a current client.');
     }
-    if (data.consent?.food_macros === false) {
-      return { meals: [], shared: false };
-    }
     if (!Array.isArray(data.meals)) {
       throw new FoodReviewUnavailableError('Food logs were not returned. Refresh to load the client’s recorded meals.');
     }
@@ -54,7 +50,7 @@ export async function loadCoachFoodReview(clientId: string, days: 7 | 14 | 30) {
       seen.add(entry.id);
       meals.push(entry);
     }
-    if (data.meals.length < 100) return { meals, shared: true };
+    if (data.meals.length < 100) return { meals };
     // Page from the last raw row, even when it was a repeat.
     cursor = data.meals[data.meals.length - 1].id;
   }

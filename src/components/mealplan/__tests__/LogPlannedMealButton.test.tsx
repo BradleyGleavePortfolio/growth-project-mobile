@@ -4,7 +4,7 @@ import { foodApi, logApi } from '../../../services/api';
 import { enqueue } from '../../../services/foodLogQueue';
 import { queryClient } from '../../../services/queryClient';
 import LogPlannedMealButton, {
-  mealTypeForSlot, plannedMealFromFoods, plannedMealFromSlot,
+  mealTypeForSlot, plannedMealFromSlot,
 } from '../LogPlannedMealButton';
 import type { DailyMealPlanSlot } from '../../../api/mealTemplatesApi';
 
@@ -60,11 +60,7 @@ describe('plan helpers', () => {
     expect(mealTypeForSlot(undefined)).toBeNull();
   });
 
-  it('sums AI meal foods only when every food has the value, and reads canonical slots', () => {
-    expect(plannedMealFromFoods([
-      { name: 'Oats', serving: '60 g', calories: 230, protein_g: 8, carbs_g: 40, fat_g: 4 },
-      { name: 'Berries', calories: 40, protein_g: 1, carbs_g: 9 },
-    ])).toEqual({ name: 'Oats (60 g), Berries', calories: 270, protein: 9, carbs: 49, fat: null });
+  it('reads canonical slots', () => {
     const slot: DailyMealPlanSlot = {
       id: 's1', daily_meal_plan_id: 'd1', meal_template_id: 't1', slot_label: 'lunch', order: 0,
       meal_template: {

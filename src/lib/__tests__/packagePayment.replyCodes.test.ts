@@ -154,33 +154,38 @@ describe('copy rules', () => {
 });
 
 describe('B-343-4 a resumed trial keeps its pinned first-charge date', () => {
+  // BILLQUOTE-M: the date the client saw is the server quote's, never now + 7.
+  const shownEnd = new Date(2026, 9, 11, 1, 0, 0).toISOString();
   const trial: PurchasablePackage = {
     id: 'p1', name: 'Trial plan', currency: 'usd', amountCents: 9900, renewing: true,
     interval: 'month', intervalCount: 1, oneTimeCents: 0, trialDays: 7,
+    quote: { dueTodayCents: 0, currency: 'usd', firstChargeAt: shownEnd, trialEnd: shownEnd },
   };
   const plan = (trialEndsAt: string | null) => ({
     amountCents: 9900, currency: 'usd', interval: 'month' as const, intervalCount: 1,
     firstChargeCents: 0, oneTimeCents: 0, trialDays: 7, trialEndsAt,
   });
-  const now = new Date(2026, 9, 4, 1, 0, 0);
-  const pinned = new Date(2026, 9, 3, 13, 0, 0);
-  pinned.setDate(pinned.getDate() + 7);
+  const pinned = new Date(2026, 9, 10, 13, 0, 0);
 
   it('a pinned date before the shown date needs review, and the review shows the pinned date', () => {
-    const r = reconcileIntentTerms(trial, plan(pinned.toISOString()), 'setup', now);
+    const r = reconcileIntentTerms(trial, plan(pinned.toISOString()), 'setup');
     expect(r).toEqual(expect.objectContaining({ changed: true, trialDateMoved: true, inconsistent: false }));
-    expect(r.adopted.trialEndsAt).toBe(pinned.toISOString());
-    expect(planTerms(r.adopted, now).firstCharge).toContain('October 10, 2026');
-    expect(planTerms(trial, now).firstCharge).toContain('October 11, 2026');
+    expect(r.adopted.quote?.firstChargeAt).toBe(pinned.toISOString());
+    expect(planTerms(r.adopted).firstCharge).toContain('October 10, 2026');
+    expect(planTerms(trial).firstCharge).toContain('October 11, 2026');
     // Confirming the reviewed date replays the same attempt: no second review.
-    expect(reconcileIntentTerms(r.adopted, plan(pinned.toISOString()), 'setup', now).changed).toBe(false);
+    expect(reconcileIntentTerms(r.adopted, plan(pinned.toISOString()), 'setup').changed).toBe(false);
   });
 
   it('the same calendar date, or no pinned date, needs no review', () => {
-    const same = new Date(now.getTime());
-    same.setDate(same.getDate() + 7);
-    expect(reconcileIntentTerms(trial, plan(same.toISOString()), 'setup', now).changed).toBe(false);
-    expect(reconcileIntentTerms(trial, plan(null), 'setup', now).changed).toBe(false);
+    const same = new Date(2026, 9, 11, 13, 0, 0);
+    expect(reconcileIntentTerms(trial, plan(same.toISOString()), 'setup').changed).toBe(false);
+    expect(reconcileIntentTerms(trial, plan(null), 'setup').changed).toBe(false);
+  });
+
+  it('with no quote no date was shown, so there is nothing to compare or review', () => {
+    const r = reconcileIntentTerms({ ...trial, quote: null }, plan(pinned.toISOString()), 'setup');
+    expect(r).toEqual(expect.objectContaining({ changed: false, trialDateMoved: false, inconsistent: false }));
   });
 });
 

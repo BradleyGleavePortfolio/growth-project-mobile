@@ -112,10 +112,11 @@ export function AIBudgetMount({
     (amount: number | 'custom') => {
       // Param shape is intentionally minimal — the checkout screen reads
       // pack options from the budget query directly. Custom flow is routed
-      // by an explicit string sentinel.
+      // by an explicit string sentinel. `initial: false`: Settings home stays beneath.
       navigation.navigate('SettingsStack', {
         screen: checkoutScreen,
         params: { preselect: amount },
+        initial: false,
       } as never);
     },
     [navigation, checkoutScreen],

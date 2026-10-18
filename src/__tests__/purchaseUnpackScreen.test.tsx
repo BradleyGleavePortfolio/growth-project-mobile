@@ -51,6 +51,9 @@ const basePurchase = (overrides: Partial<ClientPurchase> = {}): ClientPurchase =
   cancel_at_period_end: false,
   canceled_at: null,
   created_at: '2026-05-29T00:00:00Z',
+  amount_cents: 19900,
+  currency: 'usd',
+  first_charge_cents: 19900,
   ...overrides,
 });
 
@@ -101,6 +104,71 @@ describe('buildReceipt — receipt header reconciliation', () => {
     );
     expect(r.recurring).toBe(true);
     expect(r.nextChargeAt).toBeNull();
+  });
+
+  // BILLFIX1 (agent 144) + C5-S1 (agent 157): the receipt shows what the
+  // server says this purchase's checkout charged, never the package's price.
+  it('shows the server first charge when the package price changed since', () => {
+    const r = UnpackTest.buildReceipt(
+      'purchase_42',
+      [basePurchase({ first_charge_cents: 14900, currency: 'usd' })],
+      [basePackage({ price: 249 })],
+      null,
+    );
+    expect(r.amountDisplay).toMatch(/\$149\.00/);
+    expect(r.amountDisplay).not.toMatch(/249/);
+  });
+
+  it('shows no amount when the purchase row carries none, even if the package has a price', () => {
+    const r = UnpackTest.buildReceipt(
+      'purchase_42',
+      [basePurchase({ amount_cents: undefined, first_charge_cents: undefined, currency: undefined })],
+      [basePackage({ price: 249 })],
+      null,
+    );
+    expect(r.amountDisplay).toBeNull();
+  });
+
+  // C5-S1: a subscription's amount_cents is its renewal. A combo ($300 once +
+  // $149 a month) charged $449 at checkout; the receipt says $449.00.
+  it('a combo says the first charge, never the renewal amount_cents', () => {
+    const r = UnpackTest.buildReceipt(
+      'purchase_42',
+      [basePurchase({ amount_cents: 14900, first_charge_cents: 44900 })],
+      [basePackage()],
+      null,
+    );
+    expect(r.amountDisplay).toMatch(/\$449\.00/);
+  });
+
+  it('shows no amount when the server does not know the first charge (null or an older server) or the purchase is not in force', () => {
+    for (const first_charge_cents of [null, undefined, 0]) {
+      const r = UnpackTest.buildReceipt(
+        'purchase_42',
+        [basePurchase({ amount_cents: 14900, first_charge_cents })],
+        [basePackage()],
+        null,
+      );
+      expect(r.amountDisplay).toBeNull();
+    }
+    const pending = UnpackTest.buildReceipt(
+      'purchase_42',
+      [basePurchase({ status: 'pending', entitlement_active: false, first_charge_cents: 44900 })],
+      [basePackage()],
+      null,
+    );
+    expect(pending.amountDisplay).toBeNull();
+  });
+
+  it('shows no amount paid during a trial (nothing has been charged yet)', () => {
+    const r = UnpackTest.buildReceipt(
+      'purchase_42',
+      [basePurchase({ status: 'trialing' })],
+      [basePackage()],
+      null,
+    );
+    expect(r.amountDisplay).toBeNull();
+    expect(r.nextChargeAt).toBe('2026-06-29T00:00:00Z');
   });
 
   it('honours a packageName override (caller pre-fetched it)', () => {
@@ -254,6 +322,15 @@ let mockRouteParams: { purchaseId: string; packageName?: string } = {
   packageName: '1:1 Coaching',
 };
 
+const mockFlagOverrides: { clientBillingV2?: boolean } = {};
+jest.mock('../config/featureFlags', () => {
+  const actual = jest.requireActual('../config/featureFlags');
+  // A real accessor: an object-spread getter would be read once at mock time.
+  return Object.defineProperty({ ...actual }, 'featureFlags', {
+    get: () => ({ ...actual.featureFlags, ...mockFlagOverrides }),
+  });
+});
+
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
@@ -376,6 +453,9 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
           cancel_at_period_end: false,
           canceled_at: null,
           created_at: '2026-05-29T00:00:00Z',
+          amount_cents: 19900,
+          currency: 'usd',
+          first_charge_cents: 19900,
         },
       ],
     });
@@ -414,6 +494,37 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     // Receipt header is visible with package name + amount.
     expect(getByTestId('purchase-unpack-receipt')).toBeTruthy();
     expect(getByText('1:1 Coaching')).toBeTruthy();
+  });
+
+  it('the receipt says what was paid (purchase first_charge_cents), not the current package price', async () => {
+    mockGetPackages.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'pkg_1',
+          name: '1:1 Coaching',
+          description: null,
+          type: 'recurring',
+          price: 249,
+          currency: 'usd',
+          interval: 'month',
+          trial_days: null,
+          features: [],
+        },
+      ],
+    });
+    mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
+    const { getByTestId, getByText, queryByText } = await render(<PurchaseUnpackScreen />);
+    await waitFor(() => expect(getByTestId('purchase-unpack-receipt')).toBeTruthy());
+    expect(getByText(/\$199\.00 paid/)).toBeTruthy();
+    expect(queryByText(/249/)).toBeNull();
+  });
+
+  it('Ready now reads "Ready to use. Tap to open." with no em dash', async () => {
+    mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
+    const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
+    await waitFor(() => expect(getByTestId('purchase-unpack-list')).toBeTruthy());
+    expect(getByText('Ready to use. Tap to open.')).toBeTruthy();
   });
 
   it('recurring purchase shows the Next charge line', async () => {
@@ -643,5 +754,26 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     await waitFor(() => expect(getByTestId('purchase-unpack-done')).toBeTruthy());
     await fireEvent.press(getByTestId('purchase-unpack-done'));
     expect(mockParentNavigate).toHaveBeenCalledWith('Home');
+  });
+
+  // C5-S1 (slice 2, Style C): masthead with the server's paid amount and the
+  // coach mark; Done is the filled action and View deliverables a link.
+  it('clientBillingV2 on: Style C masthead, Done and View deliverables both work', async () => {
+    mockFlagOverrides.clientBillingV2 = true;
+    try {
+      mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
+      const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
+      await waitFor(() => expect(getByText('$199.00 paid')).toBeTruthy());
+      expect(getByTestId('coach-mark', { includeHiddenElements: true })).toBeTruthy();
+      await fireEvent.press(getByTestId('purchase-unpack-done'));
+      expect(mockParentNavigate).toHaveBeenCalledWith('Home');
+      await fireEvent.press(getByTestId('purchase-unpack-go-to-deliverables'));
+      expect(mockNavigate).toHaveBeenCalledWith('Deliverables', {
+        purchaseId: 'purchase_42',
+        packageName: '1:1 Coaching',
+      });
+    } finally {
+      mockFlagOverrides.clientBillingV2 = false;
+    }
   });
 });

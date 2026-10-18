@@ -5,9 +5,9 @@
  * onboarding. Presents the same three quick-win cards to every client: each
  * is basic self logging (weight, the daily check-in, a meal), which no client
  * is locked out of (owner 10-08 23:5x, m#650). Only the coach-sold package
- * sheet afterwards keeps its gate (lib/packagePromptGate). Tapping one calls
- * POST /me/first-win/complete, shows the 2-sentence AI coaching message,
- * then navigates the client into the main app.
+ * sheet afterwards keeps its gate (lib/packagePromptGate). Tapping one opens
+ * its logger. Only a successful save asks POST /me/first-win/complete for the
+ * note, which appears here before continuing into the main app.
  *
  * Design doctrine:
  *   - bone/ink/forest palette via useTheme().colors only — no hex codes.
@@ -16,7 +16,7 @@
  *   - Every interactive element has accessibilityLabel + accessibilityRole.
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -75,15 +75,14 @@ const WIN_CARD_TEST_IDS: Record<WinType, string> = {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Day1WinScreenProps {
-  // When invoked with a winType, RootNavigator transitions to the main app
-  // and deep-links into the corresponding logger screen. When invoked without
-  // args (skip / API failure continue), it just transitions to the main app.
+  // A card opens its logger; completion/skip enters the app without reopening it.
   onComplete: (target?: WinType) => void;
+  savedWin?: WinType;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
+export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
@@ -91,27 +90,34 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
   // coach or a package, so no entitlement is read here.
   const availableCards = WIN_CARDS;
 
-  const [selectedWin, setSelectedWin] = useState<WinType | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [selectedWin, setSelectedWin] = useState<WinType | null>(savedWin ?? null);
+  const [loading, setLoading] = useState(!!savedWin);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [failureCount, setFailureCount] = useState(0);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   // Task 10: PackageSelectionSheet gate
   const [showPackageSheet, setShowPackageSheet] = useState(false);
+  const requestedWin = useRef<WinType | null>(null);
 
-  const handleSelectWin = useCallback(
-    async (winType: WinType) => {
-      if (loading) return;
+  useEffect(() => {
+    if (!savedWin || requestedWin.current === savedWin) return;
+    requestedWin.current = savedWin;
+    let mounted = true;
+    const requestNote = async () => {
+      const winType = savedWin;
       setSelectedWin(winType);
       setLoading(true);
 
       try {
         const response = await firstWinApi.complete(winType);
+        if (!mounted) return;
         const { aiMessage: msg } = response.data;
         setAiMessage(msg);
         setDone(true);
         track('day1_win_completed', { winType });
       } catch (err) {
+        if (!mounted) return;
         // Surface the error but don't block the user — they can try again.
         setLoading(false);
         setSelectedWin(null);
@@ -121,9 +127,21 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
           'Could not record your win. Check your connection and try again, or continue without recording.',
         );
       }
-    },
-    [loading],
-  );
+    };
+    void requestNote();
+    return () => { mounted = false; };
+  }, [savedWin, retryAttempt]);
+
+  const handleSelectWin = (winType: WinType) => {
+    if (loading) return;
+    if (savedWin) {
+      // Retry the note for the already-saved action, never the logger.
+      requestedWin.current = null;
+      setRetryAttempt((n) => n + 1);
+    } else {
+      onComplete(winType);
+    }
+  };
 
   // Check the 24h gate and package availability, then either show sheet or call onComplete.
   const maybeShowPackageSheet = useCallback(async (target?: WinType) => {
@@ -186,10 +204,10 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
     maybeShowPackageSheet(undefined);
   }, [maybeShowPackageSheet, currentUser?.id]);
 
-  // Continue from the completion view — routes to the matching logger (via package gate).
+  // The log is already saved; Continue enters the app via the existing package gate.
   const handleContinue = useCallback(() => {
-    maybeShowPackageSheet(selectedWin ?? undefined);
-  }, [maybeShowPackageSheet, selectedWin]);
+    maybeShowPackageSheet(undefined);
+  }, [maybeShowPackageSheet]);
 
   // ── Completion state ────────────────────────────────────────────────────────
 
@@ -199,8 +217,8 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
         {/* PackageSelectionSheet — shown as Modal overlay on top of Day1WinScreen */}
         <PackageSelectionSheet
           visible={showPackageSheet}
-          onDismiss={() => { setShowPackageSheet(false); onComplete(selectedWin ?? undefined); }}
-          onPaymentSuccess={() => { setShowPackageSheet(false); onComplete(selectedWin ?? undefined); }}
+          onDismiss={() => { setShowPackageSheet(false); onComplete(undefined); }}
+          onPaymentSuccess={() => { setShowPackageSheet(false); onComplete(undefined); }}
         />
         <ScrollView
           contentContainerStyle={styles.completionContainer}
