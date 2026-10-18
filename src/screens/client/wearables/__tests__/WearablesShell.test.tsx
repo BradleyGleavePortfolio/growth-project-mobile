@@ -84,8 +84,12 @@ jest.mock('../../../../hooks/useWearableConnections', () => ({
 // S14: the AI panel is behind a default-off flag (D2 consent); the getter
 // lets each test choose the value without re-importing the shell.
 let mockAiInsightsFlag = true;
+let mockHealthPagesFlag = false;
 jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: {
+    get healthPages() {
+      return mockHealthPagesFlag;
+    },
     get wearableAiInsights() {
       return mockAiInsightsFlag;
     },
@@ -152,6 +156,7 @@ import { logger } from '../../../../utils/logger';
 
 beforeEach(() => {
   mockAiInsightsFlag = true;
+  mockHealthPagesFlag = false;
   mockDeviceSource = 'APPLE_HEALTHKIT';
   mockImportHistory.mockReset();
   mockImportHistory.mockResolvedValue({
@@ -482,6 +487,16 @@ describe('WearablesShell', () => {
 // B-HEALTHBACK-135 (B29): the More stack hides the native header and iOS has
 // no hardware back, so the pushed shell draws the coach screens' Back (m#638).
 describe('WearablesShell Back', () => {
+  it('uses the same Back to You words on screen and aloud only with healthPages on', async () => {
+    mockHealthPagesFlag = true;
+    mockCanGoBack = true;
+    mockRouteParams = { bucket: 'recovery' };
+    await render(<WearablesShell />);
+    expect(screen.getByText('Back to You')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Back to You'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText('Back')).toBeNull();
+  });
   /** The first announced node (a label or a text) in render order. */
   const firstAnnounced = (n: unknown): string | undefined => {
     if (n == null || typeof n !== 'object') return undefined;

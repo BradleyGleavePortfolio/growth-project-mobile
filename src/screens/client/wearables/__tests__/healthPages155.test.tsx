@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { dehydrate, hydrate, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 let mockSamples: (p: { bucket: string }) => object = () => ({});
 jest.mock('../../../../hooks/useWearableSamples', () => ({ useWearableSamples: (p: { bucket: string }) => mockSamples(p) }));
@@ -16,9 +16,10 @@ jest.mock('../../../../hooks/useWearableConnections', () => ({
 }));
 let mockOnline = true;
 jest.mock('../../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({}), isEffectivelyOnline: () => mockOnline }));
-let mockUser: { coach_id?: string } | null = null;
+let mockUser: { id?: string; coach_id?: string } | null = null;
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
-jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: async () => ({ data: { name: 'Sam Rivers' } }) } }));
+let mockCoachName: string | null | undefined = 'Sam Rivers';
+jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: async () => ({ data: { name: mockCoachName } }) } }));
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
 const mockSelection = jest.fn();
@@ -30,6 +31,9 @@ jest.mock('../components/useReduceMotion', () => ({ useReduceMotion: () => true 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 import HealthFitnessTab, { savedAt } from '../HealthFitnessTab';
+import type { GetSamplesParams } from '../../../../api/wearablesSamplesApi';
+
+const { wearableSamplesQueryKey } = jest.requireActual('../../../../hooks/useWearableSamples') as typeof import('../../../../hooks/useWearableSamples');
 
 const NOW = new Date();
 const at = (ago: number) => new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - ago, 9).toISOString();
@@ -43,9 +47,10 @@ const ok = (s: object[]) => ({
   isLoading: false, isError: false, isRefetching: false, dataUpdatedAt: Date.now(), refetch: mockRefetch,
 });
 const LINKED = [{ provider: 'APPLE_HEALTHKIT', status: 'connected', last_synced_at: new Date(Date.now() - 5 * 60_000).toISOString() }];
-const show = () =>
+const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const show = (client = newClient()) =>
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <HealthFitnessTab />
     </QueryClientProvider>,
   );
@@ -53,6 +58,7 @@ const show = () =>
 beforeEach(() => {
   jest.clearAllMocks();
   [mockOnline, mockUser, mockConnections] = [true, null, LINKED];
+  mockCoachName = 'Sam Rivers';
 });
 
 it('is off in every EAS build profile through the real flag reader', () => {
@@ -110,7 +116,75 @@ it('board 9: missing days are dashed slots with a No data key; a coached client 
   expect(screen.getAllByTestId('week-step-empty')).toHaveLength(4);
   expect(screen.getByText('No data')).toBeTruthy();
   expect(screen.getByText('No heart rate from Apple Health yet. A watch that writes to Apple Health adds it.')).toBeTruthy();
-  expect(await screen.findByText('Sam can see the health data your devices bring in.')).toBeTruthy();
+  expect(await screen.findByText('Sam can see the activity your devices bring in.')).toBeTruthy();
+});
+
+it.each(['', '   ', null, undefined, 'Your coach', ' Your coach '])('hides the coach line without a first name (%s)', async (name) => {
+  mockSamples = () => ok([series('STEPS', [[0, 500]])]);
+  mockUser = { id: 'self', coach_id: 'coach-1' };
+  mockCoachName = name;
+  const client = newClient();
+  await show(client);
+  await waitFor(() => expect(client.getQueryState(['wearables', 'coach-name', 'coach-1'])?.status).toBe('success'));
+  expect(screen.queryByTestId('health-coach-line')).toBeNull();
+});
+
+it.each([null, 0, 500])('shows So far only when today has a reading (%s), including a real zero', async (total) => {
+  mockSamples = (p) => ok(p.bucket === 'SLEEP_RECOVERY' ? [] : [
+    series('STEPS', total == null ? [[1, 800]] : [[0, total], [1, 800]]),
+  ]);
+  await show();
+  expect(Boolean(screen.queryByText('So far'))).toBe(total != null);
+  expect(Boolean(screen.queryByTestId('week-step-today'))).toBe(total != null);
+  const label = screen.getByTestId('week-step-bars').props.accessibilityLabel as string;
+  expect(label).toContain(total == null ? 'No data' : `${total} so far`);
+  if (total == null) expect(label).not.toContain('so far');
+});
+
+it('offline in a later hour restores the newest own Fitness and heart data with its saved time', async () => {
+  mockOnline = false;
+  mockUser = { id: 'self' };
+  mockSamples = () => ({ data: undefined, isLoading: false, isError: false, refetch: mockRefetch, dataUpdatedAt: 0 });
+  const before = newClient();
+  const hour = 60 * 60_000;
+  const oldEnd = Math.floor(Date.now() / hour) * hour;
+  const params: GetSamplesParams = {
+    bucket: 'HEALTH_FITNESS', from: new Date(oldEnd - 30 * 24 * hour).toISOString(),
+    to: new Date(oldEnd).toISOString(), granularity: 'day',
+  };
+  const saved = oldEnd - 20 * 60_000;
+  const fitness = { ...ok([series('STEPS', [[0, 975]])]).data, user_id: 'self' };
+  before.setQueryData(wearableSamplesQueryKey({ ...params, from: at(35), to: at(2) }), {
+    ...ok([series('STEPS', [[0, 100]])]).data, user_id: 'self',
+  }, { updatedAt: saved - hour });
+  before.setQueryData(wearableSamplesQueryKey(params), fitness, { updatedAt: saved });
+  before.setQueryData(wearableSamplesQueryKey({ ...params, bucket: 'SLEEP_RECOVERY', metric: 'RESTING_HEART_RATE_BPM' }), {
+    ...ok([series('RESTING_HEART_RATE_BPM', [[0, 55]])]).data, user_id: 'self',
+  }, { updatedAt: saved });
+  const client = newClient();
+  hydrate(client, dehydrate(before));
+  await show(client);
+  expect(screen.getByLabelText('Steps, 975 steps. Starter goal: 5,000 steps')).toBeTruthy();
+  expect(screen.getByText('55')).toBeTruthy();
+  expect(screen.getByText(`You're offline. Showing your last synced data from ${savedAt(saved)}.`)).toBeTruthy();
+  expect(screen.queryByTestId('health-fitness-error')).toBeNull();
+});
+
+it.each([
+  { user_id: 'other' }, { clientId: 'other' }, { metric: 'STEPS' }, { bucket: 'SLEEP_RECOVERY' },
+  { granularity: 'raw' }, { preferredOnly: false }, { providers: ['HEALTH_CONNECT'] }, { timezone: 'UTC' },
+])('does not reuse another identity or a differently scoped saved query (%j)', async (overrides) => {
+  mockOnline = false;
+  mockUser = { id: 'self' };
+  mockSamples = () => ({ data: undefined, isLoading: false, isError: false, refetch: mockRefetch });
+  const client = newClient();
+  const { user_id = 'self', ...scope } = overrides;
+  const params = { bucket: 'HEALTH_FITNESS', from: at(30), to: at(1), granularity: 'day', ...scope } as GetSamplesParams;
+  client.setQueryData(wearableSamplesQueryKey(params), { ...ok([series('STEPS', [[0, 975]])]).data, user_id });
+  await show(client);
+  expect(screen.getByTestId('health-fitness-error')).toBeTruthy();
+  expect(screen.queryByTestId('health-fitness-saved')).toBeNull();
+  expect(screen.queryByText('975')).toBeNull();
 });
 
 it('boards 10 to 12: loading, offline with saved data, error with Try again', async () => {
