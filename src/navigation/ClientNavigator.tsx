@@ -60,6 +60,8 @@ import NotificationsScreen from '../screens/client/NotificationsScreen';
 import MessagesScreen from '../screens/client/MessagesScreen';
 import MessagesInboxScreen from '../screens/client/MessagesInboxScreen';
 import EducationScreen from '../screens/client/EducationScreen';
+import LearnScreen from '../screens/client/learn/LearnScreen';
+import LearnLessonScreen from '../screens/client/learn/LearnLessonScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
@@ -289,6 +291,9 @@ export type MoreStackParamList = {
   Widgets:     undefined;
   Report:      undefined;
   Learn:       undefined;
+  /** LEARN-A (flag learnHub): one lesson, and the guidelines page opened from Learn's Read all. */
+  LearnLesson: { id: string };
+  CoachGuidelines: undefined;
   GroceryList: undefined;
   ShoppingList: undefined;
   PrepGuide:   undefined;
@@ -548,7 +553,13 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="AddCoachCode" component={AddCoachCodeScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
       <MoreStackNav.Screen name="Report"       component={ReportScreen} />
-      <MoreStackNav.Screen name="Learn"        component={EducationScreen} />
+      <MoreStackNav.Screen name="Learn"        component={featureFlags.learnHub ? LearnScreen : EducationScreen} />
+      {featureFlags.learnHub && (
+        <>
+          <MoreStackNav.Screen name="LearnLesson" component={LearnLessonScreen} />
+          <MoreStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
+        </>
+      )}
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
@@ -588,8 +599,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           {() => <RomanChatScreen surface="client" />}
         </MoreStackNav.Screen>
       )}
-      {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
-      <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
+      {/* Phase 11 — Share Card. With featureFlags.shareSheetV2 (SHARE-A) the route goes: Share opens ShareSheet in place. */}
+      {featureFlags.shareSheetV2 ? null : <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />}
       {/* Phase 11 — Notification category preferences (push taxonomy). */}
       <MoreStackNav.Screen name="NotificationPreferences" component={NotificationCategoryPreferencesScreen} />
       {/* Full notification settings (Mute all, per-category switches) for client Settings. */}

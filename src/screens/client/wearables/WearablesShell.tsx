@@ -228,16 +228,18 @@ export default function WearablesShell() {
   // pushed shell draws its own Back (iOS has no hardware back). Same arrow,
   // size and place as the coach detail screens (m#638); 44 pt target. With
   // nothing below it there is no dead Back.
+  // "Back to You" only over the You menu (the You row); opened from Home (Sleep dial, Steps tile) it is the existing "Back".
+  const backLabel = v2 && navigation.getState().routes.find((_, i, all) => all[i + 1]?.key === route.key)?.name === 'MoreIndex' ? 'Back to You' : 'Back';
   const back = navigation.canGoBack() ? (
     <TouchableOpacity
       onPress={() => navigation.goBack()}
       accessibilityRole="button"
-      accessibilityLabel={v2 ? 'Back to You' : 'Back'}
+      accessibilityLabel={backLabel}
       style={[styles.back, v2 && styles.backV2]}
       testID="health-back"
     >
       <Ionicons name={v2 ? 'chevron-back' : 'arrow-back'} size={24} color={v2 ? sc.textOnAccent : sc.textPrimary} />
-      {v2 && <Text style={[styles.backLabel, { color: sc.textOnAccent }]}>Back to You</Text>}
+      {v2 && <Text style={[styles.backLabel, { color: sc.textOnAccent }]}>{backLabel}</Text>}
     </TouchableOpacity>
   ) : null;
 

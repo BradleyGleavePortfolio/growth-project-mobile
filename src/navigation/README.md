@@ -126,8 +126,10 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 
 - The 4-tab bar (Home / Train / Log / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
 - The `MoreStack` registers `AIGuide` and `Membership` (sale-readiness, #67). Both are static targets of `MoreScreen` rows; neither is a deep-link target and neither requires backend changes (`Membership` reads only `usersApi.getFoundingNumber` and `aiApi.getStructuredContext`).
+- LEARN-A (flag `learnHub`, off): `Learn` renders `LearnScreen` instead of `EducationScreen`, and the `MoreStack` adds `LearnLesson` (`{ id: string }`, the lesson view; Next replaces it so Back returns to Learn) and `CoachGuidelines` (Read all on Learn). With the flag off neither route exists.
 - `RecipeDetail` is a serialisable-only route. The list passes `{ recipeId }`, the detail screen reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById`. The shape is asserted in `src/navigation/__tests__/clientNavigator.test.ts`. Do not add screens that pass full domain objects through navigation params.
 - There is no global floating chat widget. The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind were deleted in #63. If a future feature wants a shared AI surface, it must be a real screen registered under the relevant navigator — the doctrine (`docs/QUIET_LUXURY_DOCTRINE.md` §6) forbids reintroducing a global FAB.
+- `ShareCard` (MoreStack) is registered only while `featureFlags.shareSheetV2` is off (SHARE-A). On, Share on Progress and on the Session summary opens `components/share/ShareSheet` over the screen instead, so no route or param shape is needed; see `docs/share-card.md`.
 - The `TrophyShare` route was removed from `ClientNavigator` in #63 alongside the `TrophyShareScreen` and `FirstWinCelebration`. Do not reintroduce it; the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`) will fail the build.
 - A6 (AUTHB-05): `tgp://wearables/connected?status&provider&ticket` maps to `MoreTab/Connections` (params `{ ticket?, provider?, status? }`), so a cloud tracker return that Android hands to the app opens the screen that finishes the link. It uses the existing `tgp` scheme; no intent filter change.
 - The `linking` config covers only the unauthenticated path. If a future feature needs to be addressable by a deep link to a signed-in screen, that route must be added under both `ClientNavigator` and `CoachNavigator` configs and the Android intent filter / `applinks:` entry extended in `app.json`.
@@ -148,7 +150,7 @@ New screen names added to `HomeStackParamList`:
 | `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
 | `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + the fixed quiet hours (read-only) |
 | `MessagesInbox` | `MessagesInboxScreen` | C3B-S2: the client's Messages list (coach and Roman), opened from Home while `c3StyleB` and Roman chat are on |
-| `Health`, `WearableMetricDetail`, `Connections` | `WearablesShell`, `MetricDetailScreen`, `ConnectionsScreen` | #HEALTH-PAGES: the same Health page and its two inner routes as You's, opened from the rings Home Sleep dial and Steps tile, so Back lands on Home (the You rows keep Back to You) |
+| `Health`, `WearableMetricDetail`, `Connections` | `WearablesShell`, `MetricDetailScreen`, `ConnectionsScreen` | #HEALTH-PAGES: the same Health page and its two inner routes as You's, opened from the rings Home Sleep dial and Steps tile, so Back lands on Home and reads "Back" (over the You menu it reads "Back to You") |
 
 The legacy `Notifications` screen name (pointing to the old `NotificationsScreen`) is preserved for backward-compat.
 

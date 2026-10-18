@@ -10,9 +10,7 @@ describe('UI-1 Home dials: each its own number, never invented', () => {
   });
 
   it('Food: kcal left of the daily target, with eaten of target under it', () => {
-    expect(foodDial({ ready: true, eaten: 1030, target: 1850 })).toEqual({
-      value: '820', unit: 'kcal left', sub: '1,030 of 1,850', progress: 1030 / 1850,
-    });
+    expect(foodDial({ ready: true, eaten: 1030, target: 1850 })).toEqual({ value: '820', unit: 'kcal left', sub: '1,030 of 1,850', progress: 1030 / 1850 });
     // Over the target: nothing left and a full ring, never a negative number.
     expect(foodDial({ ready: true, eaten: 2000, target: 1850 })).toMatchObject({ value: '0', unit: 'kcal left', progress: 1 });
     // No target: the eaten number only, empty ring, no made-up goal.
@@ -35,9 +33,7 @@ describe('UI-1 Home dials: each its own number, never invented', () => {
       { scheduled_for: '2026-10-13', completed_at: null }, // next week
       { scheduled_for: '2026-10-01', completed_at: null }, // last week
     ];
-    expect(trainDial({ now, assignments, history: [], daysPerWeek: 5, loading: false })).toEqual({
-      value: '2 of 3', unit: 'workouts', sub: 'This week', progress: 2 / 3,
-    });
+    expect(trainDial({ now, assignments, history: [], daysPerWeek: 5, loading: false })).toEqual({ value: '2 of 3', unit: 'workouts', sub: 'This week', progress: 2 / 3 });
   });
 
   it("Train (coachless): the client's own workouts against their days-per-week answer", () => {
@@ -46,10 +42,8 @@ describe('UI-1 Home dials: each its own number, never invented', () => {
       { date: '2026-10-04' }, // last week
       { date: '2026-10-08', completed: false },
     ];
-    expect(trainDial({ now, assignments: [], history, daysPerWeek: 3, loading: false }))
-      .toMatchObject({ value: '1 of 3', progress: 1 / 3 });
-    expect(trainDial({ now, assignments: [], history, daysPerWeek: undefined, loading: false }))
-      .toMatchObject({ value: '1', progress: 0 });
+    expect(trainDial({ now, assignments: [], history, daysPerWeek: 3, loading: false })).toMatchObject({ value: '1 of 3', progress: 1 / 3 });
+    expect(trainDial({ now, assignments: [], history, daysPerWeek: undefined, loading: false })).toMatchObject({ value: '1', progress: 0 });
     expect(trainDial({ now, assignments: null, history: null, daysPerWeek: 3, loading: false })).toMatchObject({ value: '—' });
     expect(trainDial({ now, assignments: [], history: [], daysPerWeek: 3, loading: true })).toMatchObject({ value: '—' });
   });
@@ -67,9 +61,7 @@ describe('UI-1 Home dials: each its own number, never invented', () => {
 
   const ok = { reads: { health: 'ok', checkIn: 'ok' }, noSource: false } as const;
   it('Sleep: recovered and asleep from Health, then the check-in, then Connect only with no source (never "coming soon")', () => {
-    expect(sleepDial({ recovery: 78, asleepMin: 440, checkInHours: 6, ...ok })).toEqual({
-      value: '78%', unit: 'recovered', sub: '7 h 20 m asleep', progress: 0.78, source: 'health',
-    });
+    expect(sleepDial({ recovery: 78, asleepMin: 440, checkInHours: 6, ...ok })).toEqual({ value: '78%', unit: 'recovered', sub: '7 h 20 m asleep', progress: 0.78, source: 'health' });
     expect(sleepDial({ recovery: null, asleepMin: 440, checkInHours: null, ...ok })).toMatchObject({ value: '7.3', unit: 'h asleep', source: 'health' });
     expect(sleepDial({ recovery: null, asleepMin: null, checkInHours: 7.5, ...ok })).toMatchObject({ value: '7.5', unit: 'h asleep', source: 'checkin' });
     // #HEALTH-PAGES: a connected client with nothing for last night keeps the dash.
