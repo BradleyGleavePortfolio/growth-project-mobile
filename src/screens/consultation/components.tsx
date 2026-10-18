@@ -394,6 +394,7 @@ export function Checkbox({
   disabled = false,
   hint,
   detail,
+  variant = 'default',
 }: {
   checked: boolean;
   onToggle: () => void;
@@ -404,6 +405,8 @@ export function Checkbox({
   hint?: string;
   /** A line under the label (COACH-AI-CONSENT sign-up box: CAC-2 under CAC-1); read as the hint. */
   detail?: string;
+  /** Owner-approved warm fill for the coach sign-up card; selection is unchanged. */
+  variant?: 'default' | 'tan';
 }) {
   const { s, palette } = useConsultationStyles();
   const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null]}>{label}</Text>;
@@ -416,7 +419,7 @@ export function Checkbox({
       accessibilityHint={hint ?? detail}
       accessibilityState={disabled ? { checked, disabled: true, busy: true } : { checked }}
       testID={testID}
-      style={({ pressed }) => [s.checkRow, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
+      style={({ pressed }) => [s.checkRow, variant === 'tan' && s.checkTan, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
     >
       <View style={[s.box, checked && s.boxOn]}>
         {checked ? <Ionicons name="checkmark" size={16} color={palette.onAccent} /> : null}
@@ -702,6 +705,7 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     backgroundColor: palette.surface,
     marginTop: spacing.lg,
   },
+  checkTan: { backgroundColor: colors.cream },
   box: {
     width: 22,
     height: 22,
