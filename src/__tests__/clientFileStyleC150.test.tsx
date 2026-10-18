@@ -7,7 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { STATUS_BAR_BONE, StatusBarBand } from '../components/StatusBarBand';
-import type { ClientsStackParamList } from '../navigation/CoachNavigator';
+import type { ClientsStackParamList, CoachTabParamList } from '../navigation/CoachNavigator';
 import { layout, lightTokens } from '../theme/tokens';
 import { useCoachStore } from '../store/coachStore';
 import { coachApi } from '../services/api';
@@ -59,8 +59,10 @@ let clientWeek: { week_start: string; today: string; assignments: unknown[] };
 const params = { clientId: 'client-test', clientName: 'Test client' };
 const TABS = ['week', 'summary', 'logs', 'progress', 'healthFitness', 'sleepRecovery', 'workouts', 'timeline', 'weekly'];
 // Every render is the app's real stack (Clients, the file, the thread) under the app's status band, on a 47 pt notch.
-const Stack = createNativeStackNavigator<ClientsStackParamList>();
-const ref = createNavigationContainerRef<ClientsStackParamList>();
+// Messages stands in for the tab the pinned Message opens (#CARD-MESSAGE-DEST; real tabs: clientFileSafetyCard157).
+type Routes = ClientsStackParamList & Pick<CoachTabParamList, 'Messages'>;
+const Stack = createNativeStackNavigator<Routes>();
+const ref = createNavigationContainerRef<Routes>();
 const file = () => (
   <SafeAreaInsetsContext.Provider value={{ top: 47, bottom: 34, left: 0, right: 0 }}>
     <NavigationContainer ref={ref} initialState={{ index: 1, routes: [{ name: 'ClientsList' }, { name: 'ClientDetail', params }] }}>
@@ -68,6 +70,7 @@ const file = () => (
         <Stack.Screen name="ClientsList">{() => null}</Stack.Screen>
         <Stack.Screen name="ClientDetail" component={ClientDetailScreen} />
         <Stack.Screen name="ClientMessages">{() => null}</Stack.Screen>
+        <Stack.Screen name="Messages">{() => null}</Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
     <StatusBarBand />
@@ -215,13 +218,13 @@ it('a failed This week read offers Try again in place', async () => {
 });
 
 // B2 (FIXK1OV): the old header's message icon is gone with the flag on, so Message {first} is pinned on every section.
-it.each(TABS)('Message stays pinned on the %s tab and opens the thread', async (key) => {
+it.each(TABS)('Message stays pinned on the %s tab and opens the thread in Messages', async (key) => {
   const view = await render(file());
   await view.findByText('1 this week · 1 to review');
   await fireEvent.press(view.getByTestId(`file-tab-${key}`));
   expect(view.getByTestId(`file-tab-${key}`).props.accessibilityState).toEqual({ selected: true });
   await fireEvent.press(view.getByTestId('file-message'));
-  expect([ref.getCurrentRoute(), band(view)]).toMatchObject([{ name: 'ClientMessages', params }, BONE]);
+  expect([ref.getCurrentRoute(), band(view)]).toMatchObject([{ name: 'Messages', params: { screen: 'ClientMessages', params } }, BONE]);
   await act(async () => ref.goBack());
   expect(band(view)).toEqual(FOREST);
 });

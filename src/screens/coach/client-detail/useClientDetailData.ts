@@ -48,9 +48,10 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
   // no longer shows changes nothing (Sol B1), so one client's alert never shows on another's file.
   const [safety, setSafety] = useState<{ clientId: string; alert: OpenSafetyAlert | null } | null>(null);
   const safetyAlert = safety?.clientId === clientId ? safety.alert : null;
-  const shownClient = useRef(clientId);
+  const shownClient = useRef<string | null>(clientId);
   useEffect(() => {
     shownClient.current = clientId;
+    return () => { shownClient.current = null; }; // CLIENTFILE-FIX: a file gone (keyed per client) shows no one
   }, [clientId]);
   const loadArchiveStatus = useCallback(async (refresh = false) => {
     setArchiveStatusError(null);

@@ -45,7 +45,16 @@ import { SafetyAlertCard } from './client-detail/SafetyAlertCard';
 import { openInboxChat } from '../../navigation/coachInbox';
 import { HapticService } from '../../ui/haptics/haptics.service';
 
-export default function ClientDetailScreen({ navigation, route }: Props) {
+/**
+ * CLIENTFILE-FIX: the stack reuses this screen when another client's file opens over one (Overview, the brief, a
+ * push). Keyed by client, the file mounts afresh for each, so every read, write and timer started for client A
+ * lands in a file that is gone and changes nothing on B's. Test: clientFileSafetyCard157.test.tsx.
+ */
+export default function ClientDetailScreen(props: Props) {
+  return <ClientFile key={props.route.params.clientId} {...props} />;
+}
+
+function ClientFile({ navigation, route }: Props) {
   // S14 round 3: the coach wearable-prompts screen is reachable from this
   // client's Health tab only when the build flag AND the server flag are on.
   const serverFlags = useFeatureFlags();
@@ -117,30 +126,11 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   // R-DISPUTE-PAUSE: pull-to-refresh also re-reads the dispute-paused plans.
   const [planReloadKey, setPlanReloadKey] = useState(0);
 
-  // Hunter #2 P2-7: previously the route param `clientId` was only consumed
-  // on first mount because the load effect had an empty dep array. The
-  // ClientsStack reuses the same screen instance when a coach taps from one
-  // client straight into another (deep link, "view next client" CTA, etc.),
-  // so the screen would render Client B's avatar/header bound to Client A's
-  // profile / food logs / workouts until pull-to-refresh.
-  //
-  // Keying off `clientId` (with the memoised loaders from useClientDetailData,
-  // which themselves regenerate when `clientId` changes) makes the screen
-  // always reload when the routed client switches under us. The transient UI
-  // state (active tab, expanded weeks, draft nudge text) is
-  // also reset to its initial shape so we don't briefly render Client B's
-  // profile under Client A's selected tab or half-typed nudge.
+  // Hunter #2 P2-7: a new client's file is a new mount (the key above), so its state starts fresh; a return to the
+  // same client with another initial tab (Workouts) still opens that tab.
   useEffect(() => {
     setActiveTab(route.params.initialTab ?? (styleC ? 'week' : 'summary'));
   }, [clientId, route.params.initialTab, styleC]);
-
-  useEffect(() => {
-    setExpandedWeeks(new Set());
-    setShowNudgeModal(false);
-    setNudgeTitle('');
-    setNudgeBody('');
-    setNudgeError('');
-  }, [clientId]);
 
   useEffect(() => {
     loadData();
@@ -244,7 +234,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       { text: isArchived ? 'Unarchive client' : 'Archive client', onPress: handleToggleArchive },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  const openMessages = () => navigation.navigate('ClientMessages', { clientId, clientName });
+  // #CARD-MESSAGE-DEST op 1: both Message {first} buttons (pinned, six tabs only; the safety card) open the chat in Messages.
+  const openChat = () => openInboxChat(navigation, clientId, clientName);
   const fileHead = (rounded?: boolean) => (
     <FileHead
       name={clientName} onBack={() => navigation.goBack()} rounded={rounded} archived={isArchived === true}
@@ -252,7 +243,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       week={rounded ? null : week} drawKey={week ? `${clientId}:${week.week}` : undefined}
     />
   );
-  const message = <MessageButton label={`Message ${first}`} onPress={openMessages} />;
+  const message = <MessageButton label={`Message ${first}`} onPress={openChat} />;
 
   // The file waits for This week's read too, so the ring does not pop in under a drawn masthead.
   if (styleC && ((isLoading && !refreshing) || thisWeek.read.kind === 'loading' || (loadError && !profile))) {
@@ -421,11 +412,11 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         {styleC ? fileHead() : null}
         {styleC ? <FileTabs tabs={tabs} active={activeTab} onTab={setActiveTab} /> : null}
         <View style={styleC ? { paddingHorizontal: layout.gutter } : undefined}>
-        {/* SAFETY-CARD: Message opens the chat through Messages (coachInbox.ts; off, over this file). */}
+        {/* SAFETY-CARD: Message opens the chat through Messages (coachInbox.ts; off, over this file), as the pinned one. */}
         {safetyAlert ? (
           <SafetyAlertCard
             key={safetyAlert.alert_id} alert={safetyAlert} first={first} clientName={clientName}
-            onMessage={() => openInboxChat(navigation, clientId, clientName)} onDismiss={dismissSafetyAlert}
+            onMessage={openChat} onDismiss={dismissSafetyAlert}
           />
         ) : null}
         {styleC && archiveStatusError ? (
