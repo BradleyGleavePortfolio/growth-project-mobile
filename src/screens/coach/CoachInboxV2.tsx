@@ -43,6 +43,7 @@ import { layout, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import ActionMenu, { ActionMenuOption } from '../../components/messaging/ActionMenu';
+import { inboxLine } from '../../components/messaging/threadV2';
 import {
   messagingV2Api,
   toMessagingError,
@@ -66,8 +67,7 @@ export function inboxPreview(t: InboxThread): string {
   if (t.blocked_by_me) return 'Blocked';
   const m = t.last_message;
   if (!m) return 'No messages yet';
-  const body = m.kind === 'deleted' ? 'Message deleted' : m.kind === 'voice' ? 'Voice note' : m.preview || 'Message';
-  return m.is_mine ? `You: ${body}` : body;
+  return m.is_mine ? `You: ${inboxLine(m)}` : inboxLine(m);
 }
 
 export function inboxTimeLabel(iso: string | null, now: Date = new Date()): string {

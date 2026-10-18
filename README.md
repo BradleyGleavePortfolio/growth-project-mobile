@@ -28,6 +28,8 @@ A React Native nutrition & fitness coaching app built with Expo, TypeScript, and
 
 ## Features
 
+Calendar's optional Style C week is controlled independently by `EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2` (off by default; no checked-in build enables it). The Home Habits route accepts an optional `initialTab: 'checkin'` for direct entry from today's calendar action; unchanged callers still open Habits.
+
 - **Calorie & Macro Tracking** — Log meals with protein, carbs, fat breakdowns. Macros are stored on a strict **per-100g** canonical basis (see "Food logger math" below).
 - **Meal Plans** — Coach-assigned weekly meal plans with daily targets
 - **Recipe Library** — Searchable recipe database with filters
@@ -420,6 +422,8 @@ src/
 ```
 
 ## Navigation
+
+Incoming app links validate scheme and HTTPS host once in `navigation/incomingLinks.ts`; cold-start URLs, foreground opens and push URL payloads share the existing role-aware navigation queue. Client meal-plan assignment links open the existing daily meal-plan screen after sign-in, not the coach navigator. See `src/navigation/README.md`.
 
 Coach tabs (COACHTABS, behind `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off): Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from a gear on Overview, Community from Messages and Team from Clients; every existing route and push target still lands. With it on, coaches open the app on Overview. Off, the coach bar and the Clients landing are unchanged. See `src/navigation/README.md`.
 

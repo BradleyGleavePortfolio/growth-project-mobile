@@ -210,6 +210,11 @@ describe('feature-flag readers survive release inlining', () => {
       expect(build({ EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: 'false' }).clientProgressV2).toBe(false);
     });
 
+    it('the Style C Timeline defaults off and opts in only at build time', () => {
+      expect(build({ EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2: undefined }).clientTimelineV2).toBe(false);
+      expect(build({ EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2: 'true' }).clientTimelineV2).toBe(true);
+    });
+
     it('missing → hard-false kill switches stay OFF', () => {
       const flags = build({});
       expect(flags.extensionImport).toBe(false);

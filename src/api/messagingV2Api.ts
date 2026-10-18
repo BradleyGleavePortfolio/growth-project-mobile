@@ -27,6 +27,7 @@ import axios from 'axios';
 import { z } from 'zod';
 import api from '../services/api';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
+import type { ShareSnapshot } from './shareCardApi';
 
 export const MESSAGING_V2_TIMEOUT_MS = 15_000;
 /** Backend caps (message-actions.service.ts). */
@@ -56,6 +57,8 @@ export const InboxLastMessageSchema = z.object({
   preview: z.string(),
   created_at: isoString,
   edited: z.boolean(),
+  /** SHARE-BE: 'share' on a card-only message (kind 'text', preview ''). */
+  card_type: z.string().optional(),
 });
 export type InboxLastMessage = z.infer<typeof InboxLastMessageSchema>;
 
@@ -116,6 +119,8 @@ export const ThreadMessageSchema = z.object({
   reply_to_id: z.string().nullable().optional(),
   reply_to: ReplyPreviewSchema.nullable().optional(),
   deleted: z.boolean().optional(),
+  /** SHARE-BE `{ card_type, ref_id, snapshot }` or null; read by shareCardApi.readShareCard. */
+  card: z.unknown().optional(),
 });
 export type ThreadMessage = z.infer<typeof ThreadMessageSchema>;
 
@@ -251,6 +256,8 @@ export interface CoachInboxParams {
 
 export interface SendV2Payload {
   body: string;
+  /** Send to {coach} (SHARE-B): the share card travels alone, with no body. */
+  card?: ShareSnapshot;
   /** Device-minted UUID; the same key on a retry replays the original row. */
   clientMessageId: string;
   replyToId?: string | null;
@@ -318,7 +325,9 @@ export const messagingV2Api = {
    * the original row with no second push or signal on the server.
    */
   async sendMessage(scope: ThreadScope, payload: SendV2Payload): Promise<ThreadMessage> {
-    const body: Record<string, string> = { body: payload.body, client_message_id: payload.clientMessageId };
+    const body: Record<string, unknown> = payload.card
+      ? { card: { type: 'share', snapshot: payload.card }, client_message_id: payload.clientMessageId }
+      : { body: payload.body, client_message_id: payload.clientMessageId };
     if (payload.replyToId) body.reply_to_id = payload.replyToId;
     const headers = { 'Idempotency-Key': payload.clientMessageId };
     const row = await call(ThreadMessageSchema, () => api.post<unknown>(threadBase(scope), body, { ...cfg, headers }));

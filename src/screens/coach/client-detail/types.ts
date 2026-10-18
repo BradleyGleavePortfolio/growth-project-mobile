@@ -49,6 +49,8 @@ export type Props = {
 };
 
 export type TabKey =
+  // K1-OVERVIEW: This week, the Style C file's first tab (featureFlags.coachTabsV2).
+  | 'week'
   | 'summary'
   | 'logs'
   | 'progress'

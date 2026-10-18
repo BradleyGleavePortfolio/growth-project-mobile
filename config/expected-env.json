@@ -81,6 +81,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Independent Style C calendar week rollout; off in every build unless explicitly enabled."
+    },
     "EXPO_PUBLIC_FF_CLIENT_CALENDAR": {
       "kind": "flag",
       "default": "off",
@@ -110,6 +115,21 @@
       "kind": "flag",
       "default": "off",
       "reason": "C8 v2 chart parts stay off until the Progress page integration is ready."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_BILLING_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "C5: the Style C buying pages (success moment, what unlocks) stay off until the owner turns them on."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "TIMELINE: the Style C Timeline page and its door on Progress stay off until the owner turns them on."
+    },
+    "EXPO_PUBLIC_FF_COACH_LESSONS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (LEARN-B: the coach Lessons editor in Programs)."
     },
     "EXPO_PUBLIC_FF_COACH_TABS_V2": {
       "kind": "flag",
@@ -155,6 +175,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_HOME_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (C6-M1S: the Forest Pop Community Home)."
     },
     "EXPO_PUBLIC_FF_COMMUNITY_SEARCH": {
       "kind": "flag",
@@ -225,6 +250,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (Learn: the coach's guidelines and lessons, MOCK-LEARN, LEARN-A). Off in every EAS profile until the owner turns it on."
+    },
+    "EXPO_PUBLIC_FF_MEAL_PLANS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (coach Programs > Meal plans and the day-plan builder, MEALBUILD). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_MWB_AUTOSAVE": {
       "kind": "flag",
@@ -310,6 +340,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (client wearable AI insight panel, #317). Keep off in every EAS profile until the panel honours the D2 AI consent (box 2)."
+    },
+    "EXPO_PUBLIC_FF_YOU_TAB_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (the You tab home in MOCK-C9 Style C, C9-S1). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_GOOGLE_PAY_ENABLED": {
       "kind": "optional",

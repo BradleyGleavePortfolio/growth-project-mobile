@@ -65,11 +65,13 @@ import LearnLessonScreen from '../screens/client/learn/LearnLessonScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
+import YouScreen from '../screens/client/YouScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
 // Phase 7B — Transformation Timeline
 import TimelineScreen from '../screens/client/TimelineScreen';
+import TimelinePage from '../screens/client/timeline/TimelinePage';
 // Phase 7C — Peer Leaderboard
 import LeaderboardScreen from '../screens/client/LeaderboardScreen';
 import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
@@ -130,7 +132,7 @@ import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
 import WearablesShell from '../screens/client/wearables/WearablesShell';
 import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
 import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
-import { colors, typography } from '../theme/tokens';
+import { colors, lightTokens, typography } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 // v1-5 Community client tab. The whole stack + tab are gated behind
 // featureFlags.communityTab (default OFF). When the flag is OFF the tab is not
@@ -156,6 +158,7 @@ import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
 import { logger } from '../utils/logger';
 // S-SCHED — client Calendar tab (featureFlags.clientCalendar, default OFF).
 import CalendarHomeScreen from '../screens/client/calendar/CalendarHomeScreen';
+import CalendarWeekScreen from '../screens/client/calendar/CalendarWeekScreen';
 import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
@@ -208,8 +211,7 @@ const TAB_BUTTON_PADDING = 5;
 
 export type HomeStackParamList = {
   HomeMain: undefined;
-  /** tab: 'checkin' opens the Daily check-in tab (Home's Check-in tile, UI-1). */
-  Habits: { tab?: 'checkin' } | undefined;
+  Habits: { initialTab?: 'checkin' } | undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
   Messages: { openCoachCode?: boolean } | undefined;
@@ -282,7 +284,8 @@ export type MoreStackParamList = {
   // B-314-4: Community safety opens from member wins even when the
   // flag-gated Community tab (which has its own CommunitySafety route) is off.
   CommunitySafety: undefined;
-  Progress:    undefined;
+  /** logWeightAt: the Timeline's empty state opens the Log weight sheet (tap time, so each tap opens it). */
+  Progress:    { logWeightAt?: number } | undefined;
   ProfileMain: undefined;
   EditProfile: undefined;
   Settings:    undefined;
@@ -404,14 +407,15 @@ export type MoreStackParamList = {
  * Opened from More they get a native header with only the back chevron, so
  * the way back is always visible and the safe area is respected.
  */
-function backOnlyHeader(title = '') {
+/** `onMasthead`: the C8 v2 Progress page starts on the deep forest masthead, so its bar does too (ForestStatusBar paints the inset). */
+function backOnlyHeader(title = '', onMasthead = false) {
   return {
     headerShown: true,
     title,
     headerBackTitle: 'Back',
     headerShadowVisible: false,
-    headerStyle: { backgroundColor: colors.bone },
-    headerTintColor: colors.ink,
+    headerStyle: { backgroundColor: onMasthead ? lightTokens.surface.masthead : colors.bone },
+    headerTintColor: onMasthead ? lightTokens.textOnAccent : colors.ink,
   } as const;
 }
 
@@ -420,6 +424,8 @@ const HomeStackNav  = createNativeStackNavigator<HomeStackParamList>();
 const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
 const MoreStackNav  = createNativeStackNavigator<MoreStackParamList>();
 const CalendarStackNav = createNativeStackNavigator<CalendarStackParamList>();
+// TIMELINE: the Style C page behind clientTimelineV2 (off); off, today's screen.
+const TimelineRoute = featureFlags.clientTimelineV2 ? TimelinePage : TimelineScreen;
 
 function CalendarStackNavigator() {
   return (
@@ -433,7 +439,7 @@ function CalendarStackNavigator() {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <CalendarStackNav.Screen name="CalendarHome" component={ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
+      <CalendarStackNav.Screen name="CalendarHome" component={featureFlags.clientCalendarV2 ? CalendarWeekScreen : ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
       <CalendarStackNav.Screen name="CalendarBook" component={ProtectedCalendarBookScreen} />
       <CalendarStackNav.Screen name="CalendarSession" component={ProtectedCalendarSessionScreen} />
     </CalendarStackNav.Navigator>
@@ -453,7 +459,7 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
-        {({ navigation, route }) => <ProtectedHabitsScreen initialTab={route.params?.tab} onSaved={() => {
+        {({ navigation, route }) => <ProtectedHabitsScreen key={route.params?.initialTab ?? 'habits'} initialTab={route.params?.initialTab} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_checkin');
         }} />}
       </HomeStackNav.Screen>
@@ -533,7 +539,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <MoreStackNav.Screen name="MoreIndex"    component={MoreScreen} />
+      {/* C9-S1: the You home (MOCK-C9 Style C) behind featureFlags.youTabV2. */}
+      <MoreStackNav.Screen name="MoreIndex"    component={featureFlags.youTabV2 ? YouScreen : MoreScreen} />
       <MoreStackNav.Screen name="ProfileMain"  component={ProfileScreen} />
       <MoreStackNav.Screen name="EditProfile"  component={EditProfileScreen} />
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
@@ -544,8 +551,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
-      <MoreStackNav.Screen name="Progress" options={backOnlyHeader()}>
-        {({ navigation }) => <ProgressScreen onSaved={() => {
+      <MoreStackNav.Screen name="Progress" options={backOnlyHeader('', featureFlags.clientProgressV2)}>
+        {({ navigation, route }) => <ProgressScreen logWeightAt={route.params?.logWeightAt} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('logged_first_weight');
         }} />}
       </MoreStackNav.Screen>
@@ -571,7 +578,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
-      <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="Timeline"     component={TimelineRoute} options={backOnlyHeader()} />
       {/* Phase 7C — Peer Leaderboard (opt-in) */}
       <MoreStackNav.Screen name="Leaderboard"          component={LeaderboardScreen} />
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
@@ -840,7 +847,8 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
       <Tab.Screen
         name="MoreTab"
         options={{
-          tabBarAccessibilityLabel: 'Profile and more',
+          // C9-S1: the tab, the title and the screen reader all say You.
+          tabBarAccessibilityLabel: featureFlags.youTabV2 ? 'You' : 'Profile and more',
           title: 'You',
           tabBarIcon: ({ color }) => (
             <Ionicons name="person-outline" size={24} color={color} />

@@ -36,6 +36,9 @@ import {
   weeksByDays,
 } from "./ProgramUi";
 import type { ProgramsNav } from "./types";
+import MealPlansHome from "../meals/MealPlansHome";
+import { ProgramsTabs, type ProgramsHalf } from "../meals/mealUi";
+import { CoachLessonsEntry } from "../CoachLessons";
 
 type Tab = "programs" | "saved";
 
@@ -46,6 +49,7 @@ export default function ProgramsLibraryScreen() {
   const [query, setQuery] = useState("");
   const [goalTag, setGoalTag] = useState<string | null>(null);
   const [status, setStatus] = useState<ProgramStatusFilter>("active");
+  const [half, setHalf] = useState<ProgramsHalf>("workouts");
 
   const programs = useProgramList(query, goalTag, status);
   // U3 (AIB-FINISH-127): shown where Ask AI exists (status route present) in builds with the builder's autosave.
@@ -68,6 +72,8 @@ export default function ProgramsLibraryScreen() {
   const savedFailure = saved.error
     ? describeProgramFailure(saved.error, "load your saved workouts")
     : null;
+
+  if (featureFlags.mealPlansV2 && half !== "workouts") return <MealPlansHome tab={half} onTab={setHalf} />;
 
   const header = (
     <View style={styles.headerBlock}>
@@ -96,6 +102,8 @@ export default function ProgramsLibraryScreen() {
           />
         )}
       </View>
+      {featureFlags.mealPlansV2 ? <ProgramsTabs value="workouts" onChange={setHalf} /> : null}
+      <CoachLessonsEntry />
       {aiEntry.visible && featureFlags.mwbAutosave ? (
         <View style={styles.row}>
           <SmallButton

@@ -36,6 +36,7 @@ jest.mock('react-native-safe-area-context', () => ({
 import ForegroundNotificationBanner from '../ForegroundNotificationBanner';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { foregroundBannerStore } from '../../store/foregroundBannerStore';
+import { __resetPushTapRouterForTests, attachPushNavigator, setPushSession } from '../../services/pushTapRouter';
 
 const flatten = (style: unknown): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
@@ -48,6 +49,35 @@ const flatten = (style: unknown): Record<string, unknown> => {
 };
 
 describe('ForegroundNotificationBanner safe-area inset', () => {
+  it.each(['tgp://meal-plan/137c1340-c8a2-45d6-a006-7a6e695ed845', 'https://unknown.example/meal-plan/one'])(
+    'routes banner URLs through the same trusted role-aware receiver: %s', async (deepLink) => {
+      mockNavigate.mockClear();
+      __resetPushTapRouterForTests();
+      attachPushNavigator({
+        isReady: () => true, navigate: mockNavigate,
+        getRootState: () => ({ routeNames: ['Home', 'MoreTab'] }),
+      });
+      setPushSession({ kind: 'app', userId: 'one', role: 'student' });
+      const timing = jest.spyOn(Animated, 'timing').mockReturnValue({
+        start: (done) => done?.({ finished: true }), stop: jest.fn(), reset: jest.fn(),
+      });
+      await act(() => foregroundBannerStore.getState().showBanner({
+        title: 'Plan note', body: 'Open plan', notificationId: deepLink,
+        actionScreen: 'NotificationCenter', deepLink,
+      }));
+      const r = await render(<ForegroundNotificationBanner />);
+      await fireEvent.press(r.getByLabelText('Plan note. Open plan. Tap to view.'));
+      if (deepLink.startsWith('tgp://')) {
+        expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
+          screen: 'ClientDailyMealPlan', params: { assignmentId: '137c1340-c8a2-45d6-a006-7a6e695ed845' }, initial: false,
+        });
+      } else {
+        expect(mockNavigate).not.toHaveBeenCalled();
+      }
+      timing.mockRestore();
+    },
+  );
+
   it.each([true, false])('legacy Guidance banner redirects with Roman=%s', async (roman) => {
     mockNavigate.mockClear();
     mockFlags.romanChat = roman;
