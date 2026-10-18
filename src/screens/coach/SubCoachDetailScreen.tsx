@@ -145,24 +145,17 @@ export default function SubCoachDetailScreen() {
               );
             } catch (err) {
               const status = (err as { response?: { status?: number } })?.response?.status;
-              if (status === 404 || status === 501) {
-                Alert.alert(
-                  'Not enabled yet',
-                  'Sub-coach revocation is not enabled on your plan yet.',
-                );
-              } else if (status === 409) {
-                // P0-4 — concurrent revoke / capacity conflict. The backend
+              if (status === 409) {
+                // P0-4 — concurrent revoke. The backend
                 // returns 409 when the sub-coach was already revoked in
-                // another session, or when reassigning their clients back
-                // to the head coach would exceed the head coach's seat
-                // capacity. Surface the structured `response.data.message`
+                // another session. Surface the structured `response.data.message`
                 // per Rule 9 and refresh the detail so the head coach sees
                 // current state instead of a stale "Please try again".
                 Alert.alert(
                   'Already changed',
                   errorMessage(
                     err,
-                    'This sub-coach was already revoked, or reassigning their clients would exceed your seat capacity. Refreshing.',
+                    'This sub-coach was already revoked. Refreshing.',
                   ),
                   [{ text: 'OK', onPress: () => void load() }],
                 );
@@ -237,10 +230,6 @@ export default function SubCoachDetailScreen() {
         <Text style={styles.capacityStat} accessibilityLabel={`${detail.capacity.assignedClients} clients assigned`}>
           {detail.capacity.assignedClients}
           <Text style={styles.capacityStatLabel}> clients</Text>
-        </Text>
-        <Text style={styles.capacityStat}>
-          {detail.capacity.maxClients}
-          <Text style={styles.capacityStatLabel}> max ({detail.capacity.planTier})</Text>
         </Text>
       </View>
 

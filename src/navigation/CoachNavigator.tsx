@@ -58,7 +58,7 @@ import CommunityWearablePromptsScreen from '../screens/community/CommunityWearab
 import CrossPillarNavigator from '../screens/coach/cross-pillar/CrossPillarNavigator';
 // Phase 11 Track 9 — Support Inbox (Crisp)
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
-// Phase 11 / Track 7 — sub-coach team management (Scale+ tier gate enforced in-screen)
+// Phase 11 / Track 7 — sub-coach team management (no coach plan gate, owner TM-P1)
 import TeamManagementScreen from '../screens/coach/TeamManagementScreen';
 import SubCoachDetailScreen from '../screens/coach/SubCoachDetailScreen';
 import ClientReassignModal from '../screens/coach/ClientReassignModal';
@@ -752,7 +752,7 @@ function EntryTabBar(props: BottomTabBarProps) {
 /**
  * TeamStackNavigator
  *
- * Phase 11 / Track 7. Scale+ tier gate is enforced inside TeamManagementScreen
+ * Phase 11 / Track 7. No coach plan gate (owner TM-P1),
  * and the parent tab registers only with Team Mode on and a confirmed
  * head coach whose roster includes a sub-coach.
  */
@@ -992,8 +992,8 @@ export default function CoachNavigator() {
         }}
       />
       {tabsV2 && clientsTab}
-      {/* P0-1 + Phase 11 / Track 7 — Team tab. Scale+ tier gate enforced
-          in-screen, role gate enforced here: sub-coaches and unresolved
+      {/* P0-1 + Phase 11 / Track 7 — Team tab. No coach plan gate
+          (owner TM-P1); role gate enforced here: sub-coaches and unresolved
           sessions never see the tab. */}
       {showTeamTab && (
         <Tab.Screen

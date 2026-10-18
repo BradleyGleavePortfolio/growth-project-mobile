@@ -70,8 +70,5 @@ export function describeMediaUploadFailure(err: unknown): string {
   if (status === 400) {
     return 'That file could not be accepted. Pick a PDF up to 50 MB or a standard video file.';
   }
-  if (status === 402 || status === 403) {
-    return 'Uploading files needs an active coach subscription.';
-  }
   return TRANSFER_FAILED;
 }
