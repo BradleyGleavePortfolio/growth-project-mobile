@@ -4,7 +4,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react-native';
 let mockUser: { id: string; role: string; profile: object } | null;
 let mockInitialUrl: string | null;
 let mockUrlListener: ((event: { url: string }) => void) | undefined;
-let mockAuthListener: (() => void) | undefined;
+const mockAuthListeners: Array<() => void> = [];
 let mockPushListener: ((response: unknown) => void) | undefined;
 const mockNavigate = jest.fn();
 const mockSignOut = jest.fn();
@@ -25,7 +25,7 @@ jest.mock('../services/api', () => ({
   authApi: { me: async () => ({ data: mockUser }) },
 }));
 jest.mock('../utils/authEvents', () => ({
-  authEvents: { onAuthChange: (fn: () => void) => { mockAuthListener = fn; return () => {}; } },
+  authEvents: { onAuthChange: (fn: () => void) => { mockAuthListeners.push(fn); return () => {}; } },
 }));
 jest.mock('react-native/Libraries/Linking/Linking', () => ({
   __esModule: true,
@@ -107,7 +107,7 @@ beforeEach(() => {
   mockUser = CLIENT;
   mockInitialUrl = null;
   mockUrlListener = undefined;
-  mockAuthListener = undefined;
+  mockAuthListeners.length = 0;
   mockRoots = ['Home', 'WorkoutTab', 'MoreTab', 'Log', 'ClientsStack', 'Messages', 'SettingsStack'];
 });
 afterEach(cleanup);
@@ -153,7 +153,7 @@ it('holds a signed-out cold-start link until sign-in mounts the client navigator
   expect(mockNavigate).not.toHaveBeenCalled();
   mockUser = CLIENT;
   mockRoots = ['Home', 'MoreTab', 'WorkoutTab', 'Log'];
-  await act(async () => { mockAuthListener?.(); });
+  await act(async () => { mockAuthListeners.forEach((fn) => fn()); });
   await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('MoreTab', mealTarget));
   expect(mockNavigate).toHaveBeenCalledTimes(1);
 });

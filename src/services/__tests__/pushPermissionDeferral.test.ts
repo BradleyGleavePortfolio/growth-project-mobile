@@ -124,7 +124,7 @@ describe('AUDIT-09-125: a push without actionScreen still opens a screen', () =>
     live?.(response('c1', { kind: 'community_post_replied', target_id: 'p1' }));
     expect(onResponse).toHaveBeenLastCalledWith('Community', undefined, 'c1');
     live?.(response('w1', { kind: 'workout_reminder', deep_link: 'tgp://workouts' }));
-    expect(onResponse).toHaveBeenLastCalledWith('WorkoutMain', undefined, 'w1');
+    expect(onResponse).toHaveBeenLastCalledWith('WorkoutMain', undefined, 'w1', 'tgp://workouts');
     live?.(response('n1', { kind: 'nudge_missed_checkin' }));
     expect(onResponse).toHaveBeenLastCalledWith('NotificationCenter', undefined, 'n1');
     live?.(response('m1', { kind: 'message_received', actionScreen: 'Messages' }));

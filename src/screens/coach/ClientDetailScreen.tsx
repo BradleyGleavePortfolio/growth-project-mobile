@@ -61,7 +61,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   // The Screen wrapper's inset top (insets.top + 12), never a fixed 56 (B13 B28).
   const insets = useScreenInsets();
   const top = { paddingTop: insets.top + layout.statusBarGap };
-  const { clientId, clientName } = route.params;
+  const { clientId } = route.params;
   const currentUser = useCurrentUser();
 
   const {
@@ -94,6 +94,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     markCheckInReviewed,
     loadWeeklySummaries,
   } = useClientDetailData(clientId, colors, currentUser?.id);
+  const clientName = route.params.clientName || profile?.name || '';
 
   const [activeTab, setActiveTab] = useState<TabKey>(route.params.initialTab ?? 'summary');
   // AIB-6: Workouts tab "Build a program with AI" opens the Coach AI program generator (Summary tab) once.
@@ -498,12 +499,12 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             profile={profile}
             totals={totals}
             clientId={clientId}
-            clientName={route.params.clientName}
+            clientName={clientName}
             nudgeSuccess={nudgeSuccess}
             onOpenMessages={() =>
               navigation.navigate('ClientMessages', {
                 clientId,
-                clientName: route.params.clientName,
+                clientName,
               })
             }
             onOpenNudge={() => {
@@ -513,7 +514,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             onOpenMacrosReview={() =>
               navigation.navigate('CoachMacrosReview', {
                 clientId,
-                clientName: route.params.clientName,
+                clientName,
               })
             }
             onOpenWorkoutBuilder={() => {
@@ -522,7 +523,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             }}
             onOpenPayments={
               serverFlags.flags.coach_payment_actions
-                ? () => navigation.navigate('ClientPayments', { clientId, clientName: route.params.clientName })
+                ? () => navigation.navigate('ClientPayments', { clientId, clientName })
                 : undefined
             }
             openWorkoutRequest={aiProgramRequest}
@@ -673,7 +674,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           setShowNudgeModal(false);
           setNudgeError('');
         }}
-        clientName={route.params.clientName}
+        clientName={clientName}
         nudgeTitle={nudgeTitle}
         setNudgeTitle={setNudgeTitle}
         nudgeBody={nudgeBody}
@@ -697,7 +698,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       <AskAiActionSheet
         visible={askAiVisible}
         clientId={clientId}
-        clientName={route.params.clientName}
+        clientName={clientName}
         onClose={() => setAskAiVisible(false)}
         onAfterSubmit={() => navigation.navigate('PendingAiDrafts')}
       />

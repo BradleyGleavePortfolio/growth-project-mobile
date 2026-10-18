@@ -1,5 +1,7 @@
 # Coach screens
 
+ID-only `tgp://coach/clients/:id` links stay in the coach Clients stack. `ClientDetailScreen` uses the existing scoped summary's name when no display name was supplied, including when forwarding to its child screens; no extra data request or copy is added (MOBILE-DEEPLINK).
+
 CAC-POLISH: the Roman switch in Settings > Privacy uses the same 20 pt outline-icon slot and inset divider as sibling settings rows. Its accessible switch, whole-row toggle and consent requests are unchanged.
 
 Client-file layout: the shared tab scroller keeps its intrinsic height without shrinking; Summary and food-review action pills wrap into readable rows with 44 pt minimum height. Macro values use forest text on cream, retaining the existing macro bar colours. Food-review period chips and the Pending AI drafts action have 44 pt minimum targets. Copy, routes and data access are unchanged (UIFIX-R2R6).
