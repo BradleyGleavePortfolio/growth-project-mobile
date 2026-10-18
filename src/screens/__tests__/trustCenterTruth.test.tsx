@@ -1,8 +1,9 @@
 /**
  * TRUST-COPY-131 (FW-ACCOUNT-128 U2, U3, U4, the Trust Center part of U5, and
  * FW-COACH): Trust & Privacy says only true, state-driven things.
- *  - U2 / FW-COACH: "Who can see your data" follows the real coach link and
- *    the Coach sharing switches (GET /consent/me). A client with no coach and
+ *  - U2 / FW-COACH: "Who can see your data" follows the real coach link
+ *    (GET /consent/me); the coach sees every log (SHARE-UNWIND, no
+ *    switches). A client with no coach and
  *    a coach account get no coach line and no "Not your coach"; a coach
  *    account never calls /consent (student-only on the server).
  *  - U3: no "Last security update" or "Audit policy" rows and no canned
@@ -39,17 +40,12 @@ const TrustCenterScreen = require('../TrustCenterScreen').default;
 // Required lazily so the render tests below fail on their assertions on a head without the module.
 const copyLib = () => require('../trustCenterSharing');
 
-const SCOPES = ['fitness.workouts', 'fitness.food_macros', 'fitness.body_metrics', 'fitness.habits_progress'] as const;
-type Scope = (typeof SCOPES)[number];
 const CLIENT: CurrentUser = { id: 'client-1', email: 'client@example.test', role: 'student', coach_id: 'coach-1' };
 
-function consentBody(on: Scope[], ownerAccess?: boolean) {
-  return {
-    client_id: 'client-1',
-    coach_id: 'coach-1',
-    consents: SCOPES.map((scope) => ({ scope, granted: on.includes(scope) })),
-    ...(ownerAccess === undefined ? {} : { owner_access: ownerAccess }),
-  };
+/** What GET /consent/me sends since SHARE-UNWIND (backend #1061): the four as granted for the current coach. */
+function consentBody() {
+  const scopes = ['fitness.workouts', 'fitness.food_macros', 'fitness.body_metrics', 'fitness.habits_progress'];
+  return { client_id: 'client-1', coach_id: 'coach-1', consents: scopes.map((scope) => ({ scope, granted: true })) };
 }
 /** GET /consent/me answers with `answer` (a consent body) or fails with it (anything else). */
 function serve(answer: object) {
@@ -59,15 +55,9 @@ function serve(answer: object) {
     return ok ? Promise.resolve({ data: answer }) : Promise.reject(answer);
   });
 }
-function shared(on: Scope[]): Record<Scope, boolean> {
-  return Object.fromEntries(SCOPES.map((s) => [s, on.includes(s)])) as Record<Scope, boolean>;
-}
-
-const BASE = 'Your coach — your consultation answers, data from connected devices, and the logs you share in Coach sharing';
-const NONE = 'Your coach — your consultation answers and data from connected devices. Every Coach sharing switch is off, so no logs are shared.';
-const OWNER_IF = 'If your coach uses the TGP owner account, that account sees your logs even when they are turned off in Coach sharing.';
-const OWNER =
-  'Your coach — your consultation answers, data from connected devices, and your workouts, food logs, weigh-ins, check-ins and habits. Your coach uses the TGP owner account, which sees these logs even when they are turned off in Coach sharing.';
+/** Owner SU-5 B, word for word. */
+const COACH_LINE =
+  'Your coach — everything you log (workouts, food, weigh-ins, check-ins and habits), your consultation answers and data from connected devices';
 const ROMAN_WITH_COACH = 'Not your coach — your Roman conversations, which are kept until you delete them or your account. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.';
 const ROMAN = 'Your Roman conversations are kept until you delete them or your account';
 const OLD_COACH_LINE = 'Your coach — your consultation answers, logs, check-ins and connected health data';
@@ -87,21 +77,15 @@ beforeEach(() => {
   mockGet.mockImplementation(() => Promise.reject(new Error('offline')));
 });
 
-describe('coach line copy (U2, FW-COACH)', () => {
-  const read = (on: Scope[], ownerAccess: boolean | null) => ({ kind: 'read', state: { coachId: 'coach-1', shared: shared(on), ownerAccess } });
+describe('coach line copy (U2, FW-COACH, SHARE-UNWIND)', () => {
+  const read = { kind: 'read', state: { coachId: 'coach-1' } };
 
   it.each([
-    ['some switches on', read(['fitness.workouts', 'fitness.food_macros'], false), `${BASE}: workouts and food logs`],
-    ['three switches on', read(['fitness.workouts', 'fitness.food_macros', 'fitness.body_metrics'], false), `${BASE}: workouts, food logs and weigh-ins`],
-    ['all four on', read([...SCOPES], false), `${BASE}: workouts, food logs, weigh-ins, check-ins and habits`],
-    ['food and check-ins on', read(['fitness.food_macros', 'fitness.habits_progress'], false), `${BASE}: food logs, check-ins and habits`],
-    ['every switch off', read([], false), NONE],
-    ['owner account coach', read([], true), OWNER],
-    ['owner account not reported, one on', read(['fitness.workouts'], null), `${BASE}: workouts. ${OWNER_IF}`],
-    ['owner account not reported, all off', read([], null), `${NONE} ${OWNER_IF}`],
-    ['switches did not load', { kind: 'unread' }, `${BASE}. ${OWNER_IF}`],
-  ])('%s', (_name, view, line) => {
-    expect(copyLib().trustCoachLine(view)).toBe(line);
+    ['sharing loaded', read],
+    ['sharing did not load', { kind: 'unread' }],
+  ])('%s: one line naming every log, no switches, no owner-account line', (_name, view) => {
+    expect(copyLib().trustCoachLine(view)).toBe(COACH_LINE);
+    expect(copyLib().trustCoachLine(view)).not.toMatch(/Coach sharing|switch|owner account/);
     expect(copyLib().trustRomanLine(view)).toBe(ROMAN_WITH_COACH);
   });
 
@@ -113,11 +97,7 @@ describe('coach line copy (U2, FW-COACH)', () => {
   });
 
   it('every variant is plain, impersonal and claims no exclusive access', () => {
-    const views = [
-      ...[[], ['fitness.workouts'], [...SCOPES]].flatMap((on) => [false, true, null].map((o) => read(on as Scope[], o))),
-      { kind: 'unread' },
-      { kind: 'no_coach' },
-    ];
+    const views = [read, { kind: 'unread' }, { kind: 'no_coach' }];
     for (const view of views) {
       for (const text of [copyLib().trustCoachLine(view), copyLib().trustRomanLine(view)].filter(Boolean) as string[]) {
         expect(text).not.toMatch(/\b(we|us|our|ours|i|me|my)\b/i);
@@ -129,7 +109,7 @@ describe('coach line copy (U2, FW-COACH)', () => {
 
 describe('who can see your data, rendered (U2, FW-COACH)', () => {
   it.each([
-    ['sharing loaded', () => consentBody([], false)],
+    ['sharing loaded', () => consentBody()],
     ['sharing unavailable', () => new Error('offline')],
   ])('shows the full approved Roman exception when %s', async (_name, answer) => {
     mockUser = CLIENT;
@@ -141,23 +121,15 @@ describe('who can see your data, rendered (U2, FW-COACH)', () => {
     expect(line.props.numberOfLines).toBeUndefined();
   });
 
-  it('a client whose coach gets workouts and food logs: the line names exactly those; the old fixed lines are gone', async () => {
+  it('a client with a coach: the line names every log the coach sees; the old fixed lines are gone', async () => {
     mockUser = CLIENT;
-    serve(consentBody(['fitness.workouts', 'fitness.food_macros'], false));
+    serve(consentBody());
     const screen = await renderScreen();
-    expect(await screen.findByText(`${BASE}: workouts and food logs`)).toBeTruthy();
+    expect(await screen.findByText(COACH_LINE)).toBeTruthy();
     expect(screen.getByText(ROMAN_WITH_COACH)).toBeTruthy();
     expect(mockGet).toHaveBeenCalledWith('/consent/me');
     expect(screen.queryByText(OLD_COACH_LINE)).toBeNull();
     expect(screen.queryByText(OLD_INFO_ROW)).toBeNull();
-  });
-
-  it('a client with every switch off is told no logs are shared, and what the coach still sees', async () => {
-    mockUser = CLIENT;
-    serve(consentBody([], false));
-    const screen = await renderScreen();
-    expect(await screen.findByText(NONE)).toBeTruthy();
-    expect(screen.queryByText(OLD_COACH_LINE)).toBeNull();
   });
 
   it('a client with no coach (the server answers 400): no coach line, and the Roman line names no coach', async () => {
@@ -180,11 +152,11 @@ describe('who can see your data, rendered (U2, FW-COACH)', () => {
     expect(screen.queryByText(/Not your coach/)).toBeNull();
   });
 
-  it('a client with a coach whose switches did not load: a line that holds whatever the switches say', async () => {
+  it('a client with a coach whose sharing did not load: the same line (it does not depend on switches)', async () => {
     mockUser = CLIENT;
     serve(new Error('offline'));
     const screen = await renderScreen();
-    expect(await screen.findByText(`${BASE}. ${OWNER_IF}`)).toBeTruthy();
+    expect(await screen.findByText(COACH_LINE)).toBeTruthy();
     expect(screen.getByText(ROMAN_WITH_COACH)).toBeTruthy();
   });
 });

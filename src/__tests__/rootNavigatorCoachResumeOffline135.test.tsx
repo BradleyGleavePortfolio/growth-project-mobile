@@ -58,7 +58,6 @@ jest.mock('../navigation/AuthNavigator', () => mockScreen('nav-auth'));
 jest.mock('../navigation/CoachNavigator', () => mockScreen('nav-coach'));
 jest.mock('../navigation/ClientNavigator', () => mockScreen('nav-client'));
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
-jest.mock('../navigation/LeanOnboardingNavigator', () => () => null);
 jest.mock('../navigation/CoachWizardNavigator', () => mockScreen('nav-wizard'));
 jest.mock('../navigation/Day1OnboardingNavigator', () => () => null);
 jest.mock('../components/OfflineBanner', () => () => null);

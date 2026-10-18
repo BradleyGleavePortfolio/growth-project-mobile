@@ -65,6 +65,13 @@ import api from '../services/api';
 import { env } from '../config/env';
 import { secureStorage } from '../services/secureStorage';
 import { logger } from '../utils/logger';
+import {
+  RomanSafetyActionsWireSchema,
+  safetyActionsConfig,
+  safetyActionsHeaders,
+  toSafetyActions,
+  type RomanSafetyAction,
+} from './romanSafetyActions';
 import { captureError } from '../services/sentry';
 import { romanRequiresCoachFromHttp, romanRequiresCoachOf } from '../lib/ai/romanRequiresCoach';
 import {
@@ -136,6 +143,7 @@ export const RomanWireMessageSchema = z
     content: z.string(),
     interrupted: z.boolean(),
     createdAt: z.string().datetime({ offset: true }),
+    safety_actions: RomanSafetyActionsWireSchema,
   })
   .strict();
 export type RomanWireMessage = z.infer<typeof RomanWireMessageSchema>;
@@ -147,16 +155,20 @@ export interface RomanMessage {
   content: string;
   interrupted: boolean;
   createdAt: string;
+  /** CRISIS-BTN: set only on a reply the server marked (Roman's fixed crisis reply). */
+  safetyActions?: RomanSafetyAction[];
 }
 
 /** Validate + map a single wire message into the internal UI shape. */
 function toMessage(wire: RomanWireMessage): RomanMessage {
+  const safetyActions = toSafetyActions(wire.safety_actions);
   return {
     id: wire.id,
     role: toUiRole(wire.role),
     content: wire.content,
     interrupted: wire.interrupted,
     createdAt: wire.createdAt,
+    ...(safetyActions ? { safetyActions } : {}),
   };
 }
 
@@ -182,6 +194,7 @@ export const RomanStreamChunkSchema = z
     text: z.string().optional(),
     messageId: z.string().min(1).max(64).optional(),
     interrupted: z.boolean().optional(),
+    safety_actions: RomanSafetyActionsWireSchema,
   })
   .strict();
 export type RomanStreamChunk = z.infer<typeof RomanStreamChunkSchema>;
@@ -375,6 +388,7 @@ export async function listMessages(
   try {
     const res = await api.get(`/roman/sessions/${encodeURIComponent(sessionId)}/messages`, {
       params,
+      ...safetyActionsConfig(),
     });
     const parsed = RomanWireMessagePageSchema.safeParse(res.data);
     if (!parsed.success) {
@@ -413,6 +427,8 @@ export interface RomanAssistantReply {
   messageId?: string;
   /** True when the backend persisted a partial (interrupted) turn. */
   interrupted: boolean;
+  /** CRISIS-BTN: the server marker on the `done` chunk of the fixed crisis reply. */
+  safetyActions?: RomanSafetyAction[];
 }
 
 /**
@@ -501,6 +517,7 @@ export async function sendMessage(
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...safetyActionsHeaders(),
       },
       body: JSON.stringify({ content }),
       signal: controller.signal,
@@ -614,10 +631,12 @@ export async function sendMessage(
         'roman stream completed without a terminal `done` chunk',
       );
     }
+    const safetyActions = toSafetyActions(done.safety_actions);
     return {
       text: done.text ?? '',
       messageId: done.messageId,
       interrupted: done.interrupted === true,
+      ...(safetyActions ? { safetyActions } : {}),
     };
   } catch (err) {
     if (err instanceof RomanApiError || err instanceof RomanWireError) throw err;

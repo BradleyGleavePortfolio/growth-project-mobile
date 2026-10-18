@@ -135,9 +135,6 @@ describe('ED.5 onboarding polish — flag OFF containment (R79 pin)', () => {
   });
 
   it.each([
-    ['LeanQ2ExperienceScreen.tsx'],
-    ['LeanQ3IntentScreen.tsx'],
-    ['LeanQ5Screen.tsx'],
     ['OnboardingResults.tsx'],
   ])('%s gates StepTransitionView on the flag', (file) => {
     const src = readSrc('screens', 'onboarding', file);
