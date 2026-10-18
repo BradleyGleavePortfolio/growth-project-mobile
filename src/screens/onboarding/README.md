@@ -22,8 +22,6 @@ Both flows write to the same AsyncStorage key (`onboarding_data`) via `utils/onb
 | --- | --- |
 | `LeanQ1GoalScreen.tsx` | Goal — lose / build / maintain. First screen, fires `onboarding_started`. |
 | `LeanQ2ExperienceScreen.tsx` | Self-rated experience level. |
-| `LeanQ3IntentScreen.tsx` | Intent — log a workout, track meals or explore. Saves the answer and routes to `LeanQ4`; does not promise an intent-specific Home layout. |
-| `LeanQ6Screen.tsx` | Dietary preferences. Calls `finalizeLeanOnboarding`, sets local completion flags and emits `authEvents`. |
 | `OnboardingStep1.tsx`–`OnboardingStep10.tsx` | Long-flow steps: name & sex, dob, weights, activity, goal, eating habits, diet type, restrictions, gym/fitness level, snacks. |
 | `OnboardingResults.tsx` | TDEE / target preview that closes the long flow. |
 
