@@ -502,6 +502,35 @@ export const lightTokens: SemanticTokens = {
   },
 };
 
+/**
+ * Forest Pop (C6CHAT-S-V2 section 6): the community colours by role. Every
+ * value is an existing token above, so nothing new enters the palette. Light
+ * ground only (the app launches light, ThemeProvider). Deep holds the masthead,
+ * space headers and drawer; forest is the one filled action and the segment
+ * track; leaf means new, unread or active, on deep or as a fill with a moss
+ * edge; gold means the coach, on deep only (goldInk on light); sage tints;
+ * sageLine is the hairline; surface is the page. Leaf and gold are never text
+ * on a light ground. Pairs: theme/__tests__/forestPop.test.ts.
+ */
+export const forestPop = {
+  deep: brand[800],
+  forest: colors.forest,
+  leaf: chartLeaf,
+  moss: lightTokens.data.moss,
+  gold: gold[300],
+  goldInk: gold[800],
+  sage: semantic.success.bg,
+  sageLine: lightTokens.surface.sageLine,
+  surface: lightTokens.bgSurface,
+  ink: colors.ink,
+  n700: neutral[700],
+  brand400: brand[400],
+  onDeep: lightTokens.textOnAccent,
+  onDeepMuted: brand[100],
+  error: colors.error,
+} as const;
+export type ForestPopRole = keyof typeof forestPop;
+
 /** Dark-mode semantic tokens. */
 export const darkTokens: SemanticTokens = {
   bgPrimary:   '#121110',
@@ -574,6 +603,7 @@ const tokens = {
   wheel,
   lightTokens,
   darkTokens,
+  forestPop,
 } as const;
 
 export type Tokens = typeof tokens;
