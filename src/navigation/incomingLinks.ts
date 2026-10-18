@@ -50,7 +50,7 @@ export function resolveAppLink(path: string, role: 'student' | 'coach'): AppLink
     if (first === 'workouts' && uuidPair) return nested('MoreTab', 'WorkoutAssignmentDetail', { assignmentId: id });
     if (plain === 'workouts') return nested('WorkoutTab', 'WorkoutMain');
     if (plain === 'home') return nested('Home', 'HomeMain');
-    if (plain === 'plan') return nested('MoreTab', 'Plan');
+    if (plain === 'plan') return nested('MoreTab', 'ClientDailyMealPlan');
     if (plain === 'weight') return nested('MoreTab', 'Progress');
     if (plain === 'timeline') return nested('MoreTab', 'Timeline');
     if (plain === 'checkin/today') return nested('Home', 'Habits');

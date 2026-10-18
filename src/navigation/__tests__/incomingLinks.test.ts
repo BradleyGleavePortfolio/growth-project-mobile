@@ -39,7 +39,7 @@ it.each([
   [`workouts/${ID}`, 'MoreTab', 'WorkoutAssignmentDetail'],
   ['workouts', 'WorkoutTab', 'WorkoutMain'],
   ['home', 'Home', 'HomeMain'],
-  ['plan', 'MoreTab', 'Plan'],
+  ['plan', 'MoreTab', 'ClientDailyMealPlan'],
   ['weight', 'MoreTab', 'Progress'],
   ['timeline', 'MoreTab', 'Timeline'],
   ['checkin/today', 'Home', 'Habits'],

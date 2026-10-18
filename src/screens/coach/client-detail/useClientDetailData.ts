@@ -7,8 +7,6 @@ import { bucketDateLocal, getTodayString } from '../../../utils/date';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientProfile, FoodLog, WeightLog } from '../../../types';
 import {
-  normaliseServerPlans,
-  type CoachMealPlan,
   type TimelineEvent,
   type WeekSummary,
   type WorkoutSession,
@@ -60,10 +58,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     setIsArchived(null);
     void loadArchiveStatus();
   }, [loadArchiveStatus]);
-
-  const [serverMealPlans, setServerMealPlans] = useState<CoachMealPlan[]>([]);
-  const [mealPlansLoading, setMealPlansLoading] = useState(false);
-  const [mealPlansError, setMealPlansError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -137,20 +131,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       setLoadError(errorMessage(err, 'Could not load this client. Please try again.'));
     } finally {
       setIsLoading(false);
-    }
-  }, [clientId]);
-
-  const loadServerMealPlans = useCallback(async () => {
-    setMealPlansLoading(true);
-    setMealPlansError(null);
-    try {
-      const res = await coachApi.listClientMealPlans(clientId);
-      setServerMealPlans(normaliseServerPlans(res.data));
-    } catch (err) {
-      console.error('ClientDetailScreen: listClientMealPlans failed', err);
-      setMealPlansError(errorMessage(err, 'Could not load meal plans.'));
-    } finally {
-      setMealPlansLoading(false);
     }
   }, [clientId]);
 
@@ -396,11 +376,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     setTimeline,
     setWeekSummaries,
     setRefreshing,
-    serverMealPlans,
-    mealPlansLoading,
-    mealPlansError,
     loadData,
-    loadServerMealPlans,
     loadTimeline,
     loadWeeklySummaries,
     markCheckInReviewed,

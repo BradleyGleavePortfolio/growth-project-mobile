@@ -61,6 +61,8 @@ interface Target {
   pop?: true;
   /** Fixed params for a root-only target (merged over the push's own). */
   params?: Record<string, string>;
+  /** The stack routes set under `screen`, so Back walks them (TIMELINE: Timeline over Progress). */
+  beneath?: string[];
 }
 
 type Resolver = () => Target | null;
@@ -72,7 +74,11 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   // Legacy name: the Home stack's Notifications stub resolves to the center.
   Notifications: () => ({ root: 'Home', screen: 'NotificationCenter' }),
   Habits: () => ({ root: 'Home', screen: 'Habits' }),
-  Timeline: () => ({ root: 'MoreTab', screen: 'Timeline' }),
+  // TIMELINE (#TIMELINE-DOOR op 1): the Style C Timeline opens over Progress, its door; off, over You.
+  Timeline: () =>
+    featureFlags.clientTimelineV2
+      ? { root: 'MoreTab', screen: 'Timeline', beneath: ['MoreIndex', 'Progress'] }
+      : { root: 'MoreTab', screen: 'Timeline' },
   MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex' }),
   // Legacy Guidance notifications open Roman when available, otherwise You.
   AIGuide: () => ({
@@ -356,7 +362,11 @@ function deliver(
 
 function deliverTarget(nav: PushNavigator, target: Target, params?: Record<string, string>): boolean {
   try {
-    if (target.screen) {
+    if (target.screen && target.beneath) {
+      nav.navigate(target.root, {
+        state: { routes: [...target.beneath.map((name) => ({ name })), { name: target.screen, params }] },
+      });
+    } else if (target.screen) {
       nav.navigate(target.root, {
         screen: target.screen,
         params,

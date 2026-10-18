@@ -42,7 +42,7 @@ MOBILE-DEEPLINK: `incomingLinks.ts` validates the complete URL before any routin
 
 `CoachMealTemplates` is intentionally unregistered: it had no navigation caller or deep-link entry. The meal-template API and hooks remain; daily meal plans, client Meal plan, workout builder and invites keep their existing routes (MEAL-TEMPLATES-ROUTE-132).
 
-`ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts' | 'mealplan'`. Omission opens Summary; AI meal-plan approval requests `mealplan`, and route updates also select that tab on an already-mounted screen.
+`ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts'`. Omission opens Summary, and route updates also select the tab on an already-mounted screen.
 
 ```
 App.tsx mounts RootNavigator
@@ -128,8 +128,10 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 
 - The 4-tab bar (Home / Train / Log / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
 - The `MoreStack` registers `AIGuide` and `Membership` (sale-readiness, #67). Both are static targets of `MoreScreen` rows; neither is a deep-link target and neither requires backend changes (`Membership` reads only `usersApi.getFoundingNumber` and `aiApi.getStructuredContext`).
+- LEARN-A (flag `learnHub`, off): `Learn` renders `LearnScreen` instead of `EducationScreen`, and the `MoreStack` adds `LearnLesson` (`{ id: string }`, the lesson view; Next replaces it so Back returns to Learn) and `CoachGuidelines` (Read all on Learn). With the flag off neither route exists.
 - `RecipeDetail` is a serialisable-only route. The list passes `{ recipeId }`, the detail screen reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById`. The shape is asserted in `src/navigation/__tests__/clientNavigator.test.ts`. Do not add screens that pass full domain objects through navigation params.
 - There is no global floating chat widget. The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind were deleted in #63. If a future feature wants a shared AI surface, it must be a real screen registered under the relevant navigator — the doctrine (`docs/QUIET_LUXURY_DOCTRINE.md` §6) forbids reintroducing a global FAB.
+- `ShareCard` (MoreStack) is registered only while `featureFlags.shareSheetV2` is off (SHARE-A). On, Share on Progress and on the Session summary opens `components/share/ShareSheet` over the screen instead, so no route or param shape is needed; see `docs/share-card.md`.
 - The `TrophyShare` route was removed from `ClientNavigator` in #63 alongside the `TrophyShareScreen` and `FirstWinCelebration`. Do not reintroduce it; the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`) will fail the build.
 - A6 (AUTHB-05): `tgp://wearables/connected?status&provider&ticket` maps to `MoreTab/Connections` (params `{ ticket?, provider?, status? }`), so a cloud tracker return that Android hands to the app opens the screen that finishes the link. It uses the existing `tgp` scheme; no intent filter change.
 - Public auth links use `linking`; authenticated app links resolve through `incomingLinks.resolveAppLink` for the signed-in role. New app-link destinations must name an existing mounted screen and respect its feature gate. HTTPS links also require the matching platform association path.

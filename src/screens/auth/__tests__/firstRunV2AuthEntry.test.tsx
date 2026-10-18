@@ -9,7 +9,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { NavigationContext } from '@react-navigation/native';
+import { StatusBar, StyleSheet } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { StatusBarBand, STATUS_BAR_BONE } from '../../../components/StatusBarBand';
+import { lightTokens } from '../../../theme/tokens';
 
 const mockApi = {
   getSignupPolicy: jest.fn(),
@@ -58,6 +63,11 @@ jest.mock('react-native/Libraries/Components/StatusBar/StatusBar', () => {
   const { View } = jest.requireActual('react-native');
   return { __esModule: true, default: (p: object) => <View testID="status-bar" {...p} /> };
 });
+jest.mock('expo-status-bar', () => {
+  const { createElement } = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return { StatusBar: (p: object) => createElement(View, { testID: 'band-icons', ...p }) };
+});
 
 import WelcomeScreen from '../WelcomeScreen';
 import LoginScreen from '../LoginScreen';
@@ -74,9 +84,33 @@ type Nav = ReturnType<typeof nav>;
 const login = (n: Nav) => render(<LoginScreen navigation={n as never} route={{ key: 'l', name: 'Login' } as never} />);
 const create = (n: Nav, params?: { invite_code?: string }) =>
   render(<CreateAccountScreen navigation={n as never} route={params ? { params } : undefined} />);
+let focused = true;
+const focusListeners = new Map<string, Set<() => void>>();
+const focusNavigation = {
+  isFocused: () => focused,
+  addListener: (event: string, listener: () => void) => {
+    const handlers = focusListeners.get(event) ?? new Set();
+    handlers.add(listener);
+    focusListeners.set(event, handlers);
+    return () => { handlers.delete(listener); };
+  },
+};
+const welcome = (n: Nav) => (
+  <NavigationContext.Provider value={focusNavigation as never}>
+    <WelcomeScreen navigation={n as never} />
+  </NavigationContext.Provider>
+);
+const changeFocus = async (next: boolean) => {
+  await act(() => {
+    focused = next;
+    focusListeners.get(next ? 'focus' : 'blur')?.forEach((listener) => listener());
+  });
+};
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  focused = true;
+  focusListeners.clear();
   mockAppleOnDevice = false;
   __resetSignupPolicyCacheForTests();
   await AsyncStorage.clear();
@@ -95,7 +129,7 @@ it('the flag is off by default, so the existing auth suites cover main', () => {
 
 it('Welcome: Get started opens Create account with mediumImpact; Log in opens Sign in', async () => {
   const n = nav();
-  const view = await render(<WelcomeScreen navigation={n as never} />);
+  const view = await render(welcome(n));
   expect(view.getByText('The Growth Project')).toBeTruthy();
   await fireEvent.press(view.getByTestId('welcome-get-started'));
   expect(HapticService.mediumImpact).toHaveBeenCalledTimes(1);
@@ -104,8 +138,8 @@ it('Welcome: Get started opens Create account with mediumImpact; Log in opens Si
   expect(n.navigate).toHaveBeenLastCalledWith('Login');
 });
 
-// The app paints a cream band over the top inset of every screen (App.tsx StatusBarBand), and the
-// native stack keeps Welcome mounted under each auth screen, so Welcome's line is the one they show.
+// The native stack retains Welcome behind the next screen: blur must release
+// its forest inset and light icons even though Welcome has not unmounted.
 const overWelcome: Array<[string, (n: Nav) => React.ReactNode]> = [
   ['Welcome', () => null],
   ['Sign in', (n) => <LoginScreen navigation={n as never} route={{ key: 'l', name: 'Login' } as never} />],
@@ -114,10 +148,40 @@ const overWelcome: Array<[string, (n: Nav) => React.ReactNode]> = [
   ['Forgot password', (n) => <ForgotPasswordScreen navigation={n as never} />],
   ['Reset password', (n) => <ResetPasswordScreen navigation={n as never} route={{ key: 'r', name: 'ResetPassword', params: { access_token: 'a', refresh_token: 'r' } } as never} />],
 ];
-it.each(overWelcome)('%s over the flag-on Welcome keeps main\'s dark status-bar icons', async (_screen, top) => {
+it.each(overWelcome)('%s: focused Welcome alone owns the forest band and light icons', async (screen, top) => {
   const n = nav();
-  const view = await render(<><WelcomeScreen navigation={n as never} />{top(n)}</>);
+  const view = await render(
+    <SafeAreaInsetsContext.Provider value={{ top: 47, bottom: 34, left: 0, right: 0 }}>
+      <StatusBar barStyle="dark-content" />
+      {welcome(n)}{top(n)}
+      <StatusBarBand />
+    </SafeAreaInsetsContext.Provider>,
+  );
+  const bandColor = () => StyleSheet.flatten(view.getByTestId('status-bar-band').props.style).backgroundColor;
+  expect(bandColor()).toBe(lightTokens.surface.forestBand);
+  expect(view.getByTestId('band-icons', HIDDEN).props.style).toBe('light');
+  if (screen === 'Welcome') return;
+  await changeFocus(false);
+  expect(bandColor()).toBe(STATUS_BAR_BONE);
+  expect(view.queryByTestId('band-icons', HIDDEN)).toBeNull();
   expect(view.getAllByTestId('status-bar', HIDDEN).map((bar) => bar.props.barStyle)).toEqual(['dark-content']);
+  await changeFocus(true);
+  expect(bandColor()).toBe(lightTokens.surface.forestBand);
+  expect(view.getByTestId('band-icons', HIDDEN).props.style).toBe('light');
+});
+
+it('unmounting focused Welcome restores the band even without a blur event', async () => {
+  const content = (showWelcome: boolean) => (
+    <SafeAreaInsetsContext.Provider value={{ top: 24, bottom: 16, left: 0, right: 0 }}>
+      {showWelcome ? welcome(nav()) : null}
+      <StatusBarBand />
+    </SafeAreaInsetsContext.Provider>
+  );
+  const view = await render(content(true));
+  expect(view.getByTestId('band-icons', HIDDEN).props.style).toBe('light');
+  await view.rerender(content(false));
+  expect(StyleSheet.flatten(view.getByTestId('status-bar-band').props.style).backgroundColor).toBe(STATUS_BAR_BONE);
+  expect(view.queryByTestId('band-icons', HIDDEN)).toBeNull();
 });
 
 it('Sign in: same login request; a wrong password shows the hint under the field, error haptic once', async () => {
