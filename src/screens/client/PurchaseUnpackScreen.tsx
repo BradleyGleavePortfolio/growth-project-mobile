@@ -115,9 +115,8 @@ function buildReceipt(
   const packageName = packageNameOverride ?? pkg?.name ?? null;
   // "{amount} paid" is what the server says THIS purchase's checkout charged
   // (first_charge_cents), never the package's price or a subscription's
-  // renewal. Unknown, or a trial that has charged nothing, shows no amount.
-  const amountDisplay =
-    purchase && purchase.status !== 'trialing' ? paidAmount(purchase) : null;
+  // renewal. Unknown, not in force, or a trial that has charged nothing: none.
+  const amountDisplay = purchase ? paidAmount(purchase) : null;
   // `interval` on the CoachPackage is the source of truth for recurring vs
   // one_time (the purchase row carries the period_end but not the type).
   const recurring = !!pkg && pkg.type === 'recurring';

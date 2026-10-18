@@ -107,7 +107,7 @@ describe('PlanActiveMoment', () => {
     expect(mockSuccessHaptic).toHaveBeenCalledTimes(1);
   });
 
-  it('shows no paid line in a trial or when the server sends no first charge', async () => {
+  it('shows no paid line in a trial, when the server sends no first charge, or before the purchase is in force', async () => {
     mockGetPurchases.mockResolvedValue({
       ok: true,
       data: [row({ status: 'trialing', first_charge_cents: 0 })],
@@ -125,6 +125,13 @@ describe('PlanActiveMoment', () => {
     await waitFor(() => expect(old.getByText('S', { includeHiddenElements: true })).toBeTruthy());
     expect(old.queryByTestId('payment-success-receipt')).toBeNull();
     expect(old.queryByText('$149.00')).toBeNull();
+    old.unmount();
+
+    // Not in force yet (the charge has not settled): no paid line either.
+    mockGetPurchases.mockResolvedValue({ ok: true, data: [row({ status: 'pending', entitlement_active: false })] });
+    const pending = await render(<PlanActiveMoment success={success()} onContinue={jest.fn()} />);
+    await waitFor(() => expect(pending.getByTestId('payment-success-next')).toBeTruthy());
+    expect(pending.queryByTestId('payment-success-paid')).toBeNull();
   });
 
   it('See what unlocks opens the newest entitled purchase of the package; Done leaves', async () => {

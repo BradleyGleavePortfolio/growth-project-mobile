@@ -205,15 +205,19 @@ export function money(cents: number, currency: string): string {
 
 /**
  * C5-S1: what a purchase's checkout charged, from the server only
- * (first_charge_cents). Absent, zero or not whole cents: null, so no paid
- * line shows; never amount_cents (a subscription's renewal) or a price.
+ * (first_charge_cents), and only for a purchase that is in force and not in a
+ * trial. Otherwise, or absent, zero or not whole cents: null, so no paid line
+ * shows; never amount_cents (a subscription's renewal) or a price.
  */
 export function paidAmount(p: {
   first_charge_cents?: number | null;
   currency?: string;
+  status?: string;
+  entitlement_active?: boolean;
 }): string | null {
   const c = p.first_charge_cents;
-  return typeof c === "number" && Number.isInteger(c) && c > 0 && p.currency
+  return p.entitlement_active === true && p.status !== "trialing" &&
+    typeof c === "number" && Number.isInteger(c) && c > 0 && p.currency
     ? money(c, p.currency)
     : null;
 }

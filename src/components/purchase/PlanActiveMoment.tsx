@@ -164,7 +164,7 @@ export default function PlanActiveMoment({
     };
   }, [success.purchaseId, success.packageId]);
 
-  const paid = row && row.status !== "trialing" ? paidAmount(row) : null;
+  const paid = row ? paidAmount(row) : null;
   const nextIso =
     row?.billing_type === "recurring" && !row.cancel_at_period_end
       ? row.current_period_end

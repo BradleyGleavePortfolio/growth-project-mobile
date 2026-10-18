@@ -141,7 +141,7 @@ describe('buildReceipt — receipt header reconciliation', () => {
     expect(r.amountDisplay).toMatch(/\$449\.00/);
   });
 
-  it('shows no amount when the server does not know the first charge (null or an older server)', () => {
+  it('shows no amount when the server does not know the first charge (null or an older server) or the purchase is not in force', () => {
     for (const first_charge_cents of [null, undefined, 0]) {
       const r = UnpackTest.buildReceipt(
         'purchase_42',
@@ -151,6 +151,13 @@ describe('buildReceipt — receipt header reconciliation', () => {
       );
       expect(r.amountDisplay).toBeNull();
     }
+    const pending = UnpackTest.buildReceipt(
+      'purchase_42',
+      [basePurchase({ status: 'pending', entitlement_active: false, first_charge_cents: 44900 })],
+      [basePackage()],
+      null,
+    );
+    expect(pending.amountDisplay).toBeNull();
   });
 
   it('shows no amount paid during a trial (nothing has been charged yet)', () => {
