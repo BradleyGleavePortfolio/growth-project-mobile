@@ -32,7 +32,7 @@ export const REACHABLE_WHILE_LOCKED: ReadonlySet<string> = new Set([
  */
 export const OPEN_FOR_OWN_LOGGING: ReadonlySet<string> = new Set([
   'WorkoutTab', 'Log', 'WorkoutMain', 'ActiveWorkout', 'WorkoutHistoryEdit', 'ClientWorkoutViewer',
-  'WorkoutAssignmentDetail', 'Plan', 'ClientDailyMealPlan', 'Fast', 'ClientMacros', 'Habits', 'RoutineBuilder',
+  'WorkoutAssignmentDetail', 'ClientDailyMealPlan', 'Fast', 'ClientMacros', 'Habits', 'RoutineBuilder',
 ]);
 
 function openWhileLocked(name: string | undefined): boolean {

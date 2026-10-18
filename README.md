@@ -423,11 +423,11 @@ src/
 
 Coach tabs (COACHTABS, behind `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off): Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from a gear on Overview, Community from Messages and Team from Clients; every existing route and push target still lands. With it on, coaches open the app on Overview. Off, the coach bar and the Clients landing are unchanged. See `src/navigation/README.md`.
 
-New clients complete either LeanQ1–LeanQ6 or the available consultation. Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
+New clients complete the consultation (the unmounted lean LeanQ1–LeanQ6 flow was deleted in ONBQ-TILES). Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
 
 The current coach wizard keeps five setup routes. It respects top/bottom safe insets, and Back on a cold-resumed step replaces with the preceding route rather than doing nothing or cycling forward. Step 1 has no earlier setup route. Stripe configuration unavailability does not block Continue setup; the verification resend action shows its busy state and a live cooldown. See `src/navigation/README.md` and `src/screens/auth/README.md` (COACH-EDGES-132, agent 132).
 
-Coach `ClientDetail` accepts `initialTab: 'workouts' | 'mealplan'` (optional). AI meal-plan approval opens the Plan tab; clients find their plans at More → Meal plan, not a dedicated Plan tab.
+Coach `ClientDetail` accepts `initialTab: 'workouts'` (optional); the client file has no Plan tab. Clients find their plans at More → Meal plan, not a dedicated Plan tab.
 
 The orphan coach `CoachMealTemplates` route is not registered. No entry action or deep link used it; the meal-template API, hooks and existing daily meal-plan paths are retained (MEAL-TEMPLATES-ROUTE-132).
 
@@ -446,7 +446,7 @@ The orphan coach `CoachMealTemplates` route is not registered. No entry action o
 - `IOS_P2P_ONLY_MIN_NATIVE_BUILD` is 6, the native anchor; `app.json` `ios.buildNumber` is 10 (build 9 is already uploaded). `scripts/validate-app-config.js` fails anything below 6.
 Auth stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection` (params `{ inviteAttachError?, inviteCode? }`), `AcceptInvite`, `ResetPassword`. The signup policy (`GET /auth/signup-policy`) is read through `src/lib/signupPolicy.ts` by CreateAccount, RoleSelection and Login. See `src/navigation/README.md` for invite redemption and retry.
 
-New clients see `LeanOnboardingNavigator`, or `ConsultationOnboardingNavigator` (the full consultation, `src/screens/consultation/README.md`) when `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` is on. That flag is off by default and on in the `clinic` EAS profile.
+New clients see `ConsultationOnboardingNavigator` (the full consultation, `src/screens/consultation/README.md`); every new client gets it (RootNavigator B14).
 
 Bottom tabs are icons-only (no labels). Four tabs, in order:
 
@@ -503,9 +503,8 @@ see the linked food-logger quality-floor change.
 ## Coach AI
 
 Coach AI v1 is the per-client generate / edit / approve flow for workout
-programs, meal plans, and weekly insights. The mobile half lives in
+programs and weekly insights. The mobile half lives in
 `src/screens/coach/AIWorkoutDraftScreen.tsx`,
-`src/screens/coach/AIMealPlanDraftScreen.tsx`,
 `src/screens/coach/ClientInsightScreen.tsx`, and the entry point
 `src/components/coach/CoachAiSection.tsx` mounted inside
 `ClientDetailScreen`. The typed client is `src/api/coachAi.ts`; the
@@ -533,22 +532,19 @@ call that races past the status gate.
 - Entry: `src/components/coach/CoachAiSection.tsx` on
   `src/screens/coach/ClientDetailScreen.tsx` (Summary tab).
 - Workout draft: `src/screens/coach/AIWorkoutDraftScreen.tsx`.
-- Meal plan draft: `src/screens/coach/AIMealPlanDraftScreen.tsx`.
 - Insight digest: `src/screens/coach/ClientInsightScreen.tsx`.
 - Navigation registered in `src/navigation/CoachNavigator.tsx` under
-  `ClientsStack` (routes `AIWorkoutDraft`, `AIMealPlanDraft`,
+  `ClientsStack` (routes `AIWorkoutDraft`,
   `ClientInsight`).
 
 ### HOW
-1. Coach taps one of the three CTAs on `ClientDetailScreen`.
+1. Coach taps one of the two CTAs on `ClientDetailScreen`.
 2. A bottom sheet collects inputs:
    - Workout — weeks (1-12 stepper), days per week (1-7 chips), focus
      (Strength / Hypertrophy / Endurance / Mobility chips), notes.
-   - Meal plan — days (1-14 stepper), notes.
    - Insight — windowDays chip (7 / 14 / 30, default 7).
 3. The mobile POSTs to one of:
    - `POST /coach/ai/workout-program`
-   - `POST /coach/ai/meal-plan`
    - `POST /coach/ai/client-insight`
 4. The returned `draftId` is handed to the matching draft screen.
 5. The draft screen loads `GET /coach/ai/drafts/:draftId`, renders an
@@ -573,8 +569,6 @@ stubbed pending a coach-to-client booking surface (see Deferred below).
 ### WHAT (data shapes)
 - `WorkoutPayload` — `weeks[] → days[] → exercises[]` with optional
   RIR / RPE / notes.
-- `MealPlanPayload` — `days[] → meals[] → items[]` with optional
-  per-item macros and per-day totals.
 - `InsightPayload` — `{ summary, wins[], concerns[], suggested_actions[],
   questions_for_coach[] }`.
 

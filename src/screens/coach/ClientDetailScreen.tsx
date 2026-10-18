@@ -18,23 +18,15 @@ import { errorMessage } from '../../types/common';
 import { SkeletonProfileHeader, SkeletonWorkoutRow, SkeletonStatTile } from '../../ui/skeletons';
 
 import { makeStyles } from './client-detail/styles';
-import {
-  emptyItemDraft,
-  type CoachMealPlan,
-  type PlanItemDraft,
-  type Props,
-  type TabKey,
-} from './client-detail/types';
+import { type Props, type TabKey } from './client-detail/types';
 import { DateRangeSelector } from './client-detail/DateRangeSelector';
 import { TimelineTab } from './client-detail/TimelineTab';
 import { WeeklySummaryTab } from './client-detail/WeeklySummaryTab';
 import { FoodLogReviewSection } from './client-detail/FoodLogReviewSection';
 import { SummaryTab } from './client-detail/SummaryTab';
 import { WorkoutsTab } from './client-detail/WorkoutsTab';
-import { MealPlanTab } from './client-detail/MealPlanTab';
 import { ProgressTab } from './client-detail/ProgressTab';
 import { HealthFitnessTab } from './client-detail/HealthFitnessTab';
-import { PlanFormModal } from './client-detail/PlanFormModal';
 import { NudgeModal } from './client-detail/NudgeModal';
 import { useClientDetailData } from './client-detail/useClientDetailData';
 // PR-HK-3b — coach Sleep & Recovery tab content.
@@ -85,11 +77,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     setTimeline,
     setWeekSummaries,
     setRefreshing,
-    serverMealPlans,
-    mealPlansLoading,
-    mealPlansError,
     loadData,
-    loadServerMealPlans,
     loadTimeline,
     markCheckInReviewed,
     loadWeeklySummaries,
@@ -116,17 +104,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   // R-DISPUTE-PAUSE: pull-to-refresh also re-reads the dispute-paused plans.
   const [planReloadKey, setPlanReloadKey] = useState(0);
 
-  // Server-side meal plans (Tier 2). The legacy local-SQLite `mealPlanDb`
-  // shim was removed in the nutrition P0 cleanup — Grocery / Shopping /
-  // PrepGuide all read from the server (`listsApi`, `prepGuideApi`) now.
-  const [showPlanModal, setShowPlanModal] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<CoachMealPlan | null>(null);
-  const [planTitle, setPlanTitle] = useState('');
-  const [planNotes, setPlanNotes] = useState('');
-  const [planItems, setPlanItems] = useState<PlanItemDraft[]>([emptyItemDraft()]);
-  const [planSaving, setPlanSaving] = useState(false);
-  const [planFormError, setPlanFormError] = useState('');
-
   // Hunter #2 P2-7: previously the route param `clientId` was only consumed
   // on first mount because the load effect had an empty dep array. The
   // ClientsStack reuses the same screen instance when a coach taps from one
@@ -137,7 +114,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   // Keying off `clientId` (with the memoised loaders from useClientDetailData,
   // which themselves regenerate when `clientId` changes) makes the screen
   // always reload when the routed client switches under us. The transient UI
-  // state (active tab, expanded weeks, draft nudge text, plan-form modal) is
+  // state (active tab, expanded weeks, draft nudge text) is
   // also reset to its initial shape so we don't briefly render Client B's
   // profile under Client A's selected tab or half-typed nudge.
   useEffect(() => {
@@ -150,9 +127,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     setNudgeTitle('');
     setNudgeBody('');
     setNudgeError('');
-    setShowPlanModal(false);
-    setEditingPlan(null);
-    setPlanFormError('');
   }, [clientId]);
 
   useEffect(() => {
@@ -166,106 +140,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     if (activeTab === 'weekly') {
       loadWeeklySummaries(selectedDays);
     }
-    if (activeTab === 'mealplan') {
-      loadServerMealPlans();
-    }
-  }, [activeTab, selectedDays, clientId, loadTimeline, loadWeeklySummaries, loadServerMealPlans]);
-
-  const openCreatePlan = () => {
-    setEditingPlan(null);
-    setPlanTitle('');
-    setPlanNotes('');
-    setPlanItems([emptyItemDraft()]);
-    setPlanFormError('');
-    setShowPlanModal(true);
-  };
-
-  const openEditPlan = (plan: CoachMealPlan) => {
-    setEditingPlan(plan);
-    setPlanTitle(plan.title);
-    setPlanNotes(plan.notes || '');
-    setPlanItems(
-      plan.items.length > 0
-        ? plan.items.map((it) => ({
-            name: it.name || '',
-            calories: it.calories != null ? String(it.calories) : '',
-            protein: it.protein != null ? String(it.protein) : '',
-            notes: it.notes || '',
-            time_of_day: it.time_of_day || '',
-          }))
-        : [emptyItemDraft()],
-    );
-    setPlanFormError('');
-    setShowPlanModal(true);
-  };
-
-  const submitPlanForm = async () => {
-    setPlanFormError('');
-    if (!planTitle.trim()) {
-      setPlanFormError('Give the plan a title.');
-      return;
-    }
-    const items = planItems
-      .filter((it) => it.name.trim().length > 0)
-      .map((it) => {
-        const row: Record<string, unknown> = { name: it.name.trim() };
-        const cal = Number(it.calories);
-        if (it.calories && !Number.isNaN(cal)) row.calories = cal;
-        const prot = Number(it.protein);
-        if (it.protein && !Number.isNaN(prot)) row.protein = prot;
-        if (it.notes.trim()) row.notes = it.notes.trim();
-        if (it.time_of_day.trim()) row.time_of_day = it.time_of_day.trim().toLowerCase();
-        return row;
-      });
-    if (items.length === 0) {
-      setPlanFormError('Add at least one meal item.');
-      return;
-    }
-    setPlanSaving(true);
-    try {
-      const body: Record<string, unknown> = {
-        title: planTitle.trim(),
-        notes: planNotes.trim() || null,
-        items,
-      };
-      if (editingPlan) {
-        await coachApi.updateMealPlan(editingPlan.id, body);
-      } else {
-        await coachApi.createClientMealPlan(clientId, body);
-      }
-      setShowPlanModal(false);
-      await loadServerMealPlans();
-    } catch (err) {
-      setPlanFormError(errorMessage(err, 'Save failed. Try again.'));
-    } finally {
-      setPlanSaving(false);
-    }
-  };
-
-  const archivePlan = (plan: CoachMealPlan) => {
-    Alert.alert(
-      'Archive meal plan?',
-      `"${plan.title}" will no longer show up for this client.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Archive',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await coachApi.archiveMealPlan(plan.id);
-              await loadServerMealPlans();
-            } catch (err) {
-              Alert.alert(
-                'Archive failed',
-                errorMessage(err, 'Try again.'),
-              );
-            }
-          },
-        },
-      ],
-    );
-  };
+  }, [activeTab, selectedDays, clientId, loadTimeline, loadWeeklySummaries]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -302,7 +177,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const tabs: { key: TabKey; label: string; icon: IoniconName }[] = [
     { key: 'summary', label: 'Summary', icon: 'pie-chart-outline' },
     { key: 'logs', label: 'Logs', icon: 'restaurant-outline' },
-    { key: 'mealplan', label: 'Plan', icon: 'calendar-outline' },
     { key: 'progress', label: 'Progress', icon: 'trending-up-outline' },
     { key: 'healthFitness', label: 'Fitness', icon: 'fitness-outline' },
     // PR-HK-3b — Sleep & Recovery sits directly after HK-3a's 'healthFitness'.
@@ -404,16 +278,48 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     <View style={[styles.container, top]} testID="client-detail">
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
+        <View style={styles.headerActions} testID="client-file-header-actions">
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.msgIconBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Open messages"
+              onPress={() => {
+                if (!currentUser) return;
+                // Audit P1: route to the specific client thread, not the Messages
+                // tab (which is the global inbox and ignored the params we were
+                // passing). ClientMessages lives inside ClientsStack, the same
+                // navigator as ClientDetail, so a direct .navigate works.
+                navigation.navigate('ClientMessages', { clientId, clientName });
+              }}
+            >
+              <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+            {isArchived !== null && <TouchableOpacity
+              style={styles.msgIconBtn}
+              onPress={handleToggleArchive}
+              disabled={archiveBusy}
+              accessibilityRole="button"
+              accessibilityLabel={isArchived ? 'Unarchive client' : 'Archive client'}
+            >
+              <Ionicons
+                name={isArchived ? 'archive' : 'archive-outline'}
+                size={20}
+                color={isArchived ? colors.warning : colors.textSecondary}
+              />
+            </TouchableOpacity>}
+          </View>
+        </View>
+        <View style={styles.headerCenter} testID="client-file-header-identity">
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {clientName.split(' ').map((n) => n[0]).join('')}
             </Text>
           </View>
-          <View>
+          <View style={styles.headerLabels}>
             <Text style={styles.clientName}>{clientName}</Text>
             <Text style={styles.clientStatus}>
               {[
@@ -423,32 +329,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             </Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.msgIconBtn}
-          onPress={() => {
-            if (!currentUser) return;
-            // Audit P1: route to the specific client thread, not the Messages
-            // tab (which is the global inbox and ignored the params we were
-            // passing). ClientMessages lives inside ClientsStack, the same
-            // navigator as ClientDetail, so a direct .navigate works.
-            navigation.navigate('ClientMessages', { clientId, clientName });
-          }}
-        >
-          <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
-        </TouchableOpacity>
-        {isArchived !== null && <TouchableOpacity
-          style={[styles.msgIconBtn, { marginLeft: 4 }]}
-          onPress={handleToggleArchive}
-          disabled={archiveBusy}
-          accessibilityRole="button"
-          accessibilityLabel={isArchived ? 'Unarchive client' : 'Archive client'}
-        >
-          <Ionicons
-            name={isArchived ? 'archive' : 'archive-outline'}
-            size={20}
-            color={isArchived ? colors.warning : colors.textSecondary}
-          />
-        </TouchableOpacity>}
       </View>
 
       {archiveStatusError ? (
@@ -537,7 +417,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             clientId={clientId}
             profile={profile}
             onOpenMessages={() => navigation.navigate('ClientMessages', { clientId, clientName })}
-            onOpenMealPlans={() => setActiveTab('mealplan')}
             colors={colors}
             styles={styles}
           />
@@ -552,20 +431,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               setAiProgramRequest(true);
               setActiveTab('summary');
             }}
-            colors={colors}
-            styles={styles}
-          />
-        )}
-
-        {activeTab === 'mealplan' && (
-          <MealPlanTab
-            serverMealPlans={serverMealPlans}
-            mealPlansLoading={mealPlansLoading}
-            mealPlansError={mealPlansError}
-            onCreate={openCreatePlan}
-            onEdit={openEditPlan}
-            onArchive={archivePlan}
-            onRetry={loadServerMealPlans}
             colors={colors}
             styles={styles}
           />
@@ -649,23 +514,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           <SleepRecoveryTab clientId={clientId} colors={colors} styles={styles} />
         )}
       </ScrollView>
-
-      <PlanFormModal
-        visible={showPlanModal}
-        onClose={() => setShowPlanModal(false)}
-        editingPlan={editingPlan}
-        planTitle={planTitle}
-        setPlanTitle={setPlanTitle}
-        planNotes={planNotes}
-        setPlanNotes={setPlanNotes}
-        planItems={planItems}
-        setPlanItems={setPlanItems}
-        planFormError={planFormError}
-        planSaving={planSaving}
-        onSubmit={submitPlanForm}
-        colors={colors}
-        styles={styles}
-      />
 
       <NudgeModal
         visible={showNudgeModal}

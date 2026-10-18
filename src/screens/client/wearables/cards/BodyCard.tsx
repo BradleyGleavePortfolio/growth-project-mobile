@@ -21,6 +21,8 @@ interface Props {
   readonly bodyFatSeries: SampleSeries | undefined;
   readonly tone: BucketTone;
   readonly onPress?: () => void;
+  /** HEALTH-1: what a connected source that sends no weight says. */
+  readonly emptyText?: string;
 }
 
 export default function BodyCard({
@@ -28,6 +30,7 @@ export default function BodyCard({
   bodyFatSeries,
   tone,
   onPress,
+  emptyText,
 }: Props) {
   const toneTk = toneTokens(tone);
   const weightMeta = metricMeta('BODY_WEIGHT_KG');
@@ -53,8 +56,7 @@ export default function BodyCard({
     <WearableCard title="Body" icon="body-outline" accent={toneTk.accent} onPress={onPress}>
       {!hasAny ? (
         <Text style={styles.prompt}>
-          Connect a smart scale or tracker to see your weight and body-composition
-          trend.
+          {emptyText ?? 'Connect a smart scale or tracker to see your weight and body-composition trend.'}
         </Text>
       ) : (
         <View style={styles.row}>
