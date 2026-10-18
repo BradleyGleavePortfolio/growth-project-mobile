@@ -138,8 +138,8 @@ it.each(BOTH.flatMap((on) => LINES.map(([type, line]) => [on, type, line] as con
     const words = within(card).getAllByText(/./).map((t) => t.props.children);
     expect(words).toEqual([line, 'Message Sam', 'Dismiss']);
     expect(within(card).getByRole('button', { name: 'Dismiss alert for Sam Rivera' })).toBeTruthy();
-    const tree = JSON.stringify(view.toJSON());
-    expect(tree.indexOf(line)).toBeLessThan(tree.indexOf('paused-plans')); // above everything else in the file
+    const texts = view.getAllByText(/./).map((t) => t.props.children); // screen order
+    expect(texts.indexOf(line)).toBeLessThan(texts.indexOf('paused-plans')); // above everything else in the file
     for (const tab of ['Summary', 'Logs', 'Progress']) {
       await fireEvent.press(view.getByLabelText(tab));
       expect(view.getByTestId('file-safety-alert')).toBeTruthy();
