@@ -4,13 +4,16 @@ C8V2-2B: with `clientProgressV2` on (off in every build) `ProgressScreen` render
 `progress/ProgressV2.tsx`: the deep forest masthead (coach initial, "Since" overline,
 "Your progress", the Weight overline and Log weight chip, the trend number in the
 client's unit, one period sentence or the saved block, Week / Month / All and the
-2a chart with the usual-range band), then recent weigh-ins, Timeline and the
-report. `progress/LogWeightSheetV2.tsx` is the cream
+2a chart with the usual-range band), then Strength (newest best set of the last 50
+workouts; PeakStar and "New best" only when it beats an earlier session, is from
+the last 30 days and the read holds every workout) and Training (this
+week's ring when a plan exists, else the week's count and 8 weekly bars), recent
+weigh-ins, Timeline and the report. `progress/LogWeightSheetV2.tsx` is the cream
 sheet: the number in the forest band, 0.1 steppers, the last weigh-in, notes and,
 for a coached client, "{coach} sees weigh-ins." (no switch: #SHARE-SIMPLE). Units
 follow `profile.weight_unit` (lb unless kg); the server always gets pounds.
 `progress/progressV2.ts` holds the sentences and numbers. Coachless clients get the
-same page without coach words. Flag off, the page is as it was,
+same page without coach words or a plan read. Flag off, the page is as it was,
 except two eating-disorder safety fixes that ship to everyone: no BMI category
 word on Progress, and Report colours a gain like a loss. Tests:
 `progress/__tests__/ProgressV2.test.tsx`.

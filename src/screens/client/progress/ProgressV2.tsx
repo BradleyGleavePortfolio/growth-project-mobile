@@ -1,14 +1,15 @@
 /**
  * C8 v2 PR 2b, the Progress page behind `clientProgressV2` (planning/MOCKUP3/C8/index-v2.md): weight on the
  * deep forest masthead (Log weight, the trend in the client's unit, one sentence or the saved moment, Week /
- * Month / All, the 2a chart with its usual-range band), then the weigh-ins. Pounds on the wire. Up and down
- * share words and colour; no red, no BMI, no streak.
+ * Month / All, the 2a chart with its usual-range band), then Strength and Training. Pounds on the wire. Up and
+ * down share words and colour; no red, no BMI, no streak.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, StyleSheet, Text, View, type TextStyle } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { weightApi } from '../../../services/api';
+import { weightApi, workoutApi } from '../../../services/api';
+import { workoutBuilderApi } from '../../../api/workoutBuilderApi';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../../hooks/useCoachlessClient';
 import { useMyCoaches } from '../../../hooks/useCalendar';
@@ -17,10 +18,13 @@ import { colors, motion, radius, typography } from '../../../theme/tokens';
 import { useReduceMotion } from '../wearables/components/useReduceMotion';
 import { QuietRow, QuietSection, Screen } from '../../../ui';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
+import { PeakStar, SegmentedRing } from '../../../ui/charts/StyleCMarks';
 import PeriodTabs from '../../../components/progress/PeriodTabs';
 import WeightTrendChartDark from '../../../components/progress/WeightTrendChartDark';
 import WeighInRows from '../../../components/progress/WeighInRows';
 import type { WeightPeriod } from '../../../components/progress/weightTrend';
+import { formatWeight } from '../../../components/progress/progressFormat';
+import type { WorkoutWeek } from '../../coach/client-detail/thisWeek';
 import { featureFlags } from '../../../config/featureFlags';
 import { getTodayString } from '../../../utils/date';
 import { errorMessage } from '../../../types/common';
@@ -36,6 +40,7 @@ const fail = (what: string) => (err: unknown) => logger.error('progress', `${wha
 
 export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => void; logWeightAt?: number }) {
   const { semanticColors: sc } = useTheme();
+  const { fontScale } = useWindowDimensions();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const user = useCurrentUser();
   const coachless = useCoachlessClient();
@@ -47,6 +52,8 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const today = getTodayString();
   const [logs, setLogs] = useState<WeightLog[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [sessions, setSessions] = useState<P.Session[]>([]);
+  const [plan, setPlan] = useState<WorkoutWeek | null>(null);
   const [period, setPeriod] = useState<WeightPeriod>('30D');
   const [sheet, setSheet] = useState(false);
   const [saved, setSaved] = useState<{ lbs: number; at: Date; move: number | null } | null>(null);
@@ -56,12 +63,16 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const userId = user?.id;
   const load = useCallback(async () => {
     if (!userId) return;
-    await weightApi.getHistory(3650).then((res) => {
-      setLogs(weightHistoryRows(res.data).map((r) => parseWeightLogRow(r, userId))
-        .filter((l): l is WeightLog => l !== null).sort((a, b) => a.date.localeCompare(b.date)));
-      setFailed(false);
-    }, (err: unknown) => { setFailed(true); fail('weight history')(err); });
-  }, [userId]);
+    await Promise.all([
+      weightApi.getHistory(3650).then((res) => {
+        setLogs(weightHistoryRows(res.data).map((r) => parseWeightLogRow(r, userId))
+          .filter((l): l is WeightLog => l !== null).sort((a, b) => a.date.localeCompare(b.date)));
+        setFailed(false);
+      }, (err: unknown) => { setFailed(true); fail('weight history')(err); }),
+      workoutApi.getAll(P.SESSIONS).then((res) => setSessions(Array.isArray(res.data) ? res.data : []), fail('workouts')),
+      coachless ? null : workoutBuilderApi.listMyAssignments().then((rows) => setPlan(P.trainingWeek(rows, getTodayString())), fail('assignments')),
+    ]);
+  }, [userId, coachless]);
   useEffect(() => { void load(); }, [load]);
 
   // The saved moment (index-v2 section 7): a 300 ms decelerating fade, 150 ms with Reduce Motion.
@@ -85,10 +96,15 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
 
   const light = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
+  const ink = { color: sc.textPrimary };
   const has = !!logs?.length;
   const trend = logs && has ? P.trendNow(logs, today) : null;
   const sentence = logs && has ? P.trendSentence(logs, period, unit, today) : null;
   const num = (lbs: number) => P.one(P.toUnit(lbs, unit));
+  const best = P.latestBest(sessions, today);
+  const counts = P.weeklyWorkouts(sessions, today);
+  const training = plan || counts.some((c) => c > 0);
+  const tile = [s.tile, fontScale <= 1.15 && s.grow];
   const retry = () => { setRefreshing(true); void load().then(() => setRefreshing(false)); };
   const since = logs?.[0] ? `Since ${P.monthDay(logs[0].date)}` : null;
   return (
@@ -144,6 +160,45 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
           goal={user?.profile?.target_weight_lbs ? { value: user.profile.target_weight_lbs } : undefined} testID="progress-weight-chart" /> : null}
 
         <View style={[s.gutter, !has && s.gutterTop]}>
+          {best || training ? (
+            <View style={[s.row, s.top, fontScale > 1.15 && s.stack]}>
+              {best ? (
+                <View style={[tile, { backgroundColor: sc.surface.masthead }]} testID="progress-strength">
+                  <Text style={[typography.eyebrow, muted]}>Strength</Text>
+                  {best.isNew ? <View style={s.row}><PeakStar onDark /><Text style={[typography.bodyMd, { color: sc.data.peak }]}>New best</Text></View> : null}
+                  <Text style={[s.mid, light]}>{formatWeight(P.toUnit(best.weight, unit))}
+                    <Text style={[typography.bodyMd, light]}>{` ${unit} \u00d7 ${best.reps}`}</Text></Text>
+                  <Text style={[typography.bodySmall, muted]}>{`${best.name}, ${short(best.date)}`}</Text>
+                </View>
+              ) : null}
+              {training ? (
+                <View style={[tile, { backgroundColor: sc.surface.sage }]} testID="progress-training">
+                  <Text style={[typography.eyebrow, { color: sc.textMuted }]}>Training</Text>
+                  {plan ? (
+                    <View style={[s.row, s.wrap]} accessible accessibilityLabel={`${plan.done} of ${plan.total} done, this week`}>
+                      <SegmentedRing segments={plan.segments} size={64} label={`${plan.done} of ${plan.total} done`}>
+                        <Text style={[typography.bodyMd, ink]}>{`${plan.done}/${plan.total}`}</Text>
+                      </SegmentedRing>
+                      <View style={s.ringText}>
+                        <Text style={[typography.bodyMd, ink]}>{`${plan.done} of ${plan.total} done`}</Text>
+                        <Text style={[typography.bodySmall, { color: sc.textMuted }]}>This week</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={[s.mid, ink]}>{counts[7]}</Text>
+                      <Text style={[typography.bodySmall, ink]}>{counts[7] === 1 ? 'workout this week' : 'workouts this week'}</Text>
+                      <View style={[s.row, s.bars]} accessible accessibilityRole="image" accessibilityLabel={`Workouts in the last 8 weeks: ${counts.join(', ')}`}>
+                        {counts.map((c, i) => <View key={`week-${i}`} style={{ width: 10, height: 2 + (34 * c) / Math.max(1, ...counts),
+                          backgroundColor: i === 7 ? sc.data.forest : sc.data.moss }} />)}
+                      </View>
+                      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Last 8 weeks</Text>
+                    </>
+                  )}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
           {logs && has ? (
             <QuietSection title="Recent weigh-ins">
               <WeighInRows unit={unit} rows={logs.slice(-10).reverse().map((l) => ({ id: l.id, day: short(l.date), weight: Number(num(l.weight)), notes: l.notes }))} />
@@ -169,6 +224,7 @@ const s = StyleSheet.create({
   apart: { justifyContent: 'space-between' },
   base: { alignItems: 'baseline', flexWrap: 'wrap' },
   top: { alignItems: 'flex-start' },
+  stack: { flexDirection: 'column', alignItems: 'stretch' },
   mast: { paddingHorizontal: 24, paddingTop: 12, gap: 16 },
   mastEnd: { paddingBottom: 24, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
   avatar: { width: 44, height: 44, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
@@ -177,7 +233,13 @@ const s = StyleSheet.create({
   center: { textAlign: 'center' },
   chip: { gap: 6, minHeight: 44, paddingHorizontal: 14, borderWidth: 1, borderRadius: radius.button },
   big: { ...serif, fontSize: 64, lineHeight: 80 },
+  mid: { ...serif, fontSize: 30, lineHeight: 38 },
   disc: { width: 32, height: 32, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   gutter: { paddingHorizontal: 24, gap: 24 },
   gutterTop: { paddingTop: 24 },
+  tile: { alignSelf: 'stretch', borderRadius: radius.card, padding: 16, gap: 8 },
+  grow: { flex: 1 },
+  bars: { alignItems: 'flex-end', gap: 6, height: 40 },
+  wrap: { flexWrap: 'wrap' },
+  ringText: { flexBasis: 50, flexGrow: 1, gap: 2 },
 });
