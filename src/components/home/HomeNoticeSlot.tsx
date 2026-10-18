@@ -7,8 +7,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
-/** Most urgent first, the spec's order: dunning, pending invite, finish your profile, push permission, then the rest. */
-export const NOTICE_RANK = ['dunning', 'invite', 'profile', 'push', 'finishJoining', 'coachIntro', 'fullMacros', 'tourReoffer'] as const;
+/** Most urgent first; Finish your profile last, never ahead of another (#RINGS-NOTICE-ORDER). Failed payment: under the dials (#RINGS-PAY-SLOT). */
+export const NOTICE_RANK = ['invite', 'push', 'finishJoining', 'coachIntro', 'fullMacros', 'tourReoffer', 'profile'] as const;
 export type NoticeId = (typeof NOTICE_RANK)[number];
 
 const Slot = createContext<{ shown: NoticeId | undefined; report: (id: NoticeId, due: boolean) => void } | null>(null);
@@ -27,6 +27,9 @@ export function HomeNoticeSlot({ style, children }: { style?: StyleProp<ViewStyl
     </Slot.Provider>
   );
 }
+
+/** Whether this notice sits in the slot (the rings Home) rather than on today's Home. */
+export const useInNoticeSlot = (): boolean => useContext(Slot) !== null;
 
 /** Whether this notice renders: it is due and, inside the slot, the most urgent one due. */
 export function useNoticeSlot(id: NoticeId, due: boolean): boolean {

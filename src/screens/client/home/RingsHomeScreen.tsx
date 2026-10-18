@@ -5,8 +5,8 @@
  * locked), the date, three dials (each its own number and screen), Join a coach for a
  * coachless client (m#654), Roman's line (coachless: locked), the day's one forest
  * button, the tiles and the one notice slot (today's Home notices, most urgent first, one at
- * a time). Every read refreshes on open: focus and a return to the foreground. Edit tiles
- * follows in the next UI-1 pull request.
+ * a time); a failed payment shows alone under the dials. Every read refreshes on open: focus
+ * and a return to the foreground. Edit tiles follows in the next UI-1 pull request.
  */
 import React, { useCallback } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -132,6 +132,8 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             accessibilityLabel={dialLabel('Sleep', sleep)}
             onPress={() => (noSource && sleep.source !== 'health' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'recovery' }))} />
         </View>
+        {/* #RINGS-PAY-SLOT: the failed payment alone, up under the dials; every other notice waits in the slot. */}
+        <DunningBanner surface="HomeScreen" presentation="section" style={styles.pay} />
         <CoachlessHomeSlot part="join" />
         {/* Once the user is known, so a coached client never sees Roman locked first. */}
         {currentUser ? <HomeRomanLine coached={!!currentUser.coach_id} /> : null}
@@ -148,14 +150,13 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
         <HomeTiles day={{ ...day, ready: day.ready && !day.error }} checkIn={checkIn.data} refreshing={refreshing} noSource={noSource} />
         {/* UI-1 spec item 9: one notice at a time, most urgent first (HomeNoticeSlot's rank). */}
         <HomeNoticeSlot style={styles.notices}>
-          <DunningBanner surface="HomeScreen" presentation="section" />
           <PendingInviteBanner />
-          <ProfileNudge hasCoachPlan={workout.hasCoachPlan} hasTargets={(day.calorieTarget ?? 0) > 0} />
           <PushPermissionCard presentation="section" />
           <FinishJoining />
           <CoachIntroductionBanner />
           <FullMacrosIntroCard carbsG={day.carbsTarget} fatG={day.fatTarget} />
           <TutorialHomeSlot part="reoffer" />
+          <ProfileNudge hasCoachPlan={workout.hasCoachPlan} hasTargets={(day.calorieTarget ?? 0) > 0} />
         </HomeNoticeSlot>
       </ScrollView>
     </SafeAreaView>
@@ -166,5 +167,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: layout.gutter, paddingTop: 6, paddingBottom: 48 },
   dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
   cta: { marginTop: 20 },
+  pay: { marginTop: 20, marginBottom: 0 },
   notices: { marginTop: layout.sectionGap },
 });

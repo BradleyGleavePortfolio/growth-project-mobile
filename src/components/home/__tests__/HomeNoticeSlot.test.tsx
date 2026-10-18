@@ -4,7 +4,7 @@
  */
 import React, { useState } from 'react';
 import { Pressable, Text } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
@@ -23,7 +23,7 @@ jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 import { HomeNoticeSlot, NOTICE_RANK, useNoticeSlot, type NoticeId } from '../HomeNoticeSlot';
 import PushPermissionCard from '../PushPermissionCard';
 import FullMacrosIntroCard from '../FullMacrosIntroCard';
-import ProfileNudge from '../ProfileNudge';
+import ProfileNudge, { profileNudgeHiddenKey } from '../ProfileNudge';
 import { track } from '../../../lib/analytics';
 import { __resetMacroDisplayStoreForTests, hydrateMacroDisplay, reportMacroDisplay } from '../../../macros/macroDisplayStore';
 
@@ -44,11 +44,11 @@ beforeEach(() => {
   __resetMacroDisplayStoreForTests();
 });
 
-it("one at a time, most urgent first in the spec's order (dunning, invite, profile, push, then the rest); each dismissal shows the next", async () => {
-  expect(NOTICE_RANK).toEqual(['dunning', 'invite', 'profile', 'push', 'finishJoining', 'coachIntro', 'fullMacros', 'tourReoffer']);
+it('one at a time, most urgent first, Finish your profile last (#RINGS-NOTICE-ORDER); each dismissal shows the next', async () => {
+  expect(NOTICE_RANK).toEqual(['invite', 'push', 'finishJoining', 'coachIntro', 'fullMacros', 'tourReoffer', 'profile']);
   await render(<HomeNoticeSlot style={{ marginTop: 24 }}>{everyNotice}</HomeNoticeSlot>);
   for (const id of NOTICE_RANK) {
-    expect(visible()).toEqual([id]); // with dunning and the invite both due, only dunning
+    expect(visible()).toEqual([id]); // with the invite and push both due, only the invite
     expect(screen.getByTestId('home-notice-slot').props.style).toEqual({ marginTop: 24 });
     await fireEvent.press(screen.getByText(id));
   }
@@ -77,18 +77,31 @@ it('the real notices: Not now on the push card shows the next one due, the full 
   expect(screen.queryByTestId('push-permission-card')).toBeNull();
 });
 
-it('Finish your profile outranks push and still opens Edit profile', async () => {
-  await render(
-    <HomeNoticeSlot>
-      <PushPermissionCard presentation="section" />
-      <ProfileNudge hasCoachPlan={false} hasTargets />
-    </HomeNoticeSlot>,
-  );
+it('Finish your profile waits behind push, opens Edit profile, and Not now hides it for 7 days, in the slot only', async () => {
+  const slot = () => <HomeNoticeSlot><ProfileNudge hasCoachPlan={false} hasTargets /><PushPermissionCard presentation="section" /></HomeNoticeSlot>;
+  await render(slot());
+  expect(await screen.findByTestId('push-permission-card')).toBeTruthy();
+  expect(screen.queryByText('FINISH YOUR PROFILE')).toBeNull();
+  await fireEvent.press(screen.getByLabelText('Not now'));
   const nudge = await screen.findByLabelText(/^Complete your profile\. Missing .+\.$/);
-  expect(screen.getByText('FINISH YOUR PROFILE')).toBeTruthy();
-  expect(screen.queryByTestId('push-permission-card')).toBeNull();
   expect(track).toHaveBeenCalledWith('profile_nudge_shown', expect.objectContaining({ missing_count: expect.any(Number) }));
   await fireEvent.press(nudge);
   expect(track).toHaveBeenCalledWith('profile_edit_opened', { source: 'home_nudge' });
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
+  const before = Date.now();
+  await fireEvent.press(screen.getByLabelText('Not now'));
+  expect(screen.queryByTestId('profile-nudge')).toBeNull();
+  const until = Number(mockPrefs.get(profileNudgeHiddenKey('u1')));
+  expect(until - before).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000);
+  await screen.unmount();
+  await render(slot()); await act(async () => undefined); // reopened within the 7 days: still hidden
+  expect(screen.queryByTestId('profile-nudge')).toBeNull();
+  await screen.unmount();
+  await render(<ProfileNudge hasCoachPlan={false} hasTargets />); // today's Home: as before, no Not now
+  expect(screen.getByText('FINISH YOUR PROFILE')).toBeTruthy();
+  expect(screen.queryByLabelText('Not now')).toBeNull();
+  await screen.unmount();
+  mockPrefs.set(profileNudgeHiddenKey('u1'), String(Date.now() - 1)); // the 7 days are over
+  await render(slot());
+  expect(await screen.findByTestId('profile-nudge')).toBeTruthy();
 });

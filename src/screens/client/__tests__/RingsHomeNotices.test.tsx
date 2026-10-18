@@ -1,6 +1,6 @@
 /**
  * The rings Home's notice slot and refresh on open (agent 155/156 findings before the flag goes on):
- * today's eight Home notices, one at a time at the foot; every read again on a refocus and on a return
+ * today's Home notices, one at a time at the foot (the failed payment alone under the dials); every read again on a refocus and on a return
  * to the foreground; Health on this phone on first open and on each return to the app.
  */
 import React from 'react';
@@ -64,7 +64,7 @@ jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 jest.mock('../../../components/home/rings/HomeRomanLine', () => () => null);
 
 // Each of today's notices as a stand-in that asks the slot (due while its id is in mockDue) and prints its props.
-const mockDue = new Set<NoticeId>();
+const mockDue = new Set<NoticeId | 'dunning'>();
 function MockNotice({ id, ...props }: { id: NoticeId }) {
   const shown = useNoticeSlot(id, mockDue.has(id));
   return shown ? <Text>{`${id} ${JSON.stringify(props)}`}</Text> : null;
@@ -72,7 +72,8 @@ function MockNotice({ id, ...props }: { id: NoticeId }) {
 function mockNotice(id: NoticeId, props: object) {
   return <MockNotice id={id} {...props} />;
 }
-jest.mock('../../../entitlements/dunning/DunningBanner', () => ({ DunningBanner: (p: object) => mockNotice('dunning', p) }));
+const mockDunning = (p: object) => (mockDue.has('dunning') ? <Text>{`dunning ${JSON.stringify(p)}`}</Text> : null); // outside the slot
+jest.mock('../../../entitlements/dunning/DunningBanner', () => ({ DunningBanner: (p: object) => mockDunning(p) }));
 jest.mock('../../../components/PendingInviteBanner', () => (p: object) => mockNotice('invite', p));
 jest.mock('../../../components/join/FinishJoining', () => (p: object) => mockNotice('finishJoining', p));
 jest.mock('../../../components/home/ProfileNudge', () => (p: object) => mockNotice('profile', p));
@@ -109,7 +110,6 @@ beforeEach(() => {
 });
 
 it.each<[NoticeId, string]>([
-  ['dunning', '{"surface":"HomeScreen","presentation":"section"}'],
   ['invite', '{}'],
   ['finishJoining', '{}'],
   ['profile', '{"hasCoachPlan":true,"hasTargets":true}'],
@@ -127,11 +127,15 @@ it.each<[NoticeId, string]>([
   expect(at('home-notice-slot')).toBeGreaterThan(at('home-tiles'));
 });
 
-it('with every notice due, only the failed payment shows', async () => {
-  [...NOTICE_RANK].reverse().forEach((id) => mockDue.add(id));
+it('with every notice due, the failed payment shows alone under the dials and the invite in the slot at the foot (#RINGS-PAY-SLOT)', async () => {
+  ['dunning' as const, ...NOTICE_RANK].reverse().forEach((id) => mockDue.add(id));
   await render(<RingsHomeScreen {...props} />);
-  expect(await screen.findByText(/^dunning /)).toBeTruthy();
-  expect(screen.getAllByText(/^\w+ \{/)).toHaveLength(1);
+  expect(await screen.findByText(/^invite /)).toBeTruthy();
+  expect(screen.getAllByText(/^\w+ \{/).map((t) => String(t.props.children).split(' ')[0])).toEqual(['dunning', 'invite']);
+  const tree = JSON.stringify(screen.toJSON(), (k, v) => (k === 'refreshControl' ? undefined : v));
+  const at = ['"home-dials"', '"dunning {', '"home-tiles"', '"home-notice-slot"', '"invite {'].map((id) => tree.indexOf(id));
+  expect(at.every((i, n) => i > (n ? at[n - 1] : 0))).toBe(true); // the dials, the payment, the tiles, then the slot with the invite
+  expect(screen.getByText(/^dunning /).props.children).toContain('"surface":"HomeScreen","presentation":"section"');
 });
 
 it('refreshes on open: a refocus and a return to the foreground re-read every dial and tile; Health on this phone on each return to the app', async () => {
