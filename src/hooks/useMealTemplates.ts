@@ -13,7 +13,7 @@
  *   ['meal-plan', 'today', dateIso?]        — client today view
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   mealTemplatesApi,
   type AssignDailyPlanInput,
@@ -72,6 +72,7 @@ export function useUpdateMealTemplate() {
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['meal-templates'] });
       qc.invalidateQueries({ queryKey: ['meal-templates', vars.id] });
+      qc.invalidateQueries({ queryKey: ['daily-meal-plans'] }); // plans carry their meals' numbers
     },
   });
 }
@@ -83,6 +84,7 @@ export function useArchiveMealTemplate() {
       mealTemplatesApi.archiveTemplate(id).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['meal-templates'] });
+      qc.invalidateQueries({ queryKey: ['daily-meal-plans'] }); // plans carry their meals
     },
   });
 }
@@ -149,6 +151,22 @@ export function useAssignDailyMealPlan() {
       });
       qc.invalidateQueries({ queryKey: ['meal-plan', 'today'] });
     },
+  });
+}
+
+/** Each plan's assignments, one GET a plan (the list has no count); `byPlan` is undefined until all read. */
+export function useMealPlanAssignments(planIds: string[]) {
+  return useQueries({
+    queries: planIds.map((id) => ({
+      queryKey: ['daily-meal-plans', id, 'assignments'],
+      queryFn: () => mealTemplatesApi.listAssignmentsForPlan(id).then((r) => r.data),
+      staleTime: FIVE_MIN_MS,
+    })),
+    combine: (results) => ({
+      byPlan: results.every((r) => r.isSuccess)
+        ? new Map(planIds.map((id, i) => [id, results[i].data as DailyMealPlanAssignment[]]))
+        : undefined,
+    }),
   });
 }
 
