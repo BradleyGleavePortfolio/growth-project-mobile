@@ -39,6 +39,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
+  EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
   EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
@@ -111,6 +112,15 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_COACH_TABS_V2
    */
   coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', false),
+
+  /**
+   * LEARN-B (#LEARN-LESSONS op 1): the coach's Lessons editor in Programs
+   * (title, text, optional video link, order, delete). Default off; off,
+   * Programs is today's.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_LESSONS
+   */
+  coachLessons: readFlag('EXPO_PUBLIC_FF_COACH_LESSONS', false),
 
   /**
    * CRISIS-BTN (owner "#CRISIS-2B - all 3 buttons"): Call 911, Call 988, Text

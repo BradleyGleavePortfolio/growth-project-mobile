@@ -88,6 +88,7 @@ When the toggle changes:
 | `RoleChoice` tiles (`firstRunV2` on) | `selection()` | A role tile is picked |
 | `ForgotPasswordScreen` (`firstRunV2` on) | `softImpact()` | The reset request is submitted (the forest card shows) |
 | `ResetPasswordScreen` (`firstRunV2` on) | `success()` | The new password is saved |
+| `CoachLessons` (`coachLessons` on) | `selection()`; `warning()`; `success()`; `error()` | Opens the editor or moves a lesson; a missing title, a bad link or the delete confirm; a lesson is saved or deleted; a save, delete or move fails |
 | `LearnScreen` lesson rows (`learnHub` on) | `selection()` | A lesson opens |
 | `LearnLessonScreen` (`learnHub` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |

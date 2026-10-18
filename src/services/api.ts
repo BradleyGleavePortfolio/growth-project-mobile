@@ -1088,6 +1088,8 @@ export const lessonsApi = {
   getAll: () => api.get('/lessons'),
   create: (data: Record<string, unknown>) => api.post('/lessons', data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/lessons/${id}`, data),
+  /** The coach deletes a lesson they wrote (204); anyone else gets 404 or 403. */
+  remove: (id: string) => api.delete(`/lessons/${id}`),
   complete: (id: string) => api.post(`/lessons/${id}/complete`),
   getRecommended: () => api.get('/lessons/recommended'),
 };
