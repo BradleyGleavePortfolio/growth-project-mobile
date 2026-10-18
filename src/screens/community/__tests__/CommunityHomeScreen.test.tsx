@@ -106,7 +106,7 @@ describe('Community Home', () => {
     expect(screen.getByTestId('space-row-coach-badge')).toBeTruthy();
     // One segment has no page to switch to, so no control is drawn.
     expect(screen.queryByRole('tab')).toBeNull();
-    expect(screen.queryByLabelText('Search')).toBeNull();
+    expect(screen.queryByLabelText('Search messages and spaces')).toBeNull();
     expect(screen.queryByLabelText('Classroom')).toBeNull();
   });
 

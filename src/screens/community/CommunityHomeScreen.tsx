@@ -142,7 +142,7 @@ export default function CommunityHomeScreen(): React.ReactElement {
               intent="light"
               onPress={() => navigation.navigate('CommunityFind')}
               accessibilityRole="button"
-              accessibilityLabel="Search"
+              accessibilityLabel="Search messages and spaces"
               style={s.search}
               testID="community-home-search"
             >
