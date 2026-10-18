@@ -247,10 +247,13 @@ describe('Habits — production DTO, check-off and server history', () => {
     await waitFor(() => expect(screen.getByText('No habits yet.')).toBeTruthy());
   });
 
-  it('keeps add/dismiss, long-press deletion, check-in editing/saving and tab return reachable', async () => {
+  it.each([{
+    habitName: 'Drink water',
+    confirmation: 'Remove Drink water? Its history stays.',
+  }])('keeps $habitName history in the removal confirmation and its client flow reachable', async ({ habitName, confirmation }) => {
     const screen = await renderHabits();
-    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
-    let scroll = screen.getByText('Drink water').parent;
+    await waitFor(() => expect(screen.getByText(habitName)).toBeTruthy());
+    let scroll = screen.getByText(habitName).parent;
     while (scroll && !scroll.props.refreshControl) scroll = scroll.parent;
     expect(scroll?.props.refreshControl).toBeTruthy();
     await act(async () => scroll?.props.refreshControl.props.onRefresh());
@@ -260,9 +263,15 @@ describe('Habits — production DTO, check-off and server history', () => {
     await fireEvent.press(screen.getByText('Add habit'));
     await fireEvent.press(screen.getByLabelText('Close new habit'));
     expect(screen.queryByText('New habit')).toBeNull();
-    await fireEvent(screen.getByText('Drink water'), 'longPress');
-    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.some((button) => button.text === 'Cancel')).toBe(true);
-    const deletion = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Delete');
+    await fireEvent(screen.getByText(habitName), 'longPress');
+    const [title, message, buttons] = jest.mocked(Alert.alert).mock.calls.at(-1)!;
+    expect(title).toBe('Delete habit');
+    expect(message).toBe(confirmation);
+    expect(buttons?.map(({ text, style }) => ({ text, style }))).toEqual([
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive' },
+    ]);
+    const deletion = buttons?.find((button) => button.text === 'Delete');
     await act(async () => { deletion?.onPress?.(); });
     await waitFor(() => expect(mockDeleteHabit).toHaveBeenCalledWith('water'));
     await fireEvent.press(screen.getByText('Daily check-in'));
@@ -277,7 +286,7 @@ describe('Habits — production DTO, check-off and server history', () => {
       mood: 5, energy: 4, sleep_hours: 7, notes: 'Rested',
     })));
     await fireEvent.press(screen.getByText('Habits'));
-    expect(screen.getByText('Drink water')).toBeTruthy();
+    expect(screen.getByText(habitName)).toBeTruthy();
   });
 
   it('hydrates a saved check-in and keeps update reachable', async () => {

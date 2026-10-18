@@ -144,7 +144,7 @@ export interface CheckinSubmittedProps {
 }
 
 export interface ReferralShareCardSharedProps {
-  card_type: 'streak' | 'pr' | 'transformation';
+  card_type: 'streak' | 'pr' | 'health';
   coach_tenant_id?: string;
   destination?: string;
 }

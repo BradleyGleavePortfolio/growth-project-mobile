@@ -21,6 +21,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
 
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { useKeepUnsentChat } from '../../navigation/coachInbox';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { layout, radius } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
@@ -89,6 +90,8 @@ export default function ClientMessagesScreen() {
   // v2 idempotent send: a failed send keeps its device key for the same text,
   // so tapping Send again replays it and can never post a duplicate.
   const unsentRef = useRef<{ text: string; key: string } | null>(null);
+  // A chat opened from outside Messages closes this one first; unsent text asks before it goes (Sol B1).
+  useKeepUnsentChat(inputText.trim() !== '');
 
   const blockStore = useBlockedUsersStore();
   const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
@@ -182,11 +185,9 @@ export default function ClientMessagesScreen() {
     useCallback(() => {
       loadInitial().then(markRead);
 
-      const unsubClient = subscribeToMessages(clientId, () => {
-        loadSinceNewest().then(markRead);
-      });
-      // A client message lands on the coach's own channel: it is on screen,
-      // so it is read (AUDIT-03-125 U1; was a refetch that left it unread).
+      // Every ping for this chat reaches the coach's own topic, the coach's
+      // own server-side sends included (MSGRT). A client message is on
+      // screen, so it is read (AUDIT-03-125 U1).
       const refetchAndRead = () => {
         void loadSinceNewest().then(markRead);
       };
@@ -195,11 +196,7 @@ export default function ClientMessagesScreen() {
             currentUser.id,
             refetchAndRead,
             thread.enabled
-              ? (ping) => {
-                  // The backend's public-channel ping carries no ids, so every
-                  // ping refreshes this thread; an older ID-bearing ping for a
-                  // different client is skipped.
-                  if (ping.threadClientId !== null && ping.threadClientId !== clientId) return;
+              ? () => {
                   void loadSinceNewest();
                   void thread.refresh();
                 }
@@ -209,7 +206,6 @@ export default function ClientMessagesScreen() {
 
       pollRef.current = setInterval(refetchAndRead, FALLBACK_POLL_MS);
       return () => {
-        unsubClient();
         unsubSelf();
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
@@ -456,6 +452,11 @@ export default function ClientMessagesScreen() {
               )}
               <MessageBubble
                 message={bubbleMsg}
+                draftContext={isCoach ? {
+                  coach: currentUser?.firstName || currentUser?.name?.split(' ')[0] || 'Your coach',
+                  client: clientName.split(' ')[0],
+                  isSender: !!currentUser?.id && item.sender_id === currentUser.id,
+                } : undefined}
                 isMe={isCoach}
                 onLongPress={handleLongPress}
               />

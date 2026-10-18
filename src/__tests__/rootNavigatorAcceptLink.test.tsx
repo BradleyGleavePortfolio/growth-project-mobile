@@ -137,7 +137,6 @@ jest.mock('../navigation/AuthNavigator', () => () => null);
 jest.mock('../navigation/ClientNavigator', () => () => null);
 jest.mock('../navigation/CoachNavigator', () => () => null);
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
-jest.mock('../navigation/LeanOnboardingNavigator', () => () => null);
 
 jest.mock('../components/OfflineBanner', () => () => null);
 jest.mock('../screens/client/Day1WinScreen', () => () => null);

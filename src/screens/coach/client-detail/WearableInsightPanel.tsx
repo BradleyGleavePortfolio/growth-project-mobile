@@ -18,10 +18,12 @@
  *     `useReduceMotion()`, mirroring HK-3b `HrvTrendCard`.
  *
  * Honesty / graceful degradation (#36/#50): the approve endpoint is LIVE as of
- * HK-6a. A successful approve closes the sheet and shows the forward hook; any
- * failure (4xx/5xx, network, or a shape drift) surfaces sanitized, recoverable
- * error copy in the sheet with a Retry CTA — never a silent failure and never a
- * fabricated success that would hide a real outage.
+ * HK-6a. A successful send closes the sheet and shows the forward hook; a
+ * successful dismiss closes the sheet and folds the card, with no "Sent" claim
+ * (nothing was sent). Any failure (4xx/5xx incl. the server refusing an
+ * `approve` whose text is not Roman's, network, or a shape drift) surfaces
+ * sanitized, recoverable error copy in the sheet with a Retry CTA — never a
+ * silent failure and never a fabricated success that would hide a real outage.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -177,6 +179,12 @@ export function WearableInsightPanel({
     },
     [],
   );
+  // A dismiss sends nothing, so it never shows the "Sent" hook: the sheet
+  // closes and the card folds back to its one-line observation.
+  const onDismissed = useCallback(() => {
+    setSheetOpen(false);
+    setExpanded(false);
+  }, []);
 
   const onRetry = useCallback(() => {
     void query.refetch();
@@ -350,6 +358,7 @@ export function WearableInsightPanel({
           accentInk={toneInk}
           onClose={onCloseSheet}
           onSent={onSent}
+          onDismissed={onDismissed}
         />
       )}
     </>
@@ -407,9 +416,11 @@ function Field({ label, value }: { label: string; value: string }) {
 /**
  * MessageDraftReviewSheet — the review / edit / approve modal (UX §4.5).
  * Editable multiline draft, three actions (Approve & send / Edit then send /
- * Dismiss). Never auto-sends. The HK-6a approve endpoint is live: a successful
- * approve closes the sheet via `onSent`; a failed approve keeps the sheet open
- * and shows sanitized, recoverable error copy + a Retry CTA (#36/#50).
+ * Dismiss). Never auto-sends. What is sent is what the box holds: Roman's text
+ * byte for byte is an `approve`; any other byte (a space included) makes it
+ * the coach's `edit`, so Approve & send is off while the text differs. A
+ * successful send closes via `onSent`, a successful dismiss via `onDismissed`;
+ * a failure keeps the sheet open with sanitized copy + a Retry CTA (#36/#50).
  */
 function MessageDraftReviewSheet({
   visible,
@@ -420,6 +431,7 @@ function MessageDraftReviewSheet({
   accentInk,
   onClose,
   onSent,
+  onDismissed,
 }: {
   visible: boolean;
   insight: CoachInsight;
@@ -430,6 +442,7 @@ function MessageDraftReviewSheet({
   accentInk: string;
   onClose: () => void;
   onSent: (firstName?: string) => void;
+  onDismissed: () => void;
 }) {
   const original = insight.suggested_message_draft;
   const [body, setBody] = useState(original);
@@ -445,7 +458,9 @@ function MessageDraftReviewSheet({
   } | null>(null);
 
   const approve = useApproveDraft();
-  const edited = body.trim() !== original.trim();
+  // Exact comparison, never trimmed: the server refuses an `approve` whose
+  // text is not Roman's stored suggestion.
+  const edited = body !== original;
 
   const run = useCallback(
     (action: 'approve' | 'edit' | 'dismiss', draftBody: string) => {
@@ -454,10 +469,11 @@ function MessageDraftReviewSheet({
       approve.mutate(
         { clientId, bucket, draftBody, action },
         {
-          // `onSuccess` only fires for the sole success shape (`status: 'ok'`)
-          // now HK-6a is live — close the sheet and run the forward hook.
+          // `onSuccess` only fires for the sole success shape (`status: 'ok'`).
+          // A send runs the forward hook; a dismiss sent nothing, so no hook.
           onSuccess: () => {
-            onSent(clientFirstName);
+            if (action === 'dismiss') onDismissed();
+            else onSent(clientFirstName);
           },
           onError: (err) => {
             setErrorCopy(sanitizeSendError(err));
@@ -465,24 +481,20 @@ function MessageDraftReviewSheet({
         },
       );
     },
-    [approve, clientId, bucket, clientFirstName, onSent],
+    [approve, clientId, bucket, clientFirstName, onSent, onDismissed],
   );
 
   const busy = approve.isPending;
-  const primaryDisabled = busy;
+  const canApprove = !busy && !edited;
+  const canEdit = !busy && edited;
 
   const onRetrySend = useCallback(() => {
-    // Guard against replaying an already-in-flight request (#28 race).
-    if (busy) return;
+    // Guard against replaying an already-in-flight request (#28 race). Retry
+    // only shows after a failed `run`, which always records its attempt.
     const last = lastAttemptRef.current;
-    if (last) {
-      run(last.action, last.draftBody);
-      return;
-    }
-    // Defensive fallback (Retry is only shown after a failed `run`, so the ref
-    // should always be populated): replay the current intent.
-    run(edited ? 'edit' : 'approve', body);
-  }, [busy, run, edited, body]);
+    if (busy || last == null) return;
+    run(last.action, last.draftBody);
+  }, [busy, run]);
 
   return (
     <Modal
@@ -541,12 +553,12 @@ function MessageDraftReviewSheet({
           <Pressable
             style={[
               styles.primaryBtn,
-              { backgroundColor: primaryDisabled ? colors.stone : accentInk },
+              { backgroundColor: canApprove ? accentInk : colors.stone },
             ]}
             onPress={() => run('approve', original)}
-            disabled={primaryDisabled}
+            disabled={!canApprove}
             accessibilityRole="button"
-            accessibilityState={{ disabled: primaryDisabled, busy }}
+            accessibilityState={{ disabled: !canApprove, busy }}
             accessibilityLabel="Approve and send the message"
             testID="coach-insight-approve"
           >
@@ -560,19 +572,19 @@ function MessageDraftReviewSheet({
           <Pressable
             style={[
               styles.secondaryBtn,
-              { borderColor: edited && !primaryDisabled ? accentInk : colors.stone },
+              { borderColor: canEdit ? accentInk : colors.stone },
             ]}
             onPress={() => run('edit', body)}
-            disabled={!edited || primaryDisabled}
+            disabled={!canEdit}
             accessibilityRole="button"
-            accessibilityState={{ disabled: !edited || primaryDisabled }}
+            accessibilityState={{ disabled: !canEdit }}
             accessibilityLabel="Send your edited message"
             testID="coach-insight-edit-send"
           >
             <Text
               style={[
                 styles.secondaryBtnText,
-                { color: edited && !primaryDisabled ? accentInk : colors.stone },
+                { color: canEdit ? accentInk : colors.stone },
               ]}
             >
               Edit then send

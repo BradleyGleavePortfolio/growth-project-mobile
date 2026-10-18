@@ -68,6 +68,7 @@ jest.mock('@react-navigation/native', () => {
 });
 
 import MessagesScreen from '../MessagesScreen';
+import { featureFlags } from '../../../config/featureFlags';
 
 const getMock = api.get as unknown as jest.Mock;
 const postMock = api.post as unknown as jest.Mock;
@@ -110,6 +111,24 @@ beforeEach(() => {
 });
 
 describe('client MessagesScreen with messaging_core_v2 ON', () => {
+  it('the real client adapter marks each drafted coach message, not typed, voice or deleted rows', async () => {
+    Object.defineProperty(featureFlags, 'romanDraftMark', { value: true });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    mockList.mockResolvedValue({ data: [
+      row({ id: 'draft1', sender_id: 'coach-9', body: 'First draft', ai_draft_id: 'd1' }),
+      row({ id: 'draft2', sender_id: 'coach-9', body: 'Edited draft', ai_draft_id: 'd2', edited_at: recent }),
+      row({ id: 'typed', sender_id: 'coach-9', body: 'Typed' }),
+      row({ id: 'voice', sender_id: 'coach-9', body: '', ai_draft_id: 'd3', voice_url: 'voice.m4a' }),
+      row({ id: 'deleted', sender_id: 'coach-9', body: null, ai_draft_id: 'd4', deleted: true }),
+    ] });
+    try {
+      const u = await render(<MessagesScreen />);
+      await waitFor(() => expect(u.getAllByLabelText('Roman helped draft this message. Sam sent it.')).toHaveLength(2));
+      await fireEvent.press(u.getAllByTestId('roman-draft-mark')[0]);
+      expect(u.getByLabelText('Drafted by Roman')).toBeTruthy();
+      expect(u.queryByText('Drafted with Roman')).toBeNull();
+    } finally { Object.defineProperty(featureFlags, 'romanDraftMark', { value: false }); }
+  });
   it('groups timestamps without hiding Edited, and names never imply online presence', async () => {
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Coach Nine' } });
     mockList.mockResolvedValue({ data: [
@@ -243,6 +262,10 @@ describe('client MessagesScreen with messaging_core_v2 ON', () => {
     await fireEvent.changeText(utils.getByLabelText('Message text'), 'running late');
     await fireEvent.press(utils.getByLabelText('Send message'));
     expect(await utils.findByText('Not sent. Long press to send again')).toBeTruthy();
+    // C3B-THREAD: c3StyleB is off by default, so main's thread is unchanged.
+    expect(featureFlags.c3StyleB).toBe(false);
+    expect(utils.queryByText('Not sent. Tap to send again')).toBeNull();
+    expect(utils.queryByTestId('c3b-header')).toBeNull();
     const first = postMock.mock.calls.find(([u]) => u === '/messages')!;
     const key = (first[1] as { client_message_id: string }).client_message_id;
     expect(first[2]).toMatchObject({ headers: { 'Idempotency-Key': key } });

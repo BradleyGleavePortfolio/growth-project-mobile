@@ -111,9 +111,11 @@ it.each([
   expect(r.queryByTestId('roman-consent-gate-allow')).toBeNull();
 });
 
-it('never asks a coach', async () => {
+it('never asks a coach the client question (COACH-AI-CONSENT: the coach gate reads their own grant)', async () => {
   const api = makeApi({ kind: 'ok', status: OFF });
-  const r = await render(<RomanConsentGate surface="coach" api={api} />);
+  const coachApi = { getStatus: jest.fn(async () => ({ kind: 'unavailable' as const })), grant: jest.fn(), decline: jest.fn(), withdraw: jest.fn() };
+  const r = await render(<RomanConsentGate surface="coach" api={api} coachApi={coachApi}>{null}</RomanConsentGate>);
+  await waitFor(() => expect(coachApi.getStatus).toHaveBeenCalledTimes(1));
   expect(api.getStatus).not.toHaveBeenCalled();
   expect(r.toJSON()).toBeNull();
 });

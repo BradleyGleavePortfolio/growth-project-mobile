@@ -36,6 +36,8 @@ jest.mock('../../../../services/api', () => ({
     getPreferences: jest.fn(async () => ({ data: { digest_email: true } })),
   },
 }));
+// K1-14: the Coach sharing row follows the server's coach link (GET /consent/me); this client has a coach.
+jest.mock('../../../../api/coachSharingApi', () => ({ readCoachSharing: jest.fn(async () => ({ kind: 'ok', state: {} })) }));
 jest.mock('../../../../services/authActions', () => ({ signOut: jest.fn(), refreshProfile: jest.fn(),
   prepareSignOutConfirm: jest.fn(async () => 'Are you sure you want to sign out?') }));
 jest.mock('../../../../utils/supabaseAuth', () => ({
@@ -54,6 +56,7 @@ jest.mock('../../../../tutorial/tutorialStore', () => ({
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ getParent: () => ({ navigate: mockParentNavigate }) }),
+  useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]),
 }));
 jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: { get consultationOnboarding() { return mockRomanEnabled; },
@@ -81,6 +84,7 @@ it('groups every existing row into seven ordered sections without disclosure tap
   const view = await render(<SettingsScreen navigation={navigation} />);
   await view.findByLabelText('Biometric unlock');
   await view.findByText('7:30 AM');
+  await view.findByText('Coach sharing');
   // Part-1 row inventory, regrouped only. Existing action tests below prove effects.
   const groups = [
     ['account', 'Account', ['Name', 'Email', 'Change password', 'Appearance',
@@ -139,6 +143,7 @@ it('keeps every navigation row, preference, biometric and tutorial action on thi
   const view = await render(<ThemeProvider><SettingsScreen navigation={navigation} /></ThemeProvider>);
   await fireEvent.press(view.getByRole('button', { name: 'Back' }));
   expect(navigationStub.goBack).toHaveBeenCalled();
+  await view.findByLabelText('Coach sharing');
   for (const [label, route] of [
     ['Delete account', 'DeleteAccount'], ['Notification preferences', 'NotificationSettings'],
     ['Support, Chat with the support team.', 'SupportInbox'], ['Trust & Privacy, How your data is protected.', 'TrustCenter'],
@@ -290,7 +295,7 @@ it('keeps the existing Roman consent visibility gate', async () => {
   const view = await render(<SettingsScreen navigation={navigation} />);
   expect(view.queryByTestId('settings-roman-ai')).toBeNull();
   expect(view.queryByTestId('settings-section-roman')).toBeNull();
-  expect(view.getByTestId('settings-coach-sharing')).toBeTruthy();
+  expect(await view.findByTestId('settings-coach-sharing')).toBeTruthy();
 });
 
 it('keeps Support available when the tutorial flag is off', async () => {

@@ -31,6 +31,7 @@ import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 import SubCoachInviteModal from './SubCoachInviteModal';
 import LoadFailedNotice from '../../components/coach/LoadFailedNotice';
 import { digitalPurchasesHidden } from '../../config/purchaseSurfaces';
+import { featureFlags } from '../../config/featureFlags';
 import { Screen } from '../../ui';
 import { radius } from '../../theme/tokens';
 
@@ -223,6 +224,20 @@ export default function TeamManagementScreen() {
 
   const isGated = !SCALE_TIERS.includes(planTier);
 
+  // COACHTABS: with the six tabs Team opens from Clients, so it draws the
+  // coach Back (arrow, 44 pt) and returns there.
+  const back = featureFlags.coachTabsV2 && navigation.canGoBack() ? (
+    <Pressable
+      onPress={() => navigation.goBack()}
+      style={styles.back}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      testID="team-back"
+    >
+      <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+    </Pressable>
+  ) : null;
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -236,6 +251,7 @@ export default function TeamManagementScreen() {
   if (isGated) {
     return (
       <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="team-management">
+        {back}
         <Text style={styles.header}>Team</Text>
         <UpgradeGate />
       </Screen>
@@ -244,6 +260,7 @@ export default function TeamManagementScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="team-management">
+      {back}
       <View style={styles.headerRow}>
         <Text style={styles.header}>Team</Text>
         <Pressable
@@ -300,6 +317,7 @@ export default function TeamManagementScreen() {
 const styles = StyleSheet.create({
   // The list pads its own foot; Screen keeps the 24 pt gutter.
   body: { paddingBottom: 0 },
+  back: { width: 44, height: 44, justifyContent: 'center', marginBottom: 4 },
   center: {
     flex: 1,
     backgroundColor: Colors.background,

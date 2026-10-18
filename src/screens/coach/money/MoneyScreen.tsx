@@ -76,22 +76,20 @@ import {
 } from "../../../lib/money/moneyCopy";
 import { captureError } from "../../../services/sentry";
 import { featureFlags } from "../../../config/featureFlags";
+import { creditPacksHidden } from "../../../config/purchaseSurfaces";
 // §2.12 Roman payout notice, moved here from the deleted Earnings screen
 // (C-332-2). Gated behind romanChat.
 import RomanPayoutNotice from "../../../components/roman/RomanPayoutNotice";
 import { assertStripeUrl } from "../../../utils/stripeUrlValidator";
 import { useNetworkStatus } from "../../../hooks/useNetworkStatus";
 import { useAIBudget } from "../../../hooks/useAIBudget";
-import { creditPacksHidden } from "../../../config/purchaseSurfaces";
 import SetupNotice from "../../../components/coach/setup/SetupNotice";
 import { CsvFileError, shareCsvFile } from "../../../lib/money/csvFile";
 import { authEvents } from "../../../utils/authEvents";
 import KpiTile from "../../../components/command-center/KpiTile";
 import AlertRow from "../../../components/command-center/AlertRow";
-import type {
-  CoachTabParamList,
-  SettingsStackParamList,
-} from "../../../navigation/CoachNavigator";
+import type { SettingsStackParamList } from "../../../navigation/CoachNavigator";
+import { openInboxChat } from "../../../navigation/coachInbox";
 import { useSection } from "./useSection";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MoneyBack from "./MoneyBack";
@@ -243,14 +241,8 @@ export default function MoneyScreen({
     setRefreshing(false);
   }, [summary, attention, charges, payouts, roster, connect, refetchAi]);
 
-  const tabNav =
-    navigation.getParent<NativeStackNavigationProp<CoachTabParamList>>();
   const messageClient = (a: AttentionItem) => {
-    if (!a.client) return;
-    tabNav?.navigate("ClientsStack", {
-      screen: "ClientMessages",
-      params: { clientId: a.client.id, clientName: a.client.name },
-    });
+    if (a.client) openInboxChat(navigation, a.client.id, a.client.name);
   };
   const openStripeSetup = () =>
     navigation.navigate("CoachSetup", { section: "get_paid" });
@@ -918,6 +910,21 @@ export default function MoneyScreen({
           >
             <Text style={styles.footerText}>Packages</Text>
           </TouchableOpacity>
+          {/* PK-2a: "Buy more credits" is two taps from the Money tab (tab, then
+              this row). Same gate as every credit-pack entry: hidden where the
+              build may not sell packs (iOS store builds without the US link,
+              Android release builds without the Android link). */}
+          {creditPacksHidden() ? null : (
+            <TouchableOpacity
+              onPress={() => navigation.navigate("CreditPackCheckout", undefined)}
+              style={styles.footerRow}
+              accessibilityRole="button"
+              accessibilityLabel="Buy more AI credits"
+              testID="money-buy-credits"
+            >
+              <Text style={styles.footerText}>Buy more credits</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1145,6 +1152,8 @@ export const makeStyles = (colors: ThemeColors) =>
     chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: 12 },
     chip: {
       minHeight: 44,
+      minWidth: 44,
+      alignItems: "center",
       paddingHorizontal: 12,
       justifyContent: "center",
       borderWidth: 1,

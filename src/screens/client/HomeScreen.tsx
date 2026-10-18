@@ -58,7 +58,11 @@ import {
 import { getTodayString } from '../../utils/date';
 import { homeDateLine } from './homeDate';
 import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/workoutDoneToday';
+import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
+import { featureFlags } from '../../config/featureFlags';
+// UI-1 rings and tiles layout, behind featureFlags.clientHomeRings (off in every profile).
+import RingsHomeScreen, { type RingsWorkoutReads } from './home/RingsHomeScreen';
 
 // ─── Progress line ────────────────────────────────────────────────────────────
 
@@ -171,6 +175,7 @@ export default function HomeScreen() {
   // History or a pending coach assignment makes Continue useful. Only show
   // Explore once both reads confirm empty; a failed read keeps workouts reachable.
   const [workoutExists, setWorkoutExists] = useState<boolean | 'loading'>('loading');
+  const [workoutReads, setWorkoutReads] = useState<RingsWorkoutReads>({ history: null, assignments: null });
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     if (!currentUser) return;
@@ -178,7 +183,7 @@ export default function HomeScreen() {
     (async () => {
       try {
         const [history, assignments, active] = await Promise.allSettled([
-          workoutApi.getAll(5),
+          workoutApi.getAll(featureFlags.clientHomeRings ? 20 : 5), // rings: a week of the client's own workouts
           workoutBuilderApi.listMyAssignments(),
           loadActiveWorkoutSession(currentUser.id),
         ]);
@@ -191,10 +196,14 @@ export default function HomeScreen() {
         const savedWorkout = active.status === 'fulfilled' ? active.value?.session ?? null : null;
         if (!cancelled) {
           setWorkoutDone(done);
-          setPendingPlanName(pending?.workout_plan?.name?.trim() || null);
+          setPendingPlanName((pending && assignmentPlanName(pending)?.trim()) || null);
           setPendingAssignmentId(pending?.id ?? null);
           setHasCoachPlan(assignments.status === 'fulfilled' && assignments.value.some((assignment) => !!assignment.workout_plan));
           setActiveWorkout(savedWorkout);
+          setWorkoutReads({
+            history: history.status === 'fulfilled' ? rows : null,
+            assignments: assignments.status === 'fulfilled' ? assignments.value : null,
+          });
           setWorkoutExists(
             rows.length > 0 || !!pending || !!savedWorkout
             || history.status === 'rejected' || assignments.status === 'rejected',
@@ -217,6 +226,9 @@ export default function HomeScreen() {
   const dateLine = homeDateLine(today); // B34: "Thursday, 8 October", locale order
   const progressLine = buildProgressLine(mealsLogged, workoutDone, pendingPlanName, workoutInProgress);
   const workoutLabel = workoutInProgress ? 'Resume workout' : !workoutDone && pendingPlanName ? `Start ${pendingPlanName}` : 'Open Train';
+  const workoutHint = workoutInProgress
+    ? 'Opens your saved workout'
+    : !workoutDone && pendingPlanName ? 'Opens the assigned workout' : 'Opens Train';
 
   // The Food Log uses approximate ml because day reads round to ounces.
   const waterValue = !dayReady || !settingsLoaded || loadError ? '—' : settings.unit === 'kg'
@@ -367,6 +379,16 @@ export default function HomeScreen() {
   if (!currentUser) {
     return <SkeletonScreen />;
   }
+  if (featureFlags.clientHomeRings) {
+    return (
+      <RingsHomeScreen
+        day={{ ready: dayReady, error: loadError, retrying: isLoading || refreshing, calories: dailyTotals?.calories, calorieTarget }}
+        workout={{ exists: workoutExists, label: workoutLabel, hint: workoutHint, onContinue, ...workoutReads }}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+      />
+    );
+  }
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
@@ -427,9 +449,7 @@ export default function HomeScreen() {
             onPress={onContinue}
             accessibilityRole="button"
             accessibilityLabel={workoutLabel}
-            accessibilityHint={workoutInProgress
-              ? 'Opens your saved workout'
-              : !workoutDone && pendingPlanName ? 'Opens the assigned workout' : 'Opens Train'}
+            accessibilityHint={workoutHint}
             testID="home-continue-cta"
           >
             <Text style={{ ...typography.bodyMd, color: sc.textOnAccent }}>{workoutLabel}</Text>

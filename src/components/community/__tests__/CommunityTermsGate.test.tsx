@@ -14,7 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
-import { Alert, Linking, Text } from 'react-native';
+import { Alert, Linking, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockStore = new Map<string, string>();
@@ -158,6 +158,26 @@ describe('CommunityTermsGate', () => {
     );
   });
 
+  it('COACHTABS: with onBack (coach, six tabs) a 44 pt Back leaves without agreeing; without it there is none', async () => {
+    const onBack = jest.fn();
+    const coach = await render(
+      <CommunityTermsGate onBack={onBack}>
+        <Text testID="community-content">Community feed</Text>
+      </CommunityTermsGate>,
+    );
+    const back = await coach.findByTestId('community-terms-back');
+    expect(back.props.accessibilityLabel).toBe('Back');
+    expect(StyleSheet.flatten(back.props.style)).toMatchObject({ width: 44, height: 44 });
+    await fireEvent.press(back);
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(mockSet).not.toHaveBeenCalled();
+    expect(coach.queryByTestId('community-content')).toBeNull();
+    coach.unmount();
+    const client = await renderGate();
+    await client.findByTestId('community-terms-gate');
+    expect(client.queryByTestId('community-terms-back')).toBeNull();
+  });
+
   it('copy has no first person and no exclamation marks', () => {
     for (const text of Object.values(COMMUNITY_TERMS_COPY)) {
       expect(text).not.toMatch(/!|\b(we|our|us|I)\b/);
@@ -176,7 +196,7 @@ describe('every Community entry sits behind the gate', () => {
   it('coach Community stack', () => {
     const src = read('navigation/CoachCommunityNavigator.tsx');
     expect(src).toMatch(
-      /export default function CoachCommunityNavigator\(\): React\.ReactElement \{\s*return \(\s*<CommunityTermsGate>\s*<CoachCommunityNavigatorStack \/>\s*<\/CommunityTermsGate>/,
+      /export default function CoachCommunityNavigator\(\): React\.ReactElement \{\s*const navigation = useNavigation\(\);\s*return \(\s*<CommunityTermsGate onBack=\{featureFlags\.coachTabsV2 \? \(\) => navigation\.goBack\(\) : undefined\}>\s*<CoachCommunityNavigatorStack \/>\s*<\/CommunityTermsGate>/,
     );
   });
 

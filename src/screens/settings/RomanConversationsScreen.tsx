@@ -24,6 +24,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   FlatList,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -37,7 +38,11 @@ import { typography } from '../../theme/tokens';
 import type { RomanChatsApi, RomanChatSummary } from '../../api/romanChatsApi';
 import type { AccountBinding } from '../../services/accountBinding';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { useRomanCrisisSentence } from '../../lib/romanCrisisSentence';
 import { useRomanChats, type RomanChatsNotice } from './useRomanChats';
+import { clientPrivacyText, signedInClientIsCoachless } from '../../lib/ai/aiCoachless';
+import { isCoachLikeRole } from '../../lib/roleSelectionGate';
+import { readUserCacheSync } from '../../lib/userCache';
 import RomanChatsConfirmSheet from './RomanChatsConfirmSheet';
 import RomanChatsSupportAction from './RomanChatsSupportAction';
 import {
@@ -47,6 +52,12 @@ import {
   ROMAN_CHATS_COPY,
   type RomanChatsFailureView,
 } from './romanChatsCopy';
+
+/** K1-5: a client with no coach reads what stays, with no coach in it; a coach account and a coached client as before. */
+const confirmAllBody = () =>
+  signedInClientIsCoachless() && !isCoachLikeRole(readUserCacheSync()?.role)
+    ? ROMAN_CHATS_COPY.confirmAllBodyNoCoach
+    : clientPrivacyText(ROMAN_CHATS_COPY.confirmAllBody);
 
 /** Params of the transcript screen (RomanConversationScreen). */
 export interface RomanConversationParams {
@@ -104,6 +115,7 @@ export default function RomanConversationsScreen({
   const allOpen = confirmAll !== null && binding !== null && confirmAll.binding === binding;
   const network = useNetworkStatus();
   const online = isEffectivelyOnline(network);
+  const crisisText = useRomanCrisisSentence();
   const wasOnline = useRef(online);
 
   // Back online after an offline load failure: read the list again.
@@ -214,23 +226,29 @@ export default function RomanConversationsScreen({
 
   const intro = (
     <Text style={styles.body} testID="roman-chats-intro">
-      {ROMAN_CHATS_COPY.intro}
+      {clientPrivacyText(crisisText(ROMAN_CHATS_COPY.intro))}
     </Text>
+  );
+  // Every state that is not the list scrolls in this one container (the list
+  // scrolls itself), so the intro and its 44 pt actions stay reachable at any
+  // width and text size, above the tab bar (FIX725R3).
+  const page = (children: React.ReactNode) => (
+    <ScrollView contentContainerStyle={styles.content} testID="roman-chats-page">
+      {children}
+    </ScrollView>
   );
 
   function body(): React.ReactElement {
     if (phase === 'signed_out') {
-      return (
-        <View style={styles.content}>
-          <Text style={styles.body} testID="roman-chats-signed-out">
-            {ROMAN_CHATS_COPY.signedOutState}
-          </Text>
-        </View>
+      return page(
+        <Text style={styles.body} testID="roman-chats-signed-out">
+          {ROMAN_CHATS_COPY.signedOutState}
+        </Text>,
       );
     }
     if (phase === 'loading') {
-      return (
-        <View style={styles.content}>
+      return page(
+        <>
           {intro}
           {noticeView(notice)}
           <ActivityIndicator
@@ -238,12 +256,12 @@ export default function RomanConversationsScreen({
             accessibilityLabel={ROMAN_CHATS_COPY.loading}
             testID="roman-chats-loading"
           />
-        </View>
+        </>,
       );
     }
     if (phase === 'error' && loadFailure) {
-      return (
-        <View style={styles.content}>
+      return page(
+        <>
           {intro}
           {noticeView(notice)}
           <View style={styles.card} testID="roman-chats-error">
@@ -252,7 +270,7 @@ export default function RomanConversationsScreen({
             </Text>
             {actions(loadFailure, reload, 'roman-chats-error')}
           </View>
-        </View>
+        </>,
       );
     }
     const empty = chats.length === 0 && !hasMore;
@@ -366,7 +384,7 @@ export default function RomanConversationsScreen({
         visible={allOpen}
         typed
         title={ROMAN_CHATS_COPY.confirmAllTitle}
-        body={ROMAN_CHATS_COPY.confirmAllBody}
+        body={confirmAllBody()}
         confirmLabel={ROMAN_CHATS_COPY.deleteAll}
         onCancel={() => setConfirmAll(null)}
         onConfirm={() => {

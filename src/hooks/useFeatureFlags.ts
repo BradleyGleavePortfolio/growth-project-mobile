@@ -15,7 +15,7 @@
  *   - Refetches on app foreground via an `AppState` listener (the RN equivalent
  *     of `refetchOnWindowFocus`), so a flag flipped server-side takes effect on
  *     the next resume rather than only on a cold start.
- *   - FAIL-SAFE: while loading or on error, every flag reads `false`. A failed
+ *   - FAIL-SAFE: while loading or after a failed first read, every flag reads `false`; a failed refresh keeps the last map except `roman_crisis_alert` (off). A failed
  *     flags fetch must NEVER enable a gated surface. The local static
  *     `featureFlags.*` build-time kill switch in `config/featureFlags.ts`
  *     remains the outer gate (it controls route REGISTRATION); this hook is the
@@ -24,9 +24,9 @@
  * A flag absent from the server map is treated as OFF (the schema permits any
  * string→boolean entries; missing keys default off here).
  */
-import { useEffect } from 'react';
+import { useCallback, useContext, useEffect } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { QueryClientContext, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import {
   featureFlagsApi,
   type FeatureFlagsResponse,
@@ -94,6 +94,9 @@ export function useFeatureFlags(): UseFeatureFlagsResult {
     messaging_core_v2: resolve(data, 'messaging_core_v2'),
     coachless_home: resolve(data, 'coachless_home'),
     coach_payment_actions: resolve(data, 'coach_payment_actions'),
+    // A failed refresh reads off even after an earlier true (FIX725): while the
+    // read fails the app cannot tell that the coach-alert claim is still true.
+    roman_crisis_alert: !query.isError && resolve(data, 'roman_crisis_alert'),
   };
 
   return {
@@ -103,4 +106,17 @@ export function useFeatureFlags(): UseFeatureFlagsResult {
     data,
     refetch: query.refetch,
   };
+}
+
+/**
+ * `roman_crisis_alert` as useFeatureFlags reads it (absent, loading or failed = off, a failed refresh
+ * included; no QueryClient = off), read when called and without subscribing: which consent copies a
+ * one-shot ledger read asks for (CONSENT-CRISIS).
+ */
+export function useCrisisAlertNow(): () => boolean {
+  const qc = useContext(QueryClientContext);
+  return useCallback(() => {
+    const state = qc?.getQueryState<FeatureFlagsResponse>(featureFlagsKeys.all);
+    return state?.status !== 'error' && resolve(state?.data, 'roman_crisis_alert');
+  }, [qc]);
 }

@@ -1,6 +1,10 @@
 <!-- Last updated: 2026-05-07 (finisher pass) -->
 # Bloodwork — Module README
 
+C6SWEEP: displayed copy uses doctor / lab portal wording; wire enums are unchanged.
+The cross-surface `c6Copy.test.tsx` guard collects exported copy, renders breathing
+states and every lab review state, and checks visible text, spoken labels and alerts.
+
 **Location:** `src/screens/bloodwork/` (screens live in `src/screens/client/` and `src/screens/coach/`)
 
 ---

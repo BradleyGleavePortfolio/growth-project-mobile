@@ -23,7 +23,7 @@ import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { subscribeToMessages } from '../../services/realtime';
 import { cacheStorage } from '../../storage/mmkv';
 import { useThreadColors, type ThreadColors } from '../../components/messaging/thread/useThreadColors';
-import { typography, radius, layout } from '../../theme/tokens';
+import { typography, radius, layout, colors as palette } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
 import { errorStatus, errorCode } from '../../types/common';
 import { useBlockedUsersStore, filterOutBlocked } from '../../store/blockedUsersStore';
@@ -46,6 +46,12 @@ import {
 } from '../../components/messaging/threadV2';
 import { useThreadV2 } from '../../hooks/useThreadV2';
 import { messagingV2Api, toMessagingError, type ThreadScope } from '../../api/messagingV2Api';
+import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { StyleBBubble, StyleBDayMark, StyleBFirstCard, StyleBHeader, StyleBLoading, StyleBQueued, dayB } from '../../components/messaging/StyleBThread';
+import { useMessageOutbox } from '../../hooks/useMessageOutbox';
+import { drainOutbox, isTransient, outboxOn, sendViaOutbox, settleOutbox, takeBackRefused, type OutboxEvent } from '../../services/messageOutbox';
 
 interface Message {
   id: string;
@@ -58,6 +64,8 @@ interface Message {
   parent_message_id?: string | null;
   /** messaging v2 (flag ON); absent on legacy rows. */
   v2?: ThreadV2Fields;
+  /** A row from the outbox (services/messageOutbox: Style B sends, or a SHARE-B card), not on the server yet. */
+  outbox?: 'sending' | 'waiting' | 'failed';
 }
 
 const CLIENT_SCOPE: ThreadScope = { role: 'client' };
@@ -85,6 +93,10 @@ export default function MessagesScreen() {
   const route = useRoute<RouteProp<HomeStackParamList, 'Messages'>>();
   const currentUser = useCurrentUser();
   const { flags } = useFeatureFlags();
+  // C3B-THREAD: Style B thread (MOCK-C3 slice 1). Off: main's thread, unchanged.
+  const styleB = featureFlags.c3StyleB;
+  const online = isEffectivelyOnline(useNetworkStatus());
+  const reduceMotion = useReducedMotion();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -174,6 +186,7 @@ export default function MessagesScreen() {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
       const list = normalizeList(res.data, currentUser?.id);
+      if (outboxOn() && currentUser?.id) settleOutbox(currentUser.id, list.map((m) => m.v2?.client_message_id));
       setMessages((prev) => mergeById(list, reconcilePending(prev, list)));
       setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
@@ -282,6 +295,15 @@ export default function MessagesScreen() {
     setSending(true);
     Keyboard.dismiss();
     const reply = replyTarget;
+    if (styleB && currentUser?.id) {
+      // C3B-THREAD-R1: every Style B send goes through the outbox, in order, with its own key.
+      void HapticService.softImpact();
+      setInputText('');
+      setReplyTarget(null);
+      setSending(false);
+      void sendViaOutbox(currentUser.id, text, reply?.id ?? null);
+      return;
+    }
     if (thread.enabled) {
       await sendV2(text, newClientMessageId(), reply?.id ?? null);
       setSending(false);
@@ -393,11 +415,59 @@ export default function MessagesScreen() {
     }
   };
 
+  // The outbox (services/messageOutbox; Style B: every send, SHARE-B: a card in either style): rows not on the server yet
+  // sit under the thread. The first that failed holds the ones after it; offline they wait for the signal, which the
+  // app-level drain sends thread open or not.
+  const onOutbox = (ev: OutboxEvent) => {
+    if (ev.type === 'taken') void load();
+    else if (ev.type === 'sent') {
+      const uid = currentUser?.id;
+      const created = normalizeMessage(ev.row, uid);
+      setMessages((prev) => {
+        const next = mergeById(prev, [created]);
+        if (uid) cacheStorage.set(cacheKeyFor(uid), JSON.stringify(next));
+        return next;
+      });
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    } else if (ev.error.code === 'NO_COACH_ASSIGNED') setNoCoach(true);
+    else if (!isTransient(ev.error)) thread.report('Message not sent', ev.error);
+    else if (online) {
+      void HapticService.error(); // once per failure while online
+      if (ev.manual) Alert.alert('Message not sent', ev.error.userMessage);
+    }
+  };
+  const outboxItems = useMessageOutbox(outboxOn() ? currentUser?.id : null, onOutbox);
+  // A tap sends from the head again; on a message the server can never accept, it takes the text back to the composer.
+  const retryOutbox = (key?: string | null) => {
+    const uid = currentUser?.id;
+    const back = uid && key ? takeBackRefused(uid, key) : undefined;
+    if (back) setInputText((t) => (t && back.body ? `${t}\n${back.body}` : t || back.body)); // a card has no text to put back
+    else if (uid) void drainOutbox(uid, true);
+  };
+  const shown = useMemo(() => {
+    let held = false;
+    const rows = outboxItems.map((i): Message => {
+      const state = i.failed ? 'failed' : online && !held ? 'sending' : 'waiting';
+      held ||= !!i.failed && !i.refused;
+      const card = i.card && { card_type: 'share', snapshot: i.card }; // SHARE-B: a waiting Send to {coach}
+      const row = normalizeMessage({ id: `pending_${i.key}`, sender_id: currentUser?.id, body: i.body, client_message_id: i.key, created_at: i.createdAt, card }, currentUser?.id);
+      return { ...row, pending: true, parent_message_id: i.replyToId, outbox: state };
+    });
+    return rows.length ? [...messages, ...rows] : messages;
+  }, [messages, outboxItems, online, currentUser?.id]);
+
+  // Offline is the calm state the mockup draws: no load error while offline, and one reload when the signal returns.
+  const wasOnline = useRef(online);
+  useEffect(() => {
+    if (styleB && online && !wasOnline.current) void load();
+    wasOnline.current = online;
+  }, [styleB, online, load]);
+
   // ─── Long-press action handlers ────────────────────────────────────────────
   const handleLongPress = useCallback((m: BubbleMessage) => {
-    const found = messages.find((x) => x.id === m.id);
+    const found = shown.find((x) => x.id === m.id);
     setActionTarget(found ?? null);
-  }, [messages]);
+  }, [shown]);
 
   const handleReply = useCallback(() => {
     if (!actionTarget) return;
@@ -453,8 +523,35 @@ export default function MessagesScreen() {
 
   // Defence-in-depth filter — strip blocked senders before render.
   const visibleMessages = useMemo(
-    () => filterOutBlocked(messages, blockedIds),
-    [messages, blockedIds],
+    () => filterOutBlocked(shown, blockedIds),
+    [shown, blockedIds],
+  );
+
+  // Style B: "Read {time}" sits under the newest read client message; a read
+  // that lands while the thread is open gets one success haptic.
+  const lastReadId = useMemo(
+    () => [...visibleMessages].reverse().find((m) => m.sender_role === 'client' && !m.pending && m.read_at)?.id ?? null,
+    [visibleMessages],
+  );
+  const seenRead = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!styleB || loading) return;
+    if (seenRead.current !== undefined && lastReadId && lastReadId !== seenRead.current) void HapticService.success();
+    seenRead.current = lastReadId;
+  }, [styleB, loading, lastReadId]);
+  // Messages newer than the first paint slide in; history does not.
+  const paintedUpTo = useRef<number | null>(null);
+  const bHeader = (withBell: boolean) => (
+    <StyleBHeader
+      name={coachName || 'Your Coach'}
+      known={!!coachName}
+      contactLabel={coachId ? `View ${coachName || 'coach'} contact details` : coachName || 'Your Coach'}
+      canOpenContact={!!coachId}
+      onBack={() => navigation.goBack()}
+      onContact={openContactView}
+      right={withBell && thread.enabled ? <MuteBell muted={thread.muted} onPress={() => setMuteMenu(true)} /> : undefined}
+      topStyle={headerTop}
+    />
   );
 
   // Keep the sheet mounted while the thread reloads so its welcome and next
@@ -479,6 +576,17 @@ export default function MessagesScreen() {
   // rendered cached messages before GET /users/blocks resolved, a user blocked
   // on another device could briefly appear before being filtered out.
   if ((loading && visibleMessages.length === 0) || !serverHydrationComplete) {
+    if (styleB) {
+      return (
+        <>
+          <View style={styles.container}>
+            {bHeader(false)}
+            <StyleBLoading />
+          </View>
+          {coachCodeSheet}
+        </>
+      );
+    }
     return (
       <>
       <View style={styles.container}>
@@ -576,6 +684,10 @@ export default function MessagesScreen() {
 
   const parentLookup = new Map<string, Message>();
   visibleMessages.forEach((m) => parentLookup.set(m.id, m));
+  if (styleB && paintedUpTo.current === null) {
+    const newest = visibleMessages[visibleMessages.length - 1];
+    paintedUpTo.current = newest ? new Date(newest.created_at).getTime() : Date.now();
+  }
 
   return (
     <>
@@ -584,7 +696,7 @@ export default function MessagesScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <View style={[styles.chatHeader, headerTop]}>
+      {styleB ? bHeader(true) : <View style={[styles.chatHeader, headerTop]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -607,13 +719,13 @@ export default function MessagesScreen() {
           {coachId ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
         </TouchableOpacity>
         {thread.enabled ? <MuteBell muted={thread.muted} onPress={() => setMuteMenu(true)} /> : <View style={{ width: 24 }} />}
-      </View>
+      </View>}
 
       {thread.enabled ? (
         <PinnedBar pins={thread.pins} onOpen={(id) => jumpToMessage(flatListRef.current, visibleMessages, id)} />
       ) : null}
 
-      {error ? (
+      {error && (online || !styleB) ? (
         <TouchableOpacity style={styles.errorBanner} onPress={load} accessibilityRole="button" accessibilityLabel="Retry loading messages">
           <Text style={styles.errorBannerText}>{error}</Text>
         </TouchableOpacity>
@@ -635,13 +747,14 @@ export default function MessagesScreen() {
       <FlatList
         ref={flatListRef}
         data={visibleMessages}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.chatList}
+        keyExtractor={(item) => (styleB && item.v2?.client_message_id) || item.id}
+        contentContainerStyle={[styles.chatList, styleB && styles.bChatList]}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         onScrollToIndexFailed={({ averageItemLength, index }) =>
           flatListRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true })
         }
+        ListFooterComponent={styleB && !online ? <StyleBQueued count={visibleMessages.filter((m) => m.outbox === 'waiting').length} /> : undefined}
         ListHeaderComponent={
           hasMoreOlder && visibleMessages.length > 0 ? (
             <TouchableOpacity
@@ -662,7 +775,7 @@ export default function MessagesScreen() {
           ) : null
         }
         ListEmptyComponent={
-          !error ? <View style={styles.chatEmpty}>
+          !error && styleB && coachName ? <StyleBFirstCard coachName={coachName} /> : !error ? <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
             <Text style={styles.chatEmptyText}>Start a conversation with your coach</Text>
           </View> : null
@@ -680,7 +793,29 @@ export default function MessagesScreen() {
 
           let receiptNode: React.ReactNode = null;
           if (isMe) {
-            if (item.pending && item.v2?.client_message_id) {
+            if (item.outbox === 'waiting' || item.outbox === 'sending') {
+              // SHARE-B, Style B off: a card from the outbox; offline it waits and the app-level drain sends it.
+              receiptNode = item.outbox === 'sending' ? null : (
+                <View style={styles.receiptRow}>
+                  <Ionicons name="time-outline" size={10} color={textOnPrimaryFaint} />
+                  <Text style={styles.receiptTextPending}>Waiting to send</Text>
+                </View>
+              );
+            } else if (item.outbox === 'failed') {
+              // SHARE-B, Style B off: a card that failed online. The tap replays its key through the outbox, with or
+              // without server v2 (the long-press Send again needs v2's menu).
+              receiptNode = (
+                <TouchableOpacity
+                  onPress={() => retryOutbox(item.v2?.client_message_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Not sent. Tap to send again"
+                  style={[styles.receiptRow, styles.receiptRetry]}
+                >
+                  <Ionicons name="alert-circle-outline" size={11} color={textOnPrimaryDim} />
+                  <Text style={styles.receiptText}>Not sent. Tap to send again</Text>
+                </TouchableOpacity>
+              );
+            } else if (item.pending && item.v2?.client_message_id) {
               // v2: a pending bubble is a send that failed; it waits for the
               // user (long press, Send again with the same key).
               receiptNode = (
@@ -724,6 +859,32 @@ export default function MessagesScreen() {
             read_at: item.read_at,
             ...bubbleV2Fields(item.v2, currentUser?.id, parent),
           };
+          const draftContext = item.sender_role === 'coach' ? {
+            coach: coachName.trim().split(/\s+/)[0] || 'Your coach',
+            client: currentUser?.firstName || currentUser?.name?.split(' ')[0] || '',
+            isSender: false,
+          } : undefined;
+
+          if (styleB) {
+            return (
+              <View>
+                {showDateSep ? <StyleBDayMark label={dayB(item.created_at)} /> : null}
+                <StyleBBubble
+                  message={bubbleMsg}
+                  isMe={isMe}
+                  state={item.outbox === 'failed' || item.outbox === 'waiting' ? item.outbox : 'sent'}
+                  groupEnd={showTimestamp}
+                  readAt={item.id === lastReadId ? item.read_at : null}
+                  showSent={index === lastClientMsgIdx && !item.pending && !item.read_at}
+                  animateIn={new Date(item.created_at).getTime() > (paintedUpTo.current ?? Infinity)}
+                  reduceMotion={reduceMotion}
+                  onLongPress={handleLongPress}
+                  onRetry={() => retryOutbox(item.v2?.client_message_id)}
+                  draftContext={draftContext}
+                />
+              </View>
+            );
+          }
 
           return (
             <View>
@@ -742,6 +903,7 @@ export default function MessagesScreen() {
               )}
               <MessageBubble
                 message={bubbleMsg}
+                draftContext={draftContext}
                 isMe={isMe}
                 receipt={receiptNode}
                 showTimestamp={showTimestamp}
@@ -754,9 +916,9 @@ export default function MessagesScreen() {
 
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, styleB && styles.bInputBar]}>
         <TextInput
-          style={styles.chatInput}
+          style={[styles.chatInput, styleB && styles.bChatInput]}
           placeholder={replyTarget ? 'Reply…' : 'Type a message...'}
           placeholderTextColor={colors.textMuted}
           value={inputText}
@@ -792,7 +954,8 @@ export default function MessagesScreen() {
           onReport={handleOpenReport}
           onRetry={(m) => {
             const key = m.v2?.client_message_id;
-            if (key) void sendV2(m.body, key, actionTarget?.parent_message_id ?? null, m.id);
+            if (styleB || actionTarget?.outbox) retryOutbox(key); // SHARE-B: an outbox card replays through the outbox
+            else if (key) void sendV2(m.body, key, actionTarget?.parent_message_id ?? null, m.id);
           }}
           muteOpen={muteMenu}
           onMuteClose={() => setMuteMenu(false)}
@@ -958,6 +1121,7 @@ const makeStyles = (colors: ThreadColors) => {
     ...typography.bodySmall, fontSize: 13,
     color: textOnPrimaryDim,
   },
+  receiptRetry: { minHeight: layout.touchMin, marginTop: 0 },
   receiptTextPending: {
     ...typography.bodySmall, fontSize: 13,
     color: textOnPrimaryFaint,
@@ -995,5 +1159,9 @@ const makeStyles = (colors: ThreadColors) => {
     alignItems: 'center',
   },
   sendBtnDisabled: { backgroundColor: colors.disabledBg },
+  // Style B (C3B-THREAD): no hairlines, a cream field on the bone page.
+  bChatList: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: 16 },
+  bInputBar: { borderTopWidth: 0, backgroundColor: colors.background, paddingTop: 8 },
+  bChatInput: { backgroundColor: palette.cream, borderWidth: 0 },
   });
 };
