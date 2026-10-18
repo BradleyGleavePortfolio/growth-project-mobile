@@ -521,17 +521,18 @@ describe("MoneyScreen", () => {
     expect(mockNavigate).toHaveBeenCalledWith("CoachPackagesList");
   });
 
-  it("PK-2a: Buy credits is one tap from the Money root and opens the credit pack checkout", async () => {
+  it("PK-2a: Buy more credits is one tap from the Money root and opens the credit pack checkout", async () => {
     routeGets();
     mockPacksHidden = false;
-    const { findByTestId } = await render(<MoneyScreen />);
+    const { findByTestId, getByText } = await render(<MoneyScreen />);
     const row = await findByTestId("money-buy-credits");
-    expect(row.props.accessibilityLabel).toBe("Buy AI credits");
+    expect(row.props.accessibilityLabel).toBe("Buy more AI credits");
+    getByText("Buy more credits");
     await fireEvent.press(row);
     expect(mockNavigate).toHaveBeenCalledWith("CreditPackCheckout", undefined);
   });
 
-  it("PK-2a: no Buy credits row where the build may not sell credit packs", async () => {
+  it("PK-2a: no Buy more credits row where the build may not sell credit packs", async () => {
     routeGets();
     mockPacksHidden = true;
     const { findByTestId, queryByTestId } = await render(<MoneyScreen />);

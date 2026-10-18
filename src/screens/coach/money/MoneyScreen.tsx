@@ -902,10 +902,10 @@ export default function MoneyScreen({
               onPress={() => navigation.navigate("CreditPackCheckout", undefined)}
               style={styles.footerRow}
               accessibilityRole="button"
-              accessibilityLabel="Buy AI credits"
+              accessibilityLabel="Buy more AI credits"
               testID="money-buy-credits"
             >
-              <Text style={styles.footerText}>Buy credits</Text>
+              <Text style={styles.footerText}>Buy more credits</Text>
             </TouchableOpacity>
           )}
         </View>
