@@ -4,8 +4,8 @@ import * as SQLite from 'expo-sqlite';
 // recipesDb / mealPlanDb / fastingDb / shoppingListDb were deleted in the
 // nutrition P0 cleanup — all four shipped as orphan code with zero call
 // sites from any screen. Recipes / shopping / fasting / meal-plans are
-// 100% server-driven via recipesApi / listsApi / fastingApi / mealTemplatesApi
-// + mealPlansApi. The CREATE TABLE statements for `recipes`, `meal_plans`,
+// 100% server-driven via recipesApi / listsApi / fastingApi / mealTemplatesApi.
+// The CREATE TABLE statements for `recipes`, `meal_plans`,
 // and `fasting_sessions` are retained below for older builds that may still
 // reference them; nothing in the current build writes to them.
 import { initWorkoutTables, seedExercisesIfNeeded } from './workoutDb';

@@ -29,7 +29,6 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/client/HomeScreen';
 import HabitsScreen from '../screens/client/HabitsScreen';
 import LogScreen from '../screens/client/LogScreen';
-import PlanScreen from '../screens/client/PlanScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
 import RecipeDetailScreen from '../screens/client/RecipeDetailScreen';
 import GroceryListScreen from '../screens/client/GroceryListScreen';
@@ -182,7 +181,6 @@ const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen, OW
 const ProtectedWorkoutHistoryEditScreen = withProtectedScreen(WorkoutHistoryEditScreen, OWN);
 const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutViewerScreen, OWN);
 const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen, OWN);
-const ProtectedPlanScreen = withProtectedScreen(PlanScreen, OWN);
 const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen, OWN);
 const ProtectedFastingScreen = withProtectedScreen(FastingScreen, OWN);
 const ProtectedLogScreen = withProtectedScreen(LogScreen, OWN);
@@ -295,7 +293,6 @@ export type MoreStackParamList = {
   GroceryList: undefined;
   ShoppingList: undefined;
   PrepGuide:   undefined;
-  Plan:        undefined;
   TrustCenter: undefined;
   DeleteAccount: undefined;
   /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
@@ -398,8 +395,8 @@ export type MoreStackParamList = {
 // ─── Stack navigators ─────────────────────────────────────────────────────────
 
 /**
- * S-REACH: screens that used to be tabs (Plan, Progress) or had no menu entry
- * (ClientMacros, Habits, Timeline) draw their own title but no back control.
+ * S-REACH: screens that used to be tabs (Progress) or had no menu entry
+ * (ClientMacros, ClientDailyMealPlan, Habits, Timeline) draw their own title but no back control.
  * Opened from More they get a native header with only the back chevron, so
  * the way back is always visible and the safe area is respected.
  */
@@ -554,7 +551,6 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           <MoreStackNav.Screen name="CoachGuidelines" component={LearnGuidelinesScreen} />
         </>
       )}
-      <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
@@ -612,7 +608,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           in a follow-up; route registration first so deep-links
           work today). */}
       <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets')} />
-      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} />
+      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. The old

@@ -53,7 +53,7 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
     label: 'Meal plan',
     description: 'View meal plans',
     section: 'Your plan',
-    target: { type: 'stack', screen: 'Plan' },
+    target: { type: 'stack', screen: 'ClientDailyMealPlan' },
     a11yHint: 'Opens your meal plan',
   },
   {
