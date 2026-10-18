@@ -129,7 +129,11 @@ beforeEach(() => {
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  const overlaps = jest.mocked(console.error).mock.calls.filter(([m]) => String(m).includes('overlapping act()'));
+  jest.restoreAllMocks();
+  expect(overlaps).toEqual([]); // TEST-LEAK: acts out of order leave React's act scope stuck for every later test
+});
 
 it.each(BOTH.flatMap((on) => LINES.map(([type, line]) => [on, type, line] as const)))(
   'coachTabsV2 %s: an open %s shows one calm card at the top of the file, on every tab: the approved line, Message and Dismiss, nothing else',
@@ -229,13 +233,14 @@ it("the file reused for another client (as Overview opens it): A's late read or 
   await act(async () => lateRead(summary('Sam Rivera', alertOf('roman_crisis_reply'))));
   expect([view.queryByText(LINES[0][1]), view.getAllByTestId('file-safety-alert').length]).toEqual([null, 1]);
   await open(params);
-  // A's crisis alert; the server is slow. The press is awaited now: left open across the next act, the two overlap
-  // and React's act scope stays stuck for every later test in this file (TEST-LEAK).
-  await fireEvent.press(await view.findByTestId('file-safety-dismiss'));
+  // A's crisis alert; the server is slow, and the press's act stays open until Dismiss answers. TEST-LEAK: the acts
+  // inside it close first and the server answers outside them, so the press's act closes last, in order.
+  const pressed = fireEvent.press(await view.findByTestId('file-safety-dismiss'));
   expect(dismiss).toHaveBeenCalledWith('alert-roman_crisis_reply');
   await open(B);
   expect(await view.findByText(lineB)).toBeTruthy();
-  await act(async () => lateDismiss({ data: { ok: true } }));
+  lateDismiss({ data: { ok: true } });
+  await pressed;
   expect(view.getByText(lineB)).toBeTruthy(); // B's alert stays
   expect(summaryRead.mock.calls.map(([id]) => id)).toEqual(['client-test', 'client-b', 'client-test', 'client-b']); // no re-read of A
   await fireEvent.press(view.getByTestId('file-safety-message'));
