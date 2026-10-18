@@ -155,6 +155,15 @@ export interface ClientPurchase {
    */
   amount_cents?: number;
   currency?: string;
+  /** ClientPurchase.billing_type, sent by the same allow-list. */
+  billing_type?: 'one_time' | 'recurring';
+  /**
+   * C5-S1: what this purchase's checkout charged first, from the server
+   * (one-time part plus first period, 0 in a free trial); null or absent
+   * when the server does not know. amount_cents of a subscription is the
+   * renewal, so "Paid" reads this field only (planTerms paidAmount).
+   */
+  first_charge_cents?: number | null;
 }
 
 /**

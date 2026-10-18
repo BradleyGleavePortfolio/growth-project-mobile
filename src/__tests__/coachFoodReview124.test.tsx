@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import api, { coachApi } from '../services/api';
 import { FoodLogReviewSection } from '../screens/coach/client-detail/FoodLogReviewSection';
@@ -7,6 +8,7 @@ import { makeStyles } from '../screens/coach/client-detail/styles';
 import type { ThemeColors } from '../theme/ThemeProvider';
 import type { ClientProfile } from '../types';
 import { useCurrentMacrosForClient } from '../hooks/useMacros';
+import { layout } from '../theme/tokens';
 
 jest.mock('../services/api', () => ({
   __esModule: true,
@@ -43,7 +45,6 @@ function meal(id: string, date = '2026-10-05') {
 const reviewProps = { clientId: 'client-a', todayLogs: [], colors, styles };
 const summaryProps = {
   clientId: 'client-a', clientName: 'Client', profile: null,
-  foodShared: true,
   totals: { calories: 1100, protein: 80, carbs: 100, fat: 30 },
   nudgeSuccess: false, onOpenMessages: jest.fn(), onOpenNudge: jest.fn(),
   onOpenMacrosReview: jest.fn(), onOpenWorkoutBuilder: jest.fn(),
@@ -128,22 +129,53 @@ describe('FOOD-COACH-124 normal-day regressions', () => {
     await waitFor(() => expect(screen.getByText('167% of current daily calorie target')).toBeTruthy());
   });
 
-  it('offers the existing message and meal-plan actions without claiming adherence', async () => {
+  it('offers the existing message action and no retired meal-plan action', async () => {
     respondWithPages([[meal('one')]]);
     const onOpenMessages = jest.fn();
-    const onOpenMealPlans = jest.fn();
-    await render(<FoodLogReviewSection {...reviewProps} onOpenMessages={onOpenMessages} onOpenMealPlans={onOpenMealPlans} />);
+    await render(<FoodLogReviewSection {...reviewProps} onOpenMessages={onOpenMessages} />);
     await fireEvent.press(screen.getByText('Send feedback'));
-    await fireEvent.press(screen.getByText('Meal plans'));
     expect(onOpenMessages).toHaveBeenCalledTimes(1);
-    expect(onOpenMealPlans).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Meal plans')).toBeNull();
   });
 
-  it('distinguishes withheld food consent from no logged food', async () => {
-    (api.get as jest.Mock).mockResolvedValue({ data: { meals: [], consent: { food_macros: false } } });
+  // Owner rule: 44 pt minimum tap targets. These are the client-file actions
+  // that are not the shared pills or chips walked in clientFileLayout152.
+  it.each([
+    ['Send feedback', 'ready'],
+    ['Refresh', 'ready'],
+    ['Retry', 'error'],
+    ['Retry target', 'target-error'],
+  ] as const)('44 pt: %s is a full-size target that still does its job', async (name, state) => {
+    const refetch = jest.fn();
+    const onOpenMessages = jest.fn();
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    macroQuery.mockReturnValue({ data: target, isLoading: false, isError: state === 'target-error', refetch });
+    respondWithPages([[meal('one')]]);
+    if (state === 'error') (api.get as jest.Mock).mockRejectedValueOnce(new Error('Network Error'));
+    if (state === 'target-error') {
+      await render(<SummaryTab {...summaryProps} />);
+    } else {
+      await render(<FoodLogReviewSection {...reviewProps} onOpenMessages={onOpenMessages} />);
+      await waitFor(() => expect(screen.getByText(state === 'error' ? /could not be loaded/ : 'Food one')).toBeTruthy());
+    }
+    const button = screen.getByRole('button', { name });
+    expect(StyleSheet.flatten(button.props.style).minHeight).toBe(layout.touchMin);
+    const reads = (api.get as jest.Mock).mock.calls.length;
+    await fireEvent.press(button);
+    if (name === 'Send feedback') expect(onOpenMessages).toHaveBeenCalledTimes(1);
+    if (name === 'Refresh' || name === 'Retry target') expect(refetch).toHaveBeenCalledTimes(1);
+    if (name === 'Refresh' || name === 'Retry') {
+      expect((api.get as jest.Mock).mock.calls.length).toBeGreaterThan(reads);
+      await waitFor(() => expect(screen.getByText('Food one')).toBeTruthy());
+    }
+    spy.mockRestore();
+  });
+
+  it('an empty week reads as no meals logged; there is no "not shared" card (SHARE-UNWIND)', async () => {
+    (api.get as jest.Mock).mockResolvedValue({ data: { meals: [] } });
     await render(<FoodLogReviewSection {...reviewProps} />);
-    await waitFor(() => expect(screen.getByText('Food logs are not shared with this coach.')).toBeTruthy());
-    expect(screen.queryByText(/No meals logged/)).toBeNull();
+    await waitFor(() => expect(screen.getByText('No meals logged in the last 7 days.')).toBeTruthy());
+    expect(screen.queryByText(/not shared/)).toBeNull();
   });
 
   it('does not display partial totals when a later page fails, and can retry', async () => {

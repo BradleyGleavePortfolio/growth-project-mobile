@@ -190,7 +190,7 @@ describe('Android release build, Android link on (preview profile)', () => {
     expect(creditPacksHidden()).toBe(false);
     expect(digitalPurchasesHidden()).toBe(true);
     expect(purchasePolicyHeader()).toBe('p2p-and-ai-credits');
-    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'CreditPackCheckout' });
+    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'CreditPackCheckout', initial: false });
     const gate = await render(<UpgradeGate />);
     expect(JSON.stringify(gate.toJSON())).not.toMatch(/Upgrade/);
   });
@@ -205,6 +205,7 @@ describe('Android release build, Android link on (preview profile)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', {
       screen: 'CreditPackCheckout',
       params: { preselect: 2500 },
+      initial: false,
     });
   });
 
@@ -212,7 +213,7 @@ describe('Android release build, Android link on (preview profile)', () => {
     mockBudget = budget(96);
     const banner = await render(<AIBudgetMount />);
     await fireEvent.press(banner.getByText('Buy credits'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' } });
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' }, initial: false });
   });
 
   it('tutorial last card: packs with the non-refundable line', async () => {
@@ -247,6 +248,6 @@ describe('Android release build without the switch (production, clinic)', () => 
     const pause = await render(<AIBudgetMount />);
     expect(pause.getByTestId('ai-hard-pause-neutral')).toBeTruthy();
     expect(pause.queryByText(CREDIT_PACK_NON_REFUNDABLE)).toBeNull();
-    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'SettingsHome' });
+    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'SettingsHome', pop: true });
   });
 });

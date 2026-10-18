@@ -54,11 +54,11 @@ export function habitsSummary(done: number, total: number): string {
   return `${cap(word(done))} of ${word(total)} done today.`;
 }
 
-export default function HabitsScreen({ onSaved }: { onSaved?: () => void }) {
+export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSaved?: () => void; initialTab?: TabMode }) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const today = getTodayString();
-  const [tab, setTab] = useState<TabMode>('habits');
+  const [tab, setTab] = useState<TabMode>(initialTab);
   const [showAddModal, setShowAddModal] = useState(false);
 
   // Server reads (React Query). B1 (owner ruling 10-08 23:5x): check-ins are
@@ -190,7 +190,7 @@ export default function HabitsScreen({ onSaved }: { onSaved?: () => void }) {
   const handleDelete = (habit: HabitView) => {
     Alert.alert(
       'Delete habit',
-      `Are you sure you want to delete "${habit.name}"? This will remove the habit and all its history.`,
+      `Remove ${habit.name}? Its history stays.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

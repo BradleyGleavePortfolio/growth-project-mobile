@@ -15,15 +15,8 @@ import { WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { Colors } from '../../constants/colors';
 import { typography, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
-
-// Pastel feedback backgrounds previously sourced from the legacy `colors`
-// barrel. Inlined as constants so this file no longer depends on the
-// legacy theme/index.ts grouped export. Values match
-// theme/index.ts feedback.* exactly.
-const FEEDBACK_ERROR_TEXT = Colors.noticeCriticalAccent;
 
 export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
@@ -179,7 +172,8 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
             </View>
             {change !== null && (
               <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: change <= 0 ? colors.primary : FEEDBACK_ERROR_TEXT }]}>
+                {/* C8 found 1: a gain and a loss share one colour; red is never a weight colour. */}
+                <Text style={[styles.statValue, { color: colors.primary }]} testID="report-weight-change">
                   {change > 0 ? '+' : ''}{change.toFixed(1)}
                 </Text>
                 <Text style={styles.statLabel}>Change</Text>

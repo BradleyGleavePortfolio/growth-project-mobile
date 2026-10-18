@@ -267,6 +267,15 @@ export default function ClientPackagesScreen() {
     void load();
   }, [purchase, load]);
 
+  // C5 Style C: from the success moment to what the purchase unlocks.
+  const seeUnlocks = useCallback(
+    (purchaseId: string) => {
+      finishPurchase();
+      navigation.navigate('PurchaseUnpack', { purchaseId });
+    },
+    [finishPurchase, navigation],
+  );
+
   const handleUpdateCard = useCallback(() => {
     // OR-110-2: the native card screen (Stripe PaymentSheet, TGP theme)
     // replaces the Stripe-hosted portal webview. In dunning it also pays the
@@ -513,6 +522,7 @@ export default function ClientPackagesScreen() {
                     purchase={purchase}
                     onContinue={finishPurchase}
                     onOpenPlan={finishPurchase}
+                    onSeeUnlocks={seeUnlocks}
                   />
                 ) : null}
                 {!sellable && !current ? (

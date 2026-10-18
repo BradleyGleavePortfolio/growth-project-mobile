@@ -36,12 +36,14 @@ import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@r
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
+import { openInboxChat } from '../../navigation/coachInbox';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { layout, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import ActionMenu, { ActionMenuOption } from '../../components/messaging/ActionMenu';
+import { inboxLine } from '../../components/messaging/threadV2';
 import {
   messagingV2Api,
   toMessagingError,
@@ -51,6 +53,7 @@ import {
 } from '../../api/messagingV2Api';
 import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
 import { CommunityReportsEntry } from './CommunityReportsEntry';
+import { CommunityEntry } from './CommunityEntry';
 
 const FALLBACK_POLL_MS = 60000;
 const PAGE_LIMIT = 50;
@@ -64,8 +67,7 @@ export function inboxPreview(t: InboxThread): string {
   if (t.blocked_by_me) return 'Blocked';
   const m = t.last_message;
   if (!m) return 'No messages yet';
-  const body = m.kind === 'deleted' ? 'Message deleted' : m.kind === 'voice' ? 'Voice note' : m.preview || 'Message';
-  return m.is_mine ? `You: ${body}` : body;
+  return m.is_mine ? `You: ${inboxLine(m)}` : inboxLine(m);
 }
 
 export function inboxTimeLabel(iso: string | null, now: Date = new Date()): string {
@@ -179,8 +181,7 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   }, [threads, clients, filter, hasNextPage, data, searchQuery]);
 
   const openThread = useCallback(
-    (clientId: string, clientName: string) =>
-      navigation.navigate('ClientsStack', { screen: 'ClientMessages', params: { clientId, clientName } }),
+    (clientId: string, clientName: string) => openInboxChat(navigation, clientId, clientName),
     [navigation],
   );
 
@@ -318,6 +319,7 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
         <View style={styles.headerRow}>
           <Text style={styles.title}>Messages</Text>
           <View style={styles.headerEntries}>
+            <CommunityEntry />
             <CommunityReportsEntry />
             <BroadcastsEntry />
           </View>

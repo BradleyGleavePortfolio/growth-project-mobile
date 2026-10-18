@@ -1,9 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { motion, typography } from '../../../theme/tokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { Overline } from '../../../ui';
+import { featureFlags } from '../../../config/featureFlags';
+import ShareSheet, { ShareLink, type ShareCardContent } from '../../../components/share/ShareSheet';
+import { bestCard } from '../../../components/share/shareCards';
+import { getTodayString } from '../../../utils/date';
 import type { ActiveWorkoutStyles } from './styles';
 import type { workoutSummary } from './sessionQuality';
 
@@ -21,6 +25,8 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
   const { semanticColors: sc } = useTheme();
   const reduceMotion = useReducedMotion();
   const opacity = useRef(new Animated.Value(0)).current;
+  // SHARE-A (featureFlags.shareSheetV2): a Share link under each record line opens the sheet on its card.
+  const [shareCard, setShareCard] = useState<ShareCardContent | null>(null);
 
   useEffect(() => {
     if (reduceMotion) { opacity.setValue(1); return undefined; }
@@ -58,11 +64,20 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
     </View>
     <Text style={[local.meta, { color: sc.textMuted }]}>{`${summary.exercises} ${summary.exercises === 1 ? 'exercise' : 'exercises'}`}</Text>
     {summary.records.map((record, i) => (
-      <Text key={`${record.name}-${i}`} style={[local.meta, { color: sc.textPrimary }]}>
-        {`${record.name} at ${record.weight.toLocaleString()} lb is the heaviest in the last 50 saved workouts.`}
-      </Text>
+      <React.Fragment key={`${record.name}-${i}`}>
+        <Text style={[local.meta, { color: sc.textPrimary }]}>
+          {`${record.name} at ${record.weight.toLocaleString()} lb is the heaviest in the last 50 saved workouts.`}
+        </Text>
+        {featureFlags.shareSheetV2 ? (
+          <ShareLink
+            accessibilityLabel={`Share ${record.name} at ${record.weight.toLocaleString()} lb`}
+            onPress={() => setShareCard(bestCard(record.name, record.weight, getTodayString()))}
+          />
+        ) : null}
+      </React.Fragment>
     ))}
     {historyLine ? <Text style={[local.meta, { color: sc.textMuted }]}>{historyLine}</Text> : null}
+    {featureFlags.shareSheetV2 ? <ShareSheet card={shareCard} onClose={() => setShareCard(null)} /> : null}
   </Animated.View>;
 }
 

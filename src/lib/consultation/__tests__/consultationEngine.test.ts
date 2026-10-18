@@ -29,6 +29,8 @@ import {
   AI_CONSENT_CHECKBOX_LABEL,
   AI_CONSENT_COPY_SHA256,
   AI_CONSENT_PARAGRAPH,
+  AI_CONSENT_PARAGRAPH_PRE57C,
+  AI_CONSENT_SAFETY_EXCEPTION,
   AI_CONSENT_VERSION,
   aiConsentCopyText,
   buildSummary,
@@ -93,7 +95,8 @@ describe('definitions', () => {
     expect(coaching).toMatch(/We do not diagnose, treat, or give medical advice/);
     expect(coaching).toMatch(/the screening questions/);
     expect(coaching).toMatch(/We never sell it/);
-    expect(coaching).toMatch(/the clinic does not see it/);
+    // Owner C-6: the consent never names the referral partner (consult-consent-v5 dropped that sentence).
+    expect(coaching).not.toMatch(/cl[i]nic/i);
     // Box 1 is not an AI consent: no processor named above or in it.
     expect(coaching + CONSENT_CHECKBOX_LABEL).not.toMatch(/Anthropic|Roman/);
     expect(CONSENT_CHECKBOX_LABEL).toBe(
@@ -103,12 +106,18 @@ describe('definitions', () => {
     expect(AI_CONSENT_PARAGRAPH).toMatch(/never your coach's private notes/);
     // client-ai-v4 (owner 2026-10-01 20:32, OR-110-1): no time limit; kept
     // until the client deletes them or their account. Byte-equal to backend #635.
-    expect(AI_CONSENT_PARAGRAPH).toMatch(
+    expect(AI_CONSENT_PARAGRAPH_PRE57C).toMatch(
       /Your conversations with Roman are private from your coach and are kept until you delete them or delete your account\.$/,
     );
     expect(AI_CONSENT_PARAGRAPH).not.toMatch(/\b\d+\s*days?\b/i);
+    // Owner 57c (client-ai-v6): the privacy page's exception sentence, right after that one.
+    expect(AI_CONSENT_SAFETY_EXCEPTION).toBe(
+      'One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, ' +
+        'your coach sees the message that prompted it, so they can check in with you.',
+    );
+    expect(AI_CONSENT_PARAGRAPH).toBe(`${AI_CONSENT_PARAGRAPH_PRE57C} ${AI_CONSENT_SAFETY_EXCEPTION}`);
     // Byte-for-byte the backend #635 CLIENT_AI_CONSENT_PARAGRAPH / BOX_LABEL.
-    expect(AI_CONSENT_PARAGRAPH).toBe(
+    expect(AI_CONSENT_PARAGRAPH_PRE57C).toBe(
       'Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. ' +
         'If you allow it, your information is sent to Anthropic so Roman can answer your questions ' +
         'and your coach can use AI drafts about your training. ' +
@@ -130,12 +139,12 @@ describe('definitions', () => {
     }
   });
 
-  it('versions are bound: consult-consent-v3 with client-ai-v4 and pt-waiver-v1', () => {
-    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v3');
-    expect(AI_CONSENT_VERSION).toBe('client-ai-v4');
+  it('versions are bound: consult-consent-v7 with client-ai-v6 and pt-waiver-v1 (owner 57c)', () => {
+    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v7');
+    expect(AI_CONSENT_VERSION).toBe('client-ai-v6');
     expect(CONSENT_BINDING).toEqual({
-      copy_version: 'consult-consent-v3',
-      ai_consent_version: 'client-ai-v4',
+      copy_version: 'consult-consent-v7',
+      ai_consent_version: 'client-ai-v6',
       waiver_version: 'pt-waiver-v1',
     });
   });
@@ -147,12 +156,14 @@ describe('definitions', () => {
     expect(consentCopyText().startsWith('Before we start\n\nThe Growth Project provides')).toBe(true);
     expect(aiConsentCopyText()).toBe(`${AI_CONSENT_PARAGRAPH}\n\n${AI_CONSENT_CHECKBOX_LABEL}`);
     // Backend R2a (#622) pins the same text: paragraph 4, box 2 label and their join.
-    expect(sha(AI_CONSENT_PARAGRAPH)).toBe('56d14fb96b9f7b6abdd43242f5ce9eaee419bc0d9fb4302bc283ecc1529d430b'); // backend #635 client-ai-v4 paragraph.sha256
+    expect(sha(AI_CONSENT_PARAGRAPH_PRE57C)).toBe('56d14fb96b9f7b6abdd43242f5ce9eaee419bc0d9fb4302bc283ecc1529d430b'); // backend #635 client-ai-v4 paragraph.sha256
+    expect(sha(AI_CONSENT_PARAGRAPH)).toBe('5065bd689c0be038b9bee2d8e118f092b077ee5f85b273752bb8a1f9695f7e67'); // backend client-ai-v6 paragraph.sha256
     expect(sha(AI_CONSENT_CHECKBOX_LABEL)).toBe('77da153df7f06a045e1abbbb83b771f8a33941d47268e276becc6b4ffe5e5eba');
     // If this fails, the copy changed: bump CONSULT_CONSENT_COPY_VERSION (and
     // AI_CONSENT_VERSION for paragraph 4 / box 2) and re-pin with the new text.
-    expect(CONSENT_COPY_SHA256).toBe('79ceeb6b8316ee9e3f583fe678e2463584c6dda4c93b5c95746dfe5c52ef31c9');
-    expect(AI_CONSENT_COPY_SHA256).toBe('fbf821401d4313c6a301a6cc08d3870bb117c293fbb970e321bf87f49abe34f4');
+    // Backend consult-consent-v7 and client-ai-v6 (owner 57c).
+    expect(CONSENT_COPY_SHA256).toBe('7711079209acecedfb50c31787787124af843f076154e9bfbd1e33550e861e09');
+    expect(AI_CONSENT_COPY_SHA256).toBe('52066998fbccac128c78a68dc19c45c4e067d169c4b3e5aaaa0d7821a7a1ee38');
   });
 
   it('P8 gives guidance and a next step before the physician line', () => {
@@ -267,6 +278,21 @@ describe('validation', () => {
     const cur = (v: unknown) => isConsentAnswerCurrent(v as never);
     const ok = { agreed: true, copy_version: CONSULT_CONSENT_COPY_VERSION, agreed_at: '2026-09-30T19:00:00.000Z' };
     expect(cur(ok)).toBe(true);
+    // Owner 57c / 62y2: v7, v8 and v7-coach-free are current; earlier versions are stale.
+    // FIX684: v8 / v9-coach-free (the coach-free screen with the Roman choice) too.
+    for (const v of ['consult-consent-v8', 'consult-consent-v7-coach-free', 'consult-consent-v8-coach-free', 'consult-consent-v9-coach-free']) {
+      expect(cur({ ...ok, copy_version: v })).toBe(true);
+    }
+    for (const v of [
+      'consult-consent-v3',
+      'consult-consent-v4',
+      'consult-consent-v5',
+      'consult-consent-v6',
+      'consult-consent-v5-coach-free',
+      'consult-consent-v6-coach-free',
+    ]) {
+      expect(cur({ ...ok, copy_version: v })).toBe(false);
+    }
     expect(cur({ ...ok, copy_version: 'consult-consent-v0' })).toBe(false);
     expect(cur({ ...ok, copy_version: 'consult-consent-v1' })).toBe(false); // the single-box copy
     expect(cur({ ...ok, text_sha256: CONSENT_COPY_SHA256 })).toBe(true);

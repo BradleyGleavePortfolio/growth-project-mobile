@@ -24,6 +24,9 @@
  * Dark mode additions:
  * textPrimary (#EBE6DE) on bgPrimary (#121110)  ~14.2:1              PASS     PASS
  * textMuted (#A09B94) on bgPrimary (#121110)    ~ 5.9:1              PASS     PASS
+ *
+ * Style C v2 surface.* and data.* pairs (light and dark): theme/README.md,
+ * locked by __tests__/contrastStyleC.test.ts.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -441,7 +444,31 @@ export interface SemanticTokens {
    * Calm, not opaque — the sheet sits on a dimmed-but-visible context.
    */
   overlay: string;
+  /**
+   * Style C v2 surfaces (MOCK-C1V2, index-v2 section 4). They hold short
+   * text only; long text stays on bone. Text on masthead and forestBand uses
+   * textOnAccent and textOnMastheadMuted. Pairs: theme/__tests__/contrastStyleC.
+   */
+  surface: { masthead: string; forestBand: string; sage: string; sageLine: string };
+  /** Secondary text on surface.masthead and surface.forestBand. */
+  textOnMastheadMuted: string;
+  /**
+   * Style C v2 chart marks. leaf and fern sit on a dark ground or are chip
+   * fills, never text or a lone mark on bone. peak (gold) marks a personal
+   * best only, always with a star and words; peakInk outlines it on light
+   * ground. `*OnDark` is the same role on the masthead. Solid colours only.
+   */
+  data: {
+    leaf: string; fern: string; moss: string; forest: string; deep: string;
+    peak: string; peakInk: string; planned: string; plannedOnDark: string;
+    missed: string; missedOnDark: string; trackLight: string;
+    trend: string; range: string; weighIn: string; goal: string;
+    frameOnDark: string; pending: string;
+  };
 }
+
+// C8 v2 role aliases reuse the C1 v2 leaf, never a new colour.
+const chartLeaf = '#A3C46A';
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
 export const lightTokens: SemanticTokens = {
@@ -464,7 +491,45 @@ export const lightTokens: SemanticTokens = {
   border:      '#DCD5CC',
   // Ink (#1A1A18) at 0.40 — a calm dim that keeps the underlying screen legible.
   overlay:     'rgba(26, 26, 24, 0.40)',
+  surface: { masthead: brand[800], forestBand: brand[600], sage: semantic.success.bg, sageLine: '#C9D8CD' },
+  textOnMastheadMuted: brand[100],
+  data: {
+    leaf: chartLeaf, fern: '#7FA653', moss: '#4E7A3F', forest: brand[600], deep: brand[800],
+    peak: gold[300], peakInk: gold[800], planned: '#857F75', plannedOnDark: brand[300],
+    missed: '#6B675F', missedOnDark: colors.stone, trackLight: '#E6DFD3', // missed = textMuted
+    trend: chartLeaf, range: brand[500], weighIn: brand[100], goal: gold[300],
+    frameOnDark: brand[300], pending: chartLeaf,
+  },
 };
+
+/**
+ * Forest Pop (C6CHAT-S-V2 section 6): the community colours by role. Every
+ * value is an existing token above, so nothing new enters the palette. Light
+ * ground only (the app launches light, ThemeProvider). Deep holds the masthead,
+ * space headers and drawer; forest is the one filled action and the segment
+ * track; leaf means new, unread or active, on deep or as a fill with a moss
+ * edge; gold means the coach, on deep only (goldInk on light); sage tints;
+ * sageLine is the hairline; surface is the page. Leaf and gold are never text
+ * on a light ground. Pairs: theme/__tests__/forestPop.test.ts.
+ */
+export const forestPop = {
+  deep: brand[800],
+  forest: colors.forest,
+  leaf: chartLeaf,
+  moss: lightTokens.data.moss,
+  gold: gold[300],
+  goldInk: gold[800],
+  sage: semantic.success.bg,
+  sageLine: lightTokens.surface.sageLine,
+  surface: lightTokens.bgSurface,
+  ink: colors.ink,
+  n700: neutral[700],
+  brand400: brand[400],
+  onDeep: lightTokens.textOnAccent,
+  onDeepMuted: brand[100],
+  error: colors.error,
+} as const;
+export type ForestPopRole = keyof typeof forestPop;
 
 /** Dark-mode semantic tokens. */
 export const darkTokens: SemanticTokens = {
@@ -489,6 +554,12 @@ export const darkTokens: SemanticTokens = {
   // Deeper near-black scrim for dark mode so the dim still reads against the
   // already-dark surfaces without washing out (#000 at 0.55).
   overlay:     'rgba(0, 0, 0, 0.55)',
+  // Style C v2: the masthead, forest band, leaf greens, gold and on-dark marks
+  // were drawn for a dark ground and stay. Light-ground roles move to values
+  // that pass on #121110 and #1C1A18 (missed = textMuted again).
+  surface: { ...lightTokens.surface, sage: '#17211A', sageLine: '#2A3A2F' },
+  textOnMastheadMuted: brand[100],
+  data: { ...lightTokens.data, forest: '#527A5E', peakInk: gold[300], missed: '#A09B94', trackLight: '#24221F' },
 };
 
 // ─── Color utilities ────────────────────────────────────────────────────────
@@ -532,6 +603,7 @@ const tokens = {
   wheel,
   lightTokens,
   darkTokens,
+  forestPop,
 } as const;
 
 export type Tokens = typeof tokens;

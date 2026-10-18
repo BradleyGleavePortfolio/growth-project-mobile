@@ -6,7 +6,6 @@
  *
  *   GET  /coach/ai/status
  *   POST /coach/ai/workout-program
- *   POST /coach/ai/meal-plan
  *   POST /coach/ai/client-insight
  *   GET  /coach/ai/drafts/:draftId
  *   POST /coach/ai/drafts/:draftId/approve
@@ -73,61 +72,6 @@ export interface WorkoutPayload {
   weeks: AiWorkoutWeek[];
 }
 
-// ─── Meal plan payload ───────────────────────────────────────────────────────
-
-export interface AiMealItem {
-  name: string;
-  /**
-   * Portion as the backend sends it ("6 oz", "1 cup"). This is the field the
-   * approve step copies into the client's plan (meal-plan.prompt.ts).
-   */
-  serving?: string | null;
-  /** Older mobile name for the portion; read only as a fallback. */
-  portion?: string | null;
-  calories?: number | null;
-  protein_g?: number | null;
-  carbs_g?: number | null;
-  fat_g?: number | null;
-  notes?: string | null;
-}
-
-export interface AiMeal {
-  /** breakfast / lunch / dinner / snack — the backend field the client sees. */
-  slot?: string | null;
-  /** Older mobile name for the slot; read only as a fallback. */
-  time_of_day?: string | null;
-  name?: string | null;
-  items: AiMealItem[];
-}
-
-export interface AiMealDayTotals {
-  calories?: number | null;
-  protein_g?: number | null;
-  carbs_g?: number | null;
-  fat_g?: number | null;
-}
-
-export interface AiMealDay {
-  day: number;
-  notes?: string | null;
-  /** Daily totals as the backend sends them (meal-plan.prompt.ts). */
-  daily_totals?: AiMealDayTotals | null;
-  /** Older mobile names for the totals; read only as a fallback. */
-  total_calories?: number | null;
-  total_protein_g?: number | null;
-  total_carbs_g?: number | null;
-  total_fat_g?: number | null;
-  meals: AiMeal[];
-}
-
-export interface MealPlanPayload {
-  title?: string | null;
-  summary?: string | null;
-  /** Notes the approve step copies onto the plan the client sees. */
-  coach_notes?: string | null;
-  days: AiMealDay[];
-}
-
 // ─── Insight payload ─────────────────────────────────────────────────────────
 
 export interface InsightPayload {
@@ -140,7 +84,7 @@ export interface InsightPayload {
 
 // ─── Draft envelope ──────────────────────────────────────────────────────────
 
-export type GeneratedPayload = WorkoutPayload | MealPlanPayload | InsightPayload;
+export type GeneratedPayload = WorkoutPayload | InsightPayload;
 
 export interface Draft<T extends GeneratedPayload = GeneratedPayload> {
   draftId: string;
@@ -166,18 +110,6 @@ export interface GenerateWorkoutInput {
   daysPerWeek: number;
   /** Optional focus tag: Strength / Hypertrophy / Endurance / Mobility. */
   focus?: string;
-  notes?: string;
-}
-
-export interface GenerateMealPlanInput {
-  clientId: string;
-  /** 1-14 inclusive. */
-  days: number;
-  /**
-   * B14: the client's allergies and dietary restrictions are mirrored into
-   * `notes` by CoachAiSection. The backend body allow-list accepts only
-   * clientId, days and notes; any other key is refused with a 400.
-   */
   notes?: string;
 }
 
