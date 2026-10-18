@@ -19,7 +19,6 @@ jest.mock('../navigation/AuthNavigator', () => () => null);
 jest.mock('../navigation/ClientNavigator', () => () => null);
 jest.mock('../navigation/CoachNavigator', () => () => null);
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
-jest.mock('../navigation/LeanOnboardingNavigator', () => () => null);
 
 import { linking } from '../navigation/RootNavigator';
 
