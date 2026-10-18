@@ -29,10 +29,10 @@ import {
   type ParamListBase,
   type RouteProp,
 } from '@react-navigation/native';
-import { layout, spacing, typography } from '../../../theme/tokens';
+import { layout, radius, spacing, typography } from '../../../theme/tokens';
 import { useTheme } from '../../../theme/ThemeProvider';
 import HapticPressable from '../../../components/HapticPressable';
-import { Headline, Overline, Screen, quietActions } from '../../../ui';
+import { Headline, Overline, Screen, quietActions, useScreenInsets } from '../../../ui';
 import { configFor } from '../../../api/wearablesConnectionsApi';
 import {
   connectFailureMessage,
@@ -67,6 +67,7 @@ import BucketSwitcher from './components/BucketSwitcher';
 import FreshnessChip from './components/FreshnessChip';
 import ClientWearableInsightPanel from './ClientWearableInsightPanel';
 import HealthFitnessScreen from './HealthFitnessScreen';
+import HealthFitnessTab from './HealthFitnessTab';
 import SleepRecoveryScreen from './SleepRecoveryScreen';
 
 type HealthRouteParams = { bucket?: 'fitness' | 'recovery' };
@@ -119,6 +120,9 @@ export default function WearablesShell() {
   const route = useRoute<RouteProp<Record<string, HealthRouteParams>, string>>();
   const reduceMotion = useReduceMotion();
   const { semanticColors: sc } = useTheme();
+  const insets = useScreenInsets();
+  // HEALTH-1 (owner #HEALTH-PAGES op 1): the forest masthead; off, main's header.
+  const v2 = featureFlags.healthPages;
 
   const initialBucket = bucketForParam(route.params?.bucket);
   const [bucket, setBucket] = useState<WearableMetricBucket>(initialBucket);
@@ -229,10 +233,11 @@ export default function WearablesShell() {
       onPress={() => navigation.goBack()}
       accessibilityRole="button"
       accessibilityLabel="Back"
-      style={styles.back}
+      style={[styles.back, v2 && styles.backV2]}
       testID="health-back"
     >
-      <Ionicons name="arrow-back" size={24} color={sc.textPrimary} />
+      <Ionicons name={v2 ? 'chevron-back' : 'arrow-back'} size={24} color={v2 ? sc.textOnAccent : sc.textPrimary} />
+      {v2 && <Text style={[styles.backLabel, { color: sc.textOnAccent }]}>You</Text>}
     </TouchableOpacity>
   ) : null;
 
@@ -314,8 +319,14 @@ export default function WearablesShell() {
   // coach-only, HK-6). S14: only behind `wearableAiInsights` (default OFF)
   // until the panel honours the D2 AI-processing consent.
   const aiPanelsOn = featureFlags.wearableAiInsights;
+  const fitnessV2 = v2 && bucket === 'HEALTH_FITNESS';
   const content =
-    bucket === 'HEALTH_FITNESS' ? (
+    fitnessV2 ? (
+      <HealthFitnessTab
+        renderNotice={() => noticeView}
+        aiPanelSlot={aiPanelsOn ? <ClientWearableInsightPanel bucket="HEALTH_FITNESS" /> : undefined}
+      />
+    ) : bucket === 'HEALTH_FITNESS' ? (
       <HealthFitnessScreen
         aiPanelSlot={
           aiPanelsOn ? <ClientWearableInsightPanel bucket="HEALTH_FITNESS" /> : undefined
@@ -351,48 +362,59 @@ export default function WearablesShell() {
 
   // REDO-DEVICES-133: a serif title stack over the switcher, the sync notice
   // as a hairline band (no cream box), insets from the shared Screen.
-  return (
-    <Screen edges={['top']} scroll={false} contentStyle={styles.column} testID="health-shell">
-      <View style={styles.titleBlock}>
-        {back}
-        <Overline>Health data</Overline>
-        <Headline level="h1">Health and sleep</Headline>
-      </View>
-      <View style={styles.header}>
-        <BucketSwitcher active={bucket} onChange={handleSwitch} />
-        <FreshnessChip
-          connections={connections}
-          bucket={bucket}
-          onPress={goToConnections}
-        />
-      </View>
-
-      {notice != null && (
-        <View
-          style={[styles.notice, { borderColor: sc.border }]}
-          accessibilityRole="alert"
-          testID="health-notice"
+  const noticeView = notice != null && (
+    <View
+      style={[styles.notice, { borderColor: sc.border }]}
+      accessibilityRole="alert"
+      testID="health-notice"
+    >
+      <Text style={[styles.noticeText, { color: sc.textPrimary }]}>
+        {notice.kind === 'notSyncing' ? notSyncingHereCopy(deviceName) : notice.text}
+      </Text>
+      {(notice.kind === 'notSyncing' || notice.action !== 'none') && (
+        <HapticPressable
+          intent="light"
+          style={({ pressed }) => [quietActions.action, styles.noticeAction, { opacity: pressed ? 0.6 : 1 }]}
+          onPress={
+            notice.kind === 'notSyncing'
+              ? goToConnections
+              : () => runNoticeAction(notice.action)
+          }
+          accessibilityRole="button"
+          accessibilityLabel={noticeA11y}
         >
-          <Text style={[styles.noticeText, { color: sc.textPrimary }]}>
-            {notice.kind === 'notSyncing' ? notSyncingHereCopy(deviceName) : notice.text}
-          </Text>
-          {(notice.kind === 'notSyncing' || notice.action !== 'none') && (
-            <HapticPressable
-              intent="light"
-              style={({ pressed }) => [quietActions.action, styles.noticeAction, { opacity: pressed ? 0.6 : 1 }]}
-              onPress={
-                notice.kind === 'notSyncing'
-                  ? goToConnections
-                  : () => runNoticeAction(notice.action)
-              }
-              accessibilityRole="button"
-              accessibilityLabel={noticeA11y}
-            >
-              <Text style={[quietActions.label, { color: sc.accentText }]}>{noticeLabel}</Text>
-            </HapticPressable>
-          )}
+          <Text style={[quietActions.label, { color: sc.accentText }]}>{noticeLabel}</Text>
+        </HapticPressable>
+      )}
+    </View>
+  );
+
+  return (
+    <Screen edges={v2 ? [] : ['top']} scroll={false} contentStyle={styles.column} testID="health-shell">
+      <View
+        style={
+          v2
+            ? [styles.masthead, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + layout.statusBarGap }, !fitnessV2 && styles.mastheadEnd]
+            : styles.titleBlock
+        }
+      >
+        {back}
+        <Overline style={v2 ? { color: sc.textOnMastheadMuted } : undefined}>Health data</Overline>
+        <Headline level="h1" style={v2 ? { color: sc.textOnAccent } : undefined}>Health and sleep</Headline>
+        {v2 && <BucketSwitcher active={bucket} onChange={handleSwitch} onDark />}
+      </View>
+      {(!v2 || !fitnessV2) && (
+        <View style={styles.header}>
+          {!v2 && <BucketSwitcher active={bucket} onChange={handleSwitch} />}
+          <FreshnessChip
+            connections={connections}
+            bucket={bucket}
+            onPress={goToConnections}
+          />
         </View>
       )}
+
+      {!fitnessV2 && noticeView}
 
       <Animated.View
         style={[styles.body, reduceMotion ? undefined : { opacity: fade }]}
@@ -425,6 +447,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.xs,
   },
+  // HEALTH-1 masthead (surface.masthead): Back with its label, bottom corners
+  // on Recovery; on Fitness the tab's own masthead carries on under it.
+  masthead: { paddingHorizontal: layout.gutter, gap: spacing.xs, paddingBottom: spacing.sm },
+  mastheadEnd: { borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, paddingBottom: spacing.lg, marginBottom: spacing.md },
+  backV2: { width: undefined, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: spacing.xs, marginLeft: -spacing.xs },
+  backLabel: { ...typography.bodyMd },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

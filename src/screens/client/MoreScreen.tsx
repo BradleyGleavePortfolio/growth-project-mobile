@@ -31,7 +31,7 @@ type MoreItem = {
   section: string;
   // Either a screen inside a sibling tab's stack (opened through the tab
   // navigator) or a nested screen inside the More stack.
-  target: { type: 'tab'; tab: string; screen: string } | { type: 'stack'; screen: string };
+  target: { type: 'tab'; tab: string; screen: string } | { type: 'stack'; screen: string; params?: object };
   a11yHint: string;
   // When true, the row renders Roman's face (RomanAvatar) in place of the
   // Ionicons glyph — the face+voice rule for the Roman-branded row.
@@ -236,6 +236,16 @@ const WEARABLE_MORE_ITEMS: MoreItem[] = [
     target: { type: 'stack', screen: 'Health' },
     a11yHint: 'Opens your health and sleep data',
     tutorialTarget: 'more-health',
+    // HEALTH-1 (owner #SLEEP-PLACE op 2): the main way into Sleep and recovery
+    // opens Health and sleep on its Recovery tab. Off, the row is main's.
+    ...(featureFlags.healthPages
+      ? {
+          icon: 'moon-outline' as const,
+          label: 'Sleep and recovery',
+          description: 'Recovery estimate, activity and heart rate',
+          target: { type: 'stack' as const, screen: 'Health', params: { bucket: 'recovery' } },
+        }
+      : {}),
   },
   {
     icon: 'watch-outline',
@@ -270,7 +280,8 @@ export default function MoreScreen() {
 
   const handlePress = (item: MoreItem) => {
     if (item.target.type === 'stack') {
-      navigation.navigate(item.target.screen);
+      if (item.target.params) navigation.navigate(item.target.screen, item.target.params);
+      else navigation.navigate(item.target.screen);
       return;
     }
     // A screen in another tab's stack: go through the tab navigator and keep

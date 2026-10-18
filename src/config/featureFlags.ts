@@ -54,6 +54,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS,
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
+  EXPO_PUBLIC_FF_HEALTH_PAGES: process.env.EXPO_PUBLIC_FF_HEALTH_PAGES,
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
@@ -584,6 +585,13 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_C3_STYLE_B
    */
   c3StyleB: readFlag('EXPO_PUBLIC_FF_C3_STYLE_B', false),
+  /**
+   * HEALTH-1 (owner 10-17 #HEALTH-PAGES op 1, #SLEEP-PLACE op 2): the You row
+   * Sleep and recovery opens Health and sleep on Recovery; the Fitness tab gets
+   * the forest masthead. Off in every build; off, both are main's.
+   * env: EXPO_PUBLIC_FF_HEALTH_PAGES
+   */
+  healthPages: readFlag('EXPO_PUBLIC_FF_HEALTH_PAGES', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

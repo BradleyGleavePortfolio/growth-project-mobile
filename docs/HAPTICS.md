@@ -60,6 +60,7 @@ When the toggle changes:
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
 | `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
 | Overview gear, Calendar gear, Messages Community button (COACHTABS) | `softImpact()` | Opens Settings, Hours and rules, Community |
+| `wearables/HealthFitnessTab` (HEALTH-1, `healthPages` off by default) | `selection()`; `error()` | Opens the device row, Steps, a card or Connect; Try again fails |
 | `messaging/RomanDraftMark` (Roman draft mark, both threads and C3 Style B) | `selection()` | Show or fold the draft line, open its explanation, or forward a long press to message actions (flag off by default) |
 | `ActiveWorkoutScreen` | `heavyImpact()` | Workout saved successfully |
 | `ActiveWorkoutScreen` | `error()` | Workout save failed |
