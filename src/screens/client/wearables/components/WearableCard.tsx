@@ -35,6 +35,8 @@ interface Props {
   readonly trailing?: React.ReactNode;
   readonly style?: ViewStyle;
   readonly accessibilityHint?: string;
+  /** What a screen reader says for a pressable card (default = title). */
+  readonly accessibilityLabel?: string;
 }
 
 export default function WearableCard({
@@ -46,6 +48,7 @@ export default function WearableCard({
   trailing,
   style,
   accessibilityHint,
+  accessibilityLabel,
 }: Props) {
   const Body = (
     <View style={[styles.card, style]}>
@@ -70,7 +73,7 @@ export default function WearableCard({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint ?? `Open ${title} detail`}
       style={({ pressed }) => (pressed ? styles.pressed : undefined)}
     >

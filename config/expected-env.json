@@ -181,6 +181,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_HEALTH_PAGES": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Health and sleep slice 1, HEALTH-1). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_IMPORT_REVIEW": {
       "kind": "flag",
       "default": "off",
