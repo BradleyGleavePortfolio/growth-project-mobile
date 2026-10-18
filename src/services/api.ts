@@ -930,15 +930,6 @@ export const coachApi = {
   // ── Nudges ──
   sendNudge: (clientId: string, data: { title: string; body: string }) =>
     api.post(`/coach/clients/${clientId}/nudges`, data),
-  // ── Meal plans (server is source of truth) ──
-  listClientMealPlans: (clientId: string) =>
-    api.get(`/coach/clients/${clientId}/meal-plans`),
-  createClientMealPlan: (clientId: string, data: Record<string, unknown>) =>
-    api.post(`/coach/clients/${clientId}/meal-plans`, data),
-  updateMealPlan: (planId: string, data: Record<string, unknown>) =>
-    api.patch(`/coach/meal-plans/${planId}`, data),
-  archiveMealPlan: (planId: string) =>
-    api.delete(`/coach/meal-plans/${planId}`),
   // ── Food log review (coach read) ──
   // B15: backend exposes the client's food entries via the timeline endpoint
   // (which interleaves food/weight/workout/check-in events). The mobile fans
@@ -1099,14 +1090,6 @@ export const lessonsApi = {
   update: (id: string, data: Record<string, unknown>) => api.put(`/lessons/${id}`, data),
   complete: (id: string) => api.post(`/lessons/${id}/complete`),
   getRecommended: () => api.get('/lessons/recommended'),
-};
-
-// Meal plans (client-facing, read-only).
-// Coach creates/edits via coachApi.createClientMealPlan / updateMealPlan /
-// archiveMealPlan; the client just reads what the coach assigned.
-export const mealPlansApi = {
-  list: () => api.get('/meal-plans'),
-  get: (id: string) => api.get(`/meal-plans/${id}`),
 };
 
 // Daily check-ins. POST /check-ins upserts on `date`, so saving the same day
