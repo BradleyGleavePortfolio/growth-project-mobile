@@ -115,7 +115,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     logHabit.mutateAsync({ id: h.id, date: today, completed: next }).then(
       () => { if (next) onSaved?.(); },
       () => {
-        setShown(({ [h.id]: _, ...rest }) => rest);
+        setShown((m) => { const rest = { ...m }; delete rest[h.id]; return rest; });
         setUnsaved(h.id);
         void HapticService.error();
         AccessibilityInfo.announceForAccessibility(C.notSaved);
@@ -172,7 +172,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
             segments={parts.map((h): SegmentState => (isDone(h) ? 'done' : 'planned'))} size={ring} onDark
             label={C.ring(done, parts.length)} drawIndex={draw?.index} event={draw?.key} testID="habits-ring"
           >
-            <Text style={[s.count, s.light, { maxWidth: ring * 0.72 }]} numberOfLines={1} adjustsFontSizeToFit>{C.of(done, parts.length)}</Text>
+            <Text style={[s.count, s.light, { maxWidth: ring * 0.72 }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1} testID="habits-ring-count">{C.of(done, parts.length)}</Text>
             <Text style={[typography.eyebrow, s.muted]}>{C.today}</Text>
           </SegmentedRing>
           <View style={s.flex}>
@@ -259,7 +259,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
   } else {
     body = (
       <>
-        {parts.length ? <Text style={[typography.body, s.soft]}>{C.tap}</Text> : null}
+        {done < parts.length ? <Text style={[typography.body, s.soft]}>{C.tap}</Text> : null}
         <View style={s.grid}>{parts.map(tile)}</View>
         <TextLink label={C.addHabit} tone="accent" underline={false} align="start" onPress={onAdd} testID="habits-ring-add" />
       </>
