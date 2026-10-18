@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook, waitFor, within } from '@testing-library/react-native';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { useClientDetailData } from '../screens/coach/client-detail/useClientDetailData';
 import { useCoachStore } from '../store/coachStore';
@@ -101,6 +101,32 @@ it('an ID-only app link uses the scoped summary name rather than a blank client 
     ...props.route, params: { clientId: 'client-test', clientName: '' },
   }} />);
   expect(await view.findByText('Test client')).toBeTruthy();
+});
+
+it.each([
+  ['Christopher Martinez', false],
+  ['Jessica Richardson', false],
+  ['Christopher Martinez', true],
+  ['Jessica Richardson', true],
+  ['Christopher Martinez Richardson', true],
+] as const)('FIX762: %s has a separate identity row (archived %s), retaining header destinations', async (clientName, isArchived) => {
+  archived = isArchived;
+  (coachApi.getClientSummary as jest.Mock).mockResolvedValueOnce({
+    data: { ...summary, profile: { primaryGoal: 'lose_moderate' } },
+  });
+  const params = { ...props.route.params, clientName };
+  const view = await render(<ClientDetailScreen {...props} route={{ ...props.route, params }} />);
+  const action = await view.findByLabelText(isArchived ? 'Unarchive client' : 'Archive client');
+  const identity = within(view.getByTestId('client-file-header-identity'));
+  expect(identity.getByText(clientName).props.numberOfLines).toBeUndefined();
+  expect(identity.getByText(`${isArchived ? 'Archived' : 'Active'} client · lose moderate`).props.numberOfLines).toBeUndefined();
+  expect(identity.queryByLabelText('Open messages')).toBeNull();
+  const actions = within(view.getByTestId('client-file-header-actions'));
+  expect(actions.getByLabelText(isArchived ? 'Unarchive client' : 'Archive client')).toBe(action);
+  await fireEvent.press(actions.getByLabelText('Open messages'));
+  expect(navigate).toHaveBeenCalledWith('ClientMessages', params);
+  await fireEvent.press(actions.getByText('arrow-back'));
+  expect(goBack).toHaveBeenCalledTimes(1);
 });
 
 it('Summary Workouts opens this client Workouts tab and its builder path carries the client and copied plan', async () => {

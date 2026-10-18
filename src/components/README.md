@@ -2,6 +2,18 @@
 
 `ForegroundNotificationBanner` keeps either push URL field on its existing store payload. Tapping a URL-bearing banner uses the same trusted, role-aware receiver as a native push tap; no external URL or untrusted host is opened. Its layout, copy, timing and non-URL action handling are unchanged.
 
+C8V2-2A adds opt-in `variant="dark"` on `progress/WeightTrendChart` and
+`progress/PeriodTabs`, requiring `clientProgressV2` (off by default).
+`weightTrend.ts` smooths full history in pounds before 7D/30D/All filtering.
+Visible tabs read Week/Month/All. `WeightTrendChartDark` composes TgpLineChart:
+trend, readings, decorative usual-range ribbon, labelled optional goal except
+Week, dashed gaps, latest/pending rings, hold/drag and adjustable day-by-day
+inspection. Detail includes legend, textual range and smoothing explanation
+on the page colour. The dark part owns 24 pt gutters; use it full width below
+the masthead title/number. Overview omits band/legend. Caller supplies authorized full
+history, optional goal and coach name, pending state and through date. No reads,
+writes, coach lock or screen wiring. Full state frames remain C8 PR 13.
+
 CAC-POLISH: `roman/RomanLoadingSkeleton.tsx` is the existing Roman loading state shared by the first coach-consent read and the room read, with the same spoken label and Reduce Motion support. The initial consent read keeps a working Back action; it never mounts the room early. `ai/AiRefusalNotice.tsx` uses `radius.card` (16) for every refusal card, compact or full, and `radius.button` (12) for every primary and secondary action; refusal handling and wording are unchanged.
 
 Shared, screen-agnostic UI. Anything that more than one screen renders, or anything that owns its own animation / lifecycle, lives here. Tokenised — no hardcoded hex, no inline radius / shadow values.
@@ -60,6 +72,7 @@ No new read, write, draft lookup or permission change; the existing thread scope
 | `roman/romanAvatarAssets.ts` | Resolves bundled Roman art: `romanFaceAsset(crop)` for avatars, `romanArtAsset('portrait' \| 'hero' \| 'welcome')` for onboarding, reveal and tutorial surfaces. |
 | `roman/__tests__/romanCanonicalAssets.test.ts` | Pins every file in `assets/roman/` by sha256. |
 | `roman/RomanMessageBubble.tsx`, `RomanTypingIndicator.tsx`, `useRomanReveal.ts` | Roman chat turns (B30): Roman's replies as serif reading text with no bubble (`romanBlocks` splits paragraphs and bullets, emphasis markers dropped), the client's turns as quiet right-aligned `radius.card` bubbles, and the reading fade for the reply that arrives after a send (240 ms per paragraph, Reduce Motion shows it at once). A reply that was cut off speaks its interrupted note as part of its accessible label. Room rules: `src/screens/roman/README.md`. |
+| `roman/RomanCrisisActions.tsx` | CRISIS-BTN (flag `crisisActions`): the actions under Roman's fixed crisis reply, drawn only from the server marker (`safetyActions`) in its order, the first as `PrimaryButton` and the rest as forest outlines: "Call 911" (`tel:911`), "Call 988" (`tel:988`), "Text 988" (`sms:988`) and "Message <coach first name>" (Home > `Messages`; only for a client with a coach, name from `GET /v1/clients/me/coach`, else "Message your coach"). Stacked, `radius.button`, 48 pt or taller, soft tap haptic. Used by `RomanMessageBubble` and the Roman transcript. |
 | `roman/RomanConversationsButton.tsx` | Roman chat header entry to "Your conversations with Roman" (`RomanConversations` route). Renders nothing outside a navigator. |
 
 Roman is an older Black man in his 60s in a black three-piece butler suit, white shirt and straight black tie. The only approved art is `tgp-agent-context/design/roman/` (see `tgp-agent-context/strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md` section 3). Until 2026-09-30 the bundled avatar files showed a different, younger man; that art is removed and must never return. Replacing any Roman asset requires an owner decision recorded in tgp-agent-context, after which the pinned hashes are updated in the same PR. B27 (owner screenshot S8, 2026-10-08; tgp-agent-context handoffs/op-132/rescue/BRIEF.md): the neutral and smile crops are re-derived from `portrait.jpg` (the 330 px square at x 80, y 10, circle-masked at 64/128/192 px) so the whole crown shows; same art, new pins.
@@ -279,3 +292,6 @@ under `community_terms_agreed:v1:<userId>`) and "Read the Terms of Service" (`TE
 `src/lib/legalLinks.ts`, which names the page and gives its web address when the phone cannot open it. The Create account
 screen states the Terms of Service and Privacy Policy agreement with both links. Tests:
 `community/__tests__/CommunityTermsGate.test.tsx`, `screens/auth/__tests__/CreateAccountScreen.test.tsx`.
+COACHTABS (agent 153): an optional `onBack` draws a 44 pt Back above the agreement; only the coach Community stack
+passes it, and only with `featureFlags.coachTabsV2` on (Community opens from Messages there). Back leaves without storing an
+agreement.

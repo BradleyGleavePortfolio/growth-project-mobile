@@ -130,7 +130,10 @@ export function actionTarget(
         : null;
     case 'dunning_queue':
     case 'team_revenue_review':
-      return { tab: 'SettingsStack', params: { screen: 'CoachMoney', initial: false } };
+      // COACHTABS: Money is its own tab when coachTabsV2 is on.
+      return featureFlags.coachTabsV2
+        ? { tab: 'MoneyStack', params: { screen: 'CoachMoney', pop: true } }
+        : { tab: 'SettingsStack', params: { screen: 'CoachMoney', initial: false } };
     case 'sub_coach_operations':
     case 'team_performance':
       return featureFlags.teamMode ? { tab: 'TeamStack' } : null;

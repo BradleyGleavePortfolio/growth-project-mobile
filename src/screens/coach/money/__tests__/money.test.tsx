@@ -81,6 +81,16 @@ jest.mock("../../../../hooks/useNetworkStatus", () => ({
 }));
 
 const mockFocus: { current: (() => void) | null } = { current: null };
+// PK-2a: null keeps the real credit-pack gate; a test may force it.
+let mockPacksHidden: boolean | null = null;
+jest.mock("../../../../config/purchaseSurfaces", () => {
+  const actual = jest.requireActual("../../../../config/purchaseSurfaces");
+  return {
+    ...actual,
+    creditPacksHidden: () =>
+      mockPacksHidden === null ? actual.creditPacksHidden() : mockPacksHidden,
+  };
+});
 const mockNavigate = jest.fn();
 const mockReplace = jest.fn();
 const mockParentNavigate = jest.fn();
@@ -310,6 +320,7 @@ beforeEach(() => {
   mockParentNavigate.mockReset();
   mockOpenBrowser.mockReset();
   mockOnline = true;
+  mockPacksHidden = null;
 });
 
 describe("coachMoneyApi parsing", () => {
@@ -508,6 +519,25 @@ describe("MoneyScreen", () => {
     expect(mockNavigate).toHaveBeenCalledWith("CoachMoneyCharges", {});
     await fireEvent.press(getByTestId("money-packages"));
     expect(mockNavigate).toHaveBeenCalledWith("CoachPackagesList");
+  });
+
+  it("PK-2a: Buy more credits is one tap from the Money root and opens the credit pack checkout", async () => {
+    routeGets();
+    mockPacksHidden = false;
+    const { findByTestId, getByText } = await render(<MoneyScreen />);
+    const row = await findByTestId("money-buy-credits");
+    expect(row.props.accessibilityLabel).toBe("Buy more AI credits");
+    getByText("Buy more credits");
+    await fireEvent.press(row);
+    expect(mockNavigate).toHaveBeenCalledWith("CreditPackCheckout", undefined);
+  });
+
+  it("PK-2a: no Buy more credits row where the build may not sell credit packs", async () => {
+    routeGets();
+    mockPacksHidden = true;
+    const { findByTestId, queryByTestId } = await render(<MoneyScreen />);
+    await findByTestId("money-packages");
+    expect(queryByTestId("money-buy-credits")).toBeNull();
   });
 
   it("Payout settings opens the Stripe Express dashboard from the live route", async () => {

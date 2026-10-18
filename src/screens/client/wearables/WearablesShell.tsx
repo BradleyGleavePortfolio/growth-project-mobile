@@ -232,12 +232,12 @@ export default function WearablesShell() {
     <TouchableOpacity
       onPress={() => navigation.goBack()}
       accessibilityRole="button"
-      accessibilityLabel="Back"
+      accessibilityLabel={v2 ? 'Back to You' : 'Back'}
       style={[styles.back, v2 && styles.backV2]}
       testID="health-back"
     >
       <Ionicons name={v2 ? 'chevron-back' : 'arrow-back'} size={24} color={v2 ? sc.textOnAccent : sc.textPrimary} />
-      {v2 && <Text style={[styles.backLabel, { color: sc.textOnAccent }]}>You</Text>}
+      {v2 && <Text style={[styles.backLabel, { color: sc.textOnAccent }]}>Back to You</Text>}
     </TouchableOpacity>
   ) : null;
 
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   // on Recovery; on Fitness the tab's own masthead carries on under it.
   masthead: { paddingHorizontal: layout.gutter, gap: spacing.xs, paddingBottom: spacing.sm },
   mastheadEnd: { borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, paddingBottom: spacing.lg, marginBottom: spacing.md },
-  backV2: { width: undefined, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: spacing.xs, marginLeft: -spacing.xs },
+  backV2: { width: 'auto', flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: spacing.xs, marginLeft: -spacing.xs },
   backLabel: { ...typography.bodyMd },
   header: {
     flexDirection: 'row',

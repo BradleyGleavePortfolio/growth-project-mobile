@@ -84,10 +84,12 @@ export default function WeekStepBars({ days, goal, reduceMotion }: Props) {
         ))}
       </View>
       <View style={styles.key}>
-        <View style={styles.keyItem}>
-          <View style={[styles.swatch, styles.open, { borderColor: sc.data.moss }]} />
-          <Text style={[styles.keyText, { color: sc.textMuted }]}>So far</Text>
-        </View>
+        {days[today]?.total != null && (
+          <View style={styles.keyItem}>
+            <View style={[styles.swatch, styles.open, { borderColor: sc.data.moss }]} />
+            <Text style={[styles.keyText, { color: sc.textMuted }]}>So far</Text>
+          </View>
+        )}
         {missing && (
           <View style={styles.keyItem}>
             <View style={[styles.swatch, styles.dashed, { borderColor: sc.data.planned }]} />
