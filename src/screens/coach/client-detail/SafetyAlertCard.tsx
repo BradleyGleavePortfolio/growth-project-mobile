@@ -64,7 +64,7 @@ export function SafetyAlertCard({ alert, first, clientName, onMessage, onDismiss
           </Pressable>
           <Pressable
             onPress={dismiss} disabled={busy} accessibilityRole="button" accessibilityLabel={`Dismiss alert for ${clientName}`}
-            accessibilityState={{ disabled: busy, busy }} style={({ pressed }) => [s.quiet, pressed && s.pressed]} testID="file-safety-dismiss"
+            accessibilityState={{ disabled: busy, busy }} style={({ pressed }) => [s.quiet, (pressed || busy) && s.pressed]} testID="file-safety-dismiss"
           >
             <Text maxFontSizeMultiplier={CAP} style={[typography.bodyMd, { color: sc.textMuted }]}>Dismiss</Text>
           </Pressable>
