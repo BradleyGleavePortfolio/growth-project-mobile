@@ -405,7 +405,7 @@ export type MoreStackParamList = {
  * Opened from More they get a native header with only the back chevron, so
  * the way back is always visible and the safe area is respected.
  */
-/** `onMasthead`: the C8 v2 Progress page starts on the deep forest masthead, so its bar does too. */
+/** `onMasthead`: the C8 v2 Progress page starts on the deep forest masthead, so its bar does too (ForestStatusBar paints the inset). */
 function backOnlyHeader(title = '', onMasthead = false) {
   return {
     headerShown: true,
@@ -414,7 +414,6 @@ function backOnlyHeader(title = '', onMasthead = false) {
     headerShadowVisible: false,
     headerStyle: { backgroundColor: onMasthead ? lightTokens.surface.masthead : colors.bone },
     headerTintColor: onMasthead ? lightTokens.textOnAccent : colors.ink,
-    statusBarStyle: onMasthead ? 'light' : undefined,
   } as const;
 }
 

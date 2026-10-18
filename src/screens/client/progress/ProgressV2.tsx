@@ -16,6 +16,7 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, motion, radius, typography } from '../../../theme/tokens';
 import { useReduceMotion } from '../wearables/components/useReduceMotion';
 import { QuietRow, QuietSection, Screen } from '../../../ui';
+import { ForestStatusBar } from '../../../components/StatusBarBand';
 import PeriodTabs from '../../../components/progress/PeriodTabs';
 import WeightTrendChartDark from '../../../components/progress/WeightTrendChartDark';
 import WeighInRows from '../../../components/progress/WeighInRows';
@@ -88,11 +89,13 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const trend = logs && has ? P.trendNow(logs, today) : null;
   const sentence = logs && has ? P.trendSentence(logs, period, unit, today) : null;
   const num = (lbs: number) => P.one(P.toUnit(lbs, unit));
+  const retry = () => { setRefreshing(true); void load().then(() => setRefreshing(false)); };
   const since = logs?.[0] ? `Since ${P.monthDay(logs[0].date)}` : null;
   return (
     <>
+      <ForestStatusBar />
       <Screen edges={[]} testID="progress-screen" contentStyle={s.page} refreshControl={<RefreshControl refreshing={refreshing}
-        onRefresh={() => { setRefreshing(true); void load().then(() => setRefreshing(false)); }} tintColor={sc.textMuted} />}>
+        onRefresh={retry} tintColor={sc.textMuted} />}>
         <View style={[s.mast, { backgroundColor: sc.surface.masthead }, !has && s.mastEnd]} testID="progress-masthead">
           <View style={s.row}>
             {coachName ? <View style={[s.avatar, { backgroundColor: sc.textOnAccent }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Text style={s.initial}>{coachName.charAt(0).toUpperCase()}</Text></View> : null}
@@ -109,8 +112,16 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
               <Text style={[typography.bodyMd, light]}>Log weight</Text>
             </Pressable>
           </View>
-          {failed && !has ? <Text style={[typography.body, light]}>The weight chart did not load. Pull down to try again.</Text>
-            : logs && !has ? <Text style={[typography.body, light]}>No weigh-ins yet. The first one sets the starting point.</Text> : null}
+          {failed && !has ? (
+            <View style={[s.fail, { borderColor: sc.textOnMastheadMuted }]}>
+              <Text style={[typography.body, light, s.center]}>The weight chart did not load. Pull down to try again.</Text>
+              <Pressable onPress={retry} disabled={refreshing} accessibilityRole="button" accessibilityLabel="Try again" testID="progress-retry"
+                style={[s.row, s.chip, { borderColor: sc.textOnMastheadMuted }]}>
+                <Ionicons name="refresh" size={18} color={sc.textOnAccent} />
+                <Text style={[typography.bodyMd, light]}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : logs && !has ? <Text style={[typography.body, light]}>No weigh-ins yet. The first one sets the starting point.</Text> : null}
           {trend != null ? (
             <View style={[s.row, s.base]}>
               <Text style={[s.big, light]} maxFontSizeMultiplier={1.3}>{num(trend)}</Text>
@@ -162,6 +173,8 @@ const s = StyleSheet.create({
   mastEnd: { paddingBottom: 24, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
   avatar: { width: 44, height: 44, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   initial: { ...serif, fontSize: 24, lineHeight: 30, color: colors.ink },
+  fail: { alignItems: 'center', gap: 16, padding: 24, borderWidth: 1, borderStyle: 'dashed', borderRadius: radius.card },
+  center: { textAlign: 'center' },
   chip: { gap: 6, minHeight: 44, paddingHorizontal: 14, borderWidth: 1, borderRadius: radius.button },
   big: { ...serif, fontSize: 64, lineHeight: 80 },
   disc: { width: 32, height: 32, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },

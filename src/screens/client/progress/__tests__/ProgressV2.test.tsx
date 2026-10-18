@@ -29,7 +29,7 @@ jest.mock('../../../../services/api', () => ({
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../../hooks/useCoachlessClient', () => ({ useCoachlessClient: () => mockCoachless }));
 jest.mock('../../../../hooks/useCalendar', () => ({ useMyCoaches: () => ({ data: [{ coach_id: 'c1', name: 'Sam Rivera', timezone: null }] }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }), useFocusEffect: jest.fn() }));
 jest.mock('../../../../config/featureFlags', () => ({ featureFlags: { clientProgressV2: true, clientTimelineV2: true } }));
 jest.mock('../../../../ui/haptics/haptics.service', () => {
   const fns: Record<string | symbol, jest.Mock> = {};
@@ -147,7 +147,7 @@ it('coachless: the same page with no coach words', async () => {
   await waitFor(() => expect(v.getByText(/^176\.0 lb at \d{1,2}:\d{2} [ap]m\.$/)).toBeTruthy());
 });
 
-it('empty and failed reads say so; the Timeline and report rows open their pages', async () => {
+it('empty and failed reads say so, Try again reads again; the Timeline and report rows open their pages', async () => {
   mockLogs = [];
   const v = await mount();
   await waitFor(() => expect(v.getByText('No weigh-ins yet. The first one sets the starting point.')).toBeTruthy());
@@ -159,6 +159,10 @@ it('empty and failed reads say so; the Timeline and report rows open their pages
   mockHistory.mockRejectedValueOnce(new Error('offline'));
   const f = await render(<ProgressScreen />);
   await waitFor(() => expect(f.getByText('The weight chart did not load. Pull down to try again.')).toBeTruthy());
+  mockLogs = [{ id: 'a', date: `${today}T00:00:00.000Z`, weight_lbs: 170 }];
+  await fireEvent.press(f.getByLabelText('Try again'));
+  await waitFor(() => expect(f.getByText('lb trend')).toBeTruthy());
+  expect(f.queryByLabelText('Try again')).toBeNull();
 });
 
 describe('progressV2 words and numbers', () => {
