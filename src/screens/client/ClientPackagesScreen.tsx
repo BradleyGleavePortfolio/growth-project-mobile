@@ -368,7 +368,6 @@ export default function ClientPackagesScreen() {
     <Screen
       edges={['top']}
       contentStyle={styles.content}
-      style={featureFlags.clientBillingV2 ? { backgroundColor: semanticColors.surface.masthead } : undefined}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
       }
@@ -639,7 +638,7 @@ export default function ClientPackagesScreen() {
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     // Screen owns the inset top (insets.top + 12).
-    content: { paddingHorizontal: 24, paddingBottom: 40, backgroundColor: semanticColors.bgPrimary },
+    content: { paddingHorizontal: 24, paddingBottom: 40 },
     dueToday: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     dueAmount: { ...tokens.typography.h2, color: semanticColors.textPrimary, fontVariant: ['tabular-nums'] },
     center: {

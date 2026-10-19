@@ -9,7 +9,7 @@
  * was no Your plans panel.
  */
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, Modal, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../theme/ThemeProvider', () => {
@@ -22,7 +22,10 @@ jest.mock('../ui/skeletons/Skeleton', () => ({ SkeletonScreen: () => null }));
 let mockBillingV2 = false;
 jest.mock('../config/featureFlags', () => {
   const actual = jest.requireActual('../config/featureFlags');
-  return { ...actual, featureFlags: { ...actual.featureFlags, deliverables: true, get clientBillingV2() { return mockBillingV2; } } };
+  // Define the accessor after the spread: Babel otherwise snapshots its value.
+  return Object.defineProperty({ ...actual }, 'featureFlags', {
+    get: () => ({ ...actual.featureFlags, deliverables: true, clientBillingV2: mockBillingV2 }),
+  });
 });
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
@@ -138,10 +141,11 @@ it('Style C opens the plan without checkout, shows the server quote, and returns
   const r = await render(<ClientPackagesScreen />);
   await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
   expect(r.queryByTestId('buy-plan-pkg-monthly')).toBeNull();
-  expect(r.getByText('From Coach Lee')).toBeTruthy();
+  expect(r.getByText('Your training, adjusted by me each week.')).toBeTruthy();
   await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
   expect(mockPost).not.toHaveBeenCalled();
   expect(r.getByTestId('client-plan-page')).toBeTruthy();
+  expect(r.getByText('From Coach Lee')).toBeTruthy();
   expect(within(r.getByTestId('plan-due-today')).getByText('$123.45')).toBeTruthy();
   expect(r.getByTestId('plan-terms-pkg-monthly-first-charge').props.children).toContain('You pay $123.45 today');
   expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.disabled).toBe(false);
@@ -181,6 +185,7 @@ it('Style C uses the existing purchase handler and keeps its failure recoverable
     '/v1/checkout/subscription-intent', expect.objectContaining({ package_id: 'pkg-monthly' }),
   ));
   await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.busy).toBe(false));
+  expect(r.getByTestId('payment-error')).toBeTruthy();
   expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
 });
 
@@ -192,6 +197,24 @@ it('Style C cannot open a plan when the scoped list read is denied', async () =>
   expect(r.queryByTestId('plan-offer-pkg-monthly-open')).toBeNull();
   expect(r.queryByTestId('client-plan-page')).toBeNull();
   expect(mockPost).not.toHaveBeenCalled();
+});
+
+it('Style C keeps the current-plan action disabled and Android Back returns to the list', async () => {
+  mockBillingV2 = true;
+  jest.mocked(clientPaymentsApi.getPaymentStatus).mockResolvedValue({ ok: true, data: {
+    state: 'active', purchase_id: 'purchase-1', package_id: 'pkg-monthly', package_name: 'Monthly coaching',
+    current_period_end: null, trial_ends_at: null, dunning: null,
+  } });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  const action = r.getByTestId('buy-plan-pkg-monthly');
+  expect(action.props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(action);
+  expect(mockPost).not.toHaveBeenCalled();
+  await fireEvent(r.UNSAFE_getByType(Modal), 'requestClose');
+  expect(r.queryByTestId('client-plan-page')).toBeNull();
+  expect(mockGoBack).not.toHaveBeenCalled();
 });
 
 it.each([false, true])('names the refund team and its support action (renewing plan: %s)', async (hasPlan) => {

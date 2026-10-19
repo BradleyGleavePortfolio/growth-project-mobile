@@ -32,28 +32,29 @@ export function PlanMasthead({ title, coach, price, onBack }: {
           {price ? <Text style={[s.meta, { color: c.textOnAccent }]}>{price}</Text> : null}
         </View>
         {coach ? (
-          <View style={[s.seal, { backgroundColor: c.bgPrimary, borderColor: c.data.peak }]} accessible={false}>
-            <Text style={[s.initial, { color: c.accentText }]}>{coach.trim().charAt(0)}</Text>
+          <View style={[s.seal, { backgroundColor: c.bgPrimary, borderColor: c.data.peak }]} accessible={false} importantForAccessibility="no-hide-descendants">
+            <Text allowFontScaling={false} style={[s.initial, { color: c.accentText }]}>{coach.trim().charAt(0)}</Text>
           </View>
         ) : null}
       </View>
       <View style={[s.rule, { backgroundColor: c.data.peak }]} />
+      <View style={[s.paperEdge, { backgroundColor: c.bgPrimary }]} />
     </View>
   );
 }
 
-function CoachNote({ description, coach }: { description: string | null; coach: string | null }) {
+function CoachNote({ description, coach, compact = false }: { description: string | null; coach: string | null; compact?: boolean }) {
   const { semanticColors: c } = useTheme();
   return description ? (
     <View style={s.note}>
       {coach ? (
-        <View style={[s.noteSeal, { backgroundColor: c.surface.masthead }]} accessible={false}>
-          <Text style={[s.initial, { color: c.textOnAccent }]}>{coach.trim().charAt(0)}</Text>
+        <View style={[s.noteSeal, { backgroundColor: c.surface.masthead }]} accessible={false} importantForAccessibility="no-hide-descendants">
+          <Text allowFontScaling={false} style={[s.initial, { color: c.textOnAccent }]}>{coach.trim().charAt(0)}</Text>
         </View>
       ) : null}
       <View style={s.headingText}>
-        <Text style={[s.quote, { color: c.textPrimary }]}>{description}</Text>
-        {coach ? <Text style={[s.meta, { color: c.textMuted }]}>{CLIENT_PLAN_COPY.from(coach)}</Text> : null}
+        <Text style={[s.quote, compact && s.cardQuote, { color: c.textPrimary }]}>{description}</Text>
+        {coach && !compact ? <Text style={[s.meta, { color: c.textMuted }]}>{CLIENT_PLAN_COPY.from(coach)}</Text> : null}
       </View>
     </View>
   ) : null;
@@ -68,8 +69,8 @@ export function PlanOfferCard({ name, price, description, features, coach, onOpe
     <View style={[s.card, { backgroundColor: c.bgSurface, borderColor: c.border, borderLeftColor: c.data.peak }]} testID={testID}>
       <Text style={[s.cardTitle, { color: c.textPrimary }]} accessibilityRole="header">{name}</Text>
       <Text style={[s.cardPrice, { color: c.accentText }]}>{price}</Text>
-      {features.length ? <Text style={[s.meta, { color: c.textPrimary }]}>{features.join(' · ')}</Text> : null}
-      <CoachNote description={description} coach={coach} />
+      {features.length ? <Text style={[s.meta, { color: c.textPrimary }]}>{features.slice(0, 2).join(' · ')}</Text> : null}
+      <CoachNote description={description} coach={coach} compact />
       <TouchableOpacity
         style={s.open} onPress={onOpen} accessibilityRole="button"
         accessibilityLabel={`${CLIENT_PLAN_COPY.about}, ${name}, ${price}`} testID={`${testID}-open`}
@@ -97,7 +98,7 @@ export function ClientPlanPage({ name, price, description, features, coach, onBa
   return (
     <Screen
       edges={['bottom']} testID="client-plan-page"
-      header={<View style={{ backgroundColor: c.surface.masthead, paddingTop: insets.top + 12, paddingHorizontal: 24 }}>
+      header={<View style={{ backgroundColor: c.bgPrimary, paddingTop: insets.top + 12, paddingHorizontal: 24 }}>
         <PlanMasthead title={name} price={price} coach={coach} onBack={onBack} />
       </View>}
       footer={footer}
@@ -131,12 +132,14 @@ const s = StyleSheet.create({
   seal: { width: 44, height: 44, borderRadius: radius.chip, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   initial: { ...typography.h2, fontStyle: 'italic' },
   rule: { height: StyleSheet.hairlineWidth, marginTop: 20 },
+  paperEdge: { height: 18, marginHorizontal: -24, marginTop: 12, marginBottom: -18, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
   card: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: radius.card, padding: 16, marginBottom: 12 },
   cardTitle: { ...typography.h2 },
   cardPrice: { ...typography.h3, fontVariant: ['tabular-nums'], marginTop: 6 },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginVertical: 18 },
   noteSeal: { width: 36, height: 36, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   quote: { ...typography.h2, fontStyle: 'italic' },
+  cardQuote: { ...typography.h3, fontStyle: 'italic' },
   open: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, marginTop: 12, alignSelf: 'flex-start' },
   link: { ...typography.bodyMd },
   section: { marginVertical: 20 },
