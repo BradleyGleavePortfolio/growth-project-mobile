@@ -17,8 +17,9 @@
  *
  * `--release-env` additionally checks the current process environment (for an
  * EAS build hook): every `kind: required` name is non-empty, the Stripe
- * publishable key starts with pk_live_ or pk_test_, and no secret-shaped
- * EXPO_PUBLIC_* name is set (Opus C-319-2). Values are never printed.
+ * publishable key starts with pk_live_ or pk_test_, a set Supabase key is a
+ * complete sb_publishable_ key, and no secret-shaped EXPO_PUBLIC_* name is
+ * set (Opus C-319-2). Values are never printed.
  *
  * With a release profile (`--profile <name>`, or EAS_BUILD_PROFILE on an EAS
  * builder) and that profile listed under `releaseProfiles` in the manifest,
@@ -29,10 +30,11 @@
  *   - a URL-shaped value is not https on a real host (no localhost,
  *     loopback, private, CGNAT or link-local IPv4/IPv6, example.*,
  *     *.invalid / *.test / *.local / *.internal / *.lan, single-label names);
- *   - the Supabase anon key is not a complete JWT (three non-empty base64url
- *     parts, a signed header, role "anon", a full-length signature, not
- *     expired) nor a complete sb_publishable_ key (a service_role or
- *     sb_secret_ key in the bundle is a full database bypass);
+ *   - the Supabase key is not a complete sb_publishable_ key. A JWT-shaped
+ *     value (three dot-separated parts) is a legacy key, and the legacy keys
+ *     are switched off for this project (2026-10-19), so it fails; a
+ *     service_role JWT or an sb_secret_ key is named as such (either one in
+ *     the bundle is a full database bypass);
  *   - the Sentry DSN is not https://<key>@<host>/<project>;
  *   - the Stripe key is not a complete publishable key (pk_live_ / pk_test_
  *     plus 24-247 letters and digits), or not pk_live_ on a `stripe: "live"`
@@ -76,6 +78,7 @@ const KINDS = new Set(['required', 'optional', 'flag']);
 // (EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB is a feature flag); PRIVATE_KEY is.
 const SECRET_SHAPED = /(?:^|_)(SECRET|PASSWORD|PASSWD|SERVICE_ROLE|PRIVATE_KEY|WEBHOOK)(?:_|$)|_(SK)$/;
 const STRIPE_PUBLISHABLE = 'EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY';
+const SUPABASE_KEY = 'EXPO_PUBLIC_SUPABASE_ANON_KEY';
 
 /** The secret-shaped segment in an EXPO_PUBLIC_* name, or undefined. */
 function secretShape(name) {
@@ -415,8 +418,8 @@ const STRIPE_PUBLISHABLE_KEY = /^pk_(live|test)_([A-Za-z0-9]{24,247})$/;
 const SUPABASE_PUBLISHABLE_KEY = /^sb_publishable_([A-Za-z0-9_-]{20,200})$/;
 const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/;
 const SUPABASE_SERVICE_ROLE = 'is the Supabase SERVICE ROLE key; it bypasses row-level security and must never be in the app';
-// HS256 (Supabase legacy keys) signs with 32 bytes; every real JWS algorithm signs with at least that many.
-const MIN_JWT_SIGNATURE_BYTES = 32;
+const SUPABASE_LEGACY_JWT =
+  'is a legacy Supabase anon key (a JWT), and those keys are switched off for this project; copy the publishable key (sb_publishable_...) from Supabase → Project Settings → API Keys';
 
 const repeatsOneChar = (s) => /^(.)\1*$/.test(s);
 const isBase64UrlSegment = (s) => BASE64URL_SEGMENT.test(s) && s.length % 4 !== 1;
@@ -432,33 +435,18 @@ function jsonSegment(segment) {
   }
 }
 
-/** Why `v` is not a usable Supabase anon / publishable key, or undefined (B-333-2). */
-function supabaseKeyProblem(v, now) {
+/** Why `v` is not a usable Supabase publishable key, or undefined (B-333-2; legacy JWT keys are off). */
+function supabaseKeyProblem(v) {
   if (/^sb_secret_/.test(v)) return 'is a Supabase SECRET key (sb_secret_); it bypasses row-level security and must never be in the app';
-  if (/^sb_publishable_/.test(v)) {
-    const m = SUPABASE_PUBLISHABLE_KEY.exec(v);
-    if (!m || repeatsOneChar(m[1])) {
-      return 'is not a complete Supabase publishable key (expected sb_publishable_ followed by at least 20 letters, digits, _ or -, copied whole from Supabase → Project Settings → API Keys)';
-    }
-    return undefined;
-  }
   const parts = v.split('.');
-  if (parts.length !== 3) return 'is not a Supabase anon key (expected a JWT or an sb_publishable_ key)';
-  const payload = jsonSegment(parts[1]);
-  // A service-role payload is named first, whatever else is wrong with the token.
-  if (payload && payload.role === 'service_role') return SUPABASE_SERVICE_ROLE;
-  if (!parts.every(isBase64UrlSegment)) return 'is not a Supabase anon key (each of the three JWT parts must be non-empty base64url)';
-  const header = jsonSegment(parts[0]);
-  if (!header || typeof header.alg !== 'string' || !header.alg.trim() || header.alg.trim().toLowerCase() === 'none') {
-    return 'is not a Supabase anon key (the JWT header does not decode to a signed-token header)';
+  if (parts.length === 3) {
+    // A service-role payload is named first, whatever else is wrong with the token.
+    const payload = jsonSegment(parts[1]);
+    return payload && payload.role === 'service_role' ? SUPABASE_SERVICE_ROLE : SUPABASE_LEGACY_JWT;
   }
-  if (!payload) return 'is not a Supabase anon key (the JWT payload does not decode)';
-  if (payload.role !== 'anon') return 'is not a Supabase anon key (JWT role is not "anon")';
-  if (Buffer.from(parts[2], 'base64url').length < MIN_JWT_SIGNATURE_BYTES) {
-    return 'is not a complete Supabase anon key (the JWT signature is too short; copy the whole key)';
-  }
-  if (typeof payload.exp === 'number' && payload.exp * 1000 <= now) {
-    return 'is an expired Supabase anon key (the JWT exp is in the past); copy the current anon key from Supabase → Project Settings → API Keys';
+  const m = SUPABASE_PUBLISHABLE_KEY.exec(v);
+  if (!m || repeatsOneChar(m[1])) {
+    return 'is not a complete Supabase publishable key (expected sb_publishable_ followed by at least 20 letters, digits, _ or -, copied whole from Supabase → Project Settings → API Keys)';
   }
   return undefined;
 }
@@ -479,7 +467,7 @@ function stripeKeyProblem(v, mode) {
  * Every message is fixed text: nothing derived from the value is ever
  * interpolated, so it is safe in build logs (B-333-3).
  */
-function valueProblem(name, value, profileSpec = {}, now = Date.now()) {
+function valueProblem(name, value, profileSpec = {}) {
   const v = String(value == null ? '' : value).trim();
   if (!v) return 'is unset or empty';
   if (PLACEHOLDER_VALUE.test(v) || PLACEHOLDER_ANYWHERE.test(v)) return 'is a placeholder, not a real value';
@@ -493,8 +481,8 @@ function valueProblem(name, value, profileSpec = {}, now = Date.now()) {
     if (u.protocol !== 'https:') return 'must be an https URL';
     if (isBadHost(u.hostname)) return 'points at a local, private or example host';
   }
-  if (name === 'EXPO_PUBLIC_SUPABASE_ANON_KEY') {
-    const p = supabaseKeyProblem(v, now);
+  if (name === SUPABASE_KEY) {
+    const p = supabaseKeyProblem(v);
     if (p) return p;
   }
   if (name === 'EXPO_PUBLIC_SENTRY_DSN' && !SENTRY_DSN.test(v)) return 'is not a Sentry DSN (https://<key>@<host>/<project-id>)';
@@ -592,6 +580,13 @@ function checkReleaseEnv(root, env = process.env, opts = {}) {
     if (pk && !/^pk_(live|test)_/.test(pk)) {
       errors.push(
         `${STRIPE_PUBLISHABLE} is set but does not start with pk_live_ or pk_test_ (value not printed). Fix: set it to the publishable key from the Stripe dashboard; a secret (sk_) or restricted (rk_) key must never be in an EXPO_PUBLIC_* variable.`,
+      );
+    }
+    const sb = String(env[SUPABASE_KEY] || '').trim();
+    const sbProblem = sb && supabaseKeyProblem(sb);
+    if (sbProblem) {
+      errors.push(
+        `${SUPABASE_KEY} ${sbProblem} (value not printed). Fix: set it in the EAS environment (eas env:update --variable-name ${SUPABASE_KEY} --variable-environment <environment> --value <value>), then rebuild.`,
       );
     }
   }
