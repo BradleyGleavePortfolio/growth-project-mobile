@@ -2,7 +2,7 @@
  * Single decision point for "may this iOS build show a purchase that is not
  * a 1:1 person-to-person service?"
  *
- * Owner decision (launch): client payments for 1:1 coach packages are
+ * Owner decision (clinic launch): client payments for 1:1 coach packages are
  * real-time 1:1 coaching between a client and an individual coach, filed
  * under App Review Guideline 3.1.3(d) and paid through Stripe. They stay
  * available on iOS. Everything else that is sold in the app is hidden on iOS
