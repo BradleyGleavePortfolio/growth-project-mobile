@@ -96,6 +96,13 @@ const PLAN = {
   can_cancel: true, can_resume: false,
 };
 let plans: unknown[] = [];
+// Plan-page testIDs and texts in render order. Read the page alone: the list behind it repeats the note and
+// inclusions, and the list's RefreshControl prop cannot be serialised to JSON.
+type PageNode = { props: Record<string, unknown>; children: (PageNode | string)[] };
+const pageOrder = (node: PageNode): string[] => [
+  ...(typeof node.props.testID === 'string' ? [node.props.testID] : []),
+  ...node.children.flatMap((child) => (typeof child === 'string' ? [child] : pageOrder(child))),
+];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -210,14 +217,12 @@ it('Style C shows a decline first on the plan page, in view, on a page-coloured 
   expect(r.queryByTestId('client-plan-outcome')).toBeNull();
   await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
   await waitFor(() => expect(within(r.getByTestId('client-plan-outcome')).getByTestId('payment-error')).toBeTruthy());
-  // The list card behind the page repeats the note and inclusions, so read only the page.
-  const tree = JSON.stringify(r.toJSON());
-  const page = tree.slice(tree.indexOf('"client-plan-modal"'));
-  const at = (text: string) => page.indexOf(text);
-  expect(at('"payment-error"')).toBeGreaterThan(-1);
-  expect(at('"payment-error"')).toBeLessThan(at('Your training, adjusted by me each week.'));
+  const page = pageOrder(r.getByTestId('client-plan-page'));
+  const at = (text: string) => page.findIndex((entry) => entry.startsWith(text));
+  expect(at('payment-error')).toBeGreaterThan(-1);
+  expect(at('payment-error')).toBeLessThan(at('Your training, adjusted by me each week.'));
   expect(at('Your training, adjusted by me each week.')).toBeLessThan(at('Weekly call'));
-  expect(at('Weekly call')).toBeLessThan(at('"plan-terms-pkg-monthly'));
+  expect(at('Weekly call')).toBeLessThan(at('plan-terms-pkg-monthly'));
   expect(ScrollView.prototype.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ y: 0 }));
 });
 
@@ -229,10 +234,10 @@ it('Style C leads with the success moment, and Back from it finishes like Done (
   await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
   await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
   await waitFor(() => expect(within(r.getByTestId('client-plan-outcome')).getByTestId('payment-success')).toBeTruthy());
-  const tree = JSON.stringify(r.toJSON());
-  const page = tree.slice(tree.indexOf('"client-plan-modal"'));
-  expect(page.indexOf('"payment-success"')).toBeGreaterThan(-1);
-  expect(page.indexOf('"payment-success"')).toBeLessThan(page.indexOf('"plan-terms-pkg-monthly'));
+  const page = pageOrder(r.getByTestId('client-plan-page'));
+  const at = (text: string) => page.findIndex((entry) => entry.startsWith(text));
+  expect(at('payment-success')).toBeGreaterThan(-1);
+  expect(at('payment-success')).toBeLessThan(at('plan-terms-pkg-monthly'));
   expect(r.queryByTestId('buy-plan-pkg-monthly')).toBeNull();
   expect(haptic).toHaveBeenCalledTimes(1);
   const reads = jest.mocked(clientPaymentsApi.getPackages).mock.calls.length;
