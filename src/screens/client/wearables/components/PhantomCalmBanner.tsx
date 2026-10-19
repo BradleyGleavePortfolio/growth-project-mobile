@@ -10,7 +10,7 @@
  *   deficit     = "about 45 min under your sleep need"  (smaller, below)
  *
  * Colour: cool/neutral only. NEVER red. An optional `tone='attention'` switches
- * to a SOFT AMBER accent — reserved for genuine clinical-attention copy (e.g.
+ * to a SOFT AMBER accent — reserved for genuine medical-attention copy (e.g.
  * sustained low SpO2), never for ordinary "low score" framing.
  */
 
@@ -25,7 +25,7 @@ export interface PhantomCalmBannerProps {
   /** The deficit/number copy — rendered below, smaller, calm. */
   deficit: string;
   colors: ThemeColors;
-  /** 'calm' (default, cool/neutral) | 'attention' (soft amber, clinical only). */
+  /** 'calm' (default, cool/neutral) | 'attention' (soft amber, medical only). */
   tone?: 'calm' | 'attention';
   testID?: string;
 }

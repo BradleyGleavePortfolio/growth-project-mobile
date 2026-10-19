@@ -99,7 +99,7 @@ describe('K6 Your personal link', () => {
     expect(ui.getByTestId('k6-qr')).toBeTruthy();
     expect(ui.getByText('Anyone who opens this joins your roster directly.')).toBeTruthy();
     await fireEvent.press(ui.getByTestId('k6-share'));
-    expect(shareSpy).toHaveBeenCalledWith({ message: `Join my coaching on The Growth Project: ${LINK.url}` });
+    expect(shareSpy).toHaveBeenCalledWith({ message: `Join my coaching on TGP Fitness: ${LINK.url}` });
     expect(p.setAnswers).toHaveBeenCalledWith({ link_shared: true });
     expect(mockPrefsSet).toHaveBeenCalledWith(expect.stringContaining('coach_1'), 'true');
     expect(p.onNext).toHaveBeenCalledTimes(1);

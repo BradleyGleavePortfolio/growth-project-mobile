@@ -4,6 +4,7 @@
  */
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
+import { Alert } from "react-native";
 
 const mockNavigate = jest.fn();
 const mockPush = jest.fn();
@@ -223,7 +224,7 @@ describe("ProgramEditorScreen", () => {
           {
             content_id: "c",
             package_id: "pkg",
-            package_name: "Clinic intro",
+            package_name: "Partner intro",
             cadence_kind: "immediate",
           },
         ],
@@ -233,7 +234,7 @@ describe("ProgramEditorScreen", () => {
       refetch: mockRefetch,
     });
     const screen = await renderEditor();
-    expect(screen.getByText("Clinic intro")).toBeTruthy();
+    expect(screen.getByText("Partner intro")).toBeTruthy();
     expect(
       screen.getByLabelText("Week 2, Day 7: rest day, empty"),
     ).toBeTruthy();
@@ -299,5 +300,23 @@ describe("ProgramEditorScreen", () => {
     );
     expect(screen.getByLabelText("New workout")).toBeTruthy();
     expect(screen.getByLabelText("Use a saved workout")).toBeTruthy();
+  });
+
+  it("K3-WORDING: Promote to regime asks first, in the approved words", async () => {
+    mockProgram.mockReturnValue({
+      data: { ...SUMMARY, days: [], packages: [] },
+      error: null,
+      isLoading: false,
+      refetch: mockRefetch,
+    });
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    const screen = await renderEditor();
+    await fireEvent.press(screen.getByLabelText("Promote to regime"));
+    expect(alert).toHaveBeenCalledWith(
+      "Promote to a named regime?",
+      "Named regimes appear in the regime list for your packages. The program itself does not change.",
+      expect.any(Array),
+    );
+    alert.mockRestore();
   });
 });

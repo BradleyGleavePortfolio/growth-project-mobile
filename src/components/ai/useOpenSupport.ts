@@ -13,7 +13,7 @@ import { NavigationContext } from '@react-navigation/native';
 
 /** The navigator surface this needs (a structural subset of NavigationProp). */
 export interface SupportNav {
-  navigate(name: string, params?: { screen: string }): void;
+  navigate(name: string, params?: { screen: string; initial?: false }): void;
   getState?(): { routeNames: readonly string[] } | undefined;
   getParent?(): SupportNav | undefined;
 }
@@ -33,7 +33,7 @@ export function openSupportFrom(navigation: Nav | undefined): boolean {
       return true;
     }
     if (names.includes('SettingsStack')) {
-      nav.navigate('SettingsStack', { screen: 'SupportInbox' });
+      nav.navigate('SettingsStack', { screen: 'SupportInbox', initial: false }); // Settings home stays beneath
       return true;
     }
     nav = nav.getParent?.();

@@ -66,15 +66,35 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key. On only for the preview and clinic-apk profiles (the directly installed Android test apps): credit packs open Stripe Checkout in the system browser on Android."
     },
+    "EXPO_PUBLIC_FF_C3_STYLE_B": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (client coach thread in Style B, C3B-THREAD). Off in every EAS profile until the owner turns it on."
+    },
+    "EXPO_PUBLIC_FF_CONSULT_TILES_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (consultation questions T1, B1-B4, N1, N2 in Quiet Tiles, ONBQ-TILES). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT": {
       "kind": "flag",
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Independent Style C calendar week rollout; off in every build unless explicitly enabled."
+    },
     "EXPO_PUBLIC_FF_CLIENT_CALENDAR": {
       "kind": "flag",
       "default": "off",
       "reason": "Native client Calendar tab and Roman booking tutorial; on in clinic and production profiles."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_HOME_RINGS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "UI-1 rings and tiles client Home (featureFlags.clientHomeRings); default off; no eas.json profile sets it, so it stays off until the owner switches it on."
     },
     "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": {
       "kind": "flag",
@@ -96,10 +116,40 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "C8 v2 chart parts stay off until the Progress page integration is ready."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_BILLING_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "C5: the Style C buying pages (success moment, what unlocks) stay off until the owner turns them on."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "TIMELINE: the Style C Timeline page and its door on Progress stay off until the owner turns them on."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_TRAIN_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "C1-TRAIN-TAB: the Style C v2 top of the Train tab (week masthead, coach note, today's workout with Start under its name) stays off until the owner turns it on."
+    },
+    "EXPO_PUBLIC_FF_COACH_LESSONS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (LEARN-B: the coach Lessons editor in Programs)."
+    },
     "EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT": {
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (CREDITBUILD-143: Roman's line N7 on the AI credit screens). Off until backend #971 (no daily Roman limit for coaches) is deployed."
+    },
+    "EXPO_PUBLIC_FF_COACH_TABS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (COACHTABS: the six coach tabs)."
     },
     "EXPO_PUBLIC_FF_COMMUNITY_ACKS": {
       "kind": "flag",
@@ -141,6 +191,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_COMMUNITY_HOME_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (C6-M1S: the Forest Pop Community Home)."
+    },
     "EXPO_PUBLIC_FF_COMMUNITY_SEARCH": {
       "kind": "flag",
       "default": "off",
@@ -166,6 +221,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (consultation onboarding, #310). B14/B40: must be \"true\" in every store and test profile (preview, production, clinic, clinic-apk); scripts/validate-app-config.js enforces it. RootNavigator sends every new client to the consultation whatever its value; it still gates the tour's recovery read."
     },
+    "EXPO_PUBLIC_FF_CRISIS_ACTIONS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Call 911, Call 988, Text 988 and Message <coach> under Roman's fixed crisis reply (CRISIS-BTN); off in every EAS profile until the operator turns it on."
+    },
     "EXPO_PUBLIC_FF_DELIVERABLES": {
       "kind": "flag",
       "default": "on in dev, off in release",
@@ -175,6 +235,26 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_FIRST_RUN_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (sign-in and first run in Style B, MOCKUP3 C7 index-b-join slice 1). Off in every EAS profile until the owner turns it on."
+    },
+    "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "UI-3 Food tab plan checklist for coached clients (V1_1_UI_SPEC UI-3); off in every profile until its switch-on PR."
+    },
+    "EXPO_PUBLIC_FF_HABITS_RING": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Habits as the ring, HB-B1). Off in every EAS profile until the owner turns it on."
+    },
+    "EXPO_PUBLIC_FF_HEALTH_PAGES": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Health and sleep slice 1, HEALTH-1). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_IMPORT_REVIEW": {
       "kind": "flag",
@@ -190,6 +270,16 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key. On only for builds offered solely on the US App Store (credit packs open Stripe Checkout in the system browser)."
+    },
+    "EXPO_PUBLIC_FF_LEARN_HUB": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Learn: the coach's guidelines and lessons, MOCK-LEARN, LEARN-A). Off in every EAS profile until the owner turns it on."
+    },
+    "EXPO_PUBLIC_FF_MEAL_PLANS_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (coach Programs > Meal plans and the day-plan builder, MEALBUILD). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_MWB_AUTOSAVE": {
       "kind": "flag",
@@ -226,6 +316,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Roman draft marks stay off by default; the operator switches them on once the backend gates in m#731 hold."
+    },
     "EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW": {
       "kind": "flag",
       "default": "off",
@@ -246,6 +341,16 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_SHARE_SEND_V1": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Send to coach on the share sheet, SHARE-A). Off in every EAS profile until backend SHARE-BE and mobile PR B ship."
+    },
+    "EXPO_PUBLIC_FF_SHARE_SHEET_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (one share sheet from Progress and the Session summary, SHARE-A). Off in every EAS profile until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_TEAM_MODE": {
       "kind": "flag",
       "default": "off",
@@ -260,6 +365,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (client wearable AI insight panel, #317). Keep off in every EAS profile until the panel honours the D2 AI consent (box 2)."
+    },
+    "EXPO_PUBLIC_FF_YOU_TAB_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (the You tab home in MOCK-C9 Style C, C9-S1). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_GOOGLE_PAY_ENABLED": {
       "kind": "optional",
@@ -352,13 +462,13 @@
     }
   ],
   "releaseProfiles": {
-    "$note": "Pre-build release-env check (scripts/check-expected-env.js --release-env; EAS runs it as the eas-build-pre-install hook with EAS_BUILD_PROFILE). For a listed profile it checks, without printing values: every kind:required name plus `require` is set and not a placeholder (format-checked: https URLs on a real host, a Supabase anon key whose JWT role is anon, a Sentry DSN, a Stripe publishable key of the given mode); every eas.json build.<profile>.env value (after extends) reaches the build unchanged; no secret-shaped EXPO_PUBLIC_* is set. Profiles not listed here (development) are skipped.",
+    "$note": "Pre-build release-env check (scripts/check-expected-env.js --release-env; EAS runs it as the eas-build-pre-install hook with EAS_BUILD_PROFILE). For a listed profile it checks, without printing values: every kind:required name plus `require` is set and not a placeholder (format-checked: https URLs on a real host, a Supabase publishable key (sb_publishable_; a legacy JWT key fails), a Sentry DSN, a Stripe publishable key of the given mode); every eas.json build.<profile>.env value (after extends) reaches the build unchanged; no secret-shaped EXPO_PUBLIC_* is set. Profiles not listed here (development) are skipped.",
     "clinic": {
       "require": [
         "EXPO_PUBLIC_SENTRY_DSN"
       ],
       "stripe": "live",
-      "reason": "Clinic store binary: crash and unknown-error reporting must work (owner rule), and real clients pay."
+      "reason": "Launch store binary: crash and unknown-error reporting must work (owner rule), and real clients pay."
     },
     "clinic-apk": {
       "require": [
@@ -378,6 +488,13 @@
       "require": [],
       "stripe": "any",
       "reason": "Internal APK/TestFlight test builds: required names and placeholders only; Stripe test keys allowed."
+    },
+    "testing": {
+      "require": [
+        "EXPO_PUBLIC_SENTRY_DSN"
+      ],
+      "stripe": "live",
+      "reason": "Device-loop TestFlight build (docs/DEVICE_LOOP.md): the production build on the testing update channel, so it gets the production checks."
     }
   }
 }

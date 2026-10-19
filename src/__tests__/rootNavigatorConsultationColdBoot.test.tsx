@@ -34,6 +34,7 @@ const mockGet = jest.fn(async (url: string) => {
   return { data: { is_complete: true } };
 });
 jest.mock('../services/api', () => ({
+  authApi: { me: async () => ({ data: { profile: { date_of_birth: '1990-01-01' } } }) },
   __esModule: true,
   default: {
     get: (url: string) => mockGet(url),
@@ -104,7 +105,6 @@ jest.mock('../ui/haptics/haptics.service', () => ({
   HapticService: { success: jest.fn(async () => undefined), selection: jest.fn(async () => undefined), warning: jest.fn(async () => undefined) },
 }));
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
-jest.mock('../navigation/LeanOnboardingNavigator', () => () => null);
 jest.mock('../navigation/CoachWizardNavigator', () => () => null);
 jest.mock('../navigation/Day1OnboardingNavigator', () => {
   const React = jest.requireActual('react');

@@ -56,22 +56,43 @@ export const COMMUNITY_POST_TYPES = [
 export type CommunityPostType = (typeof COMMUNITY_POST_TYPES)[number];
 
 /**
- * Canonical reaction emoji allowlist. Mirrors backend
- * community-emoji.allowlist.ts (CommunityReactionEmoji). The @IsIn guard on the
- * backend rejects anything outside this set with a 400, so the client must only
- * ever send one of these.
+ * REST accepts these exact graphemes, NOT the named realtime discriminators.
+ * Mirror: growth-project-backend/src/community/reactions/community-emoji.allowlist.ts.
+ * Keep the backend keys here; the offered set below is a subset.
  */
+export const COMMUNITY_REACTION_BY_KIND = {
+  like: '\u{1F44D}',
+  fire: '\u{1F525}',
+  family: '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}',
+  love: '\u2764\uFE0F',
+  celebrate: '\u{1F389}',
+  strength: '\u{1F4AA}',
+  clap: '\u{1F44F}',
+  laugh: '\u{1F602}',
+  wow: '\u{1F62E}',
+  sad: '\u{1F622}',
+} as const;
+export type CommunityReactionEmoji =
+  (typeof COMMUNITY_REACTION_BY_KIND)[keyof typeof COMMUNITY_REACTION_BY_KIND];
+
+/** Quick/offered reactions, in the existing order without target or eyes. */
 export const COMMUNITY_REACTION_EMOJI = [
-  '👍',
-  '🔥',
-  '💪',
-  '🎯',
-  '👀',
-  '❤️',
-  '👏',
-  '🙌',
+  COMMUNITY_REACTION_BY_KIND.like,
+  COMMUNITY_REACTION_BY_KIND.fire,
+  COMMUNITY_REACTION_BY_KIND.strength,
+  COMMUNITY_REACTION_BY_KIND.love,
+  COMMUNITY_REACTION_BY_KIND.clap,
+  COMMUNITY_REACTION_BY_KIND.celebrate,
 ] as const;
-export type CommunityReactionEmoji = (typeof COMMUNITY_REACTION_EMOJI)[number];
+
+export function isAllowedCommunityReaction(emoji: string): emoji is CommunityReactionEmoji {
+  return Object.values<string>(COMMUNITY_REACTION_BY_KIND).includes(emoji);
+}
+
+/** Raised hands still mean celebration on screen; REST stores the party glyph. */
+export function communityReactionDisplay(emoji: string): string {
+  return emoji === COMMUNITY_REACTION_BY_KIND.celebrate ? '\u{1F64C}' : emoji;
+}
 
 // ─── Response schemas (mirror backend Zod DTOs) ──────────────────────────────
 
@@ -154,6 +175,9 @@ export const CommunityCohortSummarySchema = z
     workspace_id: z.string().uuid(),
     name: z.string(),
     is_default: z.boolean(),
+    // C6-B1: 'chat' | 'announcement' | 'section'. Optional (older backends do
+    // not send it) and a plain string so a new kind never fails the list.
+    kind: z.string().optional(),
     member_count: z.number().int().nonnegative(),
     my_role: z.enum(COMMUNITY_MEMBER_ROLES),
   })
@@ -171,6 +195,10 @@ export const CommunityCohortListResponseSchema = z
 export type CommunityCohortListResponse = z.infer<
   typeof CommunityCohortListResponseSchema
 >;
+
+/** GET /community/workspaces/:id: only the name is read (the Community Home masthead). */
+export const CommunityWorkspaceResponseSchema = z.object({ name: z.string() }).passthrough();
+export type CommunityWorkspaceResponse = z.infer<typeof CommunityWorkspaceResponseSchema>;
 
 export const CommunityReactionSummarySchema = z
   .object({
@@ -324,6 +352,13 @@ export const communityApi = {
   getCohorts(): Promise<CommunityCohortListResponse> {
     return call(CommunityCohortListResponseSchema, () =>
       api.get<unknown>('/community/cohorts'),
+    );
+  },
+
+  /** GET /community/workspaces/:workspaceId — the server answers owners and members only. */
+  getWorkspace(workspaceId: string): Promise<CommunityWorkspaceResponse> {
+    return call(CommunityWorkspaceResponseSchema, () =>
+      api.get<unknown>(`/community/workspaces/${workspaceId}`),
     );
   },
 

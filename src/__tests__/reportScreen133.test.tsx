@@ -87,6 +87,14 @@ it('keeps the saved calorie target once the server confirms it has none', async 
   await waitFor(() => expect(s.getByText('Target: 1600 kcal / day')).toBeTruthy());
 });
 
+it.each([183, 177])('a %s lb weigh-in after 180 reads in the same colour: no red for a gain (C8 found 1)', async (lbs) => {
+  jest.mocked(weightApi.getHistory).mockResolvedValue({ data: [{ id: 'w1', date: '2026-10-17', weight_lbs: lbs }] } as Awaited<ReturnType<typeof weightApi.getHistory>>);
+  jest.mocked(logApi.getDaily).mockResolvedValue({ data: { entries: [] } } as Awaited<ReturnType<typeof logApi.getDaily>>);
+  const s = await mount(DEVICES[0]);
+  const change = await waitFor(() => s.getByTestId('report-weight-change'));
+  expect(StyleSheet.flatten(change.props.style).color).toBe(jest.requireActual('../constants/colors').default.primary);
+});
+
 it('uses the rounded tokens only and the shared wrapper', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'screens', 'client', 'ReportScreen.tsx'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');

@@ -39,13 +39,20 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate:
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../config/featureFlags', () => ({
   __esModule: true,
-  featureFlags: { romanFirstPaymentBodyweightPolish: false },
+  featureFlags: {
+    romanFirstPaymentBodyweightPolish: false,
+    get clientTimelineV2() {
+      return mockTimelineV2;
+    },
+  },
 }));
+let mockTimelineV2 = false;
 
 import ProgressScreen from '../ProgressScreen';
 import { formatChange, formatSince } from '../../../components/progress/progressFormat';
 
 beforeEach(() => {
+  mockTimelineV2 = false;
   mockNavigate.mockClear();
   mockGetHistory.mockClear();
   mockAll = [
@@ -102,6 +109,25 @@ describe('The full picture (progress-details reference)', () => {
     const { getByTestId } = await screen();
     const style = StyleSheet.flatten(getByTestId('progress-weight-change').props.style);
     expect(style.lineHeight / style.fontSize).toBeGreaterThanOrEqual(1.2);
+  });
+});
+
+describe('The Timeline door (#TIMELINE-DOOR op 1)', () => {
+  it('flag off: no Timeline row on Progress', async () => {
+    const { queryByTestId } = await screen();
+    expect(queryByTestId('progress-timeline')).toBeNull();
+  });
+
+  it('flag on: one row at the foot opens the Timeline', async () => {
+    mockTimelineV2 = true;
+    const { getByLabelText } = await screen();
+    await fireEvent.press(getByLabelText('Timeline, Weigh-ins and wins, newest first.'));
+    expect(mockNavigate).toHaveBeenCalledWith('Timeline');
+  });
+
+  it("the Timeline's Log weight opens the weigh-in sheet here", async () => {
+    const utils = await render(<ProgressScreen logWeightAt={1} />);
+    await waitFor(() => expect(utils.getByTestId('log-weight-sheet')).toBeTruthy());
   });
 });
 

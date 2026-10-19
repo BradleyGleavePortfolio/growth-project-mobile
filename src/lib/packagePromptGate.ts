@@ -4,7 +4,7 @@
  *
  *  - Only when the server explicitly says the entitlement is inactive
  *    (`{ ok: true, data: { active: false } }` and `entitlement_active` is not
- *    true). Clinic clients get a comp entitlement from their invite code
+ *    true). Launch clients get a comp entitlement from their invite code
  *    (C01), so they are active and must never be asked to buy.
  *  - Fix round #304 (Sol B1): fail CLOSED. A rejected lookup, `{ok:false}`,
  *    or a response without an explicit `active: false` (`{}`, `null`,

@@ -208,7 +208,7 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
         {live && !changeable ? (
           <Note
             text={
-              s.cancellable === false
+              new Date(s.start_at).getTime() <= now
                 ? 'This session has started, so it can no longer be changed here. Message your coach if you need help.'
                 : 'Changes are locked within 24 hours of the start. Message your coach if you need help changing this session.'
             }

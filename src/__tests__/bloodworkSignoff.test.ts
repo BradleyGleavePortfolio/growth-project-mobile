@@ -48,7 +48,7 @@ describe('decideClientVisibility', () => {
     expect(r.showAIInsights).toBe(false);
   });
 
-  it('shows the panel without AI insights when referred to a clinician', () => {
+  it('shows the panel without AI insights when referred to a doctor', () => {
     const draft: BloodworkAIDraft = { status: 'approved', educationalTipsForClient: ['tip'] };
     const r = decideClientVisibility(panelOf('needs_clinician_context', draft));
     expect(r.showPanel).toBe(true);

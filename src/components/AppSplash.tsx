@@ -42,7 +42,7 @@ export default function AppSplash({ onFinish }: Props) {
     <Animated.View style={[styles.container, { opacity: containerOpacity }]}>
       <View style={styles.mark} />
       <Animated.Text style={[styles.title, { opacity: textOpacity }]}>
-        The Growth Project
+        TGP Fitness
       </Animated.Text>
     </Animated.View>
   );

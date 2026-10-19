@@ -39,7 +39,7 @@ jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: {},
-  authApi: { me: () => mockMe(), getSignupPolicy: async () => ({ data: { coach_sharing_notice: 'coach_sharing_join_v1' } }) },
+  authApi: { me: () => mockMe(), getSignupPolicy: async () => ({ data: { coach_sharing_notice: 'coach_sharing_join_v2' } }) },
 }));
 const mockAccept = jest.fn(async (_v: string) => true);
 jest.mock('../../../api/coachSharingApi', () => ({ acceptFirstSignInSharing: (v: string) => mockAccept(v) }));
@@ -147,7 +147,7 @@ it('paid: the sharing sentence sits above Continue to payment; once me() shows t
   mockMe.mockResolvedValue({ data: { id: 'u-1', coach_id: 'coach-1' } });
   const ui = await render(<JoinPackageScreen join={PAID} onClose={onClose} />);
   const notice = await ui.findByTestId('coach-sharing-notice');
-  expect(notice.props.children).toMatch(/^Joining shares your workouts, food logs, weigh-ins and check-ins with Bradley\./);
+  expect(notice.props.children).toMatch(/^Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Bradley\./);
   await act(async () => {
     fireEvent.press(ui.getByTestId('join-package-pay'));
   });
@@ -157,6 +157,6 @@ it('paid: the sharing sentence sits above Continue to payment; once me() shows t
     fireEvent.press(ui.getByTestId('payment-continue'));
   });
   await waitFor(() => expect(mockAccept).toHaveBeenCalledTimes(1));
-  expect(mockAccept).toHaveBeenCalledWith('coach_sharing_join_v1');
+  expect(mockAccept).toHaveBeenCalledWith('coach_sharing_join_v2');
   expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'coach-1' });
 });

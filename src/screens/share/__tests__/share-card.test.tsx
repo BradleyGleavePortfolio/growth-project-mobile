@@ -1,15 +1,17 @@
 /**
  * share-card.test.tsx — Phase 11 / Track C
  *
- * Asserts that ShareCardScreen:
- *   1. Renders each card variant without crashing.
+ * Asserts that ShareCardScreen (featureFlags.shareSheetV2 off):
+ *   1. Renders the streak card, its only variant (SHARE-A).
  *   2. The Share button is present and accessible (has correct label + role).
- *   3. Pressing Share does not crash the component.
+ *   3. Share makes the picture before anything else, and a failure says so in
+ *      place: no alert, no success haptic, the error haptic (SHARE-A).
  *   4. The "Share Progress" header title is rendered.
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -38,6 +40,11 @@ jest.mock('../../../utils/haptics', () => ({
   mediumTap: jest.fn(),
 }));
 
+jest.mock('../../../ui/haptics/haptics.service', () => ({
+  HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn() },
+}));
+const haptic = () => jest.requireMock('../../../ui/haptics/haptics.service').HapticService;
+
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: {
@@ -51,6 +58,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
       border: '#E0D8CC',
       white: '#FFFFFF',
     },
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
   }),
 }));
 
@@ -112,22 +120,30 @@ describe('ShareCardScreen', () => {
     expect(getByText('Day Streak')).toBeTruthy();
   });
 
-  it('renders the PR variant headline', async () => {
-    const { getByText } = await renderScreen({
-      variant: 'pr',
-      value: '100kg',
-      label: 'Back Squat PR',
-    });
-    expect(getByText('100kg')).toBeTruthy();
+  it('makes the picture, then opens the share options and records the share, with no success haptic', async () => {
+    const { getByRole } = await renderScreen({ variant: 'streak', value: '7', label: 'Day Streak' });
+    await fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
+    const sharing = jest.requireMock('expo-sharing');
+    await waitFor(() => expect(sharing.shareAsync).toHaveBeenCalledWith('file:///tmp/card.png', expect.objectContaining({ dialogTitle: 'Share your milestone' })));
+    expect(jest.requireMock('react-native-view-shot').captureRef).toHaveBeenCalledTimes(1);
+    expect(jest.requireMock('../../../lib/analytics').track).toHaveBeenCalledWith('referral_share_card_shared', expect.objectContaining({ card_type: 'streak' }));
+    expect(jest.requireMock('../../../utils/haptics').successTap).not.toHaveBeenCalled();
+    expect(haptic().success).not.toHaveBeenCalled();
   });
 
-  it('renders the transformation variant', async () => {
-    const { getByText } = await renderScreen({
-      variant: 'transformation',
-      value: '5kg',
-      label: 'Body Composition',
-    });
-    expect(getByText('5kg')).toBeTruthy();
+  it.each([
+    ['sharing is not available (the old eas build alert)', () => jest.requireMock('expo-sharing').isAvailableAsync.mockResolvedValueOnce(false)],
+    ['the share fails (once swallowed)', () => jest.requireMock('expo-sharing').shareAsync.mockRejectedValueOnce(new Error('denied'))],
+  ])('says so in place when %s: no alert, the error haptic', async (_case, arrange) => {
+    arrange();
+    const alert = jest.spyOn(Alert, 'alert');
+    const { getByRole, findByText } = await renderScreen({ variant: 'streak', value: '7', label: 'Day Streak' });
+    await fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
+    expect(await findByText('The picture could not be made. Try again.')).toBeTruthy();
+    expect(alert).not.toHaveBeenCalled();
+    expect(haptic().error).toHaveBeenCalledTimes(1);
+    expect(jest.requireMock('../../../lib/analytics').track).not.toHaveBeenCalled();
+    alert.mockRestore();
   });
 
   it('renders the Share button with correct accessibility role and label', async () => {

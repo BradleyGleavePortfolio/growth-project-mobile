@@ -1,6 +1,6 @@
 /**
  * R2b refusals on every coach AI surface (backend #626):
- *   - CoachAiSection (POST /coach/ai/workout-program | meal-plan | client-insight)
+ *   - CoachAiSection (POST /coach/ai/workout-program | client-insight)
  *   - AskAiActionSheet (POST /v1/coach/ai/draft/send-notification, via the gateway)
  *   - WearableInsightPanel, coach (GET /v1/wearables/insights/coach)
  *   - AiTriageCard (GET /community/ai-triage)

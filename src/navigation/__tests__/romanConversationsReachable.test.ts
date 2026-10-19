@@ -40,9 +40,10 @@ describe.each([
 });
 
 it('Settings > Privacy > Roman and AI opens the list', () => {
-  expect(read('screens/settings/RomanAiConsentScreen.tsx')).toMatch(
-    /button\(ROMAN_CHATS_COPY\.entryLabel, \(\) => navigation\.navigate\('RomanConversations'\), 'roman-ai-conversations'/,
-  );
+  const src = read('screens/settings/RomanAiConsentScreen.tsx');
+  expect(src).toMatch(/const openChats = \(\) => navigation\.navigate\('RomanConversations'\);/);
+  // Both states: a client with a coach, and a client with no coach (owner 62x).
+  expect(src.match(/button\(ROMAN_CHATS_COPY\.entryLabel, openChats, 'roman-ai-conversations'/g)).toHaveLength(2);
 });
 
 it('the coach Settings Privacy section opens the list', () => {

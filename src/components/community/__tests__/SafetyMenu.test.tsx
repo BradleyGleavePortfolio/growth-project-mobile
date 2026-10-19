@@ -109,7 +109,7 @@ describe('SafetyMenu', () => {
     await waitFor(() =>
       expect(alertSpy).toHaveBeenCalledWith(
         'Report sent',
-        'Thank you. Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access.',
+        'Thank you. Reports are reviewed within 24 hours, every day, by your coach and the TGP Fitness team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access.',
       ),
     );
   });
@@ -117,7 +117,7 @@ describe('SafetyMenu', () => {
   // FWC-SAFE-128 U11: a bystander who reports self-harm gets the crisis lines
   // in the moment, first, before the 24-hour review sentence.
   const SENT =
-    'Thank you. Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access.';
+    'Thank you. Reports are reviewed within 24 hours, every day, by your coach and the TGP Fitness team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access.';
 
   it('a self-harm report leads with 911 and the 988 Lifeline, then the review line', async () => {
     const { getByTestId } = await renderMenu();

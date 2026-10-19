@@ -51,6 +51,7 @@ import Animated, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
+import { layout } from '../../../theme/tokens';
 import { PackOptionsRow } from './PackOptionsRow';
 import { creditPackCheckoutMode, creditPacksHidden } from '../../../config/purchaseSurfaces';
 import {
@@ -378,8 +379,10 @@ function makeStyles(colors: ThemeColors) {
       letterSpacing: 0.4,
     },
     laterBtn: {
+      minHeight: layout.touchMin,
       paddingVertical: 12,
       alignItems: 'center',
+      justifyContent: 'center',
     },
     laterText: {
       color: colors.textSecondary,

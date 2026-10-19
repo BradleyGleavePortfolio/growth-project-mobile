@@ -81,6 +81,6 @@ it('a service failure shows the failure note and never says limited guidance is 
   jest.mocked(aiApi.chat).mockRejectedValueOnce({ response: { status: 503, data: {} } });
   const screen = await render(<AIGuideScreen />);
   await fireEvent.press(await screen.findByText('Recovery'));
-  expect(await screen.findByText(/Guidance could not answer this time because of a problem with The Growth Project service\./)).toBeTruthy();
+  expect(await screen.findByText(/Guidance could not answer this time because of a problem with the TGP Fitness service\./)).toBeTruthy();
   expect(screen.queryByText('Limited guidance is available for this reply.')).toBeNull();
 });

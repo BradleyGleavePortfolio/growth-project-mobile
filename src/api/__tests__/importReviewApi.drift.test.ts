@@ -112,7 +112,7 @@ describe('importReviewApi — strict drift rejection', () => {
 
   it('rejects an UNKNOWN extra field on an entity (.strict, not .passthrough)', async () => {
     api.get.mockResolvedValueOnce({
-      data: validPage({ entities: [{ ...validEntity(), leaked_pii: 'jane@x.com' }] }),
+      data: validPage({ entities: [{ ...validEntity(), leaked_pii: 'jane@example.test' }] }),
     });
     await expect(importReviewApi.listEntities('workouts')).rejects.toMatchObject({
       kind: 'contract',

@@ -82,6 +82,7 @@ jest.mock('../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'client-1', email: 'client@example.test', role: 'student', coach_id: 'coach-1' }),
 }));
+jest.mock('../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -157,7 +158,7 @@ describe('TrustCenterScreen source', () => {
       expect(line).not.toMatch(/\b(we|us|our|ours)\b/i);
       expect(line).not.toContain('!');
     }
-    expect(bullets).toContain('Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy');
+    expect(bullets).toContain('Service providers that run the app for TGP Fitness, such as Anthropic for Roman, only as described in the Privacy Policy');
     expect(bullets).toContain('Your data is never sold, and your health data is never used for advertising');
   });
 });
@@ -171,7 +172,7 @@ describe('TrustCenterScreen security copy (B-STORECOPY-1: no universal guarantee
     const bullets = [...SCREEN_SRC.matchAll(/<BulletItem text="([^"]+)"/g)].map((m) => m[1]);
     expect(bullets).toEqual(
       expect.arrayContaining([
-        "Data sent to The Growth Project's servers is encrypted in transit.",
+        "Data sent to TGP Fitness servers is encrypted in transit.",
         'Authentication tokens use iOS Keychain or Android Keystore-backed secure storage.',
         'Some app data is cached on this device. The Privacy Policy describes server storage and access.',
       ]),
@@ -286,7 +287,7 @@ describe('TrustCenterScreen render', () => {
     const screen = await renderScreen();
     expect(
       screen.getByText(
-        'Not your coach — your Roman conversations, which are kept until you delete them or your account',
+        'Not your coach — your Roman conversations, which are kept until you delete them or your account. One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you.',
       ),
     ).toBeTruthy();
     expect(screen.queryByText('Data residency')).toBeNull();
@@ -404,7 +405,7 @@ describe('TrustCenterScreen render', () => {
   it('the phone cannot open links (openURL rejects): the Privacy Policy address, and the report carries no query string or email', async () => {
     openUrl.mockRejectedValueOnce(
       new Error(
-        "Could not open URL 'https://app.trygrowthproject.com/privacy?token=abc123#frag' for jane.doe@realmail.com: No Activity found",
+        "Could not open URL 'https://app.trygrowthproject.com/privacy?token=abc123#frag' for jane.doe@example.com: No Activity found",
       ),
     );
     const screen = await renderScreen();
@@ -430,11 +431,11 @@ describe('TrustCenterScreen render', () => {
       reference: expect.stringMatching(/^[0-9a-f]{8}$/),
     });
     const sent = `${String(err.name)} ${String(err.message)} ${JSON.stringify(extras)}`;
-    for (const leaked of ['token', 'abc123', 'frag', 'jane.doe', 'realmail', '@', '?', 'No Activity found']) {
+    for (const leaked of ['token', 'abc123', 'frag', 'jane.doe', 'example.com', '@', '?', 'No Activity found']) {
       expect(sent).not.toContain(leaked);
     }
     // The stack holds only code frames (file paths may contain '@'), never the native text.
-    for (const leaked of ['token', 'abc123', 'jane.doe', 'realmail', 'No Activity found']) {
+    for (const leaked of ['token', 'abc123', 'jane.doe', 'example.com', 'No Activity found']) {
       expect(String(err.stack)).not.toContain(leaked);
     }
   });

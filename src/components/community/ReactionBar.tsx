@@ -15,6 +15,8 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import {
   COMMUNITY_REACTION_EMOJI,
+  communityReactionDisplay,
+  isAllowedCommunityReaction,
   type CommunityReactionEmoji,
   type CommunityReactionSummary,
 } from '../../api/communityApi';
@@ -22,7 +24,7 @@ import {
 export interface ReactionBarProps {
   /** Aggregated reaction state for the target (may be empty). */
   reactions?: CommunityReactionSummary[];
-  /** Toggle handler: receives the emoji and whether it is currently active. */
+  /** Toggle handler: receives the accepted REST key and its current state. */
   onToggle: (emoji: CommunityReactionEmoji, active: boolean) => void;
   /** Subset of the allowlist to show as quick-add chips. Defaults to first 4. */
   quickEmoji?: CommunityReactionEmoji[];
@@ -36,7 +38,8 @@ export default function ReactionBar({
   testID,
 }: ReactionBarProps): React.ReactElement {
   const { semanticColors } = useTheme();
-  const quick = quickEmoji ?? (COMMUNITY_REACTION_EMOJI.slice(0, 4) as CommunityReactionEmoji[]);
+  const quick = (quickEmoji ?? COMMUNITY_REACTION_EMOJI.slice(0, 4))
+    .filter(isAllowedCommunityReaction);
 
   const byEmoji = new Map(reactions.map((r) => [r.emoji, r]));
   // Merge the quick-add set with any emoji that already have counts.
@@ -48,28 +51,10 @@ export default function ReactionBar({
         const summary = byEmoji.get(emoji);
         const active = summary?.reacted_by_me ?? false;
         const count = summary?.count ?? 0;
-        return (
-          <HapticPressable
-            key={emoji}
-            intent="light"
-            onPress={() =>
-              onToggle(emoji as CommunityReactionEmoji, active)
-            }
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={`React ${emoji}${count ? `, ${count}` : ''}`}
-            testID={`reaction-${emoji}`}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: active
-                  ? semanticColors.accent
-                  : semanticColors.bgSurface,
-                borderColor: semanticColors.border,
-              },
-            ]}
-          >
-            <Text style={styles.glyph}>{emoji}</Text>
+        const display = communityReactionDisplay(emoji);
+        const content = (
+          <>
+            <Text style={styles.glyph}>{display}</Text>
             {count > 0 ? (
               <Text
                 style={[
@@ -84,6 +69,38 @@ export default function ReactionBar({
                 {count}
               </Text>
             ) : null}
+          </>
+        );
+        const chipTestID = `reaction-${emoji}`;
+        const chipStyle = [
+          styles.chip,
+          {
+            backgroundColor: active
+              ? semanticColors.accent
+              : semanticColors.bgSurface,
+            borderColor: semanticColors.border,
+          },
+        ];
+        // Keep stored legacy/unknown keys visible, but never offer a refused tap.
+        if (!isAllowedCommunityReaction(emoji)) {
+          return (
+            <View key={emoji} testID={chipTestID} style={chipStyle}>
+              {content}
+            </View>
+          );
+        }
+        return (
+          <HapticPressable
+            key={emoji}
+            testID={chipTestID}
+            style={chipStyle}
+            intent="light"
+            onPress={() => onToggle(emoji, active)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`React ${display}${count ? `, ${count}` : ''}`}
+          >
+            {content}
           </HapticPressable>
         );
       })}

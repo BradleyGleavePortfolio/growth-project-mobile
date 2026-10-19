@@ -14,6 +14,12 @@
  * Terms shown before paying (owner bar): renewal price and interval, what is
  * charged today (including any one-time part), the trial length and the date
  * of the first charge, and that the plan can be canceled anytime in the app.
+ *
+ * BILLQUOTE-M (agent 144): what is due today and the date of the next charge
+ * come only from the server's `quote` (backend #998, the same function the
+ * checkout charges with). The phone never adds prices or dates a trial; with
+ * no quote (an older server, or a read that carries none) those two facts are
+ * not shown and Stripe's own sheet shows the amount.
  */
 import { formatCurrencyCents } from "../utils/currency";
 
@@ -34,11 +40,38 @@ export interface PurchasablePackage {
   oneTimeCents: number;
   /** Free trial before the first charge (pure renewing packages only). */
   trialDays: number;
-  /**
-   * B-343-4: the first-charge instant the backend already pinned for this
-   * client's trial (a resumed checkout). Shown instead of now + trialDays.
-   */
-  trialEndsAt?: string | null;
+  /** The server's charge quote for this client; null when the read has none. */
+  quote?: ChargeQuote | null;
+}
+
+/**
+ * Backend #998 `quote`: what checkout charges if the client pays now, and the
+ * next charge after today (the trial end in a trial, else the first renewal;
+ * B-343-4: a resumed checkout's pinned date).
+ */
+export interface ChargeQuote {
+  dueTodayCents: number;
+  currency: string;
+  firstChargeAt: string | null;
+  trialEnd: string | null;
+}
+
+function isoOrNull(v: unknown): string | null {
+  return typeof v === "string" && !Number.isNaN(Date.parse(v)) ? v : null;
+}
+
+/** Read the server's `quote`; anything malformed counts as no quote. */
+function chargeQuoteOf(raw: unknown): ChargeQuote | null {
+  if (!raw || typeof raw !== "object") return null;
+  const q = raw as Record<string, unknown>;
+  const due = wholeCents(q.due_today_cents);
+  if (due === null || typeof q.currency !== "string" || !q.currency) return null;
+  return {
+    dueTodayCents: due,
+    currency: q.currency.toLowerCase(),
+    firstChargeAt: isoOrNull(q.first_charge_at),
+    trialEnd: isoOrNull(q.trial_end),
+  };
 }
 
 export type SaleKind = "subscription" | "one_time" | "free";
@@ -100,6 +133,7 @@ export function purchasableFromCoachPackage(
       ? r.currency.toLowerCase()
       : "usd";
 
+  const quote = chargeQuoteOf(r.quote);
   const recurringAmount = wholeCents(r.recurring_amount_cents);
   const recurringInterval = asInterval(r.recurring_interval);
   const isCombo =
@@ -120,6 +154,7 @@ export function purchasableFromCoachPackage(
       intervalCount: positiveInt(r.interval_count, 1),
       oneTimeCents: 0,
       trialDays: offeredTrialDays(r),
+      quote,
     };
   }
   if (isCombo) {
@@ -135,6 +170,7 @@ export function purchasableFromCoachPackage(
       oneTimeCents: amount,
       // Trials apply to pure renewing packages only (backend packageTrialDays).
       trialDays: 0,
+      quote,
     };
   }
   return {
@@ -147,6 +183,7 @@ export function purchasableFromCoachPackage(
     intervalCount: 1,
     oneTimeCents: 0,
     trialDays: 0,
+    quote,
   };
 }
 
@@ -164,6 +201,25 @@ export function cadenceCopy(interval: PlanInterval, count: number): string {
 
 export function money(cents: number, currency: string): string {
   return formatCurrencyCents(cents, currency);
+}
+
+/**
+ * C5-S1: what a purchase's checkout charged, from the server only
+ * (first_charge_cents), and only for a purchase that is in force and not in a
+ * trial. Otherwise, or absent, zero or not whole cents: null, so no paid line
+ * shows; never amount_cents (a subscription's renewal) or a price.
+ */
+export function paidAmount(p: {
+  first_charge_cents?: number | null;
+  currency?: string;
+  status?: string;
+  entitlement_active?: boolean;
+}): string | null {
+  const c = p.first_charge_cents;
+  return p.entitlement_active === true && p.status !== "trialing" &&
+    typeof c === "number" && Number.isInteger(c) && c > 0 && p.currency
+    ? money(c, p.currency)
+    : null;
 }
 
 /** Short price label for a list row: "$49.00 a month", "$99.00 once", "Free". */
@@ -188,21 +244,11 @@ export function formatPlanDate(d: Date): string {
   });
 }
 
-/** The date the first charge happens after a trial that starts now. */
-export function trialFirstChargeDate(
-  trialDays: number,
-  now: Date = new Date(),
-): Date {
-  const d = new Date(now.getTime());
-  d.setDate(d.getDate() + trialDays);
-  return d;
-}
-
 export interface PlanTermsLines {
   /** "$49.00 a month" or "$99.00, paid once". */
   price: string;
-  /** What happens today and next. */
-  firstCharge: string;
+  /** What happens today and next; null when the server sent no quote. */
+  firstCharge: string | null;
   /** Renewal and cancel terms; null for a one-time plan. */
   renewal: string | null;
   /** The pay button label. */
@@ -210,14 +256,10 @@ export interface PlanTermsLines {
 }
 
 /**
- * Terms shown before paying. `trialEndsAt` (from the backend answer) wins
- * over the locally computed date when the backend already set the trial.
+ * Terms shown before paying. Today's amount and the next charge date are the
+ * server's quote; without one, those lines are left out (never worked out).
  */
-export function planTerms(
-  pkg: PurchasablePackage,
-  now: Date = new Date(),
-  trialEndsAt?: string | null,
-): PlanTermsLines {
+export function planTerms(pkg: PurchasablePackage): PlanTermsLines {
   const kind = saleKindOf(pkg);
   if (kind === "free") {
     return {
@@ -228,53 +270,59 @@ export function planTerms(
     };
   }
   const amount = money(pkg.amountCents, pkg.currency);
+  const q = pkg.quote ?? null;
+  const today = q ? money(q.dueTodayCents, q.currency) : null;
+  const date = q?.firstChargeAt ? formatPlanDate(new Date(q.firstChargeAt)) : null;
   if (kind === "one_time") {
     return {
       price: `${amount}, paid once`,
-      firstCharge: `You pay ${amount} today. It does not renew.`,
+      firstCharge: today ? `You pay ${today} today. It does not renew.` : null,
       renewal: null,
-      cta: `Pay ${amount}`,
+      cta: `Pay ${today ?? amount}`,
     };
   }
   const cadence = cadenceCopy(pkg.interval ?? "month", pkg.intervalCount);
   const renewal =
     `Renews automatically at ${amount} ${cadence} until you cancel. ` +
-    "Cancel anytime in Membership; you keep the plan until the end of the period you paid for.";
+    "Cancel anytime in Your plans; you keep the plan until the end of the period you paid for.";
   if (pkg.trialDays > 0) {
-    const pinned = trialEndsAt ?? pkg.trialEndsAt ?? null;
-    const parsed = pinned ? new Date(pinned) : null;
-    const firstDate =
-      parsed && !Number.isNaN(parsed.getTime())
-        ? parsed
-        : trialFirstChargeDate(pkg.trialDays, now);
+    // With a trial the quote's date is the first charge, at the trial's end.
     return {
       price: `${amount} ${cadence}`,
-      firstCharge:
-        `Free for ${pkg.trialDays} ${pkg.trialDays === 1 ? "day" : "days"}, then your first charge of ` +
-        `${amount} is on ${formatPlanDate(firstDate)}. Your card is saved today and not charged. ` +
-        "Cancel before then and you are never charged.",
+      firstCharge: date
+        ? `Free for ${pkg.trialDays} ${pkg.trialDays === 1 ? "day" : "days"}, then your first charge of ` +
+          `${amount} is on ${date}. Your card is saved today and not charged. ` +
+          "Cancel before then and you are never charged."
+        : null,
       renewal,
       cta: "Start free trial",
     };
   }
+  // No trial: the quote's date is the next renewal, in the app's existing
+  // "next charge" words (PACKAGE_PAYMENT_COPY.nextChargeOn).
+  const next = date ? ` Your next charge of ${amount} is on ${date}.` : "";
+  const period =
+    pkg.intervalCount > 1
+      ? `${pkg.intervalCount} ${pkg.interval ?? "month"}s`
+      : (pkg.interval ?? "month");
   if (pkg.oneTimeCents > 0) {
-    const today = money(pkg.oneTimeCents + pkg.amountCents, pkg.currency);
     return {
       price: `${amount} ${cadence}`,
-      firstCharge:
-        `You pay ${today} today: ${money(pkg.oneTimeCents, pkg.currency)} once plus your first ` +
-        `${pkg.intervalCount > 1 ? `${pkg.intervalCount} ${pkg.interval ?? "month"}s` : (pkg.interval ?? "month")} at ${amount}.`,
+      firstCharge: today
+        ? `You pay ${today} today: ${money(pkg.oneTimeCents, pkg.currency)} once plus your first ` +
+          `${period} at ${amount}.${next}`
+        : null,
       renewal,
-      cta: `Subscribe, pay ${today} today`,
+      cta: today
+        ? `Subscribe, pay ${today} today`
+        : `Subscribe for ${amount} ${cadence}`,
     };
   }
   return {
     price: `${amount} ${cadence}`,
-    firstCharge: `You pay ${amount} today for your first ${
-      pkg.intervalCount > 1
-        ? `${pkg.intervalCount} ${pkg.interval ?? "month"}s`
-        : (pkg.interval ?? "month")
-    }.`,
+    firstCharge: today
+      ? `You pay ${today} today for your first ${period}.${next}`
+      : null,
     renewal,
     cta: `Subscribe for ${amount} ${cadence}`,
   };
@@ -334,30 +382,26 @@ export interface IntentTerms {
   trialEndsAt?: string | null;
 }
 
-/** What the client is told is charged today for this package. */
-export function firstChargeCentsOf(pkg: PurchasablePackage): number {
-  return pkg.trialDays > 0 ? 0 : pkg.amountCents + pkg.oneTimeCents;
-}
-
 /**
  * B-334-4: reconcile what the client was shown with what the backend is about
  * to charge, BEFORE any chargeable sheet opens. Returns the package adopted to
  * the backend's terms (zero trial days stay zero), and whether anything the
  * client consents to differs: renewal price, one-time part, currency,
- * cadence, trial length, or today's charge.
+ * cadence, trial length, or the trial's first charge date. The adopted
+ * package's quote is the checkout's own answer (today's charge, pinned trial
+ * end), so a review shows the server's numbers, never the phone's.
  */
 export function reconcileIntentTerms(
   pkg: PurchasablePackage,
   plan: IntentTerms,
   mode: "payment" | "setup" | "none",
-  now: Date = new Date(),
 ): {
   adopted: PurchasablePackage;
   changed: boolean;
   trialRemoved: boolean;
   /** B-343-4: the pinned first-charge date is not the date the client saw. */
   trialDateMoved: boolean;
-  /** Today's charge does not follow from the answered terms: never open a sheet. */
+  /** Today's charge is not what the quote showed for the same terms: never open a sheet. */
   inconsistent: boolean;
 } {
   const trialDays =
@@ -393,26 +437,15 @@ export function reconcileIntentTerms(
     trialDays,
   };
   // B-343-4: a resumed trial keeps the end date pinned when its checkout first
-  // opened. The client consents to a calendar date, so compare dates as shown.
+  // opened. The client consents to the calendar date the quote showed.
   const pinned =
-    mode === "setup" && trialDays > 0 && plan.trialEndsAt
-      ? new Date(plan.trialEndsAt)
-      : null;
-  let trialDateMoved = false;
-  if (pinned && !Number.isNaN(pinned.getTime())) {
-    const shownIso = pkg.trialEndsAt ? new Date(pkg.trialEndsAt) : null;
-    const shown =
-      shownIso && !Number.isNaN(shownIso.getTime())
-        ? shownIso
-        : trialFirstChargeDate(pkg.trialDays, now);
-    trialDateMoved = formatPlanDate(pinned) !== formatPlanDate(shown);
-    adopted.trialEndsAt = plan.trialEndsAt;
-  }
-  // Today's charge follows from the terms; a mismatch is a broken answer, not
-  // a change to review (reviewing it again would show the same terms).
-  const inconsistent =
-    plan.firstChargeCents !== null &&
-    plan.firstChargeCents !== firstChargeCentsOf(adopted);
+    mode === "setup" && trialDays > 0 ? isoOrNull(plan.trialEndsAt) : null;
+  const shown = pkg.quote ?? null;
+  const shownDate = pkg.trialDays > 0 ? (shown?.firstChargeAt ?? null) : null;
+  const trialDateMoved =
+    pinned !== null &&
+    shownDate !== null &&
+    formatPlanDate(new Date(pinned)) !== formatPlanDate(new Date(shownDate));
   const changed =
     adopted.amountCents !== pkg.amountCents ||
     adopted.currency !== pkg.currency.toLowerCase() ||
@@ -421,6 +454,27 @@ export function reconcileIntentTerms(
     adopted.oneTimeCents !== pkg.oneTimeCents ||
     adopted.trialDays !== pkg.trialDays ||
     trialDateMoved;
+  // Today's charge is the checkout's own answer. With the terms unchanged it
+  // must be what the quote showed; a mismatch is a broken answer, not a
+  // change to review (reviewing it again would show the same terms).
+  const serverToday = wholeCents(plan.firstChargeCents);
+  const inconsistent =
+    !changed &&
+    shown !== null &&
+    serverToday !== null &&
+    serverToday !== shown.dueTodayCents;
+  // New terms keep no shown date they may have moved (left out, not guessed).
+  const kept = changed ? null : shown;
+  const dueToday = serverToday ?? kept?.dueTodayCents ?? null;
+  adopted.quote =
+    dueToday === null
+      ? null
+      : {
+          dueTodayCents: dueToday,
+          currency: adopted.currency,
+          firstChargeAt: pinned ?? kept?.firstChargeAt ?? null,
+          trialEnd: pinned ?? kept?.trialEnd ?? null,
+        };
   return {
     adopted,
     changed,

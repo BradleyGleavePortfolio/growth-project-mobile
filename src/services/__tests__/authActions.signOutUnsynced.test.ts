@@ -186,14 +186,21 @@ it('the sign-out after a refused renewal does not try to send: that session can 
 });
 
 it('names each kind in words, singular and plural', () => {
-  expect(unsyncedLogsMessage({ workouts: 1, foods: 0 })).toBe(
+  expect(unsyncedLogsMessage({ workouts: 1, foods: 0, messages: 0 })).toBe(
     '1 workout has not synced yet and will be removed from this phone.',
   );
-  expect(unsyncedLogsMessage({ workouts: 0, foods: 3 })).toBe(
+  expect(unsyncedLogsMessage({ workouts: 0, foods: 3, messages: 0 })).toBe(
     '3 foods have not synced yet and will be removed from this phone.',
   );
-  expect(unsyncedLogsMessage({ workouts: 1, foods: 1 })).toBe(
+  expect(unsyncedLogsMessage({ workouts: 1, foods: 1, messages: 0 })).toBe(
     '1 workout and 1 food have not synced yet and will be removed from this phone.',
   );
-  expect(unsyncedLogsMessage({ workouts: 0, foods: 0 })).toBeNull();
+  // Style B coach messages (services/messageOutbox), owner "c3b-signout - handle like food logs and workouts".
+  expect(unsyncedLogsMessage({ workouts: 0, foods: 0, messages: 1 })).toBe(
+    '1 message has not synced yet and will be removed from this phone.',
+  );
+  expect(unsyncedLogsMessage({ workouts: 2, foods: 1, messages: 3 })).toBe(
+    '2 workouts, 1 food and 3 messages have not synced yet and will be removed from this phone.',
+  );
+  expect(unsyncedLogsMessage({ workouts: 0, foods: 0, messages: 0 })).toBeNull();
 });
