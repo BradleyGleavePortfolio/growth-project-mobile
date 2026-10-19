@@ -26,6 +26,9 @@ export interface DaySlot {
   status: string | null;
   /** Usual day only: the newest earlier version of this meal (to repeat) and every day it was eaten, newest first. */
   usual?: { meal: PastMeal; days: string[] };
+  /** UI-3c: the plan this meal is under (its name, and its place in the day's plans for its dot), set only with two or more plans. */
+  plan?: string;
+  planNo?: number;
 }
 
 export interface FoodDay {
@@ -65,9 +68,13 @@ const isPlainServing = (l: FoodLog) => l.quantity === 1 && l.unit === 'serving';
  * A plan meal's foods are the day's entries logged for it (`planSlotId`, FOODLINK: stored with the entry) that
  * are still in its meal. One such food under the plan meal's own name at 1 serving is "Logged as planned".
  * Every other food is an extra, whatever its name, so an extra can never tick a plan meal off.
+ * UI-3c (owner 10-19): with two or more plans for the day every plan's meals are in the one list, in day
+ * order (a tie keeps the plans' order, newest first, then each plan's own order), and each meal names its plan.
  */
-export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[]): FoodDay {
-  const slots = [...plan.slots].sort((a, b) => RANK[a.slot_label] - RANK[b.slot_label] || a.order - b.order);
+export function buildPlanDay(plans: DailyMealPlan[], logs: FoodLog[]): FoodDay {
+  const named = plans.length > 1;
+  const all = plans.flatMap((p, i) => p.slots.map((s) => ({ ...s, i, plan: named ? p.name : undefined })));
+  const slots = all.sort((a, b) => RANK[a.slot_label] - RANK[b.slot_label] || a.i - b.i || a.order - b.order);
   const linked = slots.map((s) => logs.filter((l) => l.planSlotId === s.id && l.mealType === LOG_MEAL[s.slot_label]));
   return {
     kind: 'plan',
@@ -91,6 +98,7 @@ export function buildPlanDay(plan: DailyMealPlan, logs: FoodLog[]): FoodDay {
         foods: (t.items ?? []).map((f) => ({ name: f.name, portion: f.portion ?? (f.grams != null ? `${f.grams} g` : '') })),
         logs: mine,
         status,
+        ...(s.plan ? { plan: s.plan, planNo: s.i } : {}),
       };
     }),
   };

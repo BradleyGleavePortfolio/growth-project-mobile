@@ -28,7 +28,7 @@ const log = (id: string, mealType: FoodLog['mealType'], foodName: string, extra:
 
 describe('buildPlanDay', () => {
   it('puts the coach meals in day order and maps pre-workout to snack', () => {
-    const day = buildPlanDay(plan, []);
+    const day = buildPlanDay([plan], []);
     expect(day.slots.map((x) => x.name)).toEqual(['Overnight oats', 'Banana', 'Chicken bowl', 'Salmon and rice']);
     expect(day.slots[1]).toMatchObject({ label: 'Pre-workout', mealType: 'snack', kcal: 100, status: null, logs: [] });
     expect(day.slots[0].foods).toEqual([{ name: 'Overnight oats base', portion: '120 g' }, { name: 'Berries', portion: '1 cup' }]);
@@ -36,49 +36,66 @@ describe('buildPlanDay', () => {
   });
 
   it('marks a meal planned only from a food logged for it under its own name, and moves next on', () => {
-    const day = buildPlanDay(plan, [log('1', 'breakfast', 'overnight oats', { planSlotId: 'b' })]);
+    const day = buildPlanDay([plan], [log('1', 'breakfast', 'overnight oats', { planSlotId: 'b' })]);
     expect(day.slots[0].status).toBe('Logged as planned');
     expect(nextSlot(day)?.name).toBe('Banana');
   });
 
   it('names a changed amount, or the foods logged for it through Something else, as the change', () => {
-    const amount = buildPlanDay(plan, [log('1', 'breakfast', 'Overnight oats', { quantity: 1.5, planSlotId: 'b' })]);
+    const amount = buildPlanDay([plan], [log('1', 'breakfast', 'Overnight oats', { quantity: 1.5, planSlotId: 'b' })]);
     expect(amount.slots[0].status).toBe('Logged with a change: 1.5 servings');
-    const swap = buildPlanDay(plan, [log('1', 'dinner', 'Pasta', { planSlotId: 'd' }), log('2', 'dinner', 'Salad', { planSlotId: 'd' })]);
+    const swap = buildPlanDay([plan], [log('1', 'dinner', 'Pasta', { planSlotId: 'd' }), log('2', 'dinner', 'Salad', { planSlotId: 'd' })]);
     expect(swap.slots[3].status).toBe('Logged with a change: Pasta and Salad');
     expect(swap.slots[3].logs.map((l) => l.id)).toEqual(['1', '2']);
     expect(nextSlot(swap)?.name).toBe('Overnight oats');
-    const plus = buildPlanDay(plan, [log('1', 'lunch', 'Chicken bowl', { planSlotId: 'l' }), log('2', 'lunch', 'Avocado', { planSlotId: 'l' })]);
+    const plus = buildPlanDay([plan], [log('1', 'lunch', 'Chicken bowl', { planSlotId: 'l' }), log('2', 'lunch', 'Avocado', { planSlotId: 'l' })]);
     expect(plus.slots[2].status).toBe('Logged with a change: Chicken bowl and Avocado');
   });
 
   it('keeps every unlinked food an extra, even one with the plan meal\'s own name', () => {
-    const day = buildPlanDay(plan, [log('1', 'lunch', 'Chicken bowl'), log('2', 'breakfast', 'Overnight oats'), log('3', 'lunch', 'Avocado')]);
+    const day = buildPlanDay([plan], [log('1', 'lunch', 'Chicken bowl'), log('2', 'breakfast', 'Overnight oats'), log('3', 'lunch', 'Avocado')]);
     expect(day.extras.map((l) => l.foodName)).toEqual(['Chicken bowl', 'Overnight oats', 'Avocado']);
     expect(day.slots.every((x) => x.logs.length === 0)).toBe(true);
   });
 
   it('turns a linked food moved to another meal, or linked to another plan, into an extra', () => {
-    const day = buildPlanDay(plan, [log('1', 'lunch', 'Toast', { planSlotId: 'b' }), log('2', 'dinner', 'Pasta', { planSlotId: 'gone' })]);
+    const day = buildPlanDay([plan], [log('1', 'lunch', 'Toast', { planSlotId: 'b' }), log('2', 'dinner', 'Pasta', { planSlotId: 'gone' })]);
     expect(day.extras.map((l) => l.foodName)).toEqual(['Toast', 'Pasta']);
     expect(nextSlot(day)?.name).toBe('Overnight oats');
   });
 
   it('fills pre-workout and snack, which both log to snack, each only from its own link', () => {
     const withSnack = { ...plan, slots: [...plan.slots, slot('s', 'snack', 'Banana', 100)] };
-    const day = buildPlanDay(withSnack, [log('1', 'snack', 'Banana', { planSlotId: 's' })]);
+    const day = buildPlanDay([withSnack], [log('1', 'snack', 'Banana', { planSlotId: 's' })]);
     expect(day.slots.find((x) => x.key === 'p')?.logs).toEqual([]);
     expect(day.slots.find((x) => x.key === 's')?.status).toBe('Logged as planned');
     expect(nextSlot(day)?.key).toBe('b');
   });
 
   it('has no next meal once every meal is logged', () => {
-    const day = buildPlanDay(plan, [
+    const day = buildPlanDay([plan], [
       log('1', 'breakfast', 'Overnight oats', { planSlotId: 'b' }), log('2', 'snack', 'Banana', { planSlotId: 'p' }),
       log('3', 'lunch', 'Chicken bowl', { planSlotId: 'l' }), log('4', 'dinner', 'Salmon and rice', { planSlotId: 'd' }),
     ]);
     expect(nextSlot(day)).toBeNull();
     expect(day.extras).toEqual([]);
+  });
+
+  it('UI-3c: lays two plans out as one day, names each meal\'s plan, and ticks a meal off only from its own plan', () => {
+    const smoothies = { id: 'smoothies', name: 'Morning smoothies', notes: null,
+      slots: [slot('n', 'snack', 'Green smoothie', 200), slot('m', 'breakfast', 'Berry smoothie', 300)] } as unknown as DailyMealPlan;
+    const day = buildPlanDay([smoothies, plan], [log('1', 'breakfast', 'Overnight oats', { planSlotId: 'b' })]);
+    expect(day.slots.map((x) => `${x.name} (${x.plan})`)).toEqual([
+      'Berry smoothie (Morning smoothies)', 'Overnight oats (Lean week 2)', 'Banana (Lean week 2)', 'Chicken bowl (Lean week 2)',
+      'Green smoothie (Morning smoothies)', 'Salmon and rice (Lean week 2)',
+    ]);
+    // Each meal also carries its plan's place in the day (newest first), which picks the plan's dot.
+    expect(day.slots.map((x) => x.planNo)).toEqual([0, 1, 1, 1, 0, 1]);
+    expect([day.slots[1].status, day.slots[0].logs, nextSlot(day)?.key, day.extras]).toEqual(['Logged as planned', [], 'm', []]);
+    // A food logged for one plan's breakfast never fills the other plan's breakfast.
+    const other = buildPlanDay([smoothies, plan], [log('2', 'breakfast', 'Berry smoothie', { planSlotId: 'm' })]);
+    expect([other.slots[0].status, other.slots[1].logs, nextSlot(other)?.key]).toEqual(['Logged as planned', [], 'b']);
+    expect(buildPlanDay([plan], []).slots.some((x) => 'plan' in x || 'planNo' in x)).toBe(false);
   });
 });
 

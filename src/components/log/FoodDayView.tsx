@@ -5,6 +5,8 @@
  * usual day" from the meals they repeat. Every tap reuses a Food log path owned by LogScreen (plan meal
  * log, repeat a past meal, the search sheet, the edit sheet), so basic self logging stays open in every
  * state. With nothing to build the day from, or the flag off, FoodDayGate renders the classic Food log.
+ * UI-3c (owner 10-19, board W-UI3C): every plan the server gives for the day shows in the one checklist;
+ * with two or more, the card lists each plan with its own dot and note, and each meal carries its plan's tag.
  */
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -12,20 +14,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api, { logApi } from '../../services/api';
-import { mealTemplatesApi } from '../../api/mealTemplatesApi';
+import { mealTemplatesApi, type DailyMealPlan } from '../../api/mealTemplatesApi';
 import HapticPressable from '../HapticPressable';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { PrimaryButton, TextLink } from '../../ui';
 import { QuietError, loadFailureMessage } from '../../ui/states/QuietStates';
 import { useTheme } from '../../theme/ThemeProvider';
-import { colors as palette, layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { colors as palette, gold, layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import type { FoodLog, MealType } from '../../types';
 import { addDays, getTodayString } from '../../utils/date';
-import { buildPlanDay, buildUsualDay, dayWord, loggedOn, nextSlot, weekday, type DaySlot, type PastDay } from '../../utils/log/foodDay';
+import { buildPlanDay, buildUsualDay, dayWord, joinNames, loggedOn, nextSlot, weekday, type DaySlot, type PastDay } from '../../utils/log/foodDay';
 import type { PlanLink } from '../../utils/log/planLink';
 
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
+const sumOf = (plan: DailyMealPlan, key: 'calories_kcal' | 'protein_g') =>
+  plan.slots.reduce((t, x) => t + (Number(x.meal_template[key]) || 0), 0);
+// UI-3c board: each plan's own dot, newest plan first (gold, then forest; a third plan takes the dark gold).
+const DOTS = [gold[300], palette.forest, gold[700]].map((backgroundColor) => ({ backgroundColor }));
+const dotOf = (i = 0) => DOTS[i % DOTS.length];
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 const longDay = (date: string) =>
@@ -88,13 +95,18 @@ export default function FoodDayView(p: FoodDayViewProps) {
       return read.flatMap((r, i) => (r.status === 'fulfilled' ? [{ date: dates[i], entries: r.value.data?.entries ?? [] }] : []));
     },
   });
-  const assigned = plan.data?.assignments?.[0]?.daily_meal_plan;
+  // Every plan for the day, newest first as the server orders them; a plan assigned twice shows once.
+  const plans = useMemo(() => [...new Map((plan.data?.assignments ?? [])
+    .flatMap((a) => (a?.daily_meal_plan ? [[a.daily_meal_plan.id, a.daily_meal_plan] as const] : []))).values()]
+    .filter((x) => x.slots.length > 0), [plan.data]);
+  const assigned = plans[0];
+  const many = plans.length > 1;
   // Each food carries the plan or usual meal it was logged for (FOODLINK), so the day is rebuilt from the server's log.
   const day = useMemo(() => {
-    if (p.coached) return assigned && assigned.slots.length > 0 ? buildPlanDay(assigned, p.foodLogs) : null;
+    if (p.coached) return plans.length > 0 ? buildPlanDay(plans, p.foodLogs) : null;
     const usual = past.data ? buildUsualDay(past.data, p.foodLogs) : null;
     return usual && usual.slots.length > 0 ? usual : null;
-  }, [p.coached, assigned, past.data, p.foodLogs]);
+  }, [p.coached, plans, past.data, p.foodLogs]);
 
   // Until the day and the plan (or the past week) are read, the classic log stays open for logging.
   if (!p.ready || (p.coached ? plan.isLoading : past.isLoading)) return <>{p.fallback}</>;
@@ -123,6 +135,13 @@ export default function FoodDayView(p: FoodDayViewProps) {
   const onTarget = !!p.targets && Math.abs(restKcal - p.targets.calories) <= p.targets.calories * 0.05
     && Math.abs(restProtein - p.targets.protein) <= p.targets.protein * 0.05;
   const dayLabel = isToday ? `Today, ${longDay(p.selectedDate)}` : longDay(p.selectedDate);
+  // With two or more plans, each meal and the up next card carry a small tag: the plan's dot and name.
+  const tag = (x: DaySlot) => (x.plan ? (
+    <View style={s.tag} testID={`food-day-tag-${x.key}`}>
+      <View style={[s.dot, dotOf(x.planNo)]} />
+      <Text style={s.tagText}>{x.plan}</Text>
+    </View>
+  ) : null);
 
   const slotRow = (x: DaySlot) => {
     const isDone = x.logs.length > 0;
@@ -138,7 +157,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
       <View key={x.key}>
         <HapticPressable intent="light" disableAnimation disabled={!isDone} onPress={() => setOpen(expanded ? null : x.key)}
           accessibilityRole={isDone ? 'button' : undefined} accessibilityState={isDone ? { expanded } : undefined}
-          accessibilityLabel={`${label}. ${name}. ${sub}. ${kcal} kcal`}
+          accessibilityLabel={`${label}. ${name}. ${sub}. ${kcal} kcal${x.plan ? `. From ${x.plan}.` : ''}`}
           style={s.slot} testID={`food-day-slot-${x.key}`}>
           <View style={[s.ring, isDone ? s.ringDone : s.ringSoft]}>
             {isDone ? <Ionicons name="checkmark" size={14} color={sc.textOnAccent} /> : null}
@@ -147,6 +166,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
             <Text style={s.eyebrow}>{label.toUpperCase()}</Text>
             <Text style={s.slotName}>{name}</Text>
             {sub ? <Text style={s.meta}>{sub}</Text> : null}
+            {tag(x)}
           </View>
           <Text style={s.kcal}>{kcal}</Text>
         </HapticPressable>
@@ -169,6 +189,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
       </View>
       <Text style={s.nowName}>{x.name}</Text>
       <Text style={s.smallMuted}>{x.usual ? loggedOn(x.usual.days, yesterday) : `${n(x.protein)} g protein, ${n(x.carbs)} g carbs, ${n(x.fat)} g fat`}</Text>
+      {tag(x)}
       {x.foods.length > 0 ? (
         <View style={s.items}>
           {x.foods.map((f, i) => (
@@ -214,7 +235,24 @@ export default function FoodDayView(p: FoodDayViewProps) {
       {isToday ? <Text style={s.title} accessibilityRole="header">Today's meals</Text> : null}
 
       <View style={s.card} testID="food-day-head">
-        {isPlan && assigned ? (
+        {isPlan && assigned && many ? (
+          <>
+            <View style={s.headRow}>
+              {initials ? <View style={s.avatar}><Text style={s.avatarText}>{initials}</Text></View> : null}
+              <Text style={[s.smallMd, s.grow]}>{coachFirst ? `${coachFirst}'s plans${isToday ? ' for today' : ''}` : joinNames(plans.map((x) => x.name))}</Text>
+            </View>
+            {/* One line per plan, newest first, each with its own dot; a coach's note sits under its own plan. */}
+            {plans.map((x, i) => (
+              <View key={x.id} style={s.planRow} testID={`food-day-plan-${x.id}`}>
+                <View style={[s.dot, s.planDot, dotOf(i)]} />
+                <View style={s.grow}>
+                  <Text style={s.smallMuted}>{`${x.name}, ${n(sumOf(x, 'calories_kcal'))} kcal, ${n(sumOf(x, 'protein_g'))} g protein`}</Text>
+                  {x.notes?.trim() ? <Text style={[s.small, s.planNote]}>{`\u201C${x.notes.trim()}\u201D`}</Text> : null}
+                </View>
+              </View>
+            ))}
+          </>
+        ) : isPlan && assigned ? (
           <>
             <View style={s.headRow}>
               {initials ? <View style={s.avatar}><Text style={s.avatarText}>{initials}</Text></View> : null}
@@ -308,6 +346,13 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   avatar: { width: 36, height: 36, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.cream, borderWidth: 1, borderColor: palette.camel },
   avatarText: { ...typography.h4, fontFamily: typography.h2.fontFamily, color: sc.textPrimary },
   quote: { marginTop: 12 },
+  planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
+  planDot: { marginTop: 7 },
+  planNote: { marginTop: 4 },
+  dot: { width: 8, height: 8, borderRadius: radius.chip },
+  tag: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', maxWidth: '100%', gap: 8, marginTop: 8,
+    paddingLeft: 8, paddingRight: 10, paddingVertical: 1, borderRadius: radius.chip, backgroundColor: palette.cream },
+  tagText: { ...typography.caption, letterSpacing: 0, color: sc.textPrimary, flexShrink: 1 },
   segs: { flexDirection: 'row', gap: 4, marginTop: 12, marginBottom: 8 },
   seg: { flex: 1, height: 6, borderRadius: radius.chip, backgroundColor: sc.border, overflow: 'hidden', flexDirection: 'row', gap: 3 },
   segDone: { backgroundColor: sc.accent },
