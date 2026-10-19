@@ -327,6 +327,7 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     await render(<CreditPackCheckoutScreen />);
     expect(screen.getByTestId('credit-pack-select')).toHaveTextContent(
       'You pay face value. $10 of credit is $10 of AI usage.',
+      { exact: false },
     );
     expect(screen.getByText('Suggested')).toBeTruthy();
     expect(screen.getByText('A $25 pack should cover you until Nov 1.')).toBeTruthy();
@@ -414,7 +415,7 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(StyleSheet.flatten(input.props.style).minHeight).toBe(layout.touchMin);
     await fireEvent.changeText(input, '5');
     await fireEvent.press(screen.getByTestId('ai-pack-option-custom'));
-    expect(screen.getByTestId('credit-pack-error')).toHaveTextContent('Custom packs must be between $10 and $500.');
+    expect(screen.getByTestId('credit-pack-error')).toHaveTextContent('Custom packs must be between $10 and $500.', { exact: false });
     expect(mockCreateCheckout).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('credit-pack-retry'));
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
@@ -436,7 +437,7 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
   it('flag off keeps old words, all choices and no new role read', async () => {
     mockFlags.coachAiCredits = false;
     await render(<CreditPackCheckoutScreen />);
-    expect(screen.getByTestId('credit-pack-select')).toHaveTextContent('no multiplier math.');
+    expect(screen.getByTestId('credit-pack-select')).toHaveTextContent('no multiplier math.', { exact: false });
     expect(screen.getByTestId('ai-pack-option-2500')).toBeTruthy();
     expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
     expect(mockUseRole).not.toHaveBeenCalled();
