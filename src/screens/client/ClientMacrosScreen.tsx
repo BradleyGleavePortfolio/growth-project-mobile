@@ -11,7 +11,7 @@
  * Sprint B-2 wiring: no edits from this screen — clients view, coaches
  * prescribe via CoachMacrosReviewScreen. Mutation paths live there.
  *
- * Lighter start (clinic contract v1 addition 8): while the client's macro
+ * Lighter start (onboarding contract v1 addition 8): while the client's macro
  * display mode is 'simple', only calories and protein are shown, with one
  * quiet line saying carbohydrate and fat join after the first week.
  */

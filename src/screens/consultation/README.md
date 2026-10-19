@@ -6,7 +6,7 @@ The full personal-training consultation a new client completes before their firs
 
 ## Rollout and rollback
 
-| Flag | Env var | Default | Clinic build |
+| Flag | Env var | Default | Launch build |
 | --- | --- | --- | --- |
 | `consultationOnboarding` | `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` | off in every general build (not `isDev`) | on, via the `clinic` profile in `eas.json` |
 | `consultTilesV2` | `EXPO_PUBLIC_FF_CONSULT_TILES_V2` | off in every build | off; no profile sets it (see Quiet Tiles) |

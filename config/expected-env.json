@@ -448,7 +448,7 @@
         "EXPO_PUBLIC_SENTRY_DSN"
       ],
       "stripe": "live",
-      "reason": "Clinic store binary: crash and unknown-error reporting must work (owner rule), and real clients pay."
+      "reason": "Launch store binary: crash and unknown-error reporting must work (owner rule), and real clients pay."
     },
     "clinic-apk": {
       "require": [

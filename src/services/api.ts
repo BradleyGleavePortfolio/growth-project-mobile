@@ -776,7 +776,7 @@ export const logApi = {
     // day's mark. Sent only through logSubmit's planLink(), i.e. only with featureFlags.foodPlanChecklist on.
     plan_slot_id?: string;
     fills_usual_meal?: boolean;
-    // Clinic tutorial: a 2xx food log is the real "first meal" action. The
+    // Client tutorial: a 2xx food log is the real "first meal" action. The
     // response passes through untouched; a failure emits nothing.
   }) => withTutorialSignal(api.post('/log/food', data), 'meal_logged'),
   getDaily: (date: string) =>
@@ -1022,7 +1022,7 @@ export const messagesApi = {
     const qs = q.toString();
     return api.get(`/messages${qs ? `?${qs}` : ''}`);
   },
-  // Clinic tutorial teach-back: a 2xx send to the client's coach thread is
+  // Client tutorial teach-back: a 2xx send to the client's coach thread is
   // the real "message your coach" action. Response passes through untouched.
   send: (body: string) => withTutorialSignal(api.post('/messages', { body }), 'message_sent'),
   markRead: () => api.post('/messages/read'),

@@ -34,10 +34,10 @@ import CoachIntroductionBanner from '../../components/home/CoachIntroductionBann
 // A1-COACHLESS: banner, code sheet and scripted Roman card for a client with
 // no coach. Renders nothing unless the server flag coachless_home is on.
 import CoachlessHomeSlot from '../../components/coachless/CoachlessHomeSlot';
-// Clinic tutorial (C08/C09): pinned macro card, Message your coach row and the
+// Client tutorial (C08/C09): pinned macro card, Message your coach row and the
 // passive re-offer line. Renders nothing unless featureFlags.clientTutorial.
 import TutorialHomeSlot from '../../components/tutorial/TutorialHomeSlot';
-// Lighter start for never-trackers (clinic contract v1 addition 8): the
+// Lighter start for never-trackers (onboarding contract v1 addition 8): the
 // grid shows calories and protein only while the macro display mode is
 // 'simple', and a one-time Roman card introduces carbohydrate and fat when
 // the simple week ends. 'full' (the existing grid) when the backend is silent.

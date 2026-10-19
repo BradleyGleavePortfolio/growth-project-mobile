@@ -166,7 +166,7 @@ export async function enqueue(
     createdAt: Date.now(),
   };
   await changeQueue(currentOwnerId(), (queue) => [...queue, item]);
-  // Clinic tutorial: an entry accepted by the offline queue counts as the
+  // Client tutorial: an entry accepted by the offline queue counts as the
   // client's first logged meal (it is saved and will sync).
   emitTutorialSignal('meal_logged');
 }

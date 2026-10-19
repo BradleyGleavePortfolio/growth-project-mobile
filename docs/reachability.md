@@ -290,7 +290,7 @@ clients the sub-coach has an open assignment with; anyone else gets the same
 | `CoachEarnings` | #332 | Every `/v1/coach/*` earnings and payout read is missing on production (404 Cannot GET) while the row is live in Settings. #332 retires the screen; if it slips, hide the Settings row. |
 | `CommunityStack`, coach community screens | coach community lane | `/community/coach/*` and `/community/moderation/*` are missing on production. Keep `coachCommunity` OFF until the backend ships them. |
 | `CoachBrief` | follow-up | Reads a local stub (`fetchCoachBrief` in `services/wave11Adapters.ts`) instead of the live `GET /coach/brief/today`. Its only entry is the retired Dashboard, so nobody reaches it today even with the clinic flag on. Wire it to the live route before adding an entry. |
-| `Leaderboard`, `LeaderboardSettings` | owner | Backend works (opt-in, roster-scoped). No entry. Recommended default: keep unwired for the clinic launch (peer ranking among clinic clients). |
+| `Leaderboard`, `LeaderboardSettings` | owner | Backend works (opt-in, roster-scoped). No entry. Recommended default: keep unwired for the launch (peer ranking among launch clients). |
 | `ClientBookingRequest`, `ClientUpcomingSessions` | #325 | No entry yet; the calendar PR adds it. |
 | `CommunityToday`, `CommunityChallenges`, `CommunityClassroom`, `CommunityFind` | #314 (merged) | Still no direct entry on main after #314 merged; the community IA follow-up owns the tab structure. |
 | `CoachCommunityWearablePrompts` | #317 | Orphan route; the wearables PR owns it. |

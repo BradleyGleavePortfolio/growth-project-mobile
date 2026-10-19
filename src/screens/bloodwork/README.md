@@ -11,9 +11,9 @@ states and every lab review state, and checks visible text, spoken labels and al
 
 ## Purpose
 
-Client-entered lab results review. Lets a client type values from a lab printout or patient portal, and lets their assigned coach add plain-English educational context before anything is shown back to the client. Ships behind `EXPO_PUBLIC_FEATURE_BLOODWORK` (default OFF) — the backend storage, audit log, and consent capture flows documented in `docs/BLOODWORK_HANDOFF.md` must be live before the flag is flipped.
+Client-entered lab results review. Lets a client type values from a lab printout or lab portal, and lets their assigned coach add plain-English educational context before anything is shown back to the client. Ships behind `EXPO_PUBLIC_FEATURE_BLOODWORK` (default OFF) — the backend storage, audit log, and consent capture flows documented in `docs/BLOODWORK_HANDOFF.md` must be live before the flag is flipped.
 
-This is not a clinical tool. Nothing in this module constitutes medical advice, diagnosis, or treatment guidance. Every surface displays a non-medical-advice disclaimer. Users must acknowledge the disclaimer before accessing any data (stored in `expo-secure-store` keyed by user id).
+This is not a medical tool. Nothing in this module constitutes medical advice, diagnosis, or treatment guidance. Every surface displays a non-medical-advice disclaimer. Users must acknowledge the disclaimer before accessing any data (stored in `expo-secure-store` keyed by user id).
 
 ---
 
@@ -29,7 +29,7 @@ This is not a clinical tool. Nothing in this module constitutes medical advice, 
 
 | Screen | File | Purpose |
 |--------|------|---------|
-| `BloodworkReviewQueueScreen` | `src/screens/coach/BloodworkReviewQueueScreen.tsx` | Coach reviews submitted panels. Action buttons (mark reviewed, request source, refer to clinician, hide, flag) stub to alerts in v1. |
+| `BloodworkReviewQueueScreen` | `src/screens/coach/BloodworkReviewQueueScreen.tsx` | Coach reviews submitted panels. Action buttons (mark reviewed, request source, refer to doctor, hide, flag) stub to alerts in v1. |
 
 ### Supporting components
 
@@ -100,14 +100,14 @@ Bloodwork values **never** appear on the leaderboard (Phase 7C), transformation 
 
 ### Full disclaimer text (verbatim — `BLOODWORK_DISCLAIMER_LONG` in `src/constants/bloodworkCopy.ts`)
 
-> These results, notes, and tips are educational coaching context only. They are not medical advice and are not a diagnosis, and they are not a substitute for guidance from your doctor or another licensed clinician. Always speak with your clinician about your results and before making changes to your care.
+> These results, notes, and tips are educational coaching context only. They are not medical advice and are not a diagnosis, and they are not a substitute for guidance from your doctor. Always speak with your doctor about your results and before making changes to your care.
 
 ### Acknowledgement modal bullets (verbatim — `BLOODWORK_DISCLAIMER_MODAL_BULLETS`)
 
 - The values and notes here are for your own reference only. They are not medical advice.
 - This app cannot diagnose illness, recommend treatments, or replace your doctor.
-- Always talk to a licensed clinician before acting on any lab result.
-- Your coach may add educational context, but that is not clinical guidance.
+- Always talk to a doctor before acting on any lab result.
+- Your coach may add educational context, but that is not medical guidance.
 - If you are concerned about a result, contact your doctor or health service.
 
 ### Where it is stored
@@ -134,8 +134,8 @@ No other env vars. All API base URLs inherit from the existing `API_BASE_URL` co
 
 | File | What it asserts |
 |------|----------------|
-| `src/__tests__/bloodworkCopy.test.ts` | Scans all bloodwork copy strings for forbidden diagnostic/prescriptive phrases. Also pins that `BLOODWORK_DISCLAIMER_LONG` contains the required safety phrases ("not medical advice", "not a diagnosis", "clinician"). |
-| `src/__tests__/bloodworkSignoff.test.ts` | `decideClientVisibility` logic — hidden states, clinician referral, awaiting review, AI draft approval path. `canTransition` state machine transitions. |
+| `src/__tests__/bloodworkCopy.test.ts` | Scans all bloodwork copy strings for forbidden diagnostic/prescriptive phrases. Also pins that `BLOODWORK_DISCLAIMER_LONG` contains the required safety phrases ("not medical advice", "not a diagnosis", "doctor"). |
+| `src/__tests__/bloodworkSignoff.test.ts` | `decideClientVisibility` logic — hidden states, doctor referral, awaiting review, AI draft approval path. `canTransition` state machine transitions. |
 | `src/__tests__/bloodworkFeatureFlag.test.ts` | Pins that `isFeatureEnabled('bloodwork')` is `false` when env var is unset. Tests the `true`/`false`/`"true"`/`"false"` parsing. |
 | `src/__tests__/bloodworkDisclaimerGate.test.ts` | **Happy path render** — acknowledged user sees full entry form without modal. **Disclaimer required on first view** — unacknowledged user sees modal. **Empty state** — form is visible but empty state text is shown when no data entered. **Error state** — modal stays visible if acknowledgement save fails. **Feature flag OFF** — renders fail-closed state regardless of acknowledgement. |
 

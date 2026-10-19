@@ -1,6 +1,6 @@
 /**
  * consultationApi: typed client for the consultation onboarding contract
- * (clinic_ops/specs/onboarding_contract.md, consult-v1).
+ * (onboarding contract spec, consult-v1).
  *
  *   PUT  /me/onboarding/consultation  idempotent save of partial or full answers
  *   GET  /me/onboarding               saved answers, completion state, result
@@ -47,7 +47,7 @@ export interface OnboardingMacros {
 
 export interface OnboardingProgram {
   id: string;
-  /** Backend #607 program rule key (one of the three clinic programs). */
+  /** Backend #607 program rule key (one of the three launch programs). */
   key?: string;
   name: string;
   days_per_week: number;
@@ -96,7 +96,7 @@ export interface OnboardingStateResponse {
   result?: CompleteOnboardingResponse | null;
   /**
    * S-REVENUE-124 (B-REV-1): false when POST /complete cannot finish for this
-   * client (no coach, or a coach without a clinic program set); the app then
+   * client (no coach, or a coach without a launch program set); the app then
    * runs the standard onboarding. Absent on older servers (treated as true).
    */
   consultation_available?: boolean;
