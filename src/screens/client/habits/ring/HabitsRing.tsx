@@ -106,22 +106,28 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     });
   }, [habits]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The same parts as Home's habits tile, for the day shown: planned that day, or ticked that day on the server.
-  const partsOn = (on: string) => list.filter((h) => doneOn(h, on) || plannedToday(h, on));
+  // Today's parts are Home's habits tile (planned today, or ticked today on the server). An earlier day counts as
+  // HB3's summary does: a habit on its planned days, a times-a-week habit only on a day it was ticked (no day to miss).
+  const weekly = (h: RingHabit) => h.schedule_kind === 'times_per_week';
+  const partOn = (h: RingHabit, on: string) => (on === today ? doneOn(h, on) || plannedToday(h, on) : weekly(h) ? isDoneOn(h, on) : plannedToday(h, on));
+  const partsOn = (on: string) => list.filter((h) => partOn(h, on));
   const countOn = (on: string) => { const p = partsOn(on); return { planned: p.length, done: p.filter((h) => isDoneOn(h, on)).length }; };
   const parts = partsOn(day);
   const done = parts.filter(isDone).length;
+  // An earlier day also offers its open times-a-week habits (from their start); a tick adds their part.
+  const tiles = day === today ? parts : list.filter((h) => partOn(h, day) || (weekly(h) && !(h.starts_on && h.starts_on.slice(0, 10) > day)));
   const toggle = (h: RingHabit) => {
     const key = `${day}|${h.id}`;
     if (busy.current.has(key)) return;
     const next = !isDone(h);
-    const index = parts.findIndex((p) => p.id === h.id);
+    const after = parts.includes(h) ? parts : tiles.filter((p) => p === h || parts.includes(p));
+    const index = after.indexOf(h);
     setUnsaved(null);
     setShown((m) => ({ ...m, [key]: next }));
     if (next) {
       taps.current += 1;
       setDraw({ index, key: `${h.id}:${day}:${taps.current}` });
-      void (done + 1 === parts.length ? HapticService.success() : HapticService.softImpact());
+      void (done + 1 === after.length ? HapticService.success() : HapticService.softImpact());
     } else void HapticService.selection();
     busy.current.add(key);
     logHabit.mutateAsync({ id: h.id, date: day, completed: next, value: next ? h.target_value || 1 : 0 }).then(
@@ -165,6 +171,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
 
   const refresh = () => { onRefresh(); void summary.refetch(); };
   const ring = Math.min(148, Math.round((width - layout.gutter * 2) * 0.46));
+  const dayWidth = Math.min(layout.touchMin, (width - layout.gutter * 2) / 7); // 44 pt, or a seventh of a narrow strip
   const tileWidth = fontScale > 1.15 ? width - layout.gutter * 2 : (width - layout.gutter * 2 - GAP) / 2;
   const week = weekCount(list, day, isDone);
   const unplanned = parts.length === 0 && day === today; // #HABITS-EMPTY-DAY op 1
@@ -225,7 +232,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
                 <Pressable
                   key={d.date} onPress={() => pick(d.date)} testID={`habits-ring-pick-${d.date}`}
                   accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={C.day(dayName(d.date), d.count)}
-                  style={({ pressed }) => [s.day, pressed && s.pressed]}
+                  style={({ pressed }) => [s.day, { minWidth: dayWidth }, pressed && s.pressed]}
                 >
                   <Text style={[s.letter, on ? s.light : s.muted]} importantForAccessibility="no" accessibilityElementsHidden>{weekdayLetter(d.date)}</Text>
                   <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
@@ -311,8 +318,8 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
           </View>
         ) : (
           <>
-            {done < parts.length ? <Text style={[typography.body, s.soft]}>{C.tap}</Text> : null}
-            <View style={s.grid}>{parts.map(tile)}</View>
+            {tiles.some((h) => !isDone(h)) ? <Text style={[typography.body, s.soft]}>{C.tap}</Text> : null}
+            <View style={s.grid}>{tiles.map(tile)}</View>
           </>
         )}
         <TextLink label={C.addHabit} tone="accent" underline={false} align="start" onPress={onAdd} testID="habits-ring-add" />
@@ -367,7 +374,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   bar: { height: 18, borderRadius: radius.control, width: '80%' },
   barShort: { width: '55%' },
   strip: { flexDirection: 'row', justifyContent: 'space-between' },
-  day: { alignItems: 'center', gap: 6, minWidth: layout.touchMin },
+  day: { alignItems: 'center', gap: 6 },
   letter: { ...typography.caption },
   mark: { width: 18, height: 3 },
   body: { paddingHorizontal: layout.gutter, paddingTop: 20, gap: 16 },

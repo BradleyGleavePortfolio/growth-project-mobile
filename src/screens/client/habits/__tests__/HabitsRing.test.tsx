@@ -176,6 +176,40 @@ it('a strip day up to today opens in the ring, dashed gaps and its date, and tic
   await waitFor(() => expect(v.getByText('12 of 23 this week')).toBeTruthy());
 });
 
+// Tuesday 13 holds an every-day habit (open), a Tuesdays habit (done), a twice-a-week habit met Monday and Wednesday
+// (not ticked Tuesday: no part, as HB3's summary) and a Mondays habit (not that day: no tile).
+it.each([
+  ['every day, open that day', 'd', false, 'Tuesday 13, 2 of 2 done', 0],
+  ['chosen days, done that day', 'c', true, 'Tuesday 13, 0 of 2 done', undefined],
+  ['times a week, met on other days, open that day', 'f', false, 'Tuesday 13, 2 of 3 done', 2],
+] as const)('a past day counts as HB3 does (%s): picking it writes nothing; a tick and an untick move only that day', async (_n, id, was, after, drawIndex) => {
+  mockGetAll.mockResolvedValue({ data: [
+    habit('d', 'Walk 30 minutes', {}),
+    habit('c', 'Lights out by 11', { schedule_kind: 'days', schedule_days: [2], logs: [log('2026-10-13')] }),
+    habit('f', 'Read', { schedule_kind: 'times_per_week', times_per_week: 2, logs: [log('2026-10-12'), log(TODAY)] }),
+    habit('m', 'Stretch 10 minutes', { schedule_kind: 'days', schedule_days: [1] }),
+  ] });
+  mockGet.mockResolvedValue({ data: { today: TODAY, days: [{ date: '2026-10-13', planned: 2, done: 1 }] } });
+  const v = await mount();
+  const tuesday = () => v.getByTestId('habits-ring-pick-2026-10-13').props.accessibilityLabel;
+  await waitFor(() => expect(tuesday()).toBe('Tuesday 13, 1 of 2 done'));
+  await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-13'));
+  expect(lastRing('habits-ring')).toMatchObject({ label: 'Tuesday 13, 1 of 2 done', segments: ['missed', 'done'] });
+  expect(tuesday()).toBe('Tuesday 13, 1 of 2 done');
+  expect(v.queryByTestId('habits-ring-tile-m')).toBeNull();
+  expect(mockLog).not.toHaveBeenCalled();
+  await fireEvent.press(v.getByTestId(`habits-ring-tile-${id}`));
+  expect(mockLog).toHaveBeenLastCalledWith(id, { date: '2026-10-13', completed: !was, value: was ? 0 : 1 });
+  expect(lastRing('habits-ring')).toMatchObject({ label: after, drawIndex });
+  expect(tuesday()).toBe(after);
+  await waitFor(() => expect(mockGetAll.mock.calls.length).toBeGreaterThan(1));
+  await act(async () => {});
+  await fireEvent.press(v.getByTestId(`habits-ring-tile-${id}`));
+  expect(mockLog).toHaveBeenLastCalledWith(id, { date: '2026-10-13', completed: was, value: was ? 1 : 0 });
+  expect(lastRing('habits-ring').label).toBe('Tuesday 13, 1 of 2 done');
+  expect(tuesday()).toBe('Tuesday 13, 1 of 2 done');
+});
+
 it.each([false, true])('a future day is never logged: "Cannot log future events", red italic, spoken, gone by itself (Reduce Motion %s)', async (reduce) => {
   jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(reduce);
   const v = await mount();
