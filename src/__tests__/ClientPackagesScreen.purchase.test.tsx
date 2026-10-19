@@ -283,7 +283,7 @@ it.each([false, true])('names the refund team and its support action (renewing p
   plans = hasPlan ? [PLAN] : [];
   const r = await render(<ClientPackagesScreen />);
   await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
-  expect(r.getByText(/Refunds are issued by The Growth Project team; to ask for one, email support\./)).toBeTruthy();
+  expect(r.getByText(/Refunds are issued by the TGP Fitness team; to ask for one, email support\./)).toBeTruthy();
   expect(r.getByTestId('plans-refund-support')).toBeTruthy();
   expect(r.queryByText(/refunds are handled by your coach/i)).toBeNull();
 });

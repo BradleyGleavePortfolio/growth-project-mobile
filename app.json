@@ -25,12 +25,12 @@
       "buildNumber": "10",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSFaceIDUsageDescription": "The Growth Project uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings.",
-        "NSHealthShareUsageDescription": "The Growth Project reads your Apple Health data for training, recovery, and check-ins. Your coach can use data you share, and Roman can use daily summaries when you allow AI access.",
-        "NSHealthUpdateUsageDescription": "The Growth Project does not write data to Apple Health.",
-        "NSCameraUsageDescription": "The Growth Project uses the camera only when you choose to take a photo to send in a support chat.",
-        "NSPhotoLibraryUsageDescription": "The Growth Project opens your photo library only when you choose a photo to send in a support chat.",
-        "NSPhotoLibraryAddUsageDescription": "The Growth Project saves an image to your photo library only when you choose Save Image, for example a progress card or an invite QR code."
+        "NSFaceIDUsageDescription": "TGP Fitness uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings.",
+        "NSHealthShareUsageDescription": "TGP Fitness reads your Apple Health data for training, recovery, and check-ins. Your coach can use data you share, and Roman can use daily summaries when you allow AI access.",
+        "NSHealthUpdateUsageDescription": "TGP Fitness does not write data to Apple Health.",
+        "NSCameraUsageDescription": "TGP Fitness uses the camera only when you choose to take a photo to send in a support chat.",
+        "NSPhotoLibraryUsageDescription": "TGP Fitness opens your photo library only when you choose a photo to send in a support chat.",
+        "NSPhotoLibraryAddUsageDescription": "TGP Fitness saves an image to your photo library only when you choose Save Image, for example a progress card or an invite QR code."
       },
       "associatedDomains": [
         "applinks:app.trygrowthproject.com"
@@ -288,7 +288,7 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "The Growth Project uses your microphone only while you record a voice note for your coaching community.",
+          "microphonePermission": "TGP Fitness uses your microphone only while you record a voice note for your coaching community.",
           "recordAudioAndroid": false,
           "enableBackgroundPlayback": false,
           "enableBackgroundRecording": false
@@ -301,16 +301,16 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "The Growth Project lets you save the confirmed coaching sessions you choose to your device calendar. Calendar copies do not update automatically.",
+          "calendarPermission": "TGP Fitness lets you save the confirmed coaching sessions you choose to your device calendar. Calendar copies do not update automatically.",
           "writeOnlyAccess": true,
-          "writeOnlyCalendarPermission": "The Growth Project lets you save the confirmed coaching sessions you choose to your device calendar.",
+          "writeOnlyCalendarPermission": "TGP Fitness lets you save the confirmed coaching sessions you choose to your device calendar.",
           "remindersPermission": false
         }
       ],
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "The Growth Project uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings."
+          "faceIDPermission": "TGP Fitness uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings."
         }
       ],
       [
@@ -334,8 +334,8 @@
       [
         "react-native-health",
         {
-          "healthSharePermission": "The Growth Project reads your Apple Health data for training, recovery, and check-ins. Your coach can use data you share, and Roman can use daily summaries when you allow AI access.",
-          "healthUpdatePermission": "The Growth Project does not write data to Apple Health."
+          "healthSharePermission": "TGP Fitness reads your Apple Health data for training, recovery, and check-ins. Your coach can use data you share, and Roman can use daily summaries when you allow AI access.",
+          "healthUpdatePermission": "TGP Fitness does not write data to Apple Health."
         }
       ],
       "react-native-health-connect",

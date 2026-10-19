@@ -18,7 +18,7 @@ export const coachSharingCopy = {
   retry: 'Try again',
   noCoach: 'Coach sharing applies once a coach is connected to this account.',
   devicesNote: () =>
-    `Your coach also sees data from ${health()} and other devices you connect. To stop new data, disconnect it in Connected devices or turn The Growth Project off in your phone's ${health()} permissions. Data already shared stays with your coach.`,
+    `Your coach also sees data from ${health()} and other devices you connect. To stop new data, disconnect it in Connected devices or turn TGP Fitness off in your phone's ${health()} permissions. Data already shared stays with your coach.`,
   devicesLink: 'Connected devices',
   devicesLinkHint: 'Opens your connected devices',
 } as const;

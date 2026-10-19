@@ -206,7 +206,7 @@ describe('a renewing plan sells as a subscription', () => {
         customerId: 'cus_test_sub',
         customerEphemeralKeySecret: 'ek_test_sub',
         paymentIntentClientSecret: 'pi_test_sub_secret_yyy',
-        merchantDisplayName: 'The Growth Project',
+        merchantDisplayName: 'TGP Fitness',
       }),
     );
     expect(params.setupIntentClientSecret).toBeUndefined();

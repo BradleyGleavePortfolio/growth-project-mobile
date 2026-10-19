@@ -122,7 +122,7 @@ describe('AgeCheckScreen', () => {
     expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: String(START_YEAR + 16) });
     await fireEvent.press(r.getByTestId('consult-continue'));
     expect(r.getByTestId('consult-screen-UNDER_AGE')).toBeTruthy();
-    expect(r.getByText(`The Growth Project is for ages ${MIN_CLIENT_AGE} and up.`)).toBeTruthy();
+    expect(r.getByText(`TGP Fitness is for ages ${MIN_CLIENT_AGE} and up.`)).toBeTruthy();
     expect(r.getByText('If the date was entered by mistake, go back and change it.')).toBeTruthy();
     await fireEvent.press(r.getByTestId('consult-under-age-change'));
     expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: String(START_YEAR + 16) });

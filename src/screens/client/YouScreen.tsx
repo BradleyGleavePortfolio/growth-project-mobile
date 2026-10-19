@@ -62,7 +62,7 @@ export const YOU_COPY = {
   healthAndDevices: 'Health and devices',
   support: 'Support',
   signOut: 'Sign out',
-  version: 'The Growth Project v1.0.0',
+  version: 'TGP Fitness v1.0.0',
 } as const;
 
 /** Monday 00:00 of the week that holds `now`, on this phone's clock. */

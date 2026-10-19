@@ -277,7 +277,7 @@ function AIGuideChat() {
           status: httpStatusOf(err),
         });
         aiText =
-          'Guidance could not answer this time because of a problem with The Growth Project service. ' +
+          'Guidance could not answer this time because of a problem with the TGP Fitness service. ' +
           'Send your message again in a minute. If it keeps happening, contact support' +
           (ref ? ` and share reference ${ref}.` : '.');
         // FIX-RC-128 B1: no guidance was returned, so the "Limited guidance"

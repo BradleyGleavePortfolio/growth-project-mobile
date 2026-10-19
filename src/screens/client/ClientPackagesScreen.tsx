@@ -398,7 +398,7 @@ export default function ClientPackagesScreen() {
       <Text style={styles.subheader}>
         Each plan is personal coaching delivered one to one by your coach.
         Payment is handled by Stripe's secure checkout. Your card never
-        touches The Growth Project servers.
+        touches TGP Fitness servers.
       </Text>
 
       {/* Past-due / dunning banner */}
@@ -620,7 +620,7 @@ export default function ClientPackagesScreen() {
       <Text style={styles.fineprint}>
         Payments are processed securely by Stripe inside the app. A renewing
         plan can be ended at any time in Your plans when it shows End my
-        plan. Refunds are issued by The Growth Project team; to ask for one, email support.
+        plan. Refunds are issued by the TGP Fitness team; to ask for one, email support.
       </Text>
       <TouchableOpacity
         onPress={() => void refundSupport.open()}

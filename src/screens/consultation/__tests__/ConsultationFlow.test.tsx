@@ -387,7 +387,7 @@ describe('ConsultationFlow', () => {
     await fireEvent.press(r.getByTestId('consult-prepare'));
     await waitFor(() => r.getByTestId('consult-problem-unknown'));
     expect(r.queryByText(/went wrong/i)).toBeNull();
-    expect(r.getByText(/The server ran into a problem\..*Bradleyapple1031@gmail\.com/)).toBeTruthy();
+    expect(r.getByText(/The server ran into a problem\..*support@thegrowthproject\.site/)).toBeTruthy();
     expect(r.getByTestId('consult-problem-reference').props.children).toBe('Reference: 7d1e44b0. Mention it if you write to support.');
     expect(r.getByTestId('consult-support')).toBeTruthy();
     expect(captureError).toHaveBeenCalledTimes(1);

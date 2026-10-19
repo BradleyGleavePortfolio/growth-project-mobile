@@ -223,7 +223,7 @@ describe('AIGuideScreen — R2b refusals', () => {
     mockChat.mockRejectedValueOnce(httpError(500, { message: 'boom' }, { 'x-request-id': 'unk-ref-123456' }));
     const r = await send('Hello');
     await waitFor(() =>
-      expect(r.getByText(/Guidance could not answer this time because of a problem with The Growth Project service/)).toBeTruthy(),
+      expect(r.getByText(/Guidance could not answer this time because of a problem with the TGP Fitness service/)).toBeTruthy(),
     );
     expect(r.getByText(/share reference unk-ref-/)).toBeTruthy();
     expect(r.queryByTestId('ai-guide-refusal')).toBeNull();

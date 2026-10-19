@@ -62,7 +62,7 @@ function WelcomeStyleB({ navigation }: Props) {
       <Overline style={{ color: sc.textOnMastheadMuted }} testID="welcome-eyebrow">Personal training, in your pocket</Overline>
       <Animated.View style={{ opacity: shown, transform: [{ translateY: rise }] }} testID="welcome-title-motion">
         <Headline level="display" style={[{ marginTop: 12 }, onForest]}>
-          The Growth Project
+          TGP Fitness
         </Headline>
       </Animated.View>
       <AccentRule />
@@ -122,7 +122,7 @@ function WelcomeToday({ navigation }: Props) {
       />
       <Overline testID="welcome-eyebrow">Personal training, in your pocket</Overline>
       <Headline level="display" style={styles.title}>
-        The Growth Project
+        TGP Fitness
       </Headline>
       <AccentRule />
       <Lede>A plan, daily targets, and a coach who knows you.</Lede>

@@ -100,7 +100,7 @@ export function partialImportMessage(
   return {
     text:
       `${name} is connected, but your history couldn't be read yet. ` +
-      `Check that ${name} access is turned on for The Growth Project, then tap Try again.`,
+      `Check that ${name} access is turned on for TGP Fitness, then tap Try again.`,
     action: 'resume',
   };
 }
@@ -136,8 +136,8 @@ export function connectFailureMessage(err: unknown, name: string): OnDeviceMessa
     // Every Health Connect type is off for the app (refused or revoked).
     return {
       text:
-        `${name} access is turned off for The Growth Project, so nothing new came in. Tap Open Health ` +
-        `Connect, choose App permissions, then The Growth Project, and allow access. Then tap ${retryWord}.`,
+        `${name} access is turned off for TGP Fitness, so nothing new came in. Tap Open Health ` +
+        `Connect, choose App permissions, then TGP Fitness, and allow access. Then tap ${retryWord}.`,
       action: 'open_settings',
     };
   }
@@ -158,7 +158,7 @@ export function connectFailureMessage(err: unknown, name: string): OnDeviceMessa
       return {
         text: connected
           ? `${name} is connected, but your history stopped coming in because the connection dropped. Check your internet connection, then tap Try again.`
-          : `The Growth Project couldn't be reached, so ${name} isn't connected yet. Check your internet connection, then tap Continue.`,
+          : `TGP Fitness couldn't be reached, so ${name} isn't connected yet. Check your internet connection, then tap Continue.`,
         action,
       };
     }
@@ -206,8 +206,8 @@ export function connectFailureMessage(err: unknown, name: string): OnDeviceMessa
   const ref = shortReference(requestId) ?? 'unavailable';
   return {
     text: connected
-      ? `${name} is connected, but your history didn't finish coming in because of an unexpected problem with The Growth Project. Reference ${ref}. Tap Try again in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`
-      : `${name} couldn't be connected because of an unexpected problem with The Growth Project. Reference ${ref}. Tap Continue in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`,
+      ? `${name} is connected, but your history didn't finish coming in because of an unexpected problem with TGP Fitness. Reference ${ref}. Tap Try again in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`
+      : `${name} couldn't be connected because of an unexpected problem with TGP Fitness. Reference ${ref}. Tap Continue in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`,
     action,
   };
 }
@@ -252,7 +252,7 @@ export function permissionOutcomeMessage(
         ? {
             text:
               `${name} access wasn't allowed, so nothing was read. Tap Open Health Connect, ` +
-              `choose App permissions, then The Growth Project, and allow access. Then come back and tap Continue.`,
+              `choose App permissions, then TGP Fitness, and allow access. Then come back and tap Continue.`,
             action: 'open_settings',
           }
         : {
@@ -281,8 +281,8 @@ export function permissionOutcomeMessage(
           ? `${name} works on Android phones only. On this iPhone, connect Apple Health instead.`
           : provider === 'APPLE_HEALTHKIT'
             ? Platform.OS === 'ios'
-              ? "Apple Health isn't available on this device. Open The Growth Project on your iPhone to connect it."
-              : 'Apple Health is only on iPhone. Open The Growth Project on your iPhone to connect it, or connect Health Connect on this phone.'
+              ? "Apple Health isn't available on this device. Open TGP Fitness on your iPhone to connect it."
+              : 'Apple Health is only on iPhone. Open TGP Fitness on your iPhone to connect it, or connect Health Connect on this phone.'
             : `${name} can't be connected on this device.`,
         action: 'none',
       };
@@ -308,7 +308,7 @@ export function settingsDidNotOpenMessage(target: 'settings' | 'store', name: st
     ? {
         text:
           `Health Connect didn't open. Open Settings on this phone, search for Health Connect, choose ` +
-          `App permissions, then The Growth Project, and allow access. Then come back and tap Continue.`,
+          `App permissions, then TGP Fitness, and allow access. Then come back and tap Continue.`,
         action: 'connect',
       }
     : {
@@ -339,8 +339,8 @@ export function emptyImportMessage(provider: WearableProvider, name: string): On
       text:
         `Samsung Health is connected through Health Connect, but there was no data from the last 30 ` +
         `days to bring in. In Samsung Health, open Settings, then Health Connect, and let Samsung ` +
-        `Health share its data. If you turned some data types off for The Growth Project, tap Open ` +
-        `Health Connect, choose App permissions, then The Growth Project, and turn them on. New data ` +
+        `Health share its data. If you turned some data types off for TGP Fitness, tap Open ` +
+        `Health Connect, choose App permissions, then TGP Fitness, and turn them on. New data ` +
         `comes in each time you open Health.`,
       action: 'open_settings',
     };
@@ -349,7 +349,7 @@ export function emptyImportMessage(provider: WearableProvider, name: string): On
     return {
       text:
         `${name} is connected, but there was no data from the last 30 days to bring in. If you turned ` +
-        `some data types off, tap Open Health Connect, choose App permissions, then The Growth Project, ` +
+        `some data types off, tap Open Health Connect, choose App permissions, then TGP Fitness, ` +
         `and turn them on. New data comes in each time you open Health.`,
       action: 'open_settings',
     };
@@ -357,8 +357,8 @@ export function emptyImportMessage(provider: WearableProvider, name: string): On
   return {
     text:
       `${name} is connected, but there was no data from the last 30 days to bring in. If you turned ` +
-      `some categories off, open the Health app, tap your profile picture, then Apps, The Growth ` +
-      `Project, and turn them on. New data comes in each time you open Health.`,
+      `some categories off, open the Health app, tap your profile picture, then Apps, TGP Fitness, ` +
+      `and turn them on. New data comes in each time you open Health.`,
     action: 'none',
   };
 }
@@ -377,7 +377,7 @@ export function cloudConnectFailureMessage(err: unknown, name: string): OnDevice
     const code = codeOf(err);
     if (status === null) {
       return {
-        text: `The Growth Project couldn't be reached, so ${name} isn't connected yet. Check your internet connection, then tap Continue.`,
+        text: `TGP Fitness couldn't be reached, so ${name} isn't connected yet. Check your internet connection, then tap Continue.`,
         action: 'connect',
       };
     }
@@ -408,7 +408,7 @@ export function cloudConnectFailureMessage(err: unknown, name: string): OnDevice
     const ref = referenceFor('wearables.cloud_connect', err, code);
     return {
       text:
-        `${name} couldn't be connected because of an unexpected problem with The Growth Project. ` +
+        `${name} couldn't be connected because of an unexpected problem with TGP Fitness. ` +
         `Reference ${ref}. Tap Continue in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`,
       action: 'connect',
     };

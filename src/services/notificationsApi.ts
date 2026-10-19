@@ -230,7 +230,7 @@ const MOCK_STORE: {
     {
       id: 'n_007',
       kind: 'system',
-      title: 'Welcome to The Growth Project',
+      title: 'Welcome to TGP Fitness',
       body: 'Your account is active. Start your day 1 log to begin tracking.',
       read: true,
       createdAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),

@@ -139,7 +139,7 @@ function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
         {/* Cover */}
         <View style={styles.cover}>
           <View style={styles.coverDot} />
-          <Text style={styles.coverTitle}>The Growth Project</Text>
+          <Text style={styles.coverTitle}>TGP Fitness</Text>
           <Text style={styles.coverSubtitle}>Weekly progress report</Text>
           <Text style={styles.coverName}>
             {currentUser?.firstName || currentUser?.name}
@@ -215,7 +215,7 @@ function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
         {/* Footer */}
         <View style={styles.footer}>
           <View style={styles.footerDot} />
-          <Text style={styles.footerTitle}>The Growth Project</Text>
+          <Text style={styles.footerTitle}>TGP Fitness</Text>
         </View>
     </Screen>
   );

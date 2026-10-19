@@ -201,7 +201,7 @@ describe('RomanAiConsentScreen', () => {
     const text = ROMAN_AI_COPY.loadServer('3f9c2a71');
     expect(r.getByText(text)).toBeTruthy();
     expect(text).toMatch(/reference 3f9c2a71/);
-    expect(text).toMatch(/Bradleyapple1031@gmail\.com/);
+    expect(text).toMatch(/support@thegrowthproject\.site/);
     expect(captureError).toHaveBeenCalledTimes(1);
     expect((captureError as jest.Mock).mock.calls[0][1]).toMatchObject({ status: 500, request_id: '3f9c2a71-0000-4000-8000-000000000000' });
   });

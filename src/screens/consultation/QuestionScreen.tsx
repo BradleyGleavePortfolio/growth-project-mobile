@@ -394,7 +394,7 @@ function DobBody(props: BodyProps) {
       >
         <View style={{ paddingTop: 96 }}>
           <Text style={s.eyebrow}>{screen.eyebrow}</Text>
-          <Headline style={{ marginTop: 16 }}>{`The Growth Project is for ages ${minAge} and up.`}</Headline>
+          <Headline style={{ marginTop: 16 }}>{`TGP Fitness is for ages ${minAge} and up.`}</Headline>
           <Text style={[s.mutedSmall, { marginTop: 12 }]}>If the date was entered by mistake, go back and change it.</Text>
           {props.escape?.(true)}
         </View>

@@ -92,7 +92,7 @@ export function Frame({ eyebrow, star, children }: { eyebrow: string; star?: boo
       </View>
       {children}
       <View style={[s.rule, { backgroundColor: withAlpha(sc.textOnMastheadMuted, 0.24) }]} />
-      <Ink muted text="The Growth Project" style={s.eyebrow} />
+      <Ink muted text="TGP Fitness" style={s.eyebrow} />
     </View>
   );
 }

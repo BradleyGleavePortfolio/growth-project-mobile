@@ -762,7 +762,7 @@ export function onDeviceDisclosure(
     : 'so your coach can personalize your training, recovery, and check-ins.';
   return (
     `When you continue, ${provider === 'SAMSUNG_HEALTH' ? 'Health Connect' : displayName} asks ` +
-    `for permission on this phone. The Growth Project then brings in your last 30 days of ${data} ` +
+    `for permission on this phone. TGP Fitness then brings in your last 30 days of ${data} ` +
     `and new data each time you open Health, ${purpose} Nothing is read or shared until you allow it.`
   );
 }

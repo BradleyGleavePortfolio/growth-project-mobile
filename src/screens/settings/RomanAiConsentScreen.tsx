@@ -97,7 +97,7 @@ export const ROMAN_AI_COPY = {
   reconsentBody: 'The wording of this choice has changed since you last chose, so it is off for now. You can allow it again below.',
   updateApp: 'This choice has been updated since this version of the app. Please update the app to change it.',
   notSent: 'You were signed out before this choice was saved, so nothing changed. Sign in and choose again.',
-  unavailable: `The Roman and AI setting is switched off by The Growth Project at the moment, so it cannot be changed here yet. Nothing is recorded. You can check back later, or write to support at ${SUPPORT_EMAIL}.`,
+  unavailable: `The Roman and AI setting is switched off by TGP Fitness at the moment, so it cannot be changed here yet. Nothing is recorded. You can check back later, or write to support at ${SUPPORT_EMAIL}.`,
   loadOffline: 'The app could not reach the server to load your choice. Check your connection, then tap Try again.',
   loadServer: (ref: string | null) =>
     `The server could not load your choice. Tap Try again. If it keeps happening, write to support at ${SUPPORT_EMAIL}${ref ? ` and mention reference ${ref}` : ''}.`,
@@ -116,7 +116,7 @@ export const ROMAN_AI_COPY = {
     'Roman and your coach\u2019s AI drafts will stop using your information. Your coaching, plan and messages carry on as before. You can allow it again at any time.',
   cancel: 'Cancel',
   accountLine:
-    'Your training agreement, and The Growth Project and your coach using your information to coach you, stay in place while you have an account. To stop all collection, delete your account in Settings > Account > Delete account.',
+    'Your training agreement, and TGP Fitness and your coach using your information to coach you, stay in place while you have an account. To stop all collection, delete your account in Settings > Account > Delete account.',
   deleteAccount: 'Delete account',
   pendingWithdraw:
     'You switched Roman and AI off during setup, and that is not confirmed yet, so the choice above may still be in place. Tap Withdraw to try again now.',
