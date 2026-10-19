@@ -212,8 +212,7 @@ export default function CoachBriefLightScreen() {
   const close = useCallback(
     (target?: BriefTarget) => {
       if (navigation.canGoBack()) navigation.goBack();
-      // The coach's Home is the tab the app opens on (coachLandingTab); a chat opens the inbox way (COACH-CHAT-BACK).
-      const tabs = navigation.getParent();
+      const tabs = navigation.getParent(); // Home is the tab the app opens on; a chat opens the inbox way (COACH-CHAT-BACK).
       if (tabs) openTarget(tabs, target ?? { tab: coachLandingTab() });
     },
     [navigation],
