@@ -26,15 +26,14 @@ import { DayMark, SegmentedRing, type DayState } from '../../../ui/charts/StyleC
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { assignmentPrescription } from '../../../utils/workout/assignmentPrescription';
 import { buildActiveWorkoutExercises, prettifyExerciseName } from '../../../utils/workout/buildActiveWorkout';
-import { bucketDateLocal } from '../../../utils/date';
-import { workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
+import { bucketDateLocal, getLocalWeekStart } from '../../../utils/date';
+import { doneLine, workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
 import { trainingWeek } from '../progress/progressV2';
 import { DAY_LABELS } from '../habits/constants';
 
 /** C1 wording IDs (index.md section 10). New ones wait for the owner (PR "Wording needed"); the rest are today's. */
 export const TRAIN_COPY = {
-  week: 'This week', // C1-C-06
-  done: (n: number, total: number) => `${n} of ${total} done`, // C1-C-08
+  week: 'This week', // C1-C-06; the ring and its line are thisWeek's doneLine, "{n} of {total} done" (C1-C-08)
   day: { done: 'done', planned: 'planned', missed: 'missed', rest: 'rest day', today: 'Today' } as Record<DayState, string>, // C1-C-02 to 05, C1-S-33
   today: 'Today', // C1-S-33
   exercises: (n: number) => `${n} ${n === 1 ? 'exercise' : 'exercises'}`, // C1-S-34 (the singular is today's)
@@ -51,6 +50,7 @@ export const TRAIN_COPY = {
   names: 'Loading exercise names', // today's
   failed: 'This workout did not load.', // today's
   retry: 'Try again', // today's
+  adjusted: 'Updated by your coach', // today's (WorkoutAssignmentDetail, rows Roman adjusted with the coach's approval)
 };
 const c = TRAIN_COPY;
 const CAP = 1.3;
@@ -60,15 +60,11 @@ export type StartParams = { routineId: string; routineName: string; exercises: s
 type Row = Pick<ClientWorkoutAssignmentWithPlan, 'scheduled_for' | 'completed_at'>;
 
 const dayOf = (a: Row) => bucketDateLocal(new Date(a.scheduled_for));
-const mondayOf = (today: string) => {
-  const d = new Date(`${today}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-  return d.toISOString().slice(0, 10);
-};
+const firstName = (name?: string) => name?.trim().split(/\s+/)[0] || null;
 
 /** The ring and strip: this week's workouts (Progress v2's reading); with none, the bare week with today marked. */
 export const trainWeek = (rows: ReadonlyArray<Row>, today: string): WorkoutWeek =>
-  trainingWeek([...rows], today) ?? workoutWeek({ week_start: mondayOf(today), today, assignments: [] });
+  trainingWeek([...rows], today) ?? workoutWeek({ week_start: getLocalWeekStart(), today, assignments: [] });
 
 /** Today's open workout; else the next open one; else the latest still open (a missed day). */
 export function featuredWorkout<T extends Row>(rows: ReadonlyArray<T>, today: string): T | null {
@@ -105,7 +101,7 @@ export function TrainMasthead({ rows, today, state, children }: {
   const light = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
   const bar = { backgroundColor: sc.surface.forestBand };
-  const line = c.done(week.done, week.total);
+  const line = doneLine(week);
   return (
     <View testID="train-masthead" style={[s.mast, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + layout.statusBarGap }]}>
       {children}
@@ -155,20 +151,28 @@ export function TrainHead({ on, children, ...rest }: React.ComponentProps<typeof
  */
 export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, onStart, onRetry, today }: {
   workout: ClientWorkoutAssignmentWithPlan | null; hasAny: boolean; state: TrainState; coachless: boolean;
-  coachId?: string | null; userId?: string; onStart: (params: StartParams) => void; onRetry: () => void; today: string;
+  coachId?: string | null; userId?: string; onStart: (params: StartParams) => void; onRetry: () => unknown; today: string;
 }) {
   const sc = useTheme().semanticColors;
   const ink = { color: sc.textPrimary };
   const muted = { color: sc.textMuted };
   const [italic] = useFonts({ CormorantGaramond_400Regular_Italic });
   const coaches = useMyCoaches(!coachless && !!userId).data;
-  const coachName = coachless ? null : (coaches?.find((x) => x.coach_id === coachId) ?? coaches?.[0])?.name.trim().split(/\s+/)[0] || null;
+  // The empty line names the client's coach; a note is signed only by the coach who set that workout (a note
+  // kept from a former coach shows unsigned, never under the current coach's name).
+  const coachName = coachless ? null : firstName((coaches?.find((x) => x.coach_id === coachId) ?? coaches?.[0])?.name);
+  const author = coachless || !workout ? null : firstName(coaches?.find((x) => x.coach_id === workout.assigned_by_coach_id)?.name);
   const plan = useMemo(() => (workout ? assignmentPrescription(workout) : null), [workout]);
   const ids = useMemo(() => (plan?.exercises ?? []).map((e) => e.exercise_external_id), [plan]);
   // Start waits for the names: the session copies them at Start (as WorkoutAssignmentDetail does).
   const { names, loading: namesLoading } = useExerciseNames(ids);
   const nameOf = (id: string) => names[id] || prettifyExerciseName(id) || 'Exercise';
   const [resume, setResume] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    setRetrying(true);
+    try { await onRetry(); } finally { setRetrying(false); }
+  };
   const workoutId = workout?.id;
   useFocusEffect(useCallback(() => {
     let live = true;
@@ -193,7 +197,7 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
     return (
       <View style={s.body} testID="train-day-failed" accessibilityRole="alert">
         <Text style={[typography.body, ink]}>{c.failed}</Text>
-        <QuietTextButton label={c.retry} onPress={onRetry} testID="train-retry" />
+        <QuietTextButton label={c.retry} onPress={() => void retry()} disabled={retrying} testID="train-retry" />
       </View>
     );
   }
@@ -224,14 +228,14 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
     <View style={s.body} testID="train-day">
       {note ? (
         <View style={[s.card, { backgroundColor: sc.surface.sage }]} testID="train-coach-note" accessible>
-          {coachName ? (
+          {author ? (
             <View style={[s.avatar, { backgroundColor: sc.surface.masthead }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-              <Text maxFontSizeMultiplier={1.15} style={[typography.h3, { color: sc.textOnAccent }]}>{coachName.charAt(0).toUpperCase()}</Text>
+              <Text maxFontSizeMultiplier={1.15} style={[typography.h3, { color: sc.textOnAccent }]}>{author.charAt(0).toUpperCase()}</Text>
             </View>
           ) : null}
           <View style={s.flex}>
             <Text style={[s.note, italic && s.italic, ink]}>{note}</Text>
-            {coachName ? <Text style={[typography.bodySmall, ink]}>{coachName}</Text> : null}
+            {author ? <Text style={[typography.bodySmall, ink]} testID="train-coach-note-author">{author}</Text> : null}
           </View>
         </View>
       ) : null}
@@ -252,6 +256,9 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
           <View style={s.flex}>
             <Text style={[typography.h4, ink]}>{b.rows.map((r) => nameOf(r.exercise_external_id)).join(' + ')}</Text>
             <Text style={[typography.bodySmall, muted, s.tabular]}>{blockLine(b)}</Text>
+            {b.rows.some((r) => plan.adjustedOrders.has(r.order)) ? (
+              <Text style={[typography.bodySmall, { color: sc.accentText }]} testID={`train-block-${b.letter}-adjusted`}>{c.adjusted}</Text>
+            ) : null}
           </View>
         </View>
       ))}
@@ -269,13 +276,13 @@ const s = StyleSheet.create({
   day: { alignItems: 'center', gap: 6, minWidth: 40 },
   tabular: { fontVariant: ['tabular-nums'] },
   line: { height: 14, borderRadius: radius.control },
-  ringSkel: { width: 88, height: 88, borderRadius: 44 },
-  daySkel: { width: 36, height: 36, borderRadius: 18, marginTop: 20 },
+  ringSkel: { width: 88, height: 88, borderRadius: radius.pill },
+  daySkel: { width: 36, height: 36, borderRadius: radius.pill, marginTop: 20 },
   body: { marginHorizontal: layout.gutter, marginBottom: 24 },
   over: { marginBottom: 8 },
   lede: { marginTop: 8 },
   card: { flexDirection: 'row', gap: 14, padding: 20, borderRadius: radius.card, marginBottom: 24 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   note: { ...typography.h3, lineHeight: 26, marginBottom: 6 },
   italic: { fontFamily: 'CormorantGaramond_400Regular_Italic', fontWeight: '400' },
   startWrap: { marginTop: 16, marginBottom: 8 },

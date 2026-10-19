@@ -4,11 +4,13 @@
  *     workout under its name (#TRAIN-START-TOP) as the one forest action, and lettered blocks.
  *   - Start opens the live workout with the assignment (no dead button); it waits for the exercise names.
  *   - Coachless: "Your plan", no coach voice, Quick workout stays; loading and failed states are true.
+ *   - A note is signed only by the coach who set the workout (fix round 1, B1); Roman-adjusted rows keep the
+ *     Detail screen's "Updated by your coach" mark.
  *   - The flag is off by default, and off the tab is today's (WorkoutScreen.calm130 and coachless135).
  */
 import React from 'react';
 import { AppState, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { lightTokens } from '../../../theme/tokens';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { addDays, getTodayString } from '../../../utils/date';
@@ -36,9 +38,10 @@ jest.mock('@react-navigation/native', () => {
     },
   };
 });
+const mockGetRoutines = jest.fn(async () => ({ data: [] as unknown[] }));
 jest.mock('../../../services/api', () => ({
   workoutApi: {
-    getRoutines: async () => ({ data: [] }),
+    getRoutines: () => mockGetRoutines(),
     getAll: async () => ({ data: [] }),
     getVolume: async () => ({ data: [] }),
     deleteWorkout: jest.fn(async () => ({})),
@@ -110,8 +113,9 @@ describe('C1 Train tab, Style C v2 (clientTrainV2)', () => {
   it('draws the week, the coach note and today, with Start workout under the name as the one forest action', async () => {
     const view = await render(<WorkoutScreen />);
     await waitFor(() => expect(view.getByText('Full body A')).toBeTruthy());
-    expect(view.getByText('This week')).toBeTruthy();
-    expect(view.getByText('1 of 2 done')).toBeTruthy();
+    const week = within(view.getByTestId('train-week'));
+    expect(week.getByText('This week')).toBeTruthy();
+    expect(week.getByText('1 of 2 done')).toBeTruthy();
     expect(view.getByLabelText('1 of 2 done')).toBeTruthy();
     expect(view.getByLabelText(`${dateNum(today)}, Today`)).toBeTruthy();
     expect(view.getByText('Squats hold at 185 this week.')).toBeTruthy();
@@ -129,6 +133,14 @@ describe('C1 Train tab, Style C v2 (clientTrainV2)', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('ActiveWorkout', { routineName: 'Quick Workout', exercises: '[]' });
     await fireEvent.press(view.getByLabelText('All coach workouts'));
     expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
+    expect(view.getByText('1 completed')).toBeTruthy();
+  });
+
+  it('with two open and none done, All coach workouts reads the open count, never "0 completed"', async () => {
+    mockQuery = { data: [fullBody, { ...fullBody, id: 'a2', scheduled_for: at(addDays(today, 2)) }] };
+    const view = await render(<WorkoutScreen />);
+    await waitFor(() => expect(view.getByText('2 workouts waiting')).toBeTruthy());
+    expect(view.queryByText('0 completed')).toBeNull();
   });
 
   it('Start workout opens the live workout with the assignment and the real names, with a medium haptic', async () => {
@@ -150,12 +162,41 @@ describe('C1 Train tab, Style C v2 (clientTrainV2)', () => {
     await waitFor(() => expect(waiting.getByLabelText('Loading exercise names')).toBeTruthy());
     await fireEvent.press(waiting.getByTestId('train-start'));
     expect(mockNavigate).not.toHaveBeenCalledWith('ActiveWorkout', expect.objectContaining({ assignmentId: 'a1' }));
-    waiting.unmount();
+    await waiting.unmount();
     mockNames = { names: {}, loading: false };
     mockLoadSession.mockResolvedValue({ session: { assignmentId: 'a1' } });
     const view = await render(<WorkoutScreen />);
     await waitFor(() => expect(view.getByText('Resume workout')).toBeTruthy());
     expect(mockLoadSession).toHaveBeenCalledWith('c1');
+  });
+
+  it.each([
+    ['the coach who set it', 'coach', true, 'Sam'],
+    ['a former coach (the workout kept after a move)', 'old-coach', true, null],
+    ['a coachless client', 'coach', false, null],
+  ])('signs the coach note only with the coach who set the workout: %s', async (_case, author, coached, shown) => {
+    mockUser = coached ? { id: 'c1', email: 'c1@example.test', role: 'client', coach_id: 'coach' } : { id: 'c1', email: 'c1@example.test', role: 'client' };
+    mockQuery = { data: [{ ...fullBody, assigned_by_coach_id: author }] };
+    const view = await render(<WorkoutScreen />);
+    await waitFor(() => expect(view.getByText('Full body A')).toBeTruthy());
+    if (!coached) {
+      expect(view.queryByTestId('train-coach-note')).toBeNull();
+    } else {
+      expect(view.getByText('Squats hold at 185 this week.')).toBeTruthy();
+      if (shown) expect(view.getByTestId('train-coach-note-author').props.children).toBe(shown);
+      else expect(view.queryByTestId('train-coach-note-author')).toBeNull();
+    }
+    if (shown) expect(view.getByText(shown)).toBeTruthy();
+    else expect(view.queryByText('Sam')).toBeNull();
+  });
+
+  it('keeps the Detail screen mark on a row the coach approved a Roman change for', async () => {
+    mockQuery = { data: [{ ...fullBody, roman_adjusted_sets: [{ order: 1, sets: 3 }] }] };
+    const view = await render(<WorkoutScreen />);
+    await waitFor(() => expect(view.getByText('Updated by your coach')).toBeTruthy());
+    expect(view.getByTestId('train-block-A-adjusted')).toBeTruthy();
+    expect(view.getByText('3 × 5 · 185 lb')).toBeTruthy();
+    expect(view.queryByTestId('train-block-B-adjusted')).toBeNull();
   });
 
   it('first day with a coach: Nothing planned yet, the coach line, Quick workout leads', async () => {
@@ -178,7 +219,7 @@ describe('C1 Train tab, Style C v2 (clientTrainV2)', () => {
     expect(empty.queryByLabelText('Coach guidelines')).toBeNull();
     await fireEvent.press(empty.getByLabelText('Quick workout'));
     expect(mockNavigate).toHaveBeenLastCalledWith('ActiveWorkout', { routineName: 'Quick Workout', exercises: '[]' });
-    empty.unmount();
+    await empty.unmount();
     mockQuery = { data: [fullBody] };
     const view = await render(<WorkoutScreen />);
     await waitFor(() => expect(view.getByText('Full body A')).toBeTruthy());
@@ -187,19 +228,31 @@ describe('C1 Train tab, Style C v2 (clientTrainV2)', () => {
     expect(forestButtons(view)).toEqual(['Start workout']);
   });
 
+  it('after a failed routines load with a workout shown, Try again is quiet so Start workout stays the one forest action', async () => {
+    mockGetRoutines.mockRejectedValueOnce(new Error('offline'));
+    const view = await render(<WorkoutScreen />);
+    await waitFor(() => expect(view.getByText('Your routines and history did not load. Check the connection, then try again.')).toBeTruthy());
+    expect(view.getByText('Full body A')).toBeTruthy();
+    expect(forestButtons(view)).toEqual(['Start workout']);
+    await fireEvent.press(view.getByTestId('workout-load-error-retry'));
+    await waitFor(() => expect(mockGetRoutines).toHaveBeenCalledTimes(2));
+  });
+
   it('loading and failed reads are true: a calm skeleton and disabled Start, then Try again', async () => {
     mockQuery = { isLoading: true };
     const loading = await render(<WorkoutScreen />);
     await waitFor(() => expect(loading.getAllByLabelText("Loading today's workout").length).toBe(2));
+    expect(loading.getByText('Workouts')).toBeTruthy();
     expect(loading.getByTestId('train-start').props.accessibilityState).toMatchObject({ disabled: true });
     expect(forestButtons(loading)).not.toContain('Start workout');
-    loading.unmount();
+    await loading.unmount();
     mockQuery = { isError: true };
     const failed = await render(<WorkoutScreen />);
     await waitFor(() => expect(failed.getByText('This workout did not load.')).toBeTruthy());
     expect(failed.queryByTestId('train-week')).toBeNull();
     await fireEvent.press(failed.getByTestId('train-retry'));
     expect(mockRefetch).toHaveBeenCalled();
+    await waitFor(() => expect(failed.getByTestId('train-retry').props.accessibilityState).toMatchObject({ disabled: false }));
   });
 });
 
