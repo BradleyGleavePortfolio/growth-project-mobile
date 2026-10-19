@@ -1,5 +1,9 @@
 # Navigation
 
+| Slice | Behavior |
+|---|---|
+| C8-WEEK | No new route: `Report` renders Week in review only with `clientProgressV2` on. Progress keeps its existing View progress report door; Back uses the existing More stack. The flag stays off by default. |
+
 C8V2-2B adds no route. With clientProgressV2 on, More > Progress keeps its back-only
 header in the masthead forest with light text and status bar (`backOnlyHeader(title,
 onMasthead)`), so the bar and the page read as one surface.

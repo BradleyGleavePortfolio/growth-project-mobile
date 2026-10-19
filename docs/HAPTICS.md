@@ -57,6 +57,7 @@ When the toggle changes:
 
 | Location | Method | Trigger |
 |---|---|---|
+| `progress/WeekInReviewScreen` (C8-WEEK, `clientProgressV2` off by default) | none on read; shared QuietError retry uses `softImpact()` | No fabricated save/completion haptic on a read-only recap; the retry text action keeps the shared preference-aware feedback. The ring is static and needs no Reduce Motion variant. |
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
 | `progress/ProgressV2` and `LogWeightSheetV2` (C8V2-2B, `clientProgressV2` off by default) | `selection()`; `success()`; `warning()`; `error()` | Week / Month / All and each 0.1 stepper; once when the server saves the weigh-in (the Save tap itself fires nothing); a weight outside the range; the save fails |
 | `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
