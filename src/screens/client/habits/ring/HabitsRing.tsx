@@ -376,7 +376,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   listedRow: { paddingVertical: 14 },
   listedLine: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.surface.sageLine },
   notice: {
-    position: 'absolute', top: 12, alignSelf: 'center', borderRadius: radius.chip, paddingHorizontal: 16, paddingVertical: 8,
+    position: 'absolute', top: 12, left: layout.gutter, right: layout.gutter, alignItems: 'center', borderRadius: radius.chip, paddingHorizontal: 16, paddingVertical: 8,
     backgroundColor: sc.bgSurface, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.surface.sageLine,
   },
   noticeText: { ...typography.bodySmall, fontStyle: 'italic', color: colors.error },
