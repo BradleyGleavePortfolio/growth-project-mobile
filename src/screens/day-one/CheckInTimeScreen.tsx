@@ -19,6 +19,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { track } from '../../lib/analytics';
+import { layout } from '../../theme/tokens';
 import { t } from './i18n/strings';
 import StepHeader, { useDayOneColors, type DayOneColors } from './StepHeader';
 import { getDeviceTimezone, saveCheckInTime } from './api';
@@ -292,7 +293,7 @@ const stepperStyles = (colors: DayOneColors) =>
       color: colors.textMuted,
       marginBottom: 4,
     },
-    btn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+    btn: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
     value: {
       fontFamily: 'CormorantGaramond_400Regular',
       fontSize: 44,
@@ -347,7 +348,7 @@ const makeStyles = (colors: DayOneColors) =>
       paddingVertical: 6,
       paddingHorizontal: 12,
       minWidth: 56,
-      minHeight: 44,
+      minHeight: layout.touchMin,
       alignItems: 'center',
       justifyContent: 'center',
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -395,7 +396,7 @@ const makeStyles = (colors: DayOneColors) =>
       color: colors.noticeCriticalAccent,
     },
     errorActions: { gap: 4 },
-    secondaryAction: { minHeight: 44, justifyContent: 'center' },
+    secondaryAction: { minHeight: layout.touchMin, justifyContent: 'center' },
     errorCtaSecondary: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
@@ -417,7 +418,7 @@ const makeStyles = (colors: DayOneColors) =>
       fontSize: 16,
       color: colors.textOnPrimary,
     },
-    skipBtn: { minHeight: 44, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 },
+    skipBtn: { minHeight: layout.touchMin, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 },
     skipText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
