@@ -371,7 +371,7 @@ export default function ClientPackagesScreen() {
       contentStyle={[styles.content, featureFlags.clientBillingV2 && { backgroundColor: semanticColors.bgPrimary }]}
       style={featureFlags.clientBillingV2 ? { backgroundColor: semanticColors.surface.masthead } : undefined}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={featureFlags.clientBillingV2 ? semanticColors.textMuted : semanticColors.accent} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={featureFlags.clientBillingV2 ? semanticColors.textOnMastheadMuted : semanticColors.accent} />
       }
     >
       {/* U-MC-5: the More stack hides headers, so the screen brings its own
@@ -530,12 +530,12 @@ export default function ClientPackagesScreen() {
                 )}
               </TouchableOpacity>
             );
-            const details = <>
+            const details = (outcome: React.ReactNode) => <>
               {sellable && !current ? <PlanTermsBlock pkg={sellable} testID={`plan-terms-${pkg.id}`} /> : null}
               {sellable && renewingName ? (
                 <Text style={styles.pkgDesc} testID={`plan-second-${pkg.id}`}>{secondPlanNotice(renewingName)}</Text>
               ) : null}
-              {feedback}
+              {outcome}
               {!sellable && !current ? (
                 <Text style={styles.pkgDesc} testID={`plan-unsellable-${pkg.id}`}>
                   Your coach sets this plan up directly. Message your coach to join it.
@@ -543,6 +543,9 @@ export default function ClientPackagesScreen() {
               ) : null}
             </>;
             if (featureFlags.clientBillingV2) {
+              // Leaving the success moment is Done, so it never mounts (haptic, ring) a second time on the list.
+              const closePlan = () => (active && purchase.state.phase === 'success' ? finishPurchase() : setOpenPlanId(null));
+              const shown = active && (purchase.state.phase !== 'idle' || purchase.state.notice || purchase.state.priceChange);
               const displayPrice = sellable ? priceLabel(sellable) : formatMoney(pkg.price ?? 0, pkg.currency);
               return <React.Fragment key={pkg.id}>
                 <PlanOfferCard name={pkg.name} price={displayPrice} description={pkg.description}
@@ -550,9 +553,10 @@ export default function ClientPackagesScreen() {
                   onOpen={() => setOpenPlanId(pkg.id)} />
                 {openPlanId !== pkg.id ? feedback : null}
                 {openPlanId === pkg.id ? (
-                  <Modal visible testID="client-plan-modal" statusBarTranslucent presentationStyle="fullScreen" animationType="none" onRequestClose={() => setOpenPlanId(null)}>
+                  <Modal visible testID="client-plan-modal" statusBarTranslucent presentationStyle="fullScreen" animationType="none" backdropColor={semanticColors.bgPrimary} onRequestClose={closePlan}>
                     <ClientPlanPage name={pkg.name} price={displayPrice} description={pkg.description}
-                      features={pkg.features ?? []} coach={coachName} onBack={() => setOpenPlanId(null)}
+                      features={pkg.features ?? []} coach={coachName} onBack={closePlan}
+                      outcome={feedback} outcomeKey={shown ? purchase.state.phase : null}
                       footer={action ? <>
                         {sellable?.quote && !current ? (
                           <View style={styles.dueToday} testID="plan-due-today" accessible
@@ -565,7 +569,7 @@ export default function ClientPackagesScreen() {
                       </> : undefined}
                     >
                       {sellable && !current ? <QuietOverline style={{ marginBottom: 12 }} accessibilityRole="header">{CLIENT_PLAN_COPY.billing}</QuietOverline> : null}
-                      {details}
+                      {details(null)}
                     </ClientPlanPage>
                   </Modal>
                 ) : null}
@@ -592,7 +596,7 @@ export default function ClientPackagesScreen() {
                     ))}
                   </View>
                 ) : null}
-                {details}
+                {details(feedback)}
                 {action}
               </View>
             );

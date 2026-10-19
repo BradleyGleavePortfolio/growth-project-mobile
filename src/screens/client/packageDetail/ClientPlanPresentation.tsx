@@ -1,11 +1,11 @@
 /** C5 Style C, slice 3: presentation only; checkout stays with its host. */
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors, radius, typography } from '../../../theme/tokens';
-import { QuietOverline, Screen, useScreenInsets } from '../../../ui';
+import { colors, layout, radius, typography } from '../../../theme/tokens';
+import { QuietOverline, Screen, footerBottomPadding, useScreenInsets } from '../../../ui';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CoachMark } from '../../../components/purchase/PlanActiveMoment';
 
@@ -91,21 +91,29 @@ export function PlanOfferCard({ name, price, description, features, coach, onOpe
   );
 }
 
-export function ClientPlanPage({ name, price, description, features, coach, onBack, children, footer }: {
+export function ClientPlanPage({ name, price, description, features, coach, onBack, outcome, outcomeKey, children, footer }: {
   name: string; price: string; description: string | null; features: string[]; coach: string | null;
-  onBack: () => void; children: React.ReactNode; footer: React.ReactNode;
+  onBack: () => void; outcome: React.ReactNode; outcomeKey: string | null; children: React.ReactNode; footer: React.ReactNode;
 }) {
   const { semanticColors: c } = useTheme();
   const insets = useScreenInsets();
+  const reduced = useReducedMotion();
+  const body = useRef<ScrollView>(null);
+  // Style C declined / success boards: the outcome leads the body, so bring the top into view when it changes.
+  useEffect(() => {
+    if (outcomeKey) body.current?.scrollTo({ y: 0, animated: !reduced });
+  }, [outcomeKey, reduced]);
   return (
     <PlanInk fill><StatusBar style="light" /><Screen
-      edges={['bottom']} testID="client-plan-page"
+      edges={['bottom']} testID="client-plan-page" scroll={false} contentStyle={s.unpadded}
       header={<View style={{ backgroundColor: c.surface.masthead, paddingTop: insets.top + 12, paddingHorizontal: 24 }}>
         <PlanMasthead title={name} price={price} coach={coach} onBack={onBack} />
       </View>}
       footer={footer}
     >
-      <>
+      <ScrollView ref={body} style={s.fill} showsVerticalScrollIndicator={false} testID="client-plan-page-body"
+        contentContainerStyle={[s.scroll, { paddingBottom: footer ? layout.gutter : footerBottomPadding(insets.bottom) }]}>
+        {outcomeKey ? <View style={s.outcome} testID="client-plan-outcome">{outcome}</View> : null}
         <CoachNote description={description} coach={coach} />
         {features.length ? (
           <View style={s.section}>
@@ -119,7 +127,7 @@ export function ClientPlanPage({ name, price, description, features, coach, onBa
           </View>
         ) : null}
         {children}
-      </>
+      </ScrollView>
     </Screen></PlanInk>
   );
 }
@@ -147,4 +155,8 @@ const s = StyleSheet.create({
   feature: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginVertical: 8 },
   dot: { width: 6, height: 6, borderRadius: radius.chip, marginTop: 10 },
   body: { ...typography.body, flex: 1 },
+  unpadded: { paddingHorizontal: 0, paddingBottom: 0 },
+  fill: { flex: 1 },
+  scroll: { flexGrow: 1, paddingHorizontal: layout.gutter },
+  outcome: { marginTop: 18 },
 });

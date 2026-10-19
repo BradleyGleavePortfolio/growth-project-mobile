@@ -9,7 +9,7 @@
  * was no Your plans panel.
  */
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, ScrollView, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../theme/ThemeProvider', () => {
@@ -70,6 +70,7 @@ jest.mock('../api/clientPaymentsApi', () => {
       })),
       createCheckoutSession: (...a: unknown[]) => mockCreateCheckoutSession(...a),
       getEntitlement: jest.fn(async () => ({ ok: true, data: { active: true } })),
+      getPurchases: jest.fn(async () => ({ ok: true, data: [] })),
     },
   };
 });
@@ -82,6 +83,8 @@ jest.mock('@stripe/stripe-react-native', () => ({
 
 import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
+import { lightTokens } from '../theme/tokens';
+import { HapticService } from '../ui/haptics/haptics.service';
 
 const defaultPackages = jest.mocked(clientPaymentsApi.getPackages).getMockImplementation();
 const defaultStatus = jest.mocked(clientPaymentsApi.getPaymentStatus).getMockImplementation();
@@ -188,6 +191,59 @@ it('Style C uses the existing purchase handler and keeps its failure recoverable
   await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.busy).toBe(false));
   expect(r.getByTestId('payment-error')).toBeTruthy();
   expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+});
+
+it('Style C shows a decline first on the plan page, in view, on a page-coloured backdrop', async () => {
+  mockBillingV2 = true;
+  const original = await defaultPackages?.();
+  if (!original?.ok) throw new Error('Expected available plans');
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{
+    ...original.data[0], description: 'Your training, adjusted by me each week.', features: ['Weekly call'],
+  }] });
+  mockPost.mockRejectedValue(Object.assign(new Error('Declined'), {
+    response: { status: 402, data: { code: 'CARD_DECLINED' } },
+  }));
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  expect(r.getByTestId('client-plan-modal').props.backdropColor).toBe(lightTokens.bgPrimary);
+  expect(r.queryByTestId('client-plan-outcome')).toBeNull();
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  await waitFor(() => expect(within(r.getByTestId('client-plan-outcome')).getByTestId('payment-error')).toBeTruthy());
+  // The list card behind the page repeats the note and inclusions, so read only the page.
+  const tree = JSON.stringify(r.toJSON());
+  const page = tree.slice(tree.indexOf('"client-plan-modal"'));
+  const at = (text: string) => page.indexOf(text);
+  expect(at('"payment-error"')).toBeGreaterThan(-1);
+  expect(at('"payment-error"')).toBeLessThan(at('Your training, adjusted by me each week.'));
+  expect(at('Your training, adjusted by me each week.')).toBeLessThan(at('Weekly call'));
+  expect(at('Weekly call')).toBeLessThan(at('"plan-terms-pkg-monthly'));
+  expect(ScrollView.prototype.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ y: 0 }));
+});
+
+it('Style C leads with the success moment, and Back from it finishes like Done (one haptic, no second moment)', async () => {
+  mockBillingV2 = true;
+  const haptic = jest.spyOn(HapticService, 'success');
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  await waitFor(() => expect(within(r.getByTestId('client-plan-outcome')).getByTestId('payment-success')).toBeTruthy());
+  const tree = JSON.stringify(r.toJSON());
+  const page = tree.slice(tree.indexOf('"client-plan-modal"'));
+  expect(page.indexOf('"payment-success"')).toBeGreaterThan(-1);
+  expect(page.indexOf('"payment-success"')).toBeLessThan(page.indexOf('"plan-terms-pkg-monthly'));
+  expect(r.queryByTestId('buy-plan-pkg-monthly')).toBeNull();
+  expect(haptic).toHaveBeenCalledTimes(1);
+  const reads = jest.mocked(clientPaymentsApi.getPackages).mock.calls.length;
+  const backs = r.getAllByLabelText('Back');
+  await fireEvent.press(backs[backs.length - 1]);
+  expect(r.queryByTestId('client-plan-page')).toBeNull();
+  expect(r.queryByTestId('payment-success')).toBeNull();
+  expect(haptic).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(jest.mocked(clientPaymentsApi.getPackages).mock.calls.length).toBeGreaterThan(reads));
+  expect(mockGoBack).not.toHaveBeenCalled();
+  haptic.mockRestore();
 });
 
 it('Style C cannot open a plan when the scoped list read is denied', async () => {
