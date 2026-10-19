@@ -543,7 +543,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         // Audit A2: preflight through the public preview, which resolves both
         // code families (permanent CoachProfile GP- links and InviteCode rows).
         // /auth/validate-invite-code only knows InviteCode rows and rejected
-        // the permanent clinic QR code. A preview failure (network) does not
+        // the permanent partner QR code. A preview failure (network) does not
         // block: signup-with-code re-checks the code authoritatively.
         try {
           const res = await authApi.getInvitePreview(trimmedCode);

@@ -16,7 +16,7 @@ for local dev) before inviting external coaches or clients.
 | `EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER` | preview, production | When `false` and live endpoints are absent, the coach is routed to the real `ClientsStack` instead of the mock dashboard. **Must be `false` for any coach-facing build.** | `false` |
 | `EXPO_PUBLIC_NOTIFICATIONS_MOCK` | preview, production | When `false`, notifications API talks to the backend. Default is now `false`; only flip to `true` for offline UI work. | `false` |
 | `EXPO_PUBLIC_SUPABASE_URL` | all | Supabase project URL used by `supabaseAuth`. | `https://<ref>.supabase.co` |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | all | Supabase anon key. | `eyJhbG…` |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | all | Supabase publishable key. The legacy anon JWT keys are switched off; the release checks refuse one. | `sb_publishable_…` |
 
 The release build now fails fast if any of the required vars above are
 missing — there is no silent fallback. See `src/config/env.ts` for the
@@ -125,7 +125,7 @@ eas login
 eas build --platform ios --profile production
 eas build --platform android --profile production
 
-# Clinic launch build: production plus the clinic flags (Roman tutorial,
+# Launch build: production plus the launch flags (Roman tutorial,
 # Community tab with Hall + Cohorts, coach brief). See src/tutorial/README.md.
 eas build --platform ios --profile clinic
 
@@ -150,7 +150,7 @@ All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
 | --- | --- | --- |
 | `EXPO_PUBLIC_API_URL` | yes (non-dev) | Base URL of the backend API. In dev, falls back to the Fly.io URL in `src/config/env.ts`. |
 | `EXPO_PUBLIC_SUPABASE_URL` | yes | Supabase project URL used for auth + token refresh. |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon JWT used by the client SDK. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase publishable key (`sb_publishable_…`) used by the client SDK. A legacy anon JWT fails the release checks (`docs/RELEASE_ENV_CHECK.md`). |
 | `EXPO_PUBLIC_SENTRY_DSN` | no | When set, Sentry is initialised in `services/sentry.ts`. Missing DSN means `wrap`, `captureError`, `setSentryUser` are no-ops. |
 | `EXPO_PUBLIC_ENVIRONMENT` | no | Sentry `environment` tag. Defaults to `'production'`. |
 | `SENTRY_AUTH_TOKEN` | no (recommended for prod) | EAS-time secret consumed by `@sentry/react-native/expo`'s release-upload step. When unset the build still succeeds, but no source maps reach Sentry, so production stack traces stay minified. See "Sentry release tracking" below. |
@@ -757,7 +757,7 @@ Operator-action checklist for the TestFlight launch of the fitness mobile app. E
 |---|---|---|---|
 | `EXPO_PUBLIC_API_URL` | `src/config/env.ts:13` | EAS secret (eas.json env block, profile `production`) | Fly host of the backend: `https://backend-spring-lake-3890.fly.dev/api`. Must include scheme and `/api` suffix; no trailing slash. |
 | `EXPO_PUBLIC_SUPABASE_URL` | `src/config/env.ts:11` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → Project URL (e.g. `https://abcdwxyz.supabase.co`). Must match the backend's `SUPABASE_URL`. |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:12` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → `anon` public key. Safe to ship in the client bundle (RLS gates all data). |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:12` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Project Settings → API Keys → publishable key (`sb_publishable_…`). Safe to ship in the client bundle (RLS gates all data). The legacy `anon` JWT is switched off and fails the release checks. |
 | `EXPO_PUBLIC_SENTRY_DSN` | `src/services/sentry.ts:49` | EAS secret (eas.json env block, profile `production`) | Sentry → Project (mobile) → Client Keys (DSN). Looks like `https://<32-hex>@oXXXXXX.ingest.sentry.io/<project-id>`. |
 | `EXPO_PUBLIC_POSTHOG_KEY` | `src/lib/analytics.ts:56` | EAS secret (eas.json env block, profile `production`) | PostHog → Project Settings → Project API Key. Starts with `phc_`. |
 | `EXPO_PUBLIC_POSTHOG_HOST` | `src/lib/analytics.ts:58` | EAS secret (eas.json env block, profile `production`) | PostHog instance URL (defaults to `https://us.i.posthog.com`). Set to `https://eu.i.posthog.com` if the project is in the EU region. |

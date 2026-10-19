@@ -37,7 +37,7 @@ export type MoreItem = {
   // When true, the row renders Roman's face (RomanAvatar) in place of the
   // Ionicons glyph — the face+voice rule for the Roman-branded row.
   isRoman?: boolean;
-  // Clinic tutorial spotlight id for this row (wearables step).
+  // Client tutorial spotlight id for this row (wearables step).
   tutorialTarget?: TutorialTargetId;
 };
 
@@ -215,7 +215,7 @@ export const ROMAN_MORE_ITEM: MoreItem = {
 
 /**
  * Wearables rows: the Connections hub and the Health shell (Fitness +
- * Recovery / sleep). The clinic tutorial's wearable step spotlights them.
+ * Recovery / sleep). The client tutorial's wearable step spotlights them.
  *
  * AUDIT-11-125: they used to ship only with featureFlags.clientTutorial,
  * which the iOS store (production) profile leaves off, so an iPhone client
@@ -263,7 +263,7 @@ export default function MoreScreen() {
     () => {
       const roman = featureFlags.romanChat ? [ROMAN_MORE_ITEM] : [];
       const plan = planMoreItems();
-      // The clinic tutorial spotlights the wearables rows, so they stay at the
+      // The client tutorial spotlights the wearables rows, so they stay at the
       // top there (unchanged); elsewhere they follow the plan rows.
       if (featureFlags.clientTutorial) {
         return [...WEARABLE_MORE_ITEMS, ...roman, ...plan, ...MORE_ITEMS];

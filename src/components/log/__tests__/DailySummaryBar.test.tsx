@@ -1,5 +1,5 @@
 /**
- * Log screen summary bar in the lighter first week (clinic contract v1
+ * Log screen summary bar in the lighter first week (onboarding contract v1
  * addition 8): calories and protein only in 'simple'; unchanged in 'full'.
  */
 import React from 'react';

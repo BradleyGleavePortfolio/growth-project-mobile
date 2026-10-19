@@ -10,11 +10,13 @@ import { featureFlags } from '../config/featureFlags';
  * to the inbox, like any inbox; off, in Clients over the client list, as today.
  * With the six tabs, every chat button in a client's file (both Message {first}
  * buttons, Summary's Messages, Logs' Send feedback) opens it the inbox way
- * (SAFETY-CARD, #CARD-MESSAGE-DEST, #CARD-MESSAGE-ALL op 1).
+ * (SAFETY-CARD, #CARD-MESSAGE-DEST, #CARD-MESSAGE-ALL op 1), and so do Message
+ * {first} on a safety alert and Send check-in on a weekly insight, which keeps
+ * its drafted text (SAFETY-CHAT-ROUTE); off, those open over the screen.
  */
-export const chatTarget = (clientId: string, clientName: string) => ({
+export const chatTarget = (clientId: string, clientName: string, initialDraft?: string) => ({
   tab: featureFlags.coachTabsV2 ? 'Messages' : 'ClientsStack',
-  params: { screen: 'ClientMessages', params: { clientId, clientName }, initial: false },
+  params: { screen: 'ClientMessages', params: { clientId, clientName, initialDraft }, initial: false },
 } as const);
 
 type Routes = { routes: readonly { name: string; state?: { key?: string; routes: readonly unknown[] } }[] };
@@ -53,8 +55,8 @@ export function openTarget(navigation: TabJump, { tab, params }: { tab: string; 
   navigation.navigate(tab);
 }
 
-export const openInboxChat = (navigation: TabJump, clientId: string, clientName: string): void =>
-  openTarget(navigation, chatTarget(clientId, clientName));
+export const openInboxChat = (navigation: TabJump, clientId: string, clientName: string, initialDraft?: string): void =>
+  openTarget(navigation, chatTarget(clientId, clientName, initialDraft));
 
 /**
  * Sol B1 (round 3): a chat left open in Messages with unsent text asks before openTarget's reset closes it, with the

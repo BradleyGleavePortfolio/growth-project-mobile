@@ -405,7 +405,7 @@ describe('TrustCenterScreen render', () => {
   it('the phone cannot open links (openURL rejects): the Privacy Policy address, and the report carries no query string or email', async () => {
     openUrl.mockRejectedValueOnce(
       new Error(
-        "Could not open URL 'https://app.trygrowthproject.com/privacy?token=abc123#frag' for jane.doe@realmail.com: No Activity found",
+        "Could not open URL 'https://app.trygrowthproject.com/privacy?token=abc123#frag' for jane.doe@example.com: No Activity found",
       ),
     );
     const screen = await renderScreen();
@@ -431,11 +431,11 @@ describe('TrustCenterScreen render', () => {
       reference: expect.stringMatching(/^[0-9a-f]{8}$/),
     });
     const sent = `${String(err.name)} ${String(err.message)} ${JSON.stringify(extras)}`;
-    for (const leaked of ['token', 'abc123', 'frag', 'jane.doe', 'realmail', '@', '?', 'No Activity found']) {
+    for (const leaked of ['token', 'abc123', 'frag', 'jane.doe', 'example.com', '@', '?', 'No Activity found']) {
       expect(sent).not.toContain(leaked);
     }
     // The stack holds only code frames (file paths may contain '@'), never the native text.
-    for (const leaked of ['token', 'abc123', 'jane.doe', 'realmail', 'No Activity found']) {
+    for (const leaked of ['token', 'abc123', 'jane.doe', 'example.com', 'No Activity found']) {
       expect(String(err.stack)).not.toContain(leaked);
     }
   });

@@ -231,6 +231,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key (sign-in and first run in Style B, MOCKUP3 C7 index-b-join slice 1). Off in every EAS profile until the owner turns it on."
     },
+    "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "UI-3 Food tab plan checklist for coached clients (V1_1_UI_SPEC UI-3); off in every profile until its switch-on PR."
+    },
     "EXPO_PUBLIC_FF_HEALTH_PAGES": {
       "kind": "flag",
       "default": "off",
@@ -442,13 +447,13 @@
     }
   ],
   "releaseProfiles": {
-    "$note": "Pre-build release-env check (scripts/check-expected-env.js --release-env; EAS runs it as the eas-build-pre-install hook with EAS_BUILD_PROFILE). For a listed profile it checks, without printing values: every kind:required name plus `require` is set and not a placeholder (format-checked: https URLs on a real host, a Supabase anon key whose JWT role is anon, a Sentry DSN, a Stripe publishable key of the given mode); every eas.json build.<profile>.env value (after extends) reaches the build unchanged; no secret-shaped EXPO_PUBLIC_* is set. Profiles not listed here (development) are skipped.",
+    "$note": "Pre-build release-env check (scripts/check-expected-env.js --release-env; EAS runs it as the eas-build-pre-install hook with EAS_BUILD_PROFILE). For a listed profile it checks, without printing values: every kind:required name plus `require` is set and not a placeholder (format-checked: https URLs on a real host, a Supabase publishable key (sb_publishable_; a legacy JWT key fails), a Sentry DSN, a Stripe publishable key of the given mode); every eas.json build.<profile>.env value (after extends) reaches the build unchanged; no secret-shaped EXPO_PUBLIC_* is set. Profiles not listed here (development) are skipped.",
     "clinic": {
       "require": [
         "EXPO_PUBLIC_SENTRY_DSN"
       ],
       "stripe": "live",
-      "reason": "Clinic store binary: crash and unknown-error reporting must work (owner rule), and real clients pay."
+      "reason": "Launch store binary: crash and unknown-error reporting must work (owner rule), and real clients pay."
     },
     "clinic-apk": {
       "require": [

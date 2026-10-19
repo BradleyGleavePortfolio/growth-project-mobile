@@ -1,6 +1,6 @@
 # Over-the-air updates (EAS Update)
 
-Added for the clinic launch (C11). Lets JavaScript-only fixes reach installed
+Added for the launch (C11). Lets JavaScript-only fixes reach installed
 builds without a new App Store review.
 
 ## Configuration (app.json / eas.json)
@@ -122,7 +122,7 @@ only when all of these hold:
    - the name is set more than once with different values (project vs account precedence is not documented, so the shipped value would be undefined);
    - the EAS value differs from the profile's `eas.json` value (for `clinic`: every clinic flag, the hide flag and `TGP_ANDROID_HEALTH_CONNECT` at the clinic profile's `eas.json` value, which also keeps the runtime fingerprint equal to the build's; OR-115-5: the value is not repeated here, so this line stays true when the clinic profile turns Health Connect on).
    The publish child gets the profile env; every other local `EXPO_PUBLIC_*` is dropped.
-6. **Release values.** The effective bundle values pass the same checks as the build (`scripts/check-expected-env.js` `valueProblem`, see `docs/RELEASE_ENV_CHECK.md`): every `kind: "required"` name plus the profile's `releaseProfiles` list is set, not a placeholder (`REPLACE_WITH_*`, `your_..._here`, a copied `*****` ...), and well formed (https URL on a real host, anon Supabase key, Sentry DSN, Stripe publishable key of the profile's mode). No secret-shaped `EXPO_PUBLIC_*` name is set.
+6. **Release values.** The effective bundle values pass the same checks as the build (`scripts/check-expected-env.js` `valueProblem`, see `docs/RELEASE_ENV_CHECK.md`): every `kind: "required"` name plus the profile's `releaseProfiles` list is set, not a placeholder (`REPLACE_WITH_*`, `your_..._here`, a copied `*****` ...), and well formed (https URL on a real host, Supabase publishable key `sb_publishable_` (a legacy anon JWT is refused), Sentry DSN, Stripe publishable key of the profile's mode). No secret-shaped `EXPO_PUBLIC_*` name is set.
 7. **Sentry symbolication.** When the bundle reports to Sentry (a DSN is set; always on `clinic` and `production`), a usable `SENTRY_AUTH_TOKEN` must be available before anything is published: the local shell first, else a plaintext or sensitive EAS variable in that environment (a `secret` one cannot be read off EAS builders). app.json must name the Sentry organization and project (`@sentry/react-native/expo` plugin).
 
 Every refusal line names the variable, its scope and the fix. No configured value is ever printed (only the reviewed `eas.json` value, which is the expected policy).
