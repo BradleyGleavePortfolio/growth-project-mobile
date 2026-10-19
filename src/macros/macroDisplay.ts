@@ -1,6 +1,6 @@
 /**
  * macroDisplay — the lighter start for clients who have never tracked food
- * (clinic onboarding contract v1, addition 8; owner ruling 2026-09-30 18:11).
+ * (onboarding contract v1, addition 8; owner ruling 2026-09-30 18:11).
  *
  * The backend sends `{ macro_display_mode: 'simple' | 'full', simple_until }`
  * on `GET /me/macros/current` and in the `POST /me/onboarding/complete`

@@ -177,7 +177,7 @@ export default function ClientPackagesScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const noCoach = useCoachlessClient();
 
-  // Clinic launch: plans are 1:1 person-to-person coaching (Guideline
+  // Launch: plans are 1:1 person-to-person coaching (Guideline
   // 3.1.3(d)), so the screen names the individual coach.
   const [coachName, setCoachName] = useState<string | null>(null);
   useEffect(() => {

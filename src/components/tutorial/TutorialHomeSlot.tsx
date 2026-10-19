@@ -1,5 +1,5 @@
 /**
- * TutorialHomeSlot — the clinic Home additions, all behind
+ * TutorialHomeSlot — the tutorial Home additions, all behind
  * featureFlags.clientTutorial:
  *   - after a skipped (paused) tour, one quiet line that resumes it
  *     (owner decision T-5: passive re-offer, never a re-triggered prompt);

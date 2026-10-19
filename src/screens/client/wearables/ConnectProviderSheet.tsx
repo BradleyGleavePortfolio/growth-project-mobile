@@ -319,7 +319,7 @@ export default function ConnectProviderSheet({
         await finishReturn(ticket, target);
         return;
       }
-      // Clinic tutorial: only an explicit success counts as connected; a
+      // Client tutorial: only an explicit success counts as connected; a
       // dismiss is confirmed (or not) by the re-read connections list.
       if (result.type === 'success') emitTutorialSignal('wearable_connected');
       if (result.type === 'success' || result.type === 'dismiss') {

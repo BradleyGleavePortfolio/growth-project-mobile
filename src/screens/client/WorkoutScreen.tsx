@@ -46,7 +46,7 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 // so this build hid them from the user entirely.
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
-// Clinic tutorial (C08): pinned plan explanation card; flag-gated, renders
+// Client tutorial (C08): pinned plan explanation card; flag-gated, renders
 // nothing unless featureFlags.clientTutorial and a program exists.
 import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
 import WorkoutSyncCards from '../../components/workout/WorkoutSyncCards';

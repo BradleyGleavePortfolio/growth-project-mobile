@@ -125,7 +125,7 @@ eas login
 eas build --platform ios --profile production
 eas build --platform android --profile production
 
-# Clinic launch build: production plus the clinic flags (Roman tutorial,
+# Launch build: production plus the launch flags (Roman tutorial,
 # Community tab with Hall + Cohorts, coach brief). See src/tutorial/README.md.
 eas build --platform ios --profile clinic
 

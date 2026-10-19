@@ -57,7 +57,7 @@ export function decideClientVisibility(
       showPanel: true,
       showAIInsights: false,
       disclaimerLevel: 'clinician_referral',
-      reason: 'coach referred to clinician — no AI insights shown',
+      reason: 'coach referred to doctor — no AI insights shown',
     };
   }
 

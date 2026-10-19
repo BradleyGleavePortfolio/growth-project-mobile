@@ -148,7 +148,7 @@ import UnreadBadge from '../components/community/UnreadBadge';
 // ClientEntitlementGuard remains canonical (Rule 20).
 import { withProtectedScreen } from '../entitlements/withProtectedScreen';
 import { withCommunityTerms } from '../components/community/CommunityTermsGate';
-// Clinic launch — Roman-led client tutorial (C09). The host is a pass-through
+// Launch — Roman-led client tutorial (C09). The host is a pass-through
 // unless featureFlags.clientTutorial is on.
 import TutorialHost from '../components/tutorial/TutorialHost';
 import { useAiWithdrawalDrain } from '../hooks/useAiWithdrawalDrain';
@@ -783,7 +783,7 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
             e.preventDefault();
             guard(() => navigation.navigate(route.name));
           },
-          // Clinic tutorial: report the focused route path so route gates
+          // Client tutorial: report the focused route path so route gates
           // (e.g. "tap Train") are satisfied by real navigation only.
           state: (e) => {
             if (!featureFlags.clientTutorial) return;

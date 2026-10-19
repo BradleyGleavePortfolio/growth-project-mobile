@@ -18,7 +18,7 @@ interface Props {
   remaining: number | null;
   targets?: DailyTotals | null;
   /**
-   * 'simple' during a never-tracker's first week (clinic contract v1
+   * 'simple' during a never-tracker's first week (onboarding contract v1
    * addition 8): calories and protein only. Defaults to 'full'.
    */
   mode?: MacroDisplayMode;

@@ -165,7 +165,7 @@ export const featureFlags = {
    */
   consultationOnboarding: readFlag('EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', false),
 
-  // ─── Clinic launch — Roman-led client tutorial (C08 + C09) ───────────────
+  // ─── Launch — Roman-led client tutorial (C08 + C09) ──────────────────────
   /**
    * The action-gated Roman tour after the plan reveal, the pinned macro and
    * plan explanation cards on Home and Train, the Home "Message your coach"
@@ -578,9 +578,9 @@ export const featureFlags = {
    */
   importReview: readFlag('EXPO_PUBLIC_FF_IMPORT_REVIEW', false),
 
-  // ─── Clinic launch (C11) — App Review 3.1 risk removal ───────────────────
+  // ─── Store launch (C11) — App Review 3.1 risk removal ────────────────────
   /**
-   * Clinic launch (App Review): hide, on iOS only, purchases that are NOT
+   * Store launch (App Review): hide, on iOS only, purchases that are NOT
    * 1:1 person-to-person services. Client purchases of 1:1 coach packages
    * stay available: they are real-time 1:1 coaching between a client and an
    * individual coach, filed under Guideline 3.1.3(d) and paid through

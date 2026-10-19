@@ -240,7 +240,7 @@ These rows belong in `docs/RELEASE_SMOKE.md`'s real-device-proof section; captur
 - "Become a coach" is **not** a self-serve action. The role is granted server-side; there is no surface in the mobile app that flips a client into a coach.
 - Coach billing in store builds is a status surface, without software-subscription purchase, portal or payable-invoice links. Android development and web retain the existing portal handoff. Any future store purchase path needs the applicable store billing or enrolled alternative-billing integration.
 
-## iOS: purchases that are not 1:1 services (clinic launch)
+## iOS: purchases that are not 1:1 services (launch)
 
 With `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` on (default in release builds; set in `eas.json` preview + production), iOS builds hide:
 - The `CreditPackCheckout` route, wrapped by `components/purchases/withNonP2PPurchaseGate`. Its hidden state reads "Not available in this app" (packs are not sold in this version of the app; there is no web checkout) with no link or URL, and an AI budget push routes to Settings instead of this screen.
