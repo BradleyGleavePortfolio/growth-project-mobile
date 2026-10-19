@@ -53,6 +53,7 @@ jest.mock('../../../hooks/useExerciseNames', () => ({ useExerciseNames: () => mo
 const mockLoadSession = jest.fn();
 jest.mock('../../../storage/activeWorkoutSession', () => ({ loadActiveWorkoutSession: (...a: unknown[]) => mockLoadSession(...a) }));
 jest.mock('../../../components/workout/WorkoutSyncCards', () => () => null);
+jest.mock('@expo-google-fonts/cormorant-garamond', () => ({ CormorantGaramond_400Regular_Italic: 1, useFonts: () => [true] }));
 jest.mock('../../../components/tutorial/PlanExplanationCard', () => () => null);
 jest.mock('../../../components/FadeInView', () => ({ children }: { children: React.ReactNode }) => children);
 

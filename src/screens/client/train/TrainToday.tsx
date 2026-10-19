@@ -13,6 +13,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
 import type { AssignmentExercise, ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilderApi';
 import { useStatusBarBand } from '../../../components/StatusBarBand';
 import { useMyCoaches } from '../../../hooks/useCalendar';
@@ -159,6 +160,7 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
   const sc = useTheme().semanticColors;
   const ink = { color: sc.textPrimary };
   const muted = { color: sc.textMuted };
+  const [italic] = useFonts({ CormorantGaramond_400Regular_Italic });
   const coaches = useMyCoaches(!coachless && !!userId).data;
   const coachName = coachless ? null : (coaches?.find((x) => x.coach_id === coachId) ?? coaches?.[0])?.name.trim().split(/\s+/)[0] || null;
   const plan = useMemo(() => (workout ? assignmentPrescription(workout) : null), [workout]);
@@ -228,7 +230,7 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
             </View>
           ) : null}
           <View style={s.flex}>
-            <Text style={[s.note, ink]}>{note}</Text>
+            <Text style={[s.note, italic && s.italic, ink]}>{note}</Text>
             {coachName ? <Text style={[typography.bodySmall, ink]}>{coachName}</Text> : null}
           </View>
         </View>
@@ -274,7 +276,8 @@ const s = StyleSheet.create({
   lede: { marginTop: 8 },
   card: { flexDirection: 'row', gap: 14, padding: 20, borderRadius: radius.card, marginBottom: 24 },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  note: { ...typography.h3, fontStyle: 'italic', lineHeight: 26, marginBottom: 6 },
+  note: { ...typography.h3, lineHeight: 26, marginBottom: 6 },
+  italic: { fontFamily: 'CormorantGaramond_400Regular_Italic', fontWeight: '400' },
   startWrap: { marginTop: 16, marginBottom: 8 },
   block: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: layout.rowMinHeight, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   letter: { width: 32, height: 32, borderRadius: radius.control, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
