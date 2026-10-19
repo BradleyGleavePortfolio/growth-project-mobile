@@ -116,7 +116,7 @@ describe('Course home', () => {
     get.mockImplementation((() => new Promise(() => undefined)) as never);
     const first = await show(CourseHomeScreen);
     expect(screen.getByLabelText("Loading your coach's course")).toBeTruthy();
-    first.unmount();
+    await first.unmount();
     get.mockImplementation((() => Promise.reject(new Error('500'))) as never);
     await show(CourseHomeScreen);
     expect(await screen.findByText("Your coach's course did not load.")).toBeTruthy();
