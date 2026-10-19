@@ -29,6 +29,12 @@ interface Props {
   onConfirm: () => void;
   onCancel: () => void;
   saving?: boolean;
+  /** The confirm button and its no-quantity hint; the food log's by default. */
+  confirmLabel?: string;
+  emptyHint?: string;
+  /** A message under the portion (screen readers hear it); `blocked` keeps the confirm off. */
+  notice?: string | null;
+  blocked?: boolean;
 }
 
 export default function QuantityPickerModal({ visible, ...props }: Props) {
@@ -55,6 +61,10 @@ export function QuantityPickerContent({
   onConfirm,
   onCancel,
   saving = false,
+  confirmLabel = 'Log food',
+  emptyHint = 'Enter a quantity greater than zero to log this food.',
+  notice,
+  blocked = false,
 }: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
   const { semanticColors: sc } = useTheme();
@@ -142,12 +152,13 @@ export function QuantityPickerContent({
           <Text style={styles.servingSizeInfo}>Volume weights are estimates. Use grams for a weighed portion.</Text>
         ) : null}
         {quantity == null ? (
-          <Text style={styles.servingSizeInfo}>Enter a quantity greater than zero to log this food.</Text>
+          <Text style={styles.servingSizeInfo}>{emptyHint}</Text>
         ) : null}
+        {notice ? <Text accessibilityRole="alert" style={styles.servingSizeInfo}>{notice}</Text> : null}
 
         <PrimaryButton
-          label="Log food"
-          disabled={quantity == null}
+          label={confirmLabel}
+          disabled={quantity == null || blocked}
           loading={saving}
           onPress={onConfirm}
           testID="quantity-log-food"
@@ -236,6 +247,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   unitChip: {
     minHeight: layout.touchMin,
+    minWidth: layout.touchMin,
     justifyContent: 'center',
     paddingHorizontal: 16,
     borderRadius: radius.chip,

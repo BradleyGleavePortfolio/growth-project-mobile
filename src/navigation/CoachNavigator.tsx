@@ -58,7 +58,7 @@ import CommunityWearablePromptsScreen from '../screens/community/CommunityWearab
 import CrossPillarNavigator from '../screens/coach/cross-pillar/CrossPillarNavigator';
 // Phase 11 Track 9 — Support Inbox (Crisp)
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
-// Phase 11 / Track 7 — sub-coach team management (Scale+ tier gate enforced in-screen)
+// Phase 11 / Track 7 — sub-coach team management (no coach plan gate, owner TM-P1)
 import TeamManagementScreen from '../screens/coach/TeamManagementScreen';
 import SubCoachDetailScreen from '../screens/coach/SubCoachDetailScreen';
 import ClientReassignModal from '../screens/coach/ClientReassignModal';
@@ -90,9 +90,8 @@ import CoachBroadcastsScreen from '../screens/coach/broadcasts/CoachBroadcastsSc
 // M-FEATURED-123 — owner-only featured coach editor (Settings > Owner).
 import FeaturedCoachEditorScreen from '../screens/coach/featured/FeaturedCoachEditorScreen';
 import BroadcastComposerScreen from '../screens/coach/broadcasts/BroadcastComposerScreen';
-// Coach AI v1 — generate/edit/approve workout, meal, insight drafts per client.
+// Coach AI v1 — generate/edit/approve workout and insight drafts per client.
 import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
-import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
 import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
@@ -112,6 +111,7 @@ const GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate(CreditPackCheckoutS
 // shell so the §2.6 celebration can overlay any tab when the coach's first
 // payment INSERT lands (flag-gated; MMKV once-only).
 import FirstPaymentWowHost from '../screens/coach/ed/FirstPaymentWowHost';
+import CoachAiConsentHost from '../components/ai/CoachAiConsentHost';
 import CoachSetupScreen from '../screens/coach/setup/CoachSetupScreen';
 // Stream 2 — Coach AI execution drafts inbox (draft.client_message,
 // draft.assign_workout, draft.assign_meal_plan, draft.send_notification).
@@ -167,7 +167,7 @@ export type CoachTabParamList = {
   // `| undefined` preserves existing no-arg navigate('ClientsStack') callers.
   ClientsStack: NavigatorScreenParams<ClientsStackParamList> | undefined;
   Templates: undefined;
-  Messages: undefined;
+  Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
   // R27: typed nested nav so navigate('SettingsStack', { screen: 'Billing' })
   // type-checks against SettingsStackParamList. Plain `undefined` left
   // navigate('SettingsStack', ... as never) as the only way to deep-link
@@ -195,7 +195,7 @@ export type SafetyAlertParams = {
 export type ClientsStackParamList = {
   ClientsList: undefined;
   /** initialTab: opens on that tab (the daily brief opens Workouts). */
-  ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' | 'mealplan' };
+  ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' };
   /**
    * S14 round 3: the coach-only wearable coaching prompts for one client,
    * opened from the client's Health tab. Registered only behind
@@ -250,8 +250,6 @@ export type ClientsStackParamList = {
   FeaturedCoachEditor:      undefined;
   /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
   AIWorkoutDraft:  { draftId: string; clientId: string; clientName: string };
-  /** Coach AI v1 — review/edit/approve AI-generated meal plan draft. */
-  AIMealPlanDraft: { draftId: string; clientId: string; clientName: string };
   /** Coach AI v1 — render an AI-generated weekly insight for a client. */
   ClientInsight:   { draftId: string; clientId: string; clientName: string };
   /** Stream 2 — inbox of pending AI execution drafts (messages,
@@ -327,6 +325,10 @@ export type SettingsStackParamList = {
   CreditPackCheckout: { preselect?: number | 'custom' } | undefined;
 };
 
+/** COACH-CHAT-BACK (owner op 1) — with the six tabs: the inbox and what opens from it (chats, Broadcasts, Community reports). */
+export type MessagesStackParamList = { MessagesInbox: undefined } & Pick<ClientsStackParamList, 'ClientMessages' | 'ContactView' |
+  'CoachBroadcasts' | 'CoachBroadcastComposer' | 'CoachCommunityModeration' | 'CoachCommunityPostDetail'>;
+
 /** Phase 11 / Track 7 — team management stack param list. */
 export type TeamStackParamList = {
   TeamManagement: undefined;
@@ -345,6 +347,7 @@ const ClientsStack = createNativeStackNavigator<ClientsStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 const TeamStack = createNativeStackNavigator<TeamStackParamList>();
 const CalendarStack = createNativeStackNavigator<CalendarStackParamList>();
+const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
 
 // ─── Phase 9: unread count polling for the coach bell icon ───────────────────
 
@@ -512,10 +515,6 @@ function ClientsStackNavigator() {
         component={AIWorkoutDraftScreen}
       />
       <ClientsStack.Screen
-        name="AIMealPlanDraft"
-        component={AIMealPlanDraftScreen}
-      />
-      <ClientsStack.Screen
         name="ClientInsight"
         component={ClientInsightScreen}
       />
@@ -679,6 +678,10 @@ function CalendarStackNavigator() {
         name="CoachBookingInbox"
         component={CoachBookingInboxScreen}
         options={({ navigation }) => ({
+          // The tab root names itself like the other tab roots (no empty band).
+          headerTitle: 'Calendar',
+          headerTitleAlign: 'left',
+          headerTitleStyle: styles.calendarTitle,
           headerRight: () => (
             <Pressable
               onPress={() => {
@@ -701,6 +704,27 @@ function CalendarStackNavigator() {
       <CalendarStack.Screen name="CoachAppointmentTypes" component={CoachAppointmentTypesScreen} />
       <CalendarStack.Screen name="CoachTimeOff" component={CoachTimeOffScreen} />
     </CalendarStack.Navigator>
+  );
+}
+
+/**
+ * COACH-CHAT-BACK (owner op 1: "Chats get their own place in the Messages tab,
+ * like any inbox") — with the six tabs a chat, Broadcasts or Community reports
+ * opened from Messages opens here, so Back returns to Messages. A chat opened
+ * from a client's file stays in Clients. Headers match the Clients stack's.
+ */
+function MessagesStackNavigator() {
+  const header = (title: string) => ({ headerShown: true, title, headerBackTitle: 'Back' });
+  return (
+    <MessagesStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.background } }}>
+      <MessagesStack.Screen name="MessagesInbox" component={MessagesScreen} />
+      <MessagesStack.Screen name="ClientMessages" component={ClientMessagesScreen} />
+      <MessagesStack.Screen name="ContactView" component={ContactView} />
+      <MessagesStack.Screen name="CoachBroadcasts" component={CoachBroadcastsScreen} options={header('Broadcasts')} />
+      <MessagesStack.Screen name="CoachBroadcastComposer" component={BroadcastComposerScreen} options={header('New broadcast')} />
+      <MessagesStack.Screen name="CoachCommunityModeration" component={CoachCommunityModerationScreen} options={header('Community reports')} />
+      <MessagesStack.Screen name="CoachCommunityPostDetail" component={CoachCommunityPostDetailScreen} options={header('Reported post')} />
+    </MessagesStack.Navigator>
   );
 }
 
@@ -728,7 +752,7 @@ function EntryTabBar(props: BottomTabBarProps) {
 /**
  * TeamStackNavigator
  *
- * Phase 11 / Track 7. Scale+ tier gate is enforced inside TeamManagementScreen
+ * Phase 11 / Track 7. No coach plan gate (owner TM-P1),
  * and the parent tab registers only with Team Mode on and a confirmed
  * head coach whose roster includes a sub-coach.
  */
@@ -814,6 +838,9 @@ export default function CoachNavigator() {
       options={{
         title: 'Clients',
         tabBarAccessibilityLabel: 'Clients',
+        // COACHTABS-CLIENTS-ROOT: Clients opens with the app even when the coach lands on another tab, so a
+        // jump into a Clients screen (a chat, Invite codes, a push) opens on top of the client list.
+        lazy: false,
         tabBarIcon: ({ color, size }) => (
           <Ionicons name="people-outline" size={size} color={color} />
         ),
@@ -946,7 +973,7 @@ export default function CoachNavigator() {
       )}
       <Tab.Screen
         name="Messages"
-        component={MessagesScreen}
+        component={tabsV2 ? MessagesStackNavigator : MessagesScreen}
         options={{
           tabBarAccessibilityLabel: unreadBadge !== undefined
             ? `Messages, ${unreadBadge}`
@@ -965,8 +992,8 @@ export default function CoachNavigator() {
         }}
       />
       {tabsV2 && clientsTab}
-      {/* P0-1 + Phase 11 / Track 7 — Team tab. Scale+ tier gate enforced
-          in-screen, role gate enforced here: sub-coaches and unresolved
+      {/* P0-1 + Phase 11 / Track 7 — Team tab. No coach plan gate
+          (owner TM-P1); role gate enforced here: sub-coaches and unresolved
           sessions never see the tab. */}
       {showTeamTab && (
         <Tab.Screen
@@ -1010,12 +1037,15 @@ export default function CoachNavigator() {
         }}
       />
     </Tab.Navigator>
+    {/* COACH-AI-CONSENT: asked once over coach Home, when the server says never asked. */}
+    <CoachAiConsentHost />
     </CoachTeamEntryContext.Provider>
     </FirstPaymentWowHost>
   );
 }
 
 const styles = StyleSheet.create({
+  calendarTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 28 },
   headerGear: {
     width: 44,
     height: 44,
@@ -1023,8 +1053,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bellButton: {
-    marginRight: 16,
-    padding: 4,
+    // 44 pt target; the glyph stays where it was (12 + 8 = 16 + 4).
+    marginRight: 12,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bellWrap: {
     position: 'relative',

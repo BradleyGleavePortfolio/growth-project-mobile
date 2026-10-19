@@ -18,6 +18,7 @@ const SIG = Buffer.from('0123456789abcdef0123456789abcdef').toString('base64').r
 const jwt = (role) => [b64url({ alg: 'HS256', typ: 'JWT' }), b64url({ iss: 'supabase', role }), SIG].join('.');
 const PK_LIVE = ['pk', 'live', '51AbCdEfGhIjKlMnOpQrStUvWx0123'].join('_');
 const PK_TEST = ['pk', 'test', '51AbCdEfGhIjKlMnOpQrStUvWx0123'].join('_');
+const SB_PUBLISHABLE = ['sb', 'publishable', 'AbCdEfGhIjKlMnOpQrStUv', 'a1B2c3D4'].join('_');
 const DSN = 'https://0123456789abcdef0123456789abcdef@o123.ingest.us.sentry.io/4507';
 const TOKEN = ['sntrys', 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6'].join('_');
 
@@ -29,7 +30,7 @@ const FILE_MARKER = '***** (This is a file env variable. To access it, run comma
 const GOOD = {
   EXPO_PUBLIC_API_URL: 'https://api.trygrowthproject.com/api',
   EXPO_PUBLIC_SUPABASE_URL: 'https://abcdefghijkl.supabase.co',
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: jwt('anon'),
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: SB_PUBLISHABLE,
   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: PK_LIVE,
   EXPO_PUBLIC_SENTRY_DSN: DSN,
   [F]: 'true',
@@ -72,12 +73,11 @@ function writeDist(dir, { platforms = ['ios', 'android'], debugId = true, mtime,
 }
 
 /**
- * Injected runner. `lookup` answers env:get, `list(scope)` answers env:list,
+ * Injected runner. `list(scope, environment, opts)` answers env:list,
  * `publish` answers eas update (and may write dist/), `upload` answers the
- * Sentry upload child.
+ * Sentry upload child. Any other command (env:get included) throws.
  */
 function harness({
-  lookup = () => ({ status: 0, stdout: `${F}=true\n` }),
   list = (scope) => ({ status: 0, stdout: scope === 'project' ? REMOTE_OK : EMPTY_SCOPE }),
   publish = () => ({ status: 0 }),
   upload = () => ({ status: 0 }),
@@ -86,8 +86,7 @@ function harness({
   const run = jest.fn((cmd, args, opts) => {
     calls.push({ cmd, args, env: opts && opts.env, capture: !!(opts && opts.capture) });
     if (cmd === process.execPath) return upload(args, opts);
-    if (args[1] === 'env:get') return lookup(opts);
-    if (args[1] === 'env:list') return list(args[args.indexOf('--scope') + 1], args[2]);
+    if (args[1] === 'env:list') return list(args[args.indexOf('--scope') + 1], args[2], opts);
     if (args[1] === 'update') return publish(args, opts);
     throw new Error(`unexpected command ${args.join(' ')}`);
   });
@@ -175,11 +174,6 @@ describe('eas-update-guard', () => {
   });
 
   describe('purchase gate', () => {
-    it('the hide flag must be exactly "true" in the EAS environment', () => {
-      expect(guard.checkEnvValue('true')).toEqual([]);
-      for (const v of [undefined, '', 'false', '1', 'TRUE']) expect(guard.checkEnvValue(v).join()).toMatch(/must be exactly "true"/);
-    });
-
     it('the committed purchase-policy lock matches src/config/purchaseSurfaces.ts (edits need a reviewed lock bump)', () => {
       expect(guard.checkPolicyHash()).toEqual([]);
     });
@@ -215,44 +209,53 @@ describe('eas-update-guard', () => {
     });
   });
 
-  describe('main(): the remote EAS record is the only source of truth for the hide flag (re-audit B2)', () => {
-    const ok = (stdout, stderr = '') => () => ({ status: 0, stdout, stderr });
+  describe('main(): the remote EAS records are the only source of truth for the hide flag (re-audit B2)', () => {
+    // The project scope lists GOOD with the flag set to `value` (undefined: absent); the account scope lists `account`.
+    const flag = (value, account = EMPTY_SCOPE) => (scope) => {
+      const { [F]: _flag, ...rest } = GOOD;
+      return { status: 0, stdout: scope === 'project' ? lines(value === undefined ? rest : { ...rest, [F]: value }) : account };
+    };
     it.each([
-      ['remote missing (eas-cli logs "not found" and exits 0), local true', ok('', 'Variable with name "X" not found')],
-      ['remote missing with empty output, local true', ok('')],
-      ['remote empty value, local true', ok(`${F}=\n`)],
-      ['remote false, local true', ok(`${F}=false\n`)],
-      ['remote masked (sensitive), local true', ok(`${F}=${SENSITIVE_MARKER}\n`)],
-      ['duplicate/ambiguous records, local true', ok(`${F}=true\n${F}=false\n`)],
-      ['lookup failed (secret / network / auth)', () => ({ status: 1, stdout: '', stderr: 'boom' })],
-      ['lookup could not spawn', () => ({ status: null, error: new Error('ENOENT') })],
-    ])('refuses and never publishes: %s', (_label, lookup) => {
-      const h = harness({ lookup });
-      const { code } = runMain(PROD, { h, env: { [F]: 'true', PATH: '/bin' } });
+      ['missing in both scopes', flag(undefined), new RegExp(`^${F} is unset in the bundle this update would ship`)],
+      ['empty', flag(''), new RegExp(`^${F} is empty in the bundle`)],
+      ['false', flag('false'), new RegExp(`^${F} holds a value other than "true" \\(not printed\\) in the bundle`)],
+      ['sensitive and not revealed', flag(SENSITIVE_MARKER), /: the project-scope EAS variable in "production" is sensitive and was not revealed/],
+      ['secret (EAS builders only)', flag(SECRET_MARKER), /: the project-scope EAS variable in "production" has secret visibility/],
+      ['true in the project but false in the account', flag('true', `${F}=false`), new RegExp(`^${F} is set 2 times`)],
+      ['missing in the project and false in the account', flag(undefined, `${F}=false`), /account-scope EAS variable in "production" holds a different value/],
+      ['unknown because the listing failed', () => ({ status: 1, stdout: '', stderr: 'auth' }), new RegExp(`neither ${F}="true" nor eas\\.json build\\.production\\.env parity can be confirmed \\(fails closed\\)`)],
+    ])('refuses and never publishes when the EAS flag is %s, even with the flag exported locally', (_label, list, re) => {
+      const h = harness({ list });
+      const { code, logs } = runMain(PROD, { h, env: { [F]: 'true', PATH: '/bin' } });
       expect(code).toBe(1);
       expect(h.published()).toBe(false);
+      expect(logs.some((m) => re.test(m))).toBe(true);
     });
 
-    it('the lookup child never sees a locally exported flag, and the queries name the environment explicitly', () => {
-      let seenEnv;
-      const dist = path.join(tmpDir('tgp-guard-dist-'), 'dist');
+    it('device-loop run 38968985863: an npx "not found and will be installed" notice on stderr is not an EAS answer', () => {
+      const npxNotice = `npm warn exec The following package was not found and will be installed: ${guard.EAS_CLI}`;
+      const h = harness({ list: (scope) => ({ status: 0, stdout: scope === 'project' ? REMOTE_OK : EMPTY_SCOPE, stderr: npxNotice }) });
+      const { code, logs } = runMain([...PROD, '--dry-run'], { h, env: { PATH: '/bin', CI: 'true' } });
+      expect(code).toBe(0);
+      expect(logs.join('\n')).toMatch(/all checks passed/);
+    });
+
+    it('every lookup runs the pinned eas-cli without the local flag and names the environment; env:get is never used', () => {
+      const seen = [];
       const h = harness({
-        lookup: (opts) => {
-          seenEnv = opts.env;
-          return { status: 0, stdout: `${F}=true\n` };
-        },
-        publish: () => {
-          writeDist(dist);
-          return { status: 0 };
+        list: (scope, _environment, opts) => {
+          seen.push(opts.env);
+          return { status: 0, stdout: scope === 'project' ? REMOTE_OK : EMPTY_SCOPE };
         },
       });
-      expect(runMain(PROD, { h, dist, env: { [F]: 'true', PATH: '/bin' } }).code).toBe(0);
-      expect(Object.prototype.hasOwnProperty.call(seenEnv, F)).toBe(false);
-      expect(h.calls.find((c) => c.args[1] === 'env:get').args).toEqual(['eas-cli', 'env:get', 'production', '--variable-name', F, '--format', 'short', '--scope', 'project', '--non-interactive']);
-      expect(h.calls.filter((c) => c.args[1] === 'env:list').map((c) => c.args)).toEqual([
-        ['eas-cli', 'env:list', 'production', '--format', 'short', '--scope', 'project', '--include-sensitive'],
-        ['eas-cli', 'env:list', 'production', '--format', 'short', '--scope', 'account', '--include-sensitive'],
+      expect(runMain([...PROD, '--dry-run'], { h, env: { [F]: 'true', PATH: '/bin' } }).code).toBe(0);
+      expect(guard.EAS_CLI).toMatch(/^eas-cli@\d+\.\d+\.\d+$/);
+      expect(h.calls.map((c) => [c.cmd, ...c.args])).toEqual([
+        ['npx', guard.EAS_CLI, 'env:list', 'production', '--format', 'short', '--scope', 'project', '--include-sensitive'],
+        ['npx', guard.EAS_CLI, 'env:list', 'production', '--format', 'short', '--scope', 'account', '--include-sensitive'],
       ]);
+      expect(seen).toHaveLength(2);
+      for (const e of seen) expect(Object.prototype.hasOwnProperty.call(e, F)).toBe(false);
     });
 
     it('mismatched environment and a local non-true flag refuse before any EAS call', () => {
@@ -272,9 +275,9 @@ describe('eas-update-guard', () => {
     it('publishes with --environment, source maps and metadata, without the local flag, then uploads the maps to Sentry', () => {
       const { code, h, logs } = runMain(PROD, { env: { PATH: '/bin', [F]: 'true' } });
       expect(code).toBe(0);
-      expect(h.kinds()).toEqual(['env:get', 'env:list', 'env:list', 'update', 'upload']);
+      expect(h.kinds()).toEqual(['env:list', 'env:list', 'update', 'upload']);
       const pub = h.calls.find((c) => c.args[1] === 'update');
-      expect(pub.args).toEqual(['eas-cli', 'update', '--channel', 'production', '--environment', 'production', '--message', 'fix', '--source-maps', 'true', '--emit-metadata']);
+      expect([pub.cmd, ...pub.args]).toEqual(['npx', guard.EAS_CLI, 'update', '--channel', 'production', '--environment', 'production', '--message', 'fix', '--source-maps', 'true', '--emit-metadata']);
       expect(Object.prototype.hasOwnProperty.call(pub.env, F)).toBe(false);
       expect(logs.some((m) => /expo\.updates\.update_id:abcdef00-1111-2222-3333-444455556666 \(ios, update group group-1\)/.test(m))).toBe(true);
     });
@@ -284,7 +287,9 @@ describe('eas-update-guard', () => {
       const { code, h } = runMain([...CLINIC, '--rollout-percentage', '10'], { env: parent });
       expect(code).toBe(0);
       const pub = h.calls.find((c) => c.args[1] === 'update');
-      expect(pub.args).toEqual(['eas-cli', 'update', '--channel', 'clinic', '--environment', 'production', '--message', 'fix', '--source-maps', 'true', '--emit-metadata', '--rollout-percentage', '10']);
+      // The channel forwarding is pinned by the production publish test above.
+      expect(pub.args.slice(0, 3)).toEqual([guard.EAS_CLI, 'update', '--channel']);
+      expect(pub.args.slice(4)).toEqual(['--environment', 'production', '--message', 'fix', '--source-maps', 'true', '--emit-metadata', '--rollout-percentage', '10']);
       expect(pub.env.PATH).toBe('/bin');
       expect(pub.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL).toBe('true');
       expect(pub.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBe('true');
@@ -297,7 +302,7 @@ describe('eas-update-guard', () => {
     it('--dry-run runs every check but never publishes or uploads', () => {
       const { code, h, logs } = runMain([...CLINIC, '--rollout-percentage', '25', '--dry-run']);
       expect(code).toBe(0);
-      expect(h.kinds()).toEqual(['env:get', 'env:list', 'env:list']);
+      expect(h.kinds()).toEqual(['env:list', 'env:list']);
       expect(logs.join('\n')).toMatch(/rollout 25%.*source maps would be uploaded to Sentry the-growth-project\/growth-project-mobile; dry run, nothing published/);
     });
   });
@@ -470,7 +475,7 @@ describe('eas-update-guard', () => {
       ['a secret-shaped public name', withProject({ ...GOOD, EXPO_PUBLIC_STRIPE_SECRET: 'abc' }), /EXPO_PUBLIC_STRIPE_SECRET looks like a secret/],
       ['a project variable turns a clinic flag off', withProject({ ...GOOD, EXPO_PUBLIC_FF_CLIENT_TUTORIAL: 'false' }), /EXPO_PUBLIC_FF_CLIENT_TUTORIAL is "true" in eas\.json build\.clinic\.env .* project-scope EAS variable in "production" holds a different value \(not printed\)/],
       ['an account variable differs from a clinic flag', (scope) => ({ status: 0, stdout: scope === 'account' ? 'EXPO_PUBLIC_FF_COMMUNITY_DM=true' : REMOTE_OK }), /EXPO_PUBLIC_FF_COMMUNITY_DM .* account-scope EAS variable .* holds a different value/],
-      ['the project list fails', (scope) => (scope === 'project' ? { status: 1, stdout: '', stderr: 'auth' } : { status: 0, stdout: '' }), /env:list production --scope project --include-sensitive failed .* Fix: run npx eas-cli login/],
+      ['the project list fails', (scope) => (scope === 'project' ? { status: 1, stdout: '', stderr: 'auth' } : { status: 0, stdout: '' }), /env:list production --scope project --include-sensitive failed .* Fix: run npx eas-cli@\d+\.\d+\.\d+ login/],
       ['the account list cannot spawn', (scope) => (scope === 'account' ? { status: null, error: new Error('ENOENT') } : { status: 0, stdout: REMOTE_OK }), /env:list production --scope account --include-sensitive failed/],
     ])('refuses and never publishes: %s', (_label, list, re) => {
       const h = harness({ list });
@@ -478,6 +483,23 @@ describe('eas-update-guard', () => {
       expect(code).toBe(1);
       expect(h.published()).toBe(false);
       expect(logs.some((m) => re.test(m))).toBe(true);
+    });
+
+    it('an update whose EAS Supabase key is a legacy anon JWT is refused on every channel, as the only problem, never printed', () => {
+      const legacy = jwt('anon');
+      const channels = guard.loadChannels(ROOT);
+      expect(Object.keys(channels)).toEqual(expect.arrayContaining(['preview', 'production', 'testing']));
+      for (const [channel, { environment }] of Object.entries(channels)) {
+        const argv = ['--channel', channel, '--environment', environment, '--message', 'fix'];
+        const h = harness({ list: withProject({ ...GOOD, EXPO_PUBLIC_SUPABASE_ANON_KEY: legacy }) });
+        const { code, logs } = runMain(argv, { h });
+        expect(code).toBe(1);
+        expect(h.published()).toBe(false);
+        expect(logs).toHaveLength(2);
+        expect(logs[0]).toMatch(new RegExp(`^EXPO_PUBLIC_SUPABASE_ANON_KEY is a legacy Supabase anon key \\(a JWT\\), and those keys are switched off for this project; .* in the bundle this update would ship to channel "${channel}" \\(value not printed\\)`));
+        expect(logs[1]).toBe('1 problem(s); nothing was published. Each line above names the variable and the fix.');
+        for (const m of logs) expect(m).not.toContain(legacy);
+      }
     });
 
     it('an ambiguous or unreadable name is reported once, not again as unset', () => {
@@ -510,7 +532,7 @@ describe('eas-update-guard', () => {
   describe('B-305-8: no diagnostic ever contains a configured value', () => {
     const CANARY = 'CANARY-7f3a9c-private';
     it.each([
-      ['remote hide flag', { lookup: () => ({ status: 0, stdout: `${F}=${CANARY}\n` }) }, {}],
+      ['remote hide flag', { list: (scope) => ({ status: 0, stdout: scope === 'project' ? lines({ ...GOOD, [F]: CANARY }) : EMPTY_SCOPE }) }, {}],
       ['local hide flag', {}, { [F]: CANARY }],
       ['remote parity mismatch', { list: (scope) => ({ status: 0, stdout: scope === 'project' ? `${REMOTE_OK}\nEXPO_PUBLIC_FF_COACH_BRIEF=${CANARY}` : EMPTY_SCOPE }) }, {}],
       ['shadowed values', { list: (scope) => ({ status: 0, stdout: scope === 'project' ? REMOTE_OK : `EXPO_PUBLIC_SUPABASE_URL=https://${CANARY}.supabase.co` }) }, {}],

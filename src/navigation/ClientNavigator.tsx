@@ -29,7 +29,6 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/client/HomeScreen';
 import HabitsScreen from '../screens/client/HabitsScreen';
 import LogScreen from '../screens/client/LogScreen';
-import PlanScreen from '../screens/client/PlanScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
 import RecipeDetailScreen from '../screens/client/RecipeDetailScreen';
 import GroceryListScreen from '../screens/client/GroceryListScreen';
@@ -61,14 +60,19 @@ import NotificationsScreen from '../screens/client/NotificationsScreen';
 import MessagesScreen from '../screens/client/MessagesScreen';
 import MessagesInboxScreen from '../screens/client/MessagesInboxScreen';
 import EducationScreen from '../screens/client/EducationScreen';
+import LearnScreen from '../screens/client/learn/LearnScreen';
+import LearnLessonScreen from '../screens/client/learn/LearnLessonScreen';
+import LearnGuidelinesScreen from '../screens/client/learn/LearnGuidelinesScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
+import YouScreen from '../screens/client/YouScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
 // Phase 7B — Transformation Timeline
 import TimelineScreen from '../screens/client/TimelineScreen';
+import TimelinePage from '../screens/client/timeline/TimelinePage';
 // Phase 7C — Peer Leaderboard
 import LeaderboardScreen from '../screens/client/LeaderboardScreen';
 import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
@@ -129,7 +133,7 @@ import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
 import WearablesShell from '../screens/client/wearables/WearablesShell';
 import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
 import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
-import { colors, typography } from '../theme/tokens';
+import { colors, lightTokens, typography } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 // v1-5 Community client tab. The whole stack + tab are gated behind
 // featureFlags.communityTab (default OFF). When the flag is OFF the tab is not
@@ -155,6 +159,7 @@ import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
 import { logger } from '../utils/logger';
 // S-SCHED — client Calendar tab (featureFlags.clientCalendar, default OFF).
 import CalendarHomeScreen from '../screens/client/calendar/CalendarHomeScreen';
+import CalendarWeekScreen from '../screens/client/calendar/CalendarWeekScreen';
 import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
@@ -179,7 +184,6 @@ const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen, OW
 const ProtectedWorkoutHistoryEditScreen = withProtectedScreen(WorkoutHistoryEditScreen, OWN);
 const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutViewerScreen, OWN);
 const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen, OWN);
-const ProtectedPlanScreen = withProtectedScreen(PlanScreen, OWN);
 const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen, OWN);
 const ProtectedFastingScreen = withProtectedScreen(FastingScreen, OWN);
 const ProtectedLogScreen = withProtectedScreen(LogScreen, OWN);
@@ -208,7 +212,7 @@ const TAB_BUTTON_PADDING = 5;
 
 export type HomeStackParamList = {
   HomeMain: undefined;
-  Habits: undefined;
+  Habits: { initialTab?: 'checkin' } | undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
   Messages: { openCoachCode?: boolean } | undefined;
@@ -220,6 +224,10 @@ export type HomeStackParamList = {
   ContactView: MoreStackParamList['ContactView'];
   /** C3B-S2: the Messages list (coach and Roman), opened from Home while Style B is on. */
   MessagesInbox: undefined;
+  /** #HEALTH-PAGES: the same Health page (and its two inner routes), opened from the rings Home. */
+  Health: MoreStackParamList['Health'];
+  WearableMetricDetail: MoreStackParamList['WearableMetricDetail'];
+  Connections: MoreStackParamList['Connections'];
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -277,7 +285,8 @@ export type MoreStackParamList = {
   // B-314-4: Community safety opens from member wins even when the
   // flag-gated Community tab (which has its own CommunitySafety route) is off.
   CommunitySafety: undefined;
-  Progress:    undefined;
+  /** logWeightAt: the Timeline's empty state opens the Log weight sheet (tap time, so each tap opens it). */
+  Progress:    { logWeightAt?: number } | undefined;
   ProfileMain: undefined;
   EditProfile: undefined;
   Settings:    undefined;
@@ -286,15 +295,17 @@ export type MoreStackParamList = {
   Widgets:     undefined;
   Report:      undefined;
   Learn:       undefined;
+  /** LEARN-A (flag learnHub): one lesson, and the guidelines page opened from Learn's Read all. */
+  LearnLesson: { id: string };
+  CoachGuidelines: undefined;
   GroceryList: undefined;
   ShoppingList: undefined;
   PrepGuide:   undefined;
-  Plan:        undefined;
   TrustCenter: undefined;
   DeleteAccount: undefined;
   /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
   RomanAiConsent: undefined;
-  /** B-SHARE-127: Settings > Privacy > Coach sharing (four toggles). */
+  /** B-SHARE-127: Settings > Privacy > Coach sharing (read-only: what the coach sees). */
   CoachSharing: undefined;
   /** Your conversations with Roman: list, open, delete (backend #635). Not behind the Roman chat flag. */
   RomanConversations: undefined;
@@ -374,8 +385,11 @@ export type MoreStackParamList = {
   BlockedUsers: undefined;
   /** Client-facing checkout for a coach's package share link. */
   PackageCheckout: { shareToken: string };
-  /** PR-HK-1-mobile — Wearable Connections Hub (manage health data sources). */
-  Connections: undefined;
+  /**
+   * PR-HK-1-mobile — Wearable Connections Hub (manage health data sources).
+   * A6: a cloud tracker's return link may carry a single-use ticket.
+   */
+  Connections: { ticket?: string; provider?: string; status?: string } | undefined;
   /** PR-HK-3a — Wearables bucket shell (Fitness | Recovery segmented switcher). */
   Health: { bucket?: 'fitness' | 'recovery' } | undefined;
   /** PR-HK-3a — shared metric drill-down (compare sources + glow-drag chart). */
@@ -389,19 +403,20 @@ export type MoreStackParamList = {
 // ─── Stack navigators ─────────────────────────────────────────────────────────
 
 /**
- * S-REACH: screens that used to be tabs (Plan, Progress) or had no menu entry
- * (ClientMacros, Habits, Timeline) draw their own title but no back control.
+ * S-REACH: screens that used to be tabs (Progress) or had no menu entry
+ * (ClientMacros, ClientDailyMealPlan, Habits, Timeline) draw their own title but no back control.
  * Opened from More they get a native header with only the back chevron, so
  * the way back is always visible and the safe area is respected.
  */
-function backOnlyHeader(title = '') {
+/** `onMasthead`: the C8 v2 Progress page starts on the deep forest masthead, so its bar does too (ForestStatusBar paints the inset). */
+function backOnlyHeader(title = '', onMasthead = false) {
   return {
     headerShown: true,
     title,
     headerBackTitle: 'Back',
     headerShadowVisible: false,
-    headerStyle: { backgroundColor: colors.bone },
-    headerTintColor: colors.ink,
+    headerStyle: { backgroundColor: onMasthead ? lightTokens.surface.masthead : colors.bone },
+    headerTintColor: onMasthead ? lightTokens.textOnAccent : colors.ink,
   } as const;
 }
 
@@ -410,6 +425,8 @@ const HomeStackNav  = createNativeStackNavigator<HomeStackParamList>();
 const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
 const MoreStackNav  = createNativeStackNavigator<MoreStackParamList>();
 const CalendarStackNav = createNativeStackNavigator<CalendarStackParamList>();
+// TIMELINE: the Style C page behind clientTimelineV2 (off); off, today's screen.
+const TimelineRoute = featureFlags.clientTimelineV2 ? TimelinePage : TimelineScreen;
 
 function CalendarStackNavigator() {
   return (
@@ -423,7 +440,7 @@ function CalendarStackNavigator() {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <CalendarStackNav.Screen name="CalendarHome" component={ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
+      <CalendarStackNav.Screen name="CalendarHome" component={featureFlags.clientCalendarV2 ? CalendarWeekScreen : ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
       <CalendarStackNav.Screen name="CalendarBook" component={ProtectedCalendarBookScreen} />
       <CalendarStackNav.Screen name="CalendarSession" component={ProtectedCalendarSessionScreen} />
     </CalendarStackNav.Navigator>
@@ -443,7 +460,7 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
-        {({ navigation }) => <ProtectedHabitsScreen onSaved={() => {
+        {({ navigation, route }) => <ProtectedHabitsScreen key={route.params?.initialTab ?? 'habits'} initialTab={route.params?.initialTab} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_checkin');
         }} />}
       </HomeStackNav.Screen>
@@ -463,6 +480,11 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         component={NotificationPreferencesScreen}
         options={{ headerShown: false }}
       />
+      {/* #HEALTH-PAGES: the rings Home opens the one Health page here, so its Back lands on Home (the You
+          row keeps its own, Back to You); its metric detail and Connections come along so no tap inside dead-ends. */}
+      <HomeStackNav.Screen name="Health" component={WearablesShell} />
+      <HomeStackNav.Screen name="WearableMetricDetail" component={MetricDetailScreen} />
+      <HomeStackNav.Screen name="Connections" component={ConnectionsScreen} />
     </HomeStackNav.Navigator>
   );
 }
@@ -482,7 +504,7 @@ function WorkoutStackNavigator() {
       <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} options={{ gestureEnabled: false }} />
       <WorkoutStackNav.Screen name="WorkoutHistoryEdit" component={ProtectedWorkoutHistoryEditScreen} />
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={ProtectedRoutineBuilderScreen} />
-      <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
+      <WorkoutStackNav.Screen name="CoachGuidelines" component={featureFlags.learnHub ? LearnGuidelinesScreen : CoachGuidelinesScreen} />
       {/* Mux video + exercise library v1. */}
       <WorkoutStackNav.Screen
         name="ExerciseLibrary"
@@ -518,7 +540,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <MoreStackNav.Screen name="MoreIndex"    component={MoreScreen} />
+      {/* C9-S1: the You home (MOCK-C9 Style C) behind featureFlags.youTabV2. */}
+      <MoreStackNav.Screen name="MoreIndex"    component={featureFlags.youTabV2 ? YouScreen : MoreScreen} />
       <MoreStackNav.Screen name="ProfileMain"  component={ProfileScreen} />
       <MoreStackNav.Screen name="EditProfile"  component={EditProfileScreen} />
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
@@ -529,8 +552,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
-      <MoreStackNav.Screen name="Progress" options={backOnlyHeader()}>
-        {({ navigation }) => <ProgressScreen onSaved={() => {
+      <MoreStackNav.Screen name="Progress" options={backOnlyHeader('', featureFlags.clientProgressV2)}>
+        {({ navigation, route }) => <ProgressScreen logWeightAt={route.params?.logWeightAt} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('logged_first_weight');
         }} />}
       </MoreStackNav.Screen>
@@ -538,8 +561,13 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="AddCoachCode" component={AddCoachCodeScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
       <MoreStackNav.Screen name="Report"       component={ReportScreen} />
-      <MoreStackNav.Screen name="Learn"        component={EducationScreen} />
-      <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="Learn"        component={featureFlags.learnHub ? LearnScreen : EducationScreen} />
+      {featureFlags.learnHub && (
+        <>
+          <MoreStackNav.Screen name="LearnLesson" component={LearnLessonScreen} />
+          <MoreStackNav.Screen name="CoachGuidelines" component={LearnGuidelinesScreen} />
+        </>
+      )}
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
@@ -551,7 +579,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
-      <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="Timeline"     component={TimelineRoute} options={backOnlyHeader()} />
       {/* Phase 7C — Peer Leaderboard (opt-in) */}
       <MoreStackNav.Screen name="Leaderboard"          component={LeaderboardScreen} />
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
@@ -579,8 +607,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           {() => <RomanChatScreen surface="client" />}
         </MoreStackNav.Screen>
       )}
-      {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
-      <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
+      {/* Phase 11 — Share Card. With featureFlags.shareSheetV2 (SHARE-A) the route goes: Share opens ShareSheet in place. */}
+      {featureFlags.shareSheetV2 ? null : <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />}
       {/* Phase 11 — Notification category preferences (push taxonomy). */}
       <MoreStackNav.Screen name="NotificationPreferences" component={NotificationCategoryPreferencesScreen} />
       {/* Full notification settings (Mute all, per-category switches) for client Settings. */}
@@ -597,7 +625,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           in a follow-up; route registration first so deep-links
           work today). */}
       <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets')} />
-      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} />
+      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. The old
@@ -820,7 +848,8 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
       <Tab.Screen
         name="MoreTab"
         options={{
-          tabBarAccessibilityLabel: 'Profile and more',
+          // C9-S1: the tab, the title and the screen reader all say You.
+          tabBarAccessibilityLabel: featureFlags.youTabV2 ? 'You' : 'Profile and more',
           title: 'You',
           tabBarIcon: ({ color }) => (
             <Ionicons name="person-outline" size={24} color={color} />

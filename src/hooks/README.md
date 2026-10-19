@@ -40,7 +40,9 @@ React hooks shared across screens. Two flavours: thin `useQuery` / `useMutation`
 | File | What it does |
 | --- | --- |
 | `useNetworkStatus.ts` | NetInfo wrapper + `isEffectivelyOnline` helper. Source of truth for `OfflineBanner` and the food-log queue flush. |
-| `useMessageOutbox.ts` | Style B messages outbox (`featureFlags.c3StyleB`, C3B-THREAD-R1). `useMessageOutboxDrain` (ClientNavigator) sends waiting messages on open, on reconnect and on return to the foreground, thread open or not; `useMessageOutbox` is the thread's live view of it. |
+| `useMessageOutbox.ts` | Style B messages outbox (`featureFlags.c3StyleB`, C3B-THREAD-R1; also `shareSendV1` for share cards, `outboxOn`). `useMessageOutboxDrain` (ClientNavigator) sends waiting messages on open, on reconnect and on return to the foreground, thread open or not; `useMessageOutbox` is the thread's live view of it. |
+| `useRefreshOnOpen.ts` | Re-reads a screen each time it is opened again: on a refocus ('focus') and on a return to the foreground while focused ('foreground'), the focus and foreground pattern of Home's header. The first focus (the mount) is skipped. Used by the rings Home and its tiles. |
+| `useDeviceHealthOnOpen.ts` | The rings Home's read of Apple Health or Health Connect on this phone into the server: once Home's connections are known, then on each return to the foreground, whichever tab is open (the Health screen reads on its own open). Quiet, one read at a time; new samples refetch the wearable reads, except after a sign-out or account switch; a failure logs one fixed line. |
 | `usePressFeedback.ts` | Animated press feedback (scale + opacity) for taps that don't otherwise haptic. |
 | `useFirstWinCelebration.ts` | One-shot orchestrator for the first-win modal — locks behind AsyncStorage so it only ever shows once. |
 

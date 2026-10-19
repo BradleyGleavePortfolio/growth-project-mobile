@@ -92,6 +92,15 @@ afterEach(() => {
 
 const tree = () => <QueryClientProvider client={queryClient}><HabitsScreen /></QueryClientProvider>;
 
+it('calendar entry opens the real today check-in form directly, including without a coach', async () => {
+  mockCoachId = undefined;
+  const r = await render(<QueryClientProvider client={queryClient}><HabitsScreen initialTab="checkin" /></QueryClientProvider>);
+  await waitFor(() => expect(r.getByText('Save check-in')).toBeTruthy());
+  await fireEvent.press(r.getByText('Save check-in'));
+  await waitFor(() => expect(mockSaveCheckIn).toHaveBeenCalledWith(expect.objectContaining({ date: TODAY })));
+  expect(r.queryByText('Drink water')).toBeNull();
+});
+
 it.each([undefined, 'coach-gate'])(
   'Day One only hears a confirmed habit tick (coach=%s)', async (coachId) => {
     mockCoachId = coachId;

@@ -4,14 +4,14 @@ import * as SQLite from 'expo-sqlite';
 // recipesDb / mealPlanDb / fastingDb / shoppingListDb were deleted in the
 // nutrition P0 cleanup — all four shipped as orphan code with zero call
 // sites from any screen. Recipes / shopping / fasting / meal-plans are
-// 100% server-driven via recipesApi / listsApi / fastingApi / mealTemplatesApi
-// + mealPlansApi. The CREATE TABLE statements for `recipes`, `meal_plans`,
+// 100% server-driven via recipesApi / listsApi / fastingApi / mealTemplatesApi.
+// The CREATE TABLE statements for `recipes`, `meal_plans`,
 // and `fasting_sessions` are retained below for older builds that may still
 // reference them; nothing in the current build writes to them.
 import { initWorkoutTables, seedExercisesIfNeeded } from './workoutDb';
 import { initNotificationsTable } from './notificationsDb';
 import { initHabitsTables } from './habitsDb';
-import { initEducationTables, seedLessonsIfNeeded } from './educationDb';
+import { initEducationTables } from './educationDb';
 import { initCommunityTables } from './communityDb';
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -183,7 +183,7 @@ export async function initDatabase(): Promise<void> {
   // code re-seeding 200 foods + 75 recipes (with hotlinked Unsplash URLs and
   // a malformed slug) on every cold start while no screen ever read the rows.
   // Foods and recipes are now fetched live via the server API.
-  await seedLessonsIfNeeded();
+  // seedLessonsIfNeeded removed (LEARN-A): no screen read the seeded rows; lessons come from GET /lessons.
   // seedCommunityIfNeeded() removed — community feed is now backend-driven (see useCommunityFeed).
   await seedExercisesIfNeeded();
 }

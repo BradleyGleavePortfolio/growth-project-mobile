@@ -1,14 +1,17 @@
 /**
- * Settings > Privacy > Coach sharing (B-SHARE-127). Failing before (#451, Sol
- * B-451-1): an absent owner_access read as false and the owner line was hidden.
- * FW-BODY B2 (failing on main): the screen said "Choose what your coach sees"
- * with no word that Apple Health / Health Connect data is outside the switches.
+ * Settings > Privacy > Coach sharing (B-SHARE-127, SHARE-UNWIND). Owner
+ * #SHARE-SIMPLE / #SHARE-JOIN: workouts, food logs, weigh-ins, check-ins and
+ * habits always reach the current coach, so the page has no switches, no
+ * owner-account line and writes nothing (POST /consent/revoke returns 410 for
+ * the four removed sharing scopes). It says
+ * what the coach sees and how new device data stops (Apple Health on iPhone,
+ * Health Connect on Android), with the Connected devices row.
  */
 import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Platform } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
@@ -22,121 +25,80 @@ jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: { get: (...a: unknown[]) => mockGet(...a), post: (...a: unknown[]) => mockPost(...a) },
 }));
-jest.mock('../../../utils/haptics', () => ({ lightTap: jest.fn(), warningTap: jest.fn() }));
 
-import { COACH_SHARING_SCOPES, parseCoachSharing } from '../../../api/coachSharingApi';
+import * as sharingApi from '../../../api/coachSharingApi';
 import CoachSharingScreen from '../CoachSharingScreen';
 
-type Row = { scope: string; granted: boolean; granted_at: string | null; revoked_at: string | null };
-const T = '2026-10-07T00:00:00Z';
-const none = (scope: string): Row => ({ scope, granted: false, granted_at: null, revoked_at: null });
-const on = (scope: string): Row => ({ scope, granted: true, granted_at: T, revoked_at: null });
-const body = (rows: Row[], extra: Record<string, unknown> = {}) => ({
-  data: { client_id: 'client-1', coach_id: 'coach-1', consents: [none('fitness.profile'), ...rows], ...extra },
+/** What GET /consent/me sends since backend #1061: the four as granted for the current coach. */
+const SCOPES = ['fitness.workouts', 'fitness.food_macros', 'fitness.body_metrics', 'fitness.habits_progress'];
+const consent = () => ({
+  data: { client_id: 'client-1', coach_id: 'coach-1', consents: SCOPES.map((scope) => ({ scope, granted: true })) },
 });
-const shared = (extra?: Record<string, unknown>) => body(COACH_SHARING_SCOPES.map(on), extra);
 const http400 = Object.assign(new Error('HTTP 400'), { response: { status: 400 } });
+const INTRO = 'Your coach sees your workouts, food logs, weigh-ins, check-ins and habits.';
+const devices = (health: string) =>
+  `Your coach also sees data from ${health} and other devices you connect. To stop new data, disconnect it in Connected devices or turn The Growth Project off in your phone's ${health} permissions. Data already shared stays with your coach.`;
 
-const OWNER = 'Your coach uses the TGP owner account, which can see these logs even when they are turned off here.';
-const OWNER_UNKNOWN =
-  'If your coach uses the TGP owner account, that account can see these logs even when they are turned off here.';
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockPost.mockResolvedValue({ data: {} });
+const originalOS = Platform.OS;
+const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
+beforeEach(() => jest.clearAllMocks());
+afterEach(() => {
+  setOS(originalOS);
+  mockHealthConnectBuild = false;
 });
 
-it('reads owner_access as true, false, or not reported (never assumed false)', () => {
-  expect(parseCoachSharing(shared().data)?.ownerAccess).toBeNull();
-  expect(parseCoachSharing(shared({ owner_access: true }).data)?.ownerAccess).toBe(true);
-  expect(parseCoachSharing(shared({ owner_access: false }).data)?.ownerAccess).toBe(false);
-  expect(parseCoachSharing(shared({ owner_access: 'yes' }).data)?.ownerAccess).toBeNull();
-  expect(parseCoachSharing(body([on('fitness.workouts')]).data)?.shared).toMatchObject({ 'fitness.workouts': true, 'fitness.food_macros': false });
+it('reads only the coach; the old switch writer and labels are gone', () => {
+  expect(sharingApi.parseCoachSharing(consent().data)).toEqual({ coachId: 'coach-1' });
+  expect(sharingApi.parseCoachSharing({ consents: [] })).toBeNull();
+  expect(Object.keys(sharingApi).filter((k) => /^(setCoachSharing|COACH_SHARING_(SCOPES|LABELS))$/.test(k))).toEqual([]);
 });
 
-it.each([
-  ['absent (current production): stated as a condition', {}, OWNER_UNKNOWN],
-  ['true: stated plainly', { owner_access: true }, OWNER],
-])('owner_access %s', async (_name, extra, line) => {
-  mockGet.mockResolvedValueOnce(shared(extra));
+it('says what the coach sees, with no switch, no owner-account line and no write', async () => {
+  setOS('ios');
+  mockGet.mockResolvedValueOnce(consent());
   await render(<CoachSharingScreen />);
-  expect(await screen.findByTestId('coach-sharing-owner-note')).toHaveTextContent(line);
+  expect(await screen.findByTestId('coach-sharing-intro')).toHaveTextContent(INTRO);
   expect(mockGet).toHaveBeenCalledWith('/consent/me');
-});
-
-it('owner_access false: no owner line', async () => {
-  mockGet.mockResolvedValueOnce(shared({ owner_access: false }));
-  await render(<CoachSharingScreen />);
-  expect(await screen.findByTestId('coach-sharing-state-fitness.workouts')).toHaveTextContent('Shared');
-  expect(screen.queryByTestId('coach-sharing-owner-note')).toBeNull();
-});
-
-it('turning a log off revokes that one scope; a failed save goes back with a specific line', async () => {
-  mockGet.mockResolvedValueOnce(shared({ owner_access: false }));
-  await render(<CoachSharingScreen />);
-  expect(await screen.findByTestId('coach-sharing-state-fitness.food_macros')).toHaveTextContent('Shared');
-  await fireEvent(screen.getByTestId('coach-sharing-toggle-fitness.food_macros'), 'valueChange', false);
-  await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/consent/revoke', { coach_id: 'coach-1', scope: 'fitness.food_macros' }));
-  expect(screen.getByTestId('coach-sharing-state-fitness.food_macros')).toHaveTextContent('Not shared');
-
-  mockPost.mockRejectedValueOnce(new Error('Network Error'));
-  await fireEvent(screen.getByTestId('coach-sharing-toggle-fitness.workouts'), 'valueChange', false);
-  expect(await screen.findByText('Workouts could not be updated. Check the connection and try again.')).toBeTruthy();
-  expect(screen.getByTestId('coach-sharing-state-fitness.workouts')).toHaveTextContent('Shared');
+  expect(screen.queryAllByTestId(/^coach-sharing-(toggle|state|owner)/)).toEqual([]);
+  expect(screen.queryAllByText(/Not shared|^Shared$|owner account|turned off|could not be updated/)).toEqual([]);
+  expect(screen.getByText(devices('Apple Health'))).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Connected devices'));
+  expect(mockNavigate).toHaveBeenCalledWith('Connections');
+  expect(mockPost).not.toHaveBeenCalled();
 });
 
 it('a failed load offers a retry; no coach says so', async () => {
   mockGet.mockRejectedValueOnce(new Error('Network Error'));
   const first = await render(<CoachSharingScreen />);
   expect(await screen.findByText('Coach sharing could not load. Check the connection and try again.')).toBeTruthy();
-  mockGet.mockResolvedValueOnce(shared({ owner_access: false }));
+  mockGet.mockResolvedValueOnce(consent());
   await fireEvent.press(screen.getByLabelText('Try again'));
-  expect(await screen.findByTestId('coach-sharing-state-fitness.workouts')).toHaveTextContent('Shared');
+  expect(await screen.findByTestId('coach-sharing-intro')).toHaveTextContent(INTRO);
   await first.unmount();
 
   mockGet.mockRejectedValueOnce(http400);
   await render(<CoachSharingScreen />);
   expect(await screen.findByText('Coach sharing applies once a coach is connected to this account.')).toBeTruthy();
+  expect(screen.queryByTestId('coach-sharing-intro')).toBeNull();
   expect(screen.queryByTestId('coach-sharing-devices')).toBeNull();
 });
 
-describe('connected devices: weight and body fat follow Weigh-ins, the rest is outside the switches (FW-BODY B2, WEIGHTWALL)', () => {
-  const DEVICES =
-    'Weight and body fat from connected devices, such as Apple Health and Health Connect, follow Weigh-ins. Your coach can see the other data they bring in, and it stays with your coach after you disconnect.';
-  const originalOS = Platform.OS;
-  const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
-  afterEach(() => {
-    setOS(originalOS);
-    mockHealthConnectBuild = false;
-  });
+it('the Connected devices target sits on the same More stack as Coach sharing (no dead row)', () => {
+  const nav = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'navigation', 'ClientNavigator.tsx'), 'utf8');
+  const more = Array.from(nav.matchAll(/<MoreStackNav\.Screen\s+name="(\w+)"/g), (m) => m[1]);
+  expect(more).toEqual(expect.arrayContaining(['CoachSharing', 'Connections']));
+});
 
-  it('says which logs the switches cover, states connected devices, and opens Connected devices', async () => {
-    setOS('ios');
-    mockGet.mockResolvedValueOnce(shared({ owner_access: false }));
-    await render(<CoachSharingScreen />);
-    expect(await screen.findByText('Choose which of these logs your coach sees. Each change saves right away.')).toBeTruthy();
-    expect(screen.queryByText('Choose what your coach sees. Each change saves right away.')).toBeNull();
-    expect(screen.getByText(DEVICES)).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Connected devices'));
-    expect(mockNavigate).toHaveBeenCalledWith('Connections');
-  });
-
-  it('the Connected devices target sits on the same More stack as Coach sharing (no dead row)', () => {
-    const nav = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'navigation', 'ClientNavigator.tsx'), 'utf8');
-    const more = Array.from(nav.matchAll(/<MoreStackNav\.Screen\s+name="(\w+)"/g), (m) => m[1]);
-    expect(more).toEqual(expect.arrayContaining(['CoachSharing', 'Connections']));
-  });
-
-  it.each([
-    ['an Android build with Health Connect: shown', true],
-    ['an Android build without Health Connect (More has no Connected devices row): hidden', false],
-  ])('%s', async (_name, healthConnect) => {
-    setOS('android');
-    mockHealthConnectBuild = healthConnect;
-    mockGet.mockResolvedValueOnce(shared({ owner_access: false }));
-    await render(<CoachSharingScreen />);
-    expect(await screen.findByTestId('coach-sharing-state-fitness.workouts')).toHaveTextContent('Shared');
-    expect(screen.queryByText(DEVICES) != null).toBe(healthConnect);
-    expect(screen.queryByLabelText('Connected devices') != null).toBe(healthConnect);
-  });
+it.each([
+  ['an Android build with Health Connect: shown, naming Health Connect', true],
+  ['an Android build without Health Connect (More has no Connected devices row): hidden', false],
+])('%s', async (_name, healthConnect) => {
+  setOS('android');
+  mockHealthConnectBuild = healthConnect;
+  mockGet.mockResolvedValueOnce(consent());
+  await render(<CoachSharingScreen />);
+  expect(await screen.findByTestId('coach-sharing-intro')).toHaveTextContent(INTRO);
+  expect(screen.queryByText(devices('Health Connect')) != null).toBe(healthConnect);
+  expect(screen.queryAllByText(/Apple Health/)).toEqual([]);
+  expect(screen.queryByLabelText('Connected devices') != null).toBe(healthConnect);
 });

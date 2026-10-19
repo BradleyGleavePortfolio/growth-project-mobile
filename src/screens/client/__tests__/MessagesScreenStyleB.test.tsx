@@ -72,6 +72,7 @@ jest.mock('@react-navigation/native', () => ({
 
 import MessagesScreen from '../MessagesScreen';
 import { useMessageOutboxDrain } from '../../../hooks/useMessageOutbox';
+import { sendCardViaOutbox } from '../../../services/messageOutbox';
 
 function Host() {
   useMessageOutboxDrain();
@@ -515,5 +516,73 @@ describe('Style B motion and reach', () => {
     });
     walk(src);
     expect(hits.sort()).toEqual(['components/home/HomeHeaderActions.tsx', 'components/messaging/StyleBThread.tsx', 'config/featureFlags.ts', 'hooks/useMessageOutbox.ts', 'screens/client/MessagesScreen.tsx', 'services/messageOutbox.ts']);
+  });
+});
+
+describe('SHARE-B: shareSendV1 on, c3StyleB off: a card sent from the share sheet waits in this thread too and sends once', () => {
+  const CARD = { kind: 'weigh_in_run', value: 14, words: 'days in a row', from: '2026-10-04', to: '2026-10-17' } as const;
+  const KEY = 'card-key-1';
+  const cards = (u: U) => u.queryAllByLabelText(/^Shared progress: 14 days in a row/);
+  const keys = () => posts.map((p) => p.key);
+  beforeEach(() => {
+    Object.assign(featureFlags, { c3StyleB: false, shareSendV1: true });
+    // SHARE-BE stores a card-only message: no text, the card on the row.
+    postMock.mockImplementation(async (url: string, b: Record<string, string>, cfg?: { headers?: Record<string, string> }) => {
+      const res = await serverImpl(url, b, cfg);
+      const sent = (b as { card?: { snapshot: unknown } }).card;
+      return sent ? { data: { ...res.data, body: '', card: { card_type: 'share', snapshot: sent.snapshot } } } : res;
+    });
+  });
+  afterEach(() => Object.assign(featureFlags, { c3StyleB: true, shareSendV1: false }));
+
+  it('offline: saved with its snapshot and key, "Waiting to send" here, sent once on reconnect with the thread closed, once after the read', async () => {
+    NetInfo.__setState(OFF);
+    serve('net');
+    const u = await render(<App />);
+    await ready(u);
+    await act(async () => { await expect(sendCardViaOutbox('client-1', CARD, KEY)).resolves.toBe('waiting'); });
+    expect(await u.findByText('Waiting to send')).toBeTruthy();
+    expect(cards(u)).toHaveLength(1);
+    expect(JSON.parse((await AsyncStorage.getItem(OUTBOX)) ?? '[]')).toEqual([expect.objectContaining({ key: KEY, body: '', card: CARD })]);
+    await u.rerender(<App thread={false} />);
+    serve('ok');
+    await net(ON);
+    await waitFor(() => expect(delivered).toHaveLength(1));
+    expect(keys()).toEqual([KEY, KEY]); // the offline try and the delivery: one key, so the server keeps one
+    expect(await AsyncStorage.getItem(OUTBOX)).toBe('[]');
+    mockList.mockResolvedValue({ data: [row({ id: 'm1', sender_id: 'coach-9', body: 'from the coach' }),
+      row({ id: `srv-${KEY}`, sender_id: 'client-1', body: '', client_message_id: KEY, card: { card_type: 'share', snapshot: CARD } })] });
+    await u.rerender(<App />);
+    await ready(u);
+    await waitFor(() => expect(cards(u)).toHaveLength(1));
+    expect(u.queryByText('Waiting to send')).toBeNull();
+    expect(mockLegacySend).not.toHaveBeenCalled();
+  });
+
+  // Sol B1 (round 1): the tap needs neither Style B nor server v2 (v2 adds the long-press Send again, :582).
+  it.each([[false, true], [false, false], [true, true], [true, false]])('online failure (c3StyleB %s, server v2 %s): the sheet closed, "Not sent. Tap to send again" replays its key through the outbox, one card', async (styleB, v2) => {
+    Object.assign(featureFlags, { c3StyleB: styleB });
+    mockFlags.messaging_core_v2 = v2;
+    serve('net');
+    const u = await render(<App />);
+    await ready(u);
+    await act(async () => { await expect(sendCardViaOutbox('client-1', CARD, KEY)).resolves.toBe('failed'); });
+    serve('ok');
+    await fireEvent.press(await u.findByLabelText('Not sent. Tap to send again'));
+    await waitFor(() => expect(u.queryByLabelText('Not sent. Tap to send again')).toBeNull());
+    expect([keys(), delivered.length, cards(u).length]).toEqual([[KEY, KEY], 1, 1]);
+    expect(mockLegacySend).not.toHaveBeenCalled();
+  });
+
+  it('online failure, server v2 on: long press, Send again replays its key through the outbox, not the text send', async () => {
+    serve('net');
+    const u = await render(<App />);
+    await ready(u);
+    await act(async () => { await expect(sendCardViaOutbox('client-1', CARD, KEY)).resolves.toBe('failed'); });
+    serve('ok');
+    await menu(u, /^Shared progress: 14 days in a row/, 'Send again');
+    await waitFor(() => expect(u.queryByLabelText('Not sent. Tap to send again')).toBeNull());
+    expect([keys(), delivered.length, cards(u).length]).toEqual([[KEY, KEY], 1, 1]);
+    expect(mockLegacySend).not.toHaveBeenCalled();
   });
 });

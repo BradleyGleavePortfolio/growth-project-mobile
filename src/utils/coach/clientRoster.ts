@@ -2,16 +2,15 @@
  * UX-COACHLOOKUP-124 — pure helpers for the coach's Clients list.
  *
  * GET /coach/clients rows carry an optional `activity` block (latest logged
- * day per slice and check-ins waiting for review; each slice null when the
- * client has not shared it with this coach). Older servers send no block:
- * every helper here treats that as "unknown" and falls back to the join date.
+ * day and check-ins waiting for review). A current client's logs always reach
+ * their coach (owner #SHARE-SIMPLE, backend #1061). Older servers send no
+ * block: every helper here treats that as "unknown" and falls back to the
+ * join date.
  */
 import type { User } from '../../types';
 
 export interface ClientActivity {
-  /** False when the client shares no fitness slice with this coach. */
-  shared: boolean;
-  /** YYYY-MM-DD, latest day across the shared slices; null when none. */
+  /** YYYY-MM-DD, latest day the client logged anything; null when none. */
   lastActiveOn: string | null;
   checkInsToReview: number | null;
 }
@@ -32,7 +31,7 @@ export function rosterActivityFromWire(raw: unknown): ClientActivity | null {
   const review = typeof a.check_ins_to_review === 'number' && Number.isFinite(a.check_ins_to_review)
     ? Math.max(0, Math.floor(a.check_ins_to_review))
     : null;
-  return { shared: a.shared === true, lastActiveOn: day, checkInsToReview: review };
+  return { lastActiveOn: day, checkInsToReview: review };
 }
 
 export function rosterDisplayName(c: Pick<User, 'firstName' | 'lastName' | 'email'>): string {
@@ -87,7 +86,7 @@ function shortDay(day: string): string {
   return `${MONTHS[m - 1]} ${d}`;
 }
 
-/** Days without any shared log before a row reads as gone quiet. */
+/** Days without any log before a row reads as gone quiet. */
 export const QUIET_AFTER_DAYS = 3;
 
 export interface ActivityLine {
@@ -106,7 +105,6 @@ export function rosterActivityLine(c: RosterClient, today: Date = new Date()): A
     ? `Joined ${shortDay(c.createdAt.slice(0, 10))}`
     : 'Client';
   if (!a) return { text: joined, tone: 'muted' };
-  if (!a.shared) return { text: `${joined} · Logs not shared`, tone: 'muted' };
   if (!a.lastActiveOn) return { text: `${joined} · Nothing logged yet`, tone: 'quiet' };
   const n = daysAgo(a.lastActiveOn, today);
   if (n <= 0) return { text: 'Logged today', tone: 'ok' };

@@ -19,6 +19,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { layout } from '../theme/tokens';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const SCREEN_SRC = fs.readFileSync(
@@ -167,6 +169,10 @@ describe('Day1WinScreen — RTL mount', () => {
     const onComplete = jest.fn();
     const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
 
+    expect(StyleSheet.flatten(getByTestId('day1win-skip-button').props.style)).toMatchObject({
+      minHeight: layout.touchMin,
+      minWidth: layout.touchMin,
+    });
     await fireEvent.press(getByTestId('day1win-skip-button'));
     // The skip path runs maybeShowPackageSheet(undefined) which is async — it
     // reads the 24h-gate from MMKV and probes the packages endpoint. Both can
@@ -250,6 +256,7 @@ describe('Day1WinScreen — RTL mount', () => {
       await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
       expect(mockComplete.mock.calls).toEqual([[winType], [winType]]);
       expect(onComplete).not.toHaveBeenCalled();
+      expect(StyleSheet.flatten(r.getByTestId('day1win-continue-anyway-button').props.style).minHeight).toBe(layout.touchMin);
       await fireEvent.press(r.getByTestId('day1win-continue-anyway-button'));
       await waitFor(() => expect(onComplete).toHaveBeenCalledWith(undefined));
       expect(mockComplete).toHaveBeenCalledTimes(2);
@@ -293,6 +300,7 @@ describe('Day1WinScreen — RTL mount', () => {
       expect(getByTestId('day1win-complete-view')).toBeTruthy();
     });
 
+    expect(StyleSheet.flatten(getByTestId('day1win-continue-button').props.style).height).toBeGreaterThanOrEqual(layout.touchMin);
     await fireEvent.press(getByTestId('day1win-continue-button'));
     // handleContinue → maybeShowPackageSheet is async (MMKV + api.get).
     await waitFor(() => {

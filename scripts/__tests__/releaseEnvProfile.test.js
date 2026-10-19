@@ -29,7 +29,7 @@ const DSN = 'https://0123456789abcdef0123456789abcdef@o123.ingest.us.sentry.io/4
 const GOOD = {
   EXPO_PUBLIC_API_URL: 'https://api.trygrowthproject.com/api',
   EXPO_PUBLIC_SUPABASE_URL: 'https://abcdefghijkl.supabase.co',
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: jwt('anon'),
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: SB_PUBLISHABLE,
   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: PK_LIVE,
   EXPO_PUBLIC_SENTRY_DSN: DSN,
 };
@@ -96,9 +96,9 @@ describe('valueProblem', () => {
     ['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY', '*****', /placeholder/],
     ['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY', ['sk', 'live', 'x'].join('_'), /pk_live_ or pk_test_/],
     ['EXPO_PUBLIC_SUPABASE_ANON_KEY', jwt('service_role'), /SERVICE ROLE/],
-    ['EXPO_PUBLIC_SUPABASE_ANON_KEY', jwt('authenticated'), /role is not "anon"/],
+    ['EXPO_PUBLIC_SUPABASE_ANON_KEY', jwt('anon'), /legacy Supabase anon key/],
     ['EXPO_PUBLIC_SUPABASE_ANON_KEY', ['sb', 'secret', 'abc'].join('_'), /SECRET key/],
-    ['EXPO_PUBLIC_SUPABASE_ANON_KEY', 'abc.def', /expected a JWT/],
+    ['EXPO_PUBLIC_SUPABASE_ANON_KEY', 'abc.def', /not a complete Supabase publishable key/],
     ['EXPO_PUBLIC_API_URL', '   ', /unset or empty/],
   ])('%s = %j is rejected', (name, value, re) => {
     expect(guard.valueProblem(name, value, { stripe: 'any' })).toMatch(re);
@@ -113,8 +113,7 @@ describe('valueProblem', () => {
 });
 
 describe('B-333-2: incomplete or malformed credentials fail the release gate', () => {
-  const NOW = Date.UTC(2026, 9, 2);
-  const bad = (name, value, spec = { stripe: 'any' }) => guard.valueProblem(name, value, spec, NOW);
+  const bad = (name, value, spec = { stripe: 'any' }) => guard.valueProblem(name, value, spec);
   const STRIPE = 'EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY';
   const ANON = 'EXPO_PUBLIC_SUPABASE_ANON_KEY';
 
@@ -139,20 +138,21 @@ describe('B-333-2: incomplete or malformed credentials fail the release gate', (
     expect(bad(STRIPE, PK_TEST, { stripe: 'any' })).toBeUndefined();
   });
 
+  // The legacy JWT keys are switched off for this project (2026-10-19): every
+  // JWT-shaped value fails with one reason, however well formed it is.
   it.each([
-    ['empty header and signature', `.${b64url({ role: 'anon' })}.`, /three JWT parts must be non-empty base64url/],
-    ['empty signature', `${HEADER}.${b64url({ role: 'anon' })}.`, /three JWT parts must be non-empty base64url/],
-    ['empty header', `.${b64url({ role: 'anon' })}.${SIG}`, /three JWT parts must be non-empty base64url/],
-    ['a non-base64url character', `${HEADER}.${b64url({ role: 'anon' })}.${SIG}+`, /three JWT parts must be non-empty base64url/],
-    ['an impossible base64url length', `${HEADER}.${b64url({ role: 'anon' })}.${SIG}ab`, /three JWT parts must be non-empty base64url/],
-    ['a header that is not JSON', `${Buffer.from('not json').toString('base64url')}.${b64url({ role: 'anon' })}.${SIG}`, /header does not decode/],
-    ['an unsigned (alg none) header', `${b64url({ alg: 'none' })}.${b64url({ role: 'anon' })}.${SIG}`, /header does not decode/],
-    ['a header without alg', `${b64url({ typ: 'JWT' })}.${b64url({ role: 'anon' })}.${SIG}`, /header does not decode/],
-    ['a payload that is not a JSON object', `${HEADER}.${b64url([1, 2])}.${SIG}`, /payload does not decode/],
-    ['a short signature', `${HEADER}.${b64url({ role: 'anon' })}.c2lnbmF0dXJl`, /signature is too short/],
-    ['an expired token', jwt('anon', { exp: Math.floor(NOW / 1000) - 60 }), /expired Supabase anon key/],
-  ])('Supabase JWT: %s is rejected', (_label, value, re) => {
-    expect(bad(ANON, value)).toMatch(re);
+    ['a full anon JWT with a future exp', jwt('anon', { ref: 'abcdefghijkl', iat: 1700000000, exp: 2015000000 })],
+    ['an anon JWT without exp', jwt('anon')],
+    ['an expired anon JWT', jwt('anon', { exp: 1700000000 })],
+    ['an authenticated-role JWT', jwt('authenticated')],
+    ['empty header and signature', `.${b64url({ role: 'anon' })}.`],
+    ['an unsigned (alg none) header', `${b64url({ alg: 'none' })}.${b64url({ role: 'anon' })}.${SIG}`],
+    ['a short signature', `${HEADER}.${b64url({ role: 'anon' })}.c2lnbmF0dXJl`],
+    ['three parts that are not base64url', 'a+b.c d.e/f'],
+  ])('Supabase legacy JWT: %s is rejected as a legacy anon key', (_label, value) => {
+    expect(bad(ANON, value)).toBe(
+      'is a legacy Supabase anon key (a JWT), and those keys are switched off for this project; copy the publishable key (sb_publishable_...) from Supabase → Project Settings → API Keys',
+    );
   });
 
   it.each([
@@ -164,9 +164,9 @@ describe('B-333-2: incomplete or malformed credentials fail the release gate', (
     expect(bad(ANON, value)).toMatch(/not a complete Supabase publishable key/);
   });
 
-  it('Supabase: a full anon JWT with a future exp, and a hosted-format publishable key, pass', () => {
-    expect(bad(ANON, jwt('anon', { ref: 'abcdefghijkl', iat: 1700000000, exp: 2015000000 }))).toBeUndefined();
+  it('Supabase: only a complete publishable key passes (hosted format, or a longer self-hosted one)', () => {
     expect(bad(ANON, SB_PUBLISHABLE)).toBeUndefined();
+    expect(bad(ANON, ['sb', 'publishable', 'AbCd-EfGh_1234'.repeat(4)].join('_'))).toBeUndefined();
   });
 
   it('a service-role payload is still named SERVICE ROLE when the rest of the token is malformed, without its text', () => {
@@ -293,6 +293,21 @@ describe('checkReleaseEnv with a release profile', () => {
   it('preview accepts a Stripe test key and does not require Sentry', () => {
     const env = { ...GOOD, EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: PK_TEST, EXPO_PUBLIC_SENTRY_DSN: '' };
     expect(guard.checkReleaseEnv(ROOT, env, { profile: 'preview' }).errors).toEqual([]);
+  });
+
+  it('a legacy anon JWT fails every release profile with the legacy-key reason, never printing it', () => {
+    const legacy = jwt('anon', { exp: 2015000000 });
+    for (const profile of ['production', 'preview', 'testing']) {
+      const { errors } = guard.checkReleaseEnv(ROOT, { ...GOOD, EXPO_PUBLIC_SUPABASE_ANON_KEY: legacy }, { profile });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatch(new RegExp(`^EXPO_PUBLIC_SUPABASE_ANON_KEY is a legacy Supabase anon key \\(a JWT\\), and those keys are switched off for this project; .* for release profile "${profile}" \\(value not printed\\)`));
+      expect(errors[0]).not.toContain(legacy);
+    }
+    const r = cli(['--eas-hook'], { ...GOOD, EXPO_PUBLIC_SUPABASE_ANON_KEY: legacy, EAS_BUILD_PROFILE: 'production' });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('EXPO_PUBLIC_SUPABASE_ANON_KEY is a legacy Supabase anon key');
+    expect(r.stderr).toContain('1 problem(s)');
+    expect(r.stdout + r.stderr).not.toContain(legacy);
   });
 
   it('CLI: fails the build with fixes and never prints a value', () => {

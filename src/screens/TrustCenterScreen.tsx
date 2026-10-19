@@ -8,7 +8,7 @@
  *   values are gone (FW-ACCOUNT-128 U3), so nothing is fetched for it.
  * Section 2: User actions — data export + account deletion
  * Section 3: Bullet list — who has access, what's encrypted. The coach and
- *   Roman lines follow the real coach link and the Coach sharing switches
+ *   Roman lines follow the real coach link (no sharing switches; #SHARE-SIMPLE)
  *   (GET /consent/me, clients only; trustCenterSharing.ts, FW-ACCOUNT-128 U2).
  * Footer: Privacy Policy, Consumer Health Data Privacy Policy, Terms of
  *   Service, help centre.
@@ -317,7 +317,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
     track('trust_center_opened');
   }, []);
 
-  // Who can see your data: the server's coach link and Coach sharing switches
+  // Who can see your data: the server's coach link (no sharing switches)
   // (400 = no coach). A coach account has no coach and /consent is for
   // clients only, so nothing is read for it. If the read fails, the account's
   // own coach link decides whether a coach line shows at all.

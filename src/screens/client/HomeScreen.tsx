@@ -50,16 +50,16 @@ import {
   loadActiveWorkoutSession,
   type PersistedActiveWorkoutSession,
 } from '../../storage/activeWorkoutSession';
-import {
-  getProfileCompletion,
-  profileNudgeLine,
-  summarizeMissing,
-} from '../../lib/profileCompletion';
+import ProfileNudge from '../../components/home/ProfileNudge';
+import { useRefreshOnOpen } from '../../hooks/useRefreshOnOpen';
 import { getTodayString } from '../../utils/date';
 import { homeDateLine } from './homeDate';
 import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/workoutDoneToday';
 import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
+import { featureFlags } from '../../config/featureFlags';
+// UI-1 rings and tiles layout, behind featureFlags.clientHomeRings (off in every profile).
+import RingsHomeScreen, { type RingsWorkoutReads } from './home/RingsHomeScreen';
 
 // ─── Progress line ────────────────────────────────────────────────────────────
 
@@ -172,14 +172,18 @@ export default function HomeScreen() {
   // History or a pending coach assignment makes Continue useful. Only show
   // Explore once both reads confirm empty; a failed read keeps workouts reachable.
   const [workoutExists, setWorkoutExists] = useState<boolean | 'loading'>('loading');
+  const [workoutReads, setWorkoutReads] = useState<RingsWorkoutReads>({ history: null, assignments: null });
+  // UI-1 rings Home: a return to the foreground re-reads the workouts too (useRefreshOnOpen below).
+  const [foregrounds, setForegrounds] = useState(0);
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     if (!currentUser) return;
-    setWorkoutExists('loading');
+    // The rings Home keeps the verified Train dial and button while it re-reads (no flash on each open).
+    if (!featureFlags.clientHomeRings) setWorkoutExists('loading');
     (async () => {
       try {
         const [history, assignments, active] = await Promise.allSettled([
-          workoutApi.getAll(5),
+          workoutApi.getAll(featureFlags.clientHomeRings ? 20 : 5), // rings: a week of the client's own workouts
           workoutBuilderApi.listMyAssignments(),
           loadActiveWorkoutSession(currentUser.id),
         ]);
@@ -196,6 +200,10 @@ export default function HomeScreen() {
           setPendingAssignmentId(pending?.id ?? null);
           setHasCoachPlan(assignments.status === 'fulfilled' && assignments.value.some((assignment) => !!assignment.workout_plan));
           setActiveWorkout(savedWorkout);
+          setWorkoutReads({
+            history: history.status === 'fulfilled' ? rows : null,
+            assignments: assignments.status === 'fulfilled' ? assignments.value : null,
+          });
           setWorkoutExists(
             rows.length > 0 || !!pending || !!savedWorkout
             || history.status === 'rejected' || assignments.status === 'rejected',
@@ -212,12 +220,15 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, refreshing]));
+  }, [currentUser?.id, refreshing, foregrounds]));
 
   const workoutInProgress = !!activeWorkout;
   const dateLine = homeDateLine(today); // B34: "Thursday, 8 October", locale order
   const progressLine = buildProgressLine(mealsLogged, workoutDone, pendingPlanName, workoutInProgress);
   const workoutLabel = workoutInProgress ? 'Resume workout' : !workoutDone && pendingPlanName ? `Start ${pendingPlanName}` : 'Open Train';
+  const workoutHint = workoutInProgress
+    ? 'Opens your saved workout'
+    : !workoutDone && pendingPlanName ? 'Opens the assigned workout' : 'Opens Train';
 
   // The Food Log uses approximate ml because day reads round to ounces.
   const waterValue = !dayReady || !settingsLoaded || loadError ? '—' : settings.unit === 'kg'
@@ -298,6 +309,13 @@ export default function HomeScreen() {
       }
     }, [currentUser?.id, selectedDate]),
   );
+  // UI-1 rings Home: the day re-reads on every open, quietly (no pull spinner). On focus the effect above
+  // already re-reads a day the Food Log moved; a return to the foreground re-reads today and the workouts.
+  useRefreshOnOpen((why) => {
+    if (!featureFlags.clientHomeRings || !currentUser) return;
+    if (why === 'foreground') setForegrounds((n) => n + 1);
+    if (why === 'foreground' || selectedDate === getTodayString()) void loadDayData(currentUser.id, getTodayString());
+  });
 
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
@@ -341,32 +359,20 @@ export default function HomeScreen() {
     navigation.navigate('Log');
   };
 
-  const completion = getProfileCompletion(currentUser);
-  const showProfileNudge = !completion.isComplete && completion.missing.length > 0;
-  const missingSummary = showProfileNudge ? summarizeMissing(completion.missing) : '';
-  // B29: the sentence names what the missing answers change; targets only when a target input is missing and none are shown.
-  const profileLine = showProfileNudge
-    ? profileNudgeLine(completion.missing, { hasCoachPlan, hasTargets: !!calorieTarget && calorieTarget > 0 })
-    : '';
-
-  // Fire impression once per user/session combination so we can attribute
-  // cold-outbound conversion to nudge exposure later.
-  useEffect(() => {
-    if (showProfileNudge && currentUser?.id) {
-      track('profile_nudge_shown', {
-        missing_count: completion.missing.length,
-        percent_complete: completion.percentComplete,
-      });
-    }
-  }, [currentUser?.id, showProfileNudge, completion.missing.length, completion.percentComplete]);
-
-  const goToEditProfile = () => {
-    track('profile_edit_opened', { source: 'home_nudge' });
-    navigation.navigate('MoreTab', { screen: 'EditProfile' });
-  };
-
   if (!currentUser) {
     return <SkeletonScreen />;
+  }
+  if (featureFlags.clientHomeRings) {
+    return (
+      <RingsHomeScreen
+        day={{ ready: dayReady, error: loadError, retrying: isLoading || refreshing, calories: dailyTotals?.calories, calorieTarget,
+          protein: dailyTotals?.protein, carbs: dailyTotals?.carbs, fat: dailyTotals?.fat, proteinTarget, carbsTarget, fatTarget,
+          simple: macroMode === 'simple', waterOz }}
+        workout={{ exists: workoutExists, label: workoutLabel, hint: workoutHint, onContinue, hasCoachPlan, ...workoutReads }}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+      />
+    );
   }
 
   return (
@@ -428,9 +434,7 @@ export default function HomeScreen() {
             onPress={onContinue}
             accessibilityRole="button"
             accessibilityLabel={workoutLabel}
-            accessibilityHint={workoutInProgress
-              ? 'Opens your saved workout'
-              : !workoutDone && pendingPlanName ? 'Opens the assigned workout' : 'Opens Train'}
+            accessibilityHint={workoutHint}
             testID="home-continue-cta"
           >
             <Text style={{ ...typography.bodyMd, color: sc.textOnAccent }}>{workoutLabel}</Text>
@@ -495,31 +499,7 @@ export default function HomeScreen() {
         <CoachlessHomeSlot part="roman" />
         <PendingInviteBanner />
         <PushPermissionCard presentation="section" />
-        {showProfileNudge ? (
-          <Pressable
-            onPress={goToEditProfile}
-            accessibilityRole="button"
-            accessibilityLabel={`Complete your profile. Missing ${missingSummary}.`}
-            style={({ pressed }) => ({
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderColor: sc.border,
-              paddingVertical: 18,
-              minHeight: 44,
-              marginBottom: 24,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>
-              FINISH YOUR PROFILE
-            </Text>
-            <Text style={{ ...typography.body, color: sc.textPrimary }}>
-              {profileLine}
-            </Text>
-            <Text style={{ ...typography.bodySmall, color: sc.textMuted, marginTop: 6, fontVariant: ['tabular-nums'] }}>
-              {`${completion.percentComplete}% complete`}
-            </Text>
-          </Pressable>
-        ) : null}
+        <ProfileNudge hasCoachPlan={hasCoachPlan} hasTargets={!!calorieTarget && calorieTarget > 0} />
         <CoachIntroductionBanner />
         <FullMacrosIntroCard carbsG={carbsTarget} fatG={fatTarget} />
         <TutorialHomeSlot />

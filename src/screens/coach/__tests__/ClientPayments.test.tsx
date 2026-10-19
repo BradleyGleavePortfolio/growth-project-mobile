@@ -325,7 +325,7 @@ describe("entry and parity (COACH-PAY-M-130)", () => {
   const colors = {} as ThemeColors;
   const noop = () => undefined;
   const tab = (onOpenPayments?: () => void) => (
-    <SummaryTab profile={null} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }} foodShared={false} clientId="client-1"
+    <SummaryTab profile={null} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }} clientId="client-1"
       clientName="Jane" nudgeSuccess={false} onOpenMessages={noop} onOpenNudge={noop} onOpenMacrosReview={noop}
       onOpenWorkoutBuilder={noop} onOpenPayments={onOpenPayments} colors={colors} styles={makeStyles(colors)} />
   );
@@ -357,7 +357,7 @@ describe("entry and parity (COACH-PAY-M-130)", () => {
   it("the client page passes Payments only while coach_payment_actions is on; the route is registered once", () => {
     const src = (...p: string[]) => fs.readFileSync(path.resolve(__dirname, "..", "..", "..", ...p), "utf8");
     expect(src("screens", "coach", "ClientDetailScreen.tsx")).toMatch(
-      /onOpenPayments=\{\s*serverFlags\.flags\.coach_payment_actions\s*\?\s*\(\) => navigation\.navigate\('ClientPayments', \{ clientId, clientName: route\.params\.clientName \}\)\s*:\s*undefined/,
+      /onOpenPayments=\{\s*serverFlags\.flags\.coach_payment_actions\s*\?\s*\(\) => navigation\.navigate\('ClientPayments', \{ clientId, clientName \}\)\s*:\s*undefined/,
     );
     const nav = src("navigation", "CoachNavigator.tsx");
     expect(nav.match(/name="ClientPayments"/g)).toHaveLength(1);

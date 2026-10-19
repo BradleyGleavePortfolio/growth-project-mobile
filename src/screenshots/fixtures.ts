@@ -13,6 +13,7 @@
  *    outcomes attributable to the app.
  */
 
+import type { ClientTodayResponse } from '../api/mealTemplatesApi';
 import type { CurrentUser } from '../hooks/useCurrentUser';
 import { bucketDateLocal } from '../utils/date';
 
@@ -142,22 +143,35 @@ export const DEMO_WEIGHT_HISTORY = (() => {
   return out;
 })();
 
-// ─── /meal-plans ─────────────────────────────────────────────────────────────
+// ─── /me/meal-plan/today (day plan) ──────────────────────────────────────────
 
-export const DEMO_MEAL_PLANS = [
-  {
-    id: 'plan-this-week',
-    title: 'This week — steady',
-    notes: 'Hitting protein first; carbs around training.',
-    created_at: '2026-04-29T15:00:00Z',
-    items: [
-      { name: 'Oats, berries, whey', calories: 410, protein: 32, time_of_day: 'breakfast', notes: 'Pre-set. Owned.' },
-      { name: 'Chicken, jasmine rice, greens', calories: 620, protein: 48, time_of_day: 'lunch', notes: 'Pre-set. Owned.' },
-      { name: 'Greek yogurt, almonds', calories: 240, protein: 22, time_of_day: 'snack', notes: 'Pre-set. Owned.' },
-      { name: 'Salmon, sweet potato, asparagus', calories: 640, protein: 42, time_of_day: 'dinner', notes: 'Pre-set. Owned.' },
-    ],
-  },
-];
+const DEMO_PLAN_ID = 'plan-this-week';
+const DEMO_PLAN_AT = '2026-04-29T15:00:00Z';
+const DEMO_PLAN_MEALS = [
+  ['breakfast', 'Oats, berries, whey', 410, 32, 52, 9],
+  ['lunch', 'Chicken, jasmine rice, greens', 620, 48, 70, 14],
+  ['snack', 'Greek yogurt, almonds', 240, 22, 12, 12],
+  ['dinner', 'Salmon, sweet potato, asparagus', 640, 42, 55, 24],
+] as const;
+
+export const DEMO_MEAL_PLAN_TODAY: ClientTodayResponse = {
+  date: '2026-04-29',
+  assignments: [{
+    id: 'assignment-this-week', daily_meal_plan_id: DEMO_PLAN_ID, client_id: DEMO_USER_ID,
+    assigned_by_coach_id: DEMO_COACH_ID, starts_on: '2026-04-29', ends_on: null, created_at: DEMO_PLAN_AT,
+    daily_meal_plan: {
+      id: DEMO_PLAN_ID, coach_id: DEMO_COACH_ID, name: 'This week — steady', created_at: DEMO_PLAN_AT, archived_at: null,
+      notes: 'Hitting protein first; carbs around training.',
+      slots: DEMO_PLAN_MEALS.map(([slot_label, name, calories_kcal, protein_g, carbs_g, fats_g], order) => ({
+        id: `slot-${order}`, daily_meal_plan_id: DEMO_PLAN_ID, meal_template_id: `meal-${order}`, slot_label, order,
+        meal_template: {
+          id: `meal-${order}`, coach_id: DEMO_COACH_ID, name, description: 'Pre-set. Owned.', calories_kcal,
+          protein_g, carbs_g, fats_g, fiber_g: null, items: null, created_at: DEMO_PLAN_AT, archived_at: null,
+        },
+      })),
+    },
+  }],
+};
 
 // ─── /recipes ────────────────────────────────────────────────────────────────
 
