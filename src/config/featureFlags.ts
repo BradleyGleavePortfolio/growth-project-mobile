@@ -649,7 +649,7 @@ export const featureFlags = {
   /**
    * Roman's line N7 ("Ask me as often as you like. Every conversation uses
    * your AI credits.") on the AI credit screens. It is true only once
-   * backend #971 (coaches have no daily Roman limit, NOLOCK-R3) is deployed,
+   * backend #1016 (coaches have no daily Roman number, NOLOCK-R3) is deployed,
    * so it has its own switch. OFF by default unconditionally.
    *
    * env: EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT

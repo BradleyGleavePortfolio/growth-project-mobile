@@ -17,7 +17,7 @@ export const CREDIT_SETUP_COPY = {
 /** The ink statement card: small label over the big amount. */
 export const CREDIT_USAGE_LABEL = 'AI Usage:';
 
-/** N7: shown only once backend #971 (no daily Roman limit for coaches) is live. */
+/** N7: shown only once backend #1016 (no daily Roman number for coaches) is live. */
 export const CREDIT_ROMAN_ASK = 'Ask me as often as you like. Every conversation uses your AI credits.';
 
 /** The explainer rows (label, then the line). */
