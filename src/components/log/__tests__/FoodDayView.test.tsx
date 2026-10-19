@@ -89,6 +89,38 @@ it('shows the coach plan as a checklist with the next meal ready to log', async 
   expect(screen.queryByText('Classic food log')).toBeNull();
 });
 
+// UI-3c (owner 10-19): a newer "Morning smoothies" plan on the same day as "Lean week 2", the newer one sent twice.
+const smoothies = { id: 'smoothies', name: 'Morning smoothies', notes: 'Blend it the night before.', slots: [
+  { id: 'm', slot_label: 'breakfast', order: 0, meal_template: template('Berry smoothie', 300) },
+] };
+const twoPlans = { date: today, assignments: [{ daily_meal_plan: smoothies }, { daily_meal_plan: { ...planDay.assignments[0].daily_meal_plan, id: 'lean' } },
+  { daily_meal_plan: smoothies }] };
+
+it('UI-3c: shows both plans in one checklist, each meal and note naming its plan, and logs each meal to its own plan', async () => {
+  serve(twoPlans);
+  const view = await show();
+  expect(await screen.findByText("Jordan's plans for today")).toBeTruthy();
+  expect([screen.getByText('Morning smoothies, 300 kcal, 30 g protein'), screen.getByText('Lean week 2, 1,210 kcal, 90 g protein')]).toBeTruthy();
+  expect(screen.getByText('Morning smoothies \u00B7 \u201CBlend it the night before.\u201D')).toBeTruthy();
+  expect(screen.getByText('Lean week 2 \u00B7 \u201CProtein first at lunch.\u201D')).toBeTruthy();
+  expect([screen.getByText('1 of 4 meals done'), screen.getByText('420 of 1,510 kcal')]).toBeTruthy();
+  expect(screen.getAllByText(/^(Berry smoothie|Overnight oats|Greek yogurt and berries|Salmon and rice)$/).map((t) => t.props.children))
+    .toEqual(['Berry smoothie', 'Overnight oats', 'Greek yogurt and berries', 'Salmon and rice']);
+  expect([screen.getByText('UP NEXT, BREAKFAST'), screen.getByText('Morning smoothies \u00B7 30 g protein, 20 g carbs, 5 g fat')]).toBeTruthy();
+  expect(screen.getByLabelText('Breakfast, 8:00 am. Overnight oats. Lean week 2. Logged as planned. 390 kcal')).toBeTruthy();
+  expect(screen.getAllByText('Lean week 2 \u00B7 30 g protein')).toHaveLength(2);
+  expect([screen.getByText('EXTRAS, NOT IN THE PLANS'), screen.getByText('1,540 kcal and 130 g protein.')]).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('food-day-primary'));
+  expect(props.onLogPlanned).toHaveBeenLastCalledWith(expect.objectContaining({ key: 'm', name: 'Berry smoothie', plan: 'Morning smoothies' }));
+  await fireEvent.press(screen.getByTestId('food-day-something-else'));
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast', { planSlotId: 'm' });
+  // The smoothie logged for its plan: both breakfasts are done, and the other plan's snack is up next.
+  await view.update({ foodLogs: [...logs, log('3', 'breakfast', 'Berry smoothie', 300, 'm')], eaten: { calories: 720, protein: 60 } });
+  expect([screen.getByText('2 of 4 meals done'), screen.getByText('Morning smoothies \u00B7 Logged as planned'), screen.getByText('UP NEXT, SNACK')]).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('food-day-something-else'));
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('snack', { planSlotId: 's' });
+});
+
 it('sends every tap to a real Food log path', async () => {
   serve(planDay);
   await show();

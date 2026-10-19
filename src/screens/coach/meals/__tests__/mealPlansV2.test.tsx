@@ -8,6 +8,7 @@ type Row = Record<string, any>;
 const mockDb = { meals: [] as Row[], plans: [] as Row[], assignments: [] as Row[], clients: [] as Row[], foods: [] as Row[], fail: {} as Record<string, unknown>, log: [] as string[] };
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn(), popTo: jest.fn(), dispatch: jest.fn() };
 let mockFlag = true;
+let mockFood = false;
 let mockGuard: ((e: { data: { action: unknown } }) => void) | undefined;
 let mockPick = new Date();
 
@@ -51,7 +52,7 @@ jest.mock('../../../../services/api', () => ({ __esModule: true, coachApi: { get
   post: (u: string, b: Row) => mockRoute('POST', u, b), patch: (u: string, b: Row) => mockRoute('PATCH', u, b), delete: (u: string) => mockRoute('DELETE', u) } }));
 jest.mock('../../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../../config/featureFlags');
-  return { ...actual, featureFlags: Object.defineProperty({ ...actual.featureFlags }, 'mealPlansV2', { get: () => mockFlag }) };
+  return { ...actual, featureFlags: Object.defineProperties({ ...actual.featureFlags }, { mealPlansV2: { get: () => mockFlag }, foodPlanChecklist: { get: () => mockFood } }) };
 });
 jest.mock('../../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: require('../../../../constants/colors').default,
   tokens: require('../../../../theme/tokens').default, semanticColors: require('../../../../theme/tokens').lightTokens }) }));
@@ -95,6 +96,7 @@ const long = (n: number) => day(n).toLocaleDateString('en-US', { weekday: 'short
 beforeEach(() => {
   jest.clearAllMocks();
   mockFlag = true;
+  mockFood = false;
   for (const k of ['selection', 'success', 'error', 'mediumImpact'] as const) jest.spyOn(HapticService, k).mockResolvedValue();
   mockDb.meals = [meal('m1', 'Overnight oats', 420, 24, 62, 9), meal('m2', 'Chicken rice bowl', 680, 52, 78, 14), meal('m3', 'Greek yogurt', 220, 20, 18, 6)];
   mockDb.plans = [
@@ -294,6 +296,24 @@ it('Assign: dates, the target line with no verdict, then success back on the bui
     { planId: 'p2', assigned: `Assigned to Jordan from ${day(0).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}.` }));
   expect(mockDb.assignments[mockDb.assignments.length - 1]).toMatchObject({ daily_meal_plan_id: 'p2', client_id: 'c2', starts_on: toIsoDate(day(0)), ends_on: toIsoDate(day(13)) });
   expect([haptic('mediumImpact').mock.calls.length, haptic('success').mock.calls.length]).toEqual([1, 1]);
+});
+
+it.each<[string, boolean, boolean, string]>([
+  ['two plans, Food checklist on', true, false, ' Leo now has Rest day and Training day. Both show on Leo\u2019s Food tab.'],
+  ['three plans, Food checklist on', true, true, ' Leo now has Light day, Training day and Rest day. All show on Leo\u2019s Food tab.'],
+  ['two plans, Food checklist off', false, false, ''],
+])('UI-3c: Leo is on Training day and gets one more plan (%s): the success line says he has them all and where they show', async (_, on, third, both) => {
+  mockFood = on;
+  if (third) {
+    mockDb.plans.push({ id: 'p3', coach_id: 'coach', name: 'Light day', notes: null, archived_at: null, slots: [slot('s4', 'm3', 'dinner', 0)] });
+    mockDb.assignments.push(assign('p2', 'c3'));
+  }
+  const s = await open(MealPlanAssign, { planId: third ? 'p3' : 'p2' });
+  await fireEvent.press(await s.findByTestId('client-c3'));
+  expect(await s.findByText('Leo is on Training day from Thu, Oct 1. On days both plans cover, Leo sees both.')).toBeTruthy();
+  await fireEvent.press(s.getByTestId('assign-submit'));
+  await waitFor(() => expect(mockNav.popTo).toHaveBeenCalledWith('DayPlanBuilder', { planId: third ? 'p3' : 'p2', assigned: `Assigned to Leo from ${long(0)}.${both}` }));
+  expect(haptic('success')).toHaveBeenCalledTimes(1);
 });
 
 it.each<[number, string, string]>([

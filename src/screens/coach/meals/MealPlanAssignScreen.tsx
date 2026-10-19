@@ -16,6 +16,8 @@ import { useAssignDailyMealPlan, useDailyMealPlan, useMealPlanRuns } from '../..
 import { useAssignableClients } from '../../../hooks/usePrograms';
 import { useCurrentMacrosForClient } from '../../../hooks/useMacros';
 import { toIsoDate } from '../../../api/programsApi';
+import { featureFlags } from '../../../config/featureFlags';
+import { joinNames } from '../../../utils/log/foodDay';
 import type { ProgramsScreenProps } from '../programs/types';
 import { Chips, FirstCard, LoadFailed, Loading, Masthead, Notice, count, covering, dayTotals, httpStatus, mealStyles as ms, num, saveFailed, sortedSlots } from './mealUi';
 
@@ -72,12 +74,16 @@ export default function MealPlanAssignScreen({ route, navigation }: ProgramsScre
   const blocked = !client || !p || !read || !!same;
 
   const submit = async () => {
-    if (blocked || !client) return;
+    if (blocked || !client || !p) return;
     void HapticService.mediumImpact();
+    // UI-3c (owner 10-19): the client's other plans on these days show with this one on their Food tab, so say so.
+    const others = [...new Map(mine.map((r) => [r.plan.id, r.plan.name])).values()];
+    const both = featureFlags.foodPlanChecklist && others.length > 0
+      ? ` ${first} now has ${joinNames([p.name, ...others])}. ${others.length > 1 ? 'All' : 'Both'} show on ${first}’s Food tab.` : '';
     try {
       await assign.mutateAsync({ planId, input: { client_id: client.id, starts_on: starts, ...(ends ? { ends_on: ends } : {}) } });
       void HapticService.success();
-      navigation.popTo('DayPlanBuilder', { planId, assigned: `Assigned to ${first} from ${fmt(starts)}.` });
+      navigation.popTo('DayPlanBuilder', { planId, assigned: `Assigned to ${first} from ${fmt(starts)}.${both}` });
     } catch {
       void HapticService.error();
     }

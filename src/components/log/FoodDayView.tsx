@@ -5,6 +5,8 @@
  * usual day" from the meals they repeat. Every tap reuses a Food log path owned by LogScreen (plan meal
  * log, repeat a past meal, the search sheet, the edit sheet), so basic self logging stays open in every
  * state. With nothing to build the day from, or the flag off, FoodDayGate renders the classic Food log.
+ * UI-3c (owner 10-19): every plan the server gives for the day shows in the one checklist, and with two
+ * or more each meal and each note names its plan.
  */
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -12,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api, { logApi } from '../../services/api';
-import { mealTemplatesApi } from '../../api/mealTemplatesApi';
+import { mealTemplatesApi, type DailyMealPlan } from '../../api/mealTemplatesApi';
 import HapticPressable from '../HapticPressable';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -22,10 +24,12 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { colors as palette, layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import type { FoodLog, MealType } from '../../types';
 import { addDays, getTodayString } from '../../utils/date';
-import { buildPlanDay, buildUsualDay, dayWord, loggedOn, nextSlot, weekday, type DaySlot, type PastDay } from '../../utils/log/foodDay';
+import { buildPlanDay, buildUsualDay, dayWord, joinNames, loggedOn, nextSlot, weekday, type DaySlot, type PastDay } from '../../utils/log/foodDay';
 import type { PlanLink } from '../../utils/log/planLink';
 
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
+const sumOf = (plan: DailyMealPlan, key: 'calories_kcal' | 'protein_g') =>
+  plan.slots.reduce((t, x) => t + (Number(x.meal_template[key]) || 0), 0);
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 const longDay = (date: string) =>
@@ -88,13 +92,18 @@ export default function FoodDayView(p: FoodDayViewProps) {
       return read.flatMap((r, i) => (r.status === 'fulfilled' ? [{ date: dates[i], entries: r.value.data?.entries ?? [] }] : []));
     },
   });
-  const assigned = plan.data?.assignments?.[0]?.daily_meal_plan;
+  // Every plan for the day, newest first as the server orders them; a plan assigned twice shows once.
+  const plans = useMemo(() => [...new Map((plan.data?.assignments ?? [])
+    .flatMap((a) => (a?.daily_meal_plan ? [[a.daily_meal_plan.id, a.daily_meal_plan] as const] : []))).values()]
+    .filter((x) => x.slots.length > 0), [plan.data]);
+  const assigned = plans[0];
+  const many = plans.length > 1;
   // Each food carries the plan or usual meal it was logged for (FOODLINK), so the day is rebuilt from the server's log.
   const day = useMemo(() => {
-    if (p.coached) return assigned && assigned.slots.length > 0 ? buildPlanDay(assigned, p.foodLogs) : null;
+    if (p.coached) return plans.length > 0 ? buildPlanDay(plans, p.foodLogs) : null;
     const usual = past.data ? buildUsualDay(past.data, p.foodLogs) : null;
     return usual && usual.slots.length > 0 ? usual : null;
-  }, [p.coached, assigned, past.data, p.foodLogs]);
+  }, [p.coached, plans, past.data, p.foodLogs]);
 
   // Until the day and the plan (or the past week) are read, the classic log stays open for logging.
   if (!p.ready || (p.coached ? plan.isLoading : past.isLoading)) return <>{p.fallback}</>;
@@ -123,6 +132,9 @@ export default function FoodDayView(p: FoodDayViewProps) {
   const onTarget = !!p.targets && Math.abs(restKcal - p.targets.calories) <= p.targets.calories * 0.05
     && Math.abs(restProtein - p.targets.protein) <= p.targets.protein * 0.05;
   const dayLabel = isToday ? `Today, ${longDay(p.selectedDate)}` : longDay(p.selectedDate);
+  // With two or more plans, a line that belongs to one plan starts with that plan's name.
+  const tagged = (x: { plan?: string }, rest: string | null) => (x.plan
+    ? <><Text style={s.planTag}>{x.plan}</Text>{rest ? ` \u00B7 ${rest}` : ''}</> : rest);
 
   const slotRow = (x: DaySlot) => {
     const isDone = x.logs.length > 0;
@@ -138,7 +150,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
       <View key={x.key}>
         <HapticPressable intent="light" disableAnimation disabled={!isDone} onPress={() => setOpen(expanded ? null : x.key)}
           accessibilityRole={isDone ? 'button' : undefined} accessibilityState={isDone ? { expanded } : undefined}
-          accessibilityLabel={`${label}. ${name}. ${sub}. ${kcal} kcal`}
+          accessibilityLabel={`${label}. ${name}. ${x.plan ? `${x.plan}. ` : ''}${sub}. ${kcal} kcal`}
           style={s.slot} testID={`food-day-slot-${x.key}`}>
           <View style={[s.ring, isDone ? s.ringDone : s.ringSoft]}>
             {isDone ? <Ionicons name="checkmark" size={14} color={sc.textOnAccent} /> : null}
@@ -146,7 +158,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
           <View style={s.grow}>
             <Text style={s.eyebrow}>{label.toUpperCase()}</Text>
             <Text style={s.slotName}>{name}</Text>
-            {sub ? <Text style={s.meta}>{sub}</Text> : null}
+            {sub || x.plan ? <Text style={s.meta}>{tagged(x, sub)}</Text> : null}
           </View>
           <Text style={s.kcal}>{kcal}</Text>
         </HapticPressable>
@@ -168,7 +180,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
         <Text style={[s.smallMuted, s.fixed]}>{n(x.kcal)} kcal</Text>
       </View>
       <Text style={s.nowName}>{x.name}</Text>
-      <Text style={s.smallMuted}>{x.usual ? loggedOn(x.usual.days, yesterday) : `${n(x.protein)} g protein, ${n(x.carbs)} g carbs, ${n(x.fat)} g fat`}</Text>
+      <Text style={s.smallMuted}>{x.usual ? loggedOn(x.usual.days, yesterday) : tagged(x, `${n(x.protein)} g protein, ${n(x.carbs)} g carbs, ${n(x.fat)} g fat`)}</Text>
       {x.foods.length > 0 ? (
         <View style={s.items}>
           {x.foods.map((f, i) => (
@@ -219,11 +231,15 @@ export default function FoodDayView(p: FoodDayViewProps) {
             <View style={s.headRow}>
               {initials ? <View style={s.avatar}><Text style={s.avatarText}>{initials}</Text></View> : null}
               <View style={s.grow}>
-                <Text style={s.smallMd}>{coachFirst ? `${coachFirst}'s plan${isToday ? ' for today' : ''}` : assigned.name}</Text>
-                <Text style={s.smallMuted}>{`${assigned.name}, ${n(total ?? 0)} kcal, ${n(day.slots.reduce((t, x) => t + x.protein, 0))} g protein`}</Text>
+                <Text style={s.smallMd}>{coachFirst ? `${coachFirst}'s plan${many ? 's' : ''}${isToday ? ' for today' : ''}` : joinNames(plans.map((x) => x.name))}</Text>
+                {plans.map((x) => (
+                  <Text key={x.id} style={s.smallMuted} testID={`food-day-plan-${x.id}`}>{`${x.name}, ${n(sumOf(x, 'calories_kcal'))} kcal, ${n(sumOf(x, 'protein_g'))} g protein`}</Text>
+                ))}
               </View>
             </View>
-            {assigned.notes?.trim() ? <Text style={[s.small, s.quote]}>{`\u201C${assigned.notes.trim()}\u201D`}</Text> : null}
+            {plans.map((x) => (x.notes?.trim() ? (
+              <Text key={x.id} style={[s.small, s.quote]}>{tagged({ plan: many ? x.name : undefined }, `\u201C${x.notes.trim()}\u201D`)}</Text>
+            ) : null))}
           </>
         ) : (
           <>
@@ -249,7 +265,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
 
       {/* An extra goes to the meal up next and never ticks a meal off: only "Something else" does that. */}
       <View style={s.sect}>
-        <Text style={s.eyebrow}>{isPlan ? 'EXTRAS, NOT IN THE PLAN' : 'EXTRAS'}</Text>
+        <Text style={s.eyebrow}>{isPlan ? `EXTRAS, NOT IN THE PLAN${many ? 'S' : ''}` : 'EXTRAS'}</Text>
         <TextLink label="Add" tone="accent" underline={false} testID="food-day-add"
           onPress={() => p.onSomethingElse(next?.mealType ?? 'snack')} />
       </View>
@@ -308,6 +324,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   avatar: { width: 36, height: 36, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.cream, borderWidth: 1, borderColor: palette.camel },
   avatarText: { ...typography.h4, fontFamily: typography.h2.fontFamily, color: sc.textPrimary },
   quote: { marginTop: 12 },
+  planTag: { fontFamily: typography.bodyMd.fontFamily, color: sc.accentText },
   segs: { flexDirection: 'row', gap: 4, marginTop: 12, marginBottom: 8 },
   seg: { flex: 1, height: 6, borderRadius: radius.chip, backgroundColor: sc.border, overflow: 'hidden', flexDirection: 'row', gap: 3 },
   segDone: { backgroundColor: sc.accent },
