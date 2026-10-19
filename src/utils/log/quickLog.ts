@@ -2,6 +2,7 @@ import { logApi } from '../../services/api';
 import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { SearchResult } from './types';
+import { planLink, type PlanLink } from './planLink';
 
 // Words in a search that describe the amount rather than the food
 // ("2 eggs", "150 g chicken"). They are ignored when matching foods the
@@ -57,7 +58,8 @@ export interface RepeatMealResult {
  * saved portion (same food item, same multiplier, same entered amount), so
  * the copied meal has the same calories and macros as the original.
  */
-export async function repeatPastMeal(meal: PastMeal, date: string, mealType: MealType): Promise<RepeatMealResult> {
+/** `link`: the plan meal or usual-day meal this repeat fills (FOODLINK), sent on every food. */
+export async function repeatPastMeal(meal: PastMeal, date: string, mealType: MealType, link?: PlanLink): Promise<RepeatMealResult> {
   const settled = await Promise.allSettled(
     meal.entries.map((e) =>
       logApi.logFood({
@@ -67,6 +69,7 @@ export async function repeatPastMeal(meal: PastMeal, date: string, mealType: Mea
         quantity_multiplier: e.quantityMultiplier,
         original_quantity: e.originalQuantity,
         original_unit: e.originalUnit,
+        ...planLink(link),
       }),
     ),
   );

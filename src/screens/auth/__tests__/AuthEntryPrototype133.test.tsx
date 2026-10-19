@@ -57,7 +57,7 @@ describe('Role (prototype 01)', () => {
   it('asks the prototype question with two radio rows; Continue waits for a choice', async () => {
     const ui = await renderRole();
     expect(ui.getByText('Welcome')).toBeTruthy();
-    expect(ui.getByText('How will you use The Growth Project?')).toBeTruthy();
+    expect(ui.getByText('How will you use TGP Fitness?')).toBeTruthy();
     expect(ui.getByText('A plan, daily targets and a coach who knows you.')).toBeTruthy();
     expect(ui.getByText('Your practice in one place: clients, programs and messages.')).toBeTruthy();
     expect(ui.getAllByRole('radio')).toHaveLength(2);

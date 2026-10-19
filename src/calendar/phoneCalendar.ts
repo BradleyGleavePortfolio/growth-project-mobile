@@ -52,7 +52,7 @@ export async function addSessionToPhoneCalendar(
           `${sessionKindLabel(session)} with ${coachName}.`,
           ...(link?.kind === 'video' ? [`Join: ${link.url}`] : []),
           ...(link?.kind === 'phone' ? [`Phone call: ${link.display}`] : []),
-          'Check The Growth Project for booking status. This calendar copy does not update automatically.',
+          'Check TGP Fitness for booking status. This calendar copy does not update automatically.',
         ].join('\n'),
         url: link?.url ?? undefined,
         alarms: [{ relativeOffset: -1440 }, { relativeOffset: -60 }],

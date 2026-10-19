@@ -73,6 +73,9 @@ jest.mock('../secureStorage', () => ({
   },
 }));
 
+jest.mock('../realtime', () => ({ refreshRealtimeAuth: jest.fn() }));
+const realtimeMock = jest.requireMock('../realtime') as { refreshRealtimeAuth: jest.Mock };
+
 const axiosMock = jest.requireMock('axios') as {
   __instance: {
     request: jest.Mock;
@@ -150,6 +153,7 @@ describe('api.ts — refresh-cycle race fix', () => {
 
   it('a) single 401 → one refresh, one retry, success', async () => {
     axiosMock.__instance.request.mockResolvedValueOnce({ status: 200, data: 'ok' });
+    realtimeMock.refreshRealtimeAuth.mockClear();
 
     const result = await handler(fake401({ url: '/profile' }));
 
@@ -164,6 +168,11 @@ describe('api.ts — refresh-cycle race fix', () => {
     expect(axiosMock.__instance.request).toHaveBeenCalledTimes(1);
     const retried = axiosMock.__instance.request.mock.calls[0][0];
     expect(retried.headers.Authorization).toBe('Bearer token-cycle-1');
+    // MSGRT-M: Realtime reads the new token once it is stored.
+    expect(realtimeMock.refreshRealtimeAuth).toHaveBeenCalledTimes(1);
+    expect(realtimeMock.refreshRealtimeAuth.mock.invocationCallOrder[0]).toBeGreaterThan(
+      secureStorageMock.secureStorage.setItem.mock.invocationCallOrder[0],
+    );
   });
 
   it('b) 5 concurrent 401s → ONE refresh call + 5 successful retries', async () => {

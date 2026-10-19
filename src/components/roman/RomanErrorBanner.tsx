@@ -22,7 +22,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import { romanGenericError } from '../../lib/roman/copy';
-import { colors, spacing, typography } from '../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../theme/tokens';
 
 export interface RomanErrorBannerProps {
   /**
@@ -65,7 +65,10 @@ export default function RomanErrorBanner({
           size={56}
           testID="roman-error-avatar"
         />
-      ) : null}
+      ) : (
+        // ROMAN-RADIUS: the error edge is a clipped child, so the 16 pt corner cuts it straight (a side border would curve).
+        <View style={styles.edge} testID="roman-error-edge" />
+      )}
       <Text
         style={isScreen ? styles.screenCopy : styles.toastCopy}
         accessibilityRole="text"
@@ -84,10 +87,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.cream,
-    borderRadius: 4,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.error,
+    borderRadius: radius.card,
+    overflow: 'hidden',
   },
+  edge: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.error },
   toastCopy: {
     ...typography.body,
     color: colors.ink,

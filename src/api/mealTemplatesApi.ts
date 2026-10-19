@@ -9,8 +9,8 @@
  *   src/real-meal-plans/real-meal-plans.controller.ts
  *   src/real-meal-plans/real-meal-plans.dto.ts
  *
- * The legacy `mealPlansApi` in src/services/api.ts targets a separate
- * (Sprint A) `/meal-plans/*` surface and is intentionally left alone.
+ * The app no longer calls the old (Sprint A) `/meal-plans/*` surface
+ * (MEALPLAN-RETIRE); this client is the only meal-plan path.
  */
 
 import api from '../services/api';

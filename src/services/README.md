@@ -15,6 +15,7 @@ Network, auth, observability, and offline-queue glue. The screens never call `ax
 
 | File | What it does |
 | --- | --- |
+| `pushNotifications.ts`, `pushTapRouter.ts`, `notificationsApi.ts` | Native push taps, foreground banners and inbox rows forward either URL field (`deepLink`, `deep_link`) to the shared incoming-link parser and existing role-aware queue. A meal-plan link replaces the generic inbox fallback, while specific safety-alert/booking actions keep their params. Complete URL trust is checked even for specific actions. Cold/warm URL opens wait for sign-in; push taps retain their existing signed-out drop and account binding. Untrusted origins are ignored; a trusted push URL without a mobile target retains its existing inbox fallback. No URL is blindly navigated or opened externally. |
 | `api.ts` | Axios instance, auth interceptor, single-flight refresh, all typed API surfaces (`authApi`, `profileApi`, `foodApi`, `logApi`, `aiApi`, `workoutApi`, `coachApi`, `messagesApi`, `nudgesApi`, `recipesApi`, `listsApi`, …). |
 | `api.ts` coach daily summary | `coachApi.getClientSummary(clientId, date?)` sends the existing `date` query, defaulting to the device calendar day from `getTodayString()`. Client detail passes that same day when mapping the returned food entries. This is a read-only query change; auth and consent handling are unchanged. |
 | `api.ts` water/fast removal | `waterApi.deleteEntry(id)` calls `DELETE /nutrition/water/:id`; `fastingApi.deleteFast(id)` calls `DELETE /fasting/:id`. Both use the existing authenticated instance and the deployed [backend #858](https://github.com/BradleyGleavePortfolio/growth-project-backend/pull/858) caller-owned deletion contract. `WaterEntry` describes the saved id, ml amount and logged date returned by water reads/adds. No new auth, flag or dependency. |
@@ -26,6 +27,7 @@ Network, auth, observability, and offline-queue glue. The screens never call `ax
 | `queryClient.ts` | The shared `QueryClient` plus an AsyncStorage-backed cache persister. Defaults: 30 s stale, 10 min gc, no focus refetch, 2 retries on read, 0 on mutate. |
 | `queryCacheCrypto.ts` | Seals every persisted query-cache blob with AES-256-GCM (`expo-crypto`) before it reaches AsyncStorage. The key is made on the phone and kept only in `expo-secure-store` (after first unlock, this device only). A blob that will not open is dropped and refetched; a plain blob from an older build is used once, removed, and rewritten sealed. If the key store is unavailable nothing is written. Android backup is off (`android.allowBackup: false` in `app.json`). |
 | `foodLogQueue.ts` | Offline queue for `POST /log/food`. Stored as a JSON array under `pending_food_logs`. Flushed by `RootNavigator` on offline → online. |
+| `messageOutbox.ts` | Style B messages outbox (`featureFlags.c3StyleB`, C3B-THREAD-R1; also `shareSendV1` for SHARE-B's share cards, `outboxOn`): the one ordered, keyed dispatcher for every client thread send. One at a time in the order written, each with its own `client_message_id` (the server dedupes on it); the first that fails holds the rest until tapped; a refusal that can never be accepted holds nothing (`refusal`: a deleted quote goes without it, anything else goes back to the composer on a tap). Saved per user in AsyncStorage as `messages_thread_outbox_<id>`; sign-out handles it like the food and workout queues (one bounded try, named in the confirm, then removed), so nothing waits across accounts. |
 | `refreshQueue.ts` | Single-flight refresh coordinator (currently unwired; `api.ts` has its own equivalent). Kept as a tested helper for a follow-up consolidation. |
 | `sentry.ts` | `initSentry`, `wrap`, `captureError`, `captureErrorWithoutPii` (same, but the event drops the signed-in user, request data and breadcrumbs via `stripPersonalData`), `setSentryUser`. No-ops when `EXPO_PUBLIC_SENTRY_DSN` is missing. |
 
@@ -47,8 +49,8 @@ Screen ──► api.<surface>.<method>(...)
             └─ otherwise ─► reject
 
 Realtime:
-  subscribeToMessages(userId, refetch) ─► channel `messages:<userId>`
-                                       └─► ping ─► caller refetches via REST
+  subscribeToMessages(userId, refetch) ─► private channel `messages:user:<userId>` (signed-in token)
+                                       └─► ping (debounced 1 s) ─► caller refetches via REST
 
 Food log offline:
   enqueueSearchLog / enqueueManualLog ─► AsyncStorage('pending_food_logs')
@@ -68,7 +70,7 @@ The header comment in `api.ts` is the canonical write-up. Short version:
 - One `refreshPromise` is in flight at a time. Concurrent 401s queue on it.
 - A refresh the sign-in service refuses (invalid, expired or revoked refresh token) signs out exactly once (`signOut()`, which emits `authEvents.emit('logout')`).
 - A refresh that gets no answer (no signal, a timeout, a gateway error, the sign-in service answering 429 or 5xx) never signs out (SESSION-KEEP-130): the waiting requests reject like a request with no answer ("Cannot reach server", no `response`), the stored session is kept and the next 401 tries the refresh again. Sign-out removes the workouts and foods still waiting on the phone, so it is never triggered by a weak signal.
-- A voluntary sign-out first makes one bounded try (4 s) to send the foods saved offline and the finished workouts waiting on the phone (`sendUnsyncedLogs`). The client Settings and Profile confirms come from `prepareSignOutConfirm`, which names anything still unsent, for example "2 workouts and 1 food have not synced yet and will be removed from this phone."; a second tap while it sends opens no second confirm. The sign-out after a refused refresh skips the send: that session can no longer send anything.
+- A voluntary sign-out first makes one bounded try (4 s) to send the foods saved offline, the finished workouts and the Style B coach messages waiting on the phone (`sendUnsyncedLogs`). The client Settings and Profile confirms come from `prepareSignOutConfirm`, which names anything still unsent, for example "2 workouts and 1 food have not synced yet and will be removed from this phone."; a second tap while it sends opens no second confirm. The sign-out after a refused refresh skips the send: that session can no longer send anything.
 - The `_retry` flag prevents an infinite loop if the retried request also returns 401.
 
 ## App-store / deep-link dependencies

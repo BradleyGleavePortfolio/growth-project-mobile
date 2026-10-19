@@ -10,8 +10,9 @@
  *   - Questions for coach
  *
  * One-tap action:
- *   - "Send check-in": navigates to ClientMessages with a templated
- *     check-in prefilled in the composer via `initialDraft` route param.
+ *   - "Send check-in": opens the client's chat (`openInboxChat`; in Messages
+ *     with the six tabs) with a templated check-in prefilled in the composer
+ *     via the `initialDraft` route param.
  *   FU-CHECKIN-126 (U-A13-7): the "Schedule call" button is gone. It only
  *   showed a "Booking integration pending" toast, because there is no
  *   coach-side "book a session for this client" screen to send it to.
@@ -37,6 +38,7 @@ import { layout, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import coachAiApi from '../../api/coachAi';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { openInboxChat } from '../../navigation/coachInbox';
 import type { Draft, InsightPayload } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
 
@@ -104,16 +106,9 @@ export default function ClientInsightScreen() {
     load();
   }, [load]);
 
-  const handleSendCheckIn = () => {
-    const initialDraft = buildCheckInTemplate(clientName, payload);
-    navigation.navigate('ClientMessages', {
-      clientId,
-      clientName,
-      // The composer reads this and prefills its input. Falls back to
-      // no-op if the screen has not been redeployed with the param.
-      initialDraft,
-    });
-  };
+  // The composer reads the draft and prefills its input.
+  const handleSendCheckIn = () =>
+    openInboxChat(navigation, clientId, clientName, buildCheckInTemplate(clientName, payload));
 
   if (loading) {
     return <SkeletonScreen count={6} />;

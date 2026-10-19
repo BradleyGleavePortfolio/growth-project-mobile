@@ -171,7 +171,6 @@ The following screens still use the static `colors` import or hardcoded hex valu
 - `LogScreen.tsx`
 - `ProfileScreen.tsx`
 - `WorkoutScreen.tsx`
-- `PlanScreen.tsx`
 - `RecipesScreen.tsx`
 - All coach-side screens under `src/screens/coach/`
 

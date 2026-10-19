@@ -10,10 +10,15 @@
  * (mounted with the client tabs) shows JoinPackageScreen. After "Not now",
  * Home shows "Finish joining <coach>" (FinishJoining) until it is paid.
  * Older backends send no join: nothing changes.
+ * FIX712: a paid join's package carries the server's `quote` (backend #1002,
+ * fresh on every attach call). A saved join never shows its saved quote; the
+ * screen re-reads the join when "Finish joining" reopens it (rereadJoin).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { z } from 'zod';
+import { authApi } from '../services/api';
 import { logger } from '../utils/logger';
+import { patchUserCache } from './userCache';
 
 const KEY = 'pending_join_package.v1';
 
@@ -43,7 +48,12 @@ export type JoinOutcome = z.infer<typeof JoinSchema>;
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let presented: JoinOutcome | null = null;
+/** A join to show, and whether "Finish joining" reopened it from the saved copy. */
+export interface PresentedJoin {
+  join: JoinOutcome;
+  resumed: boolean;
+}
+let presented: PresentedJoin | null = null;
 
 export function subscribeJoin(listener: Listener): () => void {
   listeners.add(listener);
@@ -80,9 +90,7 @@ export function presentJoinFrom(data: unknown): boolean {
   if (!join) return false;
   const replay = (data as { already_attached?: unknown }).already_attached === true;
   if (join.status === 'checkout_required') {
-    void AsyncStorage.setItem(KEY, JSON.stringify(join))
-      .catch((err: unknown) => logger.warn('JoinPackage', 'pending join save failed', err))
-      .then(notify);
+    keepPendingJoin(join);
   } else {
     void clearPendingJoin();
   }
@@ -90,14 +98,23 @@ export function presentJoinFrom(data: unknown): boolean {
   return true;
 }
 
-/** Opens the package screen for this join (JoinPackageHost, mounted with the client tabs). */
-export function showJoin(join: JoinOutcome): void {
-  presented = join;
+function keepPendingJoin(join: JoinOutcome): void {
+  void AsyncStorage.setItem(KEY, JSON.stringify(join))
+    .catch((err: unknown) => logger.warn('JoinPackage', 'pending join save failed', err))
+    .then(notify);
+}
+
+/**
+ * Opens the package screen for this join (JoinPackageHost, mounted with the
+ * client tabs). `resumed`: the saved join, reopened by "Finish joining".
+ */
+export function showJoin(join: JoinOutcome, resumed = false): void {
+  presented = { join, resumed };
   notify();
 }
 
 /** The join to show now (read once). */
-export function takePresentedJoin(): JoinOutcome | null {
+export function takePresentedJoin(): PresentedJoin | null {
   const join = presented;
   presented = null;
   return join;
@@ -108,9 +125,40 @@ export async function readPendingJoin(): Promise<JoinOutcome | null> {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return null;
     const parsed = JoinSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
+    if (!parsed.success) return null;
+    // The saved quote may be days old: never shown (the screen re-reads it).
+    const { quote: _stale, ...pkg } = parsed.data.package;
+    return { ...parsed.data, package: pkg };
   } catch (err) {
     logger.warn('JoinPackage', 'pending join read failed', err);
+    return null;
+  }
+}
+
+/**
+ * FIX712 — re-reads a saved join from the server: POST /auth/attach-invite-code
+ * with its code. For a paid join that call writes nothing (no attach, seat or
+ * ledger row) and answers the join with today's quote. If the coach has since
+ * made the code free or prepaid, it attaches the client and answers `granted`:
+ * a finished join (no payment). Never the coachless redeem, which writes a
+ * ledger and an audit row on every call. Null when the call fails or carries no
+ * join: the saved join is then shown without a quote.
+ */
+export async function rereadJoin(saved: JoinOutcome): Promise<JoinOutcome | null> {
+  try {
+    const res = await authApi.attachInviteCode(saved.code);
+    const coachId = (res?.data as { coach_id?: unknown } | undefined)?.coach_id;
+    if (typeof coachId === 'string' && coachId) {
+      await patchUserCache({ coach_id: coachId }).catch((err: unknown) =>
+        logger.warn('JoinPackage', 'user cache patch after re-read failed', err),
+      );
+    }
+    const join = joinOutcomeOf(res?.data);
+    if (join?.status === 'checkout_required') keepPendingJoin(join);
+    else if (join) await clearPendingJoin();
+    return join;
+  } catch (err) {
+    logger.warn('JoinPackage', 'pending join re-read failed', err);
     return null;
   }
 }

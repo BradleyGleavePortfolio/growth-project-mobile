@@ -134,12 +134,12 @@ describe('Login reconciles an unconfirmed coach signup (Sol B2-R3)', () => {
   });
 
   it('Google (server answer): recovered client is told before entering the app', async () => {
-    await rememberUnconfirmedCoachSignup('google', 'pat@gmail.com');
+    await rememberUnconfirmedCoachSignup('google', 'pat@mail.test');
     mockSignInWithGoogle.mockResolvedValue({
       success: true,
       server_confirmed: true,
       is_new_user: false,
-      user: { id: 'u1', email: 'Pat@gmail.com', role: 'student' },
+      user: { id: 'u1', email: 'Pat@mail.test', role: 'student' },
     });
     const utils = await renderLogin();
     await fireEvent.press(utils.getByText('Continue with Google'));
@@ -177,12 +177,12 @@ describe('Login reconciles an unconfirmed coach signup (Sol B2-R3)', () => {
   });
 
   it('unrelated identity (Google): another Google account signs in normally', async () => {
-    await rememberUnconfirmedCoachSignup('google', 'pat@gmail.com');
+    await rememberUnconfirmedCoachSignup('google', 'pat@mail.test');
     mockSignInWithGoogle.mockResolvedValue({
       success: true,
       server_confirmed: true,
       is_new_user: false,
-      user: { id: 'u2', email: 'someone@gmail.com', role: 'student' },
+      user: { id: 'u2', email: 'someone@mail.test', role: 'student' },
     });
     const utils = await renderLogin();
     await fireEvent.press(utils.getByText('Continue with Google'));
@@ -205,7 +205,7 @@ describe('Login reconciles an unconfirmed coach signup (Sol B2-R3)', () => {
       success: true,
       server_confirmed: false,
       is_new_user: true,
-      user: { id: 's1', email: 'pat@gmail.com', name: 'Pat' },
+      user: { id: 's1', email: 'pat@mail.test', name: 'Pat' },
     });
     const utils = await renderLogin();
     await fireEvent.press(utils.getByText('Continue with Google'));

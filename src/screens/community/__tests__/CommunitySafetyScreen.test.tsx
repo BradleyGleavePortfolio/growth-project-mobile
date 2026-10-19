@@ -69,7 +69,7 @@ const APPROVED_GUIDELINES = [
   'This space is not for emergencies. If you are in danger, call 911. If you are struggling emotionally, call or text 988.',
 ];
 const APPROVED_COMMITMENT =
-  'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you, and they are not told.';
+  'Reports are reviewed within 24 hours, every day, by your coach and the TGP Fitness team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you, and they are not told.';
 
 async function renderScreen() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

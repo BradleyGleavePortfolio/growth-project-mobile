@@ -1,6 +1,6 @@
 /**
  * Per-entry macro line in a Log meal section during the lighter first week
- * (clinic contract v1 addition 8).
+ * (onboarding contract v1 addition 8).
  */
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';

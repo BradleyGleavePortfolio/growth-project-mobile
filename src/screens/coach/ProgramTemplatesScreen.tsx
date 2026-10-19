@@ -20,6 +20,7 @@ import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { Screen } from '../../ui';
 import { radius } from '../../theme/tokens';
+import { CoachLessonsEntry } from './CoachLessons';
 
 // ── Program Templates ──────────────────────────────────────────────────────
 
@@ -155,6 +156,7 @@ export default function ProgramTemplatesScreen() {
               a client. Does not create a workout or meal plan — use Workout
               Builder or Meal Templates for those.
             </Text>
+            <CoachLessonsEntry />
           </View>
         </FadeInView>
 

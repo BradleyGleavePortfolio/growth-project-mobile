@@ -17,7 +17,9 @@ jest.mock('../../../screens/join/JoinPackageScreen', () => {
   const { Text } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: ({ join }: { join: { package: { name: string } } }) => <Text testID="join-package-probe">{join.package.name}</Text>,
+    default: ({ join, resumed }: { join: { package: { name: string } }; resumed?: boolean }) => (
+      <Text testID="join-package-probe" accessibilityHint={resumed ? 'resumed' : 'fresh'}>{join.package.name}</Text>
+    ),
   };
 });
 
@@ -53,6 +55,7 @@ it('a join handed over before the tabs mounted opens the package screen on mount
   expect(ui.queryByTestId('join-package-probe')).toBeNull(); // waits for a closing sheet
   const probe = await ui.findByTestId('join-package-probe', {}, { timeout: JOIN_SHEET_HANDOFF_MS * 4 });
   expect(probe.props.children).toBe('Strength coaching');
+  expect(probe.props.accessibilityHint).toBe('fresh'); // a join just answered is not re-read
 });
 
 it('after Not now Home offers Finish joining <coach>, which opens the package screen again', async () => {
@@ -63,7 +66,9 @@ it('after Not now Home offers Finish joining <coach>, which opens the package sc
   expect(await ui.findByText('Finish joining Bradley')).toBeTruthy();
   expect(ui.queryByTestId('join-package-probe')).toBeNull();
   fireEvent.press(ui.getByTestId('finish-joining-row'));
-  expect(await ui.findByTestId('join-package-probe', {}, { timeout: JOIN_SHEET_HANDOFF_MS * 4 })).toBeTruthy();
+  const probe = await ui.findByTestId('join-package-probe', {}, { timeout: JOIN_SHEET_HANDOFF_MS * 4 });
+  // FIX712: reopened from the saved join, so the screen re-reads it first.
+  expect(probe.props.accessibilityHint).toBe('resumed');
 });
 
 it('once the account has a coach (the purchase attached it) the row goes and the pending join clears', async () => {

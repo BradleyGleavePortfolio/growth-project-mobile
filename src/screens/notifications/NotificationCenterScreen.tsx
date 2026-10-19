@@ -35,7 +35,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from '../../services/notificationsApi';
-import { routeInAppNotification } from '../../services/pushTapRouter';
+import { routeInAppNotification, routePushTap } from '../../services/pushTapRouter';
 import { featureFlags } from '../../config/featureFlags';
 
 function relativeTime(iso: string): string {
@@ -65,6 +65,10 @@ export function routeNotification(
   nav: NavWithNavigate,
 ): void {
   const screen = notification.actionScreen;
+  if (notification.deepLink !== undefined) {
+    routePushTap(screen, notification.actionParams, undefined, notification.deepLink);
+    return;
+  }
   if (!screen) return;
   if (routeInAppNotification(screen, notification.actionParams)) return;
   if (screen === 'AIGuide') {

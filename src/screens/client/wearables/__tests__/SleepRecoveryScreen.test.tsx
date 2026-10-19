@@ -1,7 +1,7 @@
 /**
  * SleepRecoveryScreen — integration-ish tests with the samples hook + theme
  * mocked. Covers: empty state (anti-spinner), error state (typed + retry),
- * the reassurance-first deficit banner, and #8 bucket-param validation.
+ * the factual sleep-duration banner, and #8 bucket-param validation.
  */
 
 import React from 'react';
@@ -67,6 +67,31 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('SleepRecoveryScreen', () => {
+  it.each([
+    [180, '3h asleep'],
+    [420, '7h asleep'],
+    [0, 'Sleep stages appear once your tracker syncs a night'],
+  ])('shows a factual sleep headline for %i minutes', async (minutes, expected) => {
+    mockUseWearableSamples.mockReturnValue({
+      data: resp([
+        { metric: 'SLEEP_LIGHT_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(minutes)] },
+        { metric: 'SLEEP_AWAKE_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(30)] },
+      ]),
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      error: null,
+    });
+    const { getByTestId } = await render(<SleepRecoveryScreen />);
+    const headline = getByTestId('sleep-stages-headline').props.children as string;
+    expect(headline).toBe(expected);
+    expect(headline).not.toMatch(/\b(solid|restorative|good|great|poor|short)\b/i);
+    expect(mockUseWearableSamples).toHaveBeenCalledWith(
+      expect.not.objectContaining({ clientId: expect.anything() }),
+    );
+  });
+
   it('renders the empty state (NOT a spinner) when there is no data', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([]),
@@ -111,11 +136,51 @@ describe('SleepRecoveryScreen', () => {
     expect(refetch).toHaveBeenCalled();
   });
 
-  it('shows the reassurance-first deficit banner when sleep is under need', async () => {
+  it.each([
+    { minutes: 180, headline: '3h asleep', comparison: '5h below the 8h sleep reference' },
+    { minutes: 420, headline: '7h asleep', comparison: '1h below the 8h sleep reference' },
+    { minutes: 465, headline: '7h 45m asleep', comparison: '15 min below the 8h sleep reference' },
+  ])('reports $minutes minutes without a closeness judgment or score', async ({ minutes, headline, comparison }) => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([
-        { metric: 'RECOVERY_SCORE', unit: 'score', provider_used: 'OURA', sample_count: 1, samples: [s(70)] },
-        { metric: 'SLEEP_DURATION_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(420)] },
+        { metric: 'SLEEP_DURATION_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(minutes)] },
+      ]),
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      error: null,
+    });
+    const { getByTestId, getByLabelText } = await render(<SleepRecoveryScreen />);
+    const reassurance = getByTestId('phantom-calm-reassurance').props.children as string;
+    const deficit = getByTestId('phantom-calm-deficit').props.children as string;
+    expect(reassurance).toBe(headline);
+    expect(deficit).toBe(comparison);
+    expect(`${reassurance} ${deficit}`).not.toMatch(/\b(close|good|poor|ready|recovered|your sleep need)\b/i);
+    expect(getByLabelText(`${headline} ${comparison}`)).toBeTruthy();
+    expect(getByTestId('recovery-state-label').props.children).toBe('Recovery');
+  });
+
+  it.each([466, 480, 540])('keeps the duration banner hidden for %i minutes', async (minutes) => {
+    mockUseWearableSamples.mockReturnValue({
+      data: resp([
+        { metric: 'SLEEP_DURATION_MIN', unit: 'min', provider_used: 'OURA', sample_count: 1, samples: [s(minutes)] },
+      ]),
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      error: null,
+    });
+    const { queryByTestId } = await render(<SleepRecoveryScreen />);
+    expect(queryByTestId('phantom-calm-banner')).toBeNull();
+  });
+
+  it('uses the shared factual HRV and bedtime copy without a score', async () => {
+    mockUseWearableSamples.mockReturnValue({
+      data: resp([
+        { metric: 'HRV_MS', unit: 'ms', provider_used: 'OURA', sample_count: 3, samples: [s(60), s(62), s(40)] },
+        { metric: 'SLEEP_ONSET_ISO', unit: 'min', provider_used: 'OURA', sample_count: 3, samples: [s(1320), s(1350), s(1335)] },
       ]),
       isLoading: false,
       isError: false,
@@ -124,10 +189,11 @@ describe('SleepRecoveryScreen', () => {
       error: null,
     });
     const { getByTestId } = await render(<SleepRecoveryScreen />);
-    const reassurance = getByTestId('phantom-calm-reassurance').props.children as string;
-    const deficit = getByTestId('phantom-calm-deficit').props.children as string;
-    expect(reassurance).toMatch(/close/i);
-    expect(deficit).toMatch(/under your sleep need/);
+    expect(getByTestId('hrv-copy').props.children).toBe('Latest HRV reading: 40 ms');
+    expect(getByTestId('consistency-copy').props.children).toBe('Bedtimes span 30 min');
+    expect(mockUseWearableSamples).toHaveBeenCalledWith(
+      expect.not.objectContaining({ clientId: expect.anything() }),
+    );
   });
 
   it('renders the recovery hero with the score', async () => {

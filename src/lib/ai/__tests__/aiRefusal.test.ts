@@ -180,7 +180,7 @@ describe('aiRefusalCopy (owner copy rules)', () => {
       'guide',
     );
     expect(copy.title).toBe('AI help is paused by a service problem');
-    expect(copy.body).toContain('problem with The Growth Project service');
+    expect(copy.body).toContain('problem with the TGP Fitness service');
     expect(copy.body).toContain('Contact support');
     expect(copy.body).not.toContain('Settings');
     expect(copy.body).not.toMatch(/allow/i);

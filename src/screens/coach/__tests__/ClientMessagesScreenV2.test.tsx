@@ -9,6 +9,7 @@ import { Alert, Platform } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ClientMessagesScreen from '../ClientMessagesScreen';
 import api from '../../../services/api';
+import { featureFlags } from '../../../config/featureFlags';
 
 const originalOS = Platform.OS;
 beforeAll(() => {
@@ -66,6 +67,7 @@ jest.mock('@react-navigation/native', () => {
     ...actual,
     useNavigation: () => ({ goBack: mockGoBack, navigate: mockNavigate }),
     useRoute: () => ({ params: { clientId: 'client-1', clientName: 'Alice Smith' } }),
+    usePreventRemove: jest.fn(), // rendered outside a navigator
     useFocusEffect: (cb: () => () => void) => {
       const R = require('react');
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,6 +105,21 @@ const sentRow = (body: Record<string, unknown>) => ({
 });
 
 describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
+  it('the real coach adapter marks each draft and keeps non-drafts unmarked', async () => {
+    Object.defineProperty(featureFlags, 'romanDraftMark', { value: true });
+    mockRows.push(
+      row({ id: 'd1', sender_id: 'coach-1', body: 'First draft', ai_draft_id: 'draft1' }),
+      row({ id: 'd2', sender_id: 'coach-1', body: 'Edited draft', ai_draft_id: 'draft2', edited_at: recent }),
+      row({ id: 'voice', sender_id: 'coach-1', body: '', ai_draft_id: 'draft3', voice_url: 'voice.m4a' }),
+      row({ id: 'deleted', sender_id: 'coach-1', body: null, ai_draft_id: 'draft4', deleted: true }),
+    );
+    try {
+      const u = await render(<ClientMessagesScreen />);
+      await waitFor(() => expect(u.getAllByLabelText('Roman helped draft this message. You sent it.')).toHaveLength(2));
+      await fireEvent.press(u.getAllByTestId('roman-draft-mark')[0]);
+      expect(u.getByLabelText('Drafted by Roman')).toBeTruthy();
+    } finally { Object.defineProperty(featureFlags, 'romanDraftMark', { value: false }); }
+  });
   it('parity: shared quiet parts retain back, contact, copy and reply cancellation', async () => {
     const u = await render(<ClientMessagesScreen />);
     await u.findByLabelText(/Message: from the client/);
@@ -131,6 +148,8 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
     mockRows.push(row({ id: 'm4', sender_id: 'client-1', body: 'are you there', created_at: new Date().toISOString() }));
     const self = mockSubs.filter((x) => x.userId === 'coach-1').pop();
     expect(self).toBeTruthy();
+    // MSGRT: only the coach's own topic, never the client's.
+    expect(mockSubs.filter((x) => x.userId !== 'coach-1')).toEqual([]);
     self?.onPing();
     await waitFor(() => expect(postMock).toHaveBeenCalledWith(`${BASE}/read`, { up_to_message_id: 'm4' }, expect.anything()));
   });

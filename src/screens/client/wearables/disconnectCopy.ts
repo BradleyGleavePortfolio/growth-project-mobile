@@ -41,16 +41,16 @@ export function disconnectConfirmCopy(
     return {
       title: `Disconnect ${name}?`,
       body:
-        `${name} shares its data through Health Connect, so this disconnects Health Connect. The ` +
-        `Growth Project stops bringing in new Health Connect data from this phone, from ${name} and ` +
+        `${name} shares its data through Health Connect, so this disconnects Health Connect. ` +
+        `TGP Fitness stops bringing in new Health Connect data from this phone, from ${name} and ` +
         `every other app${coachless ? '' : ', and your coach stops seeing it'}. ${kept} ` +
         `You can connect again at any time.`,
     };
   }
   const coachStops = coachless ? '' : `, and your coach stops seeing new ${name} data`;
   const stops = isOnDevice(provider)
-    ? `The Growth Project stops bringing in new ${name} data from this phone${coachStops}.`
-    : `The Growth Project stops receiving new ${name} data${coachStops}.`;
+    ? `TGP Fitness stops bringing in new ${name} data from this phone${coachStops}.`
+    : `TGP Fitness stops receiving new ${name} data${coachStops}.`;
   return {
     title: `Disconnect ${name}?`,
     body: `${stops} ${kept} You can connect ${name} again at any time.`,
@@ -86,7 +86,7 @@ export function disconnectFailureMessage(err: unknown, name: string): Disconnect
     const status = statusOf(err);
     if (status === null) {
       return {
-        text: `The Growth Project couldn't be reached, so ${name} is still connected. Check your internet connection, then tap Disconnect again.`,
+        text: `TGP Fitness couldn't be reached, so ${name} is still connected. Check your internet connection, then tap Disconnect again.`,
         kind: 'retry',
       };
     }
@@ -121,7 +121,7 @@ export function disconnectFailureMessage(err: unknown, name: string): Disconnect
   });
   const ref = shortReference(requestId) ?? 'unavailable';
   return {
-    text: `${name} couldn't be disconnected because of an unexpected problem with The Growth Project, so it is still connected. Reference ${ref}. Tap Disconnect again in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`,
+    text: `${name} couldn't be disconnected because of an unexpected problem with TGP Fitness, so it is still connected. Reference ${ref}. Tap Disconnect again in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`,
     kind: 'retry',
   };
 }

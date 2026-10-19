@@ -28,6 +28,7 @@ import { useEntitlement } from '../entitlements/EntitlementProvider';
 import { queryClient } from '../services/queryClient';
 import { logger } from '../utils/logger';
 import { QuietOverline, QuietSection, quietActions } from '../ui/sections/QuietSection';
+import { useNoticeSlot } from './home/HomeNoticeSlot';
 
 export default function PendingInviteBanner() {
   const { semanticColors: colors } = useTheme();
@@ -82,7 +83,8 @@ export default function PendingInviteBanner() {
     return () => { live = false; };
   }, [code]);
 
-  if (!code) return null;
+  const shown = useNoticeSlot('invite', !!code); // one notice at a time on the rings Home
+  if (!shown || !code) return null;
 
   const handleClaim = async () => {
     setBusy(true);

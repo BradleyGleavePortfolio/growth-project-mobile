@@ -200,6 +200,15 @@ describe('PlanExplanationCard', () => {
     });
   });
 
+  it('K3FIX-SNAPSHOT: Next keeps the frozen workout name after the coach renames the plan', async () => {
+    mockAssignments = { isLoading: false, data: [{ id: 'a1', scheduled_for: '2026-10-12', completed_at: null,
+      workout_plan: { name: 'Day 1, Push v2' }, snapshot: { plan_name: 'Day 1, Push' } }] };
+    await hydrateTutorial('u1', 'Maya');
+    startClientTutorial(PAYLOAD);
+    await render(<PlanExplanationCard />);
+    expect(screen.getByText('Next: Day 1, Push')).toBeTruthy();
+  });
+
   it('with no workout scheduled yet, the row opens the coach workouts list', async () => {
     mockAssignments = { isLoading: false, data: [] };
     await hydrateTutorial('u1', 'Maya');

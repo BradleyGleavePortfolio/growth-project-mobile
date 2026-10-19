@@ -1,13 +1,16 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { act, fireEvent, render, renderHook, waitFor, within } from '@testing-library/react-native';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { useClientDetailData } from '../screens/coach/client-detail/useClientDetailData';
 import { useCoachStore } from '../store/coachStore';
 import { coachApi } from '../services/api';
 import type { Props } from '../screens/coach/client-detail/types';
 import { testColors } from '../screens/client/wearables/recoveryTestColors';
+import { HapticService } from '../ui/haptics/haptics.service';
+import { layout } from '../theme/tokens';
 
+jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) =>
   jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, name) }));
 jest.mock('react-native', () => {
@@ -31,14 +34,27 @@ jest.mock('../config/featureFlags', () => ({ featureFlags: {} }));
 jest.mock('../services/api', () => ({ coachApi: {
   getClientSummary: jest.fn(), getClients: jest.fn(), archiveClient: jest.fn(), unarchiveClient: jest.fn(),
 } }));
-jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: () => null }));
+let mockShowSummary = false;
+jest.mock('../screens/coach/client-detail/SummaryTab', () => ({
+  SummaryTab: (props: object) => mockShowSummary
+    ? jest.requireActual('react').createElement(jest.requireActual('../screens/coach/client-detail/SummaryTab').SummaryTab, props)
+    : null,
+}));
+jest.mock('../screens/coach/client-detail/ConsultationSummaryCard', () => ({ ConsultationSummaryCard: () => null }));
+jest.mock('../hooks/useMacros', () => ({ useCurrentMacrosForClient: () => ({ data: null }) }));
+jest.mock('../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => ({}) }));
+jest.mock('../lib/money/headCoachRole', () => ({ useHeadCoachHandlesMoney: () => false }));
+jest.mock('../components/coach/CoachAiSection', () => ({ __esModule: true, default: () => null }));
+jest.mock('../components/coach/ai-entry/AdjustForClient', () => ({
+  AdjustForClientEntry: ({ onOpened }: { onOpened: (id: string) => void }) =>
+    jest.requireActual('react').createElement(jest.requireActual('react-native').Button, {
+      title: 'Open client copy', onPress: () => onOpened('copied-plan-test'),
+    }),
+}));
 jest.mock('../screens/coach/client-detail/FoodLogReviewSection', () => ({ FoodLogReviewSection: () => null }));
-jest.mock('../screens/coach/client-detail/WorkoutsTab', () => ({ WorkoutsTab: () => null }));
-jest.mock('../screens/coach/client-detail/MealPlanTab', () => ({ MealPlanTab: () => null }));
 jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: () => null }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => null }));
 jest.mock('../screens/coach/client-detail/SleepRecoveryTab', () => ({ SleepRecoveryTab: () => null }));
-jest.mock('../screens/coach/client-detail/PlanFormModal', () => ({ PlanFormModal: () => null }));
 jest.mock('../screens/coach/client-detail/NudgeModal', () => ({ NudgeModal: () => null }));
 jest.mock('../components/coach/ai-execution/AskAiActionSheet', () => ({ AskAiActionSheet: () => null }));
 jest.mock('../components/coach/DisputePausedPlansCard', () => ({ DisputePausedPlansCard: () => null }));
@@ -68,6 +84,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   archived = false;
   mockPaymentsOn = false;
+  mockShowSummary = false;
   useCoachStore.getState().reset();
   (coachApi.getClientSummary as jest.Mock).mockReset().mockResolvedValue({ data: summary });
   clients.mockReset().mockImplementation(async () => ({ data: [row()] }));
@@ -77,6 +94,79 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
+
+it('an ID-only app link uses the scoped summary name rather than a blank client heading', async () => {
+  const view = await render(<ClientDetailScreen {...props} route={{
+    ...props.route, params: { clientId: 'client-test', clientName: '' },
+  }} />);
+  expect(await view.findByText('Test client')).toBeTruthy();
+});
+
+it.each([
+  ['Christopher Martinez', false],
+  ['Jessica Richardson', false],
+  ['Christopher Martinez', true],
+  ['Jessica Richardson', true],
+  ['Christopher Martinez Richardson', true],
+] as const)('FIX762: %s has a separate identity row (archived %s), retaining header destinations', async (clientName, isArchived) => {
+  archived = isArchived;
+  (coachApi.getClientSummary as jest.Mock).mockResolvedValueOnce({
+    data: { ...summary, profile: { primaryGoal: 'lose_moderate' } },
+  });
+  const params = { ...props.route.params, clientName };
+  const view = await render(<ClientDetailScreen {...props} route={{ ...props.route, params }} />);
+  const action = await view.findByLabelText(isArchived ? 'Unarchive client' : 'Archive client');
+  const identity = within(view.getByTestId('client-file-header-identity'));
+  expect(identity.getByText(clientName).props.numberOfLines).toBeUndefined();
+  expect(identity.getByText(`${isArchived ? 'Archived' : 'Active'} client · lose moderate`).props.numberOfLines).toBeUndefined();
+  expect(identity.queryByLabelText('Open messages')).toBeNull();
+  const actions = within(view.getByTestId('client-file-header-actions'));
+  expect(actions.getByLabelText(isArchived ? 'Unarchive client' : 'Archive client')).toBe(action);
+  await fireEvent.press(actions.getByLabelText('Open messages'));
+  expect(navigate).toHaveBeenCalledWith('ClientMessages', params);
+  await fireEvent.press(actions.getByText('arrow-back'));
+  expect(goBack).toHaveBeenCalledTimes(1);
+});
+
+// UIFIX-BACKLABEL: the flag-off file header's Back is a named button, so VoiceOver and TalkBack say "Back" ("Back" is
+// the Style C masthead's existing label, client-detail/StyleCFile.tsx:38), and it still goes back.
+it('UIFIX-BACKLABEL: the header Back is announced as the "Back" button and goes back', async () => {
+  const view = await render(<ClientDetailScreen {...props} />);
+  const actions = within(await view.findByTestId('client-file-header-actions'));
+  await fireEvent.press(actions.getByRole('button', { name: 'Back' }));
+  expect(goBack).toHaveBeenCalledTimes(1);
+});
+
+// FILEHEAD-44: every control in the file header is itself at least 44 by 44 pt (owner minimum), not a smaller box
+// stretched by hitSlop, and each still reaches its destination.
+it('FILEHEAD-44: Back, Open messages and Archive client are full 44 pt frames that keep their destinations', async () => {
+  const view = await render(<ClientDetailScreen {...props} />);
+  await view.findByLabelText('Archive client');
+  const actions = within(view.getByTestId('client-file-header-actions'));
+  for (const name of ['Back', 'Open messages', 'Archive client']) {
+    const button = actions.getByRole('button', { name });
+    const s = StyleSheet.flatten(button.props.style);
+    const frame = [Math.max(Number(s.width ?? 0), Number(s.minWidth ?? 0)), Math.max(Number(s.height ?? 0), Number(s.minHeight ?? 0))];
+    expect([name, frame.every((side) => side >= layout.touchMin), button.props.hitSlop]).toEqual([name, true, undefined]);
+    await fireEvent.press(button);
+  }
+  expect(goBack).toHaveBeenCalledTimes(1);
+  expect(navigate).toHaveBeenCalledWith('ClientMessages', props.route.params);
+  expect(confirm()).toBeDefined();
+});
+
+it('Summary Workouts opens this client Workouts tab and its builder path carries the client and copied plan', async () => {
+  mockShowSummary = true;
+  const view = await render(<ClientDetailScreen {...props} />);
+  await fireEvent.press(await view.findByLabelText('Open client workouts'));
+  expect(HapticService.selection).toHaveBeenCalledTimes(1);
+  expect(view.getByText('Recent workouts')).toBeTruthy();
+  expect(navigate).not.toHaveBeenCalled();
+  await fireEvent.press(view.getByText('Open client copy'));
+  expect(navigate).toHaveBeenCalledWith('CoachWorkoutBuilder', {
+    planId: 'copied-plan-test', openAi: true, clientId: 'client-test', clientName: 'Test client',
+  });
+});
 
 it('uses the roster archive status when the current summary has no client object', async () => {
   archived = true;

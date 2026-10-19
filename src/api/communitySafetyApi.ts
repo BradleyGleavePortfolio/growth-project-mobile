@@ -65,7 +65,7 @@ export const COMMUNITY_GUIDELINES: ReadonlyArray<string> = [
 
 /** The 24-hour moderation sentence (owner-approved 2026-10-01 09:07 PDT). */
 export const COMMUNITY_REVIEW_WITHIN_24H =
-  'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team.';
+  'Reports are reviewed within 24 hours, every day, by your coach and the TGP Fitness team.';
 
 /**
  * Public moderation commitment (owner-approved 2026-10-01 09:07 PDT). Mirrors

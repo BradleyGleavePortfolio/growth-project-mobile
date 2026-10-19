@@ -1,8 +1,9 @@
 # TimelineScreen — Phase 7B
 
 The Transformation Timeline is a reverse-chronological record of a client's
-entire journey. It covers 4 lanes, is paginated via infinite scroll, and is
-filtered via lane chips at the top.
+entire journey. It covers 3 lanes, is paginated via infinite scroll, and is
+filtered via lane chips at the top. No coach lane: coach messages never reach
+the Timeline, coached or coachless (#TIMELINE-COACH op 1, backend b#1078).
 
 ## Design
 
@@ -15,10 +16,9 @@ filtered via lane chips at the top.
 
 | Lane | Dot color | What appears |
 |------|-----------|--------------|
-| Body | Forest (`#2C4A36`) | Weight logs with delta, body composition, progress photos |
+| Body | Forest (`#2C4A36`) | Weigh-ins in the client's unit with the C8 trend |
 | Wins | Muted gold (`#C5A253`) | Streak milestones (7, 14, 30, 60, 90 days), Build Week Day 7 completion, finance milestones |
-| Coach | Ink (`#1A1A18`) | Text notes from coach, voice notes from coach |
-| Friction | Stone (`#B1A89F`) | Missed check-in markers — honest, non-punitive |
+| Friction | Stone (`#B1A89F`) | "No check-in", plain grey (#TIMELINE-MISSED op 1) |
 
 ## Navigation
 
@@ -27,6 +27,17 @@ filtered via lane chips at the top.
 "Story" entry-point on Home if the Home screen exposes a shortcut.
 
 The nav param type is registered in `MoreStackParamList` in `ClientNavigator.tsx`.
+
+## Style C page (`timeline/TimelinePage.tsx`, flag `clientTimelineV2`, off)
+
+Forest masthead ("Timeline", "Weigh-ins and wins, newest first."), then one card
+a day, newest first: en-US day headings ("Today" with its date), rows in the
+server's words (weigh-ins on their calendar day, everything else in local time),
+no lane chips. Loading skeleton, empty ("Log weight" opens the Progress sheet),
+offline (loaded days stay, one line), error ("Try again"), inline retry for older
+days. The door is a row at the foot of Progress (#TIMELINE-DOOR op 1); the You
+row goes; a Timeline push opens it over Progress. Tests:
+`timeline/__tests__/TimelinePage.test.tsx`.
 
 ## Empty state
 
@@ -38,7 +49,8 @@ Shown when the user has no events in the requested window/lanes.
 
 | File | What it owns |
 |------|--------------|
-| `TimelineScreen.tsx` | Full screen: filter chips, FlatList, event cards, empty/error states |
+| `TimelineScreen.tsx` | Flag off: filter chips, FlatList, event cards, empty/error states |
+| `timeline/TimelinePage.tsx` | Flag on: the Style C page |
 | `src/services/timelineApi.ts` | Typed client for `GET /me/timeline` |
 | `TIMELINE.md` | This file |
 
