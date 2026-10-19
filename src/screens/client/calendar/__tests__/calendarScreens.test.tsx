@@ -203,11 +203,11 @@ describe('CalendarHomeScreen', () => {
     await waitFor(() => expect(r.getByTestId('calendar-no-coach')).toBeTruthy());
     expect(r.queryByTestId('calendar-support-fallback')).toBeNull();
     await fireEvent.press(r.getByTestId('calendar-contact-support'));
-    expect(open).toHaveBeenCalledWith('mailto:Bradleyapple1031@gmail.com?subject=Calendar%20help');
+    expect(open).toHaveBeenCalledWith('mailto:support@thegrowthproject.site?subject=Calendar%20help');
     await waitFor(() => expect(r.getByTestId('calendar-support-fallback-status')).toBeTruthy());
-    expect(r.getByTestId('calendar-support-fallback-address').props.children).toBe('Bradleyapple1031@gmail.com');
+    expect(r.getByTestId('calendar-support-fallback-address').props.children).toBe('support@thegrowthproject.site');
     await fireEvent.press(r.getByTestId('calendar-support-fallback-copy'));
-    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('Bradleyapple1031@gmail.com'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('support@thegrowthproject.site'));
     await fireEvent.press(r.getByTestId('calendar-support-fallback-retry'));
     await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
     open.mockRestore();
@@ -552,12 +552,36 @@ describe('CalendarSessionScreen', () => {
     expect(r.getByText('Call link not added yet.')).toBeTruthy();
   });
 
-  it('a started session (server says not cancellable) explains why it is locked', async () => {
-    api.getSession.mockResolvedValue(sess({ cancellable: false, reschedulable: false }));
-    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
-    await waitFor(() => expect(r.getByTestId('calendar-session-status')).toBeTruthy());
-    expect(r.getByText(/has started, so it can no longer be changed here/)).toBeTruthy();
-    expect(r.queryByTestId('calendar-cancel')).toBeNull();
+  it.each([
+    { name: 'not started, server locked', hoursUntilStart: 23, flags: { cancellable: false, reschedulable: false }, note: 'locked' },
+    { name: 'at the start, server locked', hoursUntilStart: 0, flags: { cancellable: false, reschedulable: false }, note: 'started' },
+    { name: 'started, server locked', hoursUntilStart: -0.1, flags: { cancellable: false, reschedulable: false }, note: 'started' },
+    { name: 'inside 24 hours, server allows changes', hoursUntilStart: 23, flags: { cancellable: true, reschedulable: true }, note: null },
+    { name: 'older server, inside 24 hours', hoursUntilStart: 23, flags: {}, note: 'locked' },
+    { name: 'older server, outside 24 hours', hoursUntilStart: 25, flags: {}, note: null },
+  ])('$name: shows only the appropriate change note', async ({ hoursUntilStart, flags, note }) => {
+    const now = Date.parse('2030-10-07T16:00:00.000Z');
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    const startedLine = 'This session has started, so it can no longer be changed here. Message your coach if you need help.';
+    const lockedLine = 'Changes are locked within 24 hours of the start. Message your coach if you need help changing this session.';
+    const start = now + hoursUntilStart * 60 * 60_000;
+    api.getSession.mockResolvedValue(sess({
+      start_at: new Date(start).toISOString(),
+      end_at: new Date(start + 20 * 60_000).toISOString(),
+      ...flags,
+    }));
+    try {
+      const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+      await waitFor(() => expect(r.getByTestId('calendar-session-status')).toBeTruthy());
+      expect(!!r.queryByText(startedLine)).toBe(note === 'started');
+      expect(!!r.queryByText(lockedLine)).toBe(note === 'locked');
+      expect(!!r.queryByTestId('calendar-cancel')).toBe(note === null);
+      expect(!!r.queryByTestId('calendar-reschedule')).toBe(note === null);
+      await fireEvent.press(r.getByTestId('calendar-session-message'));
+      expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('a past or cancelled session offers no reschedule or cancel', async () => {
@@ -568,6 +592,34 @@ describe('CalendarSessionScreen', () => {
     expect(r.queryByTestId('calendar-reschedule')).toBeNull();
     expect(r.queryByTestId('calendar-cancel')).toBeNull();
     expect(r.queryByTestId('calendar-add-phone')).toBeNull();
+  });
+
+  it('a CHANGES_LOCKED refusal keeps the existing general message and refreshes the note', async () => {
+    const start = Date.now() + 23 * 60 * 60_000;
+    const times = { start_at: new Date(start).toISOString(), end_at: new Date(start + 20 * 60_000).toISOString() };
+    api.getSession
+      .mockResolvedValueOnce(sess({ ...times, cancellable: true, reschedulable: true }))
+      .mockResolvedValue(sess({ ...times, cancellable: false, reschedulable: false }));
+    api.cancelSession.mockRejectedValue({ response: { status: 409, data: { code: 'CHANGES_LOCKED' } } });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      buttons?.find((b) => b.style === 'destructive')?.onPress?.();
+    });
+    try {
+      const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+      await waitFor(() => expect(r.getByTestId('calendar-cancel')).toBeTruthy());
+      await fireEvent.press(r.getByTestId('calendar-cancel'));
+      await waitFor(() => expect(r.getByText(
+        'The schedule changed while you were using it. Refresh Calendar and choose an available time.',
+      )).toBeTruthy());
+      await waitFor(() => expect(r.queryByTestId('calendar-cancel')).toBeNull());
+      expect(r.queryByTestId('calendar-reschedule')).toBeNull();
+      expect(r.getByText('Changes are locked within 24 hours of the start. Message your coach if you need help changing this session.')).toBeTruthy();
+      expect(r.queryByText(/has started, so it can no longer be changed here/)).toBeNull();
+      await fireEvent.press(r.getByTestId('calendar-session-message'));
+      expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
+    } finally {
+      alert.mockRestore();
+    }
   });
 });
 

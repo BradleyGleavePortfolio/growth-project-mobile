@@ -201,7 +201,11 @@ describe('Day 10+ lockout keeps the client own logging (owner ruling 23:5x)', ()
 
   it('the open set is every remaining ClientNavigator OWN route, plus the Train tab', () => {
     const own = new Set([...navSource.matchAll(/const (\w+) = withProtectedScreen\(\w+, OWN\)/g)].map((m) => m[1]));
-    const ownRoutes = [...navSource.matchAll(/name="(\w+)"\s+component=\{(\w+)\}/g)].filter((m) => own.has(m[2])).map((m) => m[1]);
+    // A protected screen can be registered as component= or a render child.
+    const ownRoutes = navSource.split(/<\w+\.Screen\b/).slice(1)
+      .filter((registration) => [...own].some((component) =>
+        new RegExp(`component=\\{${component}\\}|<${component}\\b`).test(registration)))
+      .map((registration) => registration.match(/name="(\w+)"/)![1]);
     expect(ownRoutes).toEqual(expect.arrayContaining(['Log', 'WorkoutMain', 'Fast', 'Habits', 'RoutineBuilder']));
     expect(ownRoutes).not.toContain('AIGuide');
     expect([...OPEN_FOR_OWN_LOGGING].sort()).toEqual([...ownRoutes, 'WorkoutTab'].sort());

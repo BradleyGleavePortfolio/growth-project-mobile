@@ -4,7 +4,7 @@
 **Scope (v1):** clients **manually enter** lab results. Coach reviews. AI may
 draft *educational* context, but only after a coach explicitly approves it
 does it surface to the client. **Not medical advice. Not a diagnosis. Not a
-clinician replacement.**
+doctor replacement.**
 
 This document is the handoff for the backend / platform team. Nothing in this
 list ships in the current PR — the PR is the typed-contract + UX shell only.
@@ -40,7 +40,7 @@ work has a known landing place but **must not be enabled by default**.
 - **EHR / lab-provider import (Apple Health, Quest, LabCorp, etc.).** Out
   of scope. Will require provider-specific consent capture, dedicated audit
   trail, and a `BloodworkSourceType` other than `manual`.
-- **Clinician-entered records.** Out of scope until verified-clinician
+- **Provider-entered records.** Out of scope until verified-provider
   identity is in the auth model.
 - **Diagnostic interpretation, urgent triage, prescriptive advice,
   dosing guidance.** Forbidden by copy + tests. Do not add.
@@ -88,10 +88,10 @@ GET  /coach/labs/review-queue      — coach review queue list
    return draft text from a non-approved AI draft.
 8. **Soft-delete + retention.** Panels should soft-delete on user
    deletion request, with a privacy-policy-aligned retention window.
-9. **Clinician-escalation language.** The "Refer to clinician" coach
+9. **Doctor-escalation language.** The "Refer to doctor" coach
    action emits an in-app message and notification using copy approved
    by legal. Do not let coaches free-text into that surface — keep the
-   message templated from `BLOODWORK_CLINICIAN_REFERRAL_NOTE`.
+   message templated from `BLOODWORK_DOCTOR_REFERRAL_NOTE`.
 
 ### Server-side requirements (should, can land in iterations)
 
@@ -104,7 +104,7 @@ GET  /coach/labs/review-queue      — coach review queue list
 ## Flipping the flag on
 
 Once the backend is live and the legal review on `BLOODWORK_DISCLAIMER_LONG`
-+ the clinician-referral copy is signed off:
++ the doctor-referral copy is signed off:
 
 1. Add a row entry on `MoreScreen` (client) that navigates to `Bloodwork`.
 2. Add an entry on the coach `Dashboard` (or `Settings`) that navigates to

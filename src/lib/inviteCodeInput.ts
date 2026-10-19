@@ -4,7 +4,7 @@
  *
  *   - a bare code:           `GP-7K2Q`, `gp-7k2q`, ` GP-7K2Q\n`, `GP-AB-CD`
  *   - a join link:           `https://app.trygrowthproject.com/join/GP-7K2Q`
- *   - a custom-scheme link:  `tgp://join/GP-7K2Q`, `tgp://join/CLINIC2026`
+ *   - a custom-scheme link:  `tgp://join/GP-7K2Q`, `tgp://join/LAUNCH2026`
  *   - a query-style link:    `.../join?code=GP-7K2Q` or `?invite_code=...`
  *   - a sentence that contains one of the above ("Use code GP-7K2Q to join")
  *
@@ -21,6 +21,16 @@
 
 export const INVITE_CODE_MIN_LENGTH = 3;
 export const INVITE_CODE_MAX_LENGTH = 32;
+
+/**
+ * A complete generated coach code: the new `TGP-` + 7 (owner 26) or the older
+ * `GP-` + 6 from the backend generator alphabet (no 0/O/1/I/L), any case. Vanity
+ * and other codes are not "complete" (so `GP-BRADLE` is not checked mid-typing):
+ * the coach code sheet checks them after a typing pause, and Join accepts them.
+ */
+export function isCompleteInviteCode(code: string): boolean {
+  return /^(?:TGP-[A-Z0-9]{7}|GP-[2-9A-HJKMNP-Z]{6})$/i.test(code.trim());
+}
 
 const CODE_CHARS = /^[A-Z0-9-]+$/;
 const HAS_ALNUM = /[A-Z0-9]/;

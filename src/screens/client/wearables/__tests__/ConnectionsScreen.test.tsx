@@ -16,7 +16,8 @@
  */
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { NavigationContext, NavigationRouteContext } from '@react-navigation/native';
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -72,7 +73,11 @@ let mockCoachless = false;
 jest.mock('../../../../hooks/useCoachlessClient', () => ({ useCoachlessClient: () => mockCoachless }));
 
 import ConnectionsScreen, { buildRows } from '../ConnectionsScreen';
-import { configFor, type WearableProvider } from '../../../../api/wearablesConnectionsApi';
+import {
+  claimReturnTicket,
+  configFor,
+  type WearableProvider,
+} from '../../../../api/wearablesConnectionsApi';
 import { disconnectConfirmCopy } from '../disconnectCopy';
 import { emptyImportMessage } from '../onDeviceCopy';
 import { OnDeviceSessionChangedError } from '../../../../services/health/sessionFence';
@@ -195,7 +200,7 @@ describe('ConnectionsScreen — interactions', () => {
     expect(screen.getByText('Disconnect Oura?')).toBeTruthy();
     expect(
       screen.getByText(
-        'The Growth Project stops receiving new Oura data, and your coach stops seeing new Oura data. Data already shared stays with your coach. You can connect Oura again at any time.',
+        'TGP Fitness stops receiving new Oura data, and your coach stops seeing new Oura data. Data already shared stays with your coach. You can connect Oura again at any time.',
       ),
     ).toBeTruthy();
   });
@@ -210,7 +215,7 @@ describe('ConnectionsScreen — interactions', () => {
       await fireEvent.press(screen.getByLabelText('Disconnect Oura'));
       expect(
         screen.getByText(
-          'The Growth Project stops receiving new Oura data. Data already brought in stays in your account. You can connect Oura again at any time.',
+          'TGP Fitness stops receiving new Oura data. Data already brought in stays in your account. You can connect Oura again at any time.',
         ),
       ).toBeTruthy();
     } finally {
@@ -274,7 +279,7 @@ describe('ConnectionsScreen — disconnect confirm (C-317-4)', () => {
   });
 
   it.each([
-    [null, /The Growth Project couldn't be reached, so Oura is still connected/, true],
+    [null, /TGP Fitness couldn't be reached, so Oura is still connected/, true],
     [429, /Too many tries in a short time, so Oura is still connected/, true],
     [401, /Your session has ended, so Oura is still connected/, false],
     [403, /client account only, so nothing changed/, false],
@@ -312,7 +317,7 @@ describe('ConnectionsScreen — disconnect confirm (C-317-4)', () => {
     await openConfirm();
     await fireEvent.press(screen.getByLabelText('Disconnect Oura now'));
     expect(screen.getByText(/Reference req12345\./)).toBeTruthy();
-    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy();
     expect(screen.queryByText(/problem on our side/)).toBeNull();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
     expect(mockReportUnexpected).toHaveBeenCalledWith(
@@ -446,7 +451,7 @@ describe('ConnectionsScreen — Samsung Health row (B-364-1)', () => {
   it('copy names Health Connect and every app; empty import names the Samsung setting (C-364-2)', () => {
     expect(disconnectConfirmCopy('SAMSUNG_HEALTH', 'Samsung Health').body).toContain('every other app');
     expect(configFor('SAMSUNG_HEALTH').dataDescription).toBe(
-      'The Growth Project reads the Health Connect data on this phone, including what Samsung Health shares with Health Connect.',
+      'TGP Fitness reads the Health Connect data on this phone, including what Samsung Health shares with Health Connect.',
     );
     const empty = emptyImportMessage('SAMSUNG_HEALTH', 'Health Connect').text;
     expect(empty).toContain('Samsung Health is connected through Health Connect');
@@ -518,5 +523,53 @@ describe('ConnectionsScreen — server-listed cloud trackers (B-WEARLIST-125)', 
       .map((r) => r.provider)
       .sort();
     expect(names).toEqual(['APPLE_HEALTHKIT', 'OURA', 'POLAR']);
+  });
+});
+
+// A6 (AUTHB-05): Android can hand a cloud tracker's return link to the app
+// (also after a restart); Connections opens that tracker's sheet to finish it.
+describe('ConnectionsScreen — a cloud tracker return link (A6)', () => {
+  async function openWith(params: Record<string, string>) {
+    const setParams = jest.fn();
+    const nav = { canGoBack: () => false, setParams } as unknown as React.ContextType<
+      typeof NavigationContext
+    >;
+    await render(
+      <NavigationContext.Provider value={nav}>
+        <NavigationRouteContext.Provider value={{ key: 'connections', name: 'Connections', params }}>
+          <ConnectionsScreen />
+        </NavigationRouteContext.Provider>
+      </NavigationContext.Provider>,
+    );
+    return setParams;
+  }
+
+  beforeEach(() => mockUseWearableConnections.mockReturnValue(queryResult({ data: [] })));
+
+  it("opens that tracker's sheet with the ticket and clears the link from the route", async () => {
+    const setParams = await openWith({ status: 'ok', provider: 'OURA', ticket: 'tk-screen' });
+    expect(sheetProps.visible).toBe(true);
+    expect(sheetProps.provider).toBe('OURA');
+    expect(sheetProps.returnTicket).toBe('tk-screen');
+    expect(setParams).toHaveBeenCalledWith({
+      ticket: undefined,
+      provider: undefined,
+      status: undefined,
+    });
+
+    await act(async () => (sheetProps.onClose as () => void)());
+    expect(sheetProps.visible).toBe(false);
+    expect(sheetProps.returnTicket).toBeNull();
+  });
+
+  it.each([
+    ['a ticket the sign-in window already took', 'OURA', 'tk-claimed'],
+    ['an on-device source', 'APPLE_HEALTHKIT', 'tk-device'],
+    ['an unknown tracker', 'NOPE', 'tk-unknown'],
+  ])('opens nothing for %s', async (_label, provider, ticket) => {
+    claimReturnTicket('tk-claimed');
+    await openWith({ status: 'ok', provider, ticket });
+    expect(sheetProps.visible).toBe(false);
+    expect(sheetProps.returnTicket).toBeNull();
   });
 });

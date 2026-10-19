@@ -24,6 +24,7 @@ import {
   notificationsApi,
   deletionApi,
   AccountStatus,
+  practiceTypeApi,
 } from '../../services/api';
 import { helpUrl } from '../../config/env';
 import { featureFlags } from '../../config/featureFlags';
@@ -47,6 +48,7 @@ import { BillingSection } from './settings/BillingSection';
 import { DangerZone } from './settings/DangerZone';
 import { BookingOptionsEntry } from './settings/BookingOptionsEntry';
 import { AICreditsRow } from './settings/AICreditsRow';
+import { CoachRomanSwitch } from './settings/CoachRomanSwitch';
 import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from '../settings/deletionErrors';
 import { Headline, Overline, useScreenInsets } from '../../ui';
 import { layout } from '../../theme/tokens';
@@ -87,6 +89,27 @@ export default function SettingsScreen() {
   const [deletionBusy, setDeletionBusy] = useState(false);
 
   const userId = currentUser?.id || '';
+  const [bothPillars, setBothPillars] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const loadPractice = async () => {
+      setBothPillars(false);
+      if (!userId) return;
+      try {
+        const { data } = await practiceTypeApi.get();
+        if (alive) setBothPillars(data.practice_type === 'both');
+      } catch {
+        // Unknown practice: do not offer a route that may be unavailable.
+      }
+    };
+    void loadPractice();
+    const unsubscribe = navigation.addListener?.('focus', loadPractice);
+    return () => {
+      alive = false;
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [userId, navigation]);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -319,10 +342,15 @@ export default function SettingsScreen() {
     navigation.navigate('CoachConnect');
   };
   // S-COACH-MOB-2 — TGP Money replaces Earnings and Business metrics.
+  // COACHTABS: with the six tabs the row switches to the Money tab's root.
   const handleOpenMoney = () => {
     mediumTap();
-    navigation.navigate('CoachMoney');
+    if (featureFlags.coachTabsV2) navigation.navigate('MoneyStack', { screen: 'CoachMoney', pop: true });
+    else navigation.navigate('CoachMoney');
   };
+  // COACHTABS: with the six tabs the booking rows open in the Calendar tab, above its inbox.
+  const bookingTab = featureFlags.coachTabsV2 ? 'CalendarStack' : 'ClientsStack';
+  const bookingInitial = featureFlags.coachTabsV2 ? { initial: false, pop: true } : {};
 
   const handleOpenTrustCenter = () => {
     mediumTap();
@@ -400,9 +428,31 @@ export default function SettingsScreen() {
   };
   const permanentDate = formatPermanentDate(accountStatus?.permanentDeletionAt);
 
+  // COACHTABS: Settings opens from Overview's gear, so it draws the coach Back
+  // (arrow, 44 pt, under the status bar) and returns to the tab it came from.
+  const back = featureFlags.coachTabsV2 && navigation.canGoBack() ? (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={{ width: layout.touchMin, height: layout.touchMin, justifyContent: 'center', marginBottom: 4 }}
+      testID="settings-back"
+    >
+      <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={[styles.header, { paddingTop: insets.top + layout.statusBarGap + 12 }]} testID="settings-header">
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top + layout.statusBarGap + 12 },
+          back && { paddingTop: insets.top + layout.statusBarGap },
+        ]}
+        testID="settings-header"
+      >
+        {back}
         <Headline level="h1">Settings</Headline>
       </View>
 
@@ -596,7 +646,7 @@ export default function SettingsScreen() {
           style={styles.row}
           onPress={() => {
             mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachBookingInbox' });
+            navigation.navigate(bookingTab, { screen: 'CoachBookingInbox', ...bookingInitial });
           }}
           accessibilityRole="button"
           accessibilityLabel="Open booking inbox"
@@ -615,9 +665,10 @@ export default function SettingsScreen() {
               Alert.alert('Not signed in', 'Could not resolve your coach profile.');
               return;
             }
-            navigation.navigate('ClientsStack', {
+            navigation.navigate(bookingTab, {
               screen: 'CoachAvailabilityEditor',
               params: { coachId },
+              ...bookingInitial,
             });
           }}
           accessibilityRole="button"
@@ -634,7 +685,7 @@ export default function SettingsScreen() {
           colors={colors}
           onOpen={() => {
             mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachBookingOptions' });
+            navigation.navigate(bookingTab, { screen: 'CoachBookingOptions', ...bookingInitial });
           }}
         />
         {/* S-SCHED — appointment types clients book from, and time off. */}
@@ -642,9 +693,10 @@ export default function SettingsScreen() {
           style={styles.row}
           onPress={() => {
             mediumTap();
-            navigation.navigate('ClientsStack', {
+            navigation.navigate(bookingTab, {
               screen: 'CoachAppointmentTypes',
               params: currentUser?.id ? { coachId: currentUser.id } : undefined,
+              ...bookingInitial,
             });
           }}
           accessibilityRole="button"
@@ -660,7 +712,7 @@ export default function SettingsScreen() {
           style={styles.row}
           onPress={() => {
             mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachTimeOff' });
+            navigation.navigate(bookingTab, { screen: 'CoachTimeOff', ...bookingInitial });
           }}
           accessibilityRole="button"
           accessibilityLabel="Open time off"
@@ -734,6 +786,8 @@ export default function SettingsScreen() {
           be able to view and undo their blocks from Settings. */}
       <Overline style={styles.sectionHeader}>Privacy</Overline>
       <View style={styles.section}>
+        {/* COACH-AI-CONSENT: the coach's own Roman switch (not for a sub-coach: no coach Roman routes). */}
+        {currentUser?.role !== 'sub_coach' ? <CoachRomanSwitch colors={colors} styles={styles} /> : null}
         <TouchableOpacity
           style={styles.row}
           onPress={() => navigation.navigate('BlockedUsers')}
@@ -774,10 +828,7 @@ export default function SettingsScreen() {
         ) : null}
       </View>
 
-      {/* Stage 3 — cross-pillar federated coach surface. Settings row
-          enters the nested CrossPillarNavigator, which runs the
-          practice-selection flow on first open and the live dashboard
-          afterwards. */}
+      {bothPillars ? <>
       <Overline style={styles.sectionHeader}>Cross-pillar practice</Overline>
       <View style={styles.section}>
         <TouchableOpacity
@@ -798,6 +849,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      </> : null}
       <DangerZone
         accountStatus={accountStatus}
         accountStatusLoading={accountStatusLoading}
@@ -847,7 +899,7 @@ export default function SettingsScreen() {
 
       {/* About */}
       <View style={styles.aboutSection}>
-        <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
+        <Text style={styles.aboutText}>TGP Fitness v1.0.0</Text>
         <Text style={styles.aboutSubText}>Coach edition</Text>
       </View>
 

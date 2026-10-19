@@ -1,13 +1,21 @@
 import React from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AxiosHeaders, type AxiosResponse } from 'axios';
 import LogScreen from '../LogScreen';
 import { foodApi, logApi, waterApi } from '../../../services/api';
 import { useClientStore } from '../../../store/clientStore';
 import type { MealType } from '../../../types';
+import Day1WinScreen from '../Day1WinScreen';
+import { firstWinApi } from '../../../services/firstWinApi';
 
-jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client' }) }));
+const mockUser: { id: string; coach_id?: string } = { id: 'client' };
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+jest.mock('../../../services/firstWinApi', () => ({
+  firstWinApi: { complete: jest.fn() },
+}));
+jest.mock('../../../lib/packagePromptGate', () => ({ shouldOfferPackagePrompt: async () => false }));
+jest.mock('../../../components/PackageSelectionSheet', () => () => null);
 jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
 jest.mock('../../../hooks/useNetworkStatus', () => ({
@@ -52,6 +60,7 @@ const ok: AxiosResponse = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  delete mockUser.coach_id;
   mockEntries = [];
   useClientStore.getState().reset();
   useClientStore.getState().setSelectedDate(mockDate);
@@ -94,8 +103,78 @@ afterEach(() => jest.restoreAllMocks());
 describe.each(['ios', 'android'] as const)('%s client food journey (real screen, store and portion math)', (os) => {
   beforeEach(() => jest.replaceProperty(Platform, 'OS', os));
 
+  it.each(['coachless', 'coached'])(
+    '%s first meal resumes the same search and success feedback, with no second note', async (client) => {
+      if (client === 'coached') mockUser.coach_id = 'coach';
+      jest.mocked(foodApi.search).mockResolvedValue({ ...ok, data: { results: [mockFood, mockBanana] } });
+      jest.mocked(firstWinApi.complete).mockResolvedValue({
+        ...ok, data: { completedAt: '2026-10-14', aiMessage: `Server note for ${client}.` },
+      });
+      function SavedMeal() {
+        const consumed = React.useRef(false);
+        const [noteVisible, setNoteVisible] = React.useState(false);
+        return <View>
+          <View style={{ display: noteVisible ? 'none' : 'flex' }}>
+            <LogScreen suspended={noteVisible} onSaved={() => {
+              if (consumed.current) return;
+              consumed.current = true;
+              setNoteVisible(true);
+            }} />
+          </View>
+          {noteVisible ? <Day1WinScreen savedWin="first_meal" onComplete={() => setNoteVisible(false)} /> : null}
+        </View>;
+      }
+      await render(<SavedMeal />);
+      expect(firstWinApi.complete).not.toHaveBeenCalled();
+      await fireEvent.press(screen.getAllByText('Add food')[2]);
+      await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'foods');
+      await fireEvent.press(await screen.findByText('Banana'));
+      await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
+      expect(await screen.findByText(`Server note for ${client}.`)).toBeTruthy();
+      expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
+      expect(firstWinApi.complete).toHaveBeenCalledTimes(1);
+      expect(firstWinApi.complete).toHaveBeenCalledWith('first_meal');
+      await fireEvent.press(screen.getByTestId('day1win-continue-button'));
+      expect(await screen.findByText('Added Banana.')).toBeTruthy();
+      expect(screen.getByText('Add to Dinner')).toBeTruthy();
+      expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('foods');
+      await fireEvent.press(screen.getByText('Rolled oats'));
+      await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
+      expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
+      expect(logApi.logFood).toHaveBeenCalledTimes(2);
+      expect(mockEntries.map((e) => e.meal_type)).toEqual(['dinner', 'dinner']);
+      expect(firstWinApi.complete).toHaveBeenCalledTimes(1);
+      await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+      expect(await screen.findByText('Rolled oats added to Dinner.')).toBeTruthy();
+    },
+  );
+
+  it.each(['manual', 'repeat'])('%s keeps its added-to line after the note is dismissed', async (flow) => {
+    const onSaved = jest.fn();
+    const view = await render(<LogScreen onSaved={onSaved} />);
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
+    if (flow === 'manual') {
+      await fireEvent.press(screen.getByText('Enter manually'));
+      await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Rolled oats');
+      for (const [index, value] of ['379', '13', '68', '6.5'].entries()) {
+        await fireEvent.changeText(screen.getAllByPlaceholderText('0')[index], value);
+      }
+      expect(screen.getByRole('button', { name: 'Log food' })).toBeEnabled();
+      await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
+    } else {
+      await fireEvent.press(await screen.findByRole('button', { name: /Repeat .*breakfast: add all 1 food/ }));
+    }
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    await view.rerender(<LogScreen onSaved={onSaved} suspended />);
+    await view.rerender(<LogScreen onSaved={onSaved} suspended={false} />);
+    expect(screen.getByText(flow === 'manual' ? 'Rolled oats added to Breakfast.' : '1 food added to Breakfast.')).toBeTruthy();
+    expect(logApi.logFood).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
   it('searches, picks a portion in one sheet, cancels back, adds, edits, deletes and repeats', async () => {
-    await render(<LogScreen />);
+    const onSaved = jest.fn();
+    await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), '60 g oats');
     await waitFor(() => expect(foodApi.search).toHaveBeenCalledWith('60 g oats', 50));
@@ -105,6 +184,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     // A single native sheet replaces search with the portion picker.
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
     await fireEvent.press(screen.getByText('Cancel'));
+    expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('60 g oats');
     expect(screen.queryByLabelText('Food quantity')).toBeNull();
     await fireEvent.press(screen.getByText('Rolled oats'));
@@ -120,6 +200,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(227.4);
     expect(screen.queryByLabelText('Food quantity')).toBeNull();
     expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
+    expect(onSaved).toHaveBeenCalledTimes(1);
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
 
     await fireEvent.press(screen.getByLabelText(/Rolled oats.*Tap to edit/));
@@ -156,17 +237,20 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     });
     expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(227.4);
     expect(await screen.findByText('1 food added to Breakfast.')).toBeTruthy();
+    expect(onSaved).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the entered portion after failure, then returns to search after saving', async () => {
     jest.mocked(logApi.logFood).mockRejectedValueOnce(new Error('Network Error'));
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    await render(<LogScreen />);
+    const onSaved = jest.fn();
+    await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(await screen.findByText('Rolled oats'));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '85');
     await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(alert).toHaveBeenCalledWith("Couldn't log food", expect.any(String));
+    expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Food quantity').props.value).toBe('85');
     expect(screen.getByLabelText('Portion unit g').props.accessibilityState.selected).toBe(true);
     expect(screen.getByTestId('food-search-sheet').props.visible).toBe(true);
@@ -174,6 +258,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
+    expect(onSaved).toHaveBeenCalledTimes(1);
     expect(screen.getByPlaceholderText('Search foods...')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
     expect(await screen.findByText('Rolled oats added to Breakfast.')).toBeTruthy();
@@ -208,7 +293,8 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
 
   it('retains browse tabs, retry, suggestions, clear, manual entry and close', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    await render(<LogScreen />);
+    const onSaved = jest.fn();
+    await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(screen.getByText('Frequent'));
     expect(screen.getByText('Most logged, last 7 days')).toBeTruthy();
@@ -228,15 +314,21 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '0');
     await fireEvent.press(screen.getByText('Log food'));
     expect(alert).toHaveBeenCalledWith('Missing info', 'Enter at least a food name and calories.');
+    expect(onSaved).not.toHaveBeenCalled();
     await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Lunch label');
     await fireEvent.changeText(screen.getByPlaceholderText('1'), '2');
     await fireEvent.changeText(screen.getByPlaceholderText('serving'), 'g');
+    jest.mocked(logApi.logFood).mockRejectedValueOnce(new Error('Network Error'));
     await fireEvent.press(screen.getByText('Log food'));
+    expect(onSaved).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('Log food'));
+    expect(onSaved).toHaveBeenCalledTimes(1);
     expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lunch label', serving_size_grams: 2 }));
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(screen.getByText('Enter manually'));
     await fireEvent.press(screen.getByText('Back to search'));
     await fireEvent.press(screen.getByRole('button', { name: 'Close food search' }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
   });
 

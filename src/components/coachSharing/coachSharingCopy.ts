@@ -1,35 +1,24 @@
-/** Client-facing copy for Settings > Privacy > Coach sharing (B-SHARE-127). */
+/**
+ * Client-facing copy for Settings > Privacy > Coach sharing (B-SHARE-127).
+ * No switches (owner #SHARE-SIMPLE / #SHARE-JOIN): the page says what the
+ * current coach sees and how new device data stops (a disconnect in
+ * Connected devices, disconnectCopy.ts; or the phone's Health permissions,
+ * as the join sentence W-SU-1 says). Android says Health Connect.
+ */
+import { Platform } from 'react-native';
+
+const health = () => (Platform.OS === 'android' ? 'Health Connect' : 'Apple Health');
+
 export const coachSharingCopy = {
   settingsRow: 'Coach sharing',
-  settingsRowHint: 'Choose which logs your coach can see',
-  /** The switches cover these four logs only; connected devices are stated under them (FW-BODY B2). */
-  intro: 'Choose which of these logs your coach sees. Each change saves right away.',
-  /** owner_access true: the server says the coach is the owner account. */
-  ownerNote: 'Your coach uses the TGP owner account, which can see these logs even when they are turned off here.',
-  /** owner_access not reported (older backend): the case cannot be ruled out, so it is stated as a condition. */
-  ownerNoteUnknown:
-    'If your coach uses the TGP owner account, that account can see these logs even when they are turned off here.',
-  on: 'Shared',
-  off: 'Not shared',
-  rowFailed: (label: string) => `${label} could not be updated. Check the connection and try again.`,
+  settingsRowHint: 'Opens what your coach can see',
+  intro: 'Your coach sees your workouts, food logs, weigh-ins, check-ins and habits.',
   loading: 'Loading coach sharing',
   loadFailed: 'Coach sharing could not load. Check the connection and try again.',
   retry: 'Try again',
   noCoach: 'Coach sharing applies once a coach is connected to this account.',
-  /**
-   * FW-BODY B2: a coach reads Apple Health and Health Connect data whatever the
-   * switches say (backend wearable-samples.service.ts assertCoachOwnsClient checks
-   * the coach link only), and a disconnect keeps what came in (disconnectCopy.ts).
-   */
-  devicesNote:
-    'Connected devices, such as Apple Health and Health Connect, are not covered by these switches. Your coach can see the data they bring in, and data already shared stays with your coach after you disconnect.',
+  devicesNote: () =>
+    `Your coach also sees data from ${health()} and other devices you connect. To stop new data, disconnect it in Connected devices or turn TGP Fitness off in your phone's ${health()} permissions. Data already shared stays with your coach.`,
   devicesLink: 'Connected devices',
   devicesLinkHint: 'Opens your connected devices',
 } as const;
-
-/** The owner-account line for a read, or null when the server says the coach is not the owner account. */
-export function ownerAccessNote(ownerAccess: boolean | null): string | null {
-  if (ownerAccess === true) return coachSharingCopy.ownerNote;
-  if (ownerAccess === null) return coachSharingCopy.ownerNoteUnknown;
-  return null;
-}

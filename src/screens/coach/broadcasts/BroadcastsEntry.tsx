@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { broadcastsAvailable } from '../../../api/broadcastsApi';
-import { spacing, typography } from '../../../theme/tokens';
+import { openInboxScreen } from '../../../navigation/coachInbox';
+import { radius, spacing, typography } from '../../../theme/tokens';
 import { useTheme } from '../../../theme/ThemeProvider';
 
 /**
@@ -20,9 +21,8 @@ export function BroadcastsEntry() {
   if (q.data !== true) return null;
   return (
     <Pressable
-      // `initial: false` keeps the client list under Broadcasts, so a Clients
-      // stack opened here for the first time still has its root (B-332-7).
-      onPress={() => navigation.navigate('ClientsStack', { screen: 'CoachBroadcasts', initial: false })}
+      // COACH-CHAT-BACK: in the Messages stack with the six tabs; off, in Clients over the client list (B-332-7).
+      onPress={() => openInboxScreen(navigation, 'CoachBroadcasts')}
       accessibilityRole="button"
       accessibilityLabel="Open broadcasts"
       style={[styles.button, { borderColor: colors.border }]}
@@ -35,5 +35,5 @@ export function BroadcastsEntry() {
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderRadius: 2, paddingHorizontal: spacing.md },
+  button: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderRadius: radius.button, paddingHorizontal: spacing.md },
 });

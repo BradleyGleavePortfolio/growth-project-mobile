@@ -18,8 +18,102 @@ import {
   type AiConsentUpgradeCopy,
   type GrantRomanConsentRequest,
 } from '../../api/aiConsentApi';
-import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_MEMORY_COPY_SHA256 } from './copy';
-import { AI_CONSENT_MEMORY_VERSION, AI_CONSENT_VERSION } from './consentVersion';
+import {
+  AI_CONSENT_CHECKBOX_LABEL,
+  AI_CONSENT_CHECKBOX_LABEL_COACH_FREE,
+  AI_CONSENT_COACH_FREE_COPY_SHA256,
+  AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
+  AI_CONSENT_COPY_SHA256,
+  AI_CONSENT_CRISIS_COPY_SHA256,
+  AI_CONSENT_CRISIS_MEMORY_COPY_SHA256,
+  AI_CONSENT_MEMORY_COPY_SHA256,
+  AI_CONSENT_PARAGRAPH,
+  AI_CONSENT_PARAGRAPH_COACH_FREE,
+  AI_CONSENT_PARAGRAPH_CRISIS,
+  AI_CONSENT_PARAGRAPH_PRE57C,
+  AI_CONSENT_PRE57C_COPY_SHA256,
+  AI_CONSENT_PRE57C_MEMORY_COPY_SHA256,
+} from './copy';
+import {
+  AI_CONSENT_COACH_FREE_MEMORY_VERSION,
+  AI_CONSENT_COACH_FREE_VERSION,
+  AI_CONSENT_CRISIS_MEMORY_VERSION,
+  AI_CONSENT_CRISIS_VERSION,
+  AI_CONSENT_MEMORY_VERSION,
+  AI_CONSENT_PRE57C_MEMORY_VERSION,
+  AI_CONSENT_PRE57C_VERSION,
+  AI_CONSENT_VERSION,
+} from './consentVersion';
+
+/**
+ * The box 2 copies a client sees: coached client-ai-v6 / v7 (owner 57c), or v8 / v9 when the server
+ * answers with them (CRISIS-APP-COPY, while its crisis switch is on); client-ai-v4 / v5 for a client
+ * whose live grant is of them (the server answers with those copies); coach-free
+ * (client-ai-v4-coach-free / v5-coach-free, owner 62) only for a grant recorded before owner 62y2.
+ * `paragraph` and `boxLabel` are this build's base text; the memory paragraph always comes from the server.
+ */
+export interface RomanCopyFamily {
+  coachFree: boolean;
+  baseVersion: string;
+  baseSha256: string;
+  memoryVersion: string;
+  memorySha256: string;
+  paragraph: string;
+  boxLabel: string;
+}
+
+const COACHED_FAMILY: RomanCopyFamily = {
+  coachFree: false,
+  baseVersion: AI_CONSENT_VERSION,
+  baseSha256: AI_CONSENT_COPY_SHA256,
+  memoryVersion: AI_CONSENT_MEMORY_VERSION,
+  memorySha256: AI_CONSENT_MEMORY_COPY_SHA256,
+  paragraph: AI_CONSENT_PARAGRAPH,
+  boxLabel: AI_CONSENT_CHECKBOX_LABEL,
+};
+
+const CRISIS_FAMILY: RomanCopyFamily = {
+  coachFree: false,
+  baseVersion: AI_CONSENT_CRISIS_VERSION,
+  baseSha256: AI_CONSENT_CRISIS_COPY_SHA256,
+  memoryVersion: AI_CONSENT_CRISIS_MEMORY_VERSION,
+  memorySha256: AI_CONSENT_CRISIS_MEMORY_COPY_SHA256,
+  paragraph: AI_CONSENT_PARAGRAPH_CRISIS,
+  boxLabel: AI_CONSENT_CHECKBOX_LABEL,
+};
+
+const PRE57C_FAMILY: RomanCopyFamily = {
+  coachFree: false,
+  baseVersion: AI_CONSENT_PRE57C_VERSION,
+  baseSha256: AI_CONSENT_PRE57C_COPY_SHA256,
+  memoryVersion: AI_CONSENT_PRE57C_MEMORY_VERSION,
+  memorySha256: AI_CONSENT_PRE57C_MEMORY_COPY_SHA256,
+  paragraph: AI_CONSENT_PARAGRAPH_PRE57C,
+  boxLabel: AI_CONSENT_CHECKBOX_LABEL,
+};
+
+const COACH_FREE_FAMILY: RomanCopyFamily = {
+  coachFree: true,
+  baseVersion: AI_CONSENT_COACH_FREE_VERSION,
+  baseSha256: AI_CONSENT_COACH_FREE_COPY_SHA256,
+  memoryVersion: AI_CONSENT_COACH_FREE_MEMORY_VERSION,
+  memorySha256: AI_CONSENT_COACH_FREE_MEMORY_COPY_SHA256,
+  paragraph: AI_CONSENT_PARAGRAPH_COACH_FREE,
+  boxLabel: AI_CONSENT_CHECKBOX_LABEL_COACH_FREE,
+};
+
+/** The copies for a client with (false) or without (true) a coach; coached with `crisis`: v8 / v9. */
+export function romanFamily(coachFree: boolean | null | undefined, crisis = false): RomanCopyFamily {
+  return coachFree ? COACH_FREE_FAMILY : crisis ? CRISIS_FAMILY : COACHED_FAMILY;
+}
+
+/** The copies the server answered with, by its current version (coached v6 / v7 unless it names another). */
+export function romanFamilyOf(status: AiConsentStatusResponse | null | undefined): RomanCopyFamily {
+  const v = status?.current_version;
+  if (v === AI_CONSENT_CRISIS_VERSION || v === AI_CONSENT_CRISIS_MEMORY_VERSION) return CRISIS_FAMILY;
+  if (v === AI_CONSENT_PRE57C_VERSION || v === AI_CONSENT_PRE57C_MEMORY_VERSION) return PRE57C_FAMILY;
+  return romanFamily(v === AI_CONSENT_COACH_FREE_VERSION || v === AI_CONSENT_COACH_FREE_MEMORY_VERSION);
+}
 
 /**
  * - `granted`: the ledger confirmed the grant.
@@ -54,23 +148,31 @@ export function platformTag(): 'ios' | 'android' | 'web' {
  * The exact grant body for the box 2 text on screen: the server's client-ai-v5 copy when it is shown
  * (R11-C2B), otherwise this build's pinned client-ai-v4 text.
  */
-export function romanGrantBody(memory: AiConsentUpgradeCopy | null = null): GrantRomanConsentRequest {
+export function romanGrantBody(
+  memory: AiConsentUpgradeCopy | null = null,
+  family: RomanCopyFamily = COACHED_FAMILY,
+): GrantRomanConsentRequest {
   if (memory) return { version: memory.version, copy_sha256: memory.sha256, platform: platformTag() };
-  return { version: AI_CONSENT_VERSION, copy_sha256: AI_CONSENT_COPY_SHA256, platform: platformTag() };
+  return { version: family.baseVersion, copy_sha256: family.baseSha256, platform: platformTag() };
 }
 
-/** A live Roman grant of either copy this build knows (client-ai-v4, or client-ai-v5 with memory). */
-export function isLiveRomanGrant(status: AiConsentStatusResponse | null | undefined): boolean {
-  return isLiveGrant(status, AI_CONSENT_VERSION) || isLiveGrant(status, AI_CONSENT_MEMORY_VERSION);
+/**
+ * A live Roman grant of a copy this build knows (base, or memory). With `family`, only that family's
+ * copies count (box 2 on P0 shows that family's text); without it, any this build knows.
+ */
+export function isLiveRomanGrant(status: AiConsentStatusResponse | null | undefined, family?: RomanCopyFamily): boolean {
+  return (family ? [family] : [COACHED_FAMILY, CRISIS_FAMILY, PRE57C_FAMILY, COACH_FREE_FAMILY]).some(
+    (f) => isLiveGrant(status, f.baseVersion) || isLiveGrant(status, f.memoryVersion),
+  );
 }
 
-/** A well-formed client-ai-v5 copy with the pinned sha256 and this build's box 2 label, else null. */
-export function pinnedMemoryCopy(copy: unknown): AiConsentUpgradeCopy | null {
+/** A well-formed memory copy of `family` with its pinned sha256 and this build's box 2 label, else null. */
+export function pinnedMemoryCopy(copy: unknown, family: RomanCopyFamily = COACHED_FAMILY): AiConsentUpgradeCopy | null {
   const c = parseUpgrade(copy);
   return c &&
-    c.version === AI_CONSENT_MEMORY_VERSION &&
-    c.sha256 === AI_CONSENT_MEMORY_COPY_SHA256 &&
-    c.box_label.text === AI_CONSENT_CHECKBOX_LABEL
+    c.version === family.memoryVersion &&
+    c.sha256 === family.memorySha256 &&
+    c.box_label.text === family.boxLabel
     ? c
     : null;
 }
@@ -82,11 +184,14 @@ export function pinnedMemoryCopy(copy: unknown): AiConsentUpgradeCopy | null {
  * sees the server's `memory_copy` while it says Roman memory is on. The current production server
  * sends no `memory_copy`, so this is null there.
  */
-export function romanBox2MemoryCopyOf(status: AiConsentStatusResponse | null | undefined): AiConsentUpgradeCopy | null {
+export function romanBox2MemoryCopyOf(
+  status: AiConsentStatusResponse | null | undefined,
+  family: RomanCopyFamily = COACHED_FAMILY,
+): AiConsentUpgradeCopy | null {
   if (!status) return null;
-  if (isLiveGrant(status, AI_CONSENT_MEMORY_VERSION)) return pinnedMemoryCopy(status.copy);
-  if (status.memory_on !== true || isLiveGrant(status, AI_CONSENT_VERSION)) return null;
-  return pinnedMemoryCopy(status.memory_copy);
+  if (isLiveGrant(status, family.memoryVersion)) return pinnedMemoryCopy(status.copy, family);
+  if (status.memory_on !== true || isLiveGrant(status, family.baseVersion)) return null;
+  return pinnedMemoryCopy(status.memory_copy, family);
 }
 
 /**

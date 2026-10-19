@@ -76,6 +76,12 @@ Coverage:
 
 Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).
 
+### RomanAiConsentScreen: client with no coach (owner 62x)
+
+A client with no coach has no access to Roman. The screen shows the overline and title, the owner's sentence "You have no access to Roman, but may delete prior data here.", and one filled button, "Your conversations with Roman", which opens `RomanConversationsScreen` (its delete actions, and its empty state when there is nothing). No Allow, Withdraw or memory control and no `GET /me/ai-consent`; the server answers a grant from a client with no coach with 403 `ROMAN_REQUIRES_COACH`. Owner 57c: for a client with a coach the paragraph is `client-ai-v6` / `v7` (the safety-reply exception), read with `?variant=safety_exception`.
+
+CRISIS-APP-COPY (owner op 1): while `roman_crisis_alert` is on the screen reads `?variant=crisis_alert` (the `client-ai-v8` / `v9` texts, with the approved crisis sentence after the exception, when the server answers with them), and where it adds the exception for a live `client-ai-v4` / `v5` grant (the paragraph) the crisis sentence follows it. A live grant of another text reads its own text. B-A (b#1047): every new choice (Allow, memory on, memory off) is made in the copies asked for, whatever is on file; the memory-on confirmation is the server's text as sent, and POST / DELETE send the same `?variant=`. Tests: `src/lib/ai/__tests__/consentCrisis149.test.tsx`, `consentOfferBoundary151.test.tsx`, `consentAsked150.test.tsx`.
+
 ### RomanAiConsentScreen: prototype 74 look
 
 Built on the shared `src/ui` `Screen` (`edges={['top']}`, real insets, so Android clears the status bar; it sits in the More stack above the tab bar) with `ScreenTopBar` Back, a "Privacy" overline and the serif title "Roman and AI". When the choice has loaded, Roman's portrait sits beside one state line: "Roman is on. ..." exactly when the heading says Allowed (a live server grant), otherwise "Roman is off. ...". The card uses `radius.card` and a hairline, the buttons `radius.button`. Presentation only (ROMAN-ROOM-133): the consent paragraph, choices, confirmations and ledger writes are unchanged.
@@ -94,12 +100,14 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 **Why:** owner decision 2026-10-01 20:32 and ruling OR-110-1. Roman chats are kept until the client deletes them or their account, and the box-2 consent copy (`client-ai-v4`) says exactly that, so every chat must be findable and deletable. Roman chats are never visible to coaches.
 
+**Crisis sentence (CRISISAPP-M, owner CRISIS-APP-COPY op 1):** the intro states the Roman safety-reply exception (57c). While the server's `FEATURE_ROMAN_CRISIS_ALERT` is on (`roman_crisis_alert` in `GET /me/feature-flags`, read through `useFeatureFlags`; absent, loading or failed = off), the approved crisis sentence follows it directly, for a client with a coach only (`useRomanCrisisSentence` in `src/lib/romanCrisisSentence.ts` decides from the account; a coach account and a client with no coach never get it; a failed refresh reads off even after an earlier true); while it is off the intro is exactly as before. The Trust Center Roman bullet does the same. Every state that is not the list (loading, error, signed out) scrolls in one `ScrollView` (`page`), and the list scrolls itself, so the longer intro never pushes Try again or Contact support off a small phone at large text (FIX725R3). Test: `src/lib/__tests__/romanCrisisSentence.test.tsx` (both places x three accounts x on, off, failed read; and every state of both screens with the sentence on: in a scroll view, 44 pt actions, Try again reloads).
+
 **Flow**
 
 1. The list (`useRomanChats.ts`) loads `GET /roman/sessions` (30 per page, newest first, keyset `cursor`), shows each chat's local start date and time and message count (coach-tool chats are labelled). Two chats can start on the same local date (the backend keeps one chat per UTC day), so the start time is on every row, the transcript title and the permanent-delete confirm (B-331-1); the confirm also names the message count and, for coach tools, where it happened (`chatIdentity`), and pages with "Show older conversations".
-2. Open: `RomanConversationScreen` reads `GET /roman/sessions/:id/messages` (oldest first on screen, "Show earlier messages" pages back). Read only.
+2. Open: `RomanConversationScreen` reads `GET /roman/sessions/:id/messages` (oldest first on screen, "Show earlier messages" pages back). Read only. With `crisisActions` on, a reply carrying the server marker `safety_actions` shows `RomanCrisisActions` under it (CRISIS-BTN; coachless clients get the number actions).
 3. Delete one: confirm sheet ("permanently deletes ... cannot be undone"), the row leaves at once, comes back in place if the server does not confirm. A 404 `ROMAN_SESSION_NOT_FOUND` on delete is the requested outcome (already gone). A repeat delete is a quiet 204 on the server.
-4. Delete all: confirm sheet plus typing `DELETE` (case-insensitive). The list empties at once; on failure the previous list comes back, and after a partial or unknown failure the list is re-read to show what is left.
+4. Delete all: confirm sheet plus typing `DELETE` (case-insensitive). A client with no coach reads "Your plan and your logs stay as they are." as its last sentence (owner K1-5). The list empties at once; on failure the previous list comes back, and after a partial or unknown failure the list is re-read to show what is left.
 5. The transcript screen tells the list a chat is gone through `romanChatsEvents.ts` (in memory, carries the owner id and the sign-in epoch).
 6. The live Roman chat (`useRomanChat`) stays mounted under these screens when its header opens them. A confirmed Delete (row or transcript) of the chat it holds, or Delete all, reaches it through `romanChatsEvents.ts` (`onGone`, `onErased`): it drops that chat (no erased text stays on screen) and opens a fresh one, and a send waits for the fresh chat, so nothing is sent to an erased chat (B-376-1).
 
@@ -124,12 +132,15 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 ### CoachSharingScreen
 
-`CoachSharingScreen.tsx` (Settings > Privacy > Coach sharing): four switches (Workouts, Food logs, Weigh-ins, Check-ins and
-habits), each saved at once via `POST /consent/grant | revoke`. Under them one line says connected devices (Apple Health,
-Health Connect) are not covered by the switches: the coach reads that data through the coach link only (backend
-`wearable-samples.service.ts`), and data already shared stays after a disconnect (FW-BODY B2). The **Connected devices** row
+`CoachSharingScreen.tsx` (Settings > Privacy > Coach sharing): no switches (owner #SHARE-SIMPLE / #SHARE-JOIN, backend
+#1061: workouts, food logs, weigh-ins, check-ins and habits always reach the current coach; POST /consent/revoke returns 410
+for the four removed sharing scopes, POST /consent/grant remains accepted, and the one sharing switch is Roman and AI). It
+says what the coach sees and, under it, how new device data stops: a disconnect in Connected devices, or the phone's Apple
+Health permissions (Android: Health Connect); data already shared stays (FW-BODY B2). The **Connected devices** row
 opens `Connections` on the same More stack and shows where the More screen shows that row (iPhone, Health Connect builds,
-tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`.
+tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`. The Settings row shows only while the server says the
+client has a coach (`GET /consent/me`; 400 = none), read each time Settings comes into view (`useFocusEffect`); until the
+first answer it follows the account's own coach link, and a failed read keeps the last answer (owner K1-14, "hide until they have a coach"; test `src/lib/ai/__tests__/consentK1150.test.tsx`).
 
 ## Notification categories (`NotificationPreferencesScreen.tsx`)
 

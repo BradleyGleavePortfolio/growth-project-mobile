@@ -36,6 +36,7 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import { layout, radius, semantic, spacing, typography } from '../../../theme/tokens';
+import { featureFlags } from '../../../config/featureFlags';
 import { useTheme } from '../../../theme/ThemeProvider';
 import HapticPressable from '../../../components/HapticPressable';
 import { Headline, Overline, QuietSection, Screen, TextLink, quietActions } from '../../../ui';
@@ -56,6 +57,7 @@ import RevolutGlowChart, {
   type GlowChartPoint,
 } from './charts/RevolutGlowChart';
 import ProviderOverlapChips from './components/ProviderOverlapChips';
+import MetricDetailV2 from './MetricDetailV2';
 
 type MetricDetailParams = {
   readonly metric: WearableMetricType;
@@ -173,7 +175,16 @@ export function goalDetail(points: readonly SparkPoint[], target: number): strin
 
 const RECENT_DAYS = 7;
 
+/** HEALTH-2: with healthPages on, a daily total with a starter goal, on the client's own data, opens MetricDetailV2. */
 export default function MetricDetailScreen() {
+  const { metric, bucket, clientId } = useRoute<RouteProp<Record<string, MetricDetailParams>, string>>().params;
+  const goal = featureFlags.healthPages && !clientId ? starterGoalFor(metric) : null;
+  return goal
+    ? <MetricDetailV2 metric={metric} bucket={bucket} title={sentenceLabel(metricMeta(metric).label)} goal={goal.target} unit={goal.unit} />
+    : <MetricDetailLegacy />;
+}
+
+function MetricDetailLegacy() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<Record<string, MetricDetailParams>, string>>();
   const { metric, bucket, clientId } = route.params;
@@ -331,6 +342,7 @@ export default function MetricDetailScreen() {
           <RevolutGlowChart
             data={chartData}
             tone={tone}
+            variant={meta.summary === 'sum' && perDay ? 'bar' : 'line'}
             reduceMotion={reduceMotion}
             onSelect={setSelectedIndex}
             accessibilityLabel={`${title} trend over the last ${WINDOW_DAYS} days`}

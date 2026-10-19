@@ -1,7 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 import { usePackagePurchase } from '../usePackagePurchase';
-import { PACKAGE_PAYMENT_COPY, STRIPE_RETURN_URL } from '../../lib/packagePayment';
+import { PACKAGE_PAYMENT_COPY, STRIPE_RETURN_URL, YOUR_PLANS_QUERY_KEY } from '../../lib/packagePayment';
+import { queryClient } from '../../services/queryClient';
 import type { PurchasablePackage } from '../../lib/planTerms';
 
 const mockPost = jest.fn();
@@ -104,6 +105,7 @@ afterEach(() => linkingSpy.mockRestore());
 
 describe('HUNT-04 day-1 bank authentication returns to package PaymentSheet', () => {
   it('hands the bank return to Stripe so the held sheet completes and paid access is confirmed', async () => {
+    const outdated = jest.spyOn(queryClient, 'invalidateQueries');
     const held = deferred<SheetResult>();
     mockPresent.mockReturnValueOnce(held.promise);
     mockHandleReturn.mockImplementation(async () => {
@@ -125,6 +127,7 @@ describe('HUNT-04 day-1 bank authentication returns to package PaymentSheet', ()
     expect(mockHandleReturn).toHaveBeenCalledWith(url);
     expect(h.result.current.state.phase).toBe('success');
     expect(h.onEntitled).toHaveBeenCalledTimes(1);
+    expect(outdated).toHaveBeenCalledWith({ queryKey: YOUR_PLANS_QUERY_KEY }); // You's Your plans row reads again
     expect(mockPost).toHaveBeenCalledTimes(1);
     expect(mockRemove).toHaveBeenCalledTimes(1);
   });

@@ -52,7 +52,7 @@ function shortDate(iso: string | null): string | null {
 }
 
 export function shareMessage(c: Pick<CoachCode, 'code' | 'join_url'>): string {
-  return `Use code ${c.code} to join The Growth Project: ${c.join_url}`;
+  return `Use code ${c.code} to join TGP Fitness: ${c.join_url}`;
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -445,7 +445,7 @@ function QrSheet({
               <CodeQr value={code.qr_payload} size={232} code={code.code} />
               <Text style={styles.qrCode}>{code.code}</Text>
             </View>
-            <Text style={styles.meta}>Scanning opens The Growth Project with this code filled in.</Text>
+            <Text style={styles.meta}>Scanning opens TGP Fitness with this code filled in.</Text>
             {error ? <Text style={styles.banner} accessibilityRole="alert">{error}</Text> : null}
             <TouchableOpacity style={styles.option} onPress={shareImage} accessibilityRole="button" testID="coach-code-qr-share-image">
               <Text style={styles.optionText}>Share QR image</Text>

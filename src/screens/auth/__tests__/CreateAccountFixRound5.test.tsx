@@ -195,12 +195,12 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
     it('Apple, same mount: unconfirmed, then refused', async () => {
       const utils = await renderScreen(undefined, 'coach');
       mockSignInWithApple.mockResolvedValueOnce({
-        success: false, error: 'x', error_code: 'coach_signup_unconfirmed', provider_email: 'pat@icloud.com',
+        success: false, error: 'x', error_code: 'coach_signup_unconfirmed', provider_email: 'pat@apple.test',
       });
       await fireEvent.press(utils.getByTestId('apple-button'));
       expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
       mockSignInWithApple.mockResolvedValueOnce({
-        success: false, error: 'x', error_code: 'coach_signup_unavailable', provider_email: 'pat@icloud.com',
+        success: false, error: 'x', error_code: 'coach_signup_unavailable', provider_email: 'pat@apple.test',
       });
       await fireEvent.press(utils.getByTestId('apple-button'));
       await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
@@ -217,7 +217,7 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
     });
 
     it('Apple: a refusal thrown (not returned) after an unresolved attempt', async () => {
-      await rememberUnconfirmedCoachSignup('apple', 'pat@icloud.com');
+      await rememberUnconfirmedCoachSignup('apple', 'pat@apple.test');
       const utils = await renderScreen(undefined, 'coach');
       mockSignInWithApple.mockRejectedValueOnce(new CoachSignupUnavailableError());
       await fireEvent.press(utils.getByTestId('apple-button'));
@@ -228,12 +228,12 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
     it('Google, same mount: unconfirmed, then refused', async () => {
       const utils = await renderScreen(undefined, 'coach');
       mockSignInWithGoogle.mockResolvedValueOnce({
-        success: false, error: 'x', error_code: 'coach_signup_unconfirmed', provider_email: 'pat@gmail.com',
+        success: false, error: 'x', error_code: 'coach_signup_unconfirmed', provider_email: 'pat@mail.test',
       });
       await fireEvent.press(utils.getByText('Continue with Google'));
       expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
       mockSignInWithGoogle.mockResolvedValueOnce({
-        success: false, error: 'x', error_code: 'coach_signup_unavailable', provider_email: 'pat@gmail.com',
+        success: false, error: 'x', error_code: 'coach_signup_unavailable', provider_email: 'pat@mail.test',
       });
       await fireEvent.press(utils.getByText('Continue with Google'));
       await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
@@ -241,10 +241,10 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
     });
 
     it('Google, after a remount: refused retry keeps the unresolved state', async () => {
-      await rememberUnconfirmedCoachSignup('google', 'pat@gmail.com');
+      await rememberUnconfirmedCoachSignup('google', 'pat@mail.test');
       const utils = await renderScreen(undefined, 'coach');
       mockSignInWithGoogle.mockResolvedValueOnce({
-        success: false, error: 'x', error_code: 'coach_signup_unavailable', provider_email: 'Pat@gmail.com',
+        success: false, error: 'x', error_code: 'coach_signup_unavailable', provider_email: 'Pat@mail.test',
       });
       await fireEvent.press(utils.getByText('Continue with Google'));
       await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
@@ -458,7 +458,7 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
         is_new_user: false,
         invite_attached: false,
         invite_code: 'GP-TEST1',
-        user: { id: 'u1', email: 'pat@gmail.com', role: 'student', coach_id: 'coach-A' },
+        user: { id: 'u1', email: 'pat@mail.test', role: 'student', coach_id: 'coach-A' },
       });
       const utils = await renderScreen();
       await fireEvent.changeText(utils.getByTestId('invite-code-input'), 'GP-TEST1');
