@@ -1,5 +1,7 @@
 # Client screens
 
+| Slice | Behavior |
+|---|---|
 | C8-WEEK (`progress/WeekInReviewScreen`, `weekReview`) | With `clientProgressV2` on, the existing `Report` route reviews the last completed Monday–Sunday; off, `ReportScreen` keeps its legacy report. Self-only workout/assignment, weekly food, weight history, habit-summary and daily check-in reads; no writes, sharing or persisted summary. The ring uses server habit planned/done counts; averages use recorded days, and weight reuses C8-2B smoothing. Empty, loading, error/offline retry and account changes are explicit. No weekly form, coach reply or historical protein-target claim. |
 
 C8V2-2B: with `clientProgressV2` on (off in every build) `ProgressScreen` renders
