@@ -7,6 +7,9 @@
  * Sections, each loaded from a live route and failing on its own:
  *   Net to you      /v1/coach/money/summary (Today / 30d / 90d / YTD with
  *                   change vs the previous period; tap for the breakdown)
+ *   AI pool         /coach/ai/budget (useAIBudget, polled only while this
+ *                   page is focused) and "Buy more credits" (PK-2,
+ *                   MoneyAIPool; no button where packs are not sold)
  *   Needs attention /v1/coach/money/attention (failed payments with the
  *                   card-update state, disputes, Stripe requirements)
  *   Payouts         /coach/connect/payouts (next payout + recent)
@@ -38,7 +41,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useIsFocused, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as WebBrowser from "expo-web-browser";
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
@@ -79,6 +82,7 @@ import { creditPacksHidden } from "../../../config/purchaseSurfaces";
 import RomanPayoutNotice from "../../../components/roman/RomanPayoutNotice";
 import { assertStripeUrl } from "../../../utils/stripeUrlValidator";
 import { useNetworkStatus } from "../../../hooks/useNetworkStatus";
+import { useAIBudget } from "../../../hooks/useAIBudget";
 import SetupNotice from "../../../components/coach/setup/SetupNotice";
 import { CsvFileError, shareCsvFile } from "../../../lib/money/csvFile";
 import { authEvents } from "../../../utils/authEvents";
@@ -89,6 +93,7 @@ import { openInboxChat } from "../../../navigation/coachInbox";
 import { useSection } from "./useSection";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MoneyBack from "./MoneyBack";
+import MoneyAIPool from "./MoneyAIPool";
 
 type Nav = NativeStackNavigationProp<SettingsStackParamList, "CoachMoney">;
 
@@ -216,6 +221,11 @@ export default function MoneyScreen({
     "check your Stripe status",
     [],
   );
+  // The same query as the Coach Home meter, so a bought pack (checkout
+  // invalidates it) shows here on return.
+  const isFocused = useIsFocused();
+  const aiBudget = useAIBudget({ enabled: isFocused });
+  const refetchAi = aiBudget.refetch;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -226,9 +236,10 @@ export default function MoneyScreen({
       payouts.reload(),
       roster.reload(),
       connect.reload(),
+      refetchAi(),
     ]);
     setRefreshing(false);
-  }, [summary, attention, charges, payouts, roster, connect]);
+  }, [summary, attention, charges, payouts, roster, connect, refetchAi]);
 
   const messageClient = (a: AttentionItem) => {
     if (a.client) openInboxChat(navigation, a.client.id, a.client.name);
@@ -310,6 +321,18 @@ export default function MoneyScreen({
   const firstLoad =
     !anyLoaded && [summary, connect].some((x) => x.loading) && isOnline;
 
+  // PK-2: on both Money states, the page's one "Buy more credits" (PK-2a: two
+  // taps from the Money tab). Hidden like every credit-pack entry where the
+  // build may not sell packs. While the Stripe setup card shows its filled
+  // button, buying is the quiet text action, so one filled button per page.
+  const aiPool = (
+    <MoneyAIPool
+      query={aiBudget}
+      onBuy={creditPacksHidden() ? undefined : () => navigation.navigate("CreditPackCheckout", undefined)}
+      quiet={!!c && !stripeActive}
+    />
+  );
+
   if (headCoachHandles) {
     return (
       <SafeAreaView ph-no-capture style={styles.page} edges={["top"]}>
@@ -337,6 +360,7 @@ export default function MoneyScreen({
               payments.
             </Text>
           </View>
+          {aiPool}
         </ScrollView>
       </SafeAreaView>
     );
@@ -577,6 +601,8 @@ export default function MoneyScreen({
             </View>
           ) : null}
         </View>
+
+        {aiPool}
 
         {/* Needs attention */}
         <Text style={styles.h2} accessibilityRole="header">
@@ -886,21 +912,6 @@ export default function MoneyScreen({
           >
             <Text style={styles.footerText}>Packages</Text>
           </TouchableOpacity>
-          {/* PK-2a: "Buy more credits" is two taps from the Money tab (tab, then
-              this row). Same gate as every credit-pack entry: hidden where the
-              build may not sell packs (iOS store builds without the US link,
-              Android release builds without the Android link). */}
-          {creditPacksHidden() ? null : (
-            <TouchableOpacity
-              onPress={() => navigation.navigate("CreditPackCheckout", undefined)}
-              style={styles.footerRow}
-              accessibilityRole="button"
-              accessibilityLabel="Buy more AI credits"
-              testID="money-buy-credits"
-            >
-              <Text style={styles.footerText}>Buy more credits</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </ScrollView>
     </SafeAreaView>

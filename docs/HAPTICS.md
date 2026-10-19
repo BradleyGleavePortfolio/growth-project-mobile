@@ -100,6 +100,7 @@ When the toggle changes:
 | `HomeTile` (rings Home) | `selection()` | A tile opens its screen |
 | `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |
 | `purchase/PlanActiveMoment` (`clientBillingV2` on) | `success()` | Once, when the plan-is-active moment appears after a confirmed purchase |
+| `MoneyAIPool` (Money page) | `mediumImpact()` / `softImpact()` | "Buy more credits" pressed (filled button / quiet text while the Stripe setup card shows) |
 
 ## Architecture
 
