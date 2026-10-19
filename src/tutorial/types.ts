@@ -3,7 +3,7 @@
  *
  * `OnboardingCompletePayload` mirrors the 200 body of
  * `POST /api/me/onboarding/complete` (and the `complete` block of
- * `GET /api/me/onboarding`) from the clinic onboarding contract v1. Every
+ * `GET /api/me/onboarding`) from the onboarding contract v1. Every
  * field is treated as optional at runtime: the tutorial must never crash or
  * invent numbers when the server omits something. Missing data marks the
  * dependent step `pending` (resumable) instead.

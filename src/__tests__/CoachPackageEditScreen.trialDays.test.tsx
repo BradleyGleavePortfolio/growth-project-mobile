@@ -49,7 +49,7 @@ jest.mock("../utils/haptics", () => ({
   successTap: jest.fn(),
 }));
 jest.mock("../hooks/useCurrentUser", () => ({
-  useCurrentUser: () => ({ id: "u1", email: "c@x.com", name: "Coach Lee" }),
+  useCurrentUser: () => ({ id: "u1", email: "coach@example.test", name: "Coach Lee" }),
 }));
 
 const mockUpdate = jest.fn();

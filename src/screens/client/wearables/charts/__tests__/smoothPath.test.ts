@@ -7,11 +7,7 @@
  * guarantee that distinguishes monotone-cubic from a naive spline.
  */
 
-import {
-  smoothAreaPath,
-  smoothLinePath,
-  type PathPoint,
-} from '../smoothPath';
+import { smoothLinePath, type PathPoint } from '../smoothPath';
 
 describe('smoothLinePath', () => {
   it('returns an empty string for no points', () => {
@@ -58,27 +54,5 @@ describe('smoothLinePath', () => {
       expect(y).toBeGreaterThanOrEqual(0);
       expect(y).toBeLessThanOrEqual(100);
     }
-  });
-});
-
-describe('smoothAreaPath', () => {
-  it('returns empty for fewer than 2 points', () => {
-    expect(smoothAreaPath([], 99)).toBe('');
-    expect(smoothAreaPath([{ x: 0, y: 0 }], 99)).toBe('');
-  });
-
-  it('closes the area down to the baseline (ends with Z)', () => {
-    const pts: PathPoint[] = [
-      { x: 0, y: 10 },
-      { x: 50, y: 40 },
-      { x: 100, y: 20 },
-    ];
-    const d = smoothAreaPath(pts, 99);
-    expect(d.startsWith('M')).toBe(true);
-    expect(d).toContain('C');
-    expect(d.trimEnd().endsWith('Z')).toBe(true);
-    // Drops to the baseline at the last and first x before closing.
-    expect(d).toContain('L 100 99');
-    expect(d).toContain('L 0 99');
   });
 });

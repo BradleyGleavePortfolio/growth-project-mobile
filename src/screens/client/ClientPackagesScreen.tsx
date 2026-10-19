@@ -46,6 +46,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text,
@@ -65,7 +66,8 @@ import {
   type PaymentsResult,
 } from '../../api/clientPaymentsApi';
 import { useTheme } from '../../theme/ThemeProvider';
-import { Screen } from '../../ui';
+import { QuietOverline, Screen } from '../../ui';
+import { ForestStatusBar } from '../../components/StatusBarBand';
 import { DunningBanner as SmartDunningBanner } from '../../entitlements/dunning/DunningBanner';
 import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
@@ -77,7 +79,8 @@ import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
 import YourPlansPanel from '../../components/purchase/YourPlansPanel';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 import { PACKAGE_PAYMENT_COPY } from '../../lib/packagePayment';
-import { planTerms, priceLabel } from '../../lib/planTerms';
+import { money, planTerms, priceLabel } from '../../lib/planTerms';
+import { CLIENT_PLAN_COPY, ClientPlanPage, PlanMasthead, PlanOfferCard } from './packageDetail/ClientPlanPresentation';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { COACHLESS_TITLE, COACHLESS_BODY, COACHLESS_CTA } from '../../entitlements/PaywallSheet';
 
@@ -177,7 +180,7 @@ export default function ClientPackagesScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const noCoach = useCoachlessClient();
 
-  // Clinic launch: plans are 1:1 person-to-person coaching (Guideline
+  // Launch: plans are 1:1 person-to-person coaching (Guideline
   // 3.1.3(d)), so the screen names the individual coach.
   const [coachName, setCoachName] = useState<string | null>(null);
   useEffect(() => {
@@ -199,6 +202,7 @@ export default function ClientPackagesScreen() {
   const [plansTick, setPlansTick] = useState(0);
   // FW-MONEY-128 U-7: purchase ids Your plans shows (null until it answers).
   const [shownPlanIds, setShownPlanIds] = useState<string[] | null>(null);
+  const [openPlanId, setOpenPlanId] = useState<string | null>(null);
   // FW-MONEY-128 B-1: the refund line's own support action.
   const refundSupport = useSupportEmail('Refund request');
 
@@ -263,9 +267,19 @@ export default function ClientPackagesScreen() {
   // After success, the slow state, or "Open your plan": back to the list,
   // reloaded so the Current plan card shows the new plan.
   const finishPurchase = useCallback(() => {
+    setOpenPlanId(null);
     purchase.reset();
     void load();
   }, [purchase, load]);
+
+  // C5 Style C: from the success moment to what the purchase unlocks.
+  const seeUnlocks = useCallback(
+    (purchaseId: string) => {
+      finishPurchase();
+      navigation.navigate('PurchaseUnpack', { purchaseId });
+    },
+    [finishPurchase, navigation],
+  );
 
   const handleUpdateCard = useCallback(() => {
     // OR-110-2: the native card screen (Stripe PaymentSheet, TGP theme)
@@ -352,15 +366,20 @@ export default function ClientPackagesScreen() {
     ) : null;
 
   return (
-    <Screen
+    <>{featureFlags.clientBillingV2 ? <ForestStatusBar /> : null}<Screen
       edges={['top']}
-      contentStyle={styles.content}
+      contentStyle={[styles.content, featureFlags.clientBillingV2 && { backgroundColor: semanticColors.bgPrimary }]}
+      style={featureFlags.clientBillingV2 ? { backgroundColor: semanticColors.surface.masthead } : undefined}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={featureFlags.clientBillingV2 ? semanticColors.textOnMastheadMuted : semanticColors.accent} />
       }
     >
       {/* U-MC-5: the More stack hides headers, so the screen brings its own
           back control (cross-tab opens have nothing to go back to). */}
+      {featureFlags.clientBillingV2 ? (
+        <PlanMasthead title={oneToOneCoachingLabel(coachName)} coach={coachName}
+          onBack={navigation.canGoBack?.() ? () => navigation.goBack() : undefined} />
+      ) : <>
       {navigation.canGoBack?.() ? (
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -375,10 +394,11 @@ export default function ClientPackagesScreen() {
       <Text style={styles.header} testID="client-packages-header">
         {oneToOneCoachingLabel(coachName)}
       </Text>
+      </>}
       <Text style={styles.subheader}>
         Each plan is personal coaching delivered one to one by your coach.
         Payment is handled by Stripe's secure checkout. Your card never
-        touches The Growth Project servers.
+        touches TGP Fitness servers.
       </Text>
 
       {/* Past-due / dunning banner */}
@@ -428,7 +448,7 @@ export default function ClientPackagesScreen() {
           <Text style={styles.gateTitle}>No self-serve plans yet</Text>
           <Text style={styles.gateBody}>
             Your coach handles access directly. Message them to start or
-            change a plan — no payment is taken inside the app until they
+            change a plan. No payment is taken inside the app until they
             enable it.
           </Text>
           <TouchableOpacity
@@ -481,6 +501,80 @@ export default function ClientPackagesScreen() {
               isRenewing(packages.data.find((p) => p.id === st.package_id))
                 ? st.package_name
                 : null;
+            const feedback = active ? (
+              <PurchaseFeedback
+                purchase={purchase}
+                onContinue={finishPurchase}
+                onOpenPlan={finishPurchase}
+                onSeeUnlocks={seeUnlocks}
+              />
+            ) : null;
+            const action = !sellable && !current ? null : active && (purchase.state.phase === 'success' ||
+              purchase.state.phase === 'confirm_slow' ||
+              purchase.state.phase === 'confirmed_pending' ||
+              purchase.state.priceChange) ? null : (
+              <TouchableOpacity
+                style={[styles.buyBtn, (current || anyBusy || !sellable) && styles.buyBtnDisabled]}
+                onPress={() => handleBuy(pkg)}
+                disabled={current || anyBusy || !sellable}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: current || anyBusy || !sellable, busy }}
+                accessibilityLabel={current ? 'Current plan' : sellable
+                  ? `${planTerms(sellable).cta}, ${pkg.name}` : `${pkg.name} is not available to buy in the app`}
+                testID={`buy-plan-${pkg.id}`}
+              >
+                {busy ? <ActivityIndicator color={semanticColors.textOnDisabled} /> : (
+                  <Text style={[styles.buyBtnText, (current || anyBusy || !sellable) && styles.buyBtnTextDisabled]}>
+                    {current ? 'Current plan' : sellable ? planTerms(sellable).cta : ''}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+            const details = (outcome: React.ReactNode) => <>
+              {sellable && !current ? <PlanTermsBlock pkg={sellable} testID={`plan-terms-${pkg.id}`} /> : null}
+              {sellable && renewingName ? (
+                <Text style={styles.pkgDesc} testID={`plan-second-${pkg.id}`}>{secondPlanNotice(renewingName)}</Text>
+              ) : null}
+              {outcome}
+              {!sellable && !current ? (
+                <Text style={styles.pkgDesc} testID={`plan-unsellable-${pkg.id}`}>
+                  Your coach sets this plan up directly. Message your coach to join it.
+                </Text>
+              ) : null}
+            </>;
+            if (featureFlags.clientBillingV2) {
+              // Leaving the success moment is Done, so it never mounts (haptic, ring) a second time on the list.
+              const closePlan = () => (active && purchase.state.phase === 'success' ? finishPurchase() : setOpenPlanId(null));
+              const shown = active && (purchase.state.phase !== 'idle' || purchase.state.notice || purchase.state.priceChange);
+              const displayPrice = sellable ? priceLabel(sellable) : formatMoney(pkg.price ?? 0, pkg.currency);
+              return <React.Fragment key={pkg.id}>
+                <PlanOfferCard name={pkg.name} price={displayPrice} description={pkg.description}
+                  features={pkg.features ?? []} coach={coachName} testID={`plan-offer-${pkg.id}`}
+                  onOpen={() => setOpenPlanId(pkg.id)} />
+                {openPlanId !== pkg.id ? feedback : null}
+                {openPlanId === pkg.id ? (
+                  <Modal visible testID="client-plan-modal" statusBarTranslucent presentationStyle="fullScreen" animationType="none" backdropColor={semanticColors.bgPrimary} onRequestClose={closePlan}>
+                    <ClientPlanPage name={pkg.name} price={displayPrice} description={pkg.description}
+                      features={pkg.features ?? []} coach={coachName} onBack={closePlan}
+                      outcome={feedback} outcomeKey={shown ? purchase.state.phase : null}
+                      footer={action ? <>
+                        {sellable?.quote && !current ? (
+                          <View style={styles.dueToday} testID="plan-due-today" accessible
+                            accessibilityLabel={`${CLIENT_PLAN_COPY.due}, ${money(sellable.quote.dueTodayCents, sellable.quote.currency)}`}>
+                            <Text style={styles.pkgDesc}>{CLIENT_PLAN_COPY.due}</Text>
+                            <Text style={styles.dueAmount}>{money(sellable.quote.dueTodayCents, sellable.quote.currency)}</Text>
+                          </View>
+                        ) : null}
+                        {action}
+                      </> : undefined}
+                    >
+                      {sellable && !current ? <QuietOverline style={{ marginBottom: 12 }} accessibilityRole="header">{CLIENT_PLAN_COPY.billing}</QuietOverline> : null}
+                      {details(null)}
+                    </ClientPlanPage>
+                  </Modal>
+                ) : null}
+              </React.Fragment>;
+            }
             return (
               <View key={pkg.id} style={styles.pkgCard}>
                 <View style={styles.pkgHeader}>
@@ -502,64 +596,8 @@ export default function ClientPackagesScreen() {
                     ))}
                   </View>
                 ) : null}
-                {sellable && !current ? <PlanTermsBlock pkg={sellable} testID={`plan-terms-${pkg.id}`} /> : null}
-                {sellable && renewingName ? (
-                  <Text style={styles.pkgDesc} testID={`plan-second-${pkg.id}`}>
-                    {secondPlanNotice(renewingName)}
-                  </Text>
-                ) : null}
-                {active ? (
-                  <PurchaseFeedback
-                    purchase={purchase}
-                    onContinue={finishPurchase}
-                    onOpenPlan={finishPurchase}
-                  />
-                ) : null}
-                {!sellable && !current ? (
-                  <Text style={styles.pkgDesc} testID={`plan-unsellable-${pkg.id}`}>
-                    Your coach sets this plan up directly. Message your coach to join it.
-                  </Text>
-                ) : null}
-                {!sellable && !current ? null : active && (purchase.state.phase === 'success' ||
-                  purchase.state.phase === 'confirm_slow' ||
-                  purchase.state.phase === 'confirmed_pending' ||
-                  purchase.state.priceChange) ? null : (
-                  <TouchableOpacity
-                    style={[
-                      styles.buyBtn,
-                      (current || anyBusy || !sellable) && styles.buyBtnDisabled,
-                    ]}
-                    onPress={() => handleBuy(pkg)}
-                    disabled={current || anyBusy || !sellable}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: current || anyBusy || !sellable, busy }}
-                    accessibilityLabel={
-                      current
-                        ? 'Current plan'
-                        : sellable
-                          ? `${planTerms(sellable).cta}, ${pkg.name}`
-                          : `${pkg.name} is not available to buy in the app`
-                    }
-                    testID={`buy-plan-${pkg.id}`}
-                  >
-                    {busy ? (
-                      <ActivityIndicator color={semanticColors.textOnDisabled} />
-                    ) : (
-                      <Text
-                        style={[
-                          styles.buyBtnText,
-                          (current || anyBusy || !sellable) && styles.buyBtnTextDisabled,
-                        ]}
-                      >
-                        {current
-                          ? 'Current plan'
-                          : sellable
-                            ? planTerms(sellable).cta
-                            : ''}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                )}
+                {details(feedback)}
+                {action}
               </View>
             );
           })
@@ -582,7 +620,7 @@ export default function ClientPackagesScreen() {
       <Text style={styles.fineprint}>
         Payments are processed securely by Stripe inside the app. A renewing
         plan can be ended at any time in Your plans when it shows End my
-        plan. Refunds are issued by The Growth Project team; to ask for one, email support.
+        plan. Refunds are issued by the TGP Fitness team; to ask for one, email support.
       </Text>
       <TouchableOpacity
         onPress={() => void refundSupport.open()}
@@ -600,7 +638,7 @@ export default function ClientPackagesScreen() {
         testID="plans-refund-support-fallback"
         centered
       />
-    </Screen>
+    </Screen></>
   );
 }
 
@@ -608,6 +646,8 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     // Screen owns the inset top (insets.top + 12).
     content: { paddingHorizontal: 24, paddingBottom: 40 },
+    dueToday: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+    dueAmount: { ...tokens.typography.h2, color: semanticColors.textPrimary, fontVariant: ['tabular-nums'] },
     center: {
       flex: 1,
       alignItems: 'center',

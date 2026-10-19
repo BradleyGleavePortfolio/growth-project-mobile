@@ -84,8 +84,12 @@ jest.mock('../../../../hooks/useWearableConnections', () => ({
 // S14: the AI panel is behind a default-off flag (D2 consent); the getter
 // lets each test choose the value without re-importing the shell.
 let mockAiInsightsFlag = true;
+let mockHealthPagesFlag = false;
 jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: {
+    get healthPages() {
+      return mockHealthPagesFlag;
+    },
     get wearableAiInsights() {
       return mockAiInsightsFlag;
     },
@@ -135,6 +139,7 @@ const mockNavigate = jest.fn();
 const mockSetParams = jest.fn();
 const mockGoBack = jest.fn();
 let mockCanGoBack = false;
+let mockUnder = 'MoreIndex';
 let mockRouteParams: { bucket?: 'fitness' | 'recovery' } = {};
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -142,8 +147,9 @@ jest.mock('@react-navigation/native', () => ({
     setParams: mockSetParams,
     goBack: mockGoBack,
     canGoBack: () => mockCanGoBack,
+    getState: () => ({ routes: [{ key: 'under', name: mockUnder }, { key: 'health', name: 'Health' }] }),
   }),
-  useRoute: () => ({ params: mockRouteParams }),
+  useRoute: () => ({ key: 'health', params: mockRouteParams }),
 }));
 
 import WearablesShell from '../WearablesShell';
@@ -152,6 +158,7 @@ import { logger } from '../../../../utils/logger';
 
 beforeEach(() => {
   mockAiInsightsFlag = true;
+  mockHealthPagesFlag = false;
   mockDeviceSource = 'APPLE_HEALTHKIT';
   mockImportHistory.mockReset();
   mockImportHistory.mockResolvedValue({
@@ -166,7 +173,7 @@ beforeEach(() => {
   mockNavigate.mockReset();
   mockSetParams.mockReset();
   mockGoBack.mockReset();
-  mockCanGoBack = false;
+  mockCanGoBack = false; mockUnder = 'MoreIndex';
   mockRouteParams = {};
   mockUseWearableConnections.mockReturnValue({
     data: [
@@ -307,7 +314,7 @@ describe('WearablesShell', () => {
   it('an unexpected refresh failure shows a reference and support path, and is reported', async () => {
     mockImportHistory.mockRejectedValue(new Error('boom'));
     await render(<WearablesShell />);
-    await waitFor(() => expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy());
     expect(mockReportUnexpected).toHaveBeenCalled();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
   });
@@ -368,7 +375,7 @@ describe('WearablesShell', () => {
       await fireEvent.press(await screen.findByLabelText('Open Health Connect'));
       expect(
         await screen.findByText(
-          'When Health Connect access is allowed for The Growth Project, tap Try again to bring in new data.',
+          'When Health Connect access is allowed for TGP Fitness, tap Try again to bring in new data.',
         ),
       ).toBeTruthy();
       await fireEvent.press(screen.getByLabelText('Try again to sync Health Connect'));
@@ -482,6 +489,22 @@ describe('WearablesShell', () => {
 // B-HEALTHBACK-135 (B29): the More stack hides the native header and iOS has
 // no hardware back, so the pushed shell draws the coach screens' Back (m#638).
 describe('WearablesShell Back', () => {
+  // Back names the place it returns to: You only over the You menu; the Home stack's copy (Sleep dial, Steps tile) says "Back".
+  it.each([
+    ['the You row', 'MoreIndex', 'Back to You', 'Back'],
+    ['Home (Sleep dial or Steps tile)', 'HomeMain', 'Back', 'Back to You'],
+  ])('opened from %s (over %s), Back reads and speaks "%s" with healthPages on', async (_, under, label, other) => {
+    mockHealthPagesFlag = true;
+    mockCanGoBack = true;
+    mockUnder = under;
+    mockRouteParams = { bucket: 'recovery' };
+    await render(<WearablesShell />);
+    expect(screen.getByText(label)).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('health-back').props.style)).toMatchObject({ width: 'auto', height: 44 });
+    await fireEvent.press(screen.getByLabelText(label));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText(other)).toBeNull();
+  });
   /** The first announced node (a label or a text) in render order. */
   const firstAnnounced = (n: unknown): string | undefined => {
     if (n == null || typeof n !== 'object') return undefined;

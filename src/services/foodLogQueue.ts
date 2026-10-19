@@ -64,6 +64,10 @@ export interface PendingSearchLog {
     quantity_multiplier: number;
     original_quantity?: number;
     original_unit?: string;
+    // FOODLINK: the plan link, kept with the queued entry so it survives a relaunch. Items queued by
+    // older builds have neither and flush as before.
+    plan_slot_id?: string;
+    fills_usual_meal?: boolean;
   };
 }
 
@@ -162,7 +166,7 @@ export async function enqueue(
     createdAt: Date.now(),
   };
   await changeQueue(currentOwnerId(), (queue) => [...queue, item]);
-  // Clinic tutorial: an entry accepted by the offline queue counts as the
+  // Client tutorial: an entry accepted by the offline queue counts as the
   // client's first logged meal (it is saved and will sync).
   emitTutorialSignal('meal_logged');
 }
@@ -272,6 +276,8 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
         quantity_multiplier: item.log.quantity_multiplier,
         original_quantity: item.log.original_quantity,
         original_unit: item.log.original_unit,
+        ...(item.log.plan_slot_id ? { plan_slot_id: item.log.plan_slot_id } : {}),
+        ...(item.log.fills_usual_meal ? { fills_usual_meal: true } : {}),
         // Pass the queue entry's client-side id as the idempotency key so
         // the backend upserts on retry rather than creating a duplicate row.
         client_uuid: item.id,

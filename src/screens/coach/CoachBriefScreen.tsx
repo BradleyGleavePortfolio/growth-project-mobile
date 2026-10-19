@@ -34,6 +34,7 @@ import {
   type CoachBriefActionItem,
 } from '../../api/coachBriefApi';
 import type { CoachTabParamList } from '../../navigation/CoachNavigator';
+import { openTarget } from '../../navigation/coachInbox';
 // §2.3 Coach Brief — Roman delivers the morning brief beside his face.
 // FACE+VOICE: RomanBriefCard co-locates <RomanAvatar /> with the brief text.
 import RomanBriefCard from '../../components/roman/RomanBriefCard';
@@ -42,7 +43,7 @@ import RomanBriefCard from '../../components/roman/RomanBriefCard';
 import RomanCheckInNotice from '../../components/roman/RomanCheckInNotice';
 import RomanNewClientNotice from '../../components/roman/RomanNewClientNotice';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { actionTarget, type LooseNavigate } from './brief/briefActions';
+import { actionTarget } from './brief/briefActions';
 import { logger } from '../../utils/logger';
 
 /** A concurrent open sees 'generating'; poll until the brief is ready. */
@@ -397,7 +398,7 @@ function ActionRow({ item }: { item: CoachBriefActionItem }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.actionRow, pressed && styles.actionRowPressed]}
-      onPress={() => (navigation.navigate as LooseNavigate).call(navigation, target.tab, target.params)}
+      onPress={() => openTarget(navigation, target)}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint="Opens the screen for this item"

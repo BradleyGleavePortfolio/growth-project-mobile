@@ -172,6 +172,14 @@ it('Start → Back → You retains the unopened You menu below the assignment', 
   expect(view.queryByTestId('assignment-start')).toBeNull();
 });
 
+it('K3FIX-SNAPSHOT: Home names the frozen workout, not a later rename of the plan', async () => {
+  mockAssignments.mockResolvedValue([{ id: 'pending-assignment', completed_at: null,
+    workout_plan: { name: 'Foundations v2' }, snapshot: { plan_name: 'Foundations' } }]);
+  const view = await render(<NavigationContainer><ClientNavigator /></NavigationContainer>);
+  expect(await view.findByLabelText('Start Foundations')).toBeTruthy();
+  expect(view.queryByLabelText('Start Foundations v2')).toBeNull();
+});
+
 it('Home Start → real assignment Start → Leave → Train opens the workout list', async () => {
   mockAssignments.mockResolvedValue([mockAssignment]);
   const navigation = createNavigationContainerRef<ParamListBase>();

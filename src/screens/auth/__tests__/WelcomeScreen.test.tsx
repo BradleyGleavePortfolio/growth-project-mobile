@@ -10,6 +10,7 @@ import { Linking, StyleSheet } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { fireEvent, render } from '@testing-library/react-native';
 import { lightTokens } from '../../../theme/tokens';
+import { StatusBarBand, STATUS_BAR_BONE } from '../../../components/StatusBarBand';
 
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
@@ -23,12 +24,22 @@ import WelcomeScreen from '../WelcomeScreen';
 const textOf = (json: unknown) => JSON.stringify(json);
 
 describe('auth WelcomeScreen (prototype 00)', () => {
+  it('flag off: keeps the bone status band without a focused-screen override', async () => {
+    const ui = await render(
+      <SafeAreaInsetsContext.Provider value={{ top: 47, bottom: 34, left: 0, right: 0 }}>
+        <WelcomeScreen navigation={{ navigate: jest.fn() } as never} />
+        <StatusBarBand />
+      </SafeAreaInsetsContext.Provider>,
+    );
+    expect(StyleSheet.flatten(ui.getByTestId('status-bar-band').props.style).backgroundColor).toBe(STATUS_BAR_BONE);
+  });
+
   it('shows the TGP wordmark, eyebrow, serif title and tagline; never the old GP box', async () => {
     const ui = await render(<WelcomeScreen navigation={{ navigate: jest.fn() } as never} />);
     expect(ui.getByTestId('welcome-wordmark', { includeHiddenElements: true }).props.children).toBe('TGP');
     expect(ui.queryByText('GP')).toBeNull();
     expect(ui.getByText('Personal training, in your pocket')).toBeTruthy();
-    const title = StyleSheet.flatten(ui.getByText('The Growth Project').props.style);
+    const title = StyleSheet.flatten(ui.getByText('TGP Fitness').props.style);
     expect(title.fontFamily).toMatch(/^CormorantGaramond/);
     expect(title.lineHeight).toBeGreaterThanOrEqual(1.2 * title.fontSize);
     expect(ui.getByText('A plan, daily targets, and a coach who knows you.')).toBeTruthy();

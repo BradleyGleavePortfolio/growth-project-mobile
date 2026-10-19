@@ -1,7 +1,7 @@
 # Screenshot harness
 
 Captures App Store / Play Store marketing screenshots from the **real** app
-components — same `HomeScreen`, `PlanScreen`, `LogScreen`, `RecipesScreen`,
+components — same `HomeScreen`, `ClientDailyMealPlanScreen`, `LogScreen`, `RecipesScreen`,
 `ProgressScreen`, `FastingScreen` the production build renders. Demo data is
 seeded by intercepting the axios instance in `services/api.ts`; nothing about
 the screen components themselves changes.

@@ -2,11 +2,10 @@
  * SleepStagesCard — a stacked horizontal bar of the night's sleep stages.
  *
  * Bradley LAW: labels are PLAIN LANGUAGE ONLY — "REM", "Deep sleep",
- * "Light sleep", "Awake". No clinical sleep-stage codes anywhere.
+ * "Light sleep", "Awake". No medical sleep-stage codes anywhere.
  *
- * CALM framing: the headline reads as reassurance + context, never a bare score
- * (e.g. "Solid restorative night — 6h 48m asleep"), and a low value is never
- * coloured red.
+ * The headline reports time asleep only (e.g. "6h 48m asleep").
+ * Duration alone does not establish sleep quality.
  */
 
 import React, { useMemo } from 'react';
@@ -14,7 +13,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../../theme/ThemeProvider';
 import { SrCard } from './SrCard';
 import { RECOVERY_PALETTE } from '../recoveryTheme';
-import { formatMinutes, type SleepStagesView, type SleepStageSlice } from '../recoveryData';
+import { STAGE_COLORS } from '../wearablesTheme';
+import { formatMinutes, type SleepStagesView } from '../recoveryData';
 
 export interface SleepStagesCardProps {
   stages: SleepStagesView | null;
@@ -22,23 +22,15 @@ export interface SleepStagesCardProps {
   revealDelay?: number;
 }
 
-/** Cool stage colours — all within the indigo→slate family, never alarming. */
-const STAGE_COLORS: Record<SleepStageSlice['key'], string> = {
-  rem: '#6E5BB8', // indigo-violet
-  deep: '#3F4A7A', // deep indigo
-  light: '#8E96BE', // slate-indigo
-  awake: '#C7CBDA', // pale slate
-};
-
 export function SleepStagesCard({ stages, colors, revealDelay = 0 }: SleepStagesCardProps) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  // Reassurance-first headline. Asleep = everything except "Awake".
+  // Asleep = everything except "Awake"; no quality judgment from duration.
   const asleepMin =
     stages?.slices.filter((s) => s.key !== 'awake').reduce((sum, s) => sum + s.minutes, 0) ?? 0;
   const headline =
     stages && asleepMin > 0
-      ? `Solid restorative night — ${formatMinutes(asleepMin)} asleep`
+      ? `${formatMinutes(asleepMin)} asleep`
       : "Sleep stages appear once your tracker syncs a night";
 
   return (
@@ -64,7 +56,7 @@ export function SleepStagesCard({ stages, colors, revealDelay = 0 }: SleepStages
           <View style={styles.legend}>
             {stages.slices.map((slice) => (
               <View key={slice.key} style={styles.legendItem}>
-                <View style={[styles.dot, { backgroundColor: STAGE_COLORS[slice.key] }]} />
+                <View testID={`sleep-stage-dot-${slice.key}`} style={[styles.dot, { backgroundColor: STAGE_COLORS[slice.key] }]} />
                 <Text style={styles.legendLabel}>{slice.label}</Text>
                 <Text style={styles.legendValue}>{formatMinutes(slice.minutes)}</Text>
               </View>
@@ -88,6 +80,7 @@ function makeStyles(colors: ThemeColors) {
     headline: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
     bar: {
       flexDirection: 'row',
+      gap: 2,
       height: 14,
       borderRadius: 7,
       overflow: 'hidden',

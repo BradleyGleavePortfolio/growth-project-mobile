@@ -64,7 +64,7 @@ export interface MacroTarget {
   created_at: string;
   archived_at: string | null;
   /**
-   * Clinic onboarding contract v1 addition 8 (client surface only). 'simple'
+   * Onboarding contract v1 addition 8 (client surface only). 'simple'
    * means show calories and protein only until `simple_until`. Absent on
    * older backends, which the client treats as 'full'.
    */

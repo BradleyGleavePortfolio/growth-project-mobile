@@ -15,17 +15,17 @@ import { WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { Colors } from '../../constants/colors';
 import { typography, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
+import { featureFlags } from '../../config/featureFlags';
+import WeekInReviewScreen from './progress/WeekInReviewScreen';
 
-// Pastel feedback backgrounds previously sourced from the legacy `colors`
-// barrel. Inlined as constants so this file no longer depends on the
-// legacy theme/index.ts grouped export. Values match
-// theme/index.ts feedback.* exactly.
-const FEEDBACK_ERROR_TEXT = Colors.noticeCriticalAccent;
+type ReportNavigation = Pick<NavigationProp<ParamListBase>, 'goBack'>;
+export default function ReportScreen({ navigation }: { navigation: ReportNavigation }) {
+  return featureFlags.clientProgressV2 ? <WeekInReviewScreen navigation={navigation} /> : <LegacyReportScreen navigation={navigation} />;
+}
 
-export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
+function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
@@ -139,7 +139,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
         {/* Cover */}
         <View style={styles.cover}>
           <View style={styles.coverDot} />
-          <Text style={styles.coverTitle}>The Growth Project</Text>
+          <Text style={styles.coverTitle}>TGP Fitness</Text>
           <Text style={styles.coverSubtitle}>Weekly progress report</Text>
           <Text style={styles.coverName}>
             {currentUser?.firstName || currentUser?.name}
@@ -179,7 +179,8 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
             </View>
             {change !== null && (
               <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: change <= 0 ? colors.primary : FEEDBACK_ERROR_TEXT }]}>
+                {/* C8 found 1: a gain and a loss share one colour; red is never a weight colour. */}
+                <Text style={[styles.statValue, { color: colors.primary }]} testID="report-weight-change">
                   {change > 0 ? '+' : ''}{change.toFixed(1)}
                 </Text>
                 <Text style={styles.statLabel}>Change</Text>
@@ -214,7 +215,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
         {/* Footer */}
         <View style={styles.footer}>
           <View style={styles.footerDot} />
-          <Text style={styles.footerTitle}>The Growth Project</Text>
+          <Text style={styles.footerTitle}>TGP Fitness</Text>
         </View>
     </Screen>
   );

@@ -1,6 +1,6 @@
 # src/macros — macro display mode (lighter start for never-trackers)
 
-Clinic onboarding contract v1, addition 8 (owner ruling 2026-09-30 18:11). A client who answered "never" to "tracking before" (N4) starts with a lighter view for their first week: calories and protein only. Carbohydrate and fat targets are still computed and stored by the server. Only the display changes.
+Onboarding contract v1, addition 8 (owner ruling 2026-09-30 18:11). A client who answered "never" to "tracking before" (N4) starts with a lighter view for their first week: calories and protein only. Carbohydrate and fat targets are still computed and stored by the server. Only the display changes.
 
 ## Server contract
 

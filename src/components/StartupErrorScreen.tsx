@@ -82,7 +82,7 @@ export function StartupPending({
   }
   return (
     <View testID={testID} style={[styles.pending, { backgroundColor: sc.bgPrimary }]}>
-      <ActivityIndicator size="large" color={sc.accent} accessibilityLabel="Opening The Growth Project" />
+      <ActivityIndicator size="large" color={sc.accent} accessibilityLabel="Opening TGP Fitness" />
     </View>
   );
 }

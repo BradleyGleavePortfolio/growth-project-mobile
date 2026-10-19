@@ -7,10 +7,14 @@
  * bubble. `reveal` fades a fresh reply in paragraph by paragraph (Reduce
  * Motion: at once). FACE+VOICE: every assistant turn shows Roman's face.
  * Plain Text only (never HTML), so FIFTY_FAILURES #4 does not apply.
+ * CRISIS-BTN (flag crisisActions): a reply the server marked carries its
+ * crisis actions under the text, as the last block of the reveal.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
+import RomanCrisisActions from './RomanCrisisActions';
+import { featureFlags } from '../../config/featureFlags';
 import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
 import type { RomanMessage } from '../../api/romanApi';
 import { radius, spacing, typography } from '../../theme/tokens';
@@ -70,12 +74,14 @@ function RomanMessageBubbleComponent({
   const isAssistant = message.role === 'assistant';
   const blocks = useMemo(() => (isAssistant ? romanBlocks(message.content) : []), [isAssistant, message.content]);
   const animate = isAssistant && reveal && !reduceMotion;
+  const crisis = isAssistant && featureFlags.crisisActions ? message.safetyActions : undefined;
+  const faded = blocks.length + (crisis ? 1 : 0);
   const opacities = useRef<Animated.Value[]>([]);
-  if (opacities.current.length !== blocks.length) {
-    opacities.current = blocks.map(() => new Animated.Value(animate ? 0 : 1));
+  if (opacities.current.length !== faded) {
+    opacities.current = Array.from({ length: faded }, () => new Animated.Value(animate ? 0 : 1));
   }
 
-  // blocks.length: a reply whose paragraph count changes gets fresh opacities; run them too.
+  // faded: a reply whose paragraph (or action) count changes gets fresh opacities; run them too.
   useEffect(() => {
     if (!animate) {
       opacities.current.forEach((o) => o.setValue(1));
@@ -87,7 +93,7 @@ function RomanMessageBubbleComponent({
     );
     run.start();
     return () => run.stop();
-  }, [animate, blocks.length]);
+  }, [animate, faded]);
 
   if (isAssistant) {
     const reading = [styles.reading, { color: c.textPrimary }];
@@ -125,6 +131,11 @@ function RomanMessageBubbleComponent({
             <Text style={[styles.interruptedNote, { color: c.textMuted }]}>{ROMAN_INTERRUPTED_NOTE}</Text>
           ) : null}
         </View>
+        {crisis ? (
+          <Animated.View style={[styles.crisis, { opacity: opacities.current[blocks.length] }]}>
+            <RomanCrisisActions actions={crisis} testID={testID ? `${testID}-crisis` : undefined} />
+          </Animated.View>
+        ) : null}
       </View>
     );
   }
@@ -164,6 +175,7 @@ const styles = StyleSheet.create({
   bulletMarker: { width: 22 },
   bulletText: { flex: 1 },
   interruptedNote: { ...typography.bodySmall, marginTop: spacing.xs },
+  crisis: { marginTop: spacing.sm },
   userRow: { alignItems: 'flex-end', paddingTop: spacing.lg, paddingBottom: spacing.xs, marginHorizontal: spacing.xl },
   // Owner 17:07: rounded, never a rectangle (radius token, Q10b).
   userBubble: {

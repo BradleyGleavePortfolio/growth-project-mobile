@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
+import { layout } from '../../theme/tokens';
 import { t } from './i18n/strings';
 
 export const DAY_ONE_TOTAL_STEPS = 5;
@@ -121,12 +122,12 @@ const makeStyles = (colors: DayOneColors) =>
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 44,
+      minHeight: layout.touchMin,
       marginBottom: 8,
     },
     backBtn: {
-      width: 44,
-      height: 44,
+      width: layout.touchMin,
+      height: layout.touchMin,
       justifyContent: 'center',
       alignItems: 'flex-start',
     },

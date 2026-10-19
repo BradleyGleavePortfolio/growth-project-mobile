@@ -101,10 +101,11 @@ function wireRow(id: string, name: string, activity?: Activity, archived = false
 type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 const navigate = jest.fn();
 let focusListener: (() => void) | null = null;
-async function mount(insets?: EdgeInsets) {
-  // Only navigate() and the focus listener are read by the screen.
+async function mount(insets?: EdgeInsets, focused = true) {
+  // Only navigate(), isFocused() and the focus listener are read by the screen.
   const navigation = {
     navigate,
+    isFocused: () => focused,
     addListener: (_type: string, cb: () => void) => {
       focusListener = cb;
       return () => undefined;
@@ -187,32 +188,29 @@ describe('row helpers', () => {
   });
 
   it('says when the client last logged, and flags three quiet days', () => {
-    expect(rosterActivityLine(client({ shared: true, lastActiveOn: localDay(0), checkInsToReview: 0 }))).toEqual({
+    expect(rosterActivityLine(client({ lastActiveOn: localDay(0), checkInsToReview: 0 }))).toEqual({
       text: 'Logged today',
       tone: 'ok',
     });
-    expect(rosterActivityLine(client({ shared: true, lastActiveOn: localDay(1), checkInsToReview: 0 })).text).toBe(
+    expect(rosterActivityLine(client({ lastActiveOn: localDay(1), checkInsToReview: 0 })).text).toBe(
       'Logged yesterday',
     );
-    expect(rosterActivityLine(client({ shared: true, lastActiveOn: localDay(4), checkInsToReview: 0 }))).toEqual({
+    expect(rosterActivityLine(client({ lastActiveOn: localDay(4), checkInsToReview: 0 }))).toEqual({
       text: 'Last logged 4 days ago',
       tone: 'quiet',
     });
-    expect(rosterActivityLine(client({ shared: true, lastActiveOn: null, checkInsToReview: 0 }))).toEqual({
+    expect(rosterActivityLine(client({ lastActiveOn: null, checkInsToReview: 0 }))).toEqual({
       text: 'Joined Sep 1 · Nothing logged yet',
       tone: 'quiet',
     });
-    expect(rosterActivityLine(client({ shared: false, lastActiveOn: null, checkInsToReview: null })).text).toBe(
-      'Joined Sep 1 · Logs not shared',
-    );
     // Older server: no activity block.
     expect(rosterActivityLine(client(null))).toEqual({ text: 'Joined Sep 1', tone: 'muted' });
   });
 
   it('sorts A to Z by default and by most recent log on request', () => {
     const rows = [
-      client({ shared: true, lastActiveOn: localDay(5), checkInsToReview: 0 }, { id: 'b', firstName: 'Ben', lastName: 'Cho' }),
-      client({ shared: true, lastActiveOn: localDay(0), checkInsToReview: 0 }, { id: 'z', firstName: 'Zoe', lastName: 'Park' }),
+      client({ lastActiveOn: localDay(5), checkInsToReview: 0 }, { id: 'b', firstName: 'Ben', lastName: 'Cho' }),
+      client({ lastActiveOn: localDay(0), checkInsToReview: 0 }, { id: 'z', firstName: 'Zoe', lastName: 'Park' }),
       client(null, { id: 'a', firstName: 'ana', lastName: 'Lopez' }),
     ];
     expect(sortRoster(rows, 'name').map((c) => c.id)).toEqual(['a', 'b', 'z']);
@@ -221,8 +219,8 @@ describe('row helpers', () => {
 
   it('count line names the filter, the search narrowing and the check-ins waiting', () => {
     const rows = [
-      client({ shared: true, lastActiveOn: null, checkInsToReview: 2 }),
-      client({ shared: true, lastActiveOn: null, checkInsToReview: 1 }),
+      client({ lastActiveOn: null, checkInsToReview: 2 }),
+      client({ lastActiveOn: null, checkInsToReview: 1 }),
     ];
     expect(rosterCountLine(rows, 2, 'active', false)).toBe('2 active clients · 3 check-ins to review');
     expect(rosterCountLine(rows.slice(1), 12, 'all', true)).toBe('1 of 12 clients · 1 check-in to review');
@@ -296,6 +294,19 @@ describe('Clients list screen', () => {
     expect(mockGetClients.mock.calls.length).toBe(before + 1);
     expect(await screen.findByText('1 to review')).toBeTruthy();
   });
+
+  it('LO-773 N1: mounted unseen (six tabs: Clients opens with the app), the first visit reloads in place', async () => {
+    mockGetClients.mockResolvedValue({ data: [wireRow('c1', 'Ana Lopez')] });
+    await mount(undefined, false);
+    await screen.findByText('Ana Lopez');
+    const before = mockGetClients.mock.calls.length;
+    mockGetClients.mockResolvedValue({
+      data: [wireRow('c1', 'Ana Lopez', { shared: true, last_active_on: localDay(0), check_ins_to_review: 1 })],
+    });
+    await act(async () => focusListener?.()); // the first visit
+    expect(mockGetClients.mock.calls.length).toBe(before + 1);
+    expect(await screen.findByText('1 to review')).toBeTruthy();
+  });
 });
 
 describe('DES-O-127: honest landing and action parity', () => {
@@ -317,7 +328,7 @@ describe('DES-O-127: honest landing and action parity', () => {
     expect(rowStyle.borderBottomWidth).toBe(StyleSheet.hairlineWidth);
     expect(rowStyle.backgroundColor).toBeUndefined();
     expect(screen.queryByText(/need you|are steady|\$/i)).toBeNull();
-    expect(screen.getByText('Clients choose what they share with you. Anything not shared stays private.')).toBeTruthy();
+    expect(screen.getByText("You see your clients' workouts, food logs, weigh-ins and check-ins while you coach them.")).toBeTruthy();
   });
 
   it('does not claim zero clients while loading or when the roster request fails; retry still loads', async () => {
@@ -388,7 +399,7 @@ describe('DES-O-127: honest landing and action parity', () => {
     const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
     const view = await mount();
     await fireEvent.press(await screen.findByTestId('share-code-btn'));
-    expect(share).toHaveBeenCalledWith({ message: 'Join me on Growth Project. Use code GP-TEST or tap: https://app.trygrowthproject.com/join/GP-TEST' });
+    expect(share).toHaveBeenCalledWith({ message: 'Join me on TGP Fitness. Use code GP-TEST or tap: https://app.trygrowthproject.com/join/GP-TEST' });
     await fireEvent.press(screen.getByTestId('copy-code-btn'));
     expect(mockCopy).toHaveBeenCalledWith('GP-TEST');
     await view.unmount();

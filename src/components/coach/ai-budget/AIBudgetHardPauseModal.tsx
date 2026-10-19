@@ -18,6 +18,7 @@ import { Modal, View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
+import { layout } from '../../../theme/tokens';
 import { PackOptionsRow } from './PackOptionsRow';
 import { creditPackCheckoutMode, creditPacksHidden } from '../../../config/purchaseSurfaces';
 import {
@@ -152,7 +153,13 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    closeBtn: { padding: 6 },
+    closeBtn: {
+      minWidth: layout.touchMin,
+      minHeight: layout.touchMin,
+      padding: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     title: {
       fontSize: 22,
       fontWeight: '600',

@@ -183,7 +183,7 @@ function describeError(err: unknown, step: Step): Notice {
   if (isNetworkError(err)) {
     return {
       title: "You appear to be offline",
-      message: `The Growth Project could not be reached. Check your connection, then ${NEXT_STEP[step]}.`,
+      message: `TGP Fitness could not be reached. Check your connection, then ${NEXT_STEP[step]}.`,
       reference: null,
     };
   }
@@ -653,7 +653,7 @@ export default function DataExportScreen() {
 
       <Text style={styles.body}>
         Under UK/EU data protection law (GDPR Article 20), you have the right to
-        receive a copy of the personal data you have given The Growth Project.
+        receive a copy of the personal data you have given TGP Fitness.
         Your export will include:
       </Text>
 

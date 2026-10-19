@@ -29,7 +29,8 @@ import { coachBriefApi, CoachBriefApiError, type CoachBrief } from '../../../api
 import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { __USING_MOCK_DATA } from '../../../services/commandCenterApi';
+import { coachLandingTab } from '../../../navigation/coachLanding';
+import { openTarget } from '../../../navigation/coachInbox';
 import { colors, motion, radius } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { HapticService } from '../../../ui/haptics/haptics.service';
@@ -45,8 +46,6 @@ const BONE = '#FBF7F0';
 const END = 1300;
 /** The native driver ignores interpolate's `easing`, so the decel curve is sampled into the ranges (within 2%). */
 const CURVE = [0, 0.04, 0.1, 0.18, 0.3, 0.5, 1].map((x) => [x, Easing.bezier(...motion.easing.decel)(x)] as const);
-/** The coach's Home: the tab the coach app opens on (CoachNavigator initialTab). */
-const HOME_TAB = __USING_MOCK_DATA ? 'CommandCenter' : 'ClientsStack';
 const OPENS = 'Opens the screen for this item';
 const OPENS_LIST = 'Opens the full list';
 const CLOSES = 'Closes today\u2019s brief.';
@@ -63,7 +62,7 @@ type Nav = {
   navigate: (name: string, params?: object) => void;
   goBack: () => void;
   canGoBack: () => boolean;
-  getParent: () => { navigate: (name: string, params?: object) => void } | undefined;
+  getParent: () => Parameters<typeof openTarget>[0] | undefined;
 };
 
 type Row = { key: string; label: string; hint?: string; onPress: () => void };
@@ -213,7 +212,9 @@ export default function CoachBriefLightScreen() {
   const close = useCallback(
     (target?: BriefTarget) => {
       if (navigation.canGoBack()) navigation.goBack();
-      navigation.getParent()?.navigate(target ? target.tab : HOME_TAB, target?.params);
+      // The coach's Home is the tab the app opens on (coachLandingTab); a chat opens the inbox way (COACH-CHAT-BACK).
+      const tabs = navigation.getParent();
+      if (tabs) openTarget(tabs, target ?? { tab: coachLandingTab() });
     },
     [navigation],
   );

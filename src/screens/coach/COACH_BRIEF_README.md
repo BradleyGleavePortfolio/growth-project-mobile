@@ -39,7 +39,7 @@ opens) lives in the same file and `CoachBriefScreen` re-exports it, so nothing u
 | 0 | none |
 | 1 client, with a first name | "Reply to {first name}", "Review {first name}'s weight change", "Check on {first name}": opens what `actionTarget` opens |
 | 2 or more clients, or 1 with no usable name | one row, "See messages", "See weight logs" or "See check-ins": opens `SettingsStack > CoachBriefList` |
-| Head coach: failed payments or team revenue | one row, "See payments": opens Money (`SettingsStack > CoachMoney`) |
+| Head coach: failed payments or team revenue | one row, "See payments": opens Money (`SettingsStack > CoachMoney`; the Money tab with `coachTabsV2`) |
 | Head coach: team items | one row, "See your team": opens Team, only while Team Mode is on (otherwise no row) |
 
 Kinds are taken in a fixed order (messages, weight, check-ins, Money, Team) and only the first two with a row are kept;
@@ -52,7 +52,7 @@ and sorts every list A to Z, so the same items in any order give exactly the sam
 Screen (`brief/CoachBriefLightScreen.tsx`, `BriefField.tsx`): with the gate on, the `CoachBrief` route shows Concept A,
 "Roman in the light": a dark forest field with a cream and gold glow (SVG), Roman's face and the date, the greeting, Roman's
 words, "Where would you like to start?" when there is an action, the rows, then "Thank you, Roman" (closes onto Home, the
-coach app's first tab). The tab bar steps aside while it is open. States: still being prepared (checks every 5 s for 60 s,
+coach app's first tab, `coachLandingTab`). The tab bar steps aside while it is open. States: still being prepared (checks every 5 s for 60 s,
 then offers Try again), could not load (Try again), could not be prepared (Prepare again), prepared too often (Try again);
 each has "Continue". Marked read once when the words show; "Today's brief is ready." is announced once after a wait.
 Motion: 1.3 s reveal, a tap anywhere completes it, rows take no tap while hidden; 6 s breathing glow that stops in the

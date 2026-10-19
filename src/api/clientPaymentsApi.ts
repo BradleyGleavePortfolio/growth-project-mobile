@@ -147,6 +147,23 @@ export interface ClientPurchase {
   cancel_at_period_end: boolean;
   canceled_at: string | null;
   created_at: string;
+  /**
+   * What the server recorded for THIS purchase when it was bought, in minor
+   * units (ClientPurchase.amount_cents, a snapshot that never follows later
+   * package price changes), and its currency. Sent by GET
+   * /v1/checkout/purchases (backend client-purchases.select.ts).
+   */
+  amount_cents?: number;
+  currency?: string;
+  /** ClientPurchase.billing_type, sent by the same allow-list. */
+  billing_type?: 'one_time' | 'recurring';
+  /**
+   * C5-S1: what this purchase's checkout charged first, from the server
+   * (one-time part plus first period, 0 in a free trial); null or absent
+   * when the server does not know. amount_cents of a subscription is the
+   * renewal, so "Paid" reads this field only (planTerms paidAmount).
+   */
+  first_charge_cents?: number | null;
 }
 
 /**

@@ -29,6 +29,7 @@ jest.mock('../lib/startupTimebox', () => {
 const mockApiGet = jest.fn();
 jest.mock('../services/authActions', () => ({ signOut: jest.fn(async () => {}) }));
 jest.mock('../services/api', () => ({
+  authApi: { me: async () => ({ data: { profile: { date_of_birth: '1990-01-01' } } }) },
   __esModule: true,
   default: {
     get: (...args: unknown[]) => mockApiGet(...args),
@@ -68,7 +69,6 @@ jest.mock('../navigation/AuthNavigator', () => mockScreen('nav-auth'));
 jest.mock('../navigation/CoachNavigator', () => mockScreen('nav-coach'));
 jest.mock('../navigation/ClientNavigator', () => mockScreen('nav-client'));
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
-jest.mock('../navigation/LeanOnboardingNavigator', () => () => null);
 jest.mock('../navigation/CoachWizardNavigator', () => mockScreen('nav-wizard'));
 jest.mock('../navigation/Day1OnboardingNavigator', () => () => null);
 jest.mock('../components/OfflineBanner', () => () => null);
