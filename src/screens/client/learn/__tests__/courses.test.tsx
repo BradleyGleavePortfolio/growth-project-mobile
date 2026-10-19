@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api, { lessonsApi } from '../../../../services/api';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
 import { featureFlags } from '../../../../config/featureFlags';
+import { layout } from '../../../../theme/tokens';
 import CourseBanner from '../CourseBanner';
 import CourseHomeScreen from '../CourseHomeScreen';
 import CourseWeekScreen from '../CourseWeekScreen';
@@ -72,10 +73,10 @@ describe('Train course banner', () => {
 
   describe('flag on', () => {
     beforeEach(() => { jest.replaceProperty(featureFlags, 'learnCourses', true); });
-    it('says the approved lines and Open the course opens the course home', async () => {
+    it('sits on the page gutter, says the approved lines and Open the course opens the course home', async () => {
       await show(CourseBanner);
-      expect(await screen.findByText('Knee Rehab, 8 weeks')).toBeTruthy();
-      seen(["Sam's videos and short reads, one week at a time, alongside your workouts. Week 3 is open: 1 of 3 lessons done.", '3 of 6 lessons', 'Week 3 open until Sun Oct 18']);
+      expect(await screen.findByTestId('course-banner')).toHaveStyle({ marginHorizontal: layout.gutter }); // Train's content has no padding: the card insets itself, as every Train block does
+      seen(['Knee Rehab, 8 weeks', "Sam's videos and short reads, one week at a time, alongside your workouts. Week 3 is open: 1 of 3 lessons done.", '3 of 6 lessons', 'Week 3 open until Sun Oct 18']);
       expect(get).toHaveBeenCalledWith('/v1/client/courses', { quietPaywall: true });
       await fireEvent.press(screen.getByText('Open the course'));
       expect(mockNav.navigate).toHaveBeenCalledWith('Course', { id: 'k1' });
@@ -149,8 +150,7 @@ describe('Course week', () => {
     mockParams = { id: 'k1', week: 'm3' };
     await show(CourseWeekScreen);
     expect(await screen.findByText('Build the base')).toBeTruthy();
-    seen(['Knee Rehab, 8 weeks', 'Open Oct 12 to Oct 18 · 1 of 3 done', 'From Sam', 'Short sessions, done often.', '3.1 · Video · 5 min', '3.2 · Page · 1 min',
-      '3.3 · Video and page · 6 min', 'Week 4 opens Mon Oct 19.']);
+    seen(['Knee Rehab, 8 weeks', 'Open Oct 12 to Oct 18 · 1 of 3 done', 'From Sam', 'Short sessions, done often.', '3.1 · Video · 5 min', '3.2 · Page · 1 min', '3.3 · Video and page · 6 min', 'Week 4 opens Mon Oct 19.']);
     expect(screen.getAllByText('Up next')).toHaveLength(1);
     await fireEvent.press(screen.getByText('Stairs without fear'));
     expect(mockNav.navigate).toHaveBeenCalledWith('CourseLesson', { id: 'k1', lesson: 'l33' });

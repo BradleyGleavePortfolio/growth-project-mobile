@@ -4,7 +4,7 @@ import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { radius, typography, type SemanticTokens } from '../../../theme/tokens';
+import { layout, radius, typography, type SemanticTokens } from '../../../theme/tokens';
 import { PrimaryButton } from '../../../ui';
 import { featureFlags } from '../../../config/featureFlags';
 import { useRefreshOnOpen } from '../../../hooks/useRefreshOnOpen';
@@ -45,7 +45,7 @@ function Banner({ refreshing }: { refreshing: boolean }) {
 }
 
 const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
-  card: { backgroundColor: sc.surface.masthead, borderRadius: radius.card, padding: 20, marginTop: 24, marginBottom: 8, gap: 10 },
+  card: { backgroundColor: sc.surface.masthead, borderRadius: radius.card, padding: 20, marginHorizontal: layout.gutter, marginTop: 24, marginBottom: 8, gap: 10 },
   title: { ...typography.h2, color: sc.textOnAccent },
   body: { ...typography.bodySmall, color: sc.textOnMastheadMuted },
   track: { flexDirection: 'row', height: 6, borderRadius: radius.chip, backgroundColor: sc.surface.forestBand, overflow: 'hidden', marginTop: 4 },
