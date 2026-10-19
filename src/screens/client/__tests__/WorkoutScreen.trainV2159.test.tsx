@@ -95,6 +95,22 @@ function forestButtons(view: { toJSON: () => unknown }): string[] {
   return found;
 }
 
+/** testIDs and text in screen order (top to bottom), to check the ctx#88 section 8.A placement. */
+function screenOrder(view: { toJSON: () => unknown }): string[] {
+  const seen: string[] = [];
+  const step = (node: unknown): void => {
+    if (typeof node === 'string') { seen.push(node); return; }
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(step); return; }
+    const n = node as { props?: Record<string, unknown>; children?: unknown[] };
+    const id = n.props?.testID;
+    if (typeof id === 'string') seen.push(id);
+    (n.children ?? []).forEach(step);
+  };
+  step(view.toJSON());
+  return seen;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }));
@@ -134,6 +150,19 @@ describe('C1 Train tab, Style C v2 (clientTrainV2)', () => {
     await fireEvent.press(view.getByLabelText('All coach workouts'));
     expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
     expect(view.getByText('1 completed')).toBeTruthy();
+  });
+
+  it.each([
+    ['Start workout', null],
+    ['Resume workout', { session: { assignmentId: 'a1' } }],
+  ])('puts the name and %s above the coach note, the details and the blocks (ctx#88 8.A)', async (label, saved) => {
+    mockLoadSession.mockResolvedValue(saved);
+    const view = await render(<WorkoutScreen />);
+    await waitFor(() => expect(view.getByText(label)).toBeTruthy());
+    const seen = screenOrder(view);
+    const at = ['Today', 'Full body A', 'train-start', 'train-coach-note', 'train-details', 'train-block-A'].map((m) => seen.indexOf(m));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
 
   it('with two open and none done, All coach workouts reads the open count, never "0 completed"', async () => {

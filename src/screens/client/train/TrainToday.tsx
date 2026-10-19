@@ -3,12 +3,13 @@
  * section 10), behind `featureFlags.clientTrainV2` (off in every build). The top of the Train tab:
  *   - `TrainMasthead`: the week on deep forest (light status bar), the SegmentedRing (one segment per workout
  *     the coach set this week) and the DayMark strip, Monday first. The tab's own header sits on it.
- *   - `TrainDay`: the coach's note on sage (until an assignment carries its own note, the first coach note in
- *     its rows), today's workout with Start workout right under its name (#TRAIN-START-TOP: Train to the
- *     workout is one tap), then its lettered blocks (rows next to each other in one superset share a letter).
+ *   - `TrainDay`, in the ctx#88 section 8.A order (#TRAIN-START-TOP: Train to the workout is one tap): the
+ *     overline, today's workout name, Start workout, the coach's note on sage (the first coach note in its rows),
+ *     the details line, then its lettered blocks (rows next to each other in one superset share a letter).
  * A coachless client keeps every logging route and reads "Your plan" with no coach voice (NOLOCK-R).
- * Reads only GET /assignments/me, the signed-in client's own rows; no write. Left out until C1 backend PR 1
- * lands: the changed-by-coach marks (`sets_before`) and "Week 3, day 2" (`program_week`, `program_day`).
+ * Reads only GET /assignments/me, the signed-in client's own rows; no write. Not wired here (the next PR): the
+ * changed-by-coach marks (`sets_before`, `client_reason`) and the day note (`client_note`), whose data is on
+ * backend main; "Week 3, day 2" still waits for `program_week` and `program_day`, which are not on main.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -146,7 +147,7 @@ export function TrainHead({ on, children, ...rest }: React.ComponentProps<typeof
 }
 
 /**
- * Under the masthead: the coach's note, today's workout, Start workout, the blocks. With no workout ever set, a
+ * Under the masthead: today's workout, Start workout, the coach's note, the details, the blocks. With no workout ever set, a
  * calm empty line (the tab's Quick workout stays the one forest action below it); with every workout done, nothing.
  */
 export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, onStart, onRetry, today }: {
@@ -186,10 +187,11 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
   if (state === 'loading') {
     return (
       <View style={s.body} testID="train-day-loading" accessible accessibilityLabel={c.loading}>
-        <View style={[s.cardSkel, { backgroundColor: sc.border }]} />
+        <View style={[s.line, s.overSkel, { backgroundColor: sc.border }]} />
         <View style={[s.line, s.titleSkel, { backgroundColor: sc.border }]} />
+        <View style={s.startWrap}><PrimaryButton label={c.start} disabled onPress={() => undefined} testID="train-start" /></View>
+        <View style={[s.cardSkel, { backgroundColor: sc.border }]} />
         {[0, 1, 2].map((i) => <View key={i} style={[s.rowSkel, { borderTopColor: sc.border }]}><View style={[s.line, { width: '50%', backgroundColor: sc.border }]} /></View>)}
-        <PrimaryButton label={c.start} disabled onPress={() => undefined} testID="train-start" />
       </View>
     );
   }
@@ -226,6 +228,14 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
   };
   return (
     <View style={s.body} testID="train-day">
+      <Text maxFontSizeMultiplier={CAP} style={[typography.eyebrow, muted, s.over]}>{when}</Text>
+      <Text accessibilityRole="header" style={[typography.h1, ink]}>{plan.name}</Text>
+      <View style={s.startWrap}>
+        <PrimaryButton
+          label={namesLoading ? c.names : resume ? c.resume : c.start} onPress={start} loading={namesLoading} haptic={false}
+          accessibilityHint={`Opens ${plan.name} as a live workout`} testID="train-start"
+        />
+      </View>
       {note ? (
         <View style={[s.card, { backgroundColor: sc.surface.sage }]} testID="train-coach-note" accessible>
           {author ? (
@@ -239,15 +249,7 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
           </View>
         </View>
       ) : null}
-      <Text maxFontSizeMultiplier={CAP} style={[typography.eyebrow, muted, s.over]}>{when}</Text>
-      <Text accessibilityRole="header" style={[typography.h1, ink]}>{plan.name}</Text>
-      <Text style={[typography.bodySmall, muted, s.tabular]}>{`${c.exercises(plan.exercises.length)}${minutes}`}</Text>
-      <View style={s.startWrap}>
-        <PrimaryButton
-          label={namesLoading ? c.names : resume ? c.resume : c.start} onPress={start} loading={namesLoading} haptic={false}
-          accessibilityHint={`Opens ${plan.name} as a live workout`} testID="train-start"
-        />
-      </View>
+      <Text style={[typography.bodySmall, muted, s.tabular, s.meta]} testID="train-details">{`${c.exercises(plan.exercises.length)}${minutes}`}</Text>
       {blocksOf(plan.exercises).map((b) => (
         <View key={b.letter} style={[s.block, { borderTopColor: sc.border }]} accessible testID={`train-block-${b.letter}`}>
           <View style={[s.letter, { borderColor: sc.data.moss }]}>
@@ -281,14 +283,16 @@ const s = StyleSheet.create({
   body: { marginHorizontal: layout.gutter, marginBottom: 24 },
   over: { marginBottom: 8 },
   lede: { marginTop: 8 },
-  card: { flexDirection: 'row', gap: 14, padding: 20, borderRadius: radius.card, marginBottom: 24 },
+  card: { flexDirection: 'row', gap: 14, padding: 20, borderRadius: radius.card, marginBottom: 16 },
   avatar: { width: 40, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   note: { ...typography.h3, lineHeight: 26, marginBottom: 6 },
   italic: { fontFamily: 'CormorantGaramond_400Regular_Italic', fontWeight: '400' },
-  startWrap: { marginTop: 16, marginBottom: 8 },
+  startWrap: { marginTop: 16, marginBottom: 20 },
+  meta: { marginBottom: 12 },
   block: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: layout.rowMinHeight, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   letter: { width: 32, height: 32, borderRadius: radius.control, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  cardSkel: { height: 120, borderRadius: radius.card, marginBottom: 24 },
-  titleSkel: { width: '55%', height: 28, marginBottom: 16 },
+  overSkel: { width: '30%', marginBottom: 8 },
+  titleSkel: { width: '55%', height: 28, marginVertical: 6 },
+  cardSkel: { height: 120, borderRadius: radius.card, marginBottom: 16 },
   rowSkel: { minHeight: layout.rowMinHeight, justifyContent: 'center', borderTopWidth: StyleSheet.hairlineWidth },
 });
