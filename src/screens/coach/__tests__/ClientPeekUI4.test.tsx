@@ -1,6 +1,6 @@
 /**
- * UI-4 peek sheet (client-peek-sheet mockup). Every button opens today's real screen, a slice the client
- * does not share reads "Not shared by <first name>", and Payments shows only while coach_payment_actions is on.
+ * UI-4 peek sheet (client-peek-sheet mockup). Every button opens today's real screen, no slice reads as not
+ * shared (#SHARE-SIMPLE), and Payments shows only while coach_payment_actions is on.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -35,14 +35,14 @@ import type { RosterClient } from '../../../utils/coach/clientRoster';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const day = (offset: number) => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-const client = (shared = true) => ({
+const client = (logged = true) => ({
   id: 'c1', firstName: 'Maya', lastName: 'Brooks', email: 'c1@example.com', status: 'active', createdAt: '2026-08-14T10:00:00.000Z',
-  activity: { shared, lastActiveOn: shared ? day(0) : null, checkInsToReview: shared ? 2 : null },
+  activity: { lastActiveOn: logged ? day(0) : null, checkInsToReview: logged ? 2 : 0 },
 }) as unknown as RosterClient;
 const now = new Date().toISOString();
 const WORKOUT = `Full body A on ${new Date().toLocaleDateString('en-US', { weekday: 'long' })}, 1 of 2`;
 const assignment = (coach: string, done: boolean) => ({ scheduled_for: `${day(0)}T12:00:00`, assigned_by_coach_id: coach, completed_at: done ? now : null });
-const summary = (consent: Record<string, boolean> = {}, empty = false) => ({
+const summary = (empty = false) => ({
   data: {
     client_name: 'Maya Brooks', profile: null,
     today: { entries: empty ? [] : [{ id: 'e1' }], total_calories: 1420, total_protein_g: 96 },
@@ -50,7 +50,6 @@ const summary = (consent: Record<string, boolean> = {}, empty = false) => ({
     // Only this coach's assignments count; an earlier coach's never show.
     recent_assignments: [assignment('coach-1', true), assignment('coach-1', false), assignment('earlier-coach', true)],
     weight_logs: [],
-    consent: { workouts: true, food_macros: true, body_metrics: false, habits_progress: true, ...consent },
   },
 });
 const onOpen = jest.fn();
@@ -71,7 +70,7 @@ beforeEach(() => {
 });
 
 describe('UI-4 peek sheet', () => {
-  it('matches the mockup: header, status line, four slices and Weigh-ins not shared', async () => {
+  it('matches the mockup: header, status line, four slices and no weigh-in yet', async () => {
     await mount();
     expect(mockCheckIns).toHaveBeenCalledWith('c1', { limit: 1 });
     expect(screen.getByText('Maya Brooks')).toBeTruthy();
@@ -80,8 +79,9 @@ describe('UI-4 peek sheet', () => {
     expect(screen.getByText('Today: energy 2 of 5, knee tight')).toBeTruthy();
     expect(screen.getByText('1,420 of 1,900 kcal, protein 96 g')).toBeTruthy();
     expect(screen.getByText(WORKOUT)).toBeTruthy();
-    expect(screen.getByText('Not shared by Maya')).toBeTruthy();
-    expect(screen.getByText('icon:lock-closed-outline')).toBeTruthy();
+    expect(screen.getByText('Nothing logged yet')).toBeTruthy();
+    expect(screen.queryByText(/Not shared/)).toBeNull();
+    expect(screen.queryByText('icon:lock-closed-outline')).toBeNull();
     expect(screen.getByText('Message Maya')).toBeTruthy();
     expect(screen.getByText('Send nudge')).toBeTruthy();
     expect(screen.queryByTestId('peek-chip-Payments')).toBeNull();
@@ -94,7 +94,6 @@ describe('UI-4 peek sheet', () => {
       ['peek-review', { screen: 'ClientDetail', tab: 'timeline' }],
       ['peek-message', { screen: 'ClientMessages' }],
       ['peek-chip-Food log', { screen: 'ClientDetail', tab: 'logs' }],
-      ['peek-chip-Meal plan', { screen: 'ClientDetail', tab: 'mealplan' }],
       ['peek-chip-Workouts', { screen: 'ClientDetail', tab: 'workouts' }],
       ['peek-chip-Full profile', { screen: 'ClientDetail' }],
     ];
@@ -102,6 +101,7 @@ describe('UI-4 peek sheet', () => {
       await fireEvent.press(screen.getByTestId(id));
       expect(onOpen).toHaveBeenLastCalledWith(maya, target);
     }
+    expect(screen.queryByTestId('peek-chip-Meal plan')).toBeNull(); // MEALPLAN-M removed the Plan tab it opened
     await fireEvent.press(screen.getByTestId('peek-nudge'));
     expect(onNudge).toHaveBeenCalledWith(maya);
     await fireEvent.press(screen.getByTestId('peek-close'));
@@ -117,17 +117,17 @@ describe('UI-4 peek sheet', () => {
     expect(onOpen).toHaveBeenLastCalledWith(maya, { screen: 'ClientPayments' });
   });
 
-  it('a client who shares nothing: every slice names her, no status line and no Review', async () => {
-    mockSummary.mockResolvedValue(summary({ workouts: false, food_macros: false, body_metrics: false, habits_progress: false }));
+  it('a client who logged nothing: every slice says so, no status line and no Review', async () => {
+    mockSummary.mockResolvedValue(summary(true));
     mockCheckIns.mockResolvedValue({ data: [] });
     await mount(client(false));
-    expect(screen.getAllByText('Not shared by Maya')).toHaveLength(4);
+    expect(screen.getAllByText('Nothing logged yet')).toHaveLength(4);
     expect(screen.queryByText(/waiting for you/)).toBeNull();
     expect(screen.queryByTestId('peek-review')).toBeNull();
   });
 
-  it('shared slices with nothing in them read "Nothing logged yet", never empty', async () => {
-    mockSummary.mockResolvedValue(summary({ body_metrics: true }, true));
+  it('slices with nothing in them read "Nothing logged yet", never empty', async () => {
+    mockSummary.mockResolvedValue(summary(true));
     mockCheckIns.mockResolvedValue({ data: [] });
     await mount();
     expect(screen.getAllByText('Nothing logged yet')).toHaveLength(4);
@@ -192,16 +192,16 @@ describe('UI-4 peek sheet', () => {
   it("every chip is a 44 pt touch target around the mockup's 36 pt pill", async () => {
     mockFlags = { coach_payment_actions: true };
     await mount();
-    for (const label of ['Food log', 'Meal plan', 'Workouts', 'Payments', 'Full profile']) {
+    for (const label of ['Food log', 'Workouts', 'Payments', 'Full profile']) {
       expect(StyleSheet.flatten(screen.getByTestId(`peek-chip-${label}`).props.style).minHeight).toBeGreaterThanOrEqual(44);
     }
   });
 
   it('reads weigh-ins and targets the way the mockup words them', () => {
-    const s = summary({ body_metrics: true }).data;
+    const s = summary().data;
     const slices = peekSlices(client(), { ...s, weight_logs: [{ weight_lbs: 182.44, date: day(0) }] }, [], 'coach-1', null);
     expect(slices.weighIn.text).toBe('Today: 182.4\u00a0lb');
     expect(slices.food.text).toBe('1,420\u00a0kcal, protein 96\u00a0g'); // no target: no "of"; units never wrap apart
-    expect(slices.checkIn).toEqual({ text: 'Nothing logged yet', shared: true, hasOne: false });
+    expect(slices.checkIn).toEqual({ text: 'Nothing logged yet', hasOne: false });
   });
 });

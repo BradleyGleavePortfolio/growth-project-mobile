@@ -2,7 +2,8 @@
  * UI-4 peek sheet (client-peek-sheet mockup, owner 2026-10-09 "I like the peek sheet"). Opens from any
  * client row on the lookup. Every button opens today's real screen for it. Payments shows only while
  * the server flag coach_payment_actions is on. `children` (today's nudge form) render inside this
- * Modal so "Send nudge" opens over the sheet and returns to it.
+ * Modal so "Send nudge" opens over the sheet and returns to it. MEALPLAN-M removed the client file's
+ * Plan tab, so the mockup's Meal plan chip is left out until the owner picks where it opens.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -20,7 +21,7 @@ import { peekJoinedLine, peekSlices, peekStatusLine, type PeekSlices } from '../
 import { rosterDisplayName, type RosterClient } from '../../../utils/coach/clientRoster';
 
 export type PeekTarget =
-  | { screen: 'ClientDetail'; tab?: 'logs' | 'mealplan' | 'workouts' | 'timeline' }
+  | { screen: 'ClientDetail'; tab?: 'logs' | 'workouts' | 'timeline' }
   | { screen: 'ClientMessages' }
   | { screen: 'ClientPayments' };
 
@@ -77,18 +78,17 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
   const open = (t: PeekTarget) => onOpen(client, t);
   const chips: Array<[string, PeekTarget]> = [
     ['Food log', { screen: 'ClientDetail', tab: 'logs' }],
-    ['Meal plan', { screen: 'ClientDetail', tab: 'mealplan' }],
     ['Workouts', { screen: 'ClientDetail', tab: 'workouts' }],
     ...(payments ? [['Payments', { screen: 'ClientPayments' }] as [string, PeekTarget]] : []),
     ['Full profile', { screen: 'ClientDetail' }],
   ];
 
-  const slice = (key: string, icon: keyof typeof Ionicons.glyphMap, title: string, v: { text: string; shared: boolean }, action?: React.ReactNode) => (
+  const slice = (key: string, icon: keyof typeof Ionicons.glyphMap, title: string, v: { text: string }, action?: React.ReactNode) => (
     <View style={s.slice} accessible={!action} accessibilityLabel={`${title}, ${v.text}`} testID={`peek-slice-${key}`}>
-      <Ionicons name={v.shared ? icon : 'lock-closed-outline'} size={20} color={v.shared ? colors.primary : colors.textMuted} />
+      <Ionicons name={icon} size={20} color={colors.primary} />
       <View style={s.mid}>
         <Overline style={s.sliceTitle}>{title}</Overline>
-        <Text style={[s.sliceText, !v.shared && s.muted]} numberOfLines={2}>{v.text}</Text>
+        <Text style={s.sliceText} numberOfLines={2}>{v.text}</Text>
       </View>
       {action}
     </View>

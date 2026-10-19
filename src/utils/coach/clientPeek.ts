@@ -1,12 +1,12 @@
 /**
  * UI-4 peek sheet (client-peek-sheet mockup): one line per slice from GET /coach/clients/:id/summary
- * and the latest check-in. A slice the client does not share reads "Not shared by <first name>",
- * and a shared slice with nothing in it reads the existing "Nothing logged yet", never an empty value.
+ * and the latest check-in. A slice with nothing in it reads the existing "Nothing logged yet", never an
+ * empty value. #SHARE-SIMPLE: every slice reaches the current coach, so no slice is "not shared".
  */
 import type { MacroTarget } from '../../api/macrosApi';
 import type { ClientProfile } from '../../types';
 import { bucketDateLocal } from '../date';
-import { dayWord, firstName } from './clientLookup';
+import { dayWord } from './clientLookup';
 import { rosterActivityLine, type RosterClient } from './clientRoster';
 import { resolveCoachTargets } from './foodReview';
 
@@ -35,8 +35,6 @@ function whenWords(day: string, today: Date): string {
   return /^(Today|Yesterday|[A-Z][a-z]{2})$/.test(dayWord(day, today)) ? `on ${WEEKDAYS[new Date(y, m - 1, d).getDay()]}` : `on ${MONTHS[m - 1]} ${d}`;
 }
 
-export const notSharedBy = (c: RosterClient) => `Not shared by ${firstName(c)}`;
-
 /** "Active, joined Aug 14" (the mockup's plan type is on no coach route, so it is left out); archived reads "Archived". */
 export function peekJoinedLine(c: RosterClient): string {
   const day = c.status === 'archived' ? null : localDay(c.createdAt, false);
@@ -45,21 +43,21 @@ export function peekJoinedLine(c: RosterClient): string {
   return `Active, joined ${MONTHS[m - 1]} ${d}`;
 }
 
-/** "Logged today. 2 check-ins waiting for you." Null when the client shares or logged nothing (each slice says so). */
+/** "Logged today. 2 check-ins waiting for you." Null when the client logged nothing (each slice says so). */
 export function peekStatusLine(c: RosterClient, today: Date = new Date()): { text: string; ok: boolean } | null {
   const a = c.activity;
   const n = a?.checkInsToReview ?? 0;
-  if (!a?.shared || (!a.lastActiveOn && n === 0)) return null; // the slices already say so
+  if (!a || (!a.lastActiveOn && n === 0)) return null; // the slices already say so
   const line = a.lastActiveOn ? rosterActivityLine(c, today) : { text: NOTHING, tone: 'quiet' as const };
   const waiting = n > 0 ? ` ${n} ${n === 1 ? 'check-in' : 'check-ins'} waiting for you.` : '';
   return { text: `${line.text}.${waiting}`, ok: line.tone === 'ok' };
 }
 
 export interface PeekSlices {
-  checkIn: { text: string; shared: boolean; hasOne: boolean };
-  food: { text: string; shared: boolean };
-  workouts: { text: string; shared: boolean };
-  weighIn: { text: string; shared: boolean };
+  checkIn: { text: string; hasOne: boolean };
+  food: { text: string };
+  workouts: { text: string };
+  weighIn: { text: string };
 }
 
 /** Monday 00:00 of this week, local. */
@@ -70,7 +68,7 @@ function weekStart(today: Date): Date {
 }
 
 export function peekSlices(
-  c: RosterClient,
+  _c: RosterClient,
   summary: unknown,
   checkIns: unknown,
   coachId: string | undefined,
@@ -78,14 +76,6 @@ export function peekSlices(
   today: Date = new Date(),
 ): PeekSlices {
   const s = obj(summary);
-  const consent = obj(s.consent);
-  const off = notSharedBy(c);
-  const shared = {
-    checkIns: consent.habits_progress !== false,
-    food: consent.food_macros !== false,
-    workouts: consent.workouts !== false,
-    weighIn: consent.body_metrics !== false,
-  };
 
   const latest = rows(checkIns)[0];
   const checkDay = latest ? localDay(latest.date, false) : null;
@@ -121,9 +111,9 @@ export function peekSlices(
   const weighText = lbs != null && weightDay ? `${dayWord(weightDay, today)}: ${Math.round(lbs * 10) / 10}\u00a0lb` : NOTHING;
 
   return {
-    checkIn: { text: shared.checkIns ? checkText : off, shared: shared.checkIns, hasOne: shared.checkIns && !!checkDay },
-    food: { text: shared.food ? foodText : off, shared: shared.food },
-    workouts: { text: shared.workouts ? workoutText : off, shared: shared.workouts },
-    weighIn: { text: shared.weighIn ? weighText : off, shared: shared.weighIn },
+    checkIn: { text: checkText, hasOne: !!checkDay },
+    food: { text: foodText },
+    workouts: { text: workoutText },
+    weighIn: { text: weighText },
   };
 }
