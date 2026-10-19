@@ -66,6 +66,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
   EXPO_PUBLIC_FF_FIRST_RUN_V2: process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2,
   EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST: process.env.EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST,
+  EXPO_PUBLIC_FF_HABITS_RING: process.env.EXPO_PUBLIC_FF_HABITS_RING,
   EXPO_PUBLIC_FF_HEALTH_PAGES: process.env.EXPO_PUBLIC_FF_HEALTH_PAGES,
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
@@ -671,6 +672,9 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_HEALTH_PAGES
    */
   healthPages: readFlag('EXPO_PUBLIC_FF_HEALTH_PAGES', false),
+  /** HB-B1 (#HABITS-CONCEPT, concept B): Habits opens on the ring, the week strip and tiles.
+   * Off in every build; off, Habits is main's list. env: EXPO_PUBLIC_FF_HABITS_RING */
+  habitsRing: readFlag('EXPO_PUBLIC_FF_HABITS_RING', false),
   /**
    * SHARE-A (#SHARE-SEND op 1): Share on Progress and the Session summary opens
    * one ShareSheet over the screen; no ShareCard route. Off in every build.
