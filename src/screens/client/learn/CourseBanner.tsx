@@ -9,15 +9,19 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, typography, type SemanticTokens } from '../../../theme/tokens';
 import { PrimaryButton } from '../../../ui';
 import { featureFlags } from '../../../config/featureFlags';
-import { makeCourseStyles } from './CourseParts';
 import { courseCopy, courseNow, doneIn, today, useCourses } from './courseData';
 
+// The flag is fixed for a build, so with it off Train runs no course hook and reads nothing.
 export default function CourseBanner() {
+  return featureFlags.learnCourses ? <Banner /> : null;
+}
+
+function Banner() {
   const { semanticColors: sc } = useTheme();
-  const s = useMemo(() => ({ ...makeCourseStyles(sc), ...makeStyles(sc) }), [sc]);
+  const s = useMemo(() => makeStyles(sc), [sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const course = useCourses().data?.[0];
-  if (!featureFlags.learnCourses || !course) return null;
+  if (!course) return null;
   const copy = courseCopy(course.coach);
   const { week, done, total } = courseNow(course, today());
   const body = week ? `${copy.banner} ${copy.bannerWeek(week.n, doneIn(week), week.lessons.length)}` : copy.banner;
@@ -29,9 +33,9 @@ export default function CourseBanner() {
         <View style={[s.fill, { flex: done }]} />
         <View style={{ flex: total - done }} />
       </View>
-      <View style={[s.foot, s.footGap]}>
-        <Text style={s.onDarkBody}>{copy.lessons(done, total)}</Text>
-        {week?.finishBy ? <Text style={s.onDarkBody}>{copy.openUntil(week.n, week.finishBy)}</Text> : null}
+      <View style={s.foot}>
+        <Text style={s.muted}>{copy.lessons(done, total)}</Text>
+        {week?.finishBy ? <Text style={s.muted}>{copy.openUntil(week.n, week.finishBy)}</Text> : null}
       </View>
       <PrimaryButton tone="cream" label="Open the course" onPress={() => navigation.navigate('Course', { id: course.id })} testID="course-banner-open" />
     </View>
@@ -44,5 +48,6 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   body: { ...typography.bodySmall, color: sc.textOnMastheadMuted },
   track: { flexDirection: 'row', height: 6, borderRadius: radius.chip, backgroundColor: sc.surface.forestBand, overflow: 'hidden', marginTop: 4 },
   fill: { backgroundColor: sc.data.leaf },
-  footGap: { marginTop: 0, marginBottom: 6 },
+  foot: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 12, rowGap: 2, marginBottom: 6 },
+  muted: { ...typography.bodySmall, color: sc.textOnMastheadMuted, fontVariant: ['tabular-nums'] },
 });

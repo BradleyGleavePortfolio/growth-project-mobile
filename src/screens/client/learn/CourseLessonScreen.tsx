@@ -45,8 +45,7 @@ export default function CourseLessonScreen() {
 
   const complete = async () => {
     if (saving) return;
-    setSaving(true);
-    setSaveError(null);
+    setSaving(true); setSaveError(null);
     try {
       await lessonsApi.complete(lesson.id);
       fade.setValue(reduced ? 1 : 0);
@@ -77,11 +76,9 @@ export default function CourseLessonScreen() {
       {lesson.body ? <View style={s.text}><LearnText text={lesson.body} /></View> : null}
       {lesson.note ? <CoachNote from={copy.from} text={lesson.note} testID="course-lesson-note" /> : null}
       {lesson.done ? (
-        <Animated.View style={[s.closure, { opacity: fade }]} testID="course-lesson-done">
-          <View style={s.closureRow} accessible accessibilityLiveRegion="polite">
-            <LessonMark state="done" />
-            <Text style={[s.closureText, s.fill]}>{`Lesson ${lesson.n} complete.`}</Text>
-          </View>
+        <Animated.View style={[s.closure, { opacity: fade }]} accessible accessibilityLiveRegion="polite" testID="course-lesson-done">
+          <LessonMark state="done" />
+          <Text style={[s.closureText, s.fill]}>{`Lesson ${lesson.n} complete.`}</Text>
         </Animated.View>
       ) : null}
     </Screen>
@@ -95,8 +92,8 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   text: { marginBottom: 8 },
   ink: { ...typography.bodySmall, color: sc.textPrimary },
   footer: { gap: layout.footerItemGap },
-  closure: { marginTop: 20, backgroundColor: sc.bgSurface, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
-  closureRow: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: layout.rowMinHeight, paddingHorizontal: 16, paddingVertical: 12 },
+  closure: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: layout.rowMinHeight, paddingHorizontal: 16, paddingVertical: 12, marginTop: 20,
+    backgroundColor: sc.bgSurface, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
   closureText: { ...typography.bodyMd, color: sc.textPrimary },
   fill: { flex: 1 },
 });

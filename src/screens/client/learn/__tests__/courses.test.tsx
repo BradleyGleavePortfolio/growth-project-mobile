@@ -49,13 +49,11 @@ const complete = jest.mocked(lessonsApi.complete);
 
 async function show(Comp: React.ComponentType) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  const tree = () => (
+  return render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, bottom: 34, left: 0, right: 0 } }}>
       <QueryClientProvider client={client}><Comp /></QueryClientProvider>
-    </SafeAreaProvider>
+    </SafeAreaProvider>,
   );
-  const view = await render(tree());
-  return { ...view, again: () => view.rerender(tree()) };
 }
 
 beforeEach(() => {
@@ -76,7 +74,6 @@ describe('Train course banner', () => {
 
   describe('flag on', () => {
     beforeEach(() => { jest.replaceProperty(featureFlags, 'learnCourses', true); });
-
     it('says the approved lines and Open the course opens the course home', async () => {
       await show(CourseBanner);
       expect(await screen.findByText('Knee Rehab, 8 weeks')).toBeTruthy();
@@ -129,10 +126,9 @@ describe('Course home', () => {
   });
 
   it('offline keeps what was read and says what needs a connection (c13)', async () => {
-    const view = await show(CourseHomeScreen);
-    await screen.findByText('Week 3 of 4');
     mockOnline = false;
-    await view.again();
+    await show(CourseHomeScreen);
+    await screen.findByText('Week 3 of 4');
     seen(['You’re offline. Pages in open weeks still read here. Videos and saving progress need a connection.', 'Read lesson 3.2']);
   });
 });
@@ -175,10 +171,9 @@ describe('Course lesson', () => {
   });
 
   it('offline the page reads and Mark as complete waits, with the reason', async () => {
-    const view = await show(CourseLessonScreen);
-    await screen.findByText('Some discomfort is normal.');
     mockOnline = false;
-    await view.again();
+    await show(CourseLessonScreen);
+    await screen.findByText('Some discomfort is normal.');
     expect(screen.getByTestId('course-lesson-reason').props.children).toMatch(/^You’re offline\./);
     await fireEvent.press(screen.getByText('Mark as complete'));
     expect(complete).not.toHaveBeenCalled();
