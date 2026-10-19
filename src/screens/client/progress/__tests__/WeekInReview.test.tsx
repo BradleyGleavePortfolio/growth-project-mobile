@@ -91,7 +91,7 @@ it('uses self-only reads, exact week bounds, logged days for protein and only re
   expect(d.training).toMatchObject({ done: 1, total: 2 });
   expect(d.weights.map((w) => w.id)).toEqual(['w1', 'w2']);
   expect(reviewTrend(d.weights, week, 'lb')).toBe('Down 0.2 lb');
-  expect(sleepLine(d.sleepMinutes)).toBe('7 h 15 m');
+  expect(sleepLine(d.sleepMinutes ?? null)).toBe('7 h 15 m');
   expect(sleepLine(null)).toBe('No sleep logged');
 });
 
@@ -127,7 +127,7 @@ it.each([
   mockChecks.mockResolvedValue({ data: checks });
   const d = await read();
   expect(mockSleep).toHaveBeenCalledWith(expect.objectContaining({ bucket: 'SLEEP_RECOVERY', granularity: 'day', preferredOnly: true }));
-  expect(sleepLine(d.sleepMinutes)).toBe(line);
+  expect(sleepLine(d.sleepMinutes ?? null)).toBe(line);
   const v = await render(<WeekInReviewScreen navigation={navigation} />);
   await waitFor(() => expect(v.getByLabelText(`Sleep, average: ${line}`)).toBeTruthy());
 });
