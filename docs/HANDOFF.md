@@ -22,7 +22,7 @@ All runtime configuration is read through `EXPO_PUBLIC_*` env vars at build time
 | Variable | Read by | Notes |
 | --- | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL` | `src/config/env.ts`, `services/api.ts`, `services/realtime.ts`, `utils/googleAuth.ts`, `utils/supabaseAuth.ts` | Project URL of the Supabase instance. Throws at module load if missing. |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | same | Anon JWT for the supabase-js client. Public by design (RLS gates all data); the service-role key is never bundled. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | same | Supabase publishable key (`sb_publishable_…`) for the supabase-js client. Public by design (RLS gates all data); the service-role and secret keys are never bundled. The legacy anon JWT keys are switched off, and the release checks refuse one. |
 | `EXPO_PUBLIC_API_URL` | `src/config/env.ts` (then everywhere through axios `baseURL`) | Backend API base URL. Required in non-dev builds. In dev, falls back to the Fly.io URL hardcoded in `src/config/env.ts` so a local boot without `.env` still works. |
 
 The dev fallback is `https://backend-spring-lake-3890.fly.dev/api`. Treat that as a placeholder for local boots only; never rely on it in CI or any release-track build.

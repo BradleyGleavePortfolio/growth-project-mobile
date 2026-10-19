@@ -32,9 +32,15 @@ const pairs = (t: SemanticTokens): Array<[string, string, string, number]> => [
   ['weight empty frame', t.data.frameOnDark, t.surface.masthead, MARK],
   ['weight touch chip', colors.ink, t.textOnAccent, TEXT],
   ['masthead, error card edge', colors.warningBg, t.surface.masthead, MARK],
+  ['masthead, effort 3-4 fill', t.data.fern, t.surface.masthead, MARK],
+  ['error card title', colors.ink, colors.warningBg, TEXT],
+  ['error card body', colors.charcoal, colors.warningBg, TEXT],
+  ['error card border', colors.warningInk, colors.warningBg, MARK],
   ['forest band, primary text', t.textOnAccent, t.surface.forestBand, TEXT],
   ['forest band, secondary text', t.textOnMastheadMuted, t.surface.forestBand, TEXT],
   ['forest band, rest ring and done chip check', t.data.leaf, t.surface.forestBand, MARK],
+  ['forest band, chip border', t.surface.forestBandLine, t.surface.forestBand, MARK],
+  ['forest band, gold', t.data.peak, t.surface.forestBand, MARK],
   ['sage, primary text', t.textPrimary, t.surface.sage, TEXT],
   ['sage, secondary text', t.textMuted, t.surface.sage, TEXT],
   ['sage, accent text', t.accentText, t.surface.sage, TEXT],
@@ -48,6 +54,7 @@ const pairs = (t: SemanticTokens): Array<[string, string, string, number]> => [
   ['effort 7-8, check on a done disc', t.textOnAccent, t.data.forest, TEXT],
   ['effort 9-10', t.textOnAccent, t.data.deep, TEXT],
   ['progress fill on track', t.data.forest, t.data.trackLight, MARK],
+  ['loading, disabled Start label', t.textOnDisabled, t.disabledBg, TEXT],
   ...([['bgPrimary', t.bgPrimary], ['bgSurface', t.bgSurface]] as const).flatMap(([n, bg]): Array<[string, string, string, number]> => [
     [`${n}, missed number`, t.data.missed, bg, TEXT],
     [`${n}, done arcs, discs and selected ring`, t.data.forest, bg, MARK],
@@ -91,12 +98,18 @@ describe.each<[string, SemanticTokens]>([['light', lightTokens], ['dark', darkTo
   });
 });
 
-it('light: charcoal cue text on sage (dark uses textMuted)', () => {
-  expect(ratio(colors.charcoal, lightTokens.surface.sage)).toBeGreaterThanOrEqual(TEXT);
+// Light only: charcoal is light-ground ink (dark uses textMuted), and deep on
+// the dark page (1.34) waits for the owner's dark review (theme README).
+it.each<[string, string, string, number]>([
+  ['charcoal cue text on sage', colors.charcoal, lightTokens.surface.sage, TEXT],
+  ['charcoal legend and history labels on the page', colors.charcoal, lightTokens.bgPrimary, TEXT],
+  ['effort 9-10 fill on the page', lightTokens.data.deep, lightTokens.bgPrimary, MARK],
+])('light: %s', (_pair, fg, bg, min) => {
+  expect(ratio(fg, bg)).toBeGreaterThanOrEqual(min);
 });
 
 it('keeps the index-v2 section 4 light values', () => {
-  expect(lightTokens.surface).toEqual({ masthead: '#1C3023', forestBand: '#2C4A36', sage: '#E0EBE4', sageLine: '#C9D8CD' });
+  expect(lightTokens.surface).toEqual({ masthead: '#1C3023', forestBand: '#2C4A36', forestBandLine: '#A8B2A6', sage: '#E0EBE4', sageLine: '#C9D8CD' });
   expect(lightTokens.textOnMastheadMuted).toBe('#B8CCBF');
   expect(lightTokens.data).toEqual({
     leaf: '#A3C46A', fern: '#7FA653', moss: '#4E7A3F', forest: '#2C4A36', deep: '#1C3023', peak: '#D4B96B',

@@ -27,21 +27,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { subCoachApi, type SubCoachInviteResult } from '../../api/subCoachApi';
 import { errorMessage } from '../../types/common';
-import { digitalPurchasesHidden } from '../../config/purchaseSurfaces';
-
-/**
- * Seat-limit copy. With non-P2P purchases hidden (iOS) it never tells the
- * coach to upgrade; it names the headroom and the in-app way to free a seat.
- */
-export function seatLimitMessage(remainingSeats: number, purchasesHidden: boolean): string {
-  if (remainingSeats <= 0) {
-    return purchasesHidden
-      ? 'No seats available on your plan. Revoke an existing sub-coach to free a seat.'
-      : 'No seats available on your plan. Upgrade or revoke an existing sub-coach to free a seat.';
-  }
-  const base = `Only ${remainingSeats} seat${remainingSeats === 1 ? '' : 's'} available on your plan. `;
-  return purchasesHidden ? `${base}Lower the ceiling.` : `${base}Lower the ceiling or upgrade to add more.`;
-}
 
 interface Props {
   visible: boolean;
@@ -54,17 +39,6 @@ interface Props {
    * billing if the backend dedupe lags. Compared case-insensitively.
    */
   existingEmails?: ReadonlyArray<string>;
-  /**
-   * P0-3 — remaining seat headroom on the head coach's plan
-   * (`client_capacity - clients_assigned`). When provided, the `maxClients`
-   * field is bounded by this value so a head coach with 5 seats can't
-   * provision a sub-coach with 99999 and break the seat-based pricing
-   * model. `undefined` means "unknown" (team profile not yet loaded) — we
-   * skip the clamp in that case rather than block the invite, because
-   * blocking on an unknown denominator would lock head coaches out on a
-   * flaky team-profile fetch.
-   */
-  remainingSeats?: number;
 }
 
 export default function SubCoachInviteModal({
@@ -72,7 +46,6 @@ export default function SubCoachInviteModal({
   onDismiss,
   onInvited,
   existingEmails,
-  remainingSeats,
 }: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
@@ -134,14 +107,6 @@ export default function SubCoachInviteModal({
       const n = parseInt(maxClients.trim(), 10);
       if (isNaN(n) || n < 1) {
         setError('Seat ceiling must be a positive number.');
-        return;
-      }
-      // P0-3 — clamp to remaining plan seats. Without this a head coach with
-      // 5 seats can type 99999 and provision a sub-coach beyond the billed
-      // ceiling. Surface a structured Rule-9 message naming the exact
-      // headroom so the head coach knows what to do.
-      if (typeof remainingSeats === 'number' && n > remainingSeats) {
-        setError(seatLimitMessage(remainingSeats, digitalPurchasesHidden()));
         return;
       }
       maxClientsNum = n;

@@ -28,7 +28,7 @@ import {
 import { useTheme } from '../../theme/ThemeProvider';
 import { firstWinApi, WinType } from '../../services/firstWinApi';
 import { track } from '../../lib/analytics';
-import { radius, typography } from '../../theme/tokens';
+import { layout, radius, typography } from '../../theme/tokens';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PackageSelectionSheet from '../../components/PackageSelectionSheet';
 import { shouldOfferPackagePrompt } from '../../lib/packagePromptGate';
@@ -400,6 +400,8 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
     skipButton: {
       alignSelf: 'center',
       paddingVertical: 12,
+      minWidth: layout.touchMin,
+      minHeight: layout.touchMin,
     },
     skipText: {
       fontFamily: 'Inter_400Regular',

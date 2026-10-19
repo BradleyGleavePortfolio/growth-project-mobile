@@ -62,6 +62,9 @@ All list screens support:
   line in full at any text size, then the client's message on one muted line) and open `CoachSafetyAlertScreen`. A crisis alert never shows the
   client's words, on the card or the screen (`safetyQuote`); its screen line is "Roman sent {first name} a crisis safety
   reply. Please check in with them today." Any other type stays an ordinary row. Tests: `coachSafetyAlert.test.tsx`.
+- SAFETY-CHAT-ROUTE (agent 159): the screen's Message {first name} opens that client's chat through `openInboxChat`; with the
+  six tabs in Messages over the inbox, so Back lands on the inbox, then on the alert (off: over the alert, as before). Test:
+  `src/__tests__/coachChatRoute159.test.tsx`.
 
 ---
 

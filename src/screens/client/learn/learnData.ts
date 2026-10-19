@@ -79,6 +79,7 @@ export function useLearn() {
     name: str(coach.data?.name).split(/\s+/)[0] || null,
     lessons: lessons.data ?? [],
     guidelines: guidelines.data ?? null,
+    guidelinesQuery: guidelines,
     known,
     error: known ? null : lessons.error ?? guidelines.error,
     hasContent: !!guidelines.data || (lessons.data?.length ?? 0) > 0,

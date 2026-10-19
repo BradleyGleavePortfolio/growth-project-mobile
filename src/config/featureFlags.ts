@@ -64,6 +64,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
   EXPO_PUBLIC_FF_FIRST_RUN_V2: process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2,
+  EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST: process.env.EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST,
   EXPO_PUBLIC_FF_HABITS_RING: process.env.EXPO_PUBLIC_FF_HABITS_RING,
   EXPO_PUBLIC_FF_HEALTH_PAGES: process.env.EXPO_PUBLIC_FF_HEALTH_PAGES,
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
@@ -451,6 +452,14 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
   mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
+  // ─── UI-3 food logging (V1_1_UI_SPEC UI-3, owner 2026-10-09) ─────────────
+  // ON: a coached client's Food tab opens on the day's plan as a checklist:
+  // the coach's meals in order, "Ate it as planned" logs one in a tap. No plan
+  // for the day, or no coach: today's Food log. OFF (default in every eas.json
+  // profile): today's Food log, unchanged. The switch-on is its own PR.
+  //
+  // env: EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST
+  foodPlanChecklist: readFlag('EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST', false),
   // UI-1 (owner 10-09, V1_1_UI_SPEC; v1 since owner 10-17 "home-v1"): the rings
   // and tiles client Home. Default off and set by no eas.json profile until the
   // owner switches it on in its own PR; off renders today's Home unchanged.

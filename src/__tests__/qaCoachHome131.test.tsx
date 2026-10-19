@@ -249,7 +249,6 @@ describe('the four list tabs: one skeleton, one calm error with Try again', () =
 
 describe('U4: Team says a failed load in words, without red or a false empty line', () => {
   it('hides "No sub-coaches yet" when the load failed and keeps Invite and Try again', async () => {
-    mockMe.mockResolvedValue({ data: { plan_tier: 'scale' } });
     mockListSubCoaches.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValueOnce({ data: [] });
     const screen = await render(<TeamManagementScreen />);
     const message = await screen.findByText('Your team could not load.');
@@ -261,5 +260,23 @@ describe('U4: Team says a failed load in words, without red or a false empty lin
     expect(await screen.findByText('No sub-coaches yet. Tap Invite to add your first one.')).toBeTruthy();
     expect(screen.queryByText('Your team could not load.')).toBeNull();
     expect(mockListSubCoaches).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('TM-P1: Team has no coach plan gate or plan client cap', () => {
+  it('lists a full sub-coach with no plan or upgrade line, keeps Invite, and a row tap opens the detail', async () => {
+    mockListSubCoaches.mockResolvedValueOnce({
+      data: [{
+        id: 's1', name: 'Sam Sub', email: 'sam@example.com', created_at: '', coach_profile: null,
+        capacity: { subCoachId: 's1', assignedClients: 50, maxClients: 50, planTier: 'flat_300', hasCapacity: false },
+        engagement: { score: 90 },
+      }],
+    });
+    const screen = await render(<TeamManagementScreen />);
+    const row = await screen.findByLabelText('View details for Sam Sub');
+    expect(screen.queryByText(/\bplan\b|upgrade|50 \/ 50/i)).toBeNull();
+    expect(screen.getByLabelText('Invite sub-coach')).toBeTruthy();
+    await fireEvent.press(row);
+    expect(mockNavigate).toHaveBeenCalledWith('SubCoachDetail', { subCoachId: 's1', subCoachName: 'Sam Sub' });
   });
 });
