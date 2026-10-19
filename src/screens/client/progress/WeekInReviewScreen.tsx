@@ -8,24 +8,31 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { useCoachlessClient } from '../../../hooks/useCoachlessClient';
+import { useMyCoaches } from '../../../hooks/useCalendar';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { radius, typography } from '../../../theme/tokens';
+import { colors, radius, typography } from '../../../theme/tokens';
 import { Screen, useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import { getTodayString } from '../../../utils/date';
 import { unitOf, type WeightUnit } from './progressV2';
-import { loadWeekReview, reviewTrend, reviewWeek, sleepLine, weekDate, workoutLine, type WeekReviewData } from './weekReview';
+import { loadWeekReview, reviewTrend, reviewWeek, sleepLine, weekDates, workoutLine, type WeekReviewData } from './weekReview';
 
 const HABIT_CIRCUMFERENCE = 2 * Math.PI * 38;
-type Nav = Pick<NavigationProp<ParamListBase>, 'goBack'>;
+type Nav = Pick<NavigationProp<ParamListBase>, 'goBack'> & { getState?: () => { index: number; routes: ReadonlyArray<{ name: string }> } };
 export default function WeekInReviewScreen({ navigation }: { navigation: Nav }) {
   const user = useCurrentUser();
+  // The Progress masthead's coach initial (ProgressV2): none for a coachless client.
+  const coachless = useCoachlessClient();
+  const coaches = useMyCoaches(!!user?.id && !coachless).data;
+  const coach = coaches?.find((c) => c.coach_id === user?.coach_id) ?? coaches?.[0];
+  const initial = coachless ? '' : coach?.name.trim().charAt(0).toUpperCase() ?? '';
   // Remount on identity change: no summary or late response crosses accounts.
-  return <WeekReviewPage key={user?.id ?? 'signed-out'} userId={user?.id} unit={unitOf(user?.profile?.weight_unit)} navigation={navigation} />;
+  return <WeekReviewPage key={user?.id ?? 'signed-out'} userId={user?.id} unit={unitOf(user?.profile?.weight_unit)} initial={initial} navigation={navigation} />;
 }
 
-function WeekReviewPage({ userId, unit, navigation }: { userId?: string; unit: WeightUnit; navigation: Nav }) {
+function WeekReviewPage({ userId, unit, initial, navigation }: { userId?: string; unit: WeightUnit; initial: string; navigation: Nav }) {
   const { semanticColors: sc } = useTheme();
   const insets = useScreenInsets();
   const { fontScale } = useWindowDimensions();
@@ -54,6 +61,9 @@ function WeekReviewPage({ userId, unit, navigation }: { userId?: string; unit: W
     return () => { request.current += 1; };
   }, [load]);
 
+  // The mockup's "< Progress" names the page Back returns to; More and Profile open Report too.
+  const state = navigation.getState?.();
+  const fromProgress = state?.routes[state.index - 1]?.name === 'Progress';
   const light = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
   const count = data?.habits;
@@ -72,11 +82,20 @@ function WeekReviewPage({ userId, unit, navigation }: { userId?: string; unit: W
       <Screen edges={[]} testID="week-review" contentStyle={s.page}
         refreshControl={<RefreshControl refreshing={busy && !!data} onRefresh={() => void load()} tintColor={sc.textMuted} />}>
         <View style={[s.mast, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + 12 }]}>
-          <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" style={s.back} testID="week-back">
+          <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel={fromProgress ? 'Back to Progress' : 'Back'}
+            style={s.back} testID="week-back">
             <Ionicons name="chevron-back" size={22} color={sc.textOnAccent} />
+            {fromProgress ? <Text style={[typography.bodyMd, light]}>Progress</Text> : null}
           </Pressable>
-          <Text style={[typography.eyebrow, muted]}>{`${weekDate(start)} to ${weekDate(end)}`}</Text>
-          <Text style={[typography.h1, light]} accessibilityRole="header">Week in review</Text>
+          <View style={s.title}>
+            {initial ? <View style={[s.avatar, { backgroundColor: sc.textOnAccent }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Text style={s.initial}>{initial}</Text>
+            </View> : null}
+            <View style={s.flex}>
+              <Text style={[typography.eyebrow, muted]}>{weekDates(week)}</Text>
+              <Text style={[typography.h1, light]} accessibilityRole="header">Week in review</Text>
+            </View>
+          </View>
         </View>
         <View style={s.body}>
           {error ? <QuietError message={error} onRetry={() => void load()} retrying={busy} testID="week-error" /> : null}
@@ -91,10 +110,11 @@ function WeekReviewPage({ userId, unit, navigation }: { userId?: string; unit: W
                     {habitFraction > 0 ? <Circle testID="week-habits-fill" cx={44} cy={44} r={38} fill="none" stroke={sc.data.forest} strokeWidth={7}
                       strokeLinecap="round" strokeDasharray={`${habitFraction * HABIT_CIRCUMFERENCE} ${HABIT_CIRCUMFERENCE}`} rotation={-90} origin="44, 44" /> : null}
                   </Svg>
-                  <Text maxFontSizeMultiplier={1.15} style={[typography.h2, { color: sc.textPrimary }]}>{`${count.done}/${count.planned}`}</Text>
+                  <Text maxFontSizeMultiplier={1.15} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
+                    style={[s.centre, { color: sc.textPrimary }]}>{`${count.done}/${count.planned}`}</Text>
                 </View> : null}
                 <View style={s.summaryText}>
-                  <Text style={[typography.h2, { color: sc.textPrimary }]} accessibilityRole="header">Habits this week</Text>
+                  {count?.planned ? <Text style={[typography.h2, { color: sc.textPrimary }]} accessibilityRole="header">Habits this week</Text> : null}
                   <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`Daily check-ins: ${data.checkIns} of 7`}</Text>
                 </View>
               </View>
@@ -115,11 +135,16 @@ function WeekReviewPage({ userId, unit, navigation }: { userId?: string; unit: W
 const s = StyleSheet.create({
   page: { paddingHorizontal: 0 },
   mast: { paddingHorizontal: 24, paddingBottom: 28, gap: 12, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
-  back: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  back: { minWidth: 44, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  title: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  flex: { flex: 1, gap: 2 },
+  avatar: { width: 44, height: 44, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
+  initial: { ...typography.h2, color: colors.ink },
   body: { paddingHorizontal: 24, paddingTop: 24, gap: 8 },
   summary: { padding: 16, borderRadius: radius.card, flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
   summaryText: { flexShrink: 1, gap: 6 },
-  ring: { width: 88, height: 88, alignItems: 'center', justifyContent: 'center' },
+  ring: { width: 88, height: 88, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  centre: { ...typography.h2, fontSize: 20, lineHeight: 25, fontVariant: ['tabular-nums'] },
   row: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   label: { flex: 1 },
   value: { flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] },

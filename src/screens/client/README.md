@@ -2,7 +2,7 @@
 
 | Slice | Behavior |
 |---|---|
-| C8-WEEK (`progress/WeekInReviewScreen`, `weekReview`) | With `clientProgressV2` on, the existing `Report` route reviews the last completed Monday–Sunday; off, `ReportScreen` keeps its legacy report. Self-only workout/assignment, weekly food, weight history, habit-summary and daily check-in reads; no writes, sharing or persisted summary. The ring uses server habit planned/done counts; averages use recorded days, and weight reuses C8-2B smoothing. Empty, loading, error/offline retry and account changes are explicit. No weekly form, coach reply or historical protein-target claim. |
+| C8-WEEK (`progress/WeekInReviewScreen`, `weekReview`) | With `clientProgressV2` on, the existing `Report` route reviews the last completed Monday–Sunday; off, `ReportScreen` keeps its legacy report. Self-only workout/assignment, weekly food, weight history, habit-summary, daily check-in and Home's Sleep and recovery samples reads; no writes, sharing or persisted summary. The ring uses server habit planned/done counts and its header shows only when habits are planned; averages use recorded days; sleep reads each night like Home (watch first, check-in hours second); weight reuses C8-2B smoothing from the trend before Monday. The masthead shows the Progress coach initial (none when coachless) and names Progress on Back only when Progress opened it. Empty, loading, error/offline retry and account changes are explicit. No weekly form, coach reply or historical protein-target claim. |
 
 C8V2-2B: with `clientProgressV2` on (off in every build) `ProgressScreen` renders
 `progress/ProgressV2.tsx`: the deep forest masthead (coach initial, "Since" overline,

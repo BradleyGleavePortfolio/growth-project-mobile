@@ -2,11 +2,12 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ReportScreen from '../../ReportScreen';
 import WeekInReviewScreen from '../WeekInReviewScreen';
-import { loadWeekReview, reviewTrend, reviewWeek, sleepLine } from '../weekReview';
+import { loadWeekReview, reviewTrend, reviewWeek, sleepLine, weekDates } from '../weekReview';
 import { toUnit, type WeightUnit } from '../progressV2';
 
 const week = { start: '2026-10-05', end: '2026-10-11' };
-let mockUser: { id: string; profile: { weight_unit?: 'kg' } } | null = { id: 'client-a', profile: {} };
+let mockUser: { id: string; coach_id?: string; profile: { weight_unit?: 'kg' } } | null = { id: 'client-a', profile: {} };
+let mockCoachless = false;
 const mockGet = jest.fn();
 const mockWorkouts = jest.fn();
 const mockAssignments = jest.fn();
@@ -14,6 +15,7 @@ const mockFood = jest.fn();
 const mockWeight = jest.fn();
 const mockChecks = jest.fn();
 const mockBack = jest.fn();
+const mockSleep = jest.fn();
 jest.mock('../../../../services/api', () => ({
   __esModule: true, default: { get: (...args: unknown[]) => mockGet(...args) },
   workoutApi: { getAll: (...args: unknown[]) => mockWorkouts(...args) },
@@ -22,6 +24,9 @@ jest.mock('../../../../services/api', () => ({
   checkInsApi: { list: (...args: unknown[]) => mockChecks(...args) },
 }));
 jest.mock('../../../../api/workoutBuilderApi', () => ({ workoutBuilderApi: { listMyAssignments: () => mockAssignments() } }));
+jest.mock('../../../../api/wearablesSamplesApi', () => ({ wearablesSamplesApi: { getSamples: (...args: unknown[]) => mockSleep(...args) } }));
+jest.mock('../../../../hooks/useCoachlessClient', () => ({ useCoachlessClient: () => mockCoachless }));
+jest.mock('../../../../hooks/useCalendar', () => ({ useMyCoaches: () => ({ data: [{ coach_id: 'c1', name: 'Sam Rivera', timezone: null }] }) }));
 jest.mock('../../../../api/macrosApi', () => ({ macrosApi: { currentForSelf: jest.fn() } }));
 jest.mock('../../../../hooks/useMacroTargets', () => ({ useMacroTargets: jest.fn() }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
@@ -39,9 +44,14 @@ jest.mock('../../wearables/components/useReduceMotion', () => ({ useReduceMotion
 
 const navigation = { goBack: mockBack };
 const read = () => loadWeekReview('client-a', week);
+/** A watch night (SLEEP_DURATION_MIN) that ends on the morning of `day`. */
+const night = (day: string, value: number) => ({ start_at: `${day}T00:00:00.000Z`, end_at: `${day}T07:00:00.000Z`, value });
+const watch = (...nights: Array<ReturnType<typeof night>>) => ({ series: [{ metric: 'SLEEP_DURATION_MIN', samples: nights }] });
 beforeEach(() => {
   jest.clearAllMocks();
-  mockUser = { id: 'client-a', profile: {} };
+  mockUser = { id: 'client-a', coach_id: 'c1', profile: {} };
+  mockCoachless = false;
+  mockSleep.mockResolvedValue({ series: [] });
   mockGet.mockResolvedValue({ data: { habits: [{ done: 16, planned: 21 }] } });
   mockWorkouts.mockResolvedValue({ data: [{ date: '2026-10-07' }, { date: '2026-10-13' }] });
   mockAssignments.mockResolvedValue([
@@ -66,6 +76,9 @@ it('reviews the last complete Monday–Sunday, including when opened on Monday o
   expect(reviewWeek('2026-10-14')).toEqual(week);
   expect(reviewWeek('2026-10-12')).toEqual(week);
   expect(reviewWeek('2026-10-18')).toEqual(week);
+  expect(weekDates(week)).toBe('October 5 to 11');
+  expect(weekDates(reviewWeek('2026-10-07'))).toBe('September 28 to October 4');
+  expect(weekDates(reviewWeek('2027-01-06'))).toBe('December 28 to January 3');
 });
 
 it('uses self-only reads, exact week bounds, logged days for protein and only recorded sleep', async () => {
@@ -77,7 +90,7 @@ it('uses self-only reads, exact week bounds, logged days for protein and only re
   expect(d).toMatchObject({ workouts: 1, food: 2, protein: 132, habits: { done: 16, planned: 21 }, checkIns: 3, sleepMinutes: 435, empty: false });
   expect(d.training).toMatchObject({ done: 1, total: 2 });
   expect(d.weights.map((w) => w.id)).toEqual(['w1', 'w2']);
-  expect(reviewTrend(d.weights, week, 'lb')).toBe('Down 0.2 lb this week.');
+  expect(reviewTrend(d.weights, week, 'lb')).toBe('Down 0.2 lb');
   expect(sleepLine(d.sleepMinutes)).toBe('7 h 15 m');
   expect(sleepLine(null)).toBe('No sleep logged');
 });
@@ -86,16 +99,56 @@ it.each<WeightUnit>(['lb', 'kg'])('reuses the full-history smoothed trend in %s,
   const d = await read();
   const up = d.weights.map((w) => ({ ...w, weight: 360 - w.weight }));
   const n = toUnit(0.2, unit).toFixed(1);
-  expect(reviewTrend(d.weights, week, unit)).toBe(`Down ${n} ${unit} this week.`);
-  expect(reviewTrend(up, week, unit)).toBe(`Up ${n} ${unit} this week.`);
+  expect(reviewTrend(d.weights, week, unit)).toBe(`Down ${n} ${unit}`);
+  expect(reviewTrend(up, week, unit)).toBe(`Up ${n} ${unit}`);
   expect(reviewTrend([], week, unit)).toBe('No weigh-ins this week.');
   expect(reviewTrend(d.weights.slice(0, 1), week, unit)).toBe('No weigh-ins this week.');
+});
+
+it('Monday counts: Monday-only weigh-ins measure from the trend before the week, not after Monday', async () => {
+  mockWeight.mockResolvedValue({ data: { logs: [['2026-09-21', 182], ['2026-09-28', 180], ['2026-10-05', 177]]
+    .map(([date, weight_lbs], i) => ({ id: `m${i}`, date, weight_lbs })) } });
+  const d = await read();
+  expect(reviewTrend(d.weights, week, 'lb')).toBe('Down 0.5 lb');
+  expect(reviewTrend(d.weights, week, 'kg')).toBe('Down 0.2 kg');
+  const v = await render(<WeekInReviewScreen navigation={navigation} />);
+  await waitFor(() => expect(v.getByLabelText('Weight trend: Down 0.5 lb')).toBeTruthy());
+  expect(v.queryByText(/Steady/)).toBeNull();
+});
+
+it.each([
+  ['the watch only', watch(night('2026-10-05', 420), night('2026-10-11', 460)), [], '7 h 20 m'],
+  ['the daily check-in only', { series: [] }, [{ date: '2026-10-06', sleep_hours: 6.5 }], '6 h 30 m'],
+  ['the watch first, the check-in for nights it missed', watch(night('2026-10-05', 480), night('2026-10-06', 420)),
+    [{ date: '2026-10-05', sleep_hours: 5 }, { date: '2026-10-11', sleep_hours: '7.5' }], '7 h 30 m'],
+  ['neither', { series: [] }, [{ date: '2026-10-07', sleep_hours: null }], 'No sleep logged'],
+])('sleep reads like Home: %s', async (_, health, checks, line) => {
+  mockSleep.mockResolvedValue(health);
+  mockChecks.mockResolvedValue({ data: checks });
+  const d = await read();
+  expect(mockSleep).toHaveBeenCalledWith(expect.objectContaining({ bucket: 'SLEEP_RECOVERY', granularity: 'day', preferredOnly: true }));
+  expect(sleepLine(d.sleepMinutes)).toBe(line);
+  const v = await render(<WeekInReviewScreen navigation={navigation} />);
+  await waitFor(() => expect(v.getByLabelText(`Sleep, average: ${line}`)).toBeTruthy());
+});
+
+it('a week with only watch sleep is not called empty', async () => {
+  mockGet.mockResolvedValue({ data: { habits: [] } });
+  mockWorkouts.mockResolvedValue({ data: [] });
+  mockAssignments.mockResolvedValue([]);
+  mockFood.mockResolvedValue({ data: [] });
+  mockWeight.mockResolvedValue({ data: { logs: [] } });
+  mockChecks.mockResolvedValue({ data: [] });
+  mockSleep.mockResolvedValue(watch(night('2026-10-08', 450)));
+  expect((await read()).empty).toBe(false);
 });
 
 it('the Report door mounts the real week with no weekly form, historical target or invented coach reply', async () => {
   const v = await render(<ReportScreen navigation={navigation} />);
   await waitFor(() => expect(v.getByLabelText('Protein, average: 132 g')).toBeTruthy());
   expect(v.getByRole('header', { name: 'Week in review' })).toBeTruthy();
+  expect(v.getByText('October 5 to 11')).toBeTruthy();
+  expect(v.getByRole('header', { name: 'Habits this week' })).toBeTruthy();
   expect(v.getByLabelText('Workouts: 1 of 2')).toBeTruthy();
   expect(v.getByLabelText('Habits this week, 16 of 21 done')).toBeTruthy();
   expect(v.getByText('Daily check-ins: 3 of 7')).toBeTruthy();
@@ -107,9 +160,30 @@ it('the Report door mounts the real week with no weekly form, historical target 
 
 it('a coachless client with no plan sees their logged workouts, not a fake denominator', async () => {
   mockAssignments.mockResolvedValue([]);
+  mockCoachless = true;
   const v = await render(<WeekInReviewScreen navigation={navigation} />);
   await waitFor(() => expect(v.getByLabelText('Workouts: 1 logged')).toBeTruthy());
   expect(v.queryByText(/coach|Sam/)).toBeNull();
+  expect(v.queryByText('S', { includeHiddenElements: true })).toBeNull();
+});
+
+it('the masthead shows the coach initial the Progress masthead shows, hidden from the screen reader', async () => {
+  const v = await render(<WeekInReviewScreen navigation={navigation} />);
+  await waitFor(() => expect(v.getByLabelText('Protein, average: 132 g')).toBeTruthy());
+  expect(v.getByText('S', { includeHiddenElements: true })).toBeTruthy();
+  expect(v.queryByText('S')).toBeNull();
+});
+
+it('Back names Progress only when Progress is the page it returns to', async () => {
+  const from = (name: string) => ({ goBack: mockBack, getState: () => ({ index: 1, routes: [{ name }, { name: 'Report' }] }) });
+  const v = await render(<WeekInReviewScreen navigation={from('Progress')} />);
+  await waitFor(() => expect(v.getByLabelText('Protein, average: 132 g')).toBeTruthy());
+  await fireEvent.press(v.getByRole('button', { name: 'Back to Progress' }));
+  expect(v.getByText('Progress')).toBeTruthy();
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  await v.rerender(<WeekInReviewScreen navigation={from('MoreIndex')} />);
+  expect(v.getByRole('button', { name: 'Back' })).toBeTruthy();
+  expect(v.queryByText('Progress')).toBeNull();
 });
 
 it('the continuous habit ring keeps its actual fraction with six daily habits', async () => {
@@ -138,6 +212,7 @@ it('pending reads never claim empty; an empty week uses unknowns, not fake avera
   expect(v.getByLabelText('Protein, average: No food logged')).toBeTruthy();
   expect(v.getByLabelText('Habits: Nothing planned')).toBeTruthy();
   expect(v.queryByLabelText(/Habits this week, 0 of 0/)).toBeNull();
+  expect(v.queryByText('Habits this week')).toBeNull();
 });
 
 it.each([
