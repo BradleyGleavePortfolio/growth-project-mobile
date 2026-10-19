@@ -18,6 +18,7 @@ navigation type; flags still decide which exist. Coach tabs are never replaced
 or forced on: the selected store profile's `coachTabsV2` decides the bar.
 Roman must be enabled in that profile; its canned history makes no AI call.
 Network data is invented. Never use this mode on a personal/production install.
+Fixture matching ignores URL query strings; handlers keep the original request.
 Capture-only realtime adapters never join live channels, on either platform.
 The production Metro alias still removes the harness and fixtures entirely.
 Web-only adapters cover SQLite and unused native payment/support SDKs; no selected

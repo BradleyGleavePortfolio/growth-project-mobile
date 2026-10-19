@@ -258,7 +258,7 @@ function urlForMatch(config: AxiosRequestConfig): string {
   // path-only so fixture patterns are stable across env URLs.
   const raw = String(config.url ?? '');
   // Strip any baseURL prefix that may have been concatenated.
-  const stripped = raw.replace(/^https?:\/\/[^/]+/, '');
+  const stripped = raw.replace(/^https?:\/\/[^/]+/, '').split('?')[0];
   return stripped.startsWith('/') ? stripped : `/${stripped}`;
 }
 
