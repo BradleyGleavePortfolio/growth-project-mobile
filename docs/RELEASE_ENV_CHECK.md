@@ -27,10 +27,10 @@ binary needs is missing, a placeholder, or the wrong kind of key. It never print
 For each of those values:
 - **Not a placeholder.** Rejected: empty values, `your_..._here`, `REPLACE_WITH_*`, `<...>`, `${...}`, `changeme` / `todo` / `xxx`, a copied masked `*****`.
 - **URLs** (`API_URL`, `SUPABASE_URL`, `HELP_BASE_URL`) must be `https` on a real host. Rejected: localhost; loopback, private (10/8, 172.16/12, 192.168/16), CGNAT (100.64/10), link-local (169.254/16) and 0/8 IPv4, including decimal or hex forms; IPv6 loopback, unspecified, ULA (`fc00::/7`), link-local (`fe80::/10`) and IPv4-mapped; `example.*`; `*.invalid` / `*.test` / `*.local` / `*.localhost` / `*.internal` / `*.lan` / `*.home.arpa`; single-label names.
-- **Supabase anon key** must be a complete key:
-  - a JWT with three non-empty base64url parts, a signed header (`alg` set, not `none`), role `anon`, a full-length signature (at least 32 bytes) and an `exp` that has not passed; or
-  - an `sb_publishable_` key followed by at least 20 letters, digits, `_` or `-`.
-  - A `service_role` JWT or an `sb_secret_` key fails: either one bypasses row-level security.
+- **Supabase key** (`EXPO_PUBLIC_SUPABASE_ANON_KEY`) must be a complete publishable key: `sb_publishable_` followed by at least 20 letters, digits, `_` or `-`, copied whole from Supabase → Project Settings → API Keys.
+  - Any JWT-shaped value (three dot-separated parts) fails as a legacy anon key. The legacy keys are switched off for this project (2026-10-19), so a build or update with one would break sign-in, password reset, Google sign-in and live updates.
+  - A `service_role` JWT or an `sb_secret_` key fails and is named as such: either one bypasses row-level security.
+  - Without a release profile (`npm run check:release-env` alone), a set key gets the same check.
 - **Sentry DSN** must look like `https://<key>@<host>/<project-id>`. Without one, crash and unknown-error reports never arrive.
 - **Stripe key** must be a complete publishable key (`pk_live_` or `pk_test_` followed by 24 to 247 letters and digits) of the profile's mode (`pk_live_` for `stripe: "live"`). A bare prefix or a run of one repeated character fails.
 
