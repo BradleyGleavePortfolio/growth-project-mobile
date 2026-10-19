@@ -91,6 +91,15 @@ async function renderHome() {
   return view;
 }
 
+/** Every testID in the rendered tree, top to bottom (props can be circular, so no JSON.stringify). */
+const testIdsInOrder = (node: unknown): string[] => {
+  if (Array.isArray(node)) return node.flatMap(testIdsInOrder);
+  if (!node || typeof node !== 'object') return [];
+  const n = node as { props?: { testID?: unknown }; children?: unknown };
+  const id = n.props?.testID;
+  return [...(typeof id === 'string' ? [id] : []), ...testIdsInOrder(n.children)];
+};
+
 describe('UI-2 coach Home, flag on', () => {
   it('draws only real numbers in the three dials', async () => {
     const v = await renderHome();
@@ -154,8 +163,9 @@ describe('UI-2 coach Home, flag on', () => {
   it("carries the coach's push ask once, between the client tiles and Business (C-S-PUSH-3)", async () => {
     const v = await renderHome();
     expect(v.getAllByTestId('push-ask')).toHaveLength(1);
-    const order = JSON.stringify(v.toJSON());
-    const at = (id: string) => order.indexOf(`"testID":"${id}"`);
+    const order = testIdsInOrder(v.toJSON());
+    const at = (id: string) => order.indexOf(id);
+    expect(at('coach-home-v11-all-clients')).toBeGreaterThanOrEqual(0);
     expect(at('coach-home-v11-all-clients')).toBeLessThan(at('push-ask'));
     expect(at('push-ask')).toBeLessThan(at('coach-home-v11-business'));
   });
