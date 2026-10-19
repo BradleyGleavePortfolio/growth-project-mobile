@@ -20,7 +20,7 @@ export interface WeekReviewData {
   weights: WeightLog[];
   habits: HabitCount;
   checkIns: number;
-  /** null: no night this week. undefined: the watch read failed and no check-in has sleep, so the row is left out. */
+  /** null: no night this week. undefined: the watch read failed, so the row is left out. */
   sleepMinutes: number | null | undefined;
   empty: boolean;
 }
@@ -54,7 +54,7 @@ export async function loadWeekReview(userId: string, week: ReviewWeek): Promise<
     api.get<{ habits: HabitCount[] }>('/habits/summary', { params: { from: week.start, to: week.end } }),
     checkInsApi.list({ from: week.start, to: week.end, limit: 7 }),
     // Home's Sleep read (RingsHomeScreen), over this week's nights. #WEEK-SLEEP-FAIL op 2: only this read may
-    // fail and still leave the week; check-in hours then count alone, as on Home's Sleep dial (sleepDial).
+    // fail and still leave the week; the sleep row is then left out, even when check-ins have sleep.
     wearablesSamplesApi.getSamples({ bucket: 'SLEEP_RECOVERY', from: localAt(week.start).toISOString(),
       to: localAt(week.end, 1).toISOString(), granularity: 'day', preferredOnly: true }).catch(() => undefined),
   ]);
@@ -78,7 +78,7 @@ export async function loadWeekReview(userId: string, week: ReviewWeek): Promise<
   return {
     workouts: done, training, food: new Set(foodDays.map((d) => d.date.slice(0, 10))).size,
     protein: mean(foodDays.map((d) => d.protein_g)), weights, habits: counts, checkIns: checks.length,
-    sleepMinutes: sleep !== null ? Math.round(sleep) : health ? null : undefined,
+    sleepMinutes: health === undefined ? undefined : sleep !== null ? Math.round(sleep) : null,
     empty: done === 0 && !training?.done && !foodDays.length && !weights.some((w) => inWeek(w.date, week))
       && counts.done === 0 && !checks.length && !nights.length,
   };

@@ -144,10 +144,15 @@ it('a week with only watch sleep is not called empty', async () => {
 });
 
 // #WEEK-SLEEP-FAIL op 2: only the watch read may fail and still show the week.
-it.each([['a server error', { response: { status: 503 } }], ['no connection', { isAxiosError: true }]])(
-  'a failed watch read (%s) shows the rest of the week, no sleep row and no error', async (_, error) => {
+it.each([
+  ['a server error, no check-in sleep', { response: { status: 503 } }, null],
+  ['a server error, with check-in sleep', { response: { status: 503 } }, 7.5],
+  ['no connection, no check-in sleep', { isAxiosError: true }, null],
+  ['no connection, with check-in sleep', { isAxiosError: true }, 7.5],
+])(
+  'a failed watch read (%s) shows the rest of the week, no sleep row and no error', async (_, error, sleep) => {
     mockSleep.mockRejectedValue(error);
-    mockChecks.mockResolvedValue({ data: [{ date: '2026-10-07', sleep_hours: null }] });
+    mockChecks.mockResolvedValue({ data: [{ date: '2026-10-07', sleep_hours: sleep }] });
     expect((await read()).sleepMinutes).toBeUndefined();
     const v = await render(<WeekInReviewScreen navigation={navigation} />);
     await waitFor(() => expect(v.getByLabelText('Protein, average: 132 g')).toBeTruthy());
@@ -155,13 +160,6 @@ it.each([['a server error', { response: { status: 503 } }], ['no connection', { 
       .forEach((row) => expect(v.getByLabelText(row)).toBeTruthy());
     expect(v.queryByText(/Sleep, average|No sleep logged|could not load|No logs for this week/)).toBeNull();
   });
-
-it('a failed watch read counts check-in hours alone, as the Home Sleep dial does', async () => {
-  mockSleep.mockRejectedValue({ response: { status: 503 } });
-  const v = await render(<WeekInReviewScreen navigation={navigation} />);
-  await waitFor(() => expect(v.getByLabelText('Sleep, average: 7 h 15 m')).toBeTruthy());
-  expect(v.queryByTestId('week-error')).toBeNull();
-});
 
 it('with a failed watch read, "No logs for this week." shows only when every read that answered is empty', async () => {
   mockSleep.mockRejectedValue({ response: { status: 503 } });
@@ -173,7 +171,7 @@ it('with a failed watch read, "No logs for this week." shows only when every rea
   await waitFor(() => expect(v.getByText('No logs for this week.')).toBeTruthy());
   expect(v.queryByText(/Sleep, average|No sleep logged/)).toBeNull();
   mockChecks.mockResolvedValue({ data: [{ date: '2026-10-08', sleep_hours: 6 }] });
-  expect(await read()).toMatchObject({ empty: false, sleepMinutes: 360 });
+  expect(await read()).toMatchObject({ empty: false, sleepMinutes: undefined });
 });
 
 it.each([['workouts', mockWorkouts], ['assignments', mockAssignments], ['food', mockFood], ['weight', mockWeight],

@@ -74,7 +74,7 @@ function WeekReviewPage({ userId, unit, initial, navigation }: { userId?: string
     ['Protein, average', data.protein === null ? 'No food logged' : `${Math.round(data.protein)} g`],
     ['Weight trend', reviewTrend(data.weights, week, unit)],
     ['Habits', count?.planned ? `${count.done} of ${count.planned}` : 'Nothing planned'],
-    // #WEEK-SLEEP-FAIL op 2: no sleep row when the watch read failed and no check-in has sleep.
+    // #WEEK-SLEEP-FAIL op 2: no sleep row when the watch read failed.
     ...(data.sleepMinutes === undefined ? [] : [['Sleep, average', sleepLine(data.sleepMinutes)]]),
   ] : [];
   return (
