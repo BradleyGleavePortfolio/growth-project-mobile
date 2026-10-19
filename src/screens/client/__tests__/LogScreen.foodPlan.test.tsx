@@ -1,12 +1,13 @@
 // UI-3, flag on: the plan checklist logs the plan meal in one tap; "Something else" opens the food search with recent foods.
-// FOODLINK: every write made for a plan meal carries its plan_slot_id, online and queued; no other write does.
+// A client with no coach repeats their usual meal with the saved portions.
+// FOODLINK: every write made for a plan or usual meal carries its plan_slot_id or fills_usual_meal, online and queued; no other write does.
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LogScreen from '../LogScreen';
 import { foodApi, logApi } from '../../../services/api';
 import { enqueue } from '../../../services/foodLogQueue';
-import { getTodayString } from '../../../utils/date';
+import { addDays, getTodayString } from '../../../utils/date';
 
 const mockToday = getTodayString();
 const mockStore = {
@@ -22,7 +23,8 @@ jest.mock('../../../config/featureFlags', () => {
 });
 jest.mock('@react-navigation/native', () => ({ ...jest.requireActual('@react-navigation/native'), useNavigation: () => ({ navigate: jest.fn() }) }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockStore }));
-jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'user', coach_id: 'coach' }) }));
+const mockUser: { id: string; coach_id?: string } = { id: 'user', coach_id: 'coach' };
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
 let mockOnline = true;
 jest.mock('../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({}), isEffectivelyOnline: () => mockOnline }));
@@ -35,7 +37,7 @@ jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: { get: jest.fn(async (url: string) => ({ data: url.startsWith('/me/meal-plan') ? mockPlan : { name: 'Jordan Hale' } })) },
   foodApi: { search: jest.fn(() => new Promise(() => {})), create: jest.fn().mockResolvedValue({ data: { id: 'food-new' } }) },
-  logApi: { logFood: jest.fn().mockResolvedValue({ data: { id: 'entry-new' } }), updateEntry: jest.fn(), deleteEntry: jest.fn() },
+  logApi: { logFood: jest.fn().mockResolvedValue({ data: { id: 'entry-new' } }), updateEntry: jest.fn(), deleteEntry: jest.fn(), getDaily: jest.fn() },
 }));
 jest.mock('../../../services/foodLogQueue', () => ({ flush: jest.fn(), enqueue: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../../services/foodLogSync', () => ({ ...jest.requireActual('../../../services/foodLogSync'), notifyPendingFoodLogs: jest.fn() }));
@@ -52,6 +54,7 @@ const lastWrite = () => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockOnline = true;
+  mockUser.coach_id = 'coach';
   delete mockLastMeals.snack;
 });
 
@@ -110,4 +113,19 @@ it('never links Extras "Add", or a sheet opened after a cancelled Something else
   await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(1));
   expect(lastWrite()).not.toHaveProperty('plan_slot_id');
   expect(lastWrite()).not.toHaveProperty('fills_usual_meal');
+});
+
+it('repeats the usual meal of a client with no coach with the saved portions', async () => {
+  delete mockUser.coach_id;
+  const apple = { meal_type: 'snack', food_item_id: 'apple', quantity_multiplier: 1, original_quantity: 1, original_unit: 'medium',
+    food_item: { id: 'apple', name: 'Apple, medium', calories_per_serving: 95, nutrient_basis: 'PER_SERVING' } };
+  const usual = [addDays(mockToday, -1), addDays(mockToday, -3)];
+  jest.mocked(logApi.getDaily).mockImplementation(async (date: string) => ({ data: { entries: usual.includes(date) ? [apple] : [] } }) as never);
+  await show();
+  await fireEvent.press(await screen.findByText("Repeat yesterday's snack"));
+  await waitFor(() => expect(logApi.logFood).toHaveBeenCalledWith({
+    date: mockToday, meal_type: 'snack', food_item_id: 'apple', quantity_multiplier: 1, original_quantity: 1, original_unit: 'medium',
+    fills_usual_meal: true,
+  }));
+  expect(await screen.findByText('1 food added to Snacks.')).toBeTruthy();
 });
