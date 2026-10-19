@@ -5,6 +5,7 @@ const mockFlags = {
   clientCalendar: true,
   coachBrief: true,
   romanChat: false,
+  clientTimelineV2: false,
 };
 jest.mock('../../config/featureFlags', () => ({
   get featureFlags() {
@@ -61,6 +62,7 @@ describe('pushTapRouter', () => {
     mockFlags.coachCommunity = true;
     mockFlags.clientCalendar = true;
     mockFlags.romanChat = false;
+    mockFlags.clientTimelineV2 = false;
     mockHidden = false;
   });
 
@@ -95,6 +97,17 @@ describe('pushTapRouter', () => {
       setPushSession(STUDENT_A);
       routePushTap('Timeline');
       expect(nav.navigate).toHaveBeenCalledWith('MoreTab', { screen: 'Timeline', params: undefined });
+    });
+
+    it('Style C Timeline (flag on) opens over Progress, its door, with You beneath (#TIMELINE-DOOR op 1)', () => {
+      mockFlags.clientTimelineV2 = true;
+      const nav = makeNav(CLIENT_TABS);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('Timeline', { id: 'e1' });
+      expect(nav.navigate).toHaveBeenCalledWith('MoreTab', {
+        state: { routes: [{ name: 'MoreIndex' }, { name: 'Progress' }, { name: 'Timeline', params: { id: 'e1' } }] },
+      });
     });
 
     it('CommunityEventDetail -> CommunityTab stack when community + events flags are on', () => {
@@ -241,7 +254,7 @@ describe('pushTapRouter', () => {
       attachPushNavigator(nav);
       setPushSession(COACH_A);
       routePushTap('CreditPackCheckout');
-      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SettingsHome', params: undefined });
+      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SettingsHome', params: undefined, pop: true });
     });
 
     it('CreditPackCheckout -> SettingsStack checkout when purchases are visible', () => {
@@ -249,7 +262,7 @@ describe('pushTapRouter', () => {
       attachPushNavigator(nav);
       setPushSession(COACH_A);
       routePushTap('CreditPackCheckout');
-      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: undefined });
+      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: undefined, initial: false });
     });
 
     it('coach CommunityEventDetail -> CommunityStack events screen', () => {

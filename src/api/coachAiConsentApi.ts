@@ -1,0 +1,71 @@
+/**
+ * COACH-AI-CONSENT: the signed-in coach's own Roman grant (Apple 5.1.2(i)) over the consent ledger
+ * (backend ai-consent.controller.ts, idempotent): GET /me/ai-consent/coach (status), POST (grant),
+ * POST /decline ("Not now", kept only while never asked), DELETE (withdraw). Failures map as
+ * aiConsentFailure; a refused coach AI request is 403 coach_ai_consent_required (lib/ai/aiRefusal).
+ */
+import api from '../services/api';
+import { aiConsentFailure, type AiConsentOutcome } from './aiConsentApi';
+import { platformTag } from '../lib/consultation/aiConsent';
+import { COACH_AI_CONSENT_COPY_SHA256, COACH_AI_CONSENT_VERSION } from '../lib/ai/coachAiConsentCopy';
+
+export type CoachAiConsentState = 'not_asked' | 'declined' | 'granted' | 'withdrawn';
+
+export interface CoachAiConsentStatus {
+  /** True only for a live coach-ai-v1 grant (state "granted"). */
+  granted: boolean;
+  state: CoachAiConsentState;
+  /** The one-time request was answered on this account (every state but not_asked). */
+  asked: boolean;
+}
+
+export type CoachAiConsentOutcome =
+  | { kind: 'ok'; status: CoachAiConsentStatus }
+  | Exclude<AiConsentOutcome, { kind: 'ok' }>;
+
+const STATES: readonly CoachAiConsentState[] = ['not_asked', 'declined', 'granted', 'withdrawn'];
+
+/** Accept only a readable status body; anything else is "no status". */
+export function parseCoachAiConsentStatus(body: unknown): CoachAiConsentStatus | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const b = body as Record<string, unknown>;
+  const state = STATES.find((s) => s === b.state);
+  if (!state || typeof b.granted !== 'boolean') return null;
+  return { state, granted: b.granted && state === 'granted', asked: state !== 'not_asked' };
+}
+
+const decisionBody = () => ({
+  version: COACH_AI_CONSENT_VERSION,
+  copy_sha256: COACH_AI_CONSENT_COPY_SHA256,
+  platform: platformTag(),
+});
+
+async function call(request: () => Promise<{ data?: unknown; status?: number }>): Promise<CoachAiConsentOutcome> {
+  try {
+    const res = await request();
+    const status = parseCoachAiConsentStatus(res?.data);
+    return status ? { kind: 'ok', status } : { kind: 'error', status: res?.status ?? null };
+  } catch (err) {
+    return aiConsentFailure(err);
+  }
+}
+
+const URL = '/me/ai-consent/coach';
+
+export const coachAiConsentApi = {
+  getStatus: () => call(() => api.get<unknown>(URL)),
+  grant: () => call(() => api.post<unknown>(URL, decisionBody())),
+  decline: () => call(() => api.post<unknown>(`${URL}/decline`, decisionBody())),
+  withdraw: () => call(() => api.delete<unknown>(URL)),
+};
+
+export type CoachAiConsentApi = typeof coachAiConsentApi;
+
+/** Sign-up (owner op 2 item 1): the box was the ask, so the one-time sheet waits for the next app open. */
+let askedAtSignUp: string | null = null;
+export function markCoachAskedAtSignUp(userId: string | null): void {
+  askedAtSignUp = userId;
+}
+export function coachAskedAtSignUp(userId: string | null | undefined): boolean {
+  return !!userId && askedAtSignUp === userId;
+}

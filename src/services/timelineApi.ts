@@ -11,7 +11,8 @@ import api from './api';
 
 // ─── Lane types ───────────────────────────────────────────────────────────────
 
-export type TimelineLane = 'body' | 'win' | 'coach' | 'friction';
+/** No coach lane: coach messages never reach the Timeline (#TIMELINE-COACH op 1, backend b#1078). */
+export type TimelineLane = 'body' | 'win' | 'friction';
 
 // ─── Event union ──────────────────────────────────────────────────────────────
 
@@ -28,8 +29,8 @@ export interface BodyWeightEvent extends TimelineEventBase {
   eventType: 'weight_logged';
   metadata: {
     weightLbs: number;
-    deltaLbs: number | null;
-    streakDays: number;
+    /** C8 trend on this day, in lbs; null before the second day of weigh-ins. */
+    trendLbs: number | null;
   };
 }
 
@@ -76,25 +77,6 @@ export interface WinBuildWeekDay7Event extends TimelineEventBase {
   };
 }
 
-export interface CoachTextNoteEvent extends TimelineEventBase {
-  lane: 'coach';
-  eventType: 'coach_text_note';
-  metadata: {
-    messageId: string;
-    coachName: string;
-  };
-}
-
-export interface CoachVoiceNoteEvent extends TimelineEventBase {
-  lane: 'coach';
-  eventType: 'coach_voice_note';
-  metadata: {
-    messageId: string;
-    coachName: string;
-    durationSec: number;
-  };
-}
-
 export interface FrictionMissedDayEvent extends TimelineEventBase {
   lane: 'friction';
   eventType: 'missed_checkin';
@@ -119,8 +101,6 @@ export type TimelineEvent =
   | WinStreakEvent
   | WinFinanceMilestoneEvent
   | WinBuildWeekDay7Event
-  | CoachTextNoteEvent
-  | CoachVoiceNoteEvent
   | FrictionMissedDayEvent
   | FrictionRecoveredStreakEvent;
 

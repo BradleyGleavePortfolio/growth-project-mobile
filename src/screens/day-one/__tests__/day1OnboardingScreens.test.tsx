@@ -10,6 +10,7 @@ import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet } from 'react-native';
+import { layout } from '../../../theme/tokens';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,128 @@ function makeNav() {
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
+});
+
+const onboardingTouchTargetCases = [
+  {
+    name: 'Welcome',
+    render: () => render(<WelcomeScreen navigation={makeNav() as never} />),
+    ids: ['day-one-welcome-cta'],
+  },
+  {
+    name: 'Coach pairing',
+    render: () => render(
+      <CoachPairingScreen navigation={makeNav() as never} route={{ params: {} } as never} />,
+    ),
+    ids: ['day-one-invite-submit', 'day-one-invite-skip', 'day-one-back'],
+  },
+  {
+    name: 'Goals',
+    render: () => render(<GoalsScreen navigation={makeNav() as never} />),
+    ids: [
+      'day-one-goal-fitness',
+      'day-one-goal-business',
+      'day-one-goal-personal_growth',
+      'day-one-goal-relationships',
+      'day-one-goal-mental_health',
+      'day-one-goal-custom',
+      'day-one-goals-continue',
+      'day-one-goals-skip',
+      'day-one-back',
+    ],
+  },
+  {
+    name: 'Notifications',
+    render: () => render(<NotificationsScreen navigation={makeNav() as never} />),
+    ids: ['day-one-notifications-enable', 'day-one-notifications-skip', 'day-one-back'],
+  },
+  {
+    name: 'Check-in',
+    render: () => render(<CheckInTimeScreen navigation={makeNav() as never} />),
+    ids: [
+      'day-one-checkin-hour-up',
+      'day-one-checkin-hour-down',
+      'day-one-checkin-minute-up',
+      'day-one-checkin-minute-down',
+      'day-one-checkin-am',
+      'day-one-checkin-pm',
+      'day-one-checkin-continue',
+      'day-one-checkin-skip',
+      'day-one-back',
+    ],
+  },
+  {
+    name: 'Ready',
+    render: () => render(<ReadyScreen navigation={makeNav() as never} />),
+    ids: ['day-one-ready-cta'],
+  },
+];
+
+it.each(onboardingTouchTargetCases)(
+  'keeps the $name action list at the 44pt touch minimum',
+  async ({ render: mount, ids }) => {
+    const view = await mount();
+    try {
+      for (const id of ids) {
+        const style = StyleSheet.flatten(view.getByTestId(id).props.style);
+        expect(
+          Math.max(Number(style.minHeight ?? 0), Number(style.height ?? 0)),
+        ).toBeGreaterThanOrEqual(layout.touchMin);
+        if (style.width != null || style.minWidth != null) {
+          expect(
+            Math.max(Number(style.width ?? 0), Number(style.minWidth ?? 0)),
+          ).toBeGreaterThanOrEqual(layout.touchMin);
+        }
+      }
+    } finally {
+      view.unmount();
+    }
+  },
+);
+
+it('keeps the Goals save-recovery actions at the 44pt touch minimum', async () => {
+  mockedSaveGoals.mockRejectedValueOnce(new Error('network'));
+  const goalsError = await render(<GoalsScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(goalsError.getByTestId('day-one-goal-fitness')));
+  await act(async () => fireEvent.press(goalsError.getByTestId('day-one-goals-continue')));
+  await waitFor(() => expect(goalsError.getByTestId('day-one-goals-retry')).toBeTruthy());
+  for (const id of ['day-one-goals-retry', 'day-one-goals-offline']) {
+    expect(StyleSheet.flatten(goalsError.getByTestId(id).props.style).minHeight).toBe(layout.touchMin);
+  }
+  goalsError.unmount();
+});
+
+it('keeps the Check-in save-recovery actions at the 44pt touch minimum', async () => {
+  mockedSaveCheckIn.mockRejectedValueOnce(new Error('network'));
+  const checkInError = await render(<CheckInTimeScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(checkInError.getByTestId('day-one-checkin-continue')));
+  await waitFor(() => expect(checkInError.getByTestId('day-one-checkin-retry')).toBeTruthy());
+  for (const id of ['day-one-checkin-retry', 'day-one-checkin-offline']) {
+    expect(StyleSheet.flatten(checkInError.getByTestId(id).props.style).minHeight).toBe(layout.touchMin);
+  }
+  checkInError.unmount();
+});
+
+it('keeps the permission-denied Notifications action at the 44pt touch minimum', async () => {
+  mockedRegister.mockResolvedValueOnce({ granted: false });
+  const denied = await render(<NotificationsScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(denied.getByTestId('day-one-notifications-enable')));
+  await waitFor(() => expect(denied.getByTestId('day-one-notifications-continue')).toBeTruthy());
+  expect(
+    StyleSheet.flatten(denied.getByTestId('day-one-notifications-continue').props.style).minHeight,
+  ).toBe(layout.touchMin);
+  denied.unmount();
+});
+
+it('keeps the Ready save-recovery action at the 44pt touch minimum', async () => {
+  mockedComplete.mockRejectedValueOnce(new Error('network'));
+  const readyError = await render(<ReadyScreen navigation={makeNav() as never} />);
+  await act(async () => fireEvent.press(readyError.getByTestId('day-one-ready-cta')));
+  await waitFor(() => expect(readyError.getByTestId('day-one-ready-offline')).toBeTruthy());
+  expect(
+    StyleSheet.flatten(readyError.getByTestId('day-one-ready-offline').props.style).minHeight,
+  ).toBe(layout.touchMin);
+  readyError.unmount();
 });
 
 // ─── Welcome ─────────────────────────────────────────────────────────────────
@@ -326,6 +449,13 @@ describe('NotificationsScreen', () => {
       <NotificationsScreen navigation={makeNav() as never} />,
     );
     expect(getByTestId('day-one-step-text').props.children).toBe('Step 4 of 5');
+  });
+
+  it('keeps notification skip at the shared minimum touch height', async () => {
+    const { getByTestId } = await render(
+      <NotificationsScreen navigation={makeNav() as never} />,
+    );
+    expect(StyleSheet.flatten(getByTestId('day-one-notifications-skip').props.style).minHeight).toBe(layout.touchMin);
   });
 
   it('navigates directly to Ready after permission grant', async () => {

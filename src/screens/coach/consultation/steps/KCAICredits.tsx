@@ -2,7 +2,7 @@
  * KC "Your AI credits." (CREDITBUILD-143; CREDIT-1 Concept 1 "A page in
  * setup" in the CREDIT-S S3 look): after K6/K7, before K8, head coaches
  * only. The ink statement card shows the real pool ("AI Usage: $0 / $125",
- * "Renews Nov 1."), Roman's N7 line once backend #971 is live, then what uses
+ * "Renews Nov 1."), Roman's N7 line once backend #1016 is live, then what uses
  * the credits, what happens if they run out, and where to add more (or, on
  * builds that sell no packs, where to find them). One Continue; nothing on
  * this page charges or changes anything.

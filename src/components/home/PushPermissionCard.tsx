@@ -8,8 +8,9 @@
  * can still ask (status undetermined) and the user has not dismissed it.
  * Dismissal is stored per user (R15) in prefsStorage.
  *
- * C-S-PUSH-3: the coach app mounts the same card (audience="coach") at the top
- * of the Clients landing screen, so a fresh coach install also gets the ask
+ * C-S-PUSH-3: the coach app mounts the same card (audience="coach") on its
+ * landing screen (Clients, or Overview with coachTabsV2: navigation/coachLanding.ts),
+ * so a fresh coach install also gets the ask
  * and registers its token through the same path. Same per-user key, so it
  * shows once per account.
  */
@@ -24,6 +25,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
 import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
 import { useTutorialStore } from '../../tutorial/tutorialStore';
+import { useNoticeSlot } from './HomeNoticeSlot';
 
 export const pushPrimerDismissedKey = (userId: string) => `push_primer_dismissed:${userId}`;
 
@@ -74,7 +76,8 @@ export default function PushPermissionCard({
     };
   }, [userId, tourBusy]);
 
-  if (!visible || !userId || tourBusy) return null;
+  const shown = useNoticeSlot('push', visible && !!userId && !tourBusy); // one notice at a time on the rings Home
+  if (!shown || !userId) return null;
 
   const dismiss = async () => {
     setVisible(false);

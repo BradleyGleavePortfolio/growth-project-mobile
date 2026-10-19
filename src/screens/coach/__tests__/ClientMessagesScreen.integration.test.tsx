@@ -149,6 +149,7 @@ jest.mock('@react-navigation/native', () => {
     useRoute: () => ({
       params: { clientId: 'client-1', clientName: 'Alice Smith' },
     }),
+    usePreventRemove: jest.fn(), // rendered outside a navigator
     // useFocusEffect normally only runs on focus; in tests we want it to run
     // synchronously on mount and return the cleanup the screen provides.
     useFocusEffect: (cb: () => () => void) => {

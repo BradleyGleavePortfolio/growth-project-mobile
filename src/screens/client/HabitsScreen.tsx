@@ -41,6 +41,7 @@ import { AddHabitSheet } from './habits/AddHabitSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
 import { ProtectedScreen } from '../../entitlements/ProtectedScreen';
+import HabitsRing from './habits/ring/HabitsRing';
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 const word = (n: number) => WORDS[n] ?? String(n);
@@ -54,11 +55,11 @@ export function habitsSummary(done: number, total: number): string {
   return `${cap(word(done))} of ${word(total)} done today.`;
 }
 
-export default function HabitsScreen() {
+export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSaved?: () => void; initialTab?: TabMode }) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const today = getTodayString();
-  const [tab, setTab] = useState<TabMode>('habits');
+  const [tab, setTab] = useState<TabMode>(initialTab);
   const [showAddModal, setShowAddModal] = useState(false);
 
   // Server reads (React Query). B1 (owner ruling 10-08 23:5x): check-ins are
@@ -177,6 +178,9 @@ export default function HabitsScreen() {
         value: newCompleted ? habit.targetCount || 1 : 0,
       },
       {
+        onSuccess: () => {
+          if (newCompleted) onSaved?.();
+        },
         onError: (err) => {
           Alert.alert("Couldn't update habit", errorMessage(err, 'The habit was not updated. Try again.'));
         },
@@ -187,7 +191,7 @@ export default function HabitsScreen() {
   const handleDelete = (habit: HabitView) => {
     Alert.alert(
       'Delete habit',
-      `Are you sure you want to delete "${habit.name}"? This will remove the habit and all its history.`,
+      `Remove ${habit.name}? Its history stays.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -273,6 +277,42 @@ export default function HabitsScreen() {
       </HapticPressable>
     );
   };
+
+  const addSheet = (
+    <AddHabitSheet
+      visible={showAddModal}
+      onClose={() => setShowAddModal(false)}
+      newName={newName}
+      setNewName={setNewName}
+      newTarget={newTarget}
+      setNewTarget={setNewTarget}
+      newUnit={newUnit}
+      setNewUnit={setNewUnit}
+      onAdd={handleAddHabit}
+      isSaving={createHabit.isPending}
+      sc={sc}
+      styles={styles}
+    />
+  );
+
+  // HB-B1: concept B, the ring, behind habitsRing (off: the list below). Check-in stays today's tab.
+  if (featureFlags.habitsRing && tab === 'habits') {
+    return (
+      <>
+        <HabitsRing
+          habits={habitsQ.data}
+          loading={habitsQ.isLoading}
+          failed={habitsQ.isError}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          onAdd={() => setShowAddModal(true)}
+          onCheckIn={() => setTab('checkin')}
+          onSaved={onSaved}
+        />
+        {addSheet}
+      </>
+    );
+  }
 
   return (
     // Under the Home stack's back-only native header inside the tab bar: the
@@ -420,20 +460,7 @@ export default function HabitsScreen() {
         </>
       )}
 
-      <AddHabitSheet
-        visible={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        newName={newName}
-        setNewName={setNewName}
-        newTarget={newTarget}
-        setNewTarget={setNewTarget}
-        newUnit={newUnit}
-        setNewUnit={setNewUnit}
-        onAdd={handleAddHabit}
-        isSaving={createHabit.isPending}
-        sc={sc}
-        styles={styles}
-      />
+      {addSheet}
     </Screen>
   );
 }

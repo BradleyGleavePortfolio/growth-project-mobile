@@ -23,6 +23,7 @@ import type { SemanticTokens } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { prefsStorage } from '../../storage/mmkv';
 import api from '../../services/api';
+import { useNoticeSlot } from './HomeNoticeSlot';
 
 // ─── MMKV Keys ────────────────────────────────────────────────────────────────
 // R15: per-user scope so a different client on the same device cannot inherit
@@ -93,12 +94,11 @@ export default function CoachIntroductionBanner() {
   }, [introKey]);
 
   // ── Guards ────────────────────────────────────────────────────────────────
-  if (dismissed === null) return null; // still reading MMKV
-  if (dismissed === true) return null;
-
+  // Not dismissed (null = still reading MMKV), a coach, and the read is under way or found them.
   const coachId = currentUser?.coach_id;
-
-  if (!coachId) return null;
+  const due = dismissed === false && !!coachId && (loadState === 'loading' || (loadState === 'loaded' && !!coach));
+  const shown = useNoticeSlot('coachIntro', due); // one notice at a time on the rings Home
+  if (!shown) return null;
 
   // Loading skeleton
   if (loadState === 'loading') {

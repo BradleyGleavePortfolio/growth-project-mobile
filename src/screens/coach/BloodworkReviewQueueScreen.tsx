@@ -7,7 +7,7 @@
  *     can pick the next panel to review
  *   - copy in the queue is purely descriptive — no AI text leaks here
  *   - actions on a panel (`mark reviewed`, `request source`, `refer to
- *     clinician`, `hide from client`, `flag disputed`, `approve / reject
+ *     doctor`, `hide from client`, `flag disputed`, `approve / reject
  *     AI draft`) are stubbed; backend is tracked in
  *     docs/BLOODWORK_HANDOFF.md
  */
@@ -71,7 +71,7 @@ export default function BloodworkReviewQueueScreen() {
     label: string,
   ) => {
     if (!canTransition(from, to)) {
-      Alert.alert('Action not available', `Cannot move panel from ${from} to ${to}.`);
+      Alert.alert('Action not available', `Cannot move panel from ${prettyState(from)} to ${prettyState(to)}.`);
       return;
     }
     Alert.alert('Recorded locally', `${label} for panel ${panelId}. Wired to backend in a follow-up.`);
@@ -135,13 +135,13 @@ export default function BloodworkReviewQueueScreen() {
                 />
                 <ActionBtn
                   icon="medkit-outline"
-                  label={BLOODWORK_COACH_ACTIONS.referToClinician}
+                  label={BLOODWORK_COACH_ACTIONS.referToDoctor}
                   onPress={() =>
                     handleAction(
                       item.panelId,
                       item.reviewState,
                       'needs_clinician_context',
-                      BLOODWORK_COACH_ACTIONS.referToClinician,
+                      BLOODWORK_COACH_ACTIONS.referToDoctor,
                     )
                   }
                   colors={colors}
@@ -186,7 +186,7 @@ function prettyState(state: BloodworkReviewState): string {
     case 'draft_client_entered': return 'Draft';
     case 'submitted': return 'Submitted';
     case 'needs_source': return 'Needs source';
-    case 'needs_clinician_context': return 'Clinician referral';
+    case 'needs_clinician_context': return 'Doctor referral';
     case 'coach_reviewed': return 'Reviewed';
     case 'hidden_from_client': return 'Hidden';
     case 'disputed_flagged': return 'Disputed';

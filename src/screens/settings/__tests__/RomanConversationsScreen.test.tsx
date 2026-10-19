@@ -26,6 +26,7 @@ import type {
 } from '../../../api/romanChatsApi';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
+jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { roman_crisis_alert: false } }) }));
 jest.mock('../../../utils/haptics', () => ({ lightTap: jest.fn(), mediumTap: jest.fn(), warningTap: jest.fn(), selectionTap: jest.fn() }));
 jest.mock('../../../utils/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn(), log: jest.fn() } }));
 jest.mock('../../../theme/ThemeProvider', () => ({
@@ -109,6 +110,29 @@ async function confirmDeleteAll(screen: Awaited<ReturnType<typeof render>>) {
 }
 
 describe('list', () => {
+  it.each(['loading', 'loaded', 'empty', 'error'] as const)(
+    '57c: %s shows the exact safety exception immediately after the coach-privacy sentence',
+    async (phase) => {
+      const outcome = phase === 'loading'
+        ? new Promise<RomanChatsOutcome<RomanChatPage>>(() => {})
+        : phase === 'error'
+          ? fail({ reason: 'offline' })
+          : page(phase === 'empty' ? [] : [A1]);
+      const screen = await renderScreen(makeApi({ list: jest.fn(async () => outcome) }));
+      if (phase === 'loaded') await screen.findByTestId('roman-chat-row-ca1');
+      if (phase === 'empty') await screen.findByTestId('roman-chats-empty');
+      if (phase === 'error') await screen.findByTestId('roman-chats-error');
+      if (phase === 'loading') expect(screen.getByTestId('roman-chats-loading')).toBeTruthy();
+      const expected =
+        'Your conversations with Roman are kept until you delete them or your account. Your coach never sees them. ' +
+        'One exception: if Roman sends you an urgent medical safety reply or an eating-disorder safety reply, your coach sees the message that prompted it, so they can check in with you. ' +
+        'Deleting a conversation removes it for good.';
+      expect(ROMAN_CHATS_COPY.intro).toBe(expected);
+      expect(screen.getByTestId('roman-chats-intro').props.children).toBe(expected);
+      expect(screen.getByTestId('roman-chats-intro').props.numberOfLines).toBeUndefined();
+    },
+  );
+
   it('uses calm hairline rows and keeps Back reachable', async () => {
     const screen = await renderScreen(makeApi());
     expect((await screen.findByTestId('roman-chat-row-ca1')).props.style.backgroundColor).toBeUndefined();
@@ -682,7 +706,7 @@ describe('Contact support (one support email, never a silent failure)', () => {
     const screen = await renderScreen(api);
     await fireEvent.press(await screen.findByTestId('roman-chats-error-support'));
     expect(open).toHaveBeenCalledWith(
-      'mailto:Bradleyapple1031@gmail.com?subject=' + encodeURIComponent('Roman conversations (reference abcdef12)'),
+      'mailto:support@thegrowthproject.site?subject=' + encodeURIComponent('Roman conversations (reference abcdef12)'),
     );
     expect(await screen.findByTestId('roman-chats-error-support-fallback-status')).toBeTruthy();
     open.mockRestore();

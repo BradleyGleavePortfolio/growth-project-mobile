@@ -27,9 +27,9 @@ describe('SupportInboxScreen when live chat is unavailable', () => {
     expect(utils.queryByText(/should open automatically/)).toBeNull();
     expect(utils.queryByTestId('support-chat-open')).toBeNull();
     // S-ERRORS: the one support address (owner ruling 2026-10-01) is shown in words too.
-    expect(utils.getByText(/Bradleyapple1031@gmail\.com/)).toBeTruthy();
+    expect(utils.getByText(/support@thegrowthproject\.site/)).toBeTruthy();
     await fireEvent.press(utils.getByTestId('support-email'));
-    expect(openURL).toHaveBeenCalledWith('mailto:Bradleyapple1031@gmail.com?subject=Support%20request');
+    expect(openURL).toHaveBeenCalledWith('mailto:support@thegrowthproject.site?subject=Support%20request');
   });
 
   // Linking.openURL is already a jest.fn in the RN preset; spyOn reuses it.
@@ -49,7 +49,7 @@ describe('SupportInboxScreen when live chat is unavailable', () => {
     );
     const address = utils.getByTestId('support-email-fallback-address');
     expect(address.props.selectable).toBe(true);
-    expect(address.props.children).toBe('Bradleyapple1031@gmail.com');
+    expect(address.props.children).toBe('support@thegrowthproject.site');
     // Copy fails too: the user is told to select the address by hand.
     await fireEvent.press(utils.getByTestId('support-email-fallback-copy'));
     await waitFor(() =>
@@ -58,7 +58,7 @@ describe('SupportInboxScreen when live chat is unavailable', () => {
     // Try again retries the same draft and keeps the fallback while it still fails.
     await fireEvent.press(utils.getByTestId('support-email-fallback-retry'));
     await waitFor(() => expect(openURL).toHaveBeenCalledTimes(2));
-    expect(openURL).toHaveBeenLastCalledWith('mailto:Bradleyapple1031@gmail.com?subject=Support%20request');
+    expect(openURL).toHaveBeenLastCalledWith('mailto:support@thegrowthproject.site?subject=Support%20request');
     await waitFor(() =>
       expect(utils.getByTestId('support-email-fallback-status').props.children).toMatch(/could not open an email app/),
     );

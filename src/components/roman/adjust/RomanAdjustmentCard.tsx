@@ -16,7 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from '../RomanAvatar';
-import { colors, spacing, typography } from '../../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../../theme/tokens';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import {
   approveAdjustment,
@@ -347,7 +347,7 @@ export default function RomanAdjustmentCard({ proposal, onSettled, onChanged, de
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.cream,
-    borderRadius: 4,
+    borderRadius: radius.card,
     padding: spacing.lg,
     marginBottom: spacing.md,
     gap: spacing.md,
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   eyebrow: { ...typography.caption, color: colors.charcoal },
   body: { ...typography.body, color: colors.ink },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: { borderWidth: 0.5, borderColor: colors.camel, borderRadius: 999, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  chip: { borderWidth: 0.5, borderColor: colors.camel, borderRadius: radius.chip, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   chipText: { ...typography.caption, color: colors.charcoal },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44 },
   summary: { ...typography.bodySmall, color: colors.ink, flex: 1 },
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
   setValue: { ...typography.bodySmall, color: colors.charcoal },
   panel: { gap: spacing.sm, borderTopWidth: 0.5, borderTopColor: colors.stone, paddingTop: spacing.md },
   panelTitle: { ...typography.caption, color: colors.charcoal },
-  choice: { borderWidth: 0.5, borderColor: colors.charcoal, borderRadius: 999, paddingHorizontal: spacing.md, minHeight: 36, justifyContent: 'center' },
+  choice: { borderWidth: 0.5, borderColor: colors.charcoal, borderRadius: radius.chip, paddingHorizontal: spacing.md, minHeight: 36, justifyContent: 'center' },
   choiceOn: { backgroundColor: colors.forest, borderColor: colors.forest },
   choiceText: { ...typography.bodySmall, color: colors.ink },
   choiceTextOn: { color: colors.bone },
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   stepValue: { ...typography.body, color: colors.ink, minWidth: 24, textAlign: 'center' },
   countdown: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   actions: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  btn: { minHeight: 44, paddingHorizontal: spacing.lg, justifyContent: 'center', borderWidth: 0.5, borderColor: colors.charcoal, borderRadius: 0 },
+  btn: { minHeight: 44, paddingHorizontal: spacing.lg, justifyContent: 'center', borderWidth: 0.5, borderColor: colors.charcoal, borderRadius: radius.button },
   btnPrimary: { backgroundColor: colors.forest, borderColor: colors.forest },
   btnText: { ...typography.bodySmall, color: colors.ink },
   btnPrimaryText: { ...typography.bodySmall, color: colors.bone },

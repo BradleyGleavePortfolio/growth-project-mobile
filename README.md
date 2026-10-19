@@ -16,7 +16,7 @@ for local dev) before inviting external coaches or clients.
 | `EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER` | preview, production | When `false` and live endpoints are absent, the coach is routed to the real `ClientsStack` instead of the mock dashboard. **Must be `false` for any coach-facing build.** | `false` |
 | `EXPO_PUBLIC_NOTIFICATIONS_MOCK` | preview, production | When `false`, notifications API talks to the backend. Default is now `false`; only flip to `true` for offline UI work. | `false` |
 | `EXPO_PUBLIC_SUPABASE_URL` | all | Supabase project URL used by `supabaseAuth`. | `https://<ref>.supabase.co` |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | all | Supabase anon key. | `eyJhbG…` |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | all | Supabase publishable key. The legacy anon JWT keys are switched off; the release checks refuse one. | `sb_publishable_…` |
 
 The release build now fails fast if any of the required vars above are
 missing — there is no silent fallback. See `src/config/env.ts` for the
@@ -27,6 +27,8 @@ inline `eas env:create` invocations.
 A React Native nutrition & fitness coaching app built with Expo, TypeScript, and SQLite.
 
 ## Features
+
+Calendar's optional Style C week is controlled independently by `EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2` (off by default; no checked-in build enables it). The Home Habits route accepts an optional `initialTab: 'checkin'` for direct entry from today's calendar action; unchanged callers still open Habits.
 
 - **Calorie & Macro Tracking** — Log meals with protein, carbs, fat breakdowns. Macros are stored on a strict **per-100g** canonical basis (see "Food logger math" below).
 - **Meal Plans** — Coach-assigned weekly meal plans with daily targets
@@ -123,7 +125,7 @@ eas login
 eas build --platform ios --profile production
 eas build --platform android --profile production
 
-# Clinic launch build: production plus the clinic flags (Roman tutorial,
+# Launch build: production plus the launch flags (Roman tutorial,
 # Community tab with Hall + Cohorts, coach brief). See src/tutorial/README.md.
 eas build --platform ios --profile clinic
 
@@ -148,7 +150,7 @@ All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
 | --- | --- | --- |
 | `EXPO_PUBLIC_API_URL` | yes (non-dev) | Base URL of the backend API. In dev, falls back to the Fly.io URL in `src/config/env.ts`. |
 | `EXPO_PUBLIC_SUPABASE_URL` | yes | Supabase project URL used for auth + token refresh. |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon JWT used by the client SDK. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase publishable key (`sb_publishable_…`) used by the client SDK. A legacy anon JWT fails the release checks (`docs/RELEASE_ENV_CHECK.md`). |
 | `EXPO_PUBLIC_SENTRY_DSN` | no | When set, Sentry is initialised in `services/sentry.ts`. Missing DSN means `wrap`, `captureError`, `setSentryUser` are no-ops. |
 | `EXPO_PUBLIC_ENVIRONMENT` | no | Sentry `environment` tag. Defaults to `'production'`. |
 | `SENTRY_AUTH_TOKEN` | no (recommended for prod) | EAS-time secret consumed by `@sentry/react-native/expo`'s release-upload step. When unset the build still succeeds, but no source maps reach Sentry, so production stack traces stay minified. See "Sentry release tracking" below. |
@@ -421,11 +423,15 @@ src/
 
 ## Navigation
 
-New clients complete either LeanQ1–LeanQ6 or the available consultation. Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
+Incoming app links validate scheme and HTTPS host once in `navigation/incomingLinks.ts`; cold-start URLs, foreground opens and push URL payloads share the existing role-aware navigation queue. Client meal-plan assignment links open the existing daily meal-plan screen after sign-in, not the coach navigator. See `src/navigation/README.md`.
+
+Coach tabs (COACHTABS, behind `EXPO_PUBLIC_FF_COACH_TABS_V2`, default off): Overview, Programs, Money, Calendar, Messages, Clients. Settings opens from a gear on Overview, Community from Messages and Team from Clients; every existing route and push target still lands. With it on, coaches open the app on Overview. Off, the coach bar and the Clients landing are unchanged. See `src/navigation/README.md`.
+
+New clients complete the consultation (the unmounted lean LeanQ1–LeanQ6 flow was deleted in ONBQ-TILES). Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
 
 The current coach wizard keeps five setup routes. It respects top/bottom safe insets, and Back on a cold-resumed step replaces with the preceding route rather than doing nothing or cycling forward. Step 1 has no earlier setup route. Stripe configuration unavailability does not block Continue setup; the verification resend action shows its busy state and a live cooldown. See `src/navigation/README.md` and `src/screens/auth/README.md` (COACH-EDGES-132, agent 132).
 
-Coach `ClientDetail` accepts `initialTab: 'workouts' | 'mealplan'` (optional). AI meal-plan approval opens the Plan tab; clients find their plans at More → Meal plan, not a dedicated Plan tab.
+Coach `ClientDetail` accepts `initialTab: 'workouts'` (optional); the client file has no Plan tab. Clients find their plans at More → Meal plan, not a dedicated Plan tab.
 
 The orphan coach `CoachMealTemplates` route is not registered. No entry action or deep link used it; the meal-template API, hooks and existing daily meal-plan paths are retained (MEAL-TEMPLATES-ROUTE-132).
 
@@ -441,10 +447,10 @@ The orphan coach `CoachMealTemplates` route is not registered. No entry action o
 - Messages is not behind the client paywall: basic text DM with the coach is free server-side (only voice upload is paid).
 - The Membership screen's website link is not rendered on hidden iOS builds.
 - API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy`. The backend does not read the policy header yet (planned follow-up), so today it is advisory. The OTA publish guard is planned in #305; expo-updates is not configured at this head.
-- `IOS_P2P_ONLY_MIN_NATIVE_BUILD` is 6, the native anchor; `app.json` `ios.buildNumber` is 9 (build 8 is already uploaded). `scripts/validate-app-config.js` fails anything below 6.
+- `IOS_P2P_ONLY_MIN_NATIVE_BUILD` is 6, the native anchor; `app.json` `ios.buildNumber` is 10 (build 9 is already uploaded). `scripts/validate-app-config.js` fails anything below 6.
 Auth stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection` (params `{ inviteAttachError?, inviteCode? }`), `AcceptInvite`, `ResetPassword`. The signup policy (`GET /auth/signup-policy`) is read through `src/lib/signupPolicy.ts` by CreateAccount, RoleSelection and Login. See `src/navigation/README.md` for invite redemption and retry.
 
-New clients see `LeanOnboardingNavigator`, or `ConsultationOnboardingNavigator` (the full consultation, `src/screens/consultation/README.md`) when `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` is on. That flag is off by default and on in the `clinic` EAS profile.
+New clients see `ConsultationOnboardingNavigator` (the full consultation, `src/screens/consultation/README.md`); every new client gets it (RootNavigator B14).
 
 Bottom tabs are icons-only (no labels). Four tabs, in order:
 
@@ -501,9 +507,8 @@ see the linked food-logger quality-floor change.
 ## Coach AI
 
 Coach AI v1 is the per-client generate / edit / approve flow for workout
-programs, meal plans, and weekly insights. The mobile half lives in
+programs and weekly insights. The mobile half lives in
 `src/screens/coach/AIWorkoutDraftScreen.tsx`,
-`src/screens/coach/AIMealPlanDraftScreen.tsx`,
 `src/screens/coach/ClientInsightScreen.tsx`, and the entry point
 `src/components/coach/CoachAiSection.tsx` mounted inside
 `ClientDetailScreen`. The typed client is `src/api/coachAi.ts`; the
@@ -531,22 +536,19 @@ call that races past the status gate.
 - Entry: `src/components/coach/CoachAiSection.tsx` on
   `src/screens/coach/ClientDetailScreen.tsx` (Summary tab).
 - Workout draft: `src/screens/coach/AIWorkoutDraftScreen.tsx`.
-- Meal plan draft: `src/screens/coach/AIMealPlanDraftScreen.tsx`.
 - Insight digest: `src/screens/coach/ClientInsightScreen.tsx`.
 - Navigation registered in `src/navigation/CoachNavigator.tsx` under
-  `ClientsStack` (routes `AIWorkoutDraft`, `AIMealPlanDraft`,
+  `ClientsStack` (routes `AIWorkoutDraft`,
   `ClientInsight`).
 
 ### HOW
-1. Coach taps one of the three CTAs on `ClientDetailScreen`.
+1. Coach taps one of the two CTAs on `ClientDetailScreen`.
 2. A bottom sheet collects inputs:
    - Workout — weeks (1-12 stepper), days per week (1-7 chips), focus
      (Strength / Hypertrophy / Endurance / Mobility chips), notes.
-   - Meal plan — days (1-14 stepper), notes.
    - Insight — windowDays chip (7 / 14 / 30, default 7).
 3. The mobile POSTs to one of:
    - `POST /coach/ai/workout-program`
-   - `POST /coach/ai/meal-plan`
    - `POST /coach/ai/client-insight`
 4. The returned `draftId` is handed to the matching draft screen.
 5. The draft screen loads `GET /coach/ai/drafts/:draftId`, renders an
@@ -571,8 +573,6 @@ stubbed pending a coach-to-client booking surface (see Deferred below).
 ### WHAT (data shapes)
 - `WorkoutPayload` — `weeks[] → days[] → exercises[]` with optional
   RIR / RPE / notes.
-- `MealPlanPayload` — `days[] → meals[] → items[]` with optional
-  per-item macros and per-day totals.
 - `InsightPayload` — `{ summary, wins[], concerns[], suggested_actions[],
   questions_for_coach[] }`.
 
@@ -686,10 +686,11 @@ Four-tier channel/category system registered at app bootstrap:
 
 ### Share Card
 
-Three card variants: `streak`, `pr`, `transformation`.
+With `featureFlags.shareSheetV2` (off in every build): one `src/components/share/ShareSheet.tsx` over Progress or the
+Session summary, and no `ShareCard` route (SHARE-A). Off: one card variant, `streak`.
 
-- Screen: `src/screens/share/ShareCardScreen.tsx`
-- Navigation: `MoreStackParamList.ShareCard`
+- Screen (flag off): `src/screens/share/ShareCardScreen.tsx`
+- Navigation (flag off): `MoreStackParamList.ShareCard`
 - Capture: `react-native-view-shot` (requires native build)
 - Share: `expo-sharing`
 - Analytics: fires `REFERRAL_SHARE_CARD_SHARED` on share
@@ -756,7 +757,7 @@ Operator-action checklist for the TestFlight launch of the fitness mobile app. E
 |---|---|---|---|
 | `EXPO_PUBLIC_API_URL` | `src/config/env.ts:13` | EAS secret (eas.json env block, profile `production`) | Fly host of the backend: `https://backend-spring-lake-3890.fly.dev/api`. Must include scheme and `/api` suffix; no trailing slash. |
 | `EXPO_PUBLIC_SUPABASE_URL` | `src/config/env.ts:11` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → Project URL (e.g. `https://abcdwxyz.supabase.co`). Must match the backend's `SUPABASE_URL`. |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:12` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → `anon` public key. Safe to ship in the client bundle (RLS gates all data). |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:12` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Project Settings → API Keys → publishable key (`sb_publishable_…`). Safe to ship in the client bundle (RLS gates all data). The legacy `anon` JWT is switched off and fails the release checks. |
 | `EXPO_PUBLIC_SENTRY_DSN` | `src/services/sentry.ts:49` | EAS secret (eas.json env block, profile `production`) | Sentry → Project (mobile) → Client Keys (DSN). Looks like `https://<32-hex>@oXXXXXX.ingest.sentry.io/<project-id>`. |
 | `EXPO_PUBLIC_POSTHOG_KEY` | `src/lib/analytics.ts:56` | EAS secret (eas.json env block, profile `production`) | PostHog → Project Settings → Project API Key. Starts with `phc_`. |
 | `EXPO_PUBLIC_POSTHOG_HOST` | `src/lib/analytics.ts:58` | EAS secret (eas.json env block, profile `production`) | PostHog instance URL (defaults to `https://us.i.posthog.com`). Set to `https://eu.i.posthog.com` if the project is in the EU region. |

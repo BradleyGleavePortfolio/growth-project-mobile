@@ -264,7 +264,7 @@ export function normalizeCardSetup(raw: unknown): CardSetup {
     ephemeral_key: key,
     customer_id: customer,
     publishable_key: str(r.publishable_key),
-    merchant_display_name: str(r.merchant_display_name) ?? 'The Growth Project',
+    merchant_display_name: str(r.merchant_display_name) ?? 'TGP Fitness',
   };
 }
 

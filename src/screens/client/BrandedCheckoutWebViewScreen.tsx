@@ -358,7 +358,7 @@ export default function BrandedCheckoutWebViewScreen() {
         <View style={styles.headerLogoSlot}>
           <View
             style={styles.logoBadge}
-            accessibilityLabel="The Growth Project logo"
+            accessibilityLabel="TGP Fitness logo"
             testID="branded-checkout-logo"
           >
             <Text style={styles.logoBadgeText}>TGP</Text>

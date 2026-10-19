@@ -4,7 +4,7 @@
  * they're unit-testable without React.
  *
  * Bradley LAW: sleep-stage labels here are PLAIN LANGUAGE ONLY — `awake`,
- * `light sleep`, `deep sleep`, `REM`. There are NO clinical stage codes
+ * `light sleep`, `deep sleep`, `REM`. There are NO medical stage codes
  * anywhere in this module by construction.
  */
 
@@ -165,13 +165,13 @@ export function formatMinutes(total: number): string {
 
 // ─── Respiration / SpO2 ──────────────────────────────────────────────────────
 
-/** Sustained-low SpO2 threshold (percent). Mirrors HK-4 clinician-referral rule. */
+/** Sustained-low SpO2 threshold (percent). Mirrors HK-4 doctor-referral rule. */
 export const SPO2_ATTENTION_THRESHOLD = 90;
 
 export interface RespirationView {
   respiratoryRate: number | null;
   spo2: number | null;
-  /** True only when SpO2 is present AND below the clinical-attention threshold. */
+  /** True only when SpO2 is present AND below the medical-attention threshold. */
   spo2NeedsAttention: boolean;
   respiratoryTrend: TrendPoint[];
   spo2Trend: TrendPoint[];

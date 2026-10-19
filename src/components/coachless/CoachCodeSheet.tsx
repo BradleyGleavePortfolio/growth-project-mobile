@@ -1,9 +1,11 @@
 /**
  * CoachCodeSheet — enter a coach code after signup (coachless Home).
  *
- *   1. Live validation: once the text is a well-formed code, POST
- *      /coachless/coach-code/check (no write) shows the coach's name or the
- *      specific refusal. Only the latest check is applied.
+ *   1. Live validation: POST /coachless/coach-code/check (no write) shows the
+ *      coach's name or the specific refusal. A complete generated code
+ *      (TGP- + 7, or the older GP- + 6) or the pre-filled code is checked at
+ *      once; any other well-formed text (e.g. a vanity code) after a typing
+ *      pause. Only the latest check is applied.
  *   2. Join: POST /coachless/coach-code/redeem with an Idempotency-Key. One
  *      key per code; a retry of the same code reuses it (a lost answer
  *      replays the same result), a different code gets a new key.
@@ -30,10 +32,12 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { patchUserCache } from '../../lib/userCache';
+import { useRomanJoinOfferHold } from '../../lib/romanJoinOffer';
 import { presentJoinFrom } from '../../lib/joinPackage';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { logger } from '../../utils/logger';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
+import { isCompleteInviteCode } from '../../lib/inviteCodeInput';
 import {
   checkCoachCode,
   coachlessFailureOf,
@@ -49,7 +53,8 @@ import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import CoachSharingNotice from '../coachSharing/CoachSharingNotice';
 import InviteCoachCardDetails from '../invite/InviteCoachCardDetails';
 
-export const CHECK_DEBOUNCE_MS = 400;
+/** Typing pause before a code that is not TGP- + 7 or GP- + 6 (e.g. vanity) is checked. */
+export const CHECK_DEBOUNCE_MS = 1200;
 
 export interface CoachCodeSheetProps {
   visible: boolean;
@@ -102,6 +107,8 @@ export default function CoachCodeSheet({
   // B-SHARE-127: the sentence above Join; its version is sent with the code.
   const sharingVersion = useCoachSharingNotice();
 
+  // Owner 62y2: the Roman and AI offer waits until this sheet closes.
+  useRomanJoinOfferHold(visible);
   useEffect(() => {
     if (visible) setCode(initialCode ?? '');
   }, [visible, initialCode]);
@@ -115,8 +122,9 @@ export default function CoachCodeSheet({
       return;
     }
     const seq = ++checkSeq.current;
-    setCheck({ state: 'checking' });
+    setCheck({ state: 'idle' }); // "Checking the code" only once the request is sent.
     const t = setTimeout(() => {
+      setCheck({ state: 'checking' });
       checkCoachCode(code)
         .then((r) => {
           if (seq !== checkSeq.current) return;
@@ -130,9 +138,9 @@ export default function CoachCodeSheet({
           if (seq !== checkSeq.current) return;
           setCheck({ state: 'refused', failure: coachlessFailureOf(err) });
         });
-    }, debounceMs);
+    }, isCompleteInviteCode(code) || norm(code) === norm(initialCode ?? '') ? 0 : debounceMs);
     return () => clearTimeout(t);
-  }, [code, visible, welcome, debounceMs]);
+  }, [code, visible, welcome, debounceMs, initialCode]);
 
   const join = useCallback(async () => {
     if (joining || !isWellFormedCoachCode(code)) return;

@@ -257,14 +257,13 @@ describe('P0-1: TeamStack role gating in CoachNavigator', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// P0-2 + P0-3 — SubCoachInviteModal hardening
+// P0-2 — SubCoachInviteModal hardening; no plan seat clamp (owner TM-P1)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat clamp', () => {
+describe('P0-2: SubCoachInviteModal dedupe, double-submit guard, no plan seat clamp', () => {
   async function mountModal(
     props: {
       existingEmails?: string[];
-      remainingSeats?: number;
     } = {},
   ) {
     return await render(
@@ -273,7 +272,6 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
         onDismiss={() => undefined}
         onInvited={() => undefined}
         existingEmails={props.existingEmails}
-        remainingSeats={props.remainingSeats}
       />,
     );
   }
@@ -364,29 +362,7 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
     await findByText(/already has a pending or active sub-coach invite/i);
   });
 
-  it('P0-3: refuses maxClients > remainingSeats and names the headroom', async () => {
-    const { getByTestId, getByLabelText, findByText } = await mountModal({
-      remainingSeats: 5,
-    });
-    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    await fireEvent.changeText(getByLabelText('Max clients'), '99999');
-    await fireEvent.press(getByTestId('sub-coach-invite-submit'));
-    await findByText(/Only 5 seats available on your plan/i);
-    expect(mockSubCoachInvite).not.toHaveBeenCalled();
-  });
-
-  it('P0-3: refuses any positive maxClients when remainingSeats is 0', async () => {
-    const { getByTestId, getByLabelText, findByText } = await mountModal({
-      remainingSeats: 0,
-    });
-    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    await fireEvent.changeText(getByLabelText('Max clients'), '1');
-    await fireEvent.press(getByTestId('sub-coach-invite-submit'));
-    await findByText(/No seats available on your plan/i);
-    expect(mockSubCoachInvite).not.toHaveBeenCalled();
-  });
-
-  it('P0-3: allows maxClients ≤ remainingSeats', async () => {
+  it('TM-P1: sends any positive seat ceiling with no plan seat line', async () => {
     mockSubCoachInvite.mockResolvedValueOnce({
       data: {
         inviteId: 'i1',
@@ -395,33 +371,14 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
         expires_at: '',
       },
     });
-    const { getByTestId, getByLabelText } = await mountModal({ remainingSeats: 10 });
+    const { getByTestId, getByLabelText, queryByText } = await mountModal();
     await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    await fireEvent.changeText(getByLabelText('Max clients'), '5');
+    await fireEvent.changeText(getByLabelText('Max clients'), '99999');
     await fireEvent.press(getByTestId('sub-coach-invite-submit'));
     await waitFor(() =>
-      expect(mockSubCoachInvite).toHaveBeenCalledWith({
-        email: 'a@ex.com',
-        name: undefined,
-        maxClients: 5,
-      }),
+      expect(mockSubCoachInvite).toHaveBeenCalledWith({ email: 'a@ex.com', name: undefined, maxClients: 99999 }),
     );
-  });
-
-  it('P0-3: skips the clamp when remainingSeats is undefined (unknown headroom)', async () => {
-    mockSubCoachInvite.mockResolvedValueOnce({
-      data: {
-        inviteId: 'i1',
-        email: 'a@ex.com',
-        inviteUrl: 'https://x',
-        expires_at: '',
-      },
-    });
-    const { getByTestId, getByLabelText } = await mountModal();
-    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    await fireEvent.changeText(getByLabelText('Max clients'), '99999');
-    await fireEvent.press(getByTestId('sub-coach-invite-submit'));
-    await waitFor(() => expect(mockSubCoachInvite).toHaveBeenCalled());
+    expect(queryByText(/your plan|upgrade/i)).toBeNull();
   });
 });
 
