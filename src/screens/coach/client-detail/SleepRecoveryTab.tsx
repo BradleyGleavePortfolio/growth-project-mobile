@@ -3,7 +3,7 @@
  *
  * Renders the same client recovery cards but adds two COACH-ONLY overlays
  * (brief §5.5):
- *   - An anomaly band beneath the hero (clinician-style 7-day deviation zone).
+ *   - An anomaly band beneath the hero (medical-style 7-day deviation zone).
  *   - A client-average label next to the HRV trend, calculated from this
  *     client's HRV samples only.
  *
@@ -124,7 +124,7 @@ export function SleepRecoveryTab({ clientId, colors, styles }: SleepRecoveryTabP
 
   return (
     <View testID="coach-recovery-tab">
-      {/* Hero + clinician-style anomaly band directly beneath it. */}
+      {/* Hero + medical-style anomaly band directly beneath it. */}
       <View style={localStyles.heroWrap}>
         <RecoveryRingHero score={score} colors={colors} size={200} />
         <AnomalyBand trend={hrvTrend} colors={colors} />
@@ -164,7 +164,7 @@ function RecoveryUnavailable({ colors }: { colors: ThemeColors }) {
 
 /**
  * AnomalyBand — a subtle horizontal band showing the 7-day deviation zone of
- * the HRV trend (clinician-style overlay). Coach-only. Computes a ±1σ band and
+ * the HRV trend (medical-style overlay). Coach-only. Computes a ±1σ band and
  * marks where the latest value sits within it. Uses cool tones; an out-of-band
  * reading is drawn in soft amber, never red.
  */

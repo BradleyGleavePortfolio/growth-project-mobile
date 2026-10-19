@@ -196,7 +196,7 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
       // `src/screens/auth/AuthCallbackScreen.tsx` as an idempotent
       // landing stub — on mount it inspects the auth state and
       // re-bootstraps (authenticated) or resets to Login (not). It is
-      // mounted in AuthNavigator under this route name (clinic C10).
+      // mounted in AuthNavigator under this route name (launch C10).
       AuthCallback: 'auth/callback',
       // HUNT-01-124: sign-up confirmation return (backend emailRedirectTo
       // default `tgp://verified`). Without this entry the link opened the

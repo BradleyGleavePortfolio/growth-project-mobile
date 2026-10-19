@@ -145,11 +145,11 @@ describe('CoachCodesScreen', () => {
   });
 
   it('create reuses one Idempotency-Key across a retry and adds the new code', async () => {
-    const created = code({ id: 'row-2', code: 'GP-NEW567', label: 'Clinic' });
+    const created = code({ id: 'row-2', code: 'GP-NEW567', label: 'Partner' });
     api.create.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValueOnce({ code: created, replayed: true });
     const { getByTestId, findByText, findByTestId } = await renderEntry();
     await fireEvent.press(getByTestId('coach-code-create-open'));
-    await fireEvent.changeText(getByTestId('coach-code-create-label'), 'Clinic');
+    await fireEvent.changeText(getByTestId('coach-code-create-label'), 'Partner');
     await act(async () => fireEvent.press(getByTestId('coach-code-create-submit')));
     expect(await findByTestId('coach-code-create-error')).toBeTruthy();
     await act(async () => fireEvent.press(getByTestId('coach-code-create-submit')));
@@ -157,7 +157,7 @@ describe('CoachCodesScreen', () => {
     const [k1, k2] = api.create.mock.calls.map((c) => c[1]);
     expect(k1).toBeTruthy();
     expect(k2).toBe(k1);
-    expect(api.create.mock.calls[0][0]).toEqual({ label: 'Clinic' });
+    expect(api.create.mock.calls[0][0]).toEqual({ label: 'Partner' });
     expect(await findByText('GP-NEW567')).toBeTruthy();
   });
 

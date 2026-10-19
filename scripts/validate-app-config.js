@@ -689,7 +689,7 @@ function writeReleaseBlockerMd() {
   fs.writeFileSync(RELEASE_BLOCKER_MD, lines.join('\n'), 'utf8');
 }
 
-// Clinic C11: expo-updates (EAS Update). The binary must carry a runtime
+// Launch C11: expo-updates (EAS Update). The binary must carry a runtime
 // version and an updates URL pinned to this project's EAS projectId, with a
 // non-blocking launch (fallbackToCacheTimeout 0). Each store/preview build
 // profile in eas.json must name its update channel so `eas update --channel`

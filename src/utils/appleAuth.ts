@@ -48,7 +48,7 @@ import {
  * invite_code?, raw_nonce? }` under a `forbidNonWhitelisted` ValidationPipe,
  * so ANY extra key (identity_token, authorization_code, email, an object
  * full_name) is rejected with 400 "property identity_token should not exist".
- * The backend fix (clinic/c02-apple-contract) accepts `token` OR
+ * The backend fix (C02 Apple contract) accepts `token` OR
  * `identity_token` plus a string full_name, so this body — only whitelisted
  * fields, the JWT under `token`, and the name joined into one string — works
  * against both the current and the fixed server. Email is read from the

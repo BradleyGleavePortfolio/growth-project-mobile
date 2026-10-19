@@ -2,7 +2,7 @@
  * SleepStagesCard — a stacked horizontal bar of the night's sleep stages.
  *
  * Bradley LAW: labels are PLAIN LANGUAGE ONLY — "REM", "Deep sleep",
- * "Light sleep", "Awake". No clinical sleep-stage codes anywhere.
+ * "Light sleep", "Awake". No medical sleep-stage codes anywhere.
  *
  * The headline reports time asleep only (e.g. "6h 48m asleep").
  * Duration alone does not establish sleep quality.
