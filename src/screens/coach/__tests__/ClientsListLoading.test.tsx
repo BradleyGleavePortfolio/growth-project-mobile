@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 
 let mockIsLoading = true;
 
@@ -71,7 +71,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-it('renders the loading skeletons without passing FlatList layout props to a Fragment', () => {
+it('renders the loading skeletons without passing FlatList layout props to a Fragment', async () => {
   const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   const navigation = {
     navigate: jest.fn(),
@@ -79,9 +79,9 @@ it('renders the loading skeletons without passing FlatList layout props to a Fra
     isFocused: () => true,
   } as unknown as Nav;
 
-  render(<ClientsListScreen navigation={navigation} />);
+  const { getAllByTestId } = await render(<ClientsListScreen navigation={navigation} />);
 
-  expect(screen.getAllByTestId('clients-loading-skeleton')).toHaveLength(5);
+  expect(getAllByTestId('clients-loading-skeleton')).toHaveLength(5);
   const fragmentLayoutErrors = consoleError.mock.calls.filter((args) => {
     const message = args.map(String).join(' ');
     return (
