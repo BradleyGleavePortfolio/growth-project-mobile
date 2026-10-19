@@ -44,11 +44,11 @@ beforeEach(() => {
   __resetMacroDisplayStoreForTests();
 });
 
-it('one at a time, most urgent first, Finish your profile last (#RINGS-NOTICE-ORDER); each dismissal shows the next', async () => {
-  expect(NOTICE_RANK).toEqual(['invite', 'push', 'finishJoining', 'coachIntro', 'fullMacros', 'tourReoffer', 'profile']);
+it('one at a time, most urgent first, Finish joining ahead of push (#RINGS-JOIN-FIRST), Finish your profile last; each dismissal shows the next', async () => {
+  expect(NOTICE_RANK).toEqual(['invite', 'finishJoining', 'push', 'coachIntro', 'fullMacros', 'tourReoffer', 'profile']);
   await render(<HomeNoticeSlot style={{ marginTop: 24 }}>{everyNotice}</HomeNoticeSlot>);
   for (const id of NOTICE_RANK) {
-    expect(visible()).toEqual([id]); // with the invite and push both due, only the invite
+    expect(visible()).toEqual([id]); // with Finish joining and push both due, only Finish joining
     expect(screen.getByTestId('home-notice-slot').props.style).toEqual({ marginTop: 24 });
     await fireEvent.press(screen.getByText(id));
   }
@@ -77,31 +77,42 @@ it('the real notices: Not now on the push card shows the next one due, the full 
   expect(screen.queryByTestId('push-permission-card')).toBeNull();
 });
 
-it('Finish your profile waits behind push, opens Edit profile, and Not now hides it for 7 days, in the slot only', async () => {
-  const slot = () => <HomeNoticeSlot><ProfileNudge hasCoachPlan={false} hasTargets /><PushPermissionCard presentation="section" /></HomeNoticeSlot>;
-  await render(slot());
-  expect(await screen.findByTestId('push-permission-card')).toBeTruthy();
-  expect(screen.queryByText('FINISH YOUR PROFILE')).toBeNull();
-  await fireEvent.press(screen.getByLabelText('Not now'));
-  const nudge = await screen.findByLabelText(/^Complete your profile\. Missing .+\.$/);
-  expect(track).toHaveBeenCalledWith('profile_nudge_shown', expect.objectContaining({ missing_count: expect.any(Number) }));
-  await fireEvent.press(nudge);
-  expect(track).toHaveBeenCalledWith('profile_edit_opened', { source: 'home_nudge' });
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
-  const before = Date.now();
-  await fireEvent.press(screen.getByLabelText('Not now'));
-  expect(screen.queryByTestId('profile-nudge')).toBeNull();
-  const until = Number(mockPrefs.get(profileNudgeHiddenKey('u1')));
-  expect(until - before).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000);
-  await screen.unmount();
-  await render(slot()); await act(async () => undefined); // reopened within the 7 days: still hidden
-  expect(screen.queryByTestId('profile-nudge')).toBeNull();
-  await screen.unmount();
-  await render(<ProfileNudge hasCoachPlan={false} hasTargets />); // today's Home: as before, no Not now
-  expect(screen.getByText('FINISH YOUR PROFILE')).toBeTruthy();
-  expect(screen.queryByLabelText('Not now')).toBeNull();
-  await screen.unmount();
-  mockPrefs.set(profileNudgeHiddenKey('u1'), String(Date.now() - 1)); // the 7 days are over
-  await render(slot());
-  expect(await screen.findByTestId('profile-nudge')).toBeTruthy();
+it('Finish your profile waits behind push, opens Edit profile, and Not now hides it for 3 days, in the slot only (#RINGS-HIDE-DAYS)', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const real = Date.now;
+  let ahead = 0; // how far the phone's clock has moved on since the tap
+  const clock = jest.spyOn(Date, 'now').mockImplementation(() => real() + ahead);
+  try {
+    const slot = () => <HomeNoticeSlot><ProfileNudge hasCoachPlan={false} hasTargets /><PushPermissionCard presentation="section" /></HomeNoticeSlot>;
+    await render(slot());
+    expect(await screen.findByTestId('push-permission-card')).toBeTruthy();
+    expect(screen.queryByText('FINISH YOUR PROFILE')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Not now'));
+    const nudge = await screen.findByLabelText(/^Complete your profile\. Missing .+\.$/);
+    expect(track).toHaveBeenCalledWith('profile_nudge_shown', expect.objectContaining({ missing_count: expect.any(Number) }));
+    await fireEvent.press(nudge);
+    expect(track).toHaveBeenCalledWith('profile_edit_opened', { source: 'home_nudge' });
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
+    const before = Date.now();
+    await fireEvent.press(screen.getByLabelText('Not now'));
+    const after = Date.now();
+    expect(screen.queryByTestId('profile-nudge')).toBeNull();
+    const until = Number(mockPrefs.get(profileNudgeHiddenKey('u1')));
+    expect(until).toBeGreaterThanOrEqual(before + 3 * DAY); // 3 days, not 7
+    expect(until).toBeLessThanOrEqual(after + 3 * DAY);
+    await screen.unmount();
+    ahead = 3 * DAY - 60_000; // reopened a minute before the 3 days end: still hidden
+    await render(slot()); await act(async () => undefined);
+    expect(screen.queryByTestId('profile-nudge')).toBeNull();
+    await screen.unmount();
+    await render(<ProfileNudge hasCoachPlan={false} hasTargets />); // today's Home: as before, no Not now
+    expect(screen.getByText('FINISH YOUR PROFILE')).toBeTruthy();
+    expect(screen.queryByLabelText('Not now')).toBeNull();
+    await screen.unmount();
+    ahead = 3 * DAY; // the 3 days are over: it is back
+    await render(slot());
+    expect(await screen.findByTestId('profile-nudge')).toBeTruthy();
+  } finally {
+    clock.mockRestore();
+  }
 });

@@ -16,8 +16,8 @@ import { typography } from '../../theme/tokens';
 import { QuietSection, quietActions } from '../../ui/sections/QuietSection';
 import { useInNoticeSlot, useNoticeSlot } from './HomeNoticeSlot';
 
-/** 7 days: the operator's default, waiting on the owner (#RINGS-NOTICE-ORDER). */
-export const PROFILE_NUDGE_HIDE_MS = 7 * 24 * 60 * 60 * 1000;
+/** 3 days (owner 10-18, #RINGS-HIDE-DAYS op 3). */
+export const PROFILE_NUDGE_HIDE_MS = 3 * 24 * 60 * 60 * 1000;
 export const profileNudgeHiddenKey = (userId: string) => `home.profile_nudge_hidden_until:${userId}`;
 
 export default function ProfileNudge({ hasCoachPlan, hasTargets }: { hasCoachPlan: boolean; hasTargets: boolean }) {
