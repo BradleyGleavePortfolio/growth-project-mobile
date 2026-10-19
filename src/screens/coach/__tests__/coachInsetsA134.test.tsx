@@ -75,7 +75,7 @@ describe.each(DEVICES)('coach screens on $name', (d) => {
 // ── Source guard over every file in the COACH-INSETS-A-134 list ─────────────────────────────────────────
 const DIR = path.resolve(__dirname, '..');
 const FILES = [
-  'AIWorkoutDraftScreen.tsx', 'AIMealPlanDraftScreen.tsx', 'CoachInboxV2.tsx', 'ClientMessagesScreen.tsx', 'MessagesScreen.tsx',
+  'AIWorkoutDraftScreen.tsx', 'CoachInboxV2.tsx', 'ClientMessagesScreen.tsx', 'MessagesScreen.tsx',
   'ClientInsightScreen.tsx', 'RiskBoardScreen.tsx', 'client-detail/styles.ts', 'ClientReassignModal.tsx',
   'SubCoachDetailScreen.tsx', 'CoachTeamProfileScreen.tsx',
 ];

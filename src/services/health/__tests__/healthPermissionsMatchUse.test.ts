@@ -2,7 +2,7 @@
  * M5 (STORE-06) — the app asks only for the health data it reads.
  *
  * Apple Health: the read set requested on the consent sheet equals the set of
- * types the client actually reads, with no write types and no clinical
+ * types the client actually reads, with no write types and no medical
  * records. Health Connect's manifest == read set is pinned in
  * healthPlatformConfig.test.ts.
  *
@@ -90,7 +90,7 @@ describe('Apple Health: requested types == read types', () => {
     expect([...HEALTHKIT_READ_PERMISSIONS].sort()).toEqual([...new Set(read)].sort());
   });
 
-  it('asks for no clinical health records', () => {
+  it('asks for no medical health records', () => {
     const entry = app.plugins.find(
       (p: unknown) => Array.isArray(p) && p[0] === 'react-native-health',
     );

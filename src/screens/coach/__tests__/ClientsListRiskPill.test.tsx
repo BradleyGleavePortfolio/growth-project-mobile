@@ -45,7 +45,7 @@ type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 const navigate = jest.fn();
 async function mount() {
   // Only navigate() is read by the header.
-  const navigation: Pick<Nav, 'navigate' | 'addListener'> = { navigate, addListener: () => () => undefined };
+  const navigation: Pick<Nav, 'navigate' | 'addListener' | 'isFocused'> = { navigate, addListener: () => () => undefined, isFocused: () => true };
   return await render(<ClientsListScreen navigation={navigation as Nav} />);
 }
 

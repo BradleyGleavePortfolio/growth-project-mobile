@@ -7,9 +7,9 @@
 // inactive, AA on bone; accentText active) on 44 pt tall tabs.
 // COACH-HOME-134: the shared Screen owns the top inset (insets + 12 pt, iOS and Android alike).
 //
-// Navigation into client-level detail (ClientDetail, ClientMessages) is
-// handled by navigating up to the ClientsStack in CoachNavigator via the
-// onSelectClient / onOpenThread props passed to child screens.
+// Navigation into client-level detail (ClientDetail) is handled by navigating
+// up to the ClientsStack in CoachNavigator via the onSelectClient prop passed to
+// child screens; a chat (onOpenThread) opens through openInboxChat.
 
 import React from 'react';
 import {
@@ -20,8 +20,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { layout, typography } from '../../../theme/tokens';
+import { layout, spacing, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui';
 import { useTheme } from '../../../theme/useTheme';
 import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
@@ -34,6 +35,8 @@ import CoachHomeCards from './CoachHomeCards';
 import { coachHomeSources } from './coachHomeSources';
 import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
 import { featureFlags } from '../../../config/featureFlags';
+import { openInboxChat } from '../../../navigation/coachInbox';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 import CreditMomentsHost from '../../../components/coach/credits/CreditMomentsHost';
 
 export type CommandCenterTab =
@@ -54,7 +57,7 @@ const TABS: { key: CommandCenterTab; label: string }[] = [
 interface Props {
   /** Navigate to client detail screen (up to ClientsStack). */
   onSelectClient?: (userId: string, displayName: string) => void;
-  /** Navigate to existing ClientMessages screen (up to ClientsStack). */
+  /** Open a client's chat (default: openInboxChat, in Messages with the six tabs). */
   onOpenThread?: (clientId: string, clientName: string) => void;
   /** Pre-select a tab on mount. Defaults to 'overview'. */
   initialTab?: CommandCenterTab;
@@ -78,8 +81,9 @@ export default function CommandCenterScreen({
     if (routeParams?.tab === 'action-queue') setActiveTab('action-queue');
   }, [routeParams]);
   // AUDIT-13-125: the Overview tab mounts this screen with no props, so every
-  // client row and inbox thread was a dead tap. Default to the Clients stack
-  // (`initial: false` keeps the Clients list under it for Back).
+  // client row and inbox thread was a dead tap. A row defaults to the Clients
+  // stack (`initial: false` keeps the Clients list under it for Back); a thread
+  // opens through openInboxChat (CHATS-MESSAGES).
   const navigation = useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
   const { semanticColors: sc } = useTheme();
   const selectClient =
@@ -91,17 +95,31 @@ export default function CommandCenterScreen({
         initial: false,
       }));
   const openThread =
-    onOpenThread ??
-    ((clientId: string, clientName: string) =>
-      navigation.navigate('ClientsStack', {
-        screen: 'ClientMessages',
-        params: { clientId, clientName },
-        initial: false,
-      }));
+    onOpenThread ?? ((clientId: string, clientName: string) => openInboxChat(navigation, clientId, clientName));
   // Same Money route as the Home's Money card (B-332-7: `initial: false`).
+  // COACHTABS: with the six tabs it switches to the Money tab's root.
   const openMoney = () =>
-    navigation.navigate('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
-  const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList' });
+    featureFlags.coachTabsV2
+      ? navigation.navigate('MoneyStack', { screen: 'CoachMoney', pop: true })
+      : navigation.navigate('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
+  // COACHTABS: Settings is no longer a tab; it opens from this 44 pt gear at
+  // the end of Overview's header row.
+  const settingsGear = featureFlags.coachTabsV2 ? (
+    <TouchableOpacity
+      onPress={() => {
+        HapticService.softImpact();
+        navigation.navigate('SettingsStack', { screen: 'SettingsHome', pop: true });
+      }}
+      style={styles.gear}
+      accessibilityRole="button"
+      accessibilityLabel="Settings"
+      testID="command-center-settings"
+    >
+      <Ionicons name="settings-outline" size={22} color={sc.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
+  // LO-773 N4: back to the open list (`pop`), never a second copy over a client's file.
+  const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList', pop: true });
   const openSafetyAlert = (item: ActionQueueItem) => {
     if (!isSafetyAlert(item)) return;
     navigation.navigate('ClientsStack', {
@@ -149,11 +167,12 @@ export default function CommandCenterScreen({
     <Screen edges={['top']} scroll={false} contentStyle={styles.content} testID="command-center-root">
       {/* Top tab bar. AUDIT-13-125: no header above this tab; Screen keeps
           the tab row out of the status bar / Dynamic Island. */}
-      <View style={[styles.tabBarWrapper, { backgroundColor: sc.bgPrimary, borderBottomColor: sc.border }]}>
+      <View style={[styles.tabBarWrapper, settingsGear && styles.tabBarWithGear, { backgroundColor: sc.bgPrimary, borderBottomColor: sc.border }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBar}
+          style={settingsGear && styles.tabScroll}
+          contentContainerStyle={[styles.tabBar, settingsGear && styles.tabBarBeforeGear]}
         >
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key;
@@ -170,7 +189,7 @@ export default function CommandCenterScreen({
                 <Text
                   style={[styles.tabLabel, { color: isActive ? sc.accentText : sc.textMuted }]}
                   numberOfLines={1}
-                  maxFontSizeMultiplier={1.2}
+                  maxFontSizeMultiplier={settingsGear ? 1.1 : 1.2}
                 >
                   {tab.label}
                 </Text>
@@ -178,6 +197,7 @@ export default function CommandCenterScreen({
             );
           })}
         </ScrollView>
+        {settingsGear}
       </View>
 
       {/* Screen content */}
@@ -192,6 +212,13 @@ const styles = StyleSheet.create({
   tabBarWrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  // COACHTABS: the gear ends the row, its glyph 15 pt from the edge like a header button,
+  // and the row starts 16 pt in to match. With the labels capped at 110% (the bar's K4 cap)
+  // all five stay whole and at least 6 pt apart at 360 pt and any text size.
+  tabBarWithGear: { flexDirection: 'row', alignItems: 'center' },
+  tabScroll: { flex: 1 },
+  tabBarBeforeGear: { paddingLeft: spacing.lg, paddingRight: 0, gap: 6 },
+  gear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   // SHOTS-134B f: the five tabs share the content width (gutter to gutter) instead of
   // running off the right edge; it still scrolls at the largest text sizes.
   tabBar: {

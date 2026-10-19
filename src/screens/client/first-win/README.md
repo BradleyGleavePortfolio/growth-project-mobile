@@ -1,8 +1,14 @@
 # Day 1 Win Sequence — Phase 7A
 
-The Day 1 Win flow is a one-time interstitial shown to every new client on their first cold app open after onboarding completes. It presents three quick-win actions (log starting weight, submit first check-in, log first meal). The client picks one. The backend marks their `firstWinCompletedAt` timestamp and returns a 2-sentence AI coaching message explaining what that first data point means.
+The Day 1 Win flow is a one-time interstitial shown to every new client on their first cold app open after onboarding completes. It presents three quick-win actions (log starting weight, tick a habit, log first meal). A card opens the existing logger without requesting or showing a note. Only that logger's confirmed save returns to this interstitial and asks the backend to mark `firstWinCompletedAt` and return the note.
+
+The phone displays `response.data.aiMessage` verbatim, for coached and coachless clients alike. Coachless fixed notes and coached AI notes share the unchanged response contract ([backend #1018](https://github.com/BradleyGleavePortfolio/growth-project-backend/pull/1018)). Deploy this timing fix with or before backend #1018.
 
 Once completed the screen never appears again. If the API is unreachable at boot the screen is skipped and the client goes straight to the main app — it will be offered again on next boot until completed.
+
+After save, the navigator stays mounted but hidden behind the note. Continue (including package dismissal/payment) reveals the same logger, not Home: an open meal keeps its active slot, search and existing `Added …` feedback; manual/repeat saves keep their existing `added to …` line. The food sheet is temporarily hidden with `suspended`, not reset. No completion selection is re-armed.
+
+Skip and Continue anyway use the shared `layout.touchMin` (44 pt) minimum. The completion Continue target remains 52 pt.
 
 ---
 
@@ -10,7 +16,7 @@ Once completed the screen never appears again. If the API is unreachable at boot
 
 | Screen | Path | State | Description |
 |--------|------|-------|-------------|
-| `Day1WinScreen` | `src/screens/client/Day1WinScreen.tsx` | Local (`useState`) | Two-phase: selection view (3 win cards) → completion view (AI message + continue button). Accepts an `onComplete` prop. Every client sees all three cards, coached or coachless, with or without a package: each is basic self logging (B-SMALLFIX-135), so the screen reads no entitlement for them. Only the coach-sold package sheet afterwards keeps its gate (`lib/packagePromptGate`). Test: `src/__tests__/coachlessGateVersionB.test.tsx`. |
+| `Day1WinScreen` | `src/screens/client/Day1WinScreen.tsx` | Local (`useState`) | Selection → existing app logger → completion note. `onComplete(target)` opens the logger; `savedWin` is supplied only after save. Continue/skip calls `onComplete(undefined)`. Every client sees the same three cards with no entitlement read. Only the later package sheet keeps `lib/packagePromptGate`. |
 
 ---
 
@@ -28,7 +34,13 @@ GET /me/first-win/status
   ▼                     ▼
 Day1WinScreen        ClientNavigator
   │
-  ├── Card tapped ──► POST /me/first-win/complete
+  ├── Card tapped ──► ClientNavigator: matching logger
+  │                          │
+  │                   confirmed save only
+  │                          │
+  │                   Day1WinScreen(savedWin)
+  │                          │
+  │                   POST /me/first-win/complete
   │                          │
   │                   ┌──────┴──────┐
   │                 success      error
@@ -49,7 +61,11 @@ Day1WinScreen        ClientNavigator
 | Call | Endpoint | When | Response used |
 |------|----------|------|---------------|
 | `firstWinApi.getStatus()` | `GET /me/first-win/status` | Every student cold start (in `RootNavigator.bootstrapAuth`) | `completed` boolean to decide whether to show the win screen |
-| `firstWinApi.complete(winType)` | `POST /me/first-win/complete` | When user taps a win card | `aiMessage` displayed in completion view; `completedAt` not used in UI |
+| `firstWinApi.complete(winType)` | `POST /me/first-win/complete` | Once after the selected logger saves successfully; another request only on an explicit retry after failure | `aiMessage` displayed verbatim in the existing completion view; `completedAt` not used in UI |
+
+`RootNavigator` holds the selected type and the committed user's id, accepts only its matching save, and consumes that selection before returning to the note. `ClientNavigator` forwards the success callbacks only while the logger is focused. No callback fires on validation failure, save failure, sheet cancellation, offline food enqueue, habit creation/deletion, habit unticking, or a daily check-in save. Search, manual food and a fully successful repeat meal count as a saved meal; a successful habit tick counts as `first_checkin`.
+
+`set_first_goal` is still a valid backend `WinType`, but main has no goal card or completion caller. This change does not add a card, route or wording for it.
 
 ---
 
@@ -86,13 +102,19 @@ None. The AI message is generated on the backend; the mobile app just renders th
 | Source: uses `useTheme().colors` | Doctrine guard |
 | RTL: renders 3 win cards | Smoke test: screen mounts correctly |
 | RTL: skip button calls onComplete without API call | Skip path works without network |
-| RTL: tapping a card calls `firstWinApi.complete` with correct winType | API wiring correct |
-| RTL: continue button in completion view calls onComplete | Exit path after win |
+| RTL: each card opens its logger with no request on tap | No premature completion |
+| RTL: `savedWin` requests once and displays exact server text | Save-to-note contract |
+| RTL: Continue calls onComplete without a target | Does not reopen the saved logger |
+| RTL: failed note → card tap → retry | Re-sends only the saved win; no callback to log again, no automatic retry on rerender |
+| RTL: two failed requests → Continue anyway | Existing escape path stays reachable within the same screen mount |
+| Touch-target regression | Skip and Continue anyway use `layout.touchMin`; completion Continue remains at least 44 pt |
+
+CI also runs real-screen save callback assertions in the food journey, offline food, weigh-in and habit gate suites, plus the real root handoff in `rootNavigatorPackagePromptGate.test.tsx`. Root tests assert the navigator is never unmounted during the saved note; real ClientNavigator tests assert sheet suspension forwarding. The food journey exercises real LogScreen + Day1WinScreen for coached/coachless fixtures on both platform settings: first food → note → Continue → same Dinner search and success feedback → second food, with exactly one completion request. Manual/repeat feedback retention is covered too.
 
 ---
 
 ## Future work / known limits
 
 - The `winType` is not yet emitted as a `ClientSignal` for PTM analytics. When retention dashboards are needed, the backend's `complete()` method can emit a Phase 1A signal of type `first_win` with `winType` in `metadata`.
-- The win screen is shown on every cold start until the API call succeeds. On repeated offline boots, a client may see the screen multiple times. A local `AsyncStorage` flag could suppress it after the first offline skip — but that risks the backend timestamp never being set. Current behaviour is correct.
-- The 3 win-card actions are informational — tapping "Log your starting weight" does not automatically navigate to the weight log screen. A future improvement would navigate to the relevant screen and mark the win automatically when the user saves data there.
+- An offline food enqueue is not a backend-confirmed log and requests no note. The client can save online later; adding a queue-completion note is outside this timing fix.
+- A failed note request keeps the existing connection alert, card-based retry and skip paths. Every card tap retries the already-saved win, never another logger; after two failures the existing Continue anyway path appears. No local note replaces the server note.

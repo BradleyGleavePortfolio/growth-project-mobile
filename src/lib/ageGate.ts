@@ -1,0 +1,127 @@
+/**
+ * AGEGATE16 (owner ruling #C8-UNDER18-B, 2026-10-14: "16+ gets treated like
+ * any other client - if they dont agree theyre over 16 they dont get in the
+ * app"). A client confirms 16 or older with the date of birth on their
+ * profile: the consultation's B2 answer, or the same question asked once by
+ * AgeCheckScreen for a client who reached the app without one. The server
+ * refuses client routes with 403 AGE_CONFIRMATION_REQUIRED until then
+ * (backend JwtAuthGuard), and services/api reports that refusal here so
+ * RootNavigator can open the age step. No other age data is kept.
+ */
+import { screenById } from './consultation/definitions';
+import { logger } from '../utils/logger';
+import { authEvents } from '../utils/authEvents';
+
+export const AGE_CONFIRMATION_REQUIRED = 'AGE_CONFIRMATION_REQUIRED';
+
+/** The consultation's own B2 minimum, so the app and the question agree. */
+export const MIN_CLIENT_AGE = screenById('B2')?.validation?.ageRange?.min ?? 16;
+
+/**
+ * True when a stored date of birth (YYYY-MM-DD...) shows MIN_CLIENT_AGE or
+ * older on `now`, in whole UTC years: the same arithmetic as the server, so
+ * the app never opens what the server refuses.
+ */
+export function confirmsMinClientAge(dob: unknown, now: Date = new Date()): boolean {
+  const m = typeof dob === 'string' ? /^(\d{4})-(\d{2})-(\d{2})/.exec(dob) : null;
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const month = now.getUTCMonth() + 1;
+  const age = now.getUTCFullYear() - y - (month < mo || (month === mo && now.getUTCDate() < d) ? 1 : 0);
+  return age >= MIN_CLIENT_AGE;
+}
+
+type CachedProfile = { date_of_birth?: unknown; dob?: unknown } | null | undefined;
+
+/**
+ * May this client enter the app? Only on a 16+ date of birth: the cached
+ * profile's, or else the server's (read once, then cached so it is not asked
+ * again). A failed, timed-out or unusable answer is never a yes: the client
+ * gets the age step, whose save failure offers the retry (owner
+ * #C8-UNDER18-B: "if they dont agree theyre over 16 they dont get in").
+ */
+export async function clientAgeConfirmed(
+  profile: CachedProfile,
+  readMe: () => Promise<{ data?: unknown }>,
+  saveDob: (dob: string) => Promise<void>,
+): Promise<boolean> {
+  // FIXAGE2 R7: "a client whose latest known date of birth is not a
+  // confirmed 16+ date never enters the client app from a cache." Every date
+  // the cache holds must confirm 16+; one that does not asks the server.
+  const cachedDates = [profile?.date_of_birth, profile?.dob].filter((d) => d != null && d !== '');
+  if (cachedDates.length > 0 && cachedDates.every((d) => confirmsMinClientAge(d))) return true;
+  let dob: unknown;
+  try {
+    dob = ((await readMe())?.data as { profile?: { date_of_birth?: unknown } | null } | null | undefined)?.profile
+      ?.date_of_birth;
+  } catch {
+    dob = undefined;
+  }
+  if (!confirmsMinClientAge(dob)) return false;
+  // Not cached: the server is asked again on the next open.
+  await saveDob(String(dob)).catch((err: unknown) => logger.warn('ageGate', 'date of birth not cached', err));
+  return true;
+}
+
+const listeners = new Set<() => void>();
+// True from sign-out's first statement until the next sign-in change.
+let released = false;
+
+/** RootNavigator listens; returns the unsubscribe. */
+export function onAgeConfirmationRequired(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** services/api calls this on a 403 AGE_CONFIRMATION_REQUIRED. */
+export function reportAgeConfirmationRequired(): void {
+  // Sign-out has begun (releaseAgeHolds): the age step never opens over it.
+  if (released) return;
+  for (const listener of [...listeners]) listener();
+}
+
+let waiting: Array<(confirmed: boolean) => void> = [];
+let subscribed = false;
+
+// Subscribed on first use, not at import (keeps module load side-effect free).
+function subscribe(): void {
+  if (subscribed) return;
+  subscribed = true;
+  authEvents.onAuthChange(() => {
+    released = false;
+    settleAgeConfirmation(false);
+  });
+}
+
+/**
+ * services/api: a request refused for age waits here while the age step is
+ * open. true: the age was confirmed, send it again; false: the sign-in
+ * changed first, or sign-out has begun (never waits then).
+ */
+export function waitForAgeConfirmation(): Promise<boolean> {
+  subscribe();
+  if (released) return Promise.resolve(false);
+  return new Promise((resolve) => waiting.push(resolve));
+}
+
+/**
+ * FIXAGE2 R5 (owner #C8-UNDER18-B): "a client the age gate refuses can sign
+ * out at once, from every place that offers Sign out." services/authActions
+ * signOut() calls this first: every held request ends now, and no request
+ * refused for age waits again until the next sign-in change (the `logout`
+ * that sign-out ends with). Sign-out never waits on the age step.
+ */
+export function releaseAgeHolds(): void {
+  subscribe();
+  released = true;
+  settleAgeConfirmation(false);
+}
+
+/** AgeCheckScreen settles with true after a saved 16+ date; any auth change with false. */
+export function settleAgeConfirmation(confirmed: boolean): void {
+  const settled = waiting;
+  waiting = [];
+  for (const resolve of settled) resolve(confirmed);
+}

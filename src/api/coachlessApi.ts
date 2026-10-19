@@ -17,6 +17,7 @@
  */
 import { z } from 'zod';
 import api from '../services/api';
+import { plansChanged } from '../lib/packagePayment';
 
 export const COACHLESS_REQUEST_TIMEOUT_MS = 15_000;
 
@@ -180,7 +181,9 @@ export async function redeemCoachCode(
     { code: code.trim(), ...(coachSharingNotice ? { coach_sharing_notice: coachSharingNotice } : {}) },
     { timeout: COACHLESS_REQUEST_TIMEOUT_MS, headers: { 'Idempotency-Key': idempotencyKey } },
   );
-  return RedeemSchema.parse(res.data);
+  const result = RedeemSchema.parse(res.data);
+  plansChanged(); // a code can grant a plan (both code screens)
+  return result;
 }
 
 export async function markRomanCardSeen(): Promise<{ recorded: boolean; visible: boolean }> {

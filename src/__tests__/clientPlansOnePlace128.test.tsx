@@ -141,7 +141,7 @@ describe('B-1: the refund line is true and has its own support action', () => {
     const r = await render(<ClientPackagesScreen />);
     await waitFor(() => expect(r.getByTestId('plans-refund-support')).toBeTruthy());
     expect(
-      r.getByText(/Refunds are issued by The Growth Project team; to ask for one, email support\./),
+      r.getByText(/Refunds are issued by the TGP Fitness team; to ask for one, email support\./),
     ).toBeTruthy();
     expect(r.queryByText(/through your coach/)).toBeNull();
     expect(r.queryByText(/Settings > Support/)).toBeNull();
@@ -162,7 +162,11 @@ describe('B-1: the refund line is true and has its own support action', () => {
 
 describe('U-3: a free trial shows only when this client would get it', () => {
   it('a trial the client already used with this coach is not advertised', async () => {
-    packages = [trialPackage({ trial_days: 7, available: false, reason: 'already_used' })];
+    // BILLQUOTE-M: the server quotes a used trial at the full price.
+    packages = [{
+      ...trialPackage({ trial_days: 7, available: false, reason: 'already_used' }),
+      quote: { due_today_cents: 4900, currency: 'usd', first_charge_at: null, trial_end: null },
+    }];
     const r = await render(<ClientPackagesScreen />);
     await waitFor(() => expect(r.getByTestId('buy-plan-pkg-trial')).toBeTruthy());
     expect(r.queryByText(/free trial/i)).toBeNull();

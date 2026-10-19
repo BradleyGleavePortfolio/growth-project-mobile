@@ -312,4 +312,21 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
     expect(queue[1].id).toMatch(/^pfl_[0-9a-f-]{36}$/);
     expect(queue[0].id).not.toBe(queue[1].id);
   });
+  it('FOODLINK: flushes a queued plan link with the entry; an item from an older build flushes unchanged', async () => {
+    await enqueue({
+      kind: 'search',
+      foodItemId: 'linked',
+      log: { date: '2026-10-12', meal_type: 'snack', quantity_multiplier: 1, plan_slot_id: 'slot-s', fills_usual_meal: true },
+    });
+    await enqueue({ kind: 'search', foodItemId: 'old', log: { date: '2026-10-12', meal_type: 'snack', quantity_multiplier: 1 } });
+    api.__logFood.mockResolvedValue({ data: {} });
+
+    await flush();
+
+    expect(api.__logFood).toHaveBeenNthCalledWith(1, expect.objectContaining({ food_item_id: 'linked', plan_slot_id: 'slot-s', fills_usual_meal: true }));
+    const old = api.__logFood.mock.calls[1][0];
+    expect(old).toEqual(expect.objectContaining({ food_item_id: 'old' }));
+    expect(old).not.toHaveProperty('plan_slot_id');
+    expect(old).not.toHaveProperty('fills_usual_meal');
+  });
 });

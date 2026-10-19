@@ -1,12 +1,9 @@
 /**
  * ShareCardScreen — milestone/streak/PR progress share card.
  *
- * Phase 11 / Share Card.
+ * Phase 11 / Share Card. Used while featureFlags.shareSheetV2 is off; on, components/share/ShareSheet replaces it.
  *
- * Three card variants:
- *   - streak        — consecutive-day streak celebration
- *   - pr            — personal record (lift / weight) celebration
- *   - transformation — body-composition milestone celebration
+ * One card variant, streak (SHARE-A: the PR card had no way in; the body-change card is gone).
  *
  * Flow:
  *   1. Receives `milestone` prop (via navigation params) with variant + data.
@@ -14,6 +11,7 @@
  *   3. On "Share" press: captureRef() produces a PNG URI.
  *   4. Opens the native share sheet via Sharing.shareAsync.
  *   5. Fires REFERRAL_SHARE_CARD_SHARED PostHog event with cardType + coachTenantId.
+ *   A failure says so in place (SHARE-A: no alert, no success haptic before the picture exists).
  *
  * Typography: Cormorant Garamond if available (project display font);
  * falls back to system serif so the card looks correct even when fonts
@@ -33,7 +31,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import HapticPressable from '../../components/HapticPressable';
@@ -43,14 +40,14 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import type { ReferralShareCardSharedProps } from '../../analytics/events';
-import { successTap } from '../../utils/haptics';
+import { HapticService } from '../../ui/haptics/haptics.service';
 
 // ─── react-native-view-shot (lazy import for testability) ───────────────────
 
 // react-native-view-shot requires a native build; it is not available in Expo
 // Go. Importing lazily (at call time) means:
 //   1. Jest can mock the module correctly (module-level require fires too early).
-//   2. Expo Go gets a graceful Alert instead of a crash.
+//   2. Expo Go gets a calm line instead of a crash.
 
 type CaptureRefFn = (ref: React.RefObject<View | null>, options?: Record<string, unknown>) => Promise<string>;
 
@@ -67,7 +64,7 @@ function getCaptureRef(): CaptureRefFn | undefined {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ShareCardVariant = 'streak' | 'pr' | 'transformation';
+export type ShareCardVariant = 'streak';
 
 export interface ShareCardMilestone {
   variant: ShareCardVariant;
@@ -96,30 +93,12 @@ interface CardProps {
 function ShareCard({ milestone, colors }: CardProps) {
   const styles = useMemo(() => makeCardStyles(colors), [colors]);
 
-  const variantConfig: Record<ShareCardVariant, { headline: string; subheadline: string; iconName: string }> = {
-    streak: {
-      headline: milestone.value,
-      subheadline: milestone.label,
-      iconName: 'flame-outline',
-    },
-    pr: {
-      headline: milestone.value,
-      subheadline: milestone.label,
-      iconName: 'barbell-outline',
-    },
-    transformation: {
-      headline: milestone.value,
-      subheadline: milestone.label,
-      iconName: 'trending-up-outline',
-    },
-  };
-
-  const config = variantConfig[milestone.variant];
+  const config = { headline: milestone.value, subheadline: milestone.label, iconName: 'flame-outline' };
 
   return (
     <View style={styles.card}>
       {/* Brand mark */}
-      <Text style={styles.brandMark}>The Growth Project</Text>
+      <Text style={styles.brandMark}>TGP Fitness</Text>
 
       {/* Icon */}
       <View style={styles.iconContainer}>
@@ -133,13 +112,7 @@ function ShareCard({ milestone, colors }: CardProps) {
       <Text style={styles.subheadline}>{config.subheadline}</Text>
 
       {/* Tagline */}
-      <Text style={styles.tagline}>
-        {milestone.variant === 'streak'
-          ? 'Consistency compounds.'
-          : milestone.variant === 'pr'
-          ? 'Every rep counted.'
-          : 'Progress made visible.'}
-      </Text>
+      <Text style={styles.tagline}>Consistency compounds.</Text>
     </View>
   );
 }
@@ -148,26 +121,20 @@ function ShareCard({ milestone, colors }: CardProps) {
 
 export default function ShareCardScreen({ route, navigation }: Props) {
   const { milestone } = route.params;
-  const { colors } = useTheme();
+  const { colors, semanticColors } = useTheme();
   const styles = useMemo(() => makeScreenStyles(colors), [colors]);
 
   const cardRef = useRef<View | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const handleShare = async () => {
     const captureRef = getCaptureRef();
-    if (!captureRef) {
-      Alert.alert(
-        'Share unavailable',
-        'Image sharing requires a native build. Run "eas build" to enable this feature.',
-      );
-      return;
-    }
-
     setSharing(true);
-    successTap();
+    setFailed(false);
 
     try {
+      if (!captureRef) throw new Error('picture sharing needs a native build');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const uri = await captureRef(cardRef as any, {
         format: 'png',
@@ -176,10 +143,7 @@ export default function ShareCardScreen({ route, navigation }: Props) {
       });
 
       const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        Alert.alert('Share unavailable', 'Sharing is not supported on this device.');
-        return;
-      }
+      if (!canShare) throw new Error('sharing is not supported on this device');
 
       await Sharing.shareAsync(uri, {
         mimeType: 'image/png',
@@ -197,6 +161,8 @@ export default function ShareCardScreen({ route, navigation }: Props) {
       track(AnalyticsEvents.REFERRAL_SHARE_CARD_SHARED, props as unknown as Record<string, unknown>);
     } catch (err) {
       if (__DEV__) console.warn('ShareCardScreen: share failed', err);
+      setFailed(true);
+      void HapticService.error();
     } finally {
       setSharing(false);
     }
@@ -229,6 +195,11 @@ export default function ShareCardScreen({ route, navigation }: Props) {
           Your card is ready to share. Tap Share to post to Instagram Stories or
           any other app.
         </Text>
+        {failed ? (
+          <Text accessibilityLiveRegion="polite" style={[styles.helpText, { color: semanticColors.data.peakInk, marginTop: 12 }]}>
+            The picture could not be made. Try again.
+          </Text>
+        ) : null}
       </ScrollView>
 
       {/* Share CTA */}

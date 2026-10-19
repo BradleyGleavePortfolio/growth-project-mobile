@@ -29,6 +29,7 @@ import CommunityTermsGate from '../components/community/CommunityTermsGate';
 import { colors } from '../theme/tokens';
 import { featureFlags } from '../config/featureFlags';
 import CommunityTabScreen from '../screens/community/CommunityTabScreen';
+import CommunityHomeScreen from '../screens/community/CommunityHomeScreen';
 import CommunityTodayScreen from '../screens/community/CommunityTodayScreen';
 import CommunitySpaceScreen from '../screens/community/CommunitySpaceScreen';
 import CommunityThreadScreen from '../screens/community/CommunityThreadScreen';
@@ -75,7 +76,8 @@ function CommunityNavigatorStack(): React.ReactElement {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <CommunityStack.Screen name="CommunityTab" component={CommunityTabScreen} />
+      {/* C6-M1S: the Forest Pop Community Home replaces today's shell while communityHomeV2 is on. */}
+      <CommunityStack.Screen name="CommunityTab" component={featureFlags.communityHomeV2 ? CommunityHomeScreen : CommunityTabScreen} />
       <CommunityStack.Screen name="CommunityToday" component={CommunityTodayScreen} />
       <CommunityStack.Screen name="CommunitySpace" component={CommunitySpaceScreen} />
       <CommunityStack.Screen name="CommunityThread" component={CommunityThreadScreen} />

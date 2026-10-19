@@ -1,9 +1,7 @@
 /**
  * SleepConsistencyCard — bedtime / wake-time consistency over the last 7 days.
  *
- * CALM language (UX gate §5.2): a wide spread is framed warmly — "Your bedtime
- * is settling in" — NEVER "Inconsistent schedule". No red. The copy adapts to
- * how tight the window is, but always leads with reassurance.
+ * Copy reports the measured bedtime span, without judging sleep quality.
  */
 
 import React, { useMemo } from 'react';
@@ -19,23 +17,11 @@ export interface SleepConsistencyCardProps {
   revealDelay?: number;
 }
 
-/** Reassurance-first copy keyed off the bedtime spread. Tighter = more settled. */
-function consistencyCopy(c: ConsistencyView): string {
-  if (c.nights === 0 || c.bedtimeSpreadMin === null) {
-    return "Sleep schedule steadiness appears once a few nights sync";
-  }
-  if (c.bedtimeSpreadMin <= 45) {
-    return 'Your sleep schedule is beautifully steady — your body knows what to expect';
-  }
-  if (c.bedtimeSpreadMin <= 90) {
-    return 'Your bedtime is settling in — you’re finding a rhythm';
-  }
-  return 'Your bedtime is still finding its rhythm — even small nudges toward a regular time help';
-}
-
 export function SleepConsistencyCard({ consistency, colors, revealDelay = 0 }: SleepConsistencyCardProps) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const copy = consistencyCopy(consistency);
+  const copy = consistency.nights === 0 || consistency.bedtimeSpreadMin === null
+    ? 'Sleep times appear once your tracker syncs a night'
+    : `Bedtimes span ${formatMinutes(consistency.bedtimeSpreadMin)}`;
 
   return (
     <SrCard

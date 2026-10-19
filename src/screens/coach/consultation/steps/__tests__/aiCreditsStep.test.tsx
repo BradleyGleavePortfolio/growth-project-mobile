@@ -107,7 +107,7 @@ describe('KC Your AI credits', () => {
     expect(ui.queryByText(/Buy more credits/)).toBeNull();
   });
 
-  it("keeps Roman's line off until backend #971 is live, then shows it", async () => {
+  it("keeps Roman's line off until backend #1016 is live, then shows it", async () => {
     const line = 'Ask me as often as you like. Every conversation uses your AI credits.';
     const off = await render(<KCAICredits {...props()} />);
     expect(off.queryByText(line)).toBeNull();

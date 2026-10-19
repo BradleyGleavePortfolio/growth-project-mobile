@@ -4,7 +4,9 @@
  * are the shared src/ui primitives (DS-PRIMITIVES-133). Tokens only
  * (theme/tokens), weights 400/500, corners from the radius tokens (owner
  * 17:07: rounded), and every control carries an accessibility role, label
- * and state.
+ * and state. With featureFlags.consultTilesV2 on, the rows, chips and unit
+ * switch take the owner's Quiet Tiles look (MOCK-ONBQ
+ * option A) on the screens QuestionScreen lists in TILE_SCREENS.
  */
 import React, { useContext, useEffect, useMemo, useRef } from 'react';
 import {
@@ -23,10 +25,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
-import { layout, lightTokens, radius, spacing, typography } from '../../theme/tokens';
+import { colors, darkTokens, layout, lightTokens, radius, spacing, typography } from '../../theme/tokens';
 import { footerBottomPadding, Headline, PrimaryButton, ScreenTopBar, TextLink } from '../../ui';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { ChapterProgress, OptionDef } from '../../lib/consultation/types';
@@ -51,7 +54,15 @@ const semanticPalette = (tokens: SemanticTokens) => ({
   hair: tokens.border,
   stone: tokens.textMuted,
   field: tokens.bgSurface,
+  // Quiet Tiles: cream tiles on bone (light), and the second line on a
+  // chosen forest tile (5.81:1 light; on dark the accent text, 5.38:1).
+  tile: tokens === darkTokens ? tokens.bgSurface : colors.cream,
+  onAccentMuted: tokens === darkTokens ? tokens.textOnAccent : tokens.textOnMastheadMuted,
 });
+
+/** Quiet Tiles taps: a selection haptic, then the unchanged handler. */
+const withTick = (tiles: boolean | undefined, onPress: () => void) =>
+  tiles ? () => { void HapticService.selection(); onPress(); } : onPress;
 
 /** Compatibility exports for the untouched question and flow modules. */
 export const palette = semanticPalette(lightTokens);
@@ -301,29 +312,37 @@ export function OptionRow({
   selected,
   onPress,
   tall,
+  tiles,
   testID,
 }: {
   option: OptionDef;
   selected: boolean;
   onPress: () => void;
   tall?: boolean;
+  /** Quiet Tiles: a cream tile, forest with a check when chosen. */
+  tiles?: boolean;
   testID?: string;
 }) {
-  const { s } = useConsultationStyles();
+  const { s, palette } = useConsultationStyles();
+  const on = tiles && selected;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={withTick(tiles, onPress)}
       accessibilityRole="radio"
       accessibilityLabel={option.sub ? `${option.label}. ${option.sub}` : option.label}
       accessibilityState={{ selected, checked: selected }}
       testID={testID}
-      style={({ pressed }) => [s.row, tall && s.rowTall, selected && s.rowSel, pressed && s.pressed]}
+      style={({ pressed }) => [s.row, tall && s.rowTall, selected && s.rowSel, tiles && s.tile, on && s.tileOn, pressed && s.pressed]}
     >
       <View style={s.rowTextWrap}>
-        <Text style={s.rowLabel}>{option.label}</Text>
-        {option.sub ? <Text style={s.rowSub}>{option.sub}</Text> : null}
+        <Text style={[s.rowLabel, on && s.onTile]}>{option.label}</Text>
+        {option.sub ? <Text style={[s.rowSub, on && s.onTileMuted]}>{option.sub}</Text> : null}
       </View>
-      <View style={[s.radio, selected && s.radioSel]}>{selected ? <View style={s.radioDot} /> : null}</View>
+      {tiles ? (
+        <View style={on ? s.tileCheck : s.tileRing}>{on ? <Ionicons name="checkmark" size={16} color={palette.accent} /> : null}</View>
+      ) : (
+        <View style={[s.radio, selected && s.radioSel]}>{selected ? <View style={s.radioDot} /> : null}</View>
+      )}
     </Pressable>
   );
 }
@@ -335,6 +354,7 @@ export function Chip({
   single,
   big,
   capped,
+  tiles,
   testID,
 }: {
   option: OptionDef;
@@ -343,22 +363,25 @@ export function Chip({
   single?: boolean;
   big?: boolean;
   capped?: boolean;
+  /** Quiet Tiles: a cream pill, forest with a check when chosen. */
+  tiles?: boolean;
   testID?: string;
 }) {
   const { s, palette } = useConsultationStyles();
+  const on = tiles && selected;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={withTick(tiles, onPress)}
       accessibilityRole={single ? 'radio' : 'checkbox'}
       accessibilityLabel={option.label}
       accessibilityState={{ selected, checked: selected, disabled: !!capped && !selected }}
       testID={testID}
-      style={({ pressed }) => [s.chip, big && s.chipBig, selected && s.chipSel, pressed && s.pressed]}
+      style={({ pressed }) => [s.chip, big && s.chipBig, selected && s.chipSel, tiles && s.tileChip, on && s.tileOn, pressed && s.pressed]}
     >
-      <Text style={[big ? s.chipBigText : s.chipText, selected && s.chipTextSel, capped && !selected && s.chipCapped]}>
+      <Text style={[big ? s.chipBigText : s.chipText, selected && s.chipTextSel, on && s.onTile, capped && !selected && s.chipCapped]}>
         {option.label}
       </Text>
-      {selected ? <Ionicons name="checkmark" size={14} color={palette.accentText} style={s.chipCheck} /> : null}
+      {selected ? <Ionicons name="checkmark" size={14} color={on ? palette.onAccent : palette.accentText} style={s.chipCheck} /> : null}
     </Pressable>
   );
 }
@@ -370,6 +393,8 @@ export function Checkbox({
   testID,
   disabled = false,
   hint,
+  detail,
+  variant = 'default',
 }: {
   checked: boolean;
   onToggle: () => void;
@@ -378,23 +403,35 @@ export function Checkbox({
   /** Not tappable yet (box 2 while the saved choice is being read, Opus C-310-7). */
   disabled?: boolean;
   hint?: string;
+  /** A line under the label (COACH-AI-CONSENT sign-up box: CAC-2 under CAC-1); read as the hint. */
+  detail?: string;
+  /** Owner-approved warm fill for the coach sign-up card; selection is unchanged. */
+  variant?: 'default' | 'tan';
 }) {
   const { s, palette } = useConsultationStyles();
+  const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null]}>{label}</Text>;
   return (
     <Pressable
       onPress={disabled ? undefined : onToggle}
       disabled={disabled}
       accessibilityRole="checkbox"
       accessibilityLabel={label}
-      accessibilityHint={hint}
+      accessibilityHint={hint ?? detail}
       accessibilityState={disabled ? { checked, disabled: true, busy: true } : { checked }}
       testID={testID}
-      style={({ pressed }) => [s.checkRow, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
+      style={({ pressed }) => [s.checkRow, variant === 'tan' && s.checkTan, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
     >
       <View style={[s.box, checked && s.boxOn]}>
         {checked ? <Ionicons name="checkmark" size={16} color={palette.onAccent} /> : null}
       </View>
-      <Text style={s.checkLabel}>{label}</Text>
+      {detail ? (
+        <View style={s.checkText}>
+          {text}
+          <Text style={s.checkDetail}>{detail}</Text>
+        </View>
+      ) : (
+        text
+      )}
     </Pressable>
   );
 }
@@ -436,25 +473,28 @@ export function LabeledInput({
 export function UnitTabs({
   unit,
   onChange,
+  tiles,
 }: {
   unit: 'imperial' | 'metric';
   onChange: (u: 'imperial' | 'metric') => void;
+  /** Quiet Tiles: two pills, the chosen one forest. */
+  tiles?: boolean;
 }) {
   const { s } = useConsultationStyles();
   return (
-    <View style={s.tabs} accessibilityRole="tablist">
+    <View style={[s.tabs, tiles && s.pills]} accessibilityRole="tablist">
       {(['imperial', 'metric'] as const).map((u) => (
         <Pressable
           key={u}
-          onPress={() => onChange(u)}
+          onPress={withTick(tiles, () => onChange(u))}
           accessibilityRole="tab"
           accessibilityLabel={u === 'imperial' ? 'Imperial units' : 'Metric units'}
           accessibilityState={{ selected: unit === u }}
           testID={`unit-${u}`}
-          style={s.tab}
+          style={tiles ? [s.chip, s.tileChip, unit === u && s.tileOn] : s.tab}
         >
-          <Text style={[s.tabText, unit === u && s.tabTextOn]}>{u === 'imperial' ? 'Imperial' : 'Metric'}</Text>
-          <View style={[s.tabRule, unit === u && s.tabRuleOn]} testID={`unit-${u}-rule`} />
+          <Text style={[s.tabText, unit === u && s.tabTextOn, tiles && s.pillText, tiles && unit === u && s.onTile]}>{u === 'imperial' ? 'Imperial' : 'Metric'}</Text>
+          {tiles ? null : <View style={[s.tabRule, unit === u && s.tabRuleOn]} testID={`unit-${u}-rule`} />}
         </Pressable>
       ))}
     </View>
@@ -467,7 +507,10 @@ const ROW_H = 44;
 
 /**
  * Prototype T-D wheels: the selected value at full ink, its neighbours
- * fading with distance (B2, B3, B4).
+ * fading with distance (B2, B3, B4). FIXAGE2 R6: `value` null is a wheel
+ * nothing was picked on yet: it rests at `anchor` with every row the same
+ * (muted, full strength, so AA contrast; FIXAGE3), and the first scroll or
+ * adjust picks a row (even the anchor's).
  */
 export function wheelOpacity(distance: number): number {
   const d = Math.abs(distance);
@@ -478,20 +521,23 @@ export function Wheel<T extends string | number>({
   label,
   values,
   value,
+  anchor,
   onChange,
   format,
   testID,
 }: {
   label: string;
   values: readonly T[];
-  value: T;
+  value: T | null;
+  anchor?: T;
   onChange: (v: T) => void;
   format?: (v: T) => string;
   testID?: string;
 }) {
   const { s } = useConsultationStyles();
   const ref = useRef<ScrollView>(null);
-  const idx = Math.max(0, values.indexOf(value));
+  const unset = value === null;
+  const idx = Math.max(0, values.indexOf(value ?? anchor ?? values[0]));
   const fmt = useMemo(() => format ?? ((v: T) => String(v)), [format]);
 
   useEffect(() => {
@@ -501,7 +547,7 @@ export function Wheel<T extends string | number>({
   const settle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = Math.round(e.nativeEvent.contentOffset.y / ROW_H);
     const clamped = Math.min(values.length - 1, Math.max(0, i));
-    if (values[clamped] !== value) onChange(values[clamped]);
+    if (unset || values[clamped] !== value) onChange(values[clamped]);
   };
 
   // ONB-SWEEP U4: a flick settles on momentum end. Settling at the release
@@ -525,7 +571,7 @@ export function Wheel<T extends string | number>({
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel={label}
-      accessibilityValue={{ text: fmt(value) }}
+      accessibilityValue={value === null ? undefined : { text: fmt(value) }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={onAction}
       testID={testID}
@@ -547,7 +593,7 @@ export function Wheel<T extends string | number>({
       >
         {values.map((v, i) => (
           <View key={String(v)} style={s.wheelRow}>
-            <Text style={[s.wheelText, { opacity: wheelOpacity(i - idx) }, i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
+            <Text style={[s.wheelText, { opacity: unset ? 1 : wheelOpacity(i - idx) }, !unset && i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
           </View>
         ))}
       </ScrollView>
@@ -659,6 +705,7 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     backgroundColor: palette.surface,
     marginTop: spacing.lg,
   },
+  checkTan: { backgroundColor: colors.cream },
   box: {
     width: 22,
     height: 22,
@@ -671,6 +718,9 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   },
   boxOn: { backgroundColor: palette.accent, borderColor: palette.accent },
   checkLabel: { ...typography.bodyMd, color: palette.ink, flex: 1 },
+  checkTitle: { fontFamily: 'Inter_600SemiBold', flex: 0 },
+  checkText: { flex: 1, gap: spacing.xs },
+  checkDetail: { ...typography.bodySmall, color: palette.charcoal },
   inputWrap: { marginTop: spacing.lg },
   flabel: { ...typography.eyebrow, color: palette.muted, marginBottom: spacing.sm },
   field: {
@@ -693,6 +743,25 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   tabTextOn: { ...typography.bodySmall, fontFamily: typography.bodyMd.fontFamily, color: palette.ink },
   tabRule: { alignSelf: 'stretch', height: 1.5, marginTop: 6, backgroundColor: 'transparent' },
   tabRuleOn: { backgroundColor: palette.accent },
+  // Quiet Tiles (consultTilesV2, MOCK-ONBQ option A): cream tiles and pills
+  // on bone, forest with a check when chosen; text 4.5:1 or better on both.
+  tile: {
+    minHeight: 64,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 0,
+    borderRadius: radius.card,
+    backgroundColor: palette.tile,
+  },
+  tileOn: { backgroundColor: palette.accent },
+  onTile: { color: palette.onAccent },
+  onTileMuted: { color: palette.onAccentMuted },
+  tileRing: { width: 24, height: 24, borderRadius: radius.chip, borderWidth: 1.5, borderColor: palette.stone },
+  tileCheck: { width: 24, height: 24, borderRadius: radius.chip, backgroundColor: palette.onAccent, alignItems: 'center', justifyContent: 'center' },
+  tileChip: { borderWidth: 0, backgroundColor: palette.tile },
+  pills: { justifyContent: 'flex-start', gap: spacing.sm },
+  pillText: { color: palette.ink },
+  wheelCard: { backgroundColor: palette.tile, borderRadius: radius.card, paddingHorizontal: spacing.sm, paddingTop: spacing.md, paddingBottom: spacing.xs },
+  wheelCardLabel: { textAlign: 'center' },
   wheels: { flexDirection: 'row', gap: spacing.md },
   wheelCol: { flex: 1 },
   wheelFrame: { height: ROW_H * 5, overflow: 'hidden', marginTop: spacing.sm },

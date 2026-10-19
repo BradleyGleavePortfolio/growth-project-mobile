@@ -6,14 +6,17 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Modal } from 'react-native';
-import { subscribeJoin, takePresentedJoin, type JoinOutcome } from '../../lib/joinPackage';
+import { subscribeJoin, takePresentedJoin, type PresentedJoin } from '../../lib/joinPackage';
 import JoinPackageScreen from '../../screens/join/JoinPackageScreen';
+import { useRomanJoinOfferHold } from '../../lib/romanJoinOffer';
 
 /** Lets a closing sheet (the coach-code sheet) finish before this one opens. */
 export const JOIN_SHEET_HANDOFF_MS = 400;
 
 export default function JoinPackageHost() {
-  const [open, setOpen] = useState<JoinOutcome | null>(null);
+  const [open, setOpen] = useState<PresentedJoin | null>(null);
+  // Owner 62y2: the Roman and AI offer waits until the package sheet closes.
+  useRomanJoinOfferHold(open !== null);
 
   useEffect(() => {
     let live = true;
@@ -42,7 +45,9 @@ export default function JoinPackageHost() {
       presentationStyle="pageSheet"
       onRequestClose={() => setOpen(null)}
     >
-      {open ? <JoinPackageScreen join={open} onClose={() => setOpen(null)} /> : null}
+      {open ? (
+        <JoinPackageScreen join={open.join} resumed={open.resumed} onClose={() => setOpen(null)} />
+      ) : null}
     </Modal>
   );
 }

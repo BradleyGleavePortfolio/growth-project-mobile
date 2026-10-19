@@ -176,7 +176,7 @@ describe("B01/B09 safe areas and B08 resumed Back", () => {
       const ui = await wizard(4);
       await fireEvent.press(await ui.findByTestId("wizard-invite-share"));
       expect(share).toHaveBeenCalledWith({
-        message: "Join my coaching on The Growth Project: https://app.trygrowthproject.com/join/GP-TEST",
+        message: "Join my coaching on TGP Fitness: https://app.trygrowthproject.com/join/GP-TEST",
       });
       await fireEvent.press(ui.getByTestId("wizard-invite-copy"));
       expect(mockClipboard).toHaveBeenCalledWith("https://app.trygrowthproject.com/join/GP-TEST");

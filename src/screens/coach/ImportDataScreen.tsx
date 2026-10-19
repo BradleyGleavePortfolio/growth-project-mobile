@@ -213,8 +213,8 @@ export default function ImportDataScreen(): React.ReactElement {
     <View style={styles.prereq} accessibilityRole="summary">
       <Ionicons name="information-circle-outline" size={18} color={colors.info} />
       <Text style={styles.prereqText}>
-        You'll log in with your own account. The Growth Project browser extension then
-        asks to start the import — The Growth Project never sees or stores your other platform's password.
+        You'll log in with your own account. The TGP Fitness browser extension then
+        asks to start the import — TGP Fitness never sees or stores your other platform's password.
       </Text>
     </View>
   );
@@ -274,8 +274,8 @@ export default function ImportDataScreen(): React.ReactElement {
       <View style={styles.prereq} accessibilityRole="summary">
         <Ionicons name="information-circle-outline" size={18} color={colors.info} />
         <Text style={styles.prereqText}>
-          You'll log in with your own account. The Growth Project browser extension then
-          asks to start the import — The Growth Project never sees or stores your other platform's password.
+          You'll log in with your own account. The TGP Fitness browser extension then
+          asks to start the import — TGP Fitness never sees or stores your other platform's password.
         </Text>
       </View>
 
@@ -324,7 +324,7 @@ export default function ImportDataScreen(): React.ReactElement {
                 page "was just opened". */}
             <Text style={styles.statusText}>
               Log in to {awaitingPlatformLabel(state.platformId)} in your browser, then enter the
-              pairing code below in the Growth Project browser extension. Nothing is imported until
+              pairing code below in TGP Fitness browser extension. Nothing is imported until
               you confirm in the extension.
             </Text>
             {/* R3 closure (independent T2 review, parent grant clause: preserve

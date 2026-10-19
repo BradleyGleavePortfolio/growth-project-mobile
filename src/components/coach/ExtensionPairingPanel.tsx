@@ -134,7 +134,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
 
   const openReview = useCallback(() => {
     track(AnalyticsEvents.IMPORT_REVIEW_OPENED, { platform: platformId });
-    navigation.navigate('ClientsStack', { screen: 'ClientsList' });
+    navigation.navigate('ClientsStack', { screen: 'ClientsList', pop: true }); // LO-773 N4: no second list
   }, [navigation, platformId]);
 
   // Auto-mint once on mount; the hook's single-flight guard makes this safe.
@@ -202,7 +202,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
           </Text>
         ) : null}
         <Text style={styles.body}>
-          Open the Growth Project extension on the page you just logged into and enter this
+          Open the TGP Fitness extension on the page you just logged into and enter this
           code. It’s short-lived for your security, so enter it soon — this screen confirms here
           if it expires.
         </Text>

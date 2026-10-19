@@ -1,5 +1,5 @@
 /**
- * Macros screen in the lighter first week (clinic contract v1 addition 8):
+ * Macros screen in the lighter first week (onboarding contract v1 addition 8):
  * the backend's macro_display_mode on GET /me/macros/current decides whether
  * carbs, fats and fiber show. Absent field: the existing four cells.
  */

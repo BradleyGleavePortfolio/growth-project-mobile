@@ -10,11 +10,16 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Pressable,
   // TouchableOpacity retained for auth buttons — safe pattern
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Radius, Shadow } from '../../theme';
-import { lightTokens, typography as Typography, type SemanticTokens } from '../../theme/tokens';
+import { layout, lightTokens, radius, typography as Typography, type SemanticTokens } from '../../theme/tokens';
+import { Headline, PrimaryButton, Screen, TextLink } from '../../ui';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { authStyleB, FieldCard, OrLine, RoundBack, styleBFieldStyles } from './AuthStyleB';
 import { authApi } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
@@ -112,7 +117,16 @@ export default function LoginScreen({ navigation, route }: Props) {
   // FW-ONB-128 B1: an unconfirmed email-and-password sign-in offers Send a
   // new link (never Apple / Google: no link was sent for those).
   const [errorUnconfirmed, setErrorUnconfirmed] = useState(false);
+  // C7 Style B: the failure on screen (its kind picks the wrong-password hint),
+  // Apple shown on this device (the "or" needs a provider above it), Show password.
+  const [shownFailure, setShownFailure] = useState<AuthFailure | null>(null);
+  const [appleShown, setAppleShown] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const showFailure = (failure: AuthFailure, emailSignIn = false) => {
+    if (authStyleB()) {
+      setShownFailure(failure);
+      void HapticService.error();
+    }
     setError(failure.message);
     setErrorSupport(failure.support);
     setErrorUnconfirmed(emailSignIn && failure.kind === 'email_unconfirmed');
@@ -456,6 +470,88 @@ export default function LoginScreen({ navigation, route }: Props) {
     );
   }
 
+  if (authStyleB()) {
+    const f = styleBFieldStyles(colors);
+    // The wrong-password lines show only while that failure is the one on screen.
+    const invalid = !!error && shownFailure?.kind === 'invalid_credentials' && shownFailure.message === error;
+    const leave = () => (navigation.canGoBack?.() ? navigation.goBack() : navigation.navigate('Welcome'));
+    return (
+      <Screen
+        testID="login-b"
+        header={<RoundBack onBack={leave} testID="login-back" />}
+        footer={
+          <>
+            <PrimaryButton label="Sign in" onPress={handleLogin} loading={loading} testID="login-submit" />
+            <View style={[styles.signupRow, styles.bSignup]}>
+              <Text style={styles.signupText}>Don't have an account? </Text>
+              <TextLink label="Sign up" tone="accent" onPress={() => navigation.navigate('CreateAccount')} accessibilityHint="Opens account creation" />
+            </View>
+          </>
+        }
+      >
+        <Headline style={styles.bTitle}>Sign in to your account</Headline>
+        <View style={f.providers}>
+          <View pointerEvents={appleLoading ? 'none' : 'auto'}>
+            <AppleSignInButton onPress={() => handleAppleLogin()} label="SIGN_IN" cornerRadius={radius.button} style={{ height: layout.buttonHeight }} onAvailable={() => setAppleShown(true)} />
+            {appleLoading ? <ActivityIndicator color={colors.textPrimary} style={styles.appleSpinner} /> : null}
+          </View>
+          {googleEnabled ? (
+            <TouchableOpacity style={[f.googleButton, googleLoading && styles.buttonDisabled]} onPress={() => handleGoogleLogin()} disabled={googleLoading}
+              accessibilityRole="button" accessibilityLabel="Continue with Google" accessibilityState={{ disabled: googleLoading, busy: googleLoading }}>
+              {googleLoading ? <ActivityIndicator color={colors.textPrimary} /> : <><Text style={styles.googleG}>G</Text><Text style={f.googleButtonText}>Continue with Google</Text></>}
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {pendingProvider ? (
+          <View style={styles.bConfirm} accessible accessibilityRole="alert" testID="existing-account-confirm">
+            <Text style={styles.confirmTitle}>Already have an account?</Text>
+            <Text style={styles.confirmBody}>
+              {pendingProvider === 'apple' ? 'Sign in with Apple' : 'Continue with Google'} creates a new
+              account the first time. If you are new here, create your account first so you can choose how
+              you will use the app.
+            </Text>
+            <TextLink label="Sign in to existing account" tone="accent" align="start" testID="existing-account-continue"
+              onPress={() => (pendingProvider === 'apple' ? handleAppleLogin(true) : handleGoogleLogin(true))} />
+            <TextLink label="Create a new account" tone="accent" align="start" testID="existing-account-create"
+              onPress={() => { setPendingProvider(null); navigation.navigate('CreateAccount'); }} />
+          </View>
+        ) : null}
+        {appleShown || googleEnabled ? <OrLine testID="login-or" /> : null}
+        <FieldCard label="EMAIL">
+          <TextInput style={f.input} value={email} onChangeText={setEmail} placeholder="you@email.com" placeholderTextColor={colors.textMuted}
+            keyboardType="email-address" autoCapitalize="none" autoCorrect={false} accessibilityLabel="Email" textContentType="emailAddress" />
+        </FieldCard>
+        <FieldCard label="PASSWORD" invalid={invalid} trailing={
+            <Pressable onPress={() => { void HapticService.selection(); setShowPassword((v) => !v); }} style={styles.bEye}
+              accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} testID="login-password-visibility">
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textPrimary} />
+            </Pressable>
+          }
+        >
+          <TextInput style={f.input} value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted}
+            secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} accessibilityLabel="Password" textContentType="password" />
+        </FieldCard>
+        {error ? (
+          <View accessible accessibilityRole="alert" accessibilityLiveRegion="assertive" testID="login-error">
+            <Text style={styles.bErrorTitle}>{invalid ? 'Invalid email or password' : error}</Text>
+            {invalid ? <Text style={styles.bErrorHint}>Check the email and password, or reset your password.</Text> : null}
+            {errorUnconfirmed && email.trim() ? <ResendVerificationLink email={email} testID="login-resend" /> : null}
+          </View>
+        ) : null}
+        <View style={styles.bLinks}>
+          <TextLink label="Forgot password?" tone="accent" align="start" onPress={() => navigation.navigate('ForgotPassword')} />
+          <TextLink label="Contact support" tone="accent" align="end" onPress={() => navigation.navigate('SupportInbox')} testID="login-support" />
+        </View>
+        <Text style={styles.legalText} testID="login-legal">
+          By continuing, you agree to the{' '}
+          <Text style={styles.legalLink} onPress={openTermsOfService} accessibilityRole="link" testID="login-terms-link">Terms of Service</Text>
+          {' '}and the{' '}
+          <Text style={styles.legalLink} onPress={openPrivacyPolicyPage} accessibilityRole="link" testID="login-privacy-link">Privacy Policy</Text>.
+        </Text>
+      </Screen>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -784,5 +880,13 @@ const makeStyles = (colors: SemanticTokens) =>
   },
   signupText: { color: colors.textMuted, fontSize: 15, fontFamily: 'Inter_400Regular' },
   signupLink: { color: colors.accentText, fontSize: 15, fontFamily: 'Inter_500Medium', paddingVertical: Spacing.md },
+  // C7 Style B (firstRunV2)
+  bTitle: { marginTop: Spacing.sm, marginBottom: Spacing.lg },
+  bSignup: { marginTop: 0, flexWrap: 'wrap' },
+  bConfirm: { marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  bEye: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
+  bErrorTitle: { ...Typography.bodyMd, color: colors.textPrimary, marginTop: Spacing.xs },
+  bErrorHint: { ...Typography.body, color: colors.textMuted, marginTop: Spacing.xs },
+  bLinks: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', marginTop: Spacing.sm },
 
   });

@@ -129,6 +129,9 @@ jest.mock('react-native-svg', () => {
 import TgpLineChart from '../ui/charts/TgpLineChart';
 import TgpBarChart from '../ui/charts/TgpBarChart';
 import TgpAreaChart from '../ui/charts/TgpAreaChart';
+import TgpSparkline from '../ui/charts/TgpSparkline';
+import { brand, colors as palette, gold, lightTokens } from '../theme/tokens';
+import { CHART_FLARE as FLARE, STAGE_COLORS } from '../screens/client/wearables/wearablesTheme';
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -298,16 +301,6 @@ describe('TgpBarChart — render output', () => {
 // ─── TgpAreaChart ─────────────────────────────────────────────────────────────
 
 describe('TgpAreaChart — render output', () => {
-  it('renders a filled area Path', async () => {
-    const { getAllByTestId } = await render(<TgpAreaChart data={SAMPLE} height={200} />);
-    const paths = getAllByTestId('Path');
-    expect(paths.length).toBeGreaterThan(0);
-    const area = paths[0];
-    expect(typeof area.props.d).toBe('string');
-    expect((area.props.d as string).length).toBeGreaterThan(0);
-    expect(area.props.fill).toBeTruthy();
-  });
-
   it('renders the line Polyline and one Circle per data point', async () => {
     const { getAllByTestId } = await render(<TgpAreaChart data={SAMPLE} height={200} />);
     expect(getAllByTestId('Polyline').length).toBe(1);
@@ -340,10 +333,6 @@ describe('TgpSparkline — source guards', () => {
     expect(SPARK_SRC).toMatch(/height\?.*number/);
   });
 
-  it('renders area fill for visual momentum', () => {
-    expect(SPARK_SRC).toMatch(/areaPath/);
-  });
-
   it('has accessibilityLabel', () => {
     expect(SPARK_SRC).toMatch(/accessibilityLabel/);
   });
@@ -354,7 +343,89 @@ describe('TgpSparkline — source guards', () => {
   });
 });
 
+// One rule across the exported chart family, including the legacy area name.
+it.each([
+  ['line', TgpLineChart],
+  ['bar', TgpBarChart],
+  ['legacy area', TgpAreaChart],
+  ['sparkline', TgpSparkline],
+])('%s draws only lines or bars, never a filled path', async (_name, Chart) => {
+  const node = await render(<Chart data={SAMPLE} height={100} />);
+  expect(node.queryAllByTestId('Path')).toHaveLength(0);
+  const lines = node.queryAllByTestId('Polyline');
+  lines.forEach((line) => expect(line.props.fill).toBe('none'));
+  expect(lines.length + node.queryAllByTestId('Rect').length).toBeGreaterThan(0);
+});
+
+// Search-backed full list: shared chart primitives, inline charts and callers.
+// Rendering tests above and in the feature suites prove the output; this table
+// prevents a filled path/gradient/halo from returning on an unmounted branch.
+it.each([
+  'ui/charts/TgpLineChart.tsx',
+  'ui/charts/TgpBarChart.tsx',
+  'ui/charts/TgpAreaChart.tsx',
+  'ui/charts/TgpSparkline.tsx',
+  'components/progress/WeightTrendChart.tsx',
+  'screens/client/progress/ProgressChartCard.tsx',
+  'screens/client/wearables/charts/RevolutGlowChart.tsx',
+  'screens/client/wearables/cards/HeartCard.tsx',
+  'screens/client/wearables/cards/BodyCard.tsx',
+  'screens/client/wearables/cards/HrvTrendCard.tsx',
+  'screens/client/wearables/cards/FitnessTrendCard.tsx',
+  'screens/client/wearables/cards/ActivityBars.tsx',
+  'screens/client/wearables/cards/SleepStagesCard.tsx',
+  'screens/client/wearables/MetricDetailScreen.tsx',
+  'screens/client/wearables/HealthFitnessScreen.tsx',
+  'screens/client/wearables/SleepRecoveryScreen.tsx',
+  'screens/client/ProgressScreen.tsx',
+  'screens/coach/client-detail/HealthFitnessTab.tsx',
+  'screens/coach/client-detail/SleepRecoveryTab.tsx',
+  'screens/client/WorkoutScreen.tsx',
+  'screens/coach/client-detail/WorkoutsTab.tsx',
+  'screens/client/wearables/charts/smoothPath.ts',
+])('%s follows the no-area/no-gradient/no-glow rule', (file) => {
+  const source = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
+  expect(source).not.toMatch(/[aA]reaPath|LinearGradient|fillOpacity|shadowRadius|progress-pr-glow|styles\.glow/);
+  if (file.endsWith('SleepStagesCard.tsx')) {
+    expect(source).not.toMatch(/#[0-9a-f]{6}/i);
+  }
+  if (file.endsWith('SleepRecoveryTab.tsx')) {
+    expect(source.slice(source.indexOf('anomalyWrap:'))).not.toMatch(/#[0-9a-f]{6}/i);
+  }
+});
+
 // ─── charts/index.ts export surface ───────────────────────────────────────────
+
+// Rule: a chart that encodes categories by colour keeps neighbours apart. Marks
+// touch at 3:1, or sit apart on a card gap / ring with each mark 3:1 on it.
+// Rows walk every such chart: [chart, mark, what the mark touches].
+it.each([
+  ['single-series lines and bars', palette.forest, palette.bone],
+  ['single-series lines and bars', palette.forest, palette.cream],
+  ['latest or scrubbed flare, gapped bar or bone ring', FLARE, palette.bone],
+  ['latest or scrubbed flare, gapped bar or bone ring', FLARE, palette.cream],
+  ...Object.entries(STAGE_COLORS).map(([stage, mark]) => [`sleep stage ${stage}, 2 px card gap`, mark, palette.cream]),
+  ['coach deviation band on its track', brand[400], brand[100]],
+  ['coach marker on the track', palette.forest, brand[100]],
+  ['coach marker on the track', gold[800], brand[100]],
+  ['coach marker in its card ring', palette.forest, palette.cream],
+  ['coach marker in its card ring', gold[800], palette.cream],
+  ['record star edge', gold[800], palette.cream],
+  ['weekly volume, earlier weeks, gapped bars', lightTokens.textMuted, lightTokens.bgPrimary],
+  ['weekly volume, latest week, gapped bars', lightTokens.accent, lightTokens.bgPrimary],
+])('%s: %s is at least 3:1 on %s', (_chart, mark, ground) => {
+  const luminance = (hex: string) => {
+    const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+  };
+  const pair = [luminance(mark), luminance(ground)].sort((a, b) => a - b);
+  expect((pair[1] + 0.05) / (pair[0] + 0.05)).toBeGreaterThanOrEqual(3);
+});
+
+it('sleep stages use four distinct tokens', () => {
+  expect(new Set(Object.values(STAGE_COLORS)).size).toBe(4);
+});
 
 describe('charts/index.ts — export surface', () => {
   it('exports TgpLineChart', () => {

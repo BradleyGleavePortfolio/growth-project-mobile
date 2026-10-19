@@ -15,7 +15,17 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import RomanAiConsentScreen, { actionNoticeOf, choiceOf, headOf, RomanAiConsentApi, ROMAN_AI_COPY } from '../RomanAiConsentScreen';
 import { captureError } from '../../../services/sentry';
 import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
-import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
+// A server (or a live grant) of the client-ai-v4 / v5 generation, before owner 57c: the app reads and
+// grants it with its own copies (see RomanAiConsent57c.test.tsx for client-ai-v6 / v7).
+import {
+  AI_CONSENT_CHECKBOX_LABEL,
+  AI_CONSENT_PRE57C_COPY_SHA256 as AI_CONSENT_COPY_SHA256,
+  AI_CONSENT_PARAGRAPH_PRE57C as AI_CONSENT_PARAGRAPH,
+  AI_CONSENT_SAFETY_EXCEPTION,
+  AI_CONSENT_COPY_SHA256 as COACHED_COPY_SHA256,
+} from '../../../lib/consultation/copy';
+// K2 (owner 57c): Settings shows a live client-ai-v4 grant's paragraph with the exception (client-ai-v6's words).
+const SHOWN_V4 = `${AI_CONSENT_PARAGRAPH} ${AI_CONSENT_SAFETY_EXCEPTION}`;
 import { logger } from '../../../utils/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -111,7 +121,7 @@ describe('RomanAiConsentScreen', () => {
     await waitFor(() => off.getByTestId('roman-ai-not_allowed'));
     expect(off.getByTestId('roman-ai-state-line').props.children).toBe(ROMAN_AI_COPY.stateOff);
     // The consent wording itself is unchanged.
-    expect(off.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
+    expect(off.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V4);
     expect(fs.readFileSync(path.join(__dirname, '..', 'RomanAiConsentScreen.tsx'), 'utf8')).not.toMatch(/paddingTop: \d|borderRadius: \d/);
   });
 
@@ -120,7 +130,7 @@ describe('RomanAiConsentScreen', () => {
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
     expect(r.getByTestId('roman-ai-state').props.children).toBe('Allowed');
-    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
+    expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(SHOWN_V4);
     expect(r.queryByTestId('roman-ai-allow')).toBeNull();
 
     await fireEvent.press(r.getByTestId('roman-ai-withdraw'));
@@ -154,7 +164,8 @@ describe('RomanAiConsentScreen', () => {
     expect(api.grantRoman).not.toHaveBeenCalled();
     confirmLastAlert('Allow');
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    // B-A: a new choice is made in the copies asked for (client-ai-v6), with the GET's ask.
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v6', copy_sha256: COACHED_COPY_SHA256, platform: 'ios' }, { crisis: false });
   });
 
   it.each([404, 503])('endpoint %s: "unavailable right now", nothing recorded, retry reloads', async () => {
@@ -190,7 +201,7 @@ describe('RomanAiConsentScreen', () => {
     const text = ROMAN_AI_COPY.loadServer('3f9c2a71');
     expect(r.getByText(text)).toBeTruthy();
     expect(text).toMatch(/reference 3f9c2a71/);
-    expect(text).toMatch(/Bradleyapple1031@gmail\.com/);
+    expect(text).toMatch(/support@thegrowthproject\.site/);
     expect(captureError).toHaveBeenCalledTimes(1);
     expect((captureError as jest.Mock).mock.calls[0][1]).toMatchObject({ status: 500, request_id: '3f9c2a71-0000-4000-8000-000000000000' });
   });

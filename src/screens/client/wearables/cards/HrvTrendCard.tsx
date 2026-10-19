@@ -1,9 +1,8 @@
 /**
  * HrvTrendCard — 7-day HRV (HRV_MS) trend with full CALM treatment.
  *
- * Bradley LAW / UX gate §5.2: a low HRV is NEVER framed as alarm and NEVER
- * coloured red. Copy is reassurance-first ("Your HRV is recovering — give it
- * another quiet morning"). The chart uses HK-3a's shared RevolutGlowChart with
+ * Copy reports the latest reading without inferring recovery or readiness.
+ * The chart uses HK-3a's shared RevolutGlowChart with
  * `tone='cool'`. The reveal is handled by SrCard's CalmSlowReveal.
  */
 
@@ -24,30 +23,12 @@ export interface HrvTrendCardProps {
   revealDelay?: number;
 }
 
-/**
- * Choose reassurance-first copy from the trend direction. We compare the latest
- * value to the window's mean — but NEVER say "low"; a dip is framed as
- * "recovering / give it a quiet morning", a steady/rising trend as "settling".
- */
-function hrvCopy(trend: TrendPoint[], latestMs: number | null): string {
-  if (latestMs === null || trend.length === 0) {
-    return "Your HRV chart fills in as your mornings sync";
-  }
-  if (trend.length < 3) {
-    return 'Your HRV is settling in — a few more mornings will round out the picture';
-  }
-  const mean = trend.reduce((sum, p) => sum + p.value, 0) / trend.length;
-  if (latestMs < mean * 0.9) {
-    // Dip — reassurance, not alarm. No "low".
-    return 'Your HRV is recovering — give it another quiet morning';
-  }
-  return 'Your HRV is holding steady — a good sign your body is keeping up';
-}
-
 export function HrvTrendCard({ trend, latestMs, colors, revealDelay = 0 }: HrvTrendCardProps) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const reduceMotion = useReduceMotion();
-  const copy = hrvCopy(trend, latestMs);
+  const copy = latestMs === null || trend.length === 0
+    ? "Your HRV chart fills in as your mornings sync"
+    : `Latest HRV reading: ${Math.round(latestMs)} ms`;
   // GlowChartPoint carries the metric value plus an ISO label for the
   // selected-day readout (the chart formats it). HRV's x-axis is the day
   // timestamp, mirroring FitnessTrendCard's `label: start_at` convention.
