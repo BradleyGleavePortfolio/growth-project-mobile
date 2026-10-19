@@ -10,7 +10,7 @@
  */
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../theme/ThemeProvider', () => {
   const realTokens = jest.requireActual('../theme/tokens').default;
@@ -78,6 +78,7 @@ jest.mock('@stripe/stripe-react-native', () => ({
 
 import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
+import { featureFlags } from '../config/featureFlags';
 
 const defaultPackages = jest.mocked(clientPaymentsApi.getPackages).getMockImplementation();
 const defaultStatus = jest.mocked(clientPaymentsApi.getPaymentStatus).getMockImplementation();
@@ -93,6 +94,7 @@ let plans: unknown[] = [];
 beforeEach(() => {
   jest.clearAllMocks();
   mockNoCoach = false;
+  featureFlags.clientBillingV2 = false;
   if (defaultPackages) jest.mocked(clientPaymentsApi.getPackages).mockImplementation(defaultPackages);
   if (defaultStatus) jest.mocked(clientPaymentsApi.getPaymentStatus).mockImplementation(defaultStatus);
   process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_build';
@@ -118,6 +120,78 @@ beforeEach(() => {
     throw new Error(`unexpected POST ${url}`);
   });
   mockInitPaymentSheet.mockResolvedValue({});
+});
+
+it('Style C opens the plan without checkout, shows the server quote, and returns to the list', async () => {
+  featureFlags.clientBillingV2 = true;
+  const original = await defaultPackages?.();
+  if (!original?.ok) throw new Error('Expected available plans');
+  const pkg = original.data[0];
+  const sellable = pkg.purchasable;
+  if (!sellable) throw new Error('Expected purchasable plan');
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{
+    ...pkg, description: 'Your training, adjusted by me each week.', features: ['Weekly call'],
+    purchasable: { ...sellable, quote: {
+      dueTodayCents: 12345, currency: 'usd', firstChargeAt: '2026-11-14T12:00:00Z', trialEnd: null,
+    } },
+  }] });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  expect(r.queryByTestId('buy-plan-pkg-monthly')).toBeNull();
+  expect(r.getByText('From Coach Lee')).toBeTruthy();
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  expect(mockPost).not.toHaveBeenCalled();
+  expect(r.getByTestId('client-plan-page')).toBeTruthy();
+  expect(within(r.getByTestId('plan-due-today')).getByText('$123.45')).toBeTruthy();
+  expect(r.getByTestId('plan-terms-pkg-monthly-first-charge').props.children).toContain('You pay $123.45 today');
+  expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.disabled).toBe(false);
+  const backs = r.getAllByLabelText('Back');
+  await fireEvent.press(backs[backs.length - 1]);
+  expect(r.queryByTestId('client-plan-page')).toBeNull();
+  expect(mockGoBack).not.toHaveBeenCalled();
+});
+
+it.each([null, { dueTodayCents: 0, currency: 'usd', firstChargeAt: null, trialEnd: null }])(
+  'Style C never invents due-today data (quote: %s)', async (quote) => {
+    featureFlags.clientBillingV2 = true;
+    const original = await defaultPackages?.();
+    if (!original?.ok || !original.data[0].purchasable) throw new Error('Expected purchasable plan');
+    const pkg = original.data[0];
+    jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{
+      ...pkg, purchasable: { ...pkg.purchasable!, quote },
+    }] });
+    const r = await render(<ClientPackagesScreen />);
+    await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+    expect(Boolean(r.queryByTestId('plan-due-today'))).toBe(quote !== null);
+    if (quote) expect(r.getByText('$0.00')).toBeTruthy();
+  },
+);
+
+it('Style C uses the existing purchase handler and keeps its failure recoverable', async () => {
+  featureFlags.clientBillingV2 = true;
+  mockPost.mockRejectedValue(Object.assign(new Error('Declined'), {
+    response: { status: 402, data: { code: 'CARD_DECLINED' } },
+  }));
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
+    '/v1/checkout/subscription-intent', expect.objectContaining({ package_id: 'pkg-monthly' }), expect.anything(),
+  ));
+  await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.busy).toBe(false));
+  expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+});
+
+it('Style C cannot open a plan when the scoped list read is denied', async () => {
+  featureFlags.clientBillingV2 = true;
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: false, reason: 'error', message: 'Denied' });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('client-packages-error')).toBeTruthy());
+  expect(r.queryByTestId('plan-offer-pkg-monthly-open')).toBeNull();
+  expect(r.queryByTestId('client-plan-page')).toBeNull();
+  expect(mockPost).not.toHaveBeenCalled();
 });
 
 it.each([false, true])('names the refund team and its support action (renewing plan: %s)', async (hasPlan) => {
