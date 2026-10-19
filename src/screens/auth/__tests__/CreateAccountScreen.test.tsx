@@ -1366,9 +1366,9 @@ describe('CreateAccountScreen Request access email', () => {
     );
     const address = utils.getByTestId('request-access-fallback-address');
     expect(address.props.selectable).toBe(true);
-    expect(address.props.children).toBe('Bradleyapple1031@gmail.com');
+    expect(address.props.children).toBe('support@thegrowthproject.site');
     await fireEvent.press(utils.getByTestId('request-access-fallback-copy'));
-    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('Bradleyapple1031@gmail.com'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('support@thegrowthproject.site'));
     await waitFor(() =>
       expect(utils.getByTestId('request-access-fallback-status').props.children).toMatch(/Address copied/),
     );

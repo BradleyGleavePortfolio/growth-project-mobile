@@ -317,7 +317,7 @@ describe('ConnectionsScreen — disconnect confirm (C-317-4)', () => {
     await openConfirm();
     await fireEvent.press(screen.getByLabelText('Disconnect Oura now'));
     expect(screen.getByText(/Reference req12345\./)).toBeTruthy();
-    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy();
     expect(screen.queryByText(/problem on our side/)).toBeNull();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
     expect(mockReportUnexpected).toHaveBeenCalledWith(

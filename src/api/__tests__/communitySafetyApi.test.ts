@@ -177,7 +177,7 @@ describe('owner-approved community safety copy (2026-10-01 09:07 PDT)', () => {
 
   it('uses the one support constant as the safety contact (OR-109-1)', () => {
     expect(COMMUNITY_SAFETY_FALLBACK_EMAIL).toBe(SUPPORT_EMAIL);
-    expect(SUPPORT_EMAIL).toBe('Bradleyapple1031@gmail.com');
+    expect(SUPPORT_EMAIL).toBe('support@thegrowthproject.site');
   });
 
   it('pins the seven guidelines, including rules 5 and 7', () => {

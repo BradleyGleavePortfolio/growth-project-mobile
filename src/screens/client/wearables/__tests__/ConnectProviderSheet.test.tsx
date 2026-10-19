@@ -325,7 +325,7 @@ describe('ConnectProviderSheet — cloud connect failures (Sol B-317-8)', () => 
     mockStartOauthMutateAsync.mockRejectedValue(httpError(500, {}, 'abcd1234-ffff'));
     await pressOura();
     await waitFor(() => expect(screen.getByText(/Reference abcd1234/)).toBeTruthy());
-    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy();
     expect(screen.queryByText(/internet/)).toBeNull();
     expect(mockReport).toHaveBeenCalledWith(
       'wearables.cloud_connect',
@@ -380,7 +380,7 @@ describe('ConnectProviderSheet — S14 history import', () => {
     await waitFor(() =>
       expect(screen.getByText(/history didn't finish coming in because of an unexpected problem/)).toBeTruthy(),
     );
-    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy();
     expect(mockInvalidate).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });

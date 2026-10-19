@@ -706,7 +706,7 @@ describe('Contact support (one support email, never a silent failure)', () => {
     const screen = await renderScreen(api);
     await fireEvent.press(await screen.findByTestId('roman-chats-error-support'));
     expect(open).toHaveBeenCalledWith(
-      'mailto:Bradleyapple1031@gmail.com?subject=' + encodeURIComponent('Roman conversations (reference abcdef12)'),
+      'mailto:support@thegrowthproject.site?subject=' + encodeURIComponent('Roman conversations (reference abcdef12)'),
     );
     expect(await screen.findByTestId('roman-chats-error-support-fallback-status')).toBeTruthy();
     open.mockRestore();

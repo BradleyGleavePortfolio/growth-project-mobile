@@ -314,7 +314,7 @@ describe('WearablesShell', () => {
   it('an unexpected refresh failure shows a reference and support path, and is reported', async () => {
     mockImportHistory.mockRejectedValue(new Error('boom'));
     await render(<WearablesShell />);
-    await waitFor(() => expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy());
     expect(mockReportUnexpected).toHaveBeenCalled();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
   });
