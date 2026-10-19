@@ -2,7 +2,6 @@ import { AxiosHeaders, type AxiosAdapter } from 'axios';
 import api from '../../services/api';
 import { DEMO_USER, DEMO_RECIPES } from '../fixtures';
 import { installAxiosMockAdapter } from '../mockAdapter';
-
 jest.mock('../../services/api', () => ({ __esModule: true, default: { defaults: {} } }));
 
 describe('screenshot fixture path matching', () => {
@@ -11,11 +10,11 @@ describe('screenshot fixture path matching', () => {
     if (original === undefined) delete process.env.EXPO_PUBLIC_SCREENSHOT_MODE;
     else process.env.EXPO_PUBLIC_SCREENSHOT_MODE = original;
   });
-
   it.each([
     ['/coach/clients?status=active&take=50', [DEMO_USER]],
     ['https://capture.invalid/coach/clients?status=active&take=50', [DEMO_USER]],
     ['profile?include=coach', expect.objectContaining({ coach_id: DEMO_USER.coach_id })],
+    ['/coach/invite-codes?active=true', []],
     [`/recipes/${DEMO_RECIPES[0].id}?source=store`, DEMO_RECIPES[0]],
   ])('returns the fixture for %s without changing the request', async (url, expected) => {
     process.env.EXPO_PUBLIC_SCREENSHOT_MODE = '1';

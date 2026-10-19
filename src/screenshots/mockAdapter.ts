@@ -170,6 +170,7 @@ const ROUTES: Route[] = [
   }) },
   { method: 'GET', pattern: /^\/v1\/coach\/packages$/, handler: () => [{ id: 'demo-package', title: 'Upper body', is_active: true, published_at: '2026-05-01T09:00:00Z' }] },
   { method: 'GET', pattern: /^\/coach\/clients$/, handler: () => [DEMO_USER] },
+  { method: 'GET', pattern: /^\/coach\/invite-codes$/, handler: () => [] },
   { method: 'GET', pattern: /^\/v1\/coach\/money\/charges$/, handler: () => ({ charges: [{ id: 'demo-charge' }] }) },
   { method: 'GET', pattern: /^\/v1\/coach\/money\/summary$/, handler: (config) => ({
     currency: 'usd', currencies: ['usd'], window: { from: config.params.from, to: config.params.to },
