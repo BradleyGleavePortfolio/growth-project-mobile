@@ -117,7 +117,9 @@ it('the continuous habit ring keeps its actual fraction with six daily habits', 
   const v = await render(<WeekInReviewScreen navigation={navigation} />);
   await waitFor(() => expect(v.getByLabelText('Habits this week, 35 of 42 done')).toBeTruthy());
   const circumference = 2 * Math.PI * 38;
-  expect(v.getByTestId('week-habits-fill').props.strokeDasharray).toBe(`${35 / 42 * circumference} ${circumference}`);
+  const [filled, total] = v.getByTestId('week-habits-fill').props.strokeDasharray.map(Number);
+  expect(filled).toBeCloseTo(35 / 42 * circumference);
+  expect(total).toBeCloseTo(circumference);
 });
 
 it('pending reads never claim empty; an empty week uses unknowns, not fake averages', async () => {
