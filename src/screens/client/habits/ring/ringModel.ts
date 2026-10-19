@@ -48,6 +48,9 @@ export const RING_COPY = {
   openBest: (n: number) => `Open · best run ${n} days`, // HB-S-161
   doneBest: (n: number) => `Done · best run ${n} days`, // HB-S-088
   tile: (habit: string, done: boolean) => (done ? `${habit}, done today` : `${habit}, not done yet`), // HB-S-298
+  tileOn: (habit: string, day: string, done: boolean) => `${habit}, ${done ? 'done' : 'not done'} on ${day}`, // HB-B1b, new
+  future: 'Cannot log future events', // #WORDING-HB3, approved as written
+  nothingToday: 'Nothing planned today', // #HABITS-EMPTY-DAY op 1, approved as written
   ring: (n: number, m: number) => `Today, ${n} of ${m} habits done`, // HB-S-299
   day: (day: string, c: Count) => (c.planned ? `${day}, ${c.done} of ${c.planned} done` : day), // HB-S-300, HB-S-046
   loading: 'Loading habits', // today's QuietLoading label
@@ -70,6 +73,7 @@ export const weekdayName = (ymd: string) => fmt(ymd, { weekday: 'long' }); // HB
 export const weekdayLetter = (ymd: string) => fmt(ymd, { weekday: 'narrow' });
 export const dayOfMonth = (ymd: string) => at(ymd).getUTCDate();
 export const dayName = (ymd: string) => `${weekdayName(ymd)} ${dayOfMonth(ymd)}`; // HB-S-046
+export const longDate = (ymd: string) => fmt(ymd, { weekday: 'long', month: 'long', day: 'numeric' }); // HB-S-046, as B_missed
 export const plusDays = (ymd: string, n: number) => new Date(at(ymd).getTime() + n * 86_400_000).toISOString().slice(0, 10);
 /** The Monday of the week holding `ymd` (HB3 weeks run Monday to Sunday). */
 export const mondayOf = (ymd: string) => plusDays(ymd, -((weekday(ymd) + 6) % 7));
@@ -101,12 +105,12 @@ export function segmentsOf(c: Count, past: boolean): SegmentState[] {
   return Array.from({ length: c.planned }, (_, i) => (i < c.done ? 'done' : past ? 'missed' : 'planned'));
 }
 
-/** Monday to Sunday around today. Today draws from the screen's own ring; the rest from the summary. */
-export function weekStrip(summary: HabitSummary, today: string, todayCount: Count) {
+/** Monday to Sunday around today. The days the screen holds (`own`) draw from its ring; the rest from the summary. */
+export function weekStrip(summary: HabitSummary, today: string, own: (date: string) => Count | null) {
   const monday = mondayOf(today);
   return Array.from({ length: 7 }, (_, i) => {
     const date = plusDays(monday, i);
-    const count = date === today ? todayCount : summary.days.find((d) => d.date === date) ?? { planned: 0, done: 0 };
-    return { date, count, isToday: date === today, segments: segmentsOf(count, date < today) };
+    const count = own(date) ?? summary.days.find((d) => d.date === date) ?? { planned: 0, done: 0 };
+    return { date, count, segments: segmentsOf(count, date < today) };
   });
 }
