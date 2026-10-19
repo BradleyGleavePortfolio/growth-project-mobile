@@ -8,7 +8,7 @@
  *
  * Bradley LAW (S&R): a low recovery / low HRV value is NEVER rendered red. We
  * desaturate toward slate instead, and the only escalation colour permitted is
- * a SOFT AMBER — used solely when an absolute clinical-attention threshold is
+ * a SOFT AMBER — used solely when an absolute medical-attention threshold is
  * crossed (e.g. SpO2 sustained < 90%), never for "low score" framing.
  *
  * These tokens are local to the S&R screens (bucket accent layer) and compose
@@ -25,7 +25,7 @@ export interface RecoveryPalette {
   accentMuted: string;
   /** Track/background for the ring + bars (cool, low-luminance). */
   track: string;
-  /** Soft amber — clinical-attention ONLY. Never for generic low scores. */
+  /** Soft amber — medical-attention ONLY. Never for generic low scores. */
   attention: string;
   /** Cool tint for card surfaces layered over the theme surface. */
   surfaceTint: string;

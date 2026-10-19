@@ -11,7 +11,7 @@
  * not a medical claim, and never renders raw values when there is no data
  * (value-first, never "Coming soon").
  *
- * Data-integrity (R1 visual P1 #2 — clinician-facing): the band MUST branch on
+ * Data-integrity (R1 visual P1 #2 — coach-facing): the band MUST branch on
  * the query's loading / error states. A failed fetch is NEVER allowed to render
  * the green "no notable shifts" reassurance — that would lie to a coach reading
  * a real client's data.

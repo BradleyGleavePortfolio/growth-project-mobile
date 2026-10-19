@@ -129,7 +129,7 @@ test('OFF handles future #317 permissions/plugins, tuples, existing blocks, and 
   expect(enabled.plugins).toEqual(input.plugins);
 });
 
-test('preview explicitly opts out; the clinic launch profile and the production store profile opt in (S14 round 3, build 10)', () => {
+test('preview explicitly opts out; the launch profile and the production store profile opt in (S14 round 3, build 10)', () => {
   expect(eas.build.preview.env.TGP_ANDROID_HEALTH_CONNECT).toBe('0');
   expect(eas.build.clinic.extends).toBe('production');
   // Health Connect returns in the clinic binary after #317's isolation fixes.

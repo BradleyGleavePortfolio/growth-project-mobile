@@ -82,6 +82,7 @@ When the toggle changes:
 | `share/ShareSheet` (SHARE-A, `shareSheetV2` off by default) | `softImpact()`; `success()`; `error()` | A tap on Send to {coach}, Share outside the app or the Session summary Share link; once, only when the server confirms a send (none for Share outside the app: the app cannot know whether the person finished; none when the card waits offline in the thread outbox, SHARE-B); a picture or a send fails |
 | `ShareCardScreen` (flag off) | `error()` | The picture could not be made or the share failed (the success haptic before the picture is gone) |
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
+| `client/train/TrainToday` (C1-TRAIN-TAB, `clientTrainV2` off by default) | `mediumImpact()` | Start workout (or Resume workout) under today's workout name on the Train tab; the button's own soft haptic is off. None when the week ring or day strip draws |
 | `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |
 | Consultation T1, B1, B3, N1, N2 (`consultTilesV2` on) | `selection()` | A tile, chip, or Imperial / Metric tap (ONBQ-TILES) |
 | `roman/RomanCrisisActions` (CRISIS-BTN, `crisisActions` on) | `softImpact()` | Call 911, Call 988, Text 988 or Message <coach> under Roman's marked crisis reply; none when the reply arrives |

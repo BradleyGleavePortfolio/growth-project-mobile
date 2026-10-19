@@ -1,6 +1,6 @@
 # Over-the-air updates (EAS Update)
 
-Added for the clinic launch (C11). Lets JavaScript-only fixes reach installed
+Added for the launch (C11). Lets JavaScript-only fixes reach installed
 builds without a new App Store review.
 
 ## Configuration (app.json / eas.json)

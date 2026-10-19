@@ -31,6 +31,7 @@ const isDev =
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: process.env.EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2,
   EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2,
+  EXPO_PUBLIC_FF_CLIENT_TRAIN_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TRAIN_V2,
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
@@ -110,6 +111,8 @@ export const featureFlags = {
   clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', false),
   /** TIMELINE: the Style C Timeline page, its door on Progress and its push route; off in every build. */
   clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', false),
+  /** C1-TRAIN-TAB: the Style C v2 top of the Train tab (week masthead, coach note, today's workout); off in every build. */
+  clientTrainV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TRAIN_V2', false),
   /** C5: the Style C buying pages (slice 2: the success moment and what unlocks); off in every build. */
   clientBillingV2: readFlag('EXPO_PUBLIC_FF_CLIENT_BILLING_V2', false),
   /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
@@ -166,7 +169,7 @@ export const featureFlags = {
    */
   consultationOnboarding: readFlag('EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', false),
 
-  // ─── Clinic launch — Roman-led client tutorial (C08 + C09) ───────────────
+  // ─── Launch — Roman-led client tutorial (C08 + C09) ──────────────────────
   /**
    * The action-gated Roman tour after the plan reveal, the pinned macro and
    * plan explanation cards on Home and Train, the Home "Message your coach"
@@ -579,9 +582,9 @@ export const featureFlags = {
    */
   importReview: readFlag('EXPO_PUBLIC_FF_IMPORT_REVIEW', false),
 
-  // ─── Clinic launch (C11) — App Review 3.1 risk removal ───────────────────
+  // ─── Store launch (C11) — App Review 3.1 risk removal ────────────────────
   /**
-   * Clinic launch (App Review): hide, on iOS only, purchases that are NOT
+   * Store launch (App Review): hide, on iOS only, purchases that are NOT
    * 1:1 person-to-person services. Client purchases of 1:1 coach packages
    * stay available: they are real-time 1:1 coaching between a client and an
    * individual coach, filed under Guideline 3.1.3(d) and paid through

@@ -7,7 +7,7 @@
  *     can pick the next panel to review
  *   - copy in the queue is purely descriptive — no AI text leaks here
  *   - actions on a panel (`mark reviewed`, `request source`, `refer to
- *     clinician`, `hide from client`, `flag disputed`, `approve / reject
+ *     doctor`, `hide from client`, `flag disputed`, `approve / reject
  *     AI draft`) are stubbed; backend is tracked in
  *     docs/BLOODWORK_HANDOFF.md
  */
@@ -135,13 +135,13 @@ export default function BloodworkReviewQueueScreen() {
                 />
                 <ActionBtn
                   icon="medkit-outline"
-                  label={BLOODWORK_COACH_ACTIONS.referToClinician}
+                  label={BLOODWORK_COACH_ACTIONS.referToDoctor}
                   onPress={() =>
                     handleAction(
                       item.panelId,
                       item.reviewState,
                       'needs_clinician_context',
-                      BLOODWORK_COACH_ACTIONS.referToClinician,
+                      BLOODWORK_COACH_ACTIONS.referToDoctor,
                     )
                   }
                   colors={colors}

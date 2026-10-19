@@ -224,7 +224,7 @@ describe("ProgramEditorScreen", () => {
           {
             content_id: "c",
             package_id: "pkg",
-            package_name: "Clinic intro",
+            package_name: "Partner intro",
             cadence_kind: "immediate",
           },
         ],
@@ -234,7 +234,7 @@ describe("ProgramEditorScreen", () => {
       refetch: mockRefetch,
     });
     const screen = await renderEditor();
-    expect(screen.getByText("Clinic intro")).toBeTruthy();
+    expect(screen.getByText("Partner intro")).toBeTruthy();
     expect(
       screen.getByLabelText("Week 2, Day 7: rest day, empty"),
     ).toBeTruthy();

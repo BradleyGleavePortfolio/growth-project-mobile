@@ -86,7 +86,7 @@ import { HapticService } from '../../../../ui/haptics/haptics.service';
 import { subscribeTutorialSignals } from '../../../../tutorial/tutorialEvents';
 import type { TutorialSignal } from '../../../../tutorial/types';
 
-// Clinic tutorial: the wearable step completes on the sheet's real grant.
+// Client tutorial: the wearable step completes on the sheet's real grant.
 const tutorialSignals: TutorialSignal[] = [];
 let unsubscribeTutorial: () => void = () => undefined;
 beforeEach(() => {

@@ -324,7 +324,7 @@ describe('CreateAccountScreen', () => {
 
   it('paste with no code on the clipboard shows guidance and leaves the field empty', async () => {
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
-    mockGetString.mockResolvedValue('see you at the clinic!');
+    mockGetString.mockResolvedValue('see you at the gym!');
     const { getByTestId, findByText } = await renderScreen();
     await fireEvent.press(getByTestId('paste-invite-code'));
     expect(await findByText(/No invite code was found on your clipboard/i)).toBeTruthy();
@@ -1320,7 +1320,7 @@ describe('CreateAccountScreen', () => {
 
     it('guard: a different address in the response is ignored', async () => {
       mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
-      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true, email: 'someone@else.com' } });
+      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true, email: 'someone@example.test' } });
       mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
       const utils = await renderScreen();
       await fillAndSubmit(utils);
