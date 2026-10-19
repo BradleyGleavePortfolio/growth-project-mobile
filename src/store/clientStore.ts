@@ -98,6 +98,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         logged_at?: string;
         created_at?: string;
         food_item?: RawFoodItem;
+        plan_slot_id?: string | null;
+        fills_usual_meal?: boolean;
       }
       const entries = (data.entries || []) as DailyLogEntry[];
       // The existing mapping intentionally writes both `foodName` (the
@@ -139,6 +141,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
               : undefined,
           originalUnit: e.original_unit ? e.original_unit : undefined,
           userId: e.user_id,
+          planSlotId: e.plan_slot_id || undefined,
+          fillsUsualMeal: e.fills_usual_meal === true || undefined,
           coachId: '',
           createdAt: e.logged_at || e.created_at || new Date().toISOString(),
         } as FoodLog & { name: string });

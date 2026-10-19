@@ -5,7 +5,7 @@
  *
  * Bradley LAW / "NEVER medicalize" (UNIFIED_BUILD_PLAN lock): no diagnosis
  * nouns, no treatment verbs. When SpO2 is sustained below the threshold, append
- * a SOFT clinician-referral suffix (mirrors the HK-4 prompt rules) and switch
+ * a SOFT doctor-referral suffix (mirrors the HK-4 prompt rules) and switch
  * the only-permitted escalation accent (soft amber) — never red.
  */
 
@@ -28,12 +28,12 @@ export function RespirationCard({ respiration, colors, revealDelay = 0 }: Respir
 
   const hasAny = respiratoryRate !== null || spo2 !== null;
 
-  // Reassurance-first copy. Soft clinician-referral suffix ONLY when SpO2 is
+  // Reassurance-first copy. Soft doctor-referral suffix ONLY when SpO2 is
   // sustained below threshold — phrased as a gentle suggestion, not a verdict.
   const copy = !hasAny
     ? "Breathing and blood-oxygen appear once your tracker syncs overnight"
     : spo2NeedsAttention
-      ? `Your overnight readings are in. Blood oxygen has been dipping a little lower than usual — it may be worth mentioning to your clinician next time you chat.`
+      ? `Your overnight readings are in. Blood oxygen has been dipping a little lower than usual — it may be worth mentioning to your doctor next time you chat.`
       : 'Your breathing and blood oxygen look settled through the night';
 
   const spo2Color = spo2NeedsAttention ? RECOVERY_PALETTE.attention : colors.textPrimary;

@@ -4,6 +4,8 @@
  * tiles, and Business. Only real numbers are drawn; a dial with no real base is left out. Zero clients: the
  * Clients and Earnings dials, then the existing setup cards (`header`). The chips filter the roster section:
  * Needs you (tiles, then the Steady wall, as in the mockup), Steady (the wall) and Streaks (streak tiles).
+ * C-S-PUSH-3: Overview is the landing with this Home on (coachLanding.ts), so it carries the coach's push ask:
+ * in `header` at zero clients, else between the roster section and Business, as on today's Overview.
  */
 import React, { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -13,6 +15,7 @@ import { layout, radius, typography } from '../../../theme/tokens';
 import { QuietOverline, TextLink } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
+import PushPermissionCard from '../../../components/home/PushPermissionCard';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, lastActiveWords, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
@@ -210,27 +213,32 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
         </View>
       ) : null}
 
-      {o && roster > 0 && (data.month.kind !== 'loading' || data.payout) ? (
-        <View style={styles.section} testID="coach-home-v11-business">
-          <QuietOverline accessibilityRole="header">Business</QuietOverline>
-          {data.month.kind === 'error' ? (
-            <QuietError message="This month's earnings could not load." onRetry={retryMonth} testID="coach-home-v11-month-error" />
+      {o && roster > 0 ? (
+        <View style={styles.section}>
+          <PushPermissionCard audience="coach" presentation="section" />
+          {data.month.kind !== 'loading' || data.payout ? (
+            <View testID="coach-home-v11-business">
+              <QuietOverline accessibilityRole="header">Business</QuietOverline>
+              {data.month.kind === 'error' ? (
+                <QuietError message="This month's earnings could not load." onRetry={retryMonth} testID="coach-home-v11-month-error" />
+              ) : null}
+              <View style={styles.tiles}>
+                {data.month.kind === 'ok' && hasMonthMoney(data.month.summary) ? (
+                  <BusinessTile
+                    label={monthOverline(data.now)} value={heroAmount(data.month.summary.totals.netCents, data.month.summary.currency)}
+                    sub={paceLine(data.month.summary.totals.netCents, data.month.summary.currency, data.now)}
+                    width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-month"
+                  />
+                ) : null}
+                {data.payout ? (
+                  <BusinessTile
+                    label="Next payout" value={heroAmount(data.payout.amountCents, data.payout.currency)} sub={cap(payoutWords(data.payout, data.now))}
+                    width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-payout"
+                  />
+                ) : null}
+              </View>
+            </View>
           ) : null}
-          <View style={styles.tiles}>
-            {data.month.kind === 'ok' && hasMonthMoney(data.month.summary) ? (
-              <BusinessTile
-                label={monthOverline(data.now)} value={heroAmount(data.month.summary.totals.netCents, data.month.summary.currency)}
-                sub={paceLine(data.month.summary.totals.netCents, data.month.summary.currency, data.now)}
-                width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-month"
-              />
-            ) : null}
-            {data.payout ? (
-              <BusinessTile
-                label="Next payout" value={heroAmount(data.payout.amountCents, data.payout.currency)} sub={cap(payoutWords(data.payout, data.now))}
-                width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-payout"
-              />
-            ) : null}
-          </View>
         </View>
       ) : null}
     </ScrollView>

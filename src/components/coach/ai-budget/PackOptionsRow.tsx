@@ -18,6 +18,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
+import { layout, radius } from '../../../theme/tokens';
 import { formatCents } from '../../../api/types/coachAIBudget';
 import { CREDIT_PACK_NON_REFUNDABLE, creditPacksHidden } from '../../../config/purchaseSurfaces';
 
@@ -89,8 +90,9 @@ function makeStyles(colors: ThemeColors) {
     btn: {
       flexGrow: 1,
       minWidth: 70,
+      minHeight: layout.touchMin,
       paddingVertical: 12,
-      borderRadius: 8,
+      borderRadius: radius.button,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',

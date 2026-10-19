@@ -25,7 +25,7 @@ import { useCoachAppointmentTypes } from '../../hooks/useCalendar';
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
 import { useCreateSessionType, useUpdateSessionType } from '../../hooks/useScheduling';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 
 type Params = { CoachAppointmentTypes: { coachId?: string } | undefined };
@@ -285,12 +285,12 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 4, padding: spacing.md, marginTop: spacing.md },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: spacing.md, marginTop: spacing.md },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   primary: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: spacing.lg, paddingHorizontal: spacing.lg },
   secondary: { flex: 1, minHeight: 44, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   label: { ...typography.caption, marginTop: spacing.lg, marginBottom: spacing.xs },
-  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 2, padding: spacing.md, ...typography.body },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.input, padding: spacing.md, ...typography.body },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   chip: { minWidth: 56, minHeight: 40, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg, gap: spacing.md },

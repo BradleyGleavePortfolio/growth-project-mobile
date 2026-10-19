@@ -26,7 +26,8 @@ import { SUB_COACH_BILLING_BLOCKED } from "../../lib/coachSetup/errors";
 import { noteHeadCoachHandlesMoney } from "../../lib/money/headCoachRole";
 import { money, shortDate } from "../../lib/money/moneyCopy";
 import { useTheme } from "../../theme/ThemeProvider";
-import { typography, type SemanticTokens } from "../../theme/tokens";
+import { radius, typography, type SemanticTokens } from "../../theme/tokens";
+import { HapticService } from "../../ui/haptics/haptics.service";
 import { QuietOverline, QuietSection, quietActions } from "../../ui/sections/QuietSection";
 import { SkeletonScreen } from "../../ui/skeletons/Skeleton";
 import { generateIdempotencyKey } from "../../utils/idempotency";
@@ -84,8 +85,10 @@ export default function ClientPaymentsScreen({ route }: Props): React.ReactEleme
       setNotice(null);
       try {
         const out = await coachClientPaymentsApi.change(clientId, plan.purchaseId, change, key);
+        void HapticService.success();
         settle(out.plan, changeDone(change, out.plan, out.message));
       } catch (err) {
+        void HapticService.error();
         setNotice({ purchaseId: plan.purchaseId, text: actionFailure(err, WHAT[change]) });
         void reload();
       } finally {
@@ -104,7 +107,10 @@ export default function ClientPaymentsScreen({ route }: Props): React.ReactEleme
       {
         text: c.confirm,
         style: change === "cancel" ? "destructive" : "default",
-        onPress: () => void runChange(plan, change, key),
+        onPress: () => {
+          void (change === "cancel" ? HapticService.warning() : HapticService.mediumImpact());
+          void runChange(plan, change, key);
+        },
       },
     ]);
   };
@@ -279,6 +285,7 @@ function RefundSheet(props: {
 
   const confirm = async () => {
     if (cents === null || busy) return;
+    void HapticService.warning();
     setBusy(true);
     setError(null);
     try {
@@ -287,8 +294,12 @@ function RefundSheet(props: {
         amountCents: cents,
         idempotencyKey: key,
       });
+      void (out.status === "failed" || out.status === "canceled"
+        ? HapticService.error()
+        : HapticService.success());
       props.onDone(out.plan, refundDone(out.status, out.amountCents, pay.currency, clientName));
     } catch (err) {
+      void HapticService.error();
       setBusy(false);
       setError(actionFailure(err, "refund this payment"));
       props.onFailed();
@@ -394,8 +405,8 @@ function makeStyles(sc: SemanticTokens) {
     scrimWrap: { flex: 1, justifyContent: "flex-end" },
     sheet: {
       backgroundColor: sc.bgPrimary,
-      borderTopLeftRadius: 4,
-      borderTopRightRadius: 4,
+      borderTopLeftRadius: radius.sheet,
+      borderTopRightRadius: radius.sheet,
       padding: 24,
       paddingBottom: 36,
     },
@@ -409,7 +420,7 @@ function makeStyles(sc: SemanticTokens) {
       minHeight: 44,
       marginBottom: 4,
     },
-    primary: { minHeight: 48, borderRadius: 4, alignItems: "center", justifyContent: "center", marginTop: 20 },
+    primary: { minHeight: 48, borderRadius: radius.button, alignItems: "center", justifyContent: "center", marginTop: 20 },
     primaryLabel: { ...typography.bodyMd },
     secondary: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: 8 },
   });

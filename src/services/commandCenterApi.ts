@@ -95,7 +95,8 @@ export interface ActionQueueItem {
     | 'build_week_gate'
     | 'bloodwork_review'
     | 'roman_urgent_reply'
-    | 'roman_eating_disorder_reply';
+    | 'roman_eating_disorder_reply'
+    | 'roman_crisis_reply';
   message: string;          // plain English, generated server-side
   created_at: string;
   dismissed_at: string | null;
@@ -107,12 +108,19 @@ export interface ActionQueueItem {
   sent_at?: string | null;
 }
 
-export type SafetyAlertType = 'roman_urgent_reply' | 'roman_eating_disorder_reply';
+export type SafetyAlertType = 'roman_urgent_reply' | 'roman_eating_disorder_reply' | 'roman_crisis_reply';
+
+const SAFETY_ALERT_TYPES: readonly string[] = ['roman_urgent_reply', 'roman_eating_disorder_reply', 'roman_crisis_reply'];
 
 export function isSafetyAlert(
   item: ActionQueueItem,
 ): item is ActionQueueItem & { alert_type: SafetyAlertType } {
-  return item.alert_type === 'roman_urgent_reply' || item.alert_type === 'roman_eating_disorder_reply';
+  return SAFETY_ALERT_TYPES.includes(item.alert_type);
+}
+
+/** Owner #ROMAN-CRISIS-ALERT: a crisis alert never shows the client's words. */
+export function safetyQuote(alertType: string, quote: string | null | undefined): string | null {
+  return alertType === 'roman_crisis_reply' ? null : quote ?? null;
 }
 
 export interface ActionQueueResponse {

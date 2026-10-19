@@ -30,6 +30,7 @@ jest.mock("../services/authActions", () => ({
   signOut: jest.fn(async () => {}),
 }));
 jest.mock("../services/api", () => ({
+  authApi: { me: async () => ({ data: { profile: { date_of_birth: '1990-01-01' } } }) },
   __esModule: true,
   default: {
     get: jest.fn(async () => ({ data: { is_complete: true } })),
@@ -97,12 +98,6 @@ jest.mock("../navigation/ClientNavigator", () => {
   return () => React.createElement(Text, { testID: "nav-client" }, "client");
 });
 jest.mock("../navigation/OnboardingNavigator", () => {
-  const { Text } = jest.requireActual("react-native");
-  const R = jest.requireActual("react");
-  return () =>
-    R.createElement(Text, { testID: "nav-onboarding" }, "onboarding");
-});
-jest.mock("../navigation/LeanOnboardingNavigator", () => {
   const { Text } = jest.requireActual("react-native");
   const R = jest.requireActual("react");
   return () =>

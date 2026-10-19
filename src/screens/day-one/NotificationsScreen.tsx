@@ -22,6 +22,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { registerForPushNotifications } from '../../services/pushNotifications';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../lib/analytics';
+import { layout } from '../../theme/tokens';
 import { t, tList } from './i18n/strings';
 import StepHeader from './StepHeader';
 import { saveNotifPermission } from './api';
@@ -219,6 +220,7 @@ const makeStyles = (colors: ThemeColors) =>
     cta: {
       backgroundColor: colors.primary,
       paddingVertical: 18,
+      minHeight: layout.touchMin,
       borderRadius: 2,
       alignItems: 'center',
     },
@@ -230,7 +232,7 @@ const makeStyles = (colors: ThemeColors) =>
       textTransform: 'uppercase',
       color: colors.textOnPrimary,
     },
-    skipBtn: { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 },
+    skipBtn: { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20, minHeight: layout.touchMin },
     skipText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,

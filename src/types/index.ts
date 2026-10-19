@@ -85,6 +85,10 @@ export interface FoodLog {
   foodItemId?: string;
   quantityMultiplier?: number;
   foodItem?: import('../utils/log/types').SearchResult;
+  // FOODLINK: the plan meal this entry was logged for, and the coachless usual day's mark, from the entry
+  // itself (GET /log/daily), so they survive a relaunch, a sign-in and a cleared cache.
+  planSlotId?: string;
+  fillsUsualMeal?: boolean;
 }
 
 export interface WeightLog {

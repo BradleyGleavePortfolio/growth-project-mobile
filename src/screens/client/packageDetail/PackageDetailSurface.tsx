@@ -197,7 +197,7 @@ export default function PackageDetailSurface({
       ) : (
         <Text style={styles.fineprint}>
           Payment is processed securely by Stripe. Card details never touch this
-          app or The Growth Project's servers.
+          app or TGP Fitness servers.
         </Text>
       )}
     </ScrollView>

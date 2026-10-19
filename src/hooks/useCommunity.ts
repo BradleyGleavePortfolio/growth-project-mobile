@@ -24,6 +24,7 @@ import {
   type CommunityMeResponse,
   type CommunityTodayResponse,
   type CommunityCohortListResponse,
+  type CommunityWorkspaceResponse,
   type CommunityPost,
   type CommunityComment,
   type CommunityDmThread,
@@ -71,11 +72,22 @@ export function useCommunityToday(): UseQueryResult<CommunityTodayResponse> {
   });
 }
 
-export function useCommunityCohorts(): UseQueryResult<CommunityCohortListResponse> {
+export function useCommunityCohorts(enabled = true): UseQueryResult<CommunityCohortListResponse> {
   return useQuery({
     queryKey: communityKeys.cohorts(),
     queryFn: () => communityApi.getCohorts(),
     staleTime: 60_000,
+    enabled,
+  });
+}
+
+/** The community's name for the Home masthead; idle until the workspace id is known. */
+export function useCommunityWorkspace(workspaceId: string | null): UseQueryResult<CommunityWorkspaceResponse> {
+  return useQuery({
+    queryKey: [...communityKeys.all, 'workspace', workspaceId] as const,
+    queryFn: () => communityApi.getWorkspace(workspaceId as string),
+    enabled: workspaceId != null,
+    staleTime: 300_000,
   });
 }
 

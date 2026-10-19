@@ -1,10 +1,10 @@
 /**
  * B-ROMANADJ-125: when a coach approves Roman's set change in the Action
  * Queue, the server writes the new set counts into the assignment and lists
- * them on the client read as `roman_adjusted_sets` ({ order, sets }). The
- * client screen renders the live plan (so the coach's later edits stay
- * visible), so only these set counts are laid over it, matched by the
- * exercise `order`.
+ * them on the client read as `roman_adjusted_sets` ({ order, sets }). They
+ * are laid over the assignment's prescription (assignmentPrescription.ts),
+ * matched by the exercise `order`; on a frozen snapshot that already holds
+ * them, this only marks the rows.
  *
  * Missing or empty field (a server without this change) or an order that
  * no longer exists in the plan leaves the exercise exactly as it was.

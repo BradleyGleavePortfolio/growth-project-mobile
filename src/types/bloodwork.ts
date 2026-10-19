@@ -40,7 +40,7 @@ export const DEFAULT_BLOODWORK_SOURCE: BloodworkSourceType = 'manual';
  *   submitted             — submitted to coach, awaiting review
  *   needs_source          — coach asked the client to confirm the source
  *   needs_clinician_context — coach flagged a value as outside their scope;
- *                             client should consult their clinician
+ *                             client should consult their doctor
  *   coach_reviewed        — coach reviewed; insights (if any) may be shown
  *   hidden_from_client    — coach hid the row from the client surface
  *   disputed_flagged      — value looks implausible; surfaced for manual fix
@@ -64,7 +64,7 @@ export type BloodworkValidationStatus =
 
 /**
  * `fresh` / `stale` is purely informational — coaches care about how old a
- * panel is, but staleness must NEVER be presented as a clinical concern.
+ * panel is, but staleness must NEVER be presented as a medical concern.
  */
 export type BloodworkFreshness = 'fresh' | 'aging' | 'stale' | 'undated';
 
@@ -87,7 +87,7 @@ export type BloodworkDisclaimerLevel =
  * Hard rules (enforced in copy + tests):
  *   - never present as diagnosis, treatment, prescription, or dosing.
  *   - never claim urgency / triage.
- *   - never replace a clinician.
+ *   - never replace a doctor.
  *   - must remain `unapproved` until a coach signs off.
  */
 export type BloodworkAIDraftStatus =

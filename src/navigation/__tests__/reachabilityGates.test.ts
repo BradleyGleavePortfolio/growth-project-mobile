@@ -69,7 +69,7 @@ describe('launch surfaces have an on-screen entry (S-REACH)', () => {
   const files = onScreenSources();
   const ENTRY = (route: string) => new RegExp(`(navigate\\(\\s*['"]${route}['"]|screen:\\s*['"]${route}['"])`);
   it.each([
-    ['Plan', 'client meal plan'],
+    ['ClientDailyMealPlan', 'client meal plan'],
     ['ClientMacros', 'client macro targets'],
     ['Progress', 'client progress'],
     ['Habits', 'client habits and check-in'],
@@ -107,14 +107,14 @@ describe('hidden surfaces stay behind OFF flags (S-REACH)', () => {
 
 describe('wired screens always show a way back (S-REACH)', () => {
   it.each([
-    ['MoreStackNav', 'Plan'],
+    ['MoreStackNav', 'ClientDailyMealPlan'],
     ['MoreStackNav', 'Progress'],
     ['MoreStackNav', 'Timeline'],
     ['MoreStackNav', 'ClientMacros'],
     ['MoreStackNav', 'Fast'],
     ['HomeStackNav', 'Habits'],
   ])('%s %s registers with the back-only header', (stack, route) => {
-    const re = new RegExp(`<${stack}\\.Screen\\s+name="${route}"\\s+component=\\{\\w+\\}\\s+options=\\{backOnlyHeader\\(`);
+    const re = new RegExp(`<${stack}\\.Screen\\s+name="${route}"\\s+(?:component=\\{\\w+\\}\\s+)?options=\\{backOnlyHeader\\(`);
     expect(CLIENT_NAV).toMatch(re);
   });
 

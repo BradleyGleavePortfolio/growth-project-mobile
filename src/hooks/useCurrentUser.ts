@@ -34,6 +34,8 @@ export interface CurrentUser {
     date_of_birth?: string | null;
     current_weight_lbs?: number | null;
     target_weight_lbs?: number | null;
+    /** The client's weight unit (UserProfile.weight_unit); the weekly digest reads it too. */
+    weight_unit?: 'lbs' | 'kg' | null;
     dietary_pattern?: string | null;
     has_gym_membership?: boolean | null;
     goal_type?: string | null;

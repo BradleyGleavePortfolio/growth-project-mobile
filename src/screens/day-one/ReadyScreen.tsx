@@ -27,6 +27,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../lib/analytics';
+import { layout } from '../../theme/tokens';
 import { authEvents } from '../../utils/authEvents';
 import { patchUserCache } from '../../lib/userCache';
 import { t } from './i18n/strings';
@@ -237,7 +238,7 @@ const makeStyles = (colors: DayOneColors) =>
       color: colors.noticeCriticalAccent,
       opacity: 0.85,
     },
-    secondaryAction: { minHeight: 44, justifyContent: 'center' },
+    secondaryAction: { minHeight: layout.touchMin, justifyContent: 'center' },
     cta: {
       backgroundColor: colors.primary,
       paddingVertical: 18,

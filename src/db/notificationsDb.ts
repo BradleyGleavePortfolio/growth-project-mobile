@@ -111,7 +111,7 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
   const notifications = [
     {
       type: 'system' as const,
-      title: 'Welcome to Growth Project',
+      title: 'Welcome to TGP Fitness',
       body: 'Start logging your meals to track your nutrition and reach your fitness goals. Your personalized calorie and macro targets are ready.',
       hoursAgo: 0,
     },

@@ -1,6 +1,6 @@
 /**
  * The one-time Roman card that introduces carbohydrate and fat on the day a
- * never-tracker's simple week ends (clinic contract v1 addition 8).
+ * never-tracker's simple week ends (onboarding contract v1 addition 8).
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
