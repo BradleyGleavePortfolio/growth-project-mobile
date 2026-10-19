@@ -2,14 +2,15 @@
  * HB-B1: Habits as concept B, the ring (planning/MOCKUP3/HABITS sections 7 to 11), behind habitsRing.
  * Masthead ring, week strip of small rings, tiles; runs and counts from GET /habits and /habits/summary (HB3).
  * HB-B1b (#WORDING-HB3): a strip day up to today opens in the ring and ticks; a future day only says it cannot be logged.
+ * HB-B1c: the strip reaches back week by week to the first habit's start, so a missed day of an earlier week ticks too.
  */
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api, { habitsApi } from '../../../../services/api';
-import { useLogHabit } from '../../../../hooks/useApi';
+import { useLogHabit, type ApiHabitLog } from '../../../../hooks/useApi';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../../../hooks/useCoachlessClient';
 import { useReducedMotion } from '../../../../hooks/useReducedMotion';
@@ -24,8 +25,8 @@ import { colors, layout, radius, typography, type SemanticTokens } from '../../.
 import { getTodayString } from '../../../../utils/date';
 import { plannedToday } from '../../../../components/home/rings/homeTiles';
 import {
-  IDEAS, RING_COPY as C, dayName, dayOfMonth, doneOn, longDate, mondayOf, plusDays, runLine,
-  weekCount, weekStrip, weekdayLetter, weekdayName, type HabitSummary, type RingHabit,
+  IDEAS, RING_COPY as C, dayName, dayOfMonth, doneOn, firstDay, longDate, mondayOf, plusDays, runLine,
+  weekCount, weekStrip, weekTotal, weekdayLetter, weekdayName, type HabitSummary, type RingHabit,
 } from './ringModel';
 
 export interface HabitsRingProps {
@@ -40,6 +41,11 @@ export interface HabitsRingProps {
 }
 
 const firstName = (name?: string | null) => name?.trim().split(/\s+/)[0] || undefined;
+// GET /habits/summary for the week from `from` (Monday to Sunday).
+const summaryOf = (from: string) => ({
+  queryKey: ['habits', 'summary', from],
+  queryFn: async (): Promise<HabitSummary> => (await api.get('/habits/summary', { params: { from, to: plusDays(from, 6) } })).data,
+});
 
 export default function HabitsRing({ habits, loading, failed, refreshing, onRefresh, onAdd, onCheckIn, onSaved }: HabitsRingProps) {
   const { semanticColors: sc } = useTheme();
@@ -52,15 +58,19 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
   const coaches = useMyCoaches(!coachless).data;
   const coachName = coachless ? undefined : firstName(coaches?.find((c) => c.coach_id === user?.coach_id)?.name);
 
-  const from = mondayOf(getTodayString());
-  const summary = useQuery<HabitSummary>({
-    queryKey: ['habits', 'summary', from],
-    queryFn: async () => (await api.get('/habits/summary', { params: { from, to: plusDays(from, 6) } })).data,
-  });
+  const summary = useQuery(summaryOf(mondayOf(getTodayString())));
   const today = summary.data?.today ?? getTodayString();
-  // The day the ring shows: today, or a day of this week picked in the strip.
+  const list = habits ?? [];
+  // The day the ring shows: today, or a day picked in the strip from the first habit's start (#WORDING-HB3).
+  const start = firstDay(list, today);
   const [picked, setPicked] = useState<string | null>(null);
-  const day = picked && picked >= mondayOf(today) && picked <= today ? picked : today;
+  const day = picked && picked >= start && picked <= today ? picked : today;
+  const monday = mondayOf(day);
+  const thisMonday = mondayOf(today);
+  const shownWeek = useQuery({ ...summaryOf(monday), placeholderData: keepPreviousData });
+  // An earlier day reads its own ticks (GET /habits holds each habit's latest 30), so an older week shows true.
+  const dayLogs = useQuery<ApiHabitLog[]>({ queryKey: ['habits', 'logs', day], queryFn: async () => (await habitsApi.getLogs(day)).data, enabled: day !== today });
+  const held = (h: RingHabit, on: string) => (on === day && on !== today && dayLogs.data ? dayLogs.data.some((l) => l.habit_id === h.id && l.completed) : doneOn(h, on));
 
   // The masthead's forest runs under the native back header, with today's two tabs on its right.
   const checkIn = useRef(onCheckIn);
@@ -95,16 +105,15 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
   const [draw, setDraw] = useState<{ index: number; key: string } | null>(null);
   const busy = useRef(new Set<string>());
   const taps = useRef(0);
-  const list = habits ?? [];
   // Ticks on their way, by day and habit ("2026-10-13|h1").
-  const isDoneOn = (h: RingHabit, on: string) => shown[`${on}|${h.id}`] ?? doneOn(h, on);
+  const isDoneOn = (h: RingHabit, on: string) => shown[`${on}|${h.id}`] ?? held(h, on);
   const isDone = (h: RingHabit) => isDoneOn(h, day);
   useEffect(() => {
     setShown((m) => {
-      const keep = Object.entries(m).filter(([k, v]) => { const [on, id] = k.split('|'); return busy.current.has(k) || list.some((h) => h.id === id && doneOn(h, on) !== v); });
+      const keep = Object.entries(m).filter(([k, v]) => { const [on, id] = k.split('|'); return busy.current.has(k) || list.some((h) => h.id === id && held(h, on) !== v); });
       return keep.length === Object.keys(m).length ? m : Object.fromEntries(keep);
     });
-  }, [habits]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [habits, dayLogs.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Today's parts are Home's habits tile (planned today, or ticked today on the server). An earlier day counts as
   // HB3's summary does: a habit on its planned days, a times-a-week habit only on a day it was ticked (no day to miss).
@@ -156,6 +165,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     return () => { clearTimeout(out); clearTimeout(gone); };
   }, [future]); // eslint-disable-line react-hooks/exhaustive-deps
   const pick = (on: string) => {
+    if (on < start) return;
     if (on > today) { fade.setValue(reduceMotion ? 1 : 0); setFuture((n) => n + 1); return; }
     void HapticService.selection();
     setDraw(null);
@@ -169,12 +179,28 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     onError: () => { void HapticService.error(); },
   });
 
-  const refresh = () => { onRefresh(); void summary.refetch(); };
+  const refresh = () => { onRefresh(); void qc.invalidateQueries({ queryKey: ['habits', 'summary'] }); if (day !== today) void dayLogs.refetch(); };
   const ring = Math.min(148, Math.round((width - layout.gutter * 2) * 0.46));
   const dayWidth = Math.min(layout.touchMin, (width - layout.gutter * 2) / 7); // 44 pt, or a seventh of a narrow strip
   const tileWidth = fontScale > 1.15 ? width - layout.gutter * 2 : (width - layout.gutter * 2 - GAP) / 2;
   const week = weekCount(list, day, isDone);
-  const unplanned = parts.length === 0 && day === today; // #HABITS-EMPTY-DAY op 1
+  const unplanned = parts.length === 0; // #HABITS-EMPTY-DAY op 1; a past day says its weekday (HB-C1)
+  // A day of last week reads that week's count from the server once it is in; the week controls reach back to the first start.
+  const lastWeek = monday === plusDays(thisMonday, -7);
+  const last = lastWeek ? weekTotal(shownWeek.data) : null;
+  const earlier = monday > mondayOf(start);
+  const later = monday < thisMonday;
+  const nextSunday = plusDays(monday, 13);
+  // Previous week opens that week's Sunday (on a Monday, the missed yesterday); Next week its Sunday, or today.
+  const weekButton = (icon: 'chevron-back' | 'chevron-forward', label: string, to: string, id: string) => (
+    <Pressable
+      onPress={() => pick(to)} accessibilityRole="button" accessibilityLabel={label} testID={`habits-ring-${id}-week`}
+      style={({ pressed }) => [s.weekButton, pressed && s.pressed]}
+    >
+      <Ionicons name={icon} size={22} color={sc.textOnAccent} />
+    </Pressable>
+  );
+
   const empty = !loading && !(failed && !habits) && list.length === 0;
   const first = empty && coachless;
 
@@ -208,7 +234,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     mast = (
       <>
         <View style={s.row}>
-          {unplanned ? left(<Text style={[s.serif, s.light, s.centerText]} accessibilityRole="header" testID="habits-ring-unplanned">{C.nothingToday}</Text>) : (
+          {unplanned ? left(<Text style={[s.serif, s.light, s.centerText]} accessibilityRole="header" testID="habits-ring-unplanned">{day === today ? C.nothingToday : C.nothingOn(weekdayName(day))}</Text>) : (
             <SegmentedRing
               segments={parts.map((h): SegmentState => (isDone(h) ? 'done' : day < today ? 'missed' : 'planned'))} size={ring} onDark
               label={day === today ? C.ring(done, parts.length) : C.day(dayName(day), { planned: parts.length, done })}
@@ -220,19 +246,28 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
           )}
           <View style={s.flex}>
             <Text style={[typography.eyebrow, s.muted]}>{weekdayName(today)}</Text>
-            {day !== today ? <Text style={[typography.body, s.light]}>{longDate(day)}</Text>
-              : week?.planned ? <Text style={[typography.body, s.light]} testID="habits-ring-week">{C.thisWeek(week.done, week.planned)}</Text> : null}
+            {day === today ? (week?.planned ? <Text style={[typography.body, s.light]} testID="habits-ring-week">{C.thisWeek(week.done, week.planned)}</Text> : null)
+              : lastWeek && shownWeek.isPlaceholderData ? null
+              : last?.planned ? <Text style={[typography.body, s.light]} testID="habits-ring-week">{C.lastWeek(last.done, last.planned)}</Text>
+              : <Text style={[typography.body, s.light]}>{longDate(day)}</Text>}
+            {start < thisMonday ? (
+              <View style={s.weeks}>
+                {earlier ? weekButton('chevron-back', C.previousWeek, plusDays(monday, -1), 'previous') : <View style={s.weekButton} />}
+                {later ? weekButton('chevron-forward', C.nextWeek, nextSunday < today ? nextSunday : today, 'next') : null}
+              </View>
+            ) : null}
           </View>
         </View>
-        {summary.data ? (
+        {shownWeek.data ? (
           <View style={s.strip} testID="habits-ring-strip">
-            {weekStrip(summary.data, today, (on) => (on === today || on === day ? countOn(on) : null)).map((d) => {
+            {weekStrip(shownWeek.data, monday, today, (on) => (on === today || on === day ? countOn(on) : null)).map((d) => {
               const on = d.date === day;
+              const before = d.date < start; // before the first habit's start: nothing to log
               return (
                 <Pressable
-                  key={d.date} onPress={() => pick(d.date)} testID={`habits-ring-pick-${d.date}`}
-                  accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={C.day(dayName(d.date), d.count)}
-                  style={({ pressed }) => [s.day, { minWidth: dayWidth }, pressed && s.pressed]}
+                  key={d.date} onPress={() => pick(d.date)} disabled={before || undefined} testID={`habits-ring-pick-${d.date}`}
+                  accessibilityRole="button" accessibilityState={before ? { disabled: true } : { selected: on }} accessibilityLabel={C.day(dayName(d.date), d.count)}
+                  style={({ pressed }) => [s.day, { minWidth: dayWidth }, before && s.before, pressed && s.pressed]}
                 >
                   <Text style={[s.letter, on ? s.light : s.muted]} importantForAccessibility="no" accessibilityElementsHidden>{weekdayLetter(d.date)}</Text>
                   <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
@@ -312,7 +347,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
   } else {
     body = (
       <>
-        {unplanned ? (
+        {tiles.length === 0 ? (
           <View style={s.listed}>
             {list.map((h, i) => <View key={h.id} style={[s.listedRow, i > 0 && s.listedLine]}><Text style={[typography.bodyMd, s.ink]}>{h.name}</Text></View>)}
           </View>
@@ -377,6 +412,9 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   day: { alignItems: 'center', gap: 6 },
   letter: { ...typography.caption },
   mark: { width: 18, height: 3 },
+  before: { opacity: 0.4 },
+  weeks: { flexDirection: 'row', marginLeft: (22 - layout.touchMin) / 2 }, // the chevron's glyph lines up with the words
+  weekButton: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   body: { paddingHorizontal: layout.gutter, paddingTop: 20, gap: 16 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
   listed: { borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.surface.sageLine, backgroundColor: sc.bgSurface, paddingHorizontal: 16 },
