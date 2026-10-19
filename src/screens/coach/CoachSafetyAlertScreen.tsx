@@ -25,6 +25,7 @@ import type {
   CoachTabParamList,
   SafetyAlertParams,
 } from '../../navigation/CoachNavigator';
+import { openInboxChat } from '../../navigation/coachInbox';
 import { commandCenterApi, isSafetyAlert, safetyQuote, type SafetyAlertType } from '../../services/commandCenterApi';
 import { Headline, PrimaryButton, Screen, ScreenTopBar } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -118,7 +119,7 @@ export default function CoachSafetyAlertScreen({ route, navigation }: Props): Re
   const quote = safetyQuote(alertType, alert.quote);
   const first = firstName(clientName);
   const sent = formatSentAt(sentAt);
-  const openChat = () => navigation.navigate('ClientMessages', { clientId, clientName });
+  const openChat = () => openInboxChat(navigation, clientId, clientName); // COACH-CHAT-BACK: in Messages with the six tabs
 
   return (
     <View ph-no-capture style={styles.fill} testID="coach-safety-alert-excluded">

@@ -18,7 +18,7 @@
 | `workoutDb.ts` | Routines, sessions, exercise library; seeds the exercise list. |
 | `habitsDb.ts` | Habit definitions + daily logs for offline-tolerant check-ins. |
 | `notificationsDb.ts` | Locally scheduled notification metadata so cancellation is possible after restart. |
-| `educationDb.ts` | Lessons content + completion state. Seeds the lessons library. |
+| `educationDb.ts` | Lessons tables and completion state, the flag-off `EducationScreen` cache; no seed (lessons come from `GET /lessons`). |
 | `communityDb.ts` | Local cache of leaderboard / wins; refreshed on focus. |
 
 > Removed in the nutrition P0 cleanup: `recipesDb.ts`, `mealPlanDb.ts`,

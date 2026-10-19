@@ -29,6 +29,7 @@ import {
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { track } from '../../lib/analytics';
+import { layout } from '../../theme/tokens';
 import { writePendingInviteCode } from '../../lib/pendingInviteCode';
 import { t } from './i18n/strings';
 import { pairWithCoach, type DayOneError } from './api';
@@ -240,7 +241,7 @@ const makeStyles = (colors: DayOneColors) =>
       color: colors.textOnPrimary,
     },
     skipBtn: {
-      minHeight: 44,
+      minHeight: layout.touchMin,
       alignSelf: 'center',
       paddingVertical: 12,
       paddingHorizontal: 20,

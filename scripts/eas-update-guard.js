@@ -51,8 +51,9 @@
  *      build (scripts/check-expected-env.js valueProblem, #333): every
  *      `kind: required` name and the profile's `releaseProfiles.<p>.require`
  *      list is set, not a placeholder, and well formed (https URL on a real
- *      host, anon Supabase key, Sentry DSN, Stripe publishable key of the
- *      profile's mode); no secret-shaped EXPO_PUBLIC_* name is set.
+ *      host, Supabase publishable key (a legacy anon JWT is refused), Sentry
+ *      DSN, Stripe publishable key of the profile's mode); no secret-shaped
+ *      EXPO_PUBLIC_* name is set.
  *   7. Sentry symbolication: when the bundle reports to Sentry (a DSN is set),
  *      a usable SENTRY_AUTH_TOKEN is available (local shell, else a plaintext
  *      or sensitive EAS variable in the target environment) and app.json names

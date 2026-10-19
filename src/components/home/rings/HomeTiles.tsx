@@ -2,10 +2,11 @@
  * HomeTiles — the rings Home tile grid (UI-1), two columns with 12 pt gaps. Each
  * tile opens the screen that already exists for it; the water chip adds one
  * glass (8 oz, or 250 ml in metric, the Food log's first amount) with a haptic
- * for saved or not saved. Fasting, the next session or logging run, Edit tiles
- * and the notice slot follow in the next UI-1 pull request.
+ * for saved or not saved. Every tile read refreshes on pull and on open (focus,
+ * foreground). Fasting, the next session or logging run and Edit tiles follow in
+ * the next UI-1 pull request.
  */
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polyline } from 'react-native-svg';
@@ -17,6 +18,7 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useSettings } from '../../../hooks/useSettings';
 import { useHabitLogs, useHabits, useWeightHistory } from '../../../hooks/useApi';
 import { useWearableSamples } from '../../../hooks/useWearableSamples';
+import { useRefreshOnOpen } from '../../../hooks/useRefreshOnOpen';
 import { useClientStore } from '../../../store/clientStore';
 import { getTodayString } from '../../../utils/date';
 import { PROVIDER_CONFIG } from '../../../api/wearablesConnectionsApi';
@@ -55,14 +57,18 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
     { bucket: 'HEALTH_FITNESS', from: range.from, to: range.to, granularity: 'day', preferredOnly: true },
     { enabled: !!currentUser },
   );
-  // Pull to refresh on Home refetches every tile read (useQuery's refetch functions are stable).
+  // Pull to refresh on Home, and each open of Home, refetches every tile read (useQuery's refetch functions are stable).
   const { refetch: refetchWeight } = weight;
   const { refetch: refetchHabits } = habits;
   const { refetch: refetchHabitLogs } = habitLogs;
   const { refetch: refetchFitness } = fitness;
+  const refetchAll = useCallback(() => {
+    void Promise.all([refetchWeight(), refetchHabits(), refetchHabitLogs(), refetchFitness()]);
+  }, [refetchWeight, refetchHabits, refetchHabitLogs, refetchFitness]);
   useEffect(() => {
-    if (refreshing) void Promise.all([refetchWeight(), refetchHabits(), refetchHabitLogs(), refetchFitness()]);
-  }, [refreshing, refetchWeight, refetchHabits, refetchHabitLogs, refetchFitness]);
+    if (refreshing) refetchAll();
+  }, [refreshing, refetchAll]);
+  useRefreshOnOpen(refetchAll);
 
   const metric = settings.unit === 'kg';
   const protein = proteinTile({ ready: day.ready, protein: day.protein, carbs: day.carbs, fat: day.fat, target: day.proteinTarget, simple: day.simple });
