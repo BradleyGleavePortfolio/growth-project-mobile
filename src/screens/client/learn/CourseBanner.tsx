@@ -1,0 +1,48 @@
+/**
+ * LEARN-M5 (flag learnCourses): the dark green course banner at the bottom of Train (#TRAIN-START-TOP, #LEARN-TRAIN-BANNER);
+ * its button opens the course home (#LEARN-TRAIN-DOOR). Nothing shows without a course (c11).
+ */
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import { useTheme } from '../../../theme/ThemeProvider';
+import { radius, typography, type SemanticTokens } from '../../../theme/tokens';
+import { PrimaryButton } from '../../../ui';
+import { featureFlags } from '../../../config/featureFlags';
+import { makeCourseStyles } from './CourseParts';
+import { courseCopy, courseNow, doneIn, today, useCourses } from './courseData';
+
+export default function CourseBanner() {
+  const { semanticColors: sc } = useTheme();
+  const s = useMemo(() => ({ ...makeCourseStyles(sc), ...makeStyles(sc) }), [sc]);
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const course = useCourses().data?.[0];
+  if (!featureFlags.learnCourses || !course) return null;
+  const copy = courseCopy(course.coach);
+  const { week, done, total } = courseNow(course, today());
+  const body = week ? `${copy.banner} ${copy.bannerWeek(week.n, doneIn(week), week.lessons.length)}` : copy.banner;
+  return (
+    <View style={s.card} testID="course-banner">
+      <Text style={s.title} accessibilityRole="header">{course.title}</Text>
+      <Text style={s.body}>{body}</Text>
+      <View style={s.track} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <View style={[s.fill, { flex: done }]} />
+        <View style={{ flex: total - done }} />
+      </View>
+      <View style={[s.foot, s.footGap]}>
+        <Text style={s.onDarkBody}>{copy.lessons(done, total)}</Text>
+        {week?.finishBy ? <Text style={s.onDarkBody}>{copy.openUntil(week.n, week.finishBy)}</Text> : null}
+      </View>
+      <PrimaryButton tone="cream" label="Open the course" onPress={() => navigation.navigate('Course', { id: course.id })} testID="course-banner-open" />
+    </View>
+  );
+}
+
+const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
+  card: { backgroundColor: sc.surface.masthead, borderRadius: radius.card, padding: 20, marginTop: 24, marginBottom: 8, gap: 10 },
+  title: { ...typography.h2, color: sc.textOnAccent },
+  body: { ...typography.bodySmall, color: sc.textOnMastheadMuted },
+  track: { flexDirection: 'row', height: 6, borderRadius: radius.chip, backgroundColor: sc.surface.forestBand, overflow: 'hidden', marginTop: 4 },
+  fill: { backgroundColor: sc.data.leaf },
+  footGap: { marginTop: 0, marginBottom: 6 },
+});
