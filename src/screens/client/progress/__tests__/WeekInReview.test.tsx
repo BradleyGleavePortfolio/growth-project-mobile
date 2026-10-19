@@ -143,6 +143,47 @@ it('a week with only watch sleep is not called empty', async () => {
   expect((await read()).empty).toBe(false);
 });
 
+// #WEEK-SLEEP-FAIL op 2: only the watch read may fail and still show the week.
+it.each([['a server error', { response: { status: 503 } }], ['no connection', { isAxiosError: true }]])(
+  'a failed watch read (%s) shows the rest of the week, no sleep row and no error', async (_, error) => {
+    mockSleep.mockRejectedValue(error);
+    mockChecks.mockResolvedValue({ data: [{ date: '2026-10-07', sleep_hours: null }] });
+    expect((await read()).sleepMinutes).toBeUndefined();
+    const v = await render(<WeekInReviewScreen navigation={navigation} />);
+    await waitFor(() => expect(v.getByLabelText('Protein, average: 132 g')).toBeTruthy());
+    ['Workouts: 1 of 2', 'Food logged: 2 of 7 days', 'Weight trend: Down 0.2 lb', 'Habits: 16 of 21']
+      .forEach((row) => expect(v.getByLabelText(row)).toBeTruthy());
+    expect(v.queryByText(/Sleep, average|No sleep logged|could not load|No logs for this week/)).toBeNull();
+  });
+
+it('a failed watch read counts check-in hours alone, as the Home Sleep dial does', async () => {
+  mockSleep.mockRejectedValue({ response: { status: 503 } });
+  const v = await render(<WeekInReviewScreen navigation={navigation} />);
+  await waitFor(() => expect(v.getByLabelText('Sleep, average: 7 h 15 m')).toBeTruthy());
+  expect(v.queryByTestId('week-error')).toBeNull();
+});
+
+it('with a failed watch read, "No logs for this week." shows only when every read that answered is empty', async () => {
+  mockSleep.mockRejectedValue({ response: { status: 503 } });
+  mockGet.mockResolvedValue({ data: { habits: [] } });
+  [mockWorkouts, mockFood, mockChecks].forEach((m) => m.mockResolvedValue({ data: [] }));
+  mockAssignments.mockResolvedValue([]);
+  mockWeight.mockResolvedValue({ data: { logs: [] } });
+  const v = await render(<WeekInReviewScreen navigation={navigation} />);
+  await waitFor(() => expect(v.getByText('No logs for this week.')).toBeTruthy());
+  expect(v.queryByText(/Sleep, average|No sleep logged/)).toBeNull();
+  mockChecks.mockResolvedValue({ data: [{ date: '2026-10-08', sleep_hours: 6 }] });
+  expect(await read()).toMatchObject({ empty: false, sleepMinutes: 360 });
+});
+
+it.each([['workouts', mockWorkouts], ['assignments', mockAssignments], ['food', mockFood], ['weight', mockWeight],
+  ['habits', mockGet], ['check-ins', mockChecks]])('any other failed read (%s) keeps "Your week could not load"', async (_, mock) => {
+  mock.mockRejectedValueOnce({ response: { status: 403 } });
+  const v = await render(<WeekInReviewScreen navigation={navigation} />);
+  await waitFor(() => expect(v.getByText('Your week could not load. Try again in a moment.')).toBeTruthy());
+  expect(v.queryByLabelText(/Workouts:|Sleep, average:/)).toBeNull();
+});
+
 it('the Report door mounts the real week with no weekly form, historical target or invented coach reply', async () => {
   const v = await render(<ReportScreen navigation={navigation} />);
   await waitFor(() => expect(v.getByLabelText('Protein, average: 132 g')).toBeTruthy());
