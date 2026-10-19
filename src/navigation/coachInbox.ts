@@ -8,8 +8,9 @@ import { featureFlags } from '../config/featureFlags';
  * Overview, Money or the daily brief. With the six tabs it opens in Messages
  * over the inbox (`initial: false`), so the bar shows Messages and Back returns
  * to the inbox, like any inbox; off, in Clients over the client list, as today.
- * A chat opened from a Clients screen (a client's file) stays there; the file's two Message {first} buttons
- * (pinned, and on its safety card) open it the inbox way (SAFETY-CARD, #CARD-MESSAGE-DEST op 1).
+ * With the six tabs, every chat button in a client's file (both Message {first}
+ * buttons, Summary's Messages, Logs' Send feedback) opens it the inbox way
+ * (SAFETY-CARD, #CARD-MESSAGE-DEST, #CARD-MESSAGE-ALL op 1).
  */
 export const chatTarget = (clientId: string, clientName: string) => ({
   tab: featureFlags.coachTabsV2 ? 'Messages' : 'ClientsStack',
