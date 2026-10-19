@@ -11,7 +11,8 @@
 import React from 'react';
 import { Alert, Linking, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { SUPPORT_EMAIL } from '../../../constants/support';
 
 const mockGetSignupPolicy = jest.fn();
 const mockSignupWithCode = jest.fn();
@@ -79,6 +80,12 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 
 const mockEmit = jest.fn();
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: () => mockEmit() } }));
+const mockCoachGrant = jest.fn(async () => ({ kind: 'ok' }));
+const mockMarkAsked = jest.fn();
+jest.mock('../../../api/coachAiConsentApi', () => ({
+  coachAiConsentApi: { grant: () => mockCoachGrant() },
+  markCoachAskedAtSignUp: (id: string) => mockMarkAsked(id),
+}));
 
 import CreateAccountScreen from '../CreateAccountScreen';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../../config/env';
@@ -87,7 +94,7 @@ import { secureStorage } from '../../../services/secureStorage';
 import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../../../lib/signupRoleNotice';
 import { COACH_SIGNUP_UNCONFIRMED_KEY, rememberUnconfirmedCoachSignup } from '../../../lib/coachSignupAttempt';
-import { darkTokens, lightTokens } from '../../../theme/tokens';
+import { colors, darkTokens, lightTokens } from '../../../theme/tokens';
 
 function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };
@@ -318,7 +325,7 @@ describe('CreateAccountScreen', () => {
 
   it('paste with no code on the clipboard shows guidance and leaves the field empty', async () => {
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
-    mockGetString.mockResolvedValue('see you at the clinic!');
+    mockGetString.mockResolvedValue('see you at the gym!');
     const { getByTestId, findByText } = await renderScreen();
     await fireEvent.press(getByTestId('paste-invite-code'));
     expect(await findByText(/No invite code was found on your clipboard/i)).toBeTruthy();
@@ -584,6 +591,31 @@ describe('CreateAccountScreen', () => {
       await fireEvent.press(utils.getByTestId('apple-button'));
       await waitFor(() => expect(mockEmit).toHaveBeenCalled());
       expect(utils.nav.replace).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])('COACH-AI-CONSENT: the optional, unticked Roman box grants only when ticked (%s), after the account exists', async (tick) => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'c1', role: 'coach' } });
+      const utils = await renderScreen(undefined, 'coach');
+      const box = utils.getByTestId('create-account-roman');
+      expect(box.props.accessibilityState).toMatchObject({ checked: false });
+      expect(StyleSheet.flatten(box.props.style).backgroundColor).toBe(colors.cream);
+      // In the form (its last item), never in the pinned footer that holds Create account.
+      expect(within(utils.getByTestId('create-account-register-scroll')).getByTestId('create-account-roman')).toBeTruthy();
+      expect(within(utils.getByTestId('create-account-register-footer')).queryByTestId('create-account-roman')).toBeNull();
+      expect(utils.getByText('Turn on Roman')).toBeTruthy();
+      expect(utils.getByText(/^Roman runs on Anthropic, an outside AI company\./)).toBeTruthy();
+      if (tick) await fireEvent.press(box);
+      expect(mockCoachGrant).not.toHaveBeenCalled();
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() => expect(mockEmit).toHaveBeenCalled());
+      expect(mockCoachGrant).toHaveBeenCalledTimes(tick ? 1 : 0);
+      expect(mockMarkAsked).toHaveBeenCalledWith('c1');
+    });
+
+    it('COACH-AI-CONSENT: the client form has no Roman box', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      expect((await renderScreen(undefined, 'client')).queryByTestId('create-account-roman')).toBeNull();
     });
 
     it('F4: Apple coach choice on an EXISTING provider account: signed in, and told the choice did not apply', async () => {
@@ -1289,7 +1321,7 @@ describe('CreateAccountScreen', () => {
 
     it('guard: a different address in the response is ignored', async () => {
       mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
-      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true, email: 'someone@else.com' } });
+      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true, email: 'someone@example.test' } });
       mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
       const utils = await renderScreen();
       await fillAndSubmit(utils);
@@ -1318,7 +1350,7 @@ describe('CreateAccountScreen Request access email', () => {
     const utils = await renderScreen();
     await fireEvent.press(await utils.findByTestId('request-access-link'));
     expect(openURL).toHaveBeenCalledWith(
-      'mailto:Bradleyapple1031@gmail.com?subject=Request%20access%20to%20The%20Growth%20Project',
+      `mailto:${SUPPORT_EMAIL}?subject=Request%20access%20to%20TGP%20Fitness`,
     );
     expect(utils.queryByTestId('request-access-fallback')).toBeNull();
   });
@@ -1334,9 +1366,9 @@ describe('CreateAccountScreen Request access email', () => {
     );
     const address = utils.getByTestId('request-access-fallback-address');
     expect(address.props.selectable).toBe(true);
-    expect(address.props.children).toBe('Bradleyapple1031@gmail.com');
+    expect(address.props.children).toBe('support@thegrowthproject.site');
     await fireEvent.press(utils.getByTestId('request-access-fallback-copy'));
-    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('Bradleyapple1031@gmail.com'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('support@thegrowthproject.site'));
     await waitFor(() =>
       expect(utils.getByTestId('request-access-fallback-status').props.children).toMatch(/Address copied/),
     );

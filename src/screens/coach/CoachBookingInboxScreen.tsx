@@ -36,7 +36,7 @@ import {
 } from '../../hooks/useScheduling';
 import { useEndedSessionsByStatus, useUpcomingSessionsByStatus } from '../../hooks/useCalendar';
 import type { CoachingSession, SchedulingSessionStatus } from '../../api/schedulingApi';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
 import { formatSessionSpan } from '../../calendar/calendarTime';
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', marginTop: spacing.md },
   confirmBtn: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: radius.button,
     paddingVertical: spacing.sm,
     alignItems: 'center',
     marginRight: spacing.xs,
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
   declineBtn: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: radius.button,
     paddingVertical: spacing.sm,
     alignItems: 'center',
     marginLeft: spacing.xs,
@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     marginTop: spacing.md,
-    borderRadius: 10,
+    borderRadius: radius.button,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',

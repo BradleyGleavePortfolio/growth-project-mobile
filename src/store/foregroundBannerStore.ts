@@ -14,6 +14,7 @@ export interface BannerPayload {
   actionScreen?: string;
   /** Screen params for routing. */
   actionParams?: Record<string, string>;
+  deepLink?: string;
 }
 
 interface ForegroundBannerState {

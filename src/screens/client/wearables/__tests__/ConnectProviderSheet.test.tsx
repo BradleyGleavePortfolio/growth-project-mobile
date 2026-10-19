@@ -81,10 +81,12 @@ jest.mock('../../../../services/health/onDeviceSync', () => {
 });
 
 import ConnectProviderSheet, { onDeviceDisclosure } from '../ConnectProviderSheet';
+import { wearablesConnectionsApi } from '../../../../api/wearablesConnectionsApi';
+import { HapticService } from '../../../../ui/haptics/haptics.service';
 import { subscribeTutorialSignals } from '../../../../tutorial/tutorialEvents';
 import type { TutorialSignal } from '../../../../tutorial/types';
 
-// Clinic tutorial: the wearable step completes on the sheet's real grant.
+// Client tutorial: the wearable step completes on the sheet's real grant.
 const tutorialSignals: TutorialSignal[] = [];
 let unsubscribeTutorial: () => void = () => undefined;
 beforeEach(() => {
@@ -178,6 +180,86 @@ describe('ConnectProviderSheet — cloud OAuth provider', () => {
 
 });
 
+// A6 (AUTHB-05): the callback sends back a single-use ticket; the signed-in
+// app finishes the link, and only that makes the tracker connected.
+describe('ConnectProviderSheet — finishing a returned cloud link (A6)', () => {
+  let complete: jest.SpyInstance;
+  let success: jest.SpyInstance;
+  const returnedWith = (ticket: string) => ({
+    type: 'success',
+    url: `tgp://wearables/connected?status=ok&provider=OURA&ticket=${ticket}`,
+  });
+  beforeEach(() => {
+    complete = jest.spyOn(wearablesConnectionsApi, 'completeOauth');
+    success = jest.spyOn(HapticService, 'success').mockResolvedValue(undefined);
+    mockStartOauthMutateAsync.mockResolvedValue({
+      authorizationUrl: 'https://provider.example/oauth',
+      state: 'csrf-1',
+    });
+  });
+  afterEach(() => {
+    complete.mockRestore();
+    success.mockRestore();
+  });
+
+  it('finishes the link with the returned ticket, then closes with a success haptic', async () => {
+    complete.mockResolvedValue('OURA');
+    mockOpenAuthSessionAsync.mockResolvedValue(returnedWith('tk-ok'));
+    const onClose = jest.fn();
+    const onConnected = jest.fn();
+    await render(
+      <ConnectProviderSheet provider="OURA" visible onClose={onClose} onConnected={onConnected} />,
+    );
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(complete).toHaveBeenCalledWith('tk-ok');
+    expect(success).toHaveBeenCalledTimes(1);
+    expect(onConnected).toHaveBeenCalledTimes(1);
+    expect(mockInvalidate).toHaveBeenCalled();
+    expect(tutorialSignals).toContain('wearable_connected');
+  });
+
+  it('a refused or expired ticket keeps the sheet open with the failed-return copy; Continue starts again', async () => {
+    complete.mockRejectedValue(httpError(400, { message: 'Invalid or expired wearable link.' }));
+    mockOpenAuthSessionAsync.mockResolvedValue(returnedWith('tk-refused'));
+    const onClose = jest.fn();
+    await render(<ConnectProviderSheet provider="OURA" visible onClose={onClose} />);
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/The sign-in with Oura did not finish\. Tap Continue to try again\./),
+      ).toBeTruthy(),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    expect(success).not.toHaveBeenCalled();
+    expect(tutorialSignals).not.toContain('wearable_connected');
+
+    mockOpenAuthSessionAsync.mockResolvedValue({ type: 'cancel' });
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+    await waitFor(() => expect(mockStartOauthMutateAsync).toHaveBeenCalledTimes(2));
+  });
+
+  it('finishes a ticket the app link delivered, once, even when the sign-in window returns it too', async () => {
+    complete.mockResolvedValue('OURA');
+    const onClose = jest.fn();
+    await render(
+      <ConnectProviderSheet provider="OURA" visible onClose={onClose} returnTicket="tk-link" />,
+    );
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(complete).toHaveBeenCalledWith('tk-link');
+    expect(success).toHaveBeenCalledTimes(1);
+
+    mockOpenAuthSessionAsync.mockResolvedValue(returnedWith('tk-link'));
+    const reads = mockInvalidate.mock.calls.length;
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+    await waitFor(() => expect(mockInvalidate.mock.calls.length).toBeGreaterThan(reads));
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 /**
  * Sol B-317-8: a failed cloud connect reads the HTTP status and machine code.
  * Before the fix every failure (401, 500, ...) said "check your internet".
@@ -202,7 +284,7 @@ describe('ConnectProviderSheet — cloud connect failures (Sol B-317-8)', () => 
     await waitFor(() =>
       expect(
         screen.getByText(
-          "The Growth Project couldn't be reached, so Oura isn't connected yet. Check your internet connection, then tap Continue.",
+          "TGP Fitness couldn't be reached, so Oura isn't connected yet. Check your internet connection, then tap Continue.",
         ),
       ).toBeTruthy(),
     );
@@ -243,7 +325,7 @@ describe('ConnectProviderSheet — cloud connect failures (Sol B-317-8)', () => 
     mockStartOauthMutateAsync.mockRejectedValue(httpError(500, {}, 'abcd1234-ffff'));
     await pressOura();
     await waitFor(() => expect(screen.getByText(/Reference abcd1234/)).toBeTruthy());
-    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy();
     expect(screen.queryByText(/internet/)).toBeNull();
     expect(mockReport).toHaveBeenCalledWith(
       'wearables.cloud_connect',
@@ -298,7 +380,7 @@ describe('ConnectProviderSheet — S14 history import', () => {
     await waitFor(() =>
       expect(screen.getByText(/history didn't finish coming in because of an unexpected problem/)).toBeTruthy(),
     );
-    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy();
     expect(mockInvalidate).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -486,7 +568,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
     mockConnectOnDevice.mockResolvedValue('denied');
     await render(<ConnectProviderSheet provider="HEALTH_CONNECT" visible onClose={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
-    await waitFor(() => expect(screen.getByText(/choose App permissions, then The Growth Project/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/choose App permissions, then TGP Fitness/)).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('Open Health Connect'));
     expect(mockOpenHcPermissions).toHaveBeenCalledTimes(1);
     await waitFor(() =>
@@ -585,7 +667,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
   // FW-BODY U10 (failing on main): a client with no coach was told a coach personalizes their training.
   it('a client with no coach: no coach personalizes anything, and a coach they join can see the data', async () => {
     const COACHLESS =
-      'When you continue, Apple Health asks for permission on this phone. The Growth Project then brings in your last 30 days of Apple Health data, and new data each time you open Health, so your activity, heart rate and sleep show there. If you join a coach, your coach can see this data too. Nothing is read or shared until you allow it.';
+      'When you continue, Apple Health asks for permission on this phone. TGP Fitness then brings in your last 30 days of Apple Health data, and new data each time you open Health, so your activity, heart rate and sleep show there. If you join a coach, your coach can see this data too. Nothing is read or shared until you allow it.';
     expect(onDeviceDisclosure('Apple Health', 'APPLE_HEALTHKIT', true)).toBe(COACHLESS);
     const samsung = onDeviceDisclosure('Samsung Health', 'SAMSUNG_HEALTH', true);
     expect(samsung).toContain('Health Connect data, from Samsung Health and every other app that shares with Health Connect,');

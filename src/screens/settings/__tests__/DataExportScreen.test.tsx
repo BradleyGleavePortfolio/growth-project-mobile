@@ -252,7 +252,7 @@ describe("DataExportScreen", () => {
 
     await findByText("Could not start your export");
     await findByText(
-      /Tap Request my data again\. If it keeps happening, email Bradleyapple1031@gmail\.com and quote reference req-42\./,
+      /Tap Request my data again\. If it keeps happening, email support@thegrowthproject\.site and quote reference req-42\./,
     );
     await findByText("Reference: req-42");
     expect(mockCaptureError).toHaveBeenCalledWith(
@@ -455,7 +455,7 @@ describe("DataExportScreen", () => {
     );
 
     await findByText("Your download did not open");
-    await findByText(/email Bradleyapple1031@gmail\.com and quote reference/);
+    await findByText(/email support@thegrowthproject\.site and quote reference/);
     expect(mockCaptureError.mock.calls[0][1]).toMatchObject({
       step: "open_browser",
       known_launch_failure: false,
@@ -575,7 +575,7 @@ describe("DataExportScreen", () => {
 
     await findByText("Your last export is not available");
     await findByText(/It did not finish, or its file could not be kept/);
-    await findByText(/email Bradleyapple1031@gmail\.com/);
+    await findByText(/email support@thegrowthproject\.site/);
   });
 
   // ── Expired state ──────────────────────────────────────────────────────────
@@ -663,7 +663,7 @@ describe("DataExportScreen fix round 1", () => {
   it("the FAILED state gives the single support address", async () => {
     mockGetStatus.mockResolvedValue({ ...pendingRecord(), status: "FAILED" });
     const failed = await render(<DataExportScreen />);
-    await failed.findByText(/email Bradleyapple1031@gmail\.com/);
+    await failed.findByText(/email support@thegrowthproject\.site/);
     const text = JSON.stringify(failed.toJSON());
     for (const retired of RETIRED_ADDRESSES)
       expect(text).not.toContain(retired);
@@ -677,7 +677,7 @@ describe("DataExportScreen fix round 1", () => {
       await unknown.findByRole("button", { name: /Request my data/i }),
     );
     await unknown.findByText(
-      /email Bradleyapple1031@gmail\.com and quote reference/,
+      /email support@thegrowthproject\.site and quote reference/,
     );
     const text = JSON.stringify(unknown.toJSON());
     for (const retired of RETIRED_ADDRESSES)

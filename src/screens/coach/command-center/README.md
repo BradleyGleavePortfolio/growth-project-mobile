@@ -56,6 +56,16 @@ All list screens support:
   to gutter; date and greeting stay on one line (short date when the long one does not fit); serif figures are lining
   (`lining-nums`), so a 1 never reads as I. Tests: `coachHomeCards134.test.tsx` (360x800 and 390x844).
 
+### Roman safety alerts (B-R1F, 57w, #ROMAN-CRISIS-ALERT)
+
+- `roman_urgent_reply`, `roman_eating_disorder_reply` and `roman_crisis_reply` share one Actions card (the server's
+  line in full at any text size, then the client's message on one muted line) and open `CoachSafetyAlertScreen`. A crisis alert never shows the
+  client's words, on the card or the screen (`safetyQuote`); its screen line is "Roman sent {first name} a crisis safety
+  reply. Please check in with them today." Any other type stays an ordinary row. Tests: `coachSafetyAlert.test.tsx`.
+- SAFETY-CHAT-ROUTE (agent 159): the screen's Message {first name} opens that client's chat through `openInboxChat`; with the
+  six tabs in Messages over the inbox, so Back lands on the inbox, then on the alert (off: over the alert, as before). Test:
+  `src/__tests__/coachChatRoute159.test.tsx`.
+
 ---
 
 ## Shared Components

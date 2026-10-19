@@ -19,7 +19,7 @@ const NAME = 'Janet Canaryfield';
 const PHONE = '+1 415 555 0142';
 const EMAIL = 'janet.canaryfield@example.com';
 const HEALTH = 'insulin dependent diabetic, HIV positive';
-const PATH_ID = 'patient-janet-canaryfield-0042';
+const PATH_ID = 'client-janet-canaryfield-0042';
 const ACCOUNT = 'acct-canary-7731';
 const QUERY = 'session=canarytoken991';
 const CANARY_TEXT = `${NAME} ${PHONE} ${EMAIL} ${HEALTH} https://app.trygrowthproject.com/u/${PATH_ID}/privacy?${QUERY}#frag-canary`;

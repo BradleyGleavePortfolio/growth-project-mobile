@@ -361,6 +361,24 @@ describe('check-expected-env secret-shaped names and release env (Opus C-319-1 /
       expect(r.stderr + r.stdout).not.toContain('hunter2-value');
     });
 
+    it('a set Supabase key must be a publishable key: a legacy anon JWT fails with the legacy-key reason, never printed', () => {
+      const root = repo(files, vars);
+      // Synthetic values assembled at runtime (no key-shaped literal in the source).
+      const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+      const legacy = [b64({ alg: 'HS256', typ: 'JWT' }), b64({ iss: 'supabase', role: 'anon' }), 'c2lnbmF0dXJl'.repeat(4)].join('.');
+      const publishable = ['sb', 'publishable', 'AbCdEfGhIjKlMnOpQrStUv', 'a1B2c3D4'].join('_');
+      const base = { EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: live, EXPO_PUBLIC_API_URL: 'https://a.invalid', PATH: process.env.PATH };
+      expect(guard.checkReleaseEnv(root, { ...base, EXPO_PUBLIC_SUPABASE_ANON_KEY: publishable }).errors).toEqual([]);
+      const env = { ...base, EXPO_PUBLIC_SUPABASE_ANON_KEY: legacy };
+      expect(guard.checkReleaseEnv(root, env).errors).toEqual([
+        'EXPO_PUBLIC_SUPABASE_ANON_KEY is a legacy Supabase anon key (a JWT), and those keys are switched off for this project; copy the publishable key (sb_publishable_...) from Supabase → Project Settings → API Keys (value not printed). Fix: set it in the EAS environment (eas env:update --variable-name EXPO_PUBLIC_SUPABASE_ANON_KEY --variable-environment <environment> --value <value>), then rebuild.',
+      ]);
+      const r = spawnSync(process.execPath, [CLI, '--root', root, '--release-env'], { encoding: 'utf8', env });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('1 problem(s); each line above says how to fix it.');
+      expect(r.stderr + r.stdout).not.toContain(legacy);
+    });
+
     it('without --release-env the build environment is not consulted', () => {
       const root = repo(files, vars);
       const r = spawnSync(process.execPath, [CLI, '--root', root], {

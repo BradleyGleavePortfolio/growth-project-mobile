@@ -11,7 +11,7 @@ import type { CoachBriefActionItem } from '../../../../api/coachBriefApi';
 import { featureFlags } from '../../../../config/featureFlags';
 
 jest.mock('../../../../config/featureFlags', () => ({
-  featureFlags: { coachBrief: true, coachBriefGate: true, teamMode: false, romanChat: false },
+  featureFlags: { coachBrief: true, coachBriefGate: true, teamMode: false, romanChat: false, coachTabsV2: false },
 }));
 
 import {
@@ -292,5 +292,17 @@ describe('actionTarget', () => {
     const files = fs.readdirSync(dir).filter((f) => /\.tsx?$/.test(f));
     expect(files).toContain('briefActions.ts');
     for (const f of files) expect(fs.readFileSync(path.join(dir, f), 'utf8')).not.toMatch(/from '\.\.\/CoachBriefScreen'/);
+  });
+
+  it('with the six coach tabs a chat opens in Messages and Money opens the Money tab (COACH-CHAT-BACK, COACHTABS)', () => {
+    const on = jest.replaceProperty(featureFlags, 'coachTabsV2', true);
+    expect(actionTarget(item('message_unread', 0))).toEqual({
+      tab: 'Messages',
+      params: { screen: 'ClientMessages', params: { clientId: 'message_unread-0', clientName: 'Sarah Lin' }, initial: false },
+    });
+    expect(selectBriefActions([head('dunning_queue')])).toEqual([
+      { ...MONEY, target: { tab: 'MoneyStack', params: { screen: 'CoachMoney', pop: true } } },
+    ]);
+    on.restore();
   });
 });

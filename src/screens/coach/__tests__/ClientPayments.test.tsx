@@ -14,12 +14,24 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
+const mockMediumImpact = jest.fn();
+const mockWarning = jest.fn();
+const mockSuccess = jest.fn();
+const mockError = jest.fn();
 let mockKey = 0;
 jest.mock("../../../services/api", () => ({
   __esModule: true,
   default: { get: (...a: unknown[]) => mockGet(...a), post: (...a: unknown[]) => mockPost(...a) },
 }));
 jest.mock("../../../services/sentry", () => ({ captureError: jest.fn() }));
+jest.mock("../../../ui/haptics/haptics.service", () => ({
+  HapticService: {
+    mediumImpact: (...a: unknown[]) => mockMediumImpact(...a),
+    warning: (...a: unknown[]) => mockWarning(...a),
+    success: (...a: unknown[]) => mockSuccess(...a),
+    error: (...a: unknown[]) => mockError(...a),
+  },
+}));
 jest.mock("../../../utils/idempotency", () => ({ generateIdempotencyKey: () => `key-${++mockKey}` }));
 jest.mock("@react-navigation/native", () => ({
   ...jest.requireActual("@react-navigation/native"),
@@ -73,6 +85,10 @@ async function confirmAlert(title: string): Promise<string> {
 beforeEach(() => {
   mockGet.mockReset();
   mockPost.mockReset();
+  mockMediumImpact.mockReset();
+  mockWarning.mockReset();
+  mockSuccess.mockReset();
+  mockError.mockReset();
   jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -206,6 +222,80 @@ describe("ClientPaymentsScreen (COACH-PAY-M-130)", () => {
     expect(screen.getByTestId("plan-state-pur-1").props.children).toMatch(/^Canceled\. Jane keeps access until .+, and nothing more is charged\.$/);
   });
 
+  it.each([
+    ["refund", "success"], ["refund", "failure"],
+    ["pause", "success"], ["pause", "failure"],
+    ["resume", "success"], ["resume", "failure"],
+    ["cancel", "success"], ["cancel", "failure"],
+  ])("%s fires one confirm haptic and one %s outcome haptic", async (action, outcome) => {
+    const currentPlan = plan({
+      billing: action === "resume" ? "paused" : "running",
+      actions: { ...ALL_OFF, [action]: true },
+    });
+    await open(currentPlan);
+    if (action === "refund") {
+      await fireEvent.press(await screen.findByTestId("payment-refund-ch-1"));
+    } else {
+      const testId = action === "pause" ? "plan-action-pause-billing-pur-1"
+        : action === "resume" ? "plan-action-resume-billing-pur-1"
+          : "plan-action-cancel-plan-pur-1";
+      await fireEvent.press(await screen.findByTestId(testId));
+    }
+
+    if (outcome === "failure" && action === "refund") {
+      mockPost.mockResolvedValue({ data: {
+        refund: { id: "re_1", charge_id: "ch-1", amount_cents: 5000, currency: "usd", status: "failed" },
+        plan: currentPlan,
+      } });
+    } else if (outcome === "failure") {
+      mockPost.mockRejectedValue(new Error("Network Error"));
+    } else if (action === "refund") {
+      mockPost.mockResolvedValue({ data: {
+        refund: { id: "re_1", charge_id: "ch-1", amount_cents: 5000, currency: "usd", status: "succeeded" },
+        plan: currentPlan,
+      } });
+    } else {
+      mockPost.mockResolvedValue({ data: { plan: currentPlan } });
+    }
+
+    if (action === "refund") {
+      await fireEvent.press(screen.getByTestId("refund-confirm"));
+    } else {
+      const title = action === "pause" ? "Pause billing?" : action === "resume" ? "Resume billing?" : "Cancel this plan?";
+      await confirmAlert(title);
+    }
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(outcome === "success" ? mockSuccess : mockError).toHaveBeenCalledTimes(1));
+    expect(mockWarning).toHaveBeenCalledTimes(action === "refund" || action === "cancel" ? 1 : 0);
+    expect(mockMediumImpact).toHaveBeenCalledTimes(action === "pause" || action === "resume" ? 1 : 0);
+    expect(mockSuccess).toHaveBeenCalledTimes(outcome === "success" ? 1 : 0);
+    expect(mockError).toHaveBeenCalledTimes(outcome === "failure" ? 1 : 0);
+  });
+
+  it.each(["refund", "pause", "resume", "cancel"])("%s fires no haptic when its confirmation is cancelled", async (action) => {
+    const currentPlan = plan({
+      billing: action === "resume" ? "paused" : "running",
+      actions: { ...ALL_OFF, [action]: true },
+    });
+    await open(currentPlan);
+    if (action === "refund") {
+      await fireEvent.press(await screen.findByTestId("payment-refund-ch-1"));
+      await fireEvent.press(screen.getByTestId("refund-keep"));
+    } else {
+      const testId = action === "pause" ? "plan-action-pause-billing-pur-1"
+        : action === "resume" ? "plan-action-resume-billing-pur-1"
+          : "plan-action-cancel-plan-pur-1";
+      await fireEvent.press(await screen.findByTestId(testId));
+      const buttons = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2] as AlertButton[];
+      await act(async () => buttons[0].onPress?.());
+    }
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(mockMediumImpact).not.toHaveBeenCalled();
+    expect(mockWarning).not.toHaveBeenCalled();
+    expect(mockSuccess).not.toHaveBeenCalled();
+    expect(mockError).not.toHaveBeenCalled();
+  });
+
   it("a failed latest payment says why there is no pause, and cancel ends the plan now", async () => {
     await open(plan({ status: "past_due", actions: { ...ALL_OFF, refund: true, cancel: true } }));
     expect(await screen.findByText("The latest payment did not go through, so billing cannot be paused. Cancel plan ends the plan now.")).toBeTruthy();
@@ -235,11 +325,11 @@ describe("entry and parity (COACH-PAY-M-130)", () => {
   const colors = {} as ThemeColors;
   const noop = () => undefined;
   const tab = (onOpenPayments?: () => void) => (
-    <SummaryTab profile={null} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }} foodShared={false} clientId="client-1"
+    <SummaryTab profile={null} totals={{ calories: 0, protein: 0, carbs: 0, fat: 0 }} clientId="client-1"
       clientName="Jane" nudgeSuccess={false} onOpenMessages={noop} onOpenNudge={noop} onOpenMacrosReview={noop}
       onOpenWorkoutBuilder={noop} onOpenPayments={onOpenPayments} colors={colors} styles={makeStyles(colors)} />
   );
-  const ACTIONS = ["Open messages", "Send nudge notification", "Review client macros", "Open workout builder"];
+  const ACTIONS = ["Open messages", "Send nudge notification", "Review client macros", "Open client workouts"];
 
   it("Summary keeps its four actions and adds Payments only when passed, never for a sub-coach", async () => {
     await render(tab());
@@ -267,7 +357,7 @@ describe("entry and parity (COACH-PAY-M-130)", () => {
   it("the client page passes Payments only while coach_payment_actions is on; the route is registered once", () => {
     const src = (...p: string[]) => fs.readFileSync(path.resolve(__dirname, "..", "..", "..", ...p), "utf8");
     expect(src("screens", "coach", "ClientDetailScreen.tsx")).toMatch(
-      /onOpenPayments=\{\s*serverFlags\.flags\.coach_payment_actions\s*\?\s*\(\) => navigation\.navigate\('ClientPayments', \{ clientId, clientName: route\.params\.clientName \}\)\s*:\s*undefined/,
+      /onOpenPayments=\{\s*serverFlags\.flags\.coach_payment_actions\s*\?\s*\(\) => navigation\.navigate\('ClientPayments', \{ clientId, clientName \}\)\s*:\s*undefined/,
     );
     const nav = src("navigation", "CoachNavigator.tsx");
     expect(nav.match(/name="ClientPayments"/g)).toHaveLength(1);

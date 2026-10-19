@@ -100,11 +100,10 @@ describe('AiRefusalNotice — client consent_required', () => {
     expect(api.grantRoman).not.toHaveBeenCalled();
     await fireEvent.press(r.getByTestId('n-consent-sheet-allow'));
     await waitFor(() => expect(onRetry).toHaveBeenCalledTimes(1));
-    expect(api.grantRoman).toHaveBeenCalledWith({
-      version: V4,
-      copy_sha256: AI_CONSENT_COPY_SHA256,
-      platform: expect.stringMatching(/^(ios|android|web)$/),
-    });
+    expect(api.grantRoman).toHaveBeenCalledWith(
+      { version: V4, copy_sha256: AI_CONSENT_COPY_SHA256, platform: expect.stringMatching(/^(ios|android|web)$/) },
+      { crisis: false },
+    );
   });
 
   it('Not now records nothing and does not retry', async () => {
@@ -352,7 +351,7 @@ describe('openSupportFrom', () => {
     const tabs = nav(['ClientsStack', 'SettingsStack']);
     const clients = nav(['ClientDetail'], tabs);
     expect(openSupportFrom(clients)).toBe(true);
-    expect(tabs.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SupportInbox' });
+    expect(tabs.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SupportInbox', initial: false });
   });
 
   it('no navigator holds it: false', async () => {

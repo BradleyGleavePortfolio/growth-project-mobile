@@ -1,6 +1,6 @@
 /**
  * BRIEF-AGG: the one place the daily brief's action rows come from, and where
- * every brief item opens (actionTarget). No React, no screen imports.
+ * every brief item opens (actionTarget). No components, no screen imports.
  *
  * Client kinds count distinct clients: one named client gets a row for that
  * client ("Reply to Sarah"); two or more, or one with no usable first name, get
@@ -15,13 +15,12 @@
 import type { CoachBriefActionItem } from '../../../api/coachBriefApi';
 import { featureFlags } from '../../../config/featureFlags';
 import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
+import { chatTarget } from '../../../navigation/coachInbox';
 
 export type BriefListKind = 'messages' | 'weight' | 'checkins';
 export type BriefKind = BriefListKind | 'money' | 'team';
 
 export type BriefTarget = { tab: keyof CoachTabParamList; params?: object };
-/** actionTarget builds nested params per tab; navigate's tuple overloads cannot take a union. */
-export type LooseNavigate = (name: keyof CoachTabParamList, params?: object) => void;
 
 export type BriefAction =
   | { kind: BriefKind; label: string; opens: 'screen'; target: BriefTarget }
@@ -36,12 +35,7 @@ export function actionTarget(item: CoachBriefActionItem, teamMode: boolean = fea
   const clientName = item.client_name ?? 'Client';
   switch (item.type) {
     case 'message_unread':
-      return clientId
-        ? {
-            tab: 'ClientsStack',
-            params: { screen: 'ClientMessages', params: { clientId, clientName }, initial: false },
-          }
-        : null;
+      return clientId ? chatTarget(clientId, clientName) : null;
     // An older server may still send a workout item. Nothing in the app
     // approves a workout, so it opens the client's workout history
     // (S-BRIEF-124 B-398-1) and never says approve.
@@ -66,7 +60,10 @@ export function actionTarget(item: CoachBriefActionItem, teamMode: boolean = fea
         : null;
     case 'dunning_queue':
     case 'team_revenue_review':
-      return { tab: 'SettingsStack', params: { screen: 'CoachMoney', initial: false } };
+      // COACHTABS: Money is its own tab when coachTabsV2 is on.
+      return featureFlags.coachTabsV2
+        ? { tab: 'MoneyStack', params: { screen: 'CoachMoney', pop: true } }
+        : { tab: 'SettingsStack', params: { screen: 'CoachMoney', initial: false } };
     case 'sub_coach_operations':
     case 'team_performance':
       return teamMode ? { tab: 'TeamStack' } : null;

@@ -1,5 +1,5 @@
 /**
- * "Log this meal" on a planned meal (PlanScreen, ClientDailyMealPlanScreen).
+ * "Log this meal" on a planned meal (ClientDailyMealPlanScreen).
  *
  * One tap adds the meal to today's food log when the plan gives calories,
  * protein, carbs and fat and its slot names a log meal. Otherwise a sheet asks
@@ -66,30 +66,6 @@ export function plannedMealFromSlot(slot: DailyMealPlanSlot): PlannedMeal {
   return { name: t.name, calories: t.calories_kcal, protein: t.protein_g, carbs: t.carbs_g, fat: t.fats_g };
 }
 
-interface PlanFood {
-  name: string;
-  serving?: string | null;
-  calories?: number | null;
-  protein_g?: number | null;
-  carbs_g?: number | null;
-  fat_g?: number | null;
-}
-
-/** An AI plan meal as one entry: a value is summed only when every food has it. */
-export function plannedMealFromFoods(foods: PlanFood[]): PlannedMeal {
-  const sum = (pick: (f: PlanFood) => number | null | undefined): number | null =>
-    foods.length > 0 && foods.every((f) => isAmount(pick(f)))
-      ? foods.reduce((n, f) => n + Number(pick(f)), 0)
-      : null;
-  return {
-    name: foods.filter((f) => f.name).map((f) => (f.serving ? `${f.name} (${f.serving})` : f.name)).join(', ').slice(0, 200),
-    calories: sum((f) => f.calories),
-    protein: sum((f) => f.protein_g),
-    carbs: sum((f) => f.carbs_g),
-    fat: sum((f) => f.fat_g),
-  };
-}
-
 const mealLabel = (t: MealType) => (MEAL_SECTIONS.find((s) => s.type === t)?.label ?? 'Meal').toLowerCase();
 const shown = (v: number | null | undefined) => (isAmount(v) ? String(Math.round(v * 10) / 10) : '');
 
@@ -112,7 +88,8 @@ function refreshFoodLog() {
 
 type Phase = 'idle' | 'saving' | 'logged' | 'queued' | 'undoing';
 
-export default function LogPlannedMealButton({ meal, slot }: { meal: PlannedMeal; slot?: string | null }) {
+/** `planSlotId` (FOODLINK): the coach's plan meal, so the Food tab's checklist ticks that same meal. */
+export default function LogPlannedMealButton({ meal, slot, planSlotId }: { meal: PlannedMeal; slot?: string | null; planSlotId?: string }) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const name = meal.name.trim();
@@ -134,7 +111,7 @@ export default function LogPlannedMealButton({ meal, slot }: { meal: PlannedMeal
   const log = async (v: Values, t: MealType) => {
     setPhase('saving');
     setNote(null);
-    const args = { foodName: name, ...v, quantity: '1', unit: 'serving', date: getTodayString(), mealType: t };
+    const args = { foodName: name, ...v, quantity: '1', unit: 'serving', date: getTodayString(), mealType: t, link: { planSlotId } };
     try {
       const net = await NetInfo.fetch();
       if (!isEffectivelyOnline({ isOnline: !!net.isConnected, isInternetReachable: net.isInternetReachable })) {

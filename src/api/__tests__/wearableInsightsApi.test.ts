@@ -168,6 +168,24 @@ describe('approveDraft', () => {
     expect(res).toEqual(ok);
   });
 
+  it('posts the empty-body dismiss and parses its ok answer (decision time in the timestamp slot)', async () => {
+    const ok = {
+      status: 'ok' as const,
+      draft_id: '22222222-2222-2222-2222-222222222222',
+      materialised_at: '2026-05-20T10:00:00.000Z',
+    };
+    api.post.mockResolvedValueOnce({ data: ok });
+    await expect(
+      approveDraft({ clientId: 'client-9', bucket: 'SLEEP_RECOVERY', draftBody: '', action: 'dismiss' }),
+    ).resolves.toEqual(ok);
+    expect(api.post).toHaveBeenCalledWith('/v1/wearables/insights/approve', {
+      client_id: 'client-9',
+      bucket: 'SLEEP_RECOVERY',
+      draft_body: '',
+      action: 'dismiss',
+    });
+  });
+
   it('propagates a 404 to the caller — the HK-6a route is live, so a 404 is a real regression, never coerced to a fake success (#36)', async () => {
     api.post.mockRejectedValueOnce(axiosErrorWithStatus(404));
 

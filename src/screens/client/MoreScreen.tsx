@@ -23,20 +23,21 @@ import { isAndroidHealthConnectEnabled } from '../../config/healthConnect';
 // Canonical avatar lives in the roman/ lane (D-013).
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
+import { LearnDoor } from './learn/LearnParts';
 import type { TutorialTargetId } from '../../tutorial/tutorialSteps';
-type MoreItem = {
+export type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   description: string;
   section: string;
   // Either a screen inside a sibling tab's stack (opened through the tab
   // navigator) or a nested screen inside the More stack.
-  target: { type: 'tab'; tab: string; screen: string } | { type: 'stack'; screen: string };
+  target: { type: 'tab'; tab: string; screen: string } | { type: 'stack'; screen: string; params?: object };
   a11yHint: string;
   // When true, the row renders Roman's face (RomanAvatar) in place of the
   // Ionicons glyph — the face+voice rule for the Roman-branded row.
   isRoman?: boolean;
-  // Clinic tutorial spotlight id for this row (wearables step).
+  // Client tutorial spotlight id for this row (wearables step).
   tutorialTarget?: TutorialTargetId;
 };
 
@@ -52,7 +53,7 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
     label: 'Meal plan',
     description: 'View meal plans',
     section: 'Your plan',
-    target: { type: 'stack', screen: 'Plan' },
+    target: { type: 'stack', screen: 'ClientDailyMealPlan' },
     a11yHint: 'Opens your meal plan',
   },
   {
@@ -97,7 +98,11 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
   },
 ];
 
-const MORE_ITEMS: MoreItem[] = [
+/** TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here (More and You). */
+export const planMoreItems = (): MoreItem[] =>
+  featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
+
+export const MORE_ITEMS: MoreItem[] = [
   {
     icon: 'people-outline',
     label: 'Community',
@@ -196,7 +201,7 @@ const MORE_ITEMS: MoreItem[] = [
  * the MoreStack 'RomanChat' screen, which itself is registered only behind the
  * same flag (ClientNavigator).
  */
-const ROMAN_MORE_ITEM: MoreItem = {
+export const ROMAN_MORE_ITEM: MoreItem = {
   icon: 'sparkles-outline',
   label: 'Roman',
   // Roman is not "your AI" — he is Roman, shared across surfaces (identity
@@ -210,7 +215,7 @@ const ROMAN_MORE_ITEM: MoreItem = {
 
 /**
  * Wearables rows: the Connections hub and the Health shell (Fitness +
- * Recovery / sleep). The clinic tutorial's wearable step spotlights them.
+ * Recovery / sleep). The client tutorial's wearable step spotlights them.
  *
  * AUDIT-11-125: they used to ship only with featureFlags.clientTutorial,
  * which the iOS store (production) profile leaves off, so an iPhone client
@@ -219,7 +224,7 @@ const ROMAN_MORE_ITEM: MoreItem = {
  * read a phone health store: always on iPhone, and on Android only in a build
  * with Health Connect (the clinic profile), or with the tutorial on as before.
  */
-function showsWearableRows(): boolean {
+export function showsWearableRows(): boolean {
   return (
     featureFlags.clientTutorial ||
     Platform.OS === 'ios' ||
@@ -227,13 +232,15 @@ function showsWearableRows(): boolean {
   );
 }
 
-const WEARABLE_MORE_ITEMS: MoreItem[] = [
+export const WEARABLE_MORE_ITEMS: MoreItem[] = [
   {
-    icon: 'heart-outline',
-    label: 'Health and sleep',
-    description: 'View activity, heart rate and sleep',
+    // HEALTH-1 (owner #SLEEP-PLACE op 2): with healthPages on (read when the row is drawn), the
+    // main way into Sleep and recovery opens Health and sleep on its Recovery tab. Off, main's row.
+    get icon(): MoreItem['icon'] { return featureFlags.healthPages ? 'moon-outline' : 'heart-outline'; },
+    get label() { return featureFlags.healthPages ? 'Sleep and recovery' : 'Health and sleep'; },
+    get description() { return featureFlags.healthPages ? 'Recovery estimate, activity and heart rate' : 'View activity, heart rate and sleep'; },
     section: 'Health and devices',
-    target: { type: 'stack', screen: 'Health' },
+    get target(): MoreItem['target'] { return featureFlags.healthPages ? { type: 'stack', screen: 'Health', params: { bucket: 'recovery' } } : { type: 'stack', screen: 'Health' }; },
     a11yHint: 'Opens your health and sleep data',
     tutorialTarget: 'more-health',
   },
@@ -255,13 +262,14 @@ export default function MoreScreen() {
   const items = useMemo<MoreItem[]>(
     () => {
       const roman = featureFlags.romanChat ? [ROMAN_MORE_ITEM] : [];
-      // The clinic tutorial spotlights the wearables rows, so they stay at the
+      const plan = planMoreItems();
+      // The client tutorial spotlights the wearables rows, so they stay at the
       // top there (unchanged); elsewhere they follow the plan rows.
       if (featureFlags.clientTutorial) {
-        return [...WEARABLE_MORE_ITEMS, ...roman, ...PLAN_MORE_ITEMS, ...MORE_ITEMS];
+        return [...WEARABLE_MORE_ITEMS, ...roman, ...plan, ...MORE_ITEMS];
       }
       const wearables = showsWearableRows() ? WEARABLE_MORE_ITEMS : [];
-      return [...roman, ...PLAN_MORE_ITEMS, ...wearables, ...MORE_ITEMS];
+      return [...roman, ...plan, ...wearables, ...MORE_ITEMS];
     },
     [],
   );
@@ -270,7 +278,8 @@ export default function MoreScreen() {
 
   const handlePress = (item: MoreItem) => {
     if (item.target.type === 'stack') {
-      navigation.navigate(item.target.screen);
+      if (item.target.params) navigation.navigate(item.target.screen, item.target.params);
+      else navigation.navigate(item.target.screen);
       return;
     }
     // A screen in another tab's stack: go through the tab navigator and keep
@@ -291,7 +300,8 @@ export default function MoreScreen() {
         role="list"
       >
         {sections.map((section) => (
-          <View key={section} style={styles.section}>
+          <LearningWrap key={section} door={featureFlags.learnHub && section === 'Learning'}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle} accessibilityRole="header">{section}</Text>
             {items.filter((item) => item.section === section).map((item) => (
               // Keep list semantics and each row's button action (R3 P1-3).
@@ -323,10 +333,16 @@ export default function MoreScreen() {
               </View>
             ))}
           </View>
+          </LearningWrap>
         ))}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+// LEARN-A (flag learnHub): the Learning group waits for the coach's guidelines or a lesson.
+function LearningWrap({ door, children }: { door: boolean; children: React.ReactNode }): React.ReactElement {
+  return door ? <LearnDoor>{children}</LearnDoor> : <>{children}</>;
 }
 
 function TutorialTargetWrap({

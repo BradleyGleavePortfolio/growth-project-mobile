@@ -1262,11 +1262,11 @@ export default function CoachWorkoutBuilderScreen() {
       if (forAi && resolvedPlanId) return navigation.replace(route.name, { planId: resolvedPlanId, openAi: true });
       Alert.alert('Plan saved', 'Workout plan saved successfully.');
       navigation.goBack();
-    } catch (err) {
+    } catch {
       if (forAi) return setAiSaveError(NEW_WORKOUT_SAVE_FAILED);
       Alert.alert(
-        'Could not save plan',
-        err instanceof Error ? err.message : 'Unknown error',
+        'Could not save workout',
+        'The workout could not be saved. Try again in a moment.',
       );
     }
   }, [

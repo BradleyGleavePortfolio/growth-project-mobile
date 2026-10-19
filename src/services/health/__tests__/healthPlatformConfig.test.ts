@@ -62,7 +62,7 @@ async function runMod(
   return out.modResults;
 }
 
-/** MainActivity.onCreate exactly as decompiled from the 09-30 clinic APK. */
+/** MainActivity.onCreate exactly as decompiled from the 09-30 launch APK. */
 const APK_MAIN_ACTIVITY = `package com.growthproject.app
 
 import android.os.Bundle

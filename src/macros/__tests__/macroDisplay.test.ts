@@ -1,5 +1,5 @@
 /**
- * Lighter start for never-trackers (clinic contract v1 addition 8): pure
+ * Lighter start for never-trackers (onboarding contract v1 addition 8): pure
  * rules for parsing the server field, the effective mode, the one-time
  * carbohydrate and fat introduction, and what each surface shows.
  */

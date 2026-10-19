@@ -7,7 +7,7 @@
  * prescriptive language. If you need to add a string, add it here, not
  * inline in a screen — that way the audit can catch it.
  *
- * Tone: educational, coaching context, never clinical authority.
+ * Tone: educational, coaching context, never medical authority.
  */
 
 /**
@@ -17,8 +17,8 @@
 export const BLOODWORK_DISCLAIMER_LONG =
   'These results, notes, and tips are educational coaching context only. ' +
   'They are not medical advice and are not a diagnosis, and they are not ' +
-  'a substitute for guidance from your doctor or another licensed ' +
-  'clinician. Always speak with your clinician about your results and ' +
+  'a substitute for guidance from your doctor. ' +
+  'Always speak with your doctor about your results and ' +
   'before making changes to your care.';
 
 /**
@@ -40,8 +40,8 @@ export const BLOODWORK_DISCLAIMER_MODAL_TITLE =
 export const BLOODWORK_DISCLAIMER_MODAL_BULLETS: readonly string[] = [
   'The values and notes here are for your own reference only. They are not medical advice.',
   'This app cannot diagnose illness, recommend treatments, or replace your doctor.',
-  'Always talk to a licensed clinician before acting on any lab result.',
-  'Your coach may add educational context, but that is not clinical guidance.',
+  'Always talk to a doctor before acting on any lab result.',
+  'Your coach may add educational context, but that is not medical guidance.',
   'If you are concerned about a result, contact your doctor or health service.',
 ];
 
@@ -58,10 +58,10 @@ export const BLOODWORK_AWAITING_REVIEW_NOTE =
   'Your coach is reviewing this. Tips appear here once they sign off.';
 
 /**
- * Copy used when a coach marks a row as "needs clinician context".
+ * Copy used when a coach refers a row to the client's doctor.
  */
-export const BLOODWORK_CLINICIAN_REFERRAL_NOTE =
-  'Your coach has flagged this for your clinician. Please share these ' +
+export const BLOODWORK_DOCTOR_REFERRAL_NOTE =
+  'Your coach has flagged this for your doctor. Please share these ' +
   'results with your doctor — your coach will not interpret it for you.';
 
 /**
@@ -69,7 +69,7 @@ export const BLOODWORK_CLINICIAN_REFERRAL_NOTE =
  */
 export const BLOODWORK_CLIENT_EMPTY_TITLE = 'No lab results yet';
 export const BLOODWORK_CLIENT_EMPTY_BODY =
-  'You can manually add results from a lab printout or your patient ' +
+  'You can manually add results from a lab printout or your lab ' +
   'portal. Your coach will review them and may add educational notes.';
 
 /**
@@ -79,7 +79,7 @@ export const BLOODWORK_COACH_EMPTY_TITLE = 'No lab panels to review';
 export const BLOODWORK_COACH_EMPTY_BODY =
   'When a client submits results, they appear here for review. You can ' +
   'add educational context, ask for a missing source, or refer the ' +
-  'client to their clinician.';
+  'client to their doctor.';
 
 /**
  * Copy used when the feature flag is OFF (in case a deep link or stale
@@ -104,7 +104,7 @@ export const BLOODWORK_FORM_LABELS = {
   panelLabelHint: 'e.g. "Annual physical, March 2026"',
   collectionDate: 'Collection date',
   labName: 'Lab or source (optional)',
-  labNameHint: 'e.g. Quest, LabCorp, patient portal',
+  labNameHint: 'e.g. Quest, LabCorp, lab portal',
   sourceNotes: 'Notes about the source (optional)',
   markerName: 'Marker',
   markerNameHint: 'e.g. Vitamin D, 25-OH',
@@ -123,7 +123,7 @@ export const BLOODWORK_FORM_LABELS = {
 export const BLOODWORK_COACH_ACTIONS = {
   markReviewed: 'Mark as reviewed',
   requestSource: 'Ask client for source',
-  referToClinician: 'Refer to clinician',
+  referToDoctor: 'Refer to doctor',
   hideFromClient: 'Hide from client',
   flagDisputed: 'Flag as disputed',
   approveAIDraft: 'Approve educational draft',
@@ -140,9 +140,9 @@ export const BLOODWORK_COACH_ACTIONS = {
  * disclaimer next to them.
  */
 /**
- * The list bans phrases that *make* a clinical claim. We deliberately do
+ * The list bans phrases that *make* a medical claim. We deliberately do
  * NOT ban the bare word "diagnosis" — the long-form disclaimer needs to
- * say "not a diagnosis", which is the opposite of a clinical claim. If a
+ * say "not a diagnosis", which is the opposite of a medical claim. If a
  * future copy edit wants to say "diagnose" or "diagnostic" in a way that
  * implies the app is doing diagnosis, the per-phrase entries below catch
  * it.
@@ -176,5 +176,5 @@ export const BLOODWORK_FORBIDDEN_PHRASES: readonly string[] = [
 export const BLOODWORK_REQUIRED_DISCLAIMER_PHRASES: readonly string[] = [
   'not medical advice',
   'not a diagnosis',
-  'clinician',
+  'doctor',
 ];

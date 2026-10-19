@@ -179,7 +179,7 @@ async function sendReply(payload: SendReplyPayload): Promise<SendReplyResponse> 
     body: payload.body,
     parent_message_id: payload.parent_message_id,
   });
-  // Clinic tutorial: a reply in the coach thread is also a real message sent.
+  // Client tutorial: a reply in the coach thread is also a real message sent.
   emitTutorialSignal('message_sent');
   const raw = (res.data ?? {}) as Record<string, unknown>;
   return {

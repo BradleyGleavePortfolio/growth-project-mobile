@@ -6,11 +6,13 @@
  */
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import { Headline, QuietRow, Screen, ScreenTopBar } from '../../../ui';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { CoachBriefActionItem } from '../../../api/coachBriefApi';
-import { actionTarget, briefFirstName, type BriefListKind, type BriefTarget } from './briefActions';
+import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
+import { openTarget } from '../../../navigation/coachInbox';
+import { actionTarget, briefFirstName, type BriefListKind } from './briefActions';
 
 export type CoachBriefListParams = { kind: BriefListKind; items: CoachBriefActionItem[] };
 
@@ -20,13 +22,8 @@ const TITLE: Record<BriefListKind, string> = {
   checkins: 'Check-ins',
 };
 
-type ListNav = {
-  goBack: () => void;
-  navigate: (name: BriefTarget['tab'], params?: object) => void;
-};
-
 export default function CoachBriefListScreen({ route }: { route?: { params?: CoachBriefListParams } }) {
-  const navigation = useNavigation<ListNav>();
+  const navigation = useNavigation<NavigationProp<CoachTabParamList>>();
   const { semanticColors: sc } = useTheme();
   const kind = route?.params?.kind;
   const title = kind ? TITLE[kind] : undefined;
@@ -49,7 +46,7 @@ export default function CoachBriefListScreen({ route }: { route?: { params?: Coa
             key={`${item.client_id ?? item.type}-${i}`}
             label={label}
             detail={detail}
-            onPress={() => navigation.navigate(target.tab, target.params)}
+            onPress={() => openTarget(navigation, target)}
             accessibilityHint="Opens the screen for this item"
             testID={`brief-list-row-${item.client_id ?? i}`}
           />

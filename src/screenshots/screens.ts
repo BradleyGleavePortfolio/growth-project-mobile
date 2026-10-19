@@ -24,7 +24,7 @@ export interface ScreenshotTarget {
 export const SCREENSHOT_TARGETS: ScreenshotTarget[] = [
   { slug: '01-home',     caption: 'One thought, today.',       route: 'Home',     tab: 'Home' },
   { slug: '02-log',      caption: 'Log a meal in seconds.',    route: 'Log',      tab: 'Log' },
-  { slug: '03-plan',     caption: 'This week, dialled in.',    route: 'Plan',     tab: 'MoreTab' },
+  { slug: '03-plan',     caption: 'This week, dialled in.',    route: 'ClientDailyMealPlan', tab: 'MoreTab' },
   { slug: '04-recipes',  caption: 'Coach-made recipes.',       route: 'Recipes',  tab: 'MoreTab' },
   { slug: '05-progress', caption: 'A trend, not a number.',    route: 'Progress', tab: 'MoreTab' },
   { slug: '06-fasting',  caption: 'Fast on protocol.',         route: 'Fast',     tab: 'MoreTab' },

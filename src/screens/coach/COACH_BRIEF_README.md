@@ -39,7 +39,7 @@ opens) lives in the same file and `CoachBriefScreen` re-exports it, so nothing u
 | 0 | none |
 | 1 client, with a first name | "Reply to {first name}", "Review {first name}'s weight change", "Check on {first name}": opens what `actionTarget` opens |
 | 2 or more clients, or 1 with no usable name | one row, "See messages", "See weight logs" or "See check-ins": opens `SettingsStack > CoachBriefList` |
-| Head coach: failed payments or team revenue | one row, "See payments": opens Money (`SettingsStack > CoachMoney`) |
+| Head coach: failed payments or team revenue | one row, "See payments": opens Money (`SettingsStack > CoachMoney`; the Money tab with `coachTabsV2`) |
 | Head coach: team items | one row, "See your team": opens Team, only while Team Mode is on (otherwise no row) |
 
 Kinds are taken in a fixed order (messages, weight, check-ins, Money, Team) and only the first two with a row are kept;
