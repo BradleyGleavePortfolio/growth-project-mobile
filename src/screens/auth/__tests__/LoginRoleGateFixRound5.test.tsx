@@ -180,12 +180,12 @@ describe('#306 fix round 5: owner-scoped role-selection gate on Login', () => {
   });
 
   it('Google replay: interrupted, then the same Google account signs in again: notice, Continue, app', async () => {
-    await rememberUnconfirmedCoachSignup('google', 'pat@gmail.com');
+    await rememberUnconfirmedCoachSignup('google', 'pat@mail.test');
     mockSignInWithGoogle.mockResolvedValue({
       success: true,
       server_confirmed: true,
       is_new_user: false,
-      user: { id: 'u1', email: 'pat@gmail.com', role: 'student' },
+      user: { id: 'u1', email: 'pat@mail.test', role: 'student' },
     });
     const first = await renderLogin();
     await fireEvent.press(first.getByText('Continue with Google'));

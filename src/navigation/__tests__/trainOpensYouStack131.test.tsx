@@ -41,7 +41,9 @@ jest.mock('../../services/api', () => ({
     deleteWorkout: async () => ({}),
   },
 }));
-let mockAssignments: Array<{ id: string; completed_at: string | null; workout_plan: { name: string } }> = [];
+let mockAssignments: Array<{
+  id: string; completed_at: string | null; workout_plan: { name: string }; snapshot?: { plan_name: string };
+}> = [];
 jest.mock('../../hooks/useWorkoutBuilder', () => ({
   useMyWorkoutAssignments: () => ({ data: mockAssignments, refetch: async () => ({}) }),
 }));
@@ -61,7 +63,8 @@ for (const match of navSource.matchAll(/^import (?!type\b)[^;]*? from '(\.\.\/sc
   const modulePath = match[1];
   if (modulePath === '../screens/client/WorkoutScreen') continue;
   jest.doMock(`../${modulePath}`, () => ({
-    __esModule: true, default: () => <Text testID="destination">{modulePath}</Text>,
+    __esModule: true, default: ({ onSaved, suspended }: { onSaved?: () => void; suspended?: boolean }) =>
+      <Text testID="destination" onPress={onSaved} accessibilityState={{ disabled: suspended }}>{modulePath}</Text>,
   }));
 }
 jest.doMock('../CommunityNavigator', () => ({
@@ -120,5 +123,51 @@ describe('Train opens coach workouts above the You menu (m#542 B1 / B-542-SOL-13
     });
     await waitFor(() => expect(youStack(ref.getRootState() as StateLike)).toEqual(['MoreIndex']));
     expect(view.getByText(YOU_MENU)).toBeTruthy();
+  });
+
+  it('K3FIX-SNAPSHOT: the pending workout keeps its frozen name after the coach renames the plan', async () => {
+    mockAssignments = [{ id: 'a1', completed_at: null, workout_plan: { name: 'Upper body A v2' }, snapshot: { plan_name: 'Upper body A' } }];
+    const { view } = await openTrain();
+    expect(await view.findByLabelText('Open assigned workout: Upper body A')).toBeTruthy();
+    expect(view.getByText('Upper body A')).toBeTruthy();
+    expect(view.queryByText('Upper body A v2')).toBeNull();
+  });
+});
+
+describe('Day One save callbacks through the real client navigator', () => {
+  it('suspends only the meal sheet while the saved note is visible', async () => {
+    const ref = createNavigationContainerRef<Record<string, object | undefined>>();
+    const view = await render(
+      <NavigationContainer ref={ref}><ClientNavigator day1NoteVisible /></NavigationContainer>,
+    );
+    await act(async () => ref.navigate('Log'));
+    expect((await view.findByText('../screens/client/LogScreen')).props.accessibilityState.disabled).toBe(true);
+    await view.rerender(
+      <NavigationContainer ref={ref}><ClientNavigator day1NoteVisible={false} /></NavigationContainer>,
+    );
+    expect(view.getByText('../screens/client/LogScreen').props.accessibilityState.disabled).toBe(false);
+  });
+
+  it.each([
+    ['first_meal', 'Log', undefined, '../screens/client/LogScreen'],
+    ['first_checkin', 'Home', { screen: 'Habits' }, '../screens/client/HabitsScreen'],
+    ['logged_first_weight', 'MoreTab', { screen: 'Progress' }, '../screens/client/ProgressScreen'],
+  ] as const)('%s forwards its save only while focused', async (winType, tab, params, modulePath) => {
+    const ref = createNavigationContainerRef<Record<string, object | undefined>>();
+    const onDay1Saved = jest.fn();
+    const view = await render(
+      <NavigationContainer ref={ref}><ClientNavigator onDay1Saved={onDay1Saved} /></NavigationContainer>,
+    );
+    await act(async () => ref.navigate(tab, params));
+    const logger = await view.findByText(modulePath);
+    expect(onDay1Saved).not.toHaveBeenCalled();
+    const onSaved = logger.props.onPress;
+    await fireEvent.press(logger);
+    expect(onDay1Saved).toHaveBeenCalledTimes(1);
+    expect(onDay1Saved).toHaveBeenCalledWith(winType);
+    await act(async () => ref.navigate('Home', { screen: 'HomeMain' }));
+    await view.findByText('../screens/client/HomeScreen');
+    await act(async () => onSaved());
+    expect(onDay1Saved).toHaveBeenCalledTimes(1);
   });
 });

@@ -9,6 +9,9 @@
  *                             already stored, B-326-3).
  *   consent_required, coach   "AI help is off for this client" + the
  *                             coach can still coach as usual; "Try again".
+ *   coach_consent_required    COACH-AI-CONSENT: the coach's own Roman is off
+ *                             (CAC-5), whose button opens CoachAiConsentSheet;
+ *                             after a grant the surface's onRetry runs.
  *   egress_blocked (503)      "AI help is paused by a service problem" + the short
  *                             reference, "Contact support" and "Copy reference".
  *
@@ -19,6 +22,8 @@ import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import AiConsentSheet, { type AiConsentSheetApi } from './AiConsentSheet';
+import CoachAiConsentSheet from './CoachAiConsentSheet';
+import { COACH_AI_CONSENT_COPY } from '../../lib/ai/coachAiConsentCopy';
 import { useOpenSupport } from './useOpenSupport';
 import {
   aiRefusalCopy,
@@ -27,6 +32,7 @@ import {
   type AiSurface,
 } from '../../lib/ai/aiRefusal';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
 
 export const AI_REFUSAL_ACTIONS = {
   allow: 'Allow AI help',
@@ -108,6 +114,8 @@ export default function AiRefusalNotice({
     } else if (onRetry) {
       actions.push(button(AI_REFUSAL_ACTIONS.tryAgain, onRetry, 'retry', true));
     }
+  } else if (refusal.kind === 'coach_consent_required') {
+    actions.push(button(COACH_AI_CONSENT_COPY.off.button, () => setSheetOpen(true), 'turn-on', true));
   } else {
     if (openSupport) {
       actions.push(button(AI_REFUSAL_ACTIONS.contactSupport, () => void openSupport(), 'support', true));
@@ -164,6 +172,14 @@ export default function AiRefusalNotice({
           testID={`${testID}-consent-sheet`}
         />
       ) : null}
+      {refusal.kind === 'coach_consent_required' ? (
+        <CoachAiConsentSheet
+          visible={sheetOpen}
+          onGranted={onGranted}
+          onClose={() => setSheetOpen(false)}
+          testID={`${testID}-coach-sheet`}
+        />
+      ) : null}
     </View>
   );
 }
@@ -171,7 +187,7 @@ export default function AiRefusalNotice({
 function makeStyles(colors: ThemeColors, compact: boolean) {
   return StyleSheet.create({
     card: {
-      borderRadius: 14,
+      borderRadius: radius.card,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       backgroundColor: colors.surface,
@@ -186,7 +202,7 @@ function makeStyles(colors: ThemeColors, compact: boolean) {
     primary: {
       minHeight: 44,
       paddingHorizontal: 16,
-      borderRadius: 10,
+      borderRadius: radius.button,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
@@ -195,7 +211,7 @@ function makeStyles(colors: ThemeColors, compact: boolean) {
     secondary: {
       minHeight: 44,
       paddingHorizontal: 16,
-      borderRadius: 10,
+      borderRadius: radius.button,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.primary,
       alignItems: 'center',

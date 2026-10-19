@@ -28,8 +28,12 @@ export interface PrimaryButtonProps {
   accessibilityHint?: string;
   /** What a screen reader says when it must be fuller than the visible label (default = label). */
   accessibilityLabel?: string;
+  /** A long label may take a second line and the button grows (default: one line). */
+  wrap?: boolean;
   testID?: string;
   style?: StyleProp<ViewStyle>;
+  /** 'cream': cream fill and forest label, only on a full-forest screen (C7 Style B Welcome). */
+  tone?: 'forest' | 'cream';
 }
 
 export function PrimaryButton({
@@ -40,12 +44,15 @@ export function PrimaryButton({
   haptic = true,
   accessibilityHint,
   accessibilityLabel,
+  wrap = false,
   testID,
   style,
+  tone = 'forest',
 }: PrimaryButtonProps): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const inert = disabled || loading;
-  const labelColor = disabled ? sc.textOnDisabled : sc.textOnAccent;
+  const cream = tone === 'cream' && !disabled;
+  const labelColor = disabled ? sc.textOnDisabled : cream ? sc.surface.forestBand : sc.textOnAccent;
   const handlePress = (e: GestureResponderEvent) => {
     if (inert) return;
     if (haptic) void HapticService.softImpact();
@@ -60,7 +67,7 @@ export function PrimaryButton({
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: inert, busy: loading }}
       testID={testID}
-      style={[styles.primary, { backgroundColor: disabled ? sc.disabledBg : sc.accent }, style]}
+      style={[wrap ? [styles.primary, styles.primaryWrap] : styles.primary, { backgroundColor: disabled ? sc.disabledBg : cream ? sc.textOnAccent : sc.accent }, style]}
     >
       {({ pressed }) => (
         <>
@@ -68,7 +75,7 @@ export function PrimaryButton({
           {loading ? (
             <ActivityIndicator color={labelColor} testID={testID ? `${testID}-spinner` : undefined} />
           ) : (
-            <Text style={[styles.primaryLabel, { color: labelColor }]} numberOfLines={1} maxFontSizeMultiplier={1.6}>
+            <Text style={[styles.primaryLabel, { color: labelColor }]} numberOfLines={wrap ? 2 : 1} maxFontSizeMultiplier={1.6}>
               {label}
             </Text>
           )}
@@ -78,7 +85,7 @@ export function PrimaryButton({
   );
 }
 
-export type TextLinkTone = 'muted' | 'accent' | 'ink';
+export type TextLinkTone = 'muted' | 'accent' | 'ink' | 'onForest';
 
 export interface TextLinkProps {
   label: string;
@@ -111,7 +118,7 @@ export function TextLink({
   style,
 }: TextLinkProps): React.ReactElement {
   const { semanticColors: sc } = useTheme();
-  const color = tone === 'accent' ? sc.accentText : tone === 'ink' ? sc.textPrimary : sc.textMuted;
+  const color = tone === 'accent' ? sc.accentText : tone === 'ink' ? sc.textPrimary : tone === 'onForest' ? sc.textOnAccent : sc.textMuted;
   return (
     <Pressable
       onPress={disabled ? undefined : onPress}
@@ -152,6 +159,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  primaryWrap: { paddingVertical: 12 },
   pressedVeil: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: withAlpha(colors.ink, 0.16) },
   primaryLabel: { ...typography.bodyMd, lineHeight: 22, letterSpacing: 0.1, textAlign: 'center' },
   link: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: 4 },

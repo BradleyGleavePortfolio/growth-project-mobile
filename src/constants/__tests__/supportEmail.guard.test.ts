@@ -10,7 +10,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { SUPPORT_EMAIL, supportMailto } from "../support";
 
-const OWNER_SUPPORT_EMAIL = "Bradleyapple1031@gmail.com";
+const OWNER_SUPPORT_EMAIL = "support@thegrowthproject.site";
 
 // Not support contacts. Every entry needs a reason; an entry that no longer
 // appears in source fails the stale-entry test, so the list cannot drift.

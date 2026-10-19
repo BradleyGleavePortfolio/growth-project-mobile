@@ -7,8 +7,8 @@
   "build": {
     "development": {
       "env": {
-        "EXPO_PUBLIC_FF_TEAM_MODE": "false",
-        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
+        "EXPO_PUBLIC_FF_TEAM_MODE": "false"
       },
       "developmentClient": true,
       "distribution": "internal",
@@ -27,6 +27,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "0",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
@@ -35,8 +36,7 @@
         "EXPO_PUBLIC_FF_DELIVERABLES": "true",
         "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true",
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
-        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true",
-        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
+        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true"
       }
     },
     "production": {
@@ -45,8 +45,9 @@
       "environment": "production",
       "prebuildCommand": "prebuild --no-install",
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
-        "TGP_ANDROID_HEALTH_CONNECT": "0",
+        "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
         "EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES": "true",
@@ -59,8 +60,14 @@
         "EXPO_PUBLIC_FF_COMMUNITY_COHORTS": "true",
         "EXPO_PUBLIC_FF_DELIVERABLES": "true",
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
-        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true",
-        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
+        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true"
+      }
+    },
+    "testing": {
+      "extends": "production",
+      "channel": "testing",
+      "env": {
+        "EXPO_PUBLIC_FF_TEAM_MODE": "false"
       }
     },
     "clinic": {
@@ -68,6 +75,7 @@
       "channel": "clinic",
       "environment": "production",
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
@@ -84,8 +92,7 @@
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_DM": "false",
         "EXPO_PUBLIC_FF_ROMAN_CHAT": "true",
-        "EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK": "true",
-        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
+        "EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK": "true"
       }
     },
     "clinic-apk": {
@@ -97,10 +104,10 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST": "false",
         "EXPO_PUBLIC_FF_TEAM_MODE": "false",
         "TGP_ANDROID_HEALTH_CONNECT": "1",
-        "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true",
-        "EXPO_PUBLIC_FF_COACH_HOME_V11": "false"
+        "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true"
       }
     }
   },
@@ -109,6 +116,9 @@
       "ios": {
         "ascAppId": "6765847915"
       }
+    },
+    "testing": {
+      "extends": "production"
     },
     "clinic": {
       "extends": "production"

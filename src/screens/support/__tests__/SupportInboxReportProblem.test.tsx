@@ -27,7 +27,7 @@ describe('Support problem reporting', () => {
     expect(screen.getByTestId('support-chat-open')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Report a problem by email' }));
     expect(openURL).toHaveBeenCalledWith(
-      'mailto:Bradleyapple1031@gmail.com?subject=Report%20a%20problem',
+      'mailto:support@thegrowthproject.site?subject=Report%20a%20problem',
     );
   });
 

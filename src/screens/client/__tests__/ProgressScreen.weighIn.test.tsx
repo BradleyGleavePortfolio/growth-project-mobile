@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { Keyboard, StyleSheet } from 'react-native';
-import { render, fireEvent, act, within } from '@testing-library/react-native';
+import { render, fireEvent, act, within, waitFor } from '@testing-library/react-native';
 import { colors } from '../../../theme/tokens';
 
 const mockGetHistory = jest.fn(async (): Promise<{ data: unknown }> => ({
@@ -74,14 +74,33 @@ afterEach(() => {
   alertSpy.mockRestore();
 });
 
-async function openSheet() {
-  const utils = await render(<ProgressScreen />);
+async function openSheet(onSaved?: () => void) {
+  const utils = await render(<ProgressScreen onSaved={onSaved} />);
   const fab = await utils.findByLabelText('Log weight');
   await fireEvent.press(fab);
   return utils;
 }
 
 describe('Log weight sheet on iPhone (B1)', () => {
+  it('notifies Day One once after save, never on open, cancellation or failure', async () => {
+    const onSaved = jest.fn();
+    const r = await openSheet(onSaved);
+    expect(onSaved).not.toHaveBeenCalled();
+    await fireEvent.press(r.getByLabelText('Close log weight modal'));
+    expect(onSaved).not.toHaveBeenCalled();
+    await fireEvent.press(r.getByLabelText('Log weight'));
+    await fireEvent.changeText(r.getByTestId('log-weight-input'), '182');
+    mockLog.mockRejectedValueOnce(new Error('Network Error'));
+    await fireEvent.press(r.getByTestId('log-weight-save'));
+    expect(onSaved).not.toHaveBeenCalled();
+    let resolve!: (value: unknown) => void;
+    mockLog.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    await fireEvent.press(r.getByTestId('log-weight-save'));
+    expect(onSaved).not.toHaveBeenCalled();
+    await act(async () => resolve({}));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  });
+
   it('rides above the number pad: the sheet sits in a padding KeyboardAvoidingView', async () => {
     const { getByTestId } = await openSheet();
     // The avoider wraps the sheet, so the field and Save move above the pad

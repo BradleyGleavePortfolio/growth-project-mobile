@@ -10,7 +10,7 @@ import path from 'path';
 import { StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 import QuantityPickerModal from '../QuantityPickerModal';
-import { lightTokens, radius } from '../../../theme/tokens';
+import { layout, lightTokens, radius } from '../../../theme/tokens';
 
 jest.mock('../../FoodImage', () => ({ __esModule: true, default: () => null }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -54,6 +54,12 @@ describe('Food sheets redesign (REDO-FOOD-133)', () => {
     expect(flat(screen.getByLabelText('Food quantity')).borderRadius).toBe(radius.input);
     expect(flat(screen.getByLabelText('Portion unit serving'))).toMatchObject({ borderRadius: radius.chip, borderColor: lightTokens.accent });
     expect(flat(screen.getByLabelText('Portion unit g'))).toMatchObject({ borderRadius: radius.chip, borderColor: lightTokens.border });
+    for (const unit of ['serving', 'g', 'oz']) {
+      expect(flat(screen.getByLabelText(`Portion unit ${unit}`))).toMatchObject({
+        minHeight: layout.touchMin,
+        minWidth: layout.touchMin,
+      });
+    }
     for (const value of ['300', '12g', '54g', '6g']) {
       expect(flat(screen.getByText(value)).fontVariant).toEqual(['lining-nums', 'tabular-nums']);
     }

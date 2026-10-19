@@ -535,7 +535,7 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
         ) : null}
 
         <Text style={styles.footnote}>
-          Card details go straight to Stripe, the payment provider. The Growth Project never sees your full card number.
+          Card details go straight to Stripe, the payment provider. TGP Fitness never sees your full card number.
         </Text>
       </ScrollView>
     </SafeAreaView>

@@ -53,6 +53,8 @@ export interface JoinCoachStateProps {
   roman?: boolean;
   /** Tab roots leave the bottom edge to the tab bar. */
   edges?: readonly ScreenEdge[];
+  /** COACH-AI-CONSENT: the coach's Roman off state (CAC-5) puts its own button under the text instead. */
+  action?: { label: string; onPress: () => void };
   testID?: string;
 }
 
@@ -62,6 +64,7 @@ export default function JoinCoachState({
   onBack,
   roman = false,
   edges = ['top', 'bottom'],
+  action,
   testID = 'join-coach-state',
 }: JoinCoachStateProps): React.ReactElement {
   const { messageCoach } = useEntitlement();
@@ -71,14 +74,15 @@ export default function JoinCoachState({
       scroll={false}
       centerContent
       header={<ScreenTopBar onBack={onBack} testID={`${testID}-top`} />}
-      footer={<PrimaryButton label={JOIN_A_COACH} onPress={messageCoach} testID={`${testID}-join`} />}
+      footer={action ? undefined : <PrimaryButton label={JOIN_A_COACH} onPress={messageCoach} testID={`${testID}-join`} />}
       testID={testID}
     >
       <View style={styles.block}>
         {roman ? <RomanAvatar size={40} /> : null}
         <Headline level="h2">{title}</Headline>
         <Lede>{body}</Lede>
-        {roman ? <RomanLockHelp testID={testID} /> : null}
+        {action ? <PrimaryButton label={action.label} onPress={action.onPress} testID={`${testID}-action`} /> : null}
+        {roman && !action ? <RomanLockHelp testID={testID} /> : null}
       </View>
     </Screen>
   );

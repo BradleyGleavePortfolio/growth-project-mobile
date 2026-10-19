@@ -23,16 +23,20 @@ import WaterTracker from '../../components/WaterTracker';
 import DailySummaryBar from '../../components/log/DailySummaryBar';
 import MealSectionCard from '../../components/log/MealSectionCard';
 import FoodSearchModal from '../../components/log/FoodSearchModal';
+import { FoodDayGate } from '../../components/log/FoodDayView';
+import { featureFlags } from '../../config/featureFlags';
+import type { DaySlot } from '../../utils/log/foodDay';
 import { QuantityPickerContent } from '../../components/log/QuantityPickerModal';
 import { ManualFields } from '../../components/log/ManualFoodEntryForm';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
-import { useFoodBrowse } from '../../hooks/useFoodBrowse';
+import { useFoodBrowse, type PastMeal } from '../../hooks/useFoodBrowse';
 import { SearchResult, MEAL_SECTIONS, unitOptionsFor } from '../../utils/log/types';
 import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
 import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../utils/log/editPortion';
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import { matchLoggedFoods, mergeWithLoggedMatches, repeatPastMeal } from '../../utils/log/quickLog';
+import type { PlanLink } from '../../utils/log/planLink';
 import { addDays, getTodayString } from '../../utils/date';
 import {
   submitSearchLogOffline,
@@ -50,7 +54,7 @@ import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 
-export default function LogScreen() {
+export default function LogScreen({ onSaved, suspended = false }: { onSaved?: () => void; suspended?: boolean }) {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useScreenInsets();
@@ -171,7 +175,10 @@ export default function LogScreen() {
       unit: 'serving',
     });
 
-  const openAddFood = useCallback(async (mealType: MealType) => {
+  // FOODLINK: what this sheet's foods are logged for (the Food tab's "Something else"); every open resets it.
+  const [sheetLink, setSheetLink] = useState<PlanLink | undefined>(undefined);
+  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink) => {
+    setSheetLink(link);
     searchRequest.current += 1;
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     setSearching(false);
@@ -292,6 +299,7 @@ export default function LogScreen() {
       multiplier,
       originalQuantity: qty,
       originalUnit: selectedUnit,
+      link: sheetLink,
     };
     setFoodSaving(true);
 
@@ -326,6 +334,7 @@ export default function LogScreen() {
       setSelectedFood(null);
       setAddedFoodName(selectedFood.name);
       setSavedMessage(`${selectedFood.name} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
+      onSaved?.();
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -342,7 +351,7 @@ export default function LogScreen() {
       Alert.alert('Missing info', 'Enter at least a food name and calories.');
       return;
     }
-    const args = { ...manualFields, date: selectedDate, mealType: activeMealType };
+    const args = { ...manualFields, date: selectedDate, mealType: activeMealType, link: sheetLink };
     setFoodSaving(true);
 
     if (!online) {
@@ -369,6 +378,7 @@ export default function LogScreen() {
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'manual' });
       setModalVisible(false);
       setSavedMessage(`${manualFields.foodName.trim()} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
+      onSaved?.();
     } catch (err) {
       console.error('LogScreen: handleManualLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -395,9 +405,10 @@ export default function LogScreen() {
     : '';
 
   // Logs every food of the most recent earlier meal in this slot with the
-  // same saved portions, so a repeated breakfast is two taps.
-  const handleRepeatMeal = async () => {
-    if (!currentUser || !repeatMeal || foodSaving) return;
+  // same saved portions, so a repeated breakfast is two taps. The usual day
+  // (UI-3) repeats its usual meal through the same path.
+  const repeatMealTo = async (meal: PastMeal | null, mealType: MealType, link?: PlanLink) => {
+    if (!currentUser || !meal || foodSaving) return;
     if (!online) {
       Alert.alert(
         'Connection needed',
@@ -405,23 +416,57 @@ export default function LogScreen() {
       );
       return;
     }
-    const target = mealLabel(activeMealType);
+    const target = mealLabel(mealType);
     setFoodSaving(true);
     try {
-      const { added, failedNames } = await repeatPastMeal(repeatMeal, selectedDate, activeMealType);
+      const { added, failedNames } = await repeatPastMeal(meal, selectedDate, mealType, link);
       await loadDayData(currentUser.id, selectedDate);
       if (failedNames.length === 0) {
         HapticService.success();
-        track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'repeat_meal' });
+        track(AnalyticsEvents.MEAL_LOGGED, { meal_type: mealType, source: 'repeat_meal' });
         setModalVisible(false);
         setSavedMessage(`${added} ${added === 1 ? 'food' : 'foods'} added to ${target}.`);
+        onSaved?.();
       } else {
         HapticService.error();
         Alert.alert(
           added > 0 ? 'Some foods were not added' : "Couldn't repeat this meal",
-          `${added} of ${repeatMeal.entries.length} foods added to ${target}. Not added: ${failedNames.join(', ')}. Check the connection, then add ${failedNames.length === 1 ? 'it' : 'them'} from Recent.`,
+          `${added} of ${meal.entries.length} foods added to ${target}. Not added: ${failedNames.join(', ')}. Check the connection, then add ${failedNames.length === 1 ? 'it' : 'them'} from Recent.`,
         );
       }
+    } finally {
+      setFoodSaving(false);
+    }
+  };
+  const handleRepeatMeal = () => repeatMealTo(repeatMeal, activeMealType, sheetLink);
+
+  // UI-3 "Ate it as planned": one tap logs the plan meal with LogPlannedMealButton's write (offline queue included).
+  const logPlanned = async (slot: DaySlot) => {
+    if (!currentUser || foodSaving) return;
+    const v = (x: number) => String(Math.round(x * 10) / 10);
+    const args = {
+      foodName: slot.name, calories: v(slot.kcal), protein: v(slot.protein), carbs: v(slot.carbs), fat: v(slot.fat),
+      quantity: '1', unit: 'serving', date: selectedDate, mealType: slot.mealType, link: { planSlotId: slot.key },
+    };
+    setFoodSaving(true);
+    try {
+      if (!online) {
+        const name = await submitManualLogOffline(args);
+        void notifyPendingFoodLogs();
+        HapticService.success();
+        Alert.alert('Saved offline', `${name} will sync when you reconnect.`);
+        return;
+      }
+      await submitManualLogOnline(args);
+      await loadDayData(currentUser.id, selectedDate);
+      HapticService.success();
+      track(AnalyticsEvents.MEAL_LOGGED, { meal_type: slot.mealType, source: 'meal_plan' });
+      setSavedMessage(`${slot.name} added to ${mealLabel(slot.mealType)}.`);
+      onSaved?.();
+    } catch (err) {
+      console.error('LogScreen: plan meal log failed', err);
+      HapticService.error();
+      Alert.alert("Couldn't log food", errorMessage(err, 'This food was not added. Check the connection and try again.'));
     } finally {
       setFoodSaving(false);
     }
@@ -555,6 +600,30 @@ export default function LogScreen() {
 
   const editUnits = editLog ? editUnitsFor(editLog) : [];
 
+  const notesNode = (
+    <>
+      {pendingFoods > 0 ? (
+        <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending">
+          {pendingFoods === 1
+            ? `1 food saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
+            : `${pendingFoods} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+        </Text>
+      ) : null}
+      {savedMessage ? (
+        <Text style={[styles.note, styles.savedMessage]} accessibilityLiveRegion="polite">{savedMessage}</Text>
+      ) : null}
+    </>
+  );
+  const waterNode = (
+    <WaterTracker
+      currentOz={waterOz}
+      onAdd={handleAddWater}
+      entries={waterEntries}
+      onRemove={handleRemoveWater}
+      removingId={removingWaterId}
+    />
+  );
+
   return (
     <>
       <Screen
@@ -570,6 +639,24 @@ export default function LogScreen() {
           />
         }
       >
+        {/* UI-3: behind featureFlags.foodPlanChecklist the day's plan checklist shows first; with no plan, this Food log. */}
+        <FoodDayGate
+          on={featureFlags.foodPlanChecklist && !!currentUser}
+          coached={!!currentUser?.coach_id}
+          selectedDate={selectedDate}
+          foodLogs={foodLogs}
+          eaten={{ calories: dailyTotals.calories, protein: dailyTotals.protein }}
+          targets={macroTargets ? { calories: macroTargets.calories, protein: macroTargets.protein } : null}
+          ready={hasLoadedDay && !loadError}
+          saving={foodSaving}
+          notes={notesNode}
+          water={waterNode}
+          onDateChange={handleDateChange}
+          onLogPlanned={(slot) => void logPlanned(slot)}
+          onRepeat={(slot) => void repeatMealTo(slot.usual?.meal ?? null, slot.mealType, { fillsUsualMeal: true })}
+          onSomethingElse={(meal, link) => void openAddFood(meal, link)}
+          onEditFood={handleEditFood}
+        >
         <Overline>Food log</Overline>
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />
 
@@ -586,16 +673,7 @@ export default function LogScreen() {
         ) : null}
 
         {hasLoadedDay ? <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} targets={macroTargets} mode={macroMode} /> : null}
-        {pendingFoods > 0 ? (
-          <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending">
-            {pendingFoods === 1
-              ? `1 food saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
-              : `${pendingFoods} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
-          </Text>
-        ) : null}
-        {savedMessage ? (
-          <Text style={[styles.note, styles.savedMessage]} accessibilityLiveRegion="polite">{savedMessage}</Text>
-        ) : null}
+        {notesNode}
 
         {showDayLoading ? (
           // Meal-shaped placeholders on the page gutter (no zero totals, no empty-meal claims).
@@ -633,21 +711,14 @@ export default function LogScreen() {
                 tutorialTarget={i === 0}
               />
             ))}
-            {hasLoadedDay ? (
-              <WaterTracker
-                currentOz={waterOz}
-                onAdd={handleAddWater}
-                entries={waterEntries}
-                onRemove={handleRemoveWater}
-                removingId={removingWaterId}
-              />
-            ) : null}
+            {hasLoadedDay ? waterNode : null}
           </>
         )}
+        </FoodDayGate>
       </Screen>
 
       <FoodSearchModal
-        visible={modalVisible}
+        visible={modalVisible && !suspended}
         activeMealType={activeMealType}
         addedFoodName={addedFoodName}
         onClose={() => {

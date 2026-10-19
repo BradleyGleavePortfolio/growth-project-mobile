@@ -60,11 +60,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-async function mount(now?: () => Date) {
+async function mount() {
   const onEntitled = jest.fn();
   const hook = await renderHook(() =>
     usePackagePurchase({
-      surface: 'sheet', appearance: {}, colorScheme: 'light', now,
+      surface: 'sheet', appearance: {}, colorScheme: 'light',
       entitlementPollDelaysMs: [0], planPollDelaysMs: [0], recheckDelaysMs: [0], onEntitled,
     }),
   );
@@ -182,22 +182,26 @@ describe('B-343-1 (Opus) an unclear one-time result is never "Payment received"'
 
 describe('B-343-4 a resumed trial keeps its pinned first-charge date', () => {
   it('a pinned date that differs from the shown date is reviewed before any card step, then the same key replays', async () => {
-    const now = new Date(2026, 9, 4, 1, 0, 0);
+    // BILLQUOTE-M: the date shown is the server quote's (October 11).
+    const shown = new Date(2026, 9, 11, 1, 0, 0).toISOString();
     const pinned = new Date(2026, 9, 10, 13, 0, 0).toISOString();
-    const trial = { ...recurring, trialDays: 7 };
+    const trial: PurchasablePackage = {
+      ...recurring, trialDays: 7,
+      quote: { dueTodayCents: 0, currency: 'usd', firstChargeAt: shown, trialEnd: shown },
+    };
     const setup = {
       ...intent, mode: 'setup', client_secret: 'seti_synthetic_secret_example',
       plan: { ...plan, first_charge_cents: 0, trial_days: 7, trial_ends_at: pinned },
     };
     mockPost.mockResolvedValue({ data: setup });
-    const h = await mount(() => now);
+    const h = await mount();
     await act(async () => { await h.result.current.start(trial); });
     expect(mockInitSheet).not.toHaveBeenCalled();
     expect(h.result.current.state.phase).toBe('idle');
     expect(h.result.current.state.priceChange).toEqual(
       expect.objectContaining({ message: PACKAGE_PAYMENT_COPY.termsReviewTrialDate }),
     );
-    expect(h.result.current.state.priceChange?.pkg.trialEndsAt).toBe(pinned);
+    expect(h.result.current.state.priceChange?.pkg.quote?.firstChargeAt).toBe(pinned);
     await act(async () => { await h.result.current.confirmNewPrice(); });
     expect(keys()[1]).toBe(keys()[0]);
     expect(mockInitSheet).toHaveBeenCalledTimes(1);

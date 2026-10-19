@@ -1,6 +1,7 @@
 /**
- * UI-2 coach Home (featureFlags.coachHomeV11): real numbers only, every tap arrives somewhere real, the Money
- * tab opens the Money page, and the flag is off in every build profile.
+ * UI-2 coach Home (featureFlags.coachHomeV11): real numbers only, every tap arrives somewhere real, Money opens
+ * the six-tab Money tab (coachTabsV2) or Settings' Money page, the Home lands first and carries the coach's push
+ * ask, and the flag is off by default with no eas.json line (the OTA switch).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -44,7 +45,7 @@ jest.mock('../services/commandCenterApi', () => ({
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => Promise.resolve(2) }));
 const mockDrafts = jest.fn();
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => mockDrafts() }));
-const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false };
+const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: false };
 jest.mock('../config/featureFlags', () => ({ featureFlags: mockFlags }));
 const mockStub = (testID: string) => () => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -53,6 +54,7 @@ const mockStub = (testID: string) => () => {
 };
 jest.mock('../screens/coach/command-center/CoachHomeCards', () => mockStub('setup-cards')());
 jest.mock('../screens/coach/command-center/OverviewScreen', () => mockStub('today-overview')());
+jest.mock('../components/home/PushPermissionCard', () => mockStub('push-ask')());
 const mockSources = { monthSoFar: jest.fn(), nextPayout: jest.fn(), ltv: jest.fn(), atRisk: jest.fn() };
 jest.mock('../screens/coach/command-center/coachHomeSources', () => ({ get coachHomeSources() { return mockSources; } }));
 jest.mock('../screens/coach/home-v11/rosterSources', () => ({
@@ -88,6 +90,7 @@ beforeEach(() => {
   mockFlags.coachHomeV11 = true;
   mockFocused = true;
   mockSetup.mockResolvedValue(snapshot());
+  mockFlags.coachTabsV2 = false;
   mockOverview.mockResolvedValue({ data: overview(30) });
   mockSources.atRisk.mockResolvedValue([entry('c1', 'Casey Lin', 'No check-in for 8 days'), entry('c2', 'Ana Ruiz', 'Payment failed')]);
   mockSources.ltv.mockResolvedValue({ active_client_count: 30, churn_rate_pct: 3, mrr_30d_ago_cents: 100000 });
@@ -144,7 +147,7 @@ describe('UI-2 coach Home, flag on', () => {
     expect(StyleSheet.flatten(v.getByTestId('coach-home-v11-ask-roman').props.style).marginStart).toBeUndefined();
   });
 
-  it('opens Roman, the bell, a client, Clients and the Money tab', async () => {
+  it('opens Roman, the bell, a client, Clients and Money', async () => {
     const v = await renderHome();
     await fireEvent.press(v.getByTestId('coach-home-v11-ask-roman'));
     expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'RomanChat', initial: false });
@@ -155,12 +158,31 @@ describe('UI-2 coach Home, flag on', () => {
     await fireEvent.press(v.getByTestId('coach-home-v11-client-c1'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientDetail', params: { clientId: 'c1', clientName: 'Casey Lin' }, initial: false });
     await fireEvent.press(v.getByTestId('coach-home-v11-all-clients'));
-    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList' });
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList', pop: true });
     expect(v.getByText('Next payout')).toBeTruthy();
     await fireEvent.press(v.getByTestId('coach-home-v11-payout'));
     await fireEvent.press(v.getByTestId('coach-home-v11-month'));
-    expect(mockNavigate).toHaveBeenCalledWith('MoneyStack', { screen: 'CoachMoney' });
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
     expect(mockHaptics.softImpact).toHaveBeenCalled();
+  });
+
+  it('opens the six-tab Money tab from Business when coachTabsV2 is on too', async () => {
+    mockFlags.coachTabsV2 = true;
+    const v = await renderHome();
+    await fireEvent.press(v.getByTestId('coach-home-v11-month'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoneyStack', { screen: 'CoachMoney', pop: true });
+    await fireEvent.press(v.getByTestId('coach-home-v11-payout'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoneyStack', { screen: 'CoachMoney', pop: true });
+    expect(v.getByTestId('command-center-settings')).toBeTruthy();
+  });
+
+  it("carries the coach's push ask once, between the client tiles and Business (C-S-PUSH-3)", async () => {
+    const v = await renderHome();
+    expect(v.getAllByTestId('push-ask')).toHaveLength(1);
+    const order = JSON.stringify(v.toJSON());
+    const at = (id: string) => order.indexOf(`"testID":"${id}"`);
+    expect(at('coach-home-v11-all-clients')).toBeLessThan(at('push-ask'));
+    expect(at('push-ask')).toBeLessThan(at('coach-home-v11-business'));
   });
 
   it('shows the Setup, Clients and Earnings dials, Roman\'s next step, the open steps and the empty wall for a coach with no clients', async () => {
@@ -185,11 +207,15 @@ describe('UI-2 coach Home, flag on', () => {
     await fireEvent.press(v.getByTestId('coach-home-v11-step-invite'));
     expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachSetup', params: { section: 'invite' }, initial: false });
     await fireEvent.press(v.getByTestId('coach-home-v11-step-money'));
-    expect(mockNavigate).toHaveBeenCalledWith('MoneyStack', { screen: 'CoachMoney' });
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
     expect(mockHaptics.softImpact).toHaveBeenCalledTimes(3);
     expect(v.getByTestId('coach-home-v11-empty-wall')).toBeTruthy();
     expect(v.getByText(/^Clients appear here as they join\./)).toBeTruthy();
     expect(v.queryByTestId('setup-cards')).toBeNull();
+    // C-S-PUSH-3: the old cards are gone, so the Home itself carries the push ask, once, after the setup steps.
+    expect(v.getAllByTestId('push-ask')).toHaveLength(1);
+    const order = JSON.stringify(v.toJSON());
+    expect(order.indexOf('"testID":"coach-home-v11-empty-wall"')).toBeLessThan(order.indexOf('"testID":"push-ask"'));
     expect(v.queryByTestId('coach-home-v11-all-clients')).toBeNull();
     expect(v.queryByTestId('coach-home-v11-business')).toBeNull();
   });
@@ -298,45 +324,33 @@ describe('UI-2 flag off', () => {
   });
 });
 
-describe('UI-2 Money tab and flag wiring', () => {
+describe('UI-2 landing, Money tab and flag wiring', () => {
   const ROOT = path.resolve(__dirname, '..', '..');
   const nav = fs.readFileSync(path.join(ROOT, 'src', 'navigation', 'CoachNavigator.tsx'), 'utf8');
 
-  it('registers the Money tab ($ icon) only behind the flag, opening the Money page', () => {
-    const gate = nav.search(/\{featureFlags\.coachHomeV11 && \(\s*<Tab\.Screen\s+name="MoneyStack"/);
-    expect(gate).toBeGreaterThan(-1);
-    const tab = nav.slice(gate, gate + 500);
-    expect(tab).toMatch(/component=\{MoneyStackNavigator\}/);
-    expect(tab).toMatch(/tabBarLabel: 'Money'/);
-    expect(tab).toMatch(/name="logo-usd"/);
-    expect(nav).toMatch(/function MoneyStackNavigator\(\) \{\s*return <SettingsStackNavigator initialRouteName="CoachMoney" \/>;/);
-    expect(nav).toMatch(/<SettingsStack\.Navigator\s+initialRouteName=\{initialRouteName\}/);
-    expect(nav).toMatch(/<SettingsStack\.Screen name="CoachMoney" component=\{MoneyScreen\} \/>/);
+  it('adds no Money tab of its own: the one Money tab is the six-tab one (coachTabsV2)', () => {
     expect(nav.match(/name="MoneyStack"/g)).toHaveLength(1);
+    expect(nav).toMatch(/\{tabsV2 && \(\s*<Tab\.Screen\s+name="MoneyStack"\s+component=\{MoneyStackNavigator\}/);
+    expect(nav).not.toMatch(/coachHomeV11/);
   });
 
-  it('gives every tab a string label with the flag on, so all six labels share one size and keep it at large text', () => {
-    const tabs = nav.split('<Tab.Screen').slice(1);
-    expect(tabs.length).toBeGreaterThanOrEqual(6);
-    for (const t of tabs) {
-      const name = /name="(\w+)"/.exec(t)?.[1];
-      expect(`${name}:${/tabBarLabel: (featureFlags\.\w+ \? )?'/.test(t)}`).toBe(`${name}:true`);
-    }
-    expect(nav).toMatch(/\.\.\.\(featureFlags\.coachHomeV11 \? \{ tabBarLabel: 'Messages' \} : \{\}\),/);
-    expect(nav).toMatch(/tabBarAllowFontScaling: !featureFlags\.coachHomeV11,/);
+  it('opens the app on the new Home with the flag on (coachLanding.ts)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { coachLandingTab } = require('../navigation/coachLanding') as typeof import('../navigation/coachLanding');
+    expect(nav).toMatch(/const initialTab = coachLandingTab\(\);/);
+    expect(coachLandingTab()).toBe('CommandCenter');
+    mockFlags.coachHomeV11 = false;
+    expect(coachLandingTab()).toBe('ClientsStack');
+    mockFlags.coachTabsV2 = true;
+    expect(coachLandingTab()).toBe('CommandCenter');
   });
 
-  it('opens the app on the new Home only with the flag on', () => {
-    expect(nav).toMatch(/const initialTab = __USING_MOCK_DATA \|\| featureFlags\.coachHomeV11 \? 'CommandCenter' : 'ClientsStack';/);
-  });
-
-  it('is off by default and in every EAS profile', () => {
+  it('is off by default in featureFlags.ts and in no EAS profile, so the default is the OTA switch', () => {
     const flags = fs.readFileSync(path.join(ROOT, 'src', 'config', 'featureFlags.ts'), 'utf8');
     expect(flags).toMatch(/coachHomeV11: readFlag\('EXPO_PUBLIC_FF_COACH_HOME_V11', false\)/);
     const eas = JSON.parse(fs.readFileSync(path.join(ROOT, 'eas.json'), 'utf8')) as { build: Record<string, { env?: Record<string, string> }> };
     for (const [name, profile] of Object.entries(eas.build)) {
-      expect([undefined, 'false']).toContain(profile.env?.EXPO_PUBLIC_FF_COACH_HOME_V11);
-      if (profile.env) expect(`${name}:${profile.env.EXPO_PUBLIC_FF_COACH_HOME_V11}`).toBe(`${name}:false`);
+      expect(`${name}:${profile.env?.EXPO_PUBLIC_FF_COACH_HOME_V11}`).toBe(`${name}:undefined`);
     }
   });
 });

@@ -36,9 +36,9 @@ test.each([undefined, '', '0', 'false', 'true', 'unexpected'])(
     expect(result.ios).toEqual(app.ios);
     expect(pluginNames(result)).toContain('react-native-health');
     // The switch never changes the build number; the value itself is pinned in
-    // scripts/__tests__/validateAppConfigUpdates.test.js (bumped to 8 for build 9 by agent 135).
+    // scripts/__tests__/validateAppConfigUpdates.test.js (bumped to 9 for build 10 by agent 142).
     expect(result.android.versionCode).toBe(app.android.versionCode);
-    expect(result.android.versionCode).toBe(8);
+    expect(result.android.versionCode).toBe(9);
     expect(result.android.package).toBe('com.growthproject.app');
     expect(result.extra.eas).toEqual(app.extra.eas);
   },
@@ -129,13 +129,20 @@ test('OFF handles future #317 permissions/plugins, tuples, existing blocks, and 
   expect(enabled.plugins).toEqual(input.plugins);
 });
 
-test('production and preview explicitly opt out; the clinic launch profile opts in (S14 round 3)', () => {
-  expect(eas.build.production.env.TGP_ANDROID_HEALTH_CONNECT).toBe('0');
+test('preview explicitly opts out; the launch profile and the production store profile opt in (S14 round 3, build 10)', () => {
   expect(eas.build.preview.env.TGP_ANDROID_HEALTH_CONNECT).toBe('0');
   expect(eas.build.clinic.extends).toBe('production');
   // Health Connect returns in the clinic binary after #317's isolation fixes.
   // A new Android binary is required (native permissions); never an OTA.
   expect(eas.build.clinic.env.TGP_ANDROID_HEALTH_CONNECT).toBe('1');
+  // Owner (137-1 rulings stand): "Health Connect stays on for day 1", so a
+  // store build from the production profile has it too (build 10, agent 142).
+  expect(eas.build.production.env.TGP_ANDROID_HEALTH_CONNECT).toBe('1');
+  process.env.TGP_ANDROID_HEALTH_CONNECT = eas.build.production.env.TGP_ANDROID_HEALTH_CONNECT;
+  const result = configure();
+  expect(result.extra.healthConnectEnabled).toBe(true);
+  expect(result.android.permissions).toEqual(app.android.permissions);
+  expect(pluginNames(result)).toContain('react-native-health-connect');
 });
 
 test('the clinic-apk Android test app extends clinic and keeps Health Connect on (CLINIC-APK-132)', () => {

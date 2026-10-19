@@ -5,8 +5,12 @@
  * the shared purchase flow with `join_code` (the purchase attaches the client).
  * A client package is 1:1 coaching with an individual coach
  * (config/purchaseSurfaces.ts, Guideline 3.1.3(d)): same PaymentSheet, no new path.
+ * FIX712: what is due today and the trial's first charge date come only from
+ * the join's server `quote` (PlanTermsBlock; none shown without one). Reopened
+ * from "Finish joining" (`resumed`), the saved join shows no quote and the
+ * screen re-reads it first; a `granted` answer is a finished join.
  */
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
@@ -18,7 +22,7 @@ import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice
 import { acceptFirstSignInSharing } from '../../api/coachSharingApi';
 import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
-import { clearPendingJoin, coachNameOf, type JoinOutcome } from '../../lib/joinPackage';
+import { clearPendingJoin, coachNameOf, rereadJoin, type JoinOutcome } from '../../lib/joinPackage';
 import { patchUserCache } from '../../lib/userCache';
 import { authApi } from '../../services/api';
 import { queryClient } from '../../services/queryClient';
@@ -56,9 +60,25 @@ export async function refreshAfterJoinPaid(sharingVersion: string | null = null)
 export interface JoinPackageScreenProps {
   join: JoinOutcome;
   onClose: () => void;
+  /** The saved join, reopened by "Finish joining": re-read before paying. */
+  resumed?: boolean;
 }
 
-export default function JoinPackageScreen({ join, onClose }: JoinPackageScreenProps) {
+export default function JoinPackageScreen({ join: given, onClose, resumed = false }: JoinPackageScreenProps) {
+  // The server's answer for the join it re-read (null: the re-read failed).
+  const [reread, setReread] = useState<{ of: JoinOutcome; join: JoinOutcome | null } | null>(null);
+  useEffect(() => {
+    if (!resumed) return undefined;
+    let live = true;
+    void rereadJoin(given).then((fresh) => {
+      if (live) setReread({ of: given, join: fresh });
+    });
+    return () => {
+      live = false;
+    };
+  }, [given, resumed]);
+  const rereading = resumed && reread?.of !== given;
+  const join = (reread?.of === given ? reread.join : null) ?? given;
   const { refreshEntitlement } = useEntitlement();
   const { appearance, colorScheme } = usePaymentSheetAppearance();
   const coach = coachNameOf(join);
@@ -113,7 +133,7 @@ export default function JoinPackageScreen({ join, onClose }: JoinPackageScreenPr
               sharedAtTap.current = sharingVersion;
               if (sellable) void purchase.start(sellable);
             }}
-            loading={purchase.busy}
+            loading={purchase.busy || rereading}
             testID="join-package-pay"
           />
         </>

@@ -190,10 +190,6 @@ function toMessage(err: unknown): string {
   if (status === 503 || code === 'PRACTICE_FEDERATION_FAILED') {
     return "Your practice did not sync across both products. Try again in a moment.";
   }
-  if (!err) return "Couldn't save practice. Try again.";
-  if (err && typeof err === 'object' && 'message' in err) {
-    return String((err as { message?: unknown }).message ?? "Couldn't save practice. Try again.");
-  }
   return "Couldn't save practice. Try again.";
 }
 

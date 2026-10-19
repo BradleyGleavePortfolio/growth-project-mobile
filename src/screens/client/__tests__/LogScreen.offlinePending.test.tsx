@@ -93,7 +93,8 @@ describe('Food Log with foods saved offline', () => {
 
   it('updates the waiting count as soon as a food is saved offline', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    await render(<LogScreen />);
+    const onSaved = jest.fn();
+    await render(<LogScreen onSaved={onSaved} />);
     await act(async () => {
       fireEvent.press(screen.getAllByText('Add food')[0]);
     });
@@ -105,6 +106,7 @@ describe('Food Log with foods saved offline', () => {
     });
     await waitFor(() => expect(enqueue).toHaveBeenCalledTimes(1));
     expect(mockNotify).toHaveBeenCalledTimes(1);
+    expect(onSaved).not.toHaveBeenCalled();
     expect(alert).toHaveBeenCalledWith('Saved offline', 'Rolled oats will sync to your log when you reconnect.');
     alert.mockRestore();
   });

@@ -12,6 +12,8 @@ import MoneyHomeCard from "../../../components/coach/money/MoneyHomeCard";
 import BriefHomeCard from "../../../components/coach/brief/BriefHomeCard";
 import { featureFlags } from "../../../config/featureFlags";
 import CoachSetupChecklist from "../../../components/coach/setup/CoachSetupChecklist";
+import PushPermissionCard from "../../../components/home/PushPermissionCard";
+import { coachLandingTab } from "../../../navigation/coachLanding";
 import type { CoachTabParamList } from "../../../navigation/CoachNavigator";
 import { useSetupOpener } from "./useSetupOpener";
 
@@ -30,6 +32,11 @@ export default function CoachHomeCards() {
   );
   return (
     <View testID="coach-home-cards">
+      {/* C-S-PUSH-3 + COACHLAND: Overview is the landing (coachTabsV2 on), so
+          it carries the coach's deferred push ask, in Home's hairline look. */}
+      {coachLandingTab() === "CommandCenter" ? (
+        <PushPermissionCard audience="coach" presentation="section" />
+      ) : null}
       <CoachSetupChecklist onOpen={open} />
       {featureFlags.coachBrief ? <BriefHomeCard onOpen={openBrief} /> : null}
       <MoneyHomeCard

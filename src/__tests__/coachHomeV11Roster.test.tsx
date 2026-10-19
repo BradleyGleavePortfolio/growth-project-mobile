@@ -31,6 +31,8 @@ jest.mock('../services/commandCenterApi', () => ({
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => Promise.resolve(0) }));
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => ({ data: { drafts: [] }, refetch: jest.fn() }) }));
 jest.mock('../lib/userCache', () => ({ ...jest.requireActual('../lib/userCache'), readUserCache: () => Promise.resolve({ id: 'coach-b' }) }));
+// The coach's push ask on the Home (C-S-PUSH-3) is covered in coachHomeV11.test.tsx.
+jest.mock('../components/home/PushPermissionCard', () => () => null);
 
 // Required after the mocks above exist (an import would be hoisted above them).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
