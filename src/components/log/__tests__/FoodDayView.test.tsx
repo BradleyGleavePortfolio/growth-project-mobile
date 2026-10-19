@@ -22,11 +22,11 @@ const planDay = { date: today, assignments: [{ daily_meal_plan: { name: 'Lean we
   { id: 's', slot_label: 'snack', order: 0, meal_template: template('Greek yogurt and berries', 210, [{ name: 'Greek yogurt', grams: 250 }]) },
   { id: 'd', slot_label: 'dinner', order: 0, meal_template: template('Salmon and rice', 610) },
 ] } }] };
-const log = (id: string, mealType: FoodLog['mealType'], foodName: string, calories: number): FoodLog => ({
+const log = (id: string, mealType: FoodLog['mealType'], foodName: string, calories: number, planSlotId?: string): FoodLog => ({
   id, userId: 'u', coachId: 'c', date: today, mealType, foodName, calories, protein: 20, carbs: 10, fat: 5,
-  quantity: 1, unit: 'serving', createdAt: `${today}T08:00:00.000`,
+  quantity: 1, unit: 'serving', createdAt: `${today}T08:00:00.000`, planSlotId,
 });
-const logs = [log('1', 'breakfast', 'Overnight oats', 390), log('2', 'lunch', 'Coffee with milk', 30)];
+const logs = [log('1', 'breakfast', 'Overnight oats', 390, 'b'), log('2', 'lunch', 'Coffee with milk', 30)];
 
 function serve(plan: unknown, fail = false) {
   mockGet.mockImplementation(async (url: string) => {
@@ -86,7 +86,7 @@ it('sends every tap to a real Food log path', async () => {
   await fireEvent.press(await screen.findByTestId('food-day-primary'));
   expect(props.onLogPlanned).toHaveBeenCalledWith(expect.objectContaining({ name: 'Greek yogurt and berries', mealType: 'snack', kcal: 210 }));
   await fireEvent.press(screen.getByTestId('food-day-something-else'));
-  expect(props.onSomethingElse).toHaveBeenLastCalledWith('snack');
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('snack', { planSlotId: 's' });
   await fireEvent.press(screen.getByLabelText('Coffee with milk, logged to lunch, 30 kcal'));
   expect(props.onEditFood).toHaveBeenLastCalledWith(logs[1]);
   await fireEvent.press(screen.getByTestId('food-day-slot-b'));
@@ -102,21 +102,33 @@ it('sends every tap to a real Food log path', async () => {
 it('keeps an extra out of a day with every meal open, and lets Something else fill the meal up next', async () => {
   serve(planDay);
   const coffee = log('9', 'breakfast', 'Coffee with milk', 30);
+  // Added through Extras "Add" under the plan meal's own name: no link, so still an extra.
+  const oats = log('11', 'breakfast', 'Overnight oats', 390);
   const view = await show({ foodLogs: [], eaten: { calories: 0, protein: 0 } });
   await fireEvent.press(await screen.findByTestId('food-day-add'));
   expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
+  await view.update({ foodLogs: [oats], eaten: { calories: 390, protein: 20 } });
+  expect(screen.getByText('0 of 3 meals done')).toBeTruthy();
+  expect(screen.getByLabelText('Overnight oats, logged to breakfast, 390 kcal')).toBeTruthy();
   await view.update({ foodLogs: [coffee], eaten: { calories: 30, protein: 20 } });
   expect(screen.getByText('UP NEXT, BREAKFAST')).toBeTruthy();
   expect(screen.getByText('0 of 3 meals done')).toBeTruthy();
   expect(screen.getByText('Logged to breakfast')).toBeTruthy();
   expect(screen.getByText('1,240 kcal and 110 g protein.')).toBeTruthy();
   await fireEvent.press(screen.getByTestId('food-day-something-else'));
-  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
-  await view.update({ foodLogs: [coffee, log('10', 'breakfast', 'Toast', 200)], eaten: { calories: 230, protein: 40 } });
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast', { planSlotId: 'b' });
+  await view.update({ foodLogs: [coffee, log('10', 'breakfast', 'Toast', 200, 'b')], eaten: { calories: 230, protein: 40 } });
   expect(await screen.findByText('Logged with a change: Toast')).toBeTruthy();
   expect(screen.getByText('UP NEXT, SNACK')).toBeTruthy();
   expect(screen.getByText('Logged to breakfast')).toBeTruthy();
-  expect(view.client.getQueryData(['food-day-changes', today])).toEqual({ 10: 'b' });
+});
+
+it('rebuilds a done meal from the server rows alone: relaunch, sign-in again, cleared cache, another phone', async () => {
+  serve(planDay);
+  // A fresh QueryClient and nothing but the day's rows, as after any of those: the link is on the entry.
+  await show({ foodLogs: [log('10', 'breakfast', 'Toast', 200, 'b')], eaten: { calories: 200, protein: 20 } });
+  expect(await screen.findByText('Logged with a change: Toast')).toBeTruthy();
+  expect(screen.getByText('UP NEXT, SNACK')).toBeTruthy();
 });
 
 it('says the target is met when the rest of the plan lands within 5 percent', async () => {

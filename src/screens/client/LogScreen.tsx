@@ -36,6 +36,7 @@ import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
 import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../utils/log/editPortion';
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import { matchLoggedFoods, mergeWithLoggedMatches, repeatPastMeal } from '../../utils/log/quickLog';
+import type { PlanLink } from '../../utils/log/planLink';
 import { addDays, getTodayString } from '../../utils/date';
 import {
   submitSearchLogOffline,
@@ -174,7 +175,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       unit: 'serving',
     });
 
-  const openAddFood = useCallback(async (mealType: MealType) => {
+  // FOODLINK: what this sheet's foods are logged for (the Food tab's "Something else"); every open resets it.
+  const [sheetLink, setSheetLink] = useState<PlanLink | undefined>(undefined);
+  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink) => {
+    setSheetLink(link);
     searchRequest.current += 1;
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     setSearching(false);
@@ -295,6 +299,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       multiplier,
       originalQuantity: qty,
       originalUnit: selectedUnit,
+      link: sheetLink,
     };
     setFoodSaving(true);
 
@@ -346,7 +351,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       Alert.alert('Missing info', 'Enter at least a food name and calories.');
       return;
     }
-    const args = { ...manualFields, date: selectedDate, mealType: activeMealType };
+    const args = { ...manualFields, date: selectedDate, mealType: activeMealType, link: sheetLink };
     setFoodSaving(true);
 
     if (!online) {
@@ -413,7 +418,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     const target = mealLabel(activeMealType);
     setFoodSaving(true);
     try {
-      const { added, failedNames } = await repeatPastMeal(repeatMeal, selectedDate, activeMealType);
+      const { added, failedNames } = await repeatPastMeal(repeatMeal, selectedDate, activeMealType, sheetLink);
       await loadDayData(currentUser.id, selectedDate);
       if (failedNames.length === 0) {
         HapticService.success();
@@ -439,7 +444,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     const v = (x: number) => String(Math.round(x * 10) / 10);
     const args = {
       foodName: slot.name, calories: v(slot.kcal), protein: v(slot.protein), carbs: v(slot.carbs), fat: v(slot.fat),
-      quantity: '1', unit: 'serving', date: selectedDate, mealType: slot.mealType,
+      quantity: '1', unit: 'serving', date: selectedDate, mealType: slot.mealType, link: { planSlotId: slot.key },
     };
     setFoodSaving(true);
     try {
@@ -646,7 +651,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           water={waterNode}
           onDateChange={handleDateChange}
           onLogPlanned={(slot) => void logPlanned(slot)}
-          onSomethingElse={(meal) => void openAddFood(meal)}
+          onSomethingElse={(meal, link) => void openAddFood(meal, link)}
           onEditFood={handleEditFood}
         >
         <Overline>Food log</Overline>

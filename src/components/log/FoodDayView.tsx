@@ -5,10 +5,10 @@
  * meal log, the search sheet, the edit sheet), so basic self logging stays open in every state. With no
  * plan for the day, or the flag off, FoodDayGate renders the classic Food log (its children) unchanged.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
 import { mealTemplatesApi } from '../../api/mealTemplatesApi';
@@ -21,6 +21,7 @@ import { colors as palette, layout, radius, typography, type SemanticTokens } fr
 import type { FoodLog, MealType } from '../../types';
 import { addDays, getTodayString } from '../../utils/date';
 import { buildPlanDay, nextSlot, type DaySlot } from '../../utils/log/foodDay';
+import type { PlanLink } from '../../utils/log/planLink';
 
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
 const clock = (iso: string) =>
@@ -41,7 +42,8 @@ export interface FoodDayViewProps {
   water: React.ReactNode;
   onDateChange: (date: string) => void;
   onLogPlanned: (slot: DaySlot) => void;
-  onSomethingElse: (mealType: MealType) => void;
+  /** Opens the search sheet for this meal; `link` (FOODLINK) is what the sheet's foods are logged for. */
+  onSomethingElse: (mealType: MealType, link?: PlanLink) => void;
   onEditFood: (log: FoodLog) => void;
 }
 
@@ -67,22 +69,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
     queryFn: () => api.get<{ name?: string }>('/v1/clients/me/coach').then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
-  // A food logged through "Something else" counts as that plan meal's change (log id -> slot id), kept in the
-  // app's persisted query cache (sealed, per account, cleared at sign-out). Any other food is an extra.
-  const queryClient = useQueryClient();
-  const changes = useQuery<Record<string, string>>({ queryKey: ['food-day-changes', p.selectedDate], enabled: false, gcTime: Infinity });
-  const swap = useRef<{ date: string; slot: string; meal: MealType; seen: string[] } | null>(null);
-  useEffect(() => {
-    const w = swap.current;
-    const fresh = w?.date === p.selectedDate ? p.foodLogs.filter((l) => l.mealType === w.meal && !w.seen.includes(l.id)) : [];
-    if (!w || fresh.length === 0) return;
-    w.seen.push(...fresh.map((l) => l.id));
-    queryClient.setQueryData<Record<string, string>>(['food-day-changes', w.date],
-      (m) => ({ ...m, ...Object.fromEntries(fresh.map((l) => [l.id, w.slot])) }));
-  }, [p.foodLogs, p.selectedDate, queryClient]);
   const assigned = plan.data?.assignments?.[0]?.daily_meal_plan;
-  const day = useMemo(() => (assigned && assigned.slots.length > 0 ? buildPlanDay(assigned, p.foodLogs, changes.data) : null),
-    [assigned, p.foodLogs, changes.data]);
+  // Each food carries the plan meal it was logged for (FOODLINK), so the day is rebuilt from the server's log.
+  const day = useMemo(() => (assigned && assigned.slots.length > 0 ? buildPlanDay(assigned, p.foodLogs) : null),
+    [assigned, p.foodLogs]);
 
   // Until the day and the plan are read, the classic log stays open for logging.
   if (!p.ready || plan.isLoading) return <>{p.fallback}</>;
@@ -163,10 +153,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
       ) : null}
       <PrimaryButton label="Ate it as planned" loading={p.saving} haptic={false} style={s.nowPrimary} testID="food-day-primary"
         onPress={() => p.onLogPlanned(x)} />
-      <HapticPressable intent="light" disabled={p.saving} style={s.outline} onPress={() => {
-        swap.current = { date: p.selectedDate, slot: x.key, meal: x.mealType, seen: p.foodLogs.map((l) => l.id) };
-        p.onSomethingElse(x.mealType);
-      }}
+      <HapticPressable intent="light" disabled={p.saving} style={s.outline} onPress={() => p.onSomethingElse(x.mealType, { planSlotId: x.key })}
         accessibilityRole="button" accessibilityLabel="Something else" testID="food-day-something-else">
         <Text style={s.outlineText}>Something else</Text>
       </HapticPressable>
@@ -226,7 +213,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
       <View style={s.sect}>
         <Text style={s.eyebrow}>EXTRAS, NOT IN THE PLAN</Text>
         <TextLink label="Add" tone="accent" underline={false} testID="food-day-add"
-          onPress={() => { swap.current = null; p.onSomethingElse(next?.mealType ?? 'snack'); }} />
+          onPress={() => p.onSomethingElse(next?.mealType ?? 'snack')} />
       </View>
       {/* The water card's top hairline closes this list, so the last extra draws none of its own. */}
       {day.extras.map((l, i) => (
