@@ -1,6 +1,6 @@
 // LEARN-M5 (flag learnCourses): banner, course home, week and page lesson; routes from plan 7.A mocked until LEARN-BE2.
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api, { lessonsApi } from '../../../../services/api';
@@ -14,7 +14,7 @@ import { courseNow, coursesFrom } from '../courseData';
 
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), getState: jest.fn() };
 let mockParams: Record<string, string> = {};
-let mockOnline = true;
+let [mockOnline, mockToday, mockOpen] = [true, '2026-10-14', () => undefined as void]; // today: Wed of week 3
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useRoute: () => ({ params: mockParams }) }));
 jest.mock('@expo-google-fonts/cormorant-garamond', () => ({ CormorantGaramond_400Regular_Italic: 1, useFonts: () => [true] }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
@@ -23,7 +23,8 @@ jest.mock('../../../../hooks/useReducedMotion', () => ({ useReducedMotion: () =>
 jest.mock('../../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({ online: mockOnline }), isEffectivelyOnline: (n: { online: boolean }) => n.online }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn(), softImpact: jest.fn(), success: jest.fn(), error: jest.fn() } }));
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn() }, lessonsApi: { complete: jest.fn() } }));
-jest.mock('../courseData', () => ({ ...jest.requireActual('../courseData'), today: () => '2026-10-14' })); // Wed of week 3
+jest.mock('../courseData', () => ({ ...jest.requireActual('../courseData'), today: () => mockToday }));
+jest.mock('../../../../hooks/useRefreshOnOpen', () => ({ useRefreshOnOpen: (f: () => void) => { mockOpen = f; } }));
 
 const lesson = (id: string, title: string, done: boolean, extra: object = {}) => ({ id, title, kind: 'page', done, ...extra });
 const week = (id: string, position: number, title: string, open: boolean, opens_on: string, finish_by: string, lessons: object[], note?: string) => ({ id, position, title, open, opens_on, finish_by, lessons, note });
@@ -46,16 +47,16 @@ const [get, complete] = [jest.mocked(api.get), jest.mocked(lessonsApi.complete)]
 
 async function show(Comp: React.ComponentType) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  return render(
+  return render(<Comp />, { wrapper: ({ children }: { children: React.ReactNode }) => (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, bottom: 34, left: 0, right: 0 } }}>
-      <QueryClientProvider client={client}><Comp /></QueryClientProvider>
-    </SafeAreaProvider>,
-  );
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </SafeAreaProvider>
+  ) });
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockParams = { id: 'k1' }; mockOnline = true;
+  mockParams = { id: 'k1' }; mockOnline = true; mockToday = '2026-10-14';
   mockNav.getState.mockReturnValue({ index: 1, routes: [{ name: 'WorkoutMain' }, { name: 'Course' }] });
   get.mockImplementation(((url: string) => ok(url === '/v1/client/courses' ? [COURSE] : COURSE)) as never);
   complete.mockImplementation(() => ok({}) as never);
@@ -80,11 +81,24 @@ describe('Train course banner', () => {
       expect(mockNav.navigate).toHaveBeenCalledWith('Course', { id: 'k1' });
     });
 
-    it('shows nothing when the client owns no course (c11)', async () => {
-      get.mockImplementation((() => ok({ courses: [] })) as never);
-      await show(CourseBanner);
+    it('shows nothing when the client owns no course (c11); a course granted later shows on the next open of Train or the app, and pull re-reads', async () => {
+      get.mockImplementationOnce((() => ok({ courses: [] })) as never);
+      const { rerender } = await show(CourseBanner);
       await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
       expect(screen.queryByTestId('course-banner')).toBeNull();
+      await act(async () => mockOpen());
+      expect(await screen.findByText('Knee Rehab, 8 weeks')).toBeTruthy();
+      await rerender(<CourseBanner refreshing />);
+      await waitFor(() => expect(get).toHaveBeenCalledTimes(3));
+    });
+
+    it('after the last finish-by day, the banner and the course home name no past date', async () => {
+      mockToday = '2026-10-20';
+      const banner = await show(CourseBanner);
+      expect(await screen.findByText(/Week 3 is open: 1 of 3 lessons done\.$/)).toBeTruthy();
+      await show(CourseHomeScreen);
+      expect(await screen.findByText('Week 3 of 4')).toBeTruthy();
+      [banner, screen].forEach((r) => expect(r.queryByText(/open until/)).toBeNull());
     });
   });
 });

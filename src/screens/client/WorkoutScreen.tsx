@@ -931,7 +931,7 @@ export default function WorkoutScreen() {
           ) : <Text style={styles.chartEmptyText}>Log a workout to see muscle breakdown</Text>}
         </FadeInView>}
         {/* LEARN-M5: the course banner at the very bottom (#TRAIN-START-TOP); nothing unless featureFlags.learnCourses. */}
-        <CourseBanner />
+        <CourseBanner refreshing={refreshing} />
     </Screen>
   );
 }

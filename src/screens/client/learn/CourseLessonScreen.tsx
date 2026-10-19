@@ -1,8 +1,5 @@
-/**
- * LEARN-M5, board c05 (flag learnCourses): one lesson's page, the coach's note and Mark as complete, done only after
- * the server saves it (300 ms fade, none with Reduce Motion; success haptic). Offline the page reads and the button
- * waits, with the reason. The video player is plan PR 6; the finish moments are plan PR 7.
- */
+/** LEARN-M5, board c05 (flag learnCourses): one lesson's page, the coach's note and Mark as complete, done only after the server saves it
+ * (300 ms fade, none with Reduce Motion; success haptic). Offline the page reads and the button waits, with the reason. Video player: plan PR 6; finish moments: plan PR 7. */
 import React, { useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, type NavigationProp, type ParamListBase } from '@react-navigation/native';

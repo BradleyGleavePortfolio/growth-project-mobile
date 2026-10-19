@@ -1,7 +1,5 @@
-/**
- * LEARN-M5, board c04 (flag learnCourses): one open week with its dates, the coach's note and its lessons (kind and
- * minutes; the first not done says Up next), then when the next week opens.
- */
+/** LEARN-M5, board c04 (flag learnCourses): one open week with its dates, the coach's note and its lessons (kind and minutes; the first not done says Up
+ * next), then when the next week opens. */
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';

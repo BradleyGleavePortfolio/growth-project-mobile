@@ -1,7 +1,5 @@
-/**
- * LEARN-M5, boards c03, c12, c13 (flag learnCourses): the course home. This week and its end date over one bar per
- * week, Up next with the one forest button, then the weeks; a week not open yet says when it opens (its sheet is PR 7).
- */
+/** LEARN-M5, boards c03, c12, c13 (flag learnCourses): the course home. This week and its end date over one bar per week, Up next with the one forest
+ * button, then the weeks; a week not open yet says when it opens (its sheet is PR 7). */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,10 +44,8 @@ export default function CourseHomeScreen() {
             <QuietError layout="inline" testID="course-error" onRetry={() => void query.refetch()}
               message={!online ? copy.noAnswer : isConnectionFailure(query.error) ? `${copy.failed} ${copy.noAnswer}` : copy.failed} />
           ) : (
-            <>
-              <QuietLoading label={copy.loading} rows={4} testID="course-loading" />
-              <Text style={[s.muted, s.section]} importantForAccessibility="no" accessibilityElementsHidden>{copy.loading}</Text>
-            </>
+            <><QuietLoading label={copy.loading} rows={4} testID="course-loading" />
+              <Text style={[s.muted, s.section]} importantForAccessibility="no" accessibilityElementsHidden>{copy.loading}</Text></>
           )}
         </View>
       </Screen>
@@ -57,7 +53,7 @@ export default function CourseHomeScreen() {
   }
 
   const on = today();
-  const { week, next, nextWeek, done, total } = courseNow(course, on);
+  const { week, until, next, nextWeek, done, total } = courseNow(course, on);
   const shown = week ?? course.weeks[0];
   const openWeek = (w: CourseWeek) => { void HapticService.selection(); navigation.navigate('CourseWeek', { id: course.id, week: w.id }); };
 
@@ -79,7 +75,7 @@ export default function CourseHomeScreen() {
         </View>
         <View style={s.foot}>
           <Text style={s.onDarkBody}>{copy.lessons(done, total)}</Text>
-          {week?.finishBy ? <Text style={s.onDarkBody}>{copy.openUntil(week.n, week.finishBy)}</Text> : null}
+          {week && until ? <Text style={s.onDarkBody}>{copy.openUntil(week.n, until)}</Text> : null}
         </View>
       </CourseMasthead>
       <FadeInView duration={300} style={s.body}>

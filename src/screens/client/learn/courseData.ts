@@ -1,8 +1,5 @@
-/**
- * LEARN-M5 (flag learnCourses; MOCK-LEARN2 option A): the course reads typed from plan 7.A. GET /v1/client/courses: the
- * courses the client owns; GET /v1/client/courses/:id: weeks, open state, finish-by days, progress and open weeks'
- * page text. The server decides what is open; a lapsed plan locks nothing (#LEARN-LOCK op 1).
- */
+/** LEARN-M5 (flag learnCourses; MOCK-LEARN2 option A): the course reads typed from plan 7.A. GET /v1/client/courses: the courses the client owns;
+ * GET /v1/client/courses/:id: weeks, open state, finish-by days, progress and open weeks' page text. The server decides what is open; a lapsed plan locks nothing (#LEARN-LOCK op 1). */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosRequestConfig } from 'axios';
 import api from '../../../services/api';
@@ -53,14 +50,15 @@ export function dayLabel(d: string | null, weekday = true): string {
   return `${weekday ? `${DAYS[date.getDay()]} ` : ''}${MONTHS[m - 1]} ${n}`;
 }
 
-/** This week: the first open week not yet past its finish-by day, else the last open one. Up next: its first lesson not done, else any open one. */
+/** This week: the first open week not yet past its finish-by day, else the last open one; `until`: its finish-by day only while that is
+ * today or later (as the week rows). Up next: its first lesson not done, else any open one. */
 export function courseNow(c: Course, on = today()) {
   const open = c.weeks.filter((w) => w.open);
   const week = open.find((w) => !w.finishBy || w.finishBy >= on) ?? open[open.length - 1] ?? null;
   const all = c.weeks.flatMap((w) => w.lessons);
   const next = week?.lessons.find((l) => !l.done) ?? open.flatMap((w) => w.lessons).find((l) => !l.done) ?? null;
   const nextWeek = next ? open.find((w) => w.lessons.includes(next)) ?? null : null;
-  return { week, next, nextWeek, done: all.filter((l) => l.done).length, total: all.length };
+  return { week, until: week?.finishBy && week.finishBy >= on ? week.finishBy : null, next, nextWeek, done: all.filter((l) => l.done).length, total: all.length };
 }
 
 export const doneIn = (w: CourseWeek) => w.lessons.filter((l) => l.done).length;
