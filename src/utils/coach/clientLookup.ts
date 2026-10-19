@@ -1,8 +1,8 @@
 /**
  * UI-4 (V1_1_UI_SPEC) — helpers for the coach client lookup. Reads only the
  * roster GET /coach/clients sends (server scoped: a moved client is never in
- * it) and GET /coach/messages/unread-count. Never invents a value: a client
- * who shares nothing reads "Not shared by <first name>".
+ * it) and GET /coach/messages/unread-count. Never invents a value: nothing
+ * logged says so (owner #SHARE-SIMPLE: a client's logs reach their coach).
  */
 import { cacheStorage } from '../../storage/mmkv';
 import { QUIET_AFTER_DAYS, rosterActivityLine, rosterDisplayName, type RosterClient } from './clientRoster';
@@ -11,15 +11,15 @@ import { QUIET_AFTER_DAYS, rosterActivityLine, rosterDisplayName, type RosterCli
 export const SEARCH_FIRST_AT = 15;
 export const RECENT_MAX = 4;
 
-export type LookupFilter = 'review' | 'messages' | 'quiet' | 'new' | 'notSharing';
+export type LookupFilter = 'review' | 'messages' | 'quiet' | 'new';
 export type UnreadByClient = Record<string, number>;
 
 export const FILTER_LABELS: Record<LookupFilter, string> = {
-  review: 'To review', messages: 'New messages', quiet: 'Quiet 3+ days', new: 'New this week', notSharing: 'Not sharing',
+  review: 'To review', messages: 'New messages', quiet: 'Quiet 3+ days', new: 'New this week',
 };
 
 /** A typed word that applies a filter, so "quiet ben" finds Ben Carter. */
-const FILTER_WORDS: Record<string, LookupFilter> = { review: 'review', messages: 'messages', quiet: 'quiet', new: 'new', sharing: 'notSharing' };
+const FILTER_WORDS: Record<string, LookupFilter> = { review: 'review', messages: 'messages', quiet: 'quiet', new: 'new' };
 
 export function parseLookupQuery(query: string): { filters: LookupFilter[]; text: string } {
   const filters: LookupFilter[] = [];
@@ -63,13 +63,11 @@ export function matchesLookupFilter(
       return (unread[c.id] ?? 0) > 0;
     case 'quiet': {
       const a = c.activity;
-      if (!a?.shared) return false;
+      if (!a) return false; // older server: no activity block
       return a.lastActiveOn ? dayDiff(a.lastActiveOn, today) >= QUIET_AFTER_DAYS : !isNewThisWeek(c, today);
     }
     case 'new':
       return isNewThisWeek(c, today);
-    case 'notSharing':
-      return c.activity?.shared === false;
   }
 }
 
@@ -90,7 +88,6 @@ export function lookupReason(
   if (review > 0) return { text: `${plural(review, 'check-in', 'check-ins')} to review`, action: 'review', ok: false };
   const messages = unread[c.id] ?? 0;
   if (messages > 0) return { text: plural(messages, 'new message', 'new messages'), action: 'reply', ok: false };
-  if (c.activity?.shared === false) return { text: `Not shared by ${firstName(c)}`, action: null, ok: false };
   const line = rosterActivityLine(c, today);
   const isNew = isNewThisWeek(c, today);
   if (isNew && !c.activity?.lastActiveOn) {
@@ -129,7 +126,6 @@ export function dayWord(day: string, today: Date = new Date()): string {
 
 /** The right-hand word on an A to Z row. */
 export function lastLoggedWord(c: RosterClient, today: Date = new Date()): string {
-  if (c.activity?.shared === false) return `Not shared by ${firstName(c)}`;
   const day = c.activity?.lastActiveOn;
   return day ? dayWord(day, today) : 'Nothing logged yet';
 }

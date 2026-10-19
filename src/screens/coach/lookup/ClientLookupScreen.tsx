@@ -5,12 +5,15 @@
  * and side index under "Opened recently". Mockups and HTML:
  * tgp-agent-context planning/v1_1_ui/ui-4-client-lookup/.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ClientsStackParamList } from '../../../navigation/CoachNavigator';
+import { CoachTeamEntryContext } from '../../../navigation/coachTeamEntry';
+import { coachLandingTab } from '../../../navigation/coachLanding';
+import PushPermissionCard from '../../../components/home/PushPermissionCard';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { coachApi } from '../../../services/api';
 import { ROSTER_PAGE_SIZE, useCoachStore } from '../../../store/coachStore';
@@ -53,6 +56,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
   const [everyoneY, setEveryoneY] = useState<number | null>(null);
   const activeTotal = useRef<number | null>(null);
   const nudge = useLookupNudge(colors);
+  const teamEntry = useContext(CoachTeamEntryContext); // COACHTABS: a Team Mode head coach opens Team here, as on today's list
   const archived = filterStatus === 'archived';
 
   const loadSide = useCallback(async () => {
@@ -162,12 +166,16 @@ export default function ClientLookupScreen({ navigation }: Props) {
       {known ? (
         <Text style={s.count} testID="lookup-count">{roster.length} {archived ? 'archived' : 'active'} {roster.length === 1 ? 'client' : 'clients'}</Text>
       ) : null}
+      {teamEntry ? <HapticPressable intent="light" style={s.azRow} onPress={() => navigation.getParent()?.navigate('TeamStack')} accessibilityRole="button" accessibilityLabel="Team" testID="lookup-team-entry">
+        <Ionicons name="briefcase-outline" size={20} color={colors.textSecondary} /><Text style={s.azName}>Team</Text><Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </HapticPressable> : null}
+      {coachLandingTab() === 'ClientsStack' ? <PushPermissionCard audience="coach" /> /* C-S-PUSH-3 + COACHLAND, as on today's list */ : null}
     </View>
   );
   const privacy = (
     <View style={s.privacy}>
       <Ionicons name="shield-outline" size={16} color={colors.textMuted} style={s.privacyIcon} />
-      <Text style={s.note}>Clients choose what they share with you. Anything not shared stays private.</Text>
+      <Text style={s.note}>You see your clients' workouts, food logs, weigh-ins and check-ins while you coach them.</Text>
     </View>
   );
 
