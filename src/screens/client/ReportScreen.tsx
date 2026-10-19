@@ -17,8 +17,14 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
+import { featureFlags } from '../../config/featureFlags';
+import WeekInReviewScreen from './progress/WeekInReviewScreen';
 
 export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
+  return featureFlags.clientProgressV2 ? <WeekInReviewScreen navigation={navigation} /> : <LegacyReportScreen navigation={navigation} />;
+}
+
+function LegacyReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
