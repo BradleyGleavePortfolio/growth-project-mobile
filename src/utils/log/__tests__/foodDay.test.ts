@@ -89,11 +89,13 @@ describe('buildPlanDay', () => {
       'Berry smoothie (Morning smoothies)', 'Overnight oats (Lean week 2)', 'Banana (Lean week 2)', 'Chicken bowl (Lean week 2)',
       'Green smoothie (Morning smoothies)', 'Salmon and rice (Lean week 2)',
     ]);
+    // Each meal also carries its plan's place in the day (newest first), which picks the plan's dot.
+    expect(day.slots.map((x) => x.planNo)).toEqual([0, 1, 1, 1, 0, 1]);
     expect([day.slots[1].status, day.slots[0].logs, nextSlot(day)?.key, day.extras]).toEqual(['Logged as planned', [], 'm', []]);
     // A food logged for one plan's breakfast never fills the other plan's breakfast.
     const other = buildPlanDay([smoothies, plan], [log('2', 'breakfast', 'Berry smoothie', { planSlotId: 'm' })]);
     expect([other.slots[0].status, other.slots[1].logs, nextSlot(other)?.key]).toEqual(['Logged as planned', [], 'b']);
-    expect(buildPlanDay([plan], []).slots.some((x) => 'plan' in x)).toBe(false);
+    expect(buildPlanDay([plan], []).slots.some((x) => 'plan' in x || 'planNo' in x)).toBe(false);
   });
 });
 
