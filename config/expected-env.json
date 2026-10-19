@@ -126,6 +126,11 @@
       "default": "off",
       "reason": "TIMELINE: the Style C Timeline page and its door on Progress stay off until the owner turns them on."
     },
+    "EXPO_PUBLIC_FF_CLIENT_TRAIN_V2": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "C1-TRAIN-TAB: the Style C v2 top of the Train tab (week masthead, coach note, today's workout with Start under its name) stays off until the owner turns it on."
+    },
     "EXPO_PUBLIC_FF_COACH_LESSONS": {
       "kind": "flag",
       "default": "off",

@@ -31,6 +31,7 @@ const isDev =
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: process.env.EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2,
   EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2,
+  EXPO_PUBLIC_FF_CLIENT_TRAIN_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TRAIN_V2,
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
@@ -109,6 +110,8 @@ export const featureFlags = {
   clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', false),
   /** TIMELINE: the Style C Timeline page, its door on Progress and its push route; off in every build. */
   clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', false),
+  /** C1-TRAIN-TAB: the Style C v2 top of the Train tab (week masthead, coach note, today's workout); off in every build. */
+  clientTrainV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TRAIN_V2', false),
   /** C5: the Style C buying pages (slice 2: the success moment and what unlocks); off in every build. */
   clientBillingV2: readFlag('EXPO_PUBLIC_FF_CLIENT_BILLING_V2', false),
   /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
