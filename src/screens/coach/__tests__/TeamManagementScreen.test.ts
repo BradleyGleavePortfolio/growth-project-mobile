@@ -28,17 +28,12 @@ describe('TeamManagementScreen', () => {
     expect(SCREEN_SRC).toMatch(/from ['"].*constants\/colors['"]/);
   });
 
-  it('renders a capacity bar component', () => {
-    expect(SCREEN_SRC).toMatch(/CapacityBar/);
-  });
-
   it('renders a score badge component', () => {
     expect(SCREEN_SRC).toMatch(/ScoreBadge/);
   });
 
-  it('renders an upgrade gate for non-Scale tiers', () => {
-    expect(SCREEN_SRC).toMatch(/UpgradeGate/);
-    expect(SCREEN_SRC).toMatch(/scale/);
+  it('has no plan gate, tier check or plan-based capacity bar (owner TM-P1)', () => {
+    expect(SCREEN_SRC).not.toMatch(/UpgradeGate|SCALE_TIERS|plan_tier|CapacityBar|remainingSeats|Upgrade/);
   });
 
   it('uses accessibilityRole on interactive elements', () => {

@@ -3,16 +3,16 @@
  *
  * Renders the same client recovery cards but adds two COACH-ONLY overlays
  * (brief §5.5):
- *   - An anomaly band beneath the hero (clinician-style 7-day deviation zone).
- *   - A cohort-comparison sparkline next to the HRV trend ("median client at
- *     week 6"). Cohort comparisons are NEVER rendered on the client side.
+ *   - An anomaly band beneath the hero (medical-style 7-day deviation zone).
+ *   - A client-average label next to the HRV trend, calculated from this
+ *     client's HRV samples only.
  *
  * IDOR defence (#5): the backend gates the `clientId` query via CoachGuard and
  * returns 403 if this coach does not own the client. This tab MUST render a
  * graceful `<RecoveryUnavailable />` state on 403 — NEVER throw uncaught. Any
  * other error surfaces a retry. No sample values are ever logged (#34).
  *
- * Anomaly band + cohort sparkline only render when `clientId` is present (we are
+ * Anomaly band + client average only render when `clientId` is present (we are
  * a coach viewing a client); they are inert on a client device.
  */
 
@@ -30,6 +30,7 @@ import { SleepStagesCard } from '../../client/wearables/cards/SleepStagesCard';
 import { HrvTrendCard } from '../../client/wearables/cards/HrvTrendCard';
 import { SleepConsistencyCard } from '../../client/wearables/cards/SleepConsistencyCard';
 import { RECOVERY_PALETTE } from '../../client/wearables/recoveryTheme';
+import { brand, colors as palette, gold } from '../../../theme/tokens';
 import { WearableInsightPanel } from './WearableInsightPanel';
 import {
   recoveryScore,
@@ -123,7 +124,7 @@ export function SleepRecoveryTab({ clientId, colors, styles }: SleepRecoveryTabP
 
   return (
     <View testID="coach-recovery-tab">
-      {/* Hero + clinician-style anomaly band directly beneath it. */}
+      {/* Hero + medical-style anomaly band directly beneath it. */}
       <View style={localStyles.heroWrap}>
         <RecoveryRingHero score={score} colors={colors} size={200} />
         <AnomalyBand trend={hrvTrend} colors={colors} />
@@ -135,7 +136,7 @@ export function SleepRecoveryTab({ clientId, colors, styles }: SleepRecoveryTabP
         <SleepStagesCard stages={stages} colors={colors} />
       </View>
 
-      {/* HRV trend with a coach-only cohort comparison sparkline beside it. */}
+      {/* HRV trend with this client's average beside it. */}
       <View style={{ marginTop: 14 }}>
         <HrvTrendCard trend={hrvTrend} latestMs={hrvLatest} colors={colors} />
         <CohortComparison trend={hrvTrend} colors={colors} />
@@ -163,7 +164,7 @@ function RecoveryUnavailable({ colors }: { colors: ThemeColors }) {
 
 /**
  * AnomalyBand — a subtle horizontal band showing the 7-day deviation zone of
- * the HRV trend (clinician-style overlay). Coach-only. Computes a ±1σ band and
+ * the HRV trend (medical-style overlay). Coach-only. Computes a ±1σ band and
  * marks where the latest value sits within it. Uses cool tones; an out-of-band
  * reading is drawn in soft amber, never red.
  */
@@ -204,7 +205,7 @@ function AnomalyBand({ trend, colors }: { trend: TrendPoint[]; colors: ThemeColo
             localStyles.anomalyMarker,
             {
               left: `${markerPos * 100}%`,
-              backgroundColor: outOfBand ? RECOVERY_PALETTE.attention : RECOVERY_PALETTE.accent,
+              backgroundColor: outOfBand ? gold[800] : palette.forest,
             },
           ]}
         />
@@ -214,22 +215,19 @@ function AnomalyBand({ trend, colors }: { trend: TrendPoint[]; colors: ThemeColo
 }
 
 /**
- * CohortComparison — a tiny coach-only sparkline label comparing this client's
- * mean HRV to a reference cohort ("median client at week 6"). Cohort framing is
- * NEVER shown to clients; it only renders inside the coach tab.
+ * CohortComparison — a coach-only label showing this client's mean HRV.
+ * The average is calculated from the viewed client's own HRV trend.
  */
 function CohortComparison({ trend, colors }: { trend: TrendPoint[]; colors: ThemeColors }) {
   const localStyles = useMemo(() => makeStyles(colors), [colors]);
   if (trend.length === 0) return null;
   const mean = trend.reduce((s, p) => s + p.value, 0) / trend.length;
-  // Reference cohort median is a server-derived constant in production; here we
-  // present the client's own mean against a neutral cohort label without
-  // green-for-good colouring (confidence-calibration lock).
+  // Keep the summary limited to the viewed client's HRV samples.
   return (
     <View style={localStyles.cohortWrap} testID="coach-cohort-comparison">
       <Ionicons name="people-outline" size={13} color={colors.textSecondary} />
       <Text style={localStyles.cohortText}>
-        Client average {Math.round(mean)} ms · compared with the median client at week 6
+        Client average {Math.round(mean)} ms
       </Text>
     </View>
   );
@@ -253,7 +251,7 @@ function makeStyles(colors: ThemeColors) {
     anomalyTrack: {
       height: 10,
       borderRadius: 5,
-      backgroundColor: RECOVERY_PALETTE.track,
+      backgroundColor: brand[100],
       overflow: 'visible',
       justifyContent: 'center',
     },
@@ -261,15 +259,17 @@ function makeStyles(colors: ThemeColors) {
       position: 'absolute',
       top: 2,
       bottom: 2,
-      backgroundColor: '#C9CEE6',
+      backgroundColor: brand[400],
       borderRadius: 4,
     },
     anomalyMarker: {
       position: 'absolute',
-      width: 4,
+      width: 6,
       height: 16,
-      borderRadius: 2,
-      marginLeft: -2,
+      borderRadius: 3,
+      marginLeft: -3,
+      borderWidth: 1,
+      borderColor: colors.surface,
     },
     cohortWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 4 },
     cohortText: { fontSize: 12, color: colors.textSecondary, flex: 1 },

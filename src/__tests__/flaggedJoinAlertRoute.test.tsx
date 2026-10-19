@@ -3,9 +3,12 @@
  * consultation answers from a push and from the notification inbox. The row
  * copies backend b#943's write (src/onboarding/flagged-join-alert.ts) and
  * runs through the real push handler, normalizer, router and screens.
+ * FLAG-2 (owner 139-12): the coached completion flag alert carries the same
+ * link (backend flaggedClientPayload), and the screen is headed by the name
+ * the read returns, since no alert row stores one (owner 4).
  */
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockGet = jest.fn();
@@ -99,6 +102,13 @@ const FLAGGED_JOIN_ROW = {
   created_at: '2026-10-12T17:00:00.000Z',
 };
 
+/** Backend onboarding.service.ts coached completion alert, after FLAG-2. */
+const COACHED_FLAG_ROW = {
+  ...FLAGGED_JOIN_ROW,
+  id: 'n-coached-flag',
+  body: 'A new client finished their consultation and was flagged for extra care. Please review before their first session.',
+};
+
 /** What every tap path delivers: the answers, the Clients list beneath. */
 const OPEN_ANSWERS = { screen: 'ClientConsultation', params: { clientId: CLIENT }, initial: false };
 
@@ -151,19 +161,22 @@ describe('owner 61a: the flagged-client join alert opens that client\'s answers'
     cleanup();
   });
 
-  it('notification inbox: tapping the row marks it read and opens the answers', async () => {
+  it.each([
+    ['the join alert', FLAGGED_JOIN_ROW],
+    ['the coached completion alert (FLAG-2)', COACHED_FLAG_ROW],
+  ])('notification inbox: tapping %s marks it read and opens the answers', async (_label, row) => {
     mockGet.mockImplementation(async (url: string) =>
       url.startsWith('/notifications/unread-count')
         ? { data: { count: 1 } }
-        : { data: { items: [FLAGGED_JOIN_ROW], nextCursor: null } },
+        : { data: { items: [row], nextCursor: null } },
     );
     setPushSession(COACH);
     const navigate = attachRoot(COACH_TABS);
     const screen = await render(<NotificationCenterScreen />);
-    await waitFor(() => expect(screen.getByText(BODY)).toBeTruthy());
-    await fireEvent.press(screen.getByText(BODY));
+    await waitFor(() => expect(screen.getByText(row.body)).toBeTruthy());
+    await fireEvent.press(screen.getByText(row.body));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('ClientsStack', OPEN_ANSWERS));
-    expect(mockPost).toHaveBeenCalledWith('/notifications/n-flagged-join/read');
+    expect(mockPost).toHaveBeenCalledWith(`/notifications/${row.id}/read`);
     expect(mockScreenNavigate).not.toHaveBeenCalled();
   });
 
@@ -179,25 +192,54 @@ describe('owner 61a: the flagged-client join alert opens that client\'s answers'
     }
   });
 
-  it('the screen the tap opens reads that client\'s answers', async () => {
-    const answer = { screen: 'B3', question: 'Your height and weight.', answer_label: '5 ft 6 in (168 cm), 172 lb' };
-    mockGet.mockResolvedValueOnce({
-      data: {
-        version: 'consult-v1', revision: 1, revision_cause: 'complete',
-        submitted_at: '2026-10-12T15:00:00.000Z', saved_at: '2026-10-12T15:00:00.000Z',
-        chapters: [{ key: 'body', title: 'Body basics', answers: [answer] }],
-        screening: { any_yes: false, items: [] },
-        consent: { version: 'consult-consent-v3', agreed_at: '2026-10-12T14:00:00.000Z' },
-      },
-    });
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const screen = await render(
-      <QueryClientProvider client={qc}>
+  const openAnswers = () =>
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <ClientConsultationScreen route={{ key: 'k', name: 'ClientConsultation', params: OPEN_ANSWERS.params }} />
       </QueryClientProvider>,
+    );
+
+  it('the screen the tap opens reads that client\'s answers, headed by the name the read returns', async () => {
+    const answer = { screen: 'B3', question: 'Your height and weight.', answer_label: '5 ft 6 in (168 cm), 172 lb' };
+    let reply!: (res: unknown) => void;
+    mockGet.mockReturnValueOnce(
+      new Promise((resolve) => {
+        reply = resolve;
+      }),
+    );
+    const screen = await openAnswers();
+    // FLAG-2: while the read loads, the heading holds its line, never "Client".
+    expect(screen.getByTestId('consultation-loading')).toBeTruthy();
+    expect(screen.queryByText('Client')).toBeNull();
+    await act(async () =>
+      reply({
+        data: {
+          version: 'consult-v1', revision: 1, revision_cause: 'complete',
+          submitted_at: '2026-10-12T15:00:00.000Z', saved_at: '2026-10-12T15:00:00.000Z',
+          chapters: [{ key: 'body', title: 'Body basics', answers: [answer] }],
+          screening: { any_yes: false, items: [] },
+          consent: { version: 'consult-consent-v3', agreed_at: '2026-10-12T14:00:00.000Z' },
+          client_name: 'Sam Lee',
+        },
+      }),
     );
     await screen.findByTestId('consultation-answers');
     expect(mockGet).toHaveBeenCalledWith(`/coach/clients/${CLIENT}/consultation`);
     expect(screen.getByText(answer.answer_label)).toBeTruthy();
+    expect(screen.getByRole('header').props.children).toBe('Sam Lee');
+  });
+
+  it('FLAG-2: a coach who lost access keeps the no-answers state and sees no name', async () => {
+    mockGet.mockRejectedValueOnce(
+      Object.assign(new Error('status 404'), {
+        isAxiosError: true,
+        config: { headers: {} },
+        response: { status: 404, data: { message: 'Consultation not found' }, headers: {} },
+      }),
+    );
+    const screen = await openAnswers();
+    await screen.findByTestId('consultation-none');
+    expect(screen.getByRole('header').props.children).toBe('Client');
+    expect(screen.getByText('No consultation answers are on file for this client yet.')).toBeTruthy();
   });
 });

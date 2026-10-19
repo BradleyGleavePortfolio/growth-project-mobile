@@ -16,7 +16,7 @@
 
 import React from 'react';
 import { Platform } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -180,8 +180,6 @@ function holdNextImport(): Held {
   return held;
 }
 
-const flush = () => new Promise((r) => setTimeout(r, 0));
-
 function ctaDisabled(label: string): boolean {
   return screen.getByLabelText(label).props.accessibilityState?.disabled === true;
 }
@@ -189,6 +187,14 @@ function ctaDisabled(label: string): boolean {
 const LATE_FAILURE_COPY = /history didn't finish coming in/;
 
 type How = 'close and reopen for Oura' | 'provider change to Oura';
+
+async function settleHeldImport(held: Held, pressed: Promise<unknown>, outcome: 'succeeds' | 'fails') {
+  await act(async () => {
+    if (outcome === 'succeeds') held.resolve({ normalizedCount: 4, complete: true });
+    else held.reject(new Error('phone store read failed'));
+    await pressed;
+  });
+}
 
 async function startHeldConnect(onClose: jest.Mock, onConnected: jest.Mock) {
   const held = holdNextImport();
@@ -226,9 +232,8 @@ describe('B-317-11: a stale on-device import does nothing to the next sheet', ()
     const onConnected = jest.fn();
     const { held, view, pressed } = await startHeldConnect(onClose, onConnected);
     await moveToOura(view, how, onClose, onConnected);
-    held.resolve({ normalizedCount: 4, complete: true });
-    await pressed;
-    await flush();
+    await settleHeldImport(held, pressed, 'succeeds');
+    await waitFor(() => expect(mockInvalidate).toHaveBeenCalledTimes(1));
     expectNothingVisible(onClose, onConnected);
     expect(screen.getByLabelText('Connect Oura')).toBeTruthy();
     // Same session: the authoritative list is re-read (data may have arrived).
@@ -240,9 +245,8 @@ describe('B-317-11: a stale on-device import does nothing to the next sheet', ()
     const onConnected = jest.fn();
     const { held, view, pressed } = await startHeldConnect(onClose, onConnected);
     await moveToOura(view, how, onClose, onConnected);
-    held.reject(new Error('phone store read failed'));
-    await pressed;
-    await flush();
+    await settleHeldImport(held, pressed, 'fails');
+    await waitFor(() => expect(mockInvalidate).toHaveBeenCalledTimes(1));
     expectNothingVisible(onClose, onConnected);
     expect(mockInvalidate).toHaveBeenCalledTimes(1);
   });
@@ -258,9 +262,8 @@ describe('B-317-11: a stale on-device import does nothing to the next sheet', ()
     // And it works: Continue starts the Oura authorization right away.
     fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
     await waitFor(() => expect(mockStartOauth).toHaveBeenCalledWith('OURA'));
-    held.resolve({ normalizedCount: 4, complete: true });
-    await pressed;
-    await flush();
+    await settleHeldImport(held, pressed, 'succeeds');
+    await waitFor(() => expect(mockInvalidate).toHaveBeenCalledTimes(1));
     expect(tutorialSignals).toEqual([]);
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -270,10 +273,8 @@ describe('B-317-11: a stale on-device import does nothing to the next sheet', ()
     const onConnected = jest.fn();
     const { held, view, pressed } = await startHeldConnect(onClose, onConnected);
     await view.unmount();
-    if (result === 'succeeds') held.resolve({ normalizedCount: 4, complete: true });
-    else held.reject(new Error('phone store read failed'));
-    await pressed;
-    await flush();
+    await settleHeldImport(held, pressed, result);
+    await waitFor(() => expect(mockInvalidate).toHaveBeenCalledTimes(1));
     expect(tutorialSignals).toEqual([]);
     expect(onConnected).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
@@ -288,20 +289,22 @@ describe('B-317-11: a stale on-device import does nothing to the next sheet', ()
       const { held, pressed } = await startHeldConnect(onClose, onConnected);
       // signOut() calls this first, synchronously, before its first await.
       stopOnDeviceHealthWork();
-      if (result === 'succeeds') held.resolve({ normalizedCount: 4, complete: true });
-      else held.reject(new Error('phone store read failed'));
-      await pressed;
-      await flush();
+      await settleHeldImport(held, pressed, result);
+      if (result === 'fails') {
+        // Still this sheet: the stop is explained, with the way back.
+        await waitFor(() =>
+          expect(screen.getByText(/signed-in account changed while Health Connect was connecting/)).toBeTruthy(),
+        );
+      } else {
+        // A stale success is complete only after the current sheet is ready again.
+        await waitFor(() => expect(ctaDisabled('Continue connecting Health Connect')).toBe(false));
+      }
       expect(tutorialSignals).toEqual([]);
       expect(onConnected).not.toHaveBeenCalled();
       expect(onClose).not.toHaveBeenCalled();
       expect(mockInvalidate).not.toHaveBeenCalled();
       expect(mockReport).not.toHaveBeenCalled();
       expect(screen.queryByText(LATE_FAILURE_COPY)).toBeNull();
-      if (result === 'fails') {
-        // Still this sheet: the stop is explained, with the way back.
-        expect(screen.getByText(/signed-in account changed while Health Connect was connecting/)).toBeTruthy();
-      }
     },
   );
 
@@ -324,9 +327,8 @@ describe('B-317-11: a stale on-device import does nothing to the next sheet', ()
     await waitFor(() => expect(mockHealthConnectSync.mock.calls.length).toBe(calls + 1));
     await moveToOura(view, how, onClose, onConnected);
     expect(ctaDisabled('Continue connecting Oura')).toBe(false);
-    held.reject(new Error('phone store read failed'));
-    await resumed;
-    await flush();
+    await settleHeldImport(held, resumed, 'fails');
+    await waitFor(() => expect(mockInvalidate).toHaveBeenCalledTimes(1));
     expectNothingVisible(onClose, onConnected);
     expect(screen.queryByLabelText('Continue import for Health Connect')).toBeNull();
   });
@@ -336,8 +338,7 @@ describe('B-317-11: a stale on-device import does nothing to the next sheet', ()
       const onClose = jest.fn();
       const onConnected = jest.fn();
       const { held, pressed } = await startHeldConnect(onClose, onConnected);
-      held.resolve({ normalizedCount: 4, complete: true });
-      await pressed;
+      await settleHeldImport(held, pressed, 'succeeds');
       await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
       expect(onConnected).toHaveBeenCalledTimes(1);
       expect(tutorialSignals).toEqual(['wearable_connected']);
@@ -348,8 +349,7 @@ describe('B-317-11: a stale on-device import does nothing to the next sheet', ()
       const onClose = jest.fn();
       const onConnected = jest.fn();
       const { held, pressed } = await startHeldConnect(onClose, onConnected);
-      held.reject(new Error('phone store read failed'));
-      await pressed;
+      await settleHeldImport(held, pressed, 'fails');
       await waitFor(() => expect(screen.getByText(LATE_FAILURE_COPY)).toBeTruthy());
       expect(screen.getByText(/Reference /)).toBeTruthy();
       expect(mockReport).toHaveBeenCalledTimes(1);
@@ -375,9 +375,10 @@ describe('C-317-c: the Open Health Connect result is shown only on the sheet tha
     await waitFor(() => expect(openSpy).toHaveBeenCalledTimes(1));
     await view.rerender(<ConnectProviderSheet provider="HEALTH_CONNECT" visible={false} onClose={onClose} />);
     await view.rerender(<ConnectProviderSheet provider="OURA" visible onClose={onClose} />);
-    resolveOpen(opens);
-    await opened;
-    await flush();
+    await act(async () => {
+      resolveOpen(opens);
+      await opened;
+    });
     expect(screen.queryByText(/didn't open/)).toBeNull();
     expect(screen.queryByText(/access is set up/)).toBeNull();
     expect(screen.getByLabelText('Continue connecting Oura')).toBeTruthy();

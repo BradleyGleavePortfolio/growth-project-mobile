@@ -1,6 +1,6 @@
 /**
  * S-SCHED-4 B-325-3: the support destination is the owner-ruled address
- * (2026-10-01 14:19 PDT, "Support email: Bradleyapple1031@gmail.com"; one
+ * (2026-10-19 #SUPPORT-ADDRESS; one
  * SUPPORT_EMAIL everywhere). Pinned to the ruling's literal, not to the
  * constant, so a wrong constant fails here.
  */
@@ -12,7 +12,7 @@ import { SUPPORT_EMAIL as CONSULTATION_SUPPORT_EMAIL } from '../../lib/consultat
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
 import { DELETION_SUPPORT_EMAIL, HELP_UNAVAILABLE_COPY } from '../../screens/settings/deletionErrors';
 
-const RULED = 'Bradleyapple1031@gmail.com';
+const RULED = 'support@thegrowthproject.site';
 
 describe('support address (owner ruling)', () => {
   it('is the ruled address and the mailto targets it', () => {

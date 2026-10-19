@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import type { ClientWorkoutAssignmentWithPlan } from '../../api/workoutBuilderApi';
+import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import { Headline } from '../../ui';
 import { typography, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -168,7 +169,7 @@ export default function PlanExplanationCard(): React.ReactElement | null {
     navigation.getParent()?.navigate('MoreTab', { screen, ...(params ? { params } : {}), initial: false });
   const next: PlanNextDay | null = first
     ? {
-        title: first.workout_plan?.name ?? 'Your first workout',
+        title: assignmentPlanName(first) ?? 'Your first workout',
         when: weekdayOf(first.scheduled_for),
         onPress: () => open('WorkoutAssignmentDetail', { assignmentId: first.id }),
       }

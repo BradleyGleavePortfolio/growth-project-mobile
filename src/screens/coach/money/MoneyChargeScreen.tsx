@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useTheme } from "../../../theme/ThemeProvider";
 import {
   coachMoneyApi,
@@ -29,10 +28,8 @@ import {
   shortDate,
 } from "../../../lib/money/moneyCopy";
 import SetupNotice from "../../../components/coach/setup/SetupNotice";
-import type {
-  CoachTabParamList,
-  SettingsStackParamList,
-} from "../../../navigation/CoachNavigator";
+import type { SettingsStackParamList } from "../../../navigation/CoachNavigator";
+import { openInboxChat } from "../../../navigation/coachInbox";
 import { makeStyles } from "./MoneyScreen";
 import { useSection } from "./useSection";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -123,8 +120,6 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
     // Opus B-349-1: on a plan the first row is every payment so far.
     plan && r.key === "price" ? { ...r, label: "Clients paid so far" } : r,
   );
-  const tabNav =
-    navigation.getParent<NativeStackNavigationProp<CoachTabParamList>>();
   // B-332-8 (Opus): a failed payment or an unfinished checkout moved no
   // money, so it never shows "Clients paid" or "check back once it clears".
   // Opus B-349-1: a failed renewal on a plan that has been paid before
@@ -232,12 +227,7 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
         )}
         {c.client.id ? (
           <TouchableOpacity
-            onPress={() =>
-              tabNav?.navigate("ClientsStack", {
-                screen: "ClientMessages",
-                params: { clientId: c.client.id, clientName: c.client.name },
-              })
-            }
+            onPress={() => openInboxChat(navigation, c.client.id, c.client.name)}
             style={styles.primary}
             accessibilityRole="button"
             accessibilityLabel={`Message ${c.client.name}`}

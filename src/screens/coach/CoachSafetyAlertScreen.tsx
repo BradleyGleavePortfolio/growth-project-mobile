@@ -6,6 +6,8 @@
  * Shows the client's name, when they sent the message, that one message in
  * full (nothing else from the chat), one fixed line saying what Roman told
  * them, and a "Message {first name}" button that opens the coach-client chat.
+ * A crisis alert (owner #ROMAN-CRISIS-ALERT) never shows the client's words:
+ * only its own fixed line, with the client's first name.
  * From the card everything comes from the queue item (route params). By id
  * the screen reads that one alert (shared skeleton while it loads); the
  * server gives it only to the client's current coach, and anything it won't
@@ -23,18 +25,20 @@ import type {
   CoachTabParamList,
   SafetyAlertParams,
 } from '../../navigation/CoachNavigator';
-import { commandCenterApi, isSafetyAlert, type SafetyAlertType } from '../../services/commandCenterApi';
+import { openInboxChat } from '../../navigation/coachInbox';
+import { commandCenterApi, isSafetyAlert, safetyQuote, type SafetyAlertType } from '../../services/commandCenterApi';
 import { Headline, PrimaryButton, Screen, ScreenTopBar } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { QuietLoading } from '../../ui/states/QuietStates';
 import { useTheme } from '../../theme/useTheme';
 import { radius, spacing, typography } from '../../theme/tokens';
 
-/** Owner 57: the one line under the client's message, word for word. */
+/** Owner 57, C6a, #ROMAN-CRISIS-ALERT: the one fixed line, word for word. */
 export const SAFETY_ALERT_SUMMARY: Record<SafetyAlertType, string> = {
   roman_urgent_reply:
-    'Roman told them to contact their prescribing clinic today, and to call 911 if symptoms are severe.',
+    'Roman told them to contact their doctor or prescriber today, and to call 911 if symptoms are severe.',
   roman_eating_disorder_reply: 'Roman answered with eating-disorder safety guidance.',
+  roman_crisis_reply: 'Roman sent {first name} a crisis safety reply. Please check in with them today.',
 };
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'CoachSafetyAlert'>;
@@ -111,10 +115,11 @@ export default function CoachSafetyAlertScreen({ route, navigation }: Props): Re
     );
   }
 
-  const { alertType, clientId, clientName, quote, sentAt } = alert;
+  const { alertType, clientId, clientName, sentAt } = alert;
+  const quote = safetyQuote(alertType, alert.quote);
   const first = firstName(clientName);
   const sent = formatSentAt(sentAt);
-  const openChat = () => navigation.navigate('ClientMessages', { clientId, clientName });
+  const openChat = () => openInboxChat(navigation, clientId, clientName); // COACH-CHAT-BACK: in Messages with the six tabs
 
   return (
     <View ph-no-capture style={styles.fill} testID="coach-safety-alert-excluded">
@@ -148,7 +153,7 @@ export default function CoachSafetyAlertScreen({ route, navigation }: Props): Re
             </View>
           ) : null}
           <Text style={[styles.summary, { color: sc.textPrimary }]} testID="coach-safety-alert-summary">
-            {SAFETY_ALERT_SUMMARY[alertType]}
+            {SAFETY_ALERT_SUMMARY[alertType].replace('{first name}', first || clientName)}
           </Text>
         </View>
       </Screen>

@@ -107,6 +107,21 @@ async function renderThread() {
 }
 
 describe('CommunityThreadScreen reactions (U1)', () => {
+  it.each(COMMUNITY_REACTION_EMOJI)('routes an offered reaction %s through the real hook with its accepted REST key', async (emoji) => {
+    // The settled hook refetches: that read must reflect the persisted tap.
+    mockApi.getPost.mockResolvedValueOnce(prodPost({
+      reactions: COMMUNITY_REACTION_EMOJI.map((key) =>
+        ({ emoji: key, count: 1, reacted_by_me: false })),
+    })).mockResolvedValue(prodPost({
+      reactions: [{ emoji, count: 2, reacted_by_me: true }],
+    }));
+    mockApi.reactToPost.mockResolvedValue(state([{ emoji, count: 2, reacted_by_me: true }]));
+    const view = await renderThread();
+    await fireEvent.press(chip(view, emoji));
+    expect(mockApi.reactToPost).toHaveBeenCalledWith(POST, emoji);
+    await waitFor(() => expect(chip(view, emoji).props.accessibilityState).toMatchObject({ selected: true }));
+  });
+
   it('flips at once, then shows the summary the tap returned, and the next tap removes it (no reactions on the post)', async () => {
     let resolveTap: (v: unknown) => void = () => undefined;
     mockApi.reactToPost.mockReturnValue(new Promise((r) => { resolveTap = r; }));

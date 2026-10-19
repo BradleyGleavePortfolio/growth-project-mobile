@@ -30,6 +30,7 @@ import {
   type TeamResult,
 } from '../../api/coachTeamApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { featureFlags } from '../../config/featureFlags';
 import { errorMessage } from '../../types/common';
 import InviteShareCard from '../../components/coach/setup/InviteShareCard';
 import { QuietError } from '../../ui/states/QuietStates';
@@ -221,7 +222,11 @@ export default function CoachTeamProfileScreen() {
 
       <TouchableOpacity
         style={styles.linkRow}
-        onPress={() => navigation.navigate('CoachMoney')}
+        onPress={() =>
+          featureFlags.coachTabsV2
+            ? navigation.navigate('MoneyStack', { screen: 'CoachMoney', pop: true })
+            : navigation.navigate('CoachMoney')
+        }
         accessibilityRole="button"
         accessibilityLabel="Open Money"
       >

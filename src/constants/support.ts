@@ -9,7 +9,7 @@
  * their own address. src/constants/__tests__/supportEmail.guard.test.ts fails
  * the build if any other address appears in src/.
  */
-export const SUPPORT_EMAIL = "Bradleyapple1031@gmail.com";
+export const SUPPORT_EMAIL = "support@thegrowthproject.site";
 
 /**
  * `mailto:` link to SUPPORT_EMAIL, with an optional subject line and an

@@ -33,6 +33,7 @@ import { layout, radius, typography, type SemanticTokens } from '../../theme/tok
 import { Headline, Lede, Overline, Screen, ScreenTopBar, TextLink } from '../../ui';
 import { useTheme } from '../../theme/ThemeProvider';
 import { getProfileCompletion } from '../../lib/profileCompletion';
+import { featureFlags } from '../../config/featureFlags';
 import { buildProfileRows, buildTargetRows, type ProfileValues } from './profileDisplay';
 type Nav = NativeStackNavigationProp<MoreStackParamList>;
 interface SavedValues {
@@ -184,17 +185,20 @@ export default function ProfileScreen() {
           <Ionicons name="apps-outline" size={24} color={sc.textMuted} />
           <Text style={styles.actionText}>Shortcuts</Text>
         </HapticPressable>
-        <HapticPressable
-          intent="light"
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate('Learn')}
-          accessibilityRole="button"
-          accessibilityLabel="Learn"
-          accessibilityHint="Opens learning content"
-        >
-          <Ionicons name="book-outline" size={24} color={sc.textMuted} />
-          <Text style={styles.actionText}>Learn</Text>
-        </HapticPressable>
+        {featureFlags.learnHub ? null : (
+          // LEARN-A: with learnHub on, Learn opens from the You list only, once the coach has written something.
+          <HapticPressable
+            intent="light"
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate('Learn')}
+            accessibilityRole="button"
+            accessibilityLabel="Learn"
+            accessibilityHint="Opens learning content"
+          >
+            <Ionicons name="book-outline" size={24} color={sc.textMuted} />
+            <Text style={styles.actionText}>Learn</Text>
+          </HapticPressable>
+        )}
       </View>
 
       <View style={styles.section}>

@@ -42,6 +42,8 @@ import SafetyMenu from '../../components/community/SafetyMenu';
 import VoiceNotesSection from '../../components/community/VoiceNotesSection';
 import { featureFlags } from '../../config/featureFlags';
 import HapticPressable from '../../components/HapticPressable';
+import { SpaceListButton } from '../../components/community/SpaceDrawer';
+import { ScreenTopBar } from '../../ui/layout/Screen';
 import type { CommunityPost } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
 import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from '../../api/communityErrors';
@@ -138,16 +140,20 @@ export default function CommunitySpaceScreen({
     [isPostsError, posts.error],
   );
 
-  const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
+  // Memoised so a refetch re-render keeps the same component type: the page
+  // (and an open space list) stays mounted instead of rebuilding.
+  const Container = useMemo<React.ComponentType<{ children: React.ReactNode }>>(() => embedded
     ? ({ children }) => <View style={styles.flex}>{children}</View>
     : ({ children }) => (
         <SafeAreaView
           style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
           edges={['top']}
         >
+          {/* C6-M1S: opened from Community Home, Back returns there and the drawer switches space. */}
+          {featureFlags.communityHomeV2 ? <ScreenTopBar onBack={() => navigation.goBack()} trailing={<SpaceListButton />} testID="community-space-topbar" /> : null}
           {children}
         </SafeAreaView>
-      );
+      ), [embedded, semanticColors.bgPrimary, navigation]);
 
   // Resolve the prerequisite BEFORE any post state so a still-loading or failed
   // prerequisite is never mistaken for an empty workspace.

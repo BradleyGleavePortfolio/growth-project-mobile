@@ -258,19 +258,19 @@ describe('signInWithApple: provider email on coach outcomes (#306 r5)', () => {
   });
 
   it('a later attempt (no credential email) takes the email from the identity token', async () => {
-    mockSignInAsync.mockResolvedValueOnce({ identityToken: tokenWith({ email: 'pat@icloud.com' }) });
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: tokenWith({ email: 'pat@apple.test' }) });
     mockApiPost.mockRejectedValueOnce(new Error('Cannot reach server'));
     const result = await signInWithApple({ intendedRole: 'coach' });
-    expect(result).toMatchObject({ error_code: 'coach_signup_unconfirmed', provider_email: 'pat@icloud.com' });
+    expect(result).toMatchObject({ error_code: 'coach_signup_unconfirmed', provider_email: 'pat@apple.test' });
   });
 
   it('the coach refusal returns the email too', async () => {
-    mockSignInAsync.mockResolvedValueOnce({ identityToken: tokenWith({ email: 'pat@icloud.com' }) });
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: tokenWith({ email: 'pat@apple.test' }) });
     mockApiPost.mockRejectedValueOnce({
       response: { status: 400, data: { message: ['property intended_role should not exist'] } },
     });
     const result = await signInWithApple({ intendedRole: 'coach' });
-    expect(result).toMatchObject({ error_code: 'coach_signup_unavailable', provider_email: 'pat@icloud.com' });
+    expect(result).toMatchObject({ error_code: 'coach_signup_unavailable', provider_email: 'pat@apple.test' });
   });
 });
 
@@ -286,7 +286,7 @@ describe('signInWithApple: failure detail and provider subject (#306 r6)', () =>
 
   it('reads the sub claim as the stable subject', () => {
     expect(subjectFromAppleIdentityToken(tokenWith({ sub: '001234.abc' }))).toBe('001234.abc');
-    expect(subjectFromAppleIdentityToken(tokenWith({ email: 'pat@icloud.com' }))).toBeUndefined();
+    expect(subjectFromAppleIdentityToken(tokenWith({ email: 'pat@apple.test' }))).toBeUndefined();
     expect(subjectFromAppleIdentityToken('apple-id-token')).toBeUndefined();
   });
 

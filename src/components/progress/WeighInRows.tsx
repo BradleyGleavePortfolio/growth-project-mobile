@@ -16,7 +16,7 @@ export interface WeighInRow {
   notes?: string;
 }
 
-export default function WeighInRows({ rows }: { rows: WeighInRow[] }): React.ReactElement {
+export default function WeighInRows({ rows, unit = 'lb' }: { rows: WeighInRow[]; unit?: 'lb' | 'kg' }): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   return (
     <View testID="progress-weigh-ins">
@@ -33,7 +33,7 @@ export default function WeighInRows({ rows }: { rows: WeighInRow[] }): React.Rea
           </View>
           <Text style={[styles.weight, { color: sc.textPrimary }]}>
             {formatWeight(row.weight)}
-            <Text style={[styles.unit, { color: sc.textMuted }]}> lb</Text>
+            <Text style={[styles.unit, { color: sc.textMuted }]}> {unit}</Text>
           </Text>
         </View>
       ))}

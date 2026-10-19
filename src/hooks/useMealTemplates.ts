@@ -13,7 +13,7 @@
  *   ['meal-plan', 'today', dateIso?]        — client today view
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   mealTemplatesApi,
   type AssignDailyPlanInput,
@@ -72,6 +72,7 @@ export function useUpdateMealTemplate() {
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['meal-templates'] });
       qc.invalidateQueries({ queryKey: ['meal-templates', vars.id] });
+      qc.invalidateQueries({ queryKey: ['daily-meal-plans'] }); // plans carry their meals' numbers
     },
   });
 }
@@ -83,6 +84,7 @@ export function useArchiveMealTemplate() {
       mealTemplatesApi.archiveTemplate(id).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['meal-templates'] });
+      qc.invalidateQueries({ queryKey: ['daily-meal-plans'] }); // plans carry their meals
     },
   });
 }
@@ -150,6 +152,27 @@ export function useAssignDailyMealPlan() {
       qc.invalidateQueries({ queryKey: ['meal-plan', 'today'] });
     },
   });
+}
+
+export type MealPlanRun = { plan: DailyMealPlan; client: string; from: string; to?: string }; // ISO days; no `to` = no end date
+/** The coach's plans and every plan's assignments as runs, one GET a plan (the list has no count); `runs` is undefined until all read, `error` is the first failed read. */
+export function useMealPlanRuns() {
+  const plans = useDailyMealPlans();
+  const list = plans.data ?? [];
+  return { plans, ...useQueries({
+    queries: list.map((p) => ({
+      queryKey: ['daily-meal-plans', p.id, 'assignments'],
+      queryFn: () => mealTemplatesApi.listAssignmentsForPlan(p.id).then((r) => r.data),
+      staleTime: FIVE_MIN_MS,
+    })),
+    combine: (results) => ({
+      runs: plans.data && results.every((r) => r.isSuccess)
+        ? list.flatMap((plan, i) => (results[i].data as DailyMealPlanAssignment[]).map((a): MealPlanRun =>
+          ({ plan, client: a.client_id, from: a.starts_on.slice(0, 10), to: a.ends_on?.slice(0, 10) })))
+        : undefined,
+      error: plans.error ?? results.find((r) => r.error)?.error ?? null,
+    }),
+  }) };
 }
 
 // ---- Client today view -----------------------------------------------------

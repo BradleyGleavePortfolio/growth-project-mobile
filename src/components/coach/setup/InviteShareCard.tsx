@@ -76,8 +76,8 @@ export default function InviteShareCard({
     try {
       const result = await Share.share({
         message: packageName
-          ? `Join my coaching on The Growth Project. ${packageName} is waiting for you: ${link.url}`
-          : `Join my coaching on The Growth Project: ${link.url}`,
+          ? `Join my coaching on TGP Fitness. ${packageName} is waiting for you: ${link.url}`
+          : `Join my coaching on TGP Fitness: ${link.url}`,
       });
       if (result.action === Share.sharedAction) markShared("share");
     } catch (err) {
