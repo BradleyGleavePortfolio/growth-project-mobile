@@ -20,11 +20,12 @@ import { Screen } from '../../ui';
 import { featureFlags } from '../../config/featureFlags';
 import WeekInReviewScreen from './progress/WeekInReviewScreen';
 
-export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
+type ReportNavigation = Pick<NavigationProp<ParamListBase>, 'goBack'>;
+export default function ReportScreen({ navigation }: { navigation: ReportNavigation }) {
   return featureFlags.clientProgressV2 ? <WeekInReviewScreen navigation={navigation} /> : <LegacyReportScreen navigation={navigation} />;
 }
 
-function LegacyReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
+function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();

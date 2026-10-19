@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ReportScreen from '../../ReportScreen';
 import WeekInReviewScreen from '../WeekInReviewScreen';
 import { loadWeekReview, reviewTrend, reviewWeek, sleepLine } from '../weekReview';
@@ -112,6 +112,14 @@ it('a coachless client with no plan sees their logged workouts, not a fake denom
   expect(v.queryByText(/coach|Sam/)).toBeNull();
 });
 
+it('the continuous habit ring keeps its actual fraction with six daily habits', async () => {
+  mockGet.mockResolvedValue({ data: { habits: [{ done: 35, planned: 42 }] } });
+  const v = await render(<WeekInReviewScreen navigation={navigation} />);
+  await waitFor(() => expect(v.getByLabelText('Habits this week, 35 of 42 done')).toBeTruthy());
+  const circumference = 2 * Math.PI * 38;
+  expect(v.getByTestId('week-habits-fill').props.strokeDasharray).toBe(`${35 / 42 * circumference} ${circumference}`);
+});
+
 it('pending reads never claim empty; an empty week uses unknowns, not fake averages', async () => {
   let finish: (value: unknown) => void = () => undefined;
   mockFood.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
@@ -156,4 +164,18 @@ it('another client never sees the previous client summary', async () => {
   await v.rerender(<WeekInReviewScreen navigation={navigation} />);
   expect(v.queryByTestId('week-error')).toBeNull();
   expect(v.queryByLabelText(/132 g/)).toBeNull();
+});
+
+it('a late result for the previous account cannot replace the current account', async () => {
+  let finish: (value: unknown) => void = () => undefined;
+  mockFood.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  const v = await render(<WeekInReviewScreen navigation={navigation} />);
+  expect(v.getByLabelText('Loading your week')).toBeTruthy();
+  mockUser = { id: 'client-b', profile: {} };
+  mockGet.mockRejectedValueOnce({ response: { status: 403 } });
+  await v.rerender(<WeekInReviewScreen navigation={navigation} />);
+  await waitFor(() => expect(v.getByTestId('week-error')).toBeTruthy());
+  await act(async () => { finish({ data: [{ date: week.start, protein_g: 132 }] }); });
+  expect(v.getByTestId('week-error')).toBeTruthy();
+  expect(v.queryByLabelText(/Protein, average:/)).toBeNull();
 });

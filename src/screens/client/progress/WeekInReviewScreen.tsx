@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Circle } from 'react-native-svg';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
@@ -12,11 +13,11 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, typography } from '../../../theme/tokens';
 import { Screen, useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
-import { SegmentedRing, type SegmentState } from '../../../ui/charts/StyleCMarks';
 import { getTodayString } from '../../../utils/date';
 import { unitOf, type WeightUnit } from './progressV2';
 import { loadWeekReview, reviewTrend, reviewWeek, sleepLine, weekDate, workoutLine, type WeekReviewData } from './weekReview';
 
+const HABIT_CIRCUMFERENCE = 2 * Math.PI * 38;
 type Nav = Pick<NavigationProp<ParamListBase>, 'goBack'>;
 export default function WeekInReviewScreen({ navigation }: { navigation: Nav }) {
   const user = useCurrentUser();
@@ -56,7 +57,7 @@ function WeekReviewPage({ userId, unit, navigation }: { userId?: string; unit: W
   const light = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
   const count = data?.habits;
-  const segments: SegmentState[] = count ? Array.from({ length: count.planned }, (_, i) => i < count.done ? 'done' : 'planned') : [];
+  const habitFraction = count?.planned ? Math.min(count.done / count.planned, 1) : 0;
   const rows = data ? [
     ['Workouts', workoutLine(data)],
     ['Food logged', `${data.food} of 7 days`],
@@ -84,9 +85,14 @@ function WeekReviewPage({ userId, unit, navigation }: { userId?: string; unit: W
             <>
               {data.empty ? <Text style={[typography.body, { color: sc.textMuted }]} testID="week-empty">No logs for this week.</Text> : null}
               <View style={[s.summary, { backgroundColor: sc.surface.sage }, fontScale > 1.15 && s.stack]}>
-                {segments.length ? <SegmentedRing size={88} segments={segments} label={`Habits this week, ${count?.done} of ${count?.planned} done`}>
-                  <Text style={[typography.h2, { color: sc.textPrimary }]}>{`${count?.done}/${count?.planned}`}</Text>
-                </SegmentedRing> : null}
+                {count?.planned ? <View style={s.ring} accessible accessibilityRole="image" accessibilityLabel={`Habits this week, ${count.done} of ${count.planned} done`}>
+                  <Svg width={88} height={88} style={StyleSheet.absoluteFill} accessible={false}>
+                    <Circle cx={44} cy={44} r={38} fill="none" stroke={sc.data.planned} strokeWidth={2} />
+                    {habitFraction > 0 ? <Circle testID="week-habits-fill" cx={44} cy={44} r={38} fill="none" stroke={sc.data.forest} strokeWidth={7}
+                      strokeLinecap="round" strokeDasharray={`${habitFraction * HABIT_CIRCUMFERENCE} ${HABIT_CIRCUMFERENCE}`} rotation={-90} origin="44, 44" /> : null}
+                  </Svg>
+                  <Text maxFontSizeMultiplier={1.15} style={[typography.h2, { color: sc.textPrimary }]}>{`${count.done}/${count.planned}`}</Text>
+                </View> : null}
                 <View style={s.summaryText}>
                   <Text style={[typography.h2, { color: sc.textPrimary }]} accessibilityRole="header">Habits this week</Text>
                   <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`Daily check-ins: ${data.checkIns} of 7`}</Text>
@@ -113,6 +119,7 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: 24, paddingTop: 24, gap: 8 },
   summary: { padding: 16, borderRadius: radius.card, flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
   summaryText: { flexShrink: 1, gap: 6 },
+  ring: { width: 88, height: 88, alignItems: 'center', justifyContent: 'center' },
   row: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   label: { flex: 1 },
   value: { flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] },
