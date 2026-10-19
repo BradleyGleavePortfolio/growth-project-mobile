@@ -96,7 +96,7 @@ When the toggle changes:
 | `LearnLessonScreen` (`learnHub` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
-| `habits/ring/HabitsRing` (HB-B1, `habitsRing` off by default) | `softImpact()`; `success()`; `selection()`; `mediumImpact()`; `error()` | A tick (the part draws); the tick that completes today's ring, instead; an untick or the Check-in tab; an idea tile on the first run (success when the server creates it); a tick or an idea the server refuses |
+| `habits/ring/HabitsRing` (HB-B1, HB-B1b, `habitsRing` off by default) | `softImpact()`; `success()`; `selection()`; `mediumImpact()`; `error()` | A tick (the part draws); the tick that completes the day's ring, instead; an untick, a strip day up to today or the Check-in tab; an idea tile on the first run (success when the server creates it); a tick or an idea the server refuses. None for a future day: its quiet line only |
 | `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
 | `HomeTile` (rings Home) | `selection()` | A tile opens its screen |
 | `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |
