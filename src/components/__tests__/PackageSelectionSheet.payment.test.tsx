@@ -208,7 +208,7 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
         customerId: 'cus_test_789',
         customerEphemeralKeySecret: 'ek_test_456',
         paymentIntentClientSecret: 'pi_test_123_secret_abc',
-        merchantDisplayName: 'The Growth Project',
+        merchantDisplayName: 'TGP Fitness',
         allowsDelayedPaymentMethods: false,
       }),
     );

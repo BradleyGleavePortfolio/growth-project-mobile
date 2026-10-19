@@ -11,7 +11,7 @@ const FILES = [
   'screens/client/HomeScreen.tsx',
   'screens/client/MembershipScreen.tsx',
   'screens/client/MoreScreen.tsx',
-  'screens/client/PlanScreen.tsx',
+  'screens/client/ClientDailyMealPlanScreen.tsx',
   'screens/client/Day1WinScreen.tsx',
   'screens/client/BloodworkEntryScreen.tsx',
   'components/trust/TrustExplainerSheet.tsx',
@@ -31,8 +31,4 @@ describe.each(FILES)('%s', (file) => {
   it('has no literal borderRadius', () => {
     expect(src).not.toMatch(/borderRadius:\s*\d/);
   });
-});
-
-it('Plan sits under the stack header: no Android top-padding guess', () => {
-  expect(read('screens/client/PlanScreen.tsx')).not.toMatch(/Platform\.OS === 'android' \? 50/);
 });

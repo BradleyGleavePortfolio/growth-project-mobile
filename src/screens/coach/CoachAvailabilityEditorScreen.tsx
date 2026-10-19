@@ -30,7 +30,7 @@ import type {
   AvailabilityWindow,
   UpsertAvailabilityWindowInput,
 } from '../../api/schedulingApi';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export type CoachAvailabilityEditorParams = { coachId: string };
@@ -221,6 +221,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
                       Math.max(0, w.start_minute - 30),
                     )
                   }
+                  hitSlop={4}
                   style={[styles.stepBtn, { borderColor: colors.border }]}
                 >
                   <Text style={[typography.body, { color: colors.textPrimary }]}>−</Text>
@@ -240,6 +241,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
                       Math.min(w.end_minute - 30, w.start_minute + 30),
                     )
                   }
+                  hitSlop={4}
                   style={[styles.stepBtn, { borderColor: colors.border }]}
                 >
                   <Text style={[typography.body, { color: colors.textPrimary }]}>+</Text>
@@ -261,6 +263,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
                       Math.max(w.start_minute + 30, w.end_minute - 30),
                     )
                   }
+                  hitSlop={4}
                   style={[styles.stepBtn, { borderColor: colors.border }]}
                 >
                   <Text style={[typography.body, { color: colors.textPrimary }]}>−</Text>
@@ -280,6 +283,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
                       Math.min(1440, w.end_minute + 30),
                     )
                   }
+                  hitSlop={4}
                   style={[styles.stepBtn, { borderColor: colors.border }]}
                 >
                   <Text style={[typography.body, { color: colors.textPrimary }]}>+</Text>
@@ -358,13 +362,15 @@ const styles = StyleSheet.create({
   },
   windowRow: {
     flexDirection: 'row',
+    // Two steppers and Remove are wider than a 360-390 pt card: Remove wraps.
+    flexWrap: 'wrap',
     alignItems: 'center',
     marginTop: spacing.sm,
   },
   stepperGroup: { flexDirection: 'row', alignItems: 'center' },
   stepBtn: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: radius.button,
     width: 36,
     height: 36,
     alignItems: 'center',
@@ -372,7 +378,7 @@ const styles = StyleSheet.create({
   },
   timeChip: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: radius.input,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     minWidth: 64,
@@ -389,7 +395,7 @@ const styles = StyleSheet.create({
   addBtn: {
     marginTop: spacing.sm,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: radius.button,
     paddingVertical: spacing.sm,
     alignItems: 'center',
     minHeight: 44,
@@ -397,7 +403,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     marginTop: spacing.md,
-    borderRadius: 10,
+    borderRadius: radius.button,
     paddingVertical: spacing.md,
     alignItems: 'center',
     minHeight: 48,

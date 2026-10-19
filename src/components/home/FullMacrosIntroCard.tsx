@@ -1,6 +1,6 @@
 /**
  * FullMacrosIntroCard — one quiet Roman card, shown once, on the day a
- * never-tracker's lighter first week ends (clinic onboarding contract v1
+ * never-tracker's lighter first week ends (onboarding contract v1
  * addition 8; owner ruling 2026-09-30 18:11).
  *
  * Visible only when the client started in the 'simple' macro view, that view
@@ -19,6 +19,7 @@ import { typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import RomanAvatar from '../roman/RomanAvatar';
 import { dismissFullMacrosIntro, useFullMacrosIntroVisible } from '../../macros/macroDisplayStore';
+import { useNoticeSlot } from './HomeNoticeSlot';
 
 const fmt = (v: number): string => Math.round(v).toLocaleString('en-US');
 const known = (v: number | null | undefined): v is number =>
@@ -76,7 +77,7 @@ export default function FullMacrosIntroCard({
   carbsG?: number | null;
   fatG?: number | null;
 }): React.ReactElement | null {
-  const visible = useFullMacrosIntroVisible();
+  const visible = useNoticeSlot('fullMacros', useFullMacrosIntroVisible());
   if (!visible) return null;
   return (
     <FullMacrosIntroCardView carbsG={carbsG} fatG={fatG} onDismiss={() => dismissFullMacrosIntro()} />

@@ -1,8 +1,7 @@
 /**
- * RevolutGlowChart — render contract for the VISCERAL PEAK (R1 visual P0 #1).
+ * Shared wearable chart: unfilled lines or daily-total bars.
  *
- * Pins the Revolut treatment the visual audit required:
- *   • a `<LinearGradient id="chartFill">` soft area fill exists in the SVG,
+ * Pins the owner's no-area/no-gradient/no-glow rule:
  *   • the line is a smooth `<Path>` whose `d` starts with `M` and contains at
  *     least one cubic-bezier `C` command (NOT the prior tutorial `<Polyline>`),
  *   • the reduce-motion path renders the chart fully (data is never hidden
@@ -13,8 +12,44 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { RevolutGlowChart, type GlowChartPoint } from '../RevolutGlowChart';
+import { CHART_FLARE as FLARE } from '../../wearablesTheme';
+import { colors } from '../../../../../theme/tokens';
+
+const mockPan: {
+  begin?: (e: { x: number }) => void;
+  update?: (e: { x: number }) => void;
+  finalize?: () => void;
+} = {};
+jest.mock('react-native-gesture-handler', () => {
+  const ReactLocal = require('react');
+  return {
+    GestureDetector: ({ children }: { children: React.ReactNode }) =>
+      ReactLocal.createElement(ReactLocal.Fragment, null, children),
+    Gesture: { Pan: () => {
+      const g = {
+        onBegin: (fn: typeof mockPan.begin) => { mockPan.begin = fn; return g; },
+        onUpdate: (fn: typeof mockPan.update) => { mockPan.update = fn; return g; },
+        onFinalize: (fn: typeof mockPan.finalize) => { mockPan.finalize = fn; return g; },
+      };
+      return g;
+    } },
+  };
+});
+jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('react-native-reanimated', () => {
+  const mock = require('react-native-reanimated/mock');
+  return { ...mock, runOnJS: (fn: unknown) => fn };
+});
+jest.mock('react-native-svg', () => {
+  const ReactLocal = require('react');
+  const { View } = require('react-native');
+  const mark = (name: string) => ({ children, ...props }: { children?: React.ReactNode }) =>
+    ReactLocal.createElement(View, { ...props, testID: name }, children);
+  return { __esModule: true, default: mark('Svg'), Path: mark('Path'), Rect: mark('Rect'), Circle: mark('Circle'), Line: mark('Line') };
+});
 
 const DATA: readonly GlowChartPoint[] = [
   { value: 62, label: '2026-05-01' },
@@ -66,16 +101,16 @@ async function renderTree(reduceMotion: boolean): Promise<TestNode[]> {
 }
 
 describe('RevolutGlowChart', () => {
-  it('renders a chartFill linear gradient (the Revolut area treatment)', async () => {
+  it('renders no gradient or filled area', async () => {
     const nodes = await renderTree(true);
     // RN-SVG maps the SVG `id` prop to the native `name` prop on the gradient,
-    // and a fill that references it carries `brushRef="chartFill"`. Assert the
-    // gradient exists AND is wired to a filled area path.
+    // and a fill that references it carries `brushRef="chartFill"`. Neither
+    // the gradient nor a filled area may remain.
     const gradient = nodes.find(
       (n) =>
         n.props?.id === 'chartFill' || n.props?.name === 'chartFill',
     );
-    expect(gradient).toBeTruthy();
+    expect(gradient).toBeUndefined();
     // RN-SVG resolves the `fill="url(#chartFill)"` reference to a brush object
     // `{ type, brushRef: 'chartFill' }` on the area path; web/string form is
     // also accepted so the assertion is renderer-agnostic.
@@ -88,7 +123,7 @@ describe('RevolutGlowChart', () => {
           (fill as { brushRef?: unknown }).brushRef === 'chartFill')
       );
     });
-    expect(filledArea).toBeTruthy();
+    expect(filledArea).toBeUndefined();
   });
 
   it('renders a smooth bezier line path (d starts with M, contains a C)', async () => {
@@ -115,5 +150,63 @@ describe('RevolutGlowChart', () => {
     // The smooth line is present whether or not motion is reduced.
     expect(hasLine(nodes)).toBe(true);
     expect(hasLine(reduced)).toBe(true);
+  });
+
+  it.each([
+    ['line', false], ['line', true], ['bar', false], ['bar', true],
+  ] as const)('%s, reduced=%s: clean marks and scrub/release kept', async (variant, reduceMotion) => {
+    const onSelect = jest.fn();
+    const node = await render(
+      <RevolutGlowChart data={DATA} tone="warm" variant={variant} reduceMotion={reduceMotion} onSelect={onSelect} />,
+    );
+    const paths = node.queryAllByTestId('Path');
+    // Gold flare on the latest mark at rest, on the scrubbed mark while held.
+    const expectFlare = (index: number | null) => {
+      if (variant === 'line') {
+        const mark = node.queryByTestId('chart-latest-mark');
+        if (index === null) expect(mark).toBeNull();
+        else expect(StyleSheet.flatten(mark?.props.style)).toMatchObject({ backgroundColor: FLARE, left: '100%' });
+        return;
+      }
+      node.getAllByTestId('Rect').forEach((bar, i) =>
+        expect(bar.props.fill).toBe(i === (index ?? DATA.length - 1) ? FLARE : colors.forest));
+    };
+    if (variant === 'line') {
+      expect(paths).toHaveLength(1);
+      expect(paths[0].props.fill).toBe('none');
+      expect(paths[0].props.stroke).toBe(colors.forest);
+    } else {
+      expect(paths).toHaveLength(0);
+      const bars = node.getAllByTestId('Rect');
+      expect(bars).toHaveLength(DATA.length);
+      bars.forEach((bar) => {
+        expect(bar.props.height).toBeGreaterThan(0);
+        expect(bar.props.y + bar.props.height).toBeCloseTo(node.getByTestId('Line').props.y1);
+      });
+    }
+    expectFlare(DATA.length - 1);
+    await fireEvent(node.getByLabelText('Interactive trend chart'), 'layout', {
+      nativeEvent: { layout: { width: 300, height: 120, x: 0, y: 0 } },
+    });
+    await act(() => {
+      mockPan.begin?.({ x: 8 });
+      mockPan.update?.({ x: 9 });
+    });
+    expectFlare(variant === 'bar' ? 0 : null);
+    await act(() => {
+      mockPan.update?.({ x: 292 });
+      mockPan.finalize?.();
+    });
+    expect(onSelect.mock.calls).toEqual([[0], [DATA.length - 1], [null]]);
+    expectFlare(DATA.length - 1);
+    await node.unmount();
+  });
+
+  it.each(['line', 'bar'] as const)('%s: empty and single-day marks stay valid', async (variant) => {
+    const node = await render(<RevolutGlowChart data={[]} tone="cool" variant={variant} reduceMotion />);
+    expect(node.queryAllByTestId('Path')).toHaveLength(0);
+    expect(node.queryAllByTestId('Rect')).toHaveLength(0);
+    await node.rerender(<RevolutGlowChart data={DATA.slice(0, 1)} tone="cool" variant={variant} reduceMotion />);
+    expect(node.queryAllByTestId(variant === 'bar' ? 'Rect' : 'chart-latest-mark')).toHaveLength(1);
   });
 });

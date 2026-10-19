@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { layout, typography, type SemanticTokens } from '../../theme/tokens';
 import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
@@ -68,8 +68,10 @@ function lockedCopy(status: ClientDunningStatus): { title: string; body: null } 
 export function DunningBanner({
   surface,
   presentation = 'card',
+  style,
 }: {
   surface: string;
+  style?: StyleProp<ViewStyle>; // 'section' only: its place on the screen (the rings Home: under the dials)
   /**
    * 'section' = Home's hairline look (DES-K2-128); 'locked' = the same look at
    * the foot of an open logging screen, only while locked (DunningOwnScreen);
@@ -95,7 +97,7 @@ export function DunningBanner({
 
   if (presentation === 'section' || lockedHere) {
     return (
-      <QuietSection testID="dunning-banner" accessibilityRole="alert" style={lockedHere ? styles.locked : undefined}>
+      <QuietSection testID="dunning-banner" accessibilityRole="alert" style={lockedHere ? styles.locked : style}>
         <QuietOverline>PAYMENT</QuietOverline>
         <Text style={[styles.sectionTitle, { color: semanticColors.textPrimary }]}>{copy.title}</Text>
         {copy.body ? <Text style={[styles.sectionBody, { color: semanticColors.textPrimary }]}>{copy.body}</Text> : null}

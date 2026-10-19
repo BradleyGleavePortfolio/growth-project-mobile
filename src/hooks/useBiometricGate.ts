@@ -83,7 +83,7 @@ async function tryAuthenticate(): Promise<AuthResult> {
       return { success: true };
     }
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Unlock The Growth Project',
+      promptMessage: 'Unlock TGP Fitness',
       // disableDeviceFallback=false → if biometrics fail, iOS/Android can
       // fall back to the device passcode, matching the spec.
       disableDeviceFallback: false,

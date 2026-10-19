@@ -173,12 +173,8 @@ export default function CrossPillarMessagesScreen() {
   );
 }
 
-function toMessage(err: unknown): string {
-  if (!err) return 'Something went wrong.';
-  if (err && typeof err === 'object' && 'message' in err) {
-    return String((err as { message?: unknown }).message ?? 'Something went wrong.');
-  }
-  return 'Something went wrong.';
+function toMessage(_err: unknown): string {
+  return 'Try again in a moment.';
 }
 
 const makeStyles = (colors: ThemeColors) =>

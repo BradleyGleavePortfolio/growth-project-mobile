@@ -289,7 +289,7 @@ export default function MembershipScreen() {
             <View style={styles.explainBlock}>
               <Text style={styles.explainTitle}>How access works</Text>
               <Text style={styles.explainBody}>
-                The Growth Project is a coach-managed platform. Your coach
+                TGP Fitness is a coach-managed platform. Your coach
                 invites you, sets your training and nutrition plan, and may
                 offer plans you can buy in the app. A plan bought in the app
                 shows above. A renewing plan can be ended at any time in Your

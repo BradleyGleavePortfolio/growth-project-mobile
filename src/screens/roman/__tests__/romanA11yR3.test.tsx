@@ -40,6 +40,8 @@ function readSrc(...segments: string[]): string {
 }
 
 const CHAT_SRC = readSrc('screens', 'roman', 'RomanChatScreen.tsx');
+const LOADING_SRC = readSrc('components', 'roman', 'RomanLoadingSkeleton.tsx');
+const GATE_SRC = readSrc('components', 'roman', 'RomanConsentGate.tsx');
 const SKELETON_SRC = readSrc('ui', 'skeletons', 'Skeleton.tsx');
 const MORE_SRC = readSrc('screens', 'client', 'MoreScreen.tsx');
 const SETTINGS_SRC = readSrc('screens', 'coach', 'SettingsScreen.tsx');
@@ -119,17 +121,19 @@ describe('RomanMessageBubble — rows are list items (R3 P1-3)', () => {
 // ─── P1-1 — RomanChatScreen loading states carry busy/progress semantics ──────
 
 describe('RomanChatScreen — loading states are busy progressbars (R3 P1-1)', () => {
-  it('the initial LoadingSkeleton wrapper is a busy progressbar with a label', () => {
-    expect(CHAT_SRC).toMatch(/accessibilityRole="progressbar"/);
-    expect(CHAT_SRC).toMatch(/accessibilityLabel=\{ROMAN_LOADING_A11Y_LABEL\}/);
-    expect(CHAT_SRC).toMatch(/accessibilityState=\{\{\s*busy:\s*true\s*\}\}/);
+  it('the shared initial skeleton is a labelled busy progressbar in both consent and room reads', () => {
+    expect(CHAT_SRC).toContain('<RomanLoadingSkeleton />');
+    expect(GATE_SRC).toContain('<RomanLoadingSkeleton />');
+    expect(LOADING_SRC).toMatch(/accessibilityRole="progressbar"/);
+    expect(LOADING_SRC).toMatch(/accessibilityLabel=\{ROMAN_LOADING_A11Y_LABEL\}/);
+    expect(LOADING_SRC).toMatch(/accessibilityState=\{\{\s*busy:\s*true\s*\}\}/);
   });
 
   it('the loading-older footer is a busy progressbar live region', () => {
     // Footer block carries label = the Roman-voiced "gathering" line.
     expect(CHAT_SRC).toMatch(/accessibilityLabel=\{ROMAN_LOADING_OLDER\}/);
     // At least two busy progressbars exist (initial + footer).
-    const busyCount = (CHAT_SRC.match(/busy:\s*true/g) ?? []).length;
+    const busyCount = ((CHAT_SRC + LOADING_SRC).match(/busy:\s*true/g) ?? []).length;
     expect(busyCount).toBeGreaterThanOrEqual(2);
   });
 

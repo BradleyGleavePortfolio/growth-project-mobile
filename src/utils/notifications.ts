@@ -161,7 +161,7 @@ export async function sendMotivationNotification(message: string): Promise<strin
   try {
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'The Growth Project',
+        title: 'TGP Fitness',
         body: message,
         sound: true,
         data: { type: 'motivation' },

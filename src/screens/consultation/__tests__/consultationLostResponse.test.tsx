@@ -19,6 +19,7 @@ import type { AiConsentOutcome } from '../../../api/aiConsentApi';
 import { fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
 import { AI_ALLOWED, aiStatus, makeApi, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
 import { readLocalState } from '../../../lib/consultation/storage';
+import { readUserCacheSync } from '../../../lib/userCache';
 import {
   aiWithdrawalPendingKey,
   drainAiWithdrawal,
@@ -557,6 +558,13 @@ describe('B-310-5 completion and unmount', () => {
 });
 
 describe('B-310-5 Settings > Privacy > Roman and AI', () => {
+  // Owner 62x: the Allow / Withdraw choice is for a client with a coach.
+  beforeEach(() => {
+    jest.mocked(readUserCacheSync).mockReturnValue({ id: 'u1', email: '', coach_id: 'coach-1' });
+  });
+  afterEach(() => {
+    jest.mocked(readUserCacheSync).mockReturnValue({ id: 'u1', email: '' });
+  });
   const nav = { goBack: jest.fn(), navigate: jest.fn() };
 
   function settingsApi(over: Partial<Record<'getStatus' | 'grantRoman' | 'withdrawRoman', jest.Mock>> = {}) {

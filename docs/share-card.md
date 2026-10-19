@@ -2,6 +2,22 @@
 
 Phase 11 / progress share card for organic referral.
 
+SHARE-A (owner 10-17 #SHARE-SEND op 1): with `featureFlags.shareSheetV2` (off in every build) the route below is not
+registered. Share on the Progress run line and under each recent best on the Session summary opens
+`src/components/share/ShareSheet.tsx` over the screen, with `runCard` / `bestCard` from `shareCards.tsx` (number, words,
+dates, app name; each says what is in it and what is not). Coached with `featureFlags.shareSendV1` (off), Send to {coach}
+posts `{ card: { type: 'share', snapshot }, client_message_id }` to `POST /messages` (backend SHARE-BE) through the
+client's thread outbox (`services/messageOutbox` `sendCardViaOutbox`, SHARE-B). The outbox retains a NO_COACH_ASSIGNED card and waits for a valid current coach; other permanent 4xx refusals
+use the unavailable path.
+
+SHARE-B (same flag): thread rows carry `card` (`readShareCard` keeps a `share` card it can draw). Both threads draw it
+as the same forest card under "Shared progress" on cream (`SharedCard`), the client's on the right and the coach's
+view on the left; the coach inbox, and the client's, say "Shared a card" when the newest message is one. The sheet
+sends through the client's thread outbox in either thread style (`outboxOn`: `c3StyleB` or `shareSendV1`), so offline
+the card waits in the thread ("Waiting to send") and sends on reconnect, thread open or not; a failed one says "Not
+sent. Tap to send again" in the sheet and in either thread; the tap replays its key through the outbox, with or
+without server v2 (`messaging_core_v2` also offers long press, Send again).
+
 ## Implementation
 
 - Screen: `src/screens/share/ShareCardScreen.tsx`
@@ -14,8 +30,6 @@ Phase 11 / progress share card for organic referral.
 | Variant | `card_type` | Trigger | Icon |
 |---|---|---|---|
 | Streak | `streak` | Logging streak >= 3 days | `flame-outline` |
-| PR | `pr` | Personal record set | `barbell-outline` |
-| Transformation | `transformation` | Body-composition milestone | `trending-up-outline` |
 
 ## Card anatomy
 
@@ -41,9 +55,9 @@ Additional trigger points to wire in later phases:
 
 ```typescript
 track(AnalyticsEvents.REFERRAL_SHARE_CARD_SHARED, {
-  card_type: 'streak' | 'pr' | 'transformation',
+  card_type: 'streak' | 'pr', // pr: the sheet's recent-best card
   coach_tenant_id?: string,
-  destination: 'native_share_sheet',
+  destination: 'native_share_sheet' | 'coach_thread',
 });
 ```
 
@@ -59,4 +73,4 @@ The native share sheet (`expo-sharing`) routes to any installed app. Expected ta
 
 ## Native build requirement
 
-`react-native-view-shot` requires a native build (`eas build`). In Expo Go the share button shows an in-app alert explaining this. Production builds are unaffected.
+`react-native-view-shot` requires a native build. Where it is missing, or sharing fails, the screen and the sheet (`src/components/share/sharePicture.ts`) say "The picture could not be made. Try again." in place with the error haptic, never an alert; no success haptic fires before the picture exists.

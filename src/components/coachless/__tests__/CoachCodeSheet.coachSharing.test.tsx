@@ -18,10 +18,12 @@ jest.mock('../../../lib/userCache', () => ({ patchUserCache: async () => undefin
 
 import CoachCodeSheet from '../CoachCodeSheet';
 import { resetCoachSharingNoticeForTests } from '../../../lib/coachSharingNotice';
+import { YOUR_PLANS_QUERY_KEY } from '../../../lib/packagePayment';
+import { queryClient } from '../../../services/queryClient';
 
 const COACH = { id: 'coach-1', name: 'Alex Rivera', photo_url: null, business_name: null, bio: null };
 const SENTENCE =
-  'Joining shares your workouts, food logs, weigh-ins and check-ins with Alex Rivera. Change this any time in Settings > Privacy.';
+  "Joining shares your workouts, food logs, weigh-ins, check-ins and any Apple Health data you connect with Alex Rivera. You can stop new Apple Health data in your phone's Apple Health permissions.";
 
 const REDEEMED = { status: 'attached', already_attached: false, coach: COACH, next: { featured_package: null, packages_available: 0 }, grant: null, replayed: false };
 
@@ -56,19 +58,21 @@ async function joinAndReadBody(): Promise<unknown> {
 }
 
 it('current production policy: no sentence on the sheet and the old redeem body', async () => {
+  const outdated = jest.spyOn(queryClient, 'invalidateQueries');
   mockPolicy.mockResolvedValue({ data: { invite_code_required: true, providers: ['email'] } });
   await renderSheet();
   expect(await screen.findByText('Coach: Alex Rivera')).toBeTruthy();
   await waitFor(() => expect(mockPolicy).toHaveBeenCalled());
   expect(screen.queryByTestId('coach-sharing-notice')).toBeNull();
   expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP' });
+  await waitFor(() => expect(outdated).toHaveBeenCalledWith({ queryKey: YOUR_PLANS_QUERY_KEY })); // a code can grant a plan
 });
 
 it('advertised version: the sentence names the coach above Join and the version rides on the redeem', async () => {
   mockPolicy.mockResolvedValue({
-    data: { coach_sharing_notice: 'coach_sharing_join_v1', coach_sharing_notice_field: 'coach_sharing_notice' },
+    data: { coach_sharing_notice: 'coach_sharing_join_v2', coach_sharing_notice_field: 'coach_sharing_notice' },
   });
   await renderSheet();
   expect(await screen.findByText(SENTENCE)).toBeTruthy();
-  expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP', coach_sharing_notice: 'coach_sharing_join_v1' });
+  expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP', coach_sharing_notice: 'coach_sharing_join_v2' });
 });

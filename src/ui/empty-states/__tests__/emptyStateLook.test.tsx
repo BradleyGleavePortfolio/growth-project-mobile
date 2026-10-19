@@ -168,12 +168,12 @@ describe('EmptyStateNoClients', () => {
     mockListInviteCodes.mockResolvedValue({ data: [{ id: 'i1', code: 'GP-TEST' }] });
     const first = await render(<EmptyStateNoClients onInvite={jest.fn()} />);
     await fireEvent.press(await first.findByTestId('share-code-btn'));
-    expect(share).toHaveBeenLastCalledWith({ message: 'Join me on Growth Project. Use code GP-TEST or tap: https://app.trygrowthproject.com/join/GP-TEST' });
+    expect(share).toHaveBeenLastCalledWith({ message: 'Join me on TGP Fitness. Use code GP-TEST or tap: https://app.trygrowthproject.com/join/GP-TEST' });
     await first.unmount();
     mockListInviteCodes.mockResolvedValue({ data: [{ id: 'i1', code: 'GP-TEST', deep_link_url: 'tgp://join/GP-TEST' }] });
     const again = await render(<EmptyStateNoClients onInvite={jest.fn()} />);
     await fireEvent.press(await again.findByTestId('share-code-btn'));
-    expect(share).toHaveBeenLastCalledWith({ message: 'Join me on Growth Project. Use code GP-TEST or tap: tgp://join/GP-TEST' });
+    expect(share).toHaveBeenLastCalledWith({ message: 'Join me on TGP Fitness. Use code GP-TEST or tap: tgp://join/GP-TEST' });
     share.mockRestore();
   });
 

@@ -42,7 +42,7 @@ export const K8_COPY = {
 
 /** The share sheet message: the coach's real join link. */
 export function shareMessage(url: string): string {
-  return `Join my coaching on The Growth Project: ${url}`;
+  return `Join my coaching on TGP Fitness: ${url}`;
 }
 
 /** The link as the prototype prints it: no scheme, no trailing slash. */

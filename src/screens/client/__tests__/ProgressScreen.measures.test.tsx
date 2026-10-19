@@ -53,12 +53,12 @@ async function screen() {
 }
 
 describe('U2: BMI', () => {
-  it('reads the server height and stays monochrome', async () => {
+  it('reads the server height, stays monochrome and names no category (C8 found 3)', async () => {
     mockHeightCm = 178;
-    const { findByText, getByText } = await screen();
+    const { findByText, queryByText } = await screen();
     const bmi = await findByText('26.2');
     expect([colors.warning, colors.success, colors.error]).not.toContain(StyleSheet.flatten(bmi.props.style).color);
-    expect(getByText('Overweight')).toBeTruthy();
+    expect(queryByText(/Underweight|Normal|Overweight|Obese/)).toBeNull();
   });
 
   it('shows no BMI row and no empty heading without a height', async () => {

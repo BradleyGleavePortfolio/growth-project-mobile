@@ -150,7 +150,7 @@ describe('otaUpdateTags', () => {
   });
 
   it('Sol B-305-10 canary: personal data in any native field never reaches setTags or captureMessage', () => {
-    const CANARY = ['Janet Canaryfield', 'janet.canaryfield@example.com', '+1 415 555 0142', 'patient-7731', 'HIV positive, insulin dependent'];
+    const CANARY = ['Janet Canaryfield', 'janet.canaryfield@example.com', '+1 415 555 0142', 'member-7731', 'HIV positive, insulin dependent'];
     const text = CANARY.join(' ');
     const sentry = fakeSentry();
     const state = reportOtaUpdateLaunch(

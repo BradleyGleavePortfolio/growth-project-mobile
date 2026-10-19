@@ -1,5 +1,7 @@
 # Notifications — Phase 9
 
+URL-bearing inbox rows retain `deepLink` / `deep_link` during normalization and use the same trusted, role-aware receiver as native and foreground push taps. Meal-plan links open the existing client daily meal plan, specific booking/alert actions retain their params, and untrusted origins never fall through to direct navigation. Rows without a URL retain their existing routing.
+
 The global system-notification center for The Growth Project mobile app. This is distinct from the Phase 8 coach command-center inbox (`/coach/command-center/inbox`) — that surface covers direct coach–client messages. This center covers every other notification kind the platform can emit: coach notes, milestones, build-week gate approvals, system alerts, reminders, and coaching tips, for both client and coach roles.
 
 ---
@@ -107,6 +109,8 @@ All calls go through `src/services/notificationsApi.ts`. The mock flag is `NOTIF
 | `MoreIndex` | `MoreStack → MoreIndex` | Build-week gate approvals |
 | `Deliverables` | `MoreStack → Deliverables` | "New content" rows (`drip_released`), with `purchaseId` from `payload.client_purchase_id` so the screen lists that purchase |
 | `UpdateCard` | `MoreStack → UpdateCard` (More index kept beneath) | The Day 3, Day 7 and dispute payment blocker (`dunning_blocker` with `payload.headline`); the full-refund notice of the same kind has no destination |
+| `ClientConsultation` | `ClientsStack → ClientConsultation` (coach; Clients list kept beneath) | Both flag alerts (`coach_alert`, `payload.type` `onboarding_screening_review`: the join alert and, from backend FLAG-2, the coached completion alert) open that client's consultation answers (`{ clientId }`), headed by the name the read returns. A client account lands on its notification center |
+| `CoachSafetyAlert` | `ClientsStack → CoachSafetyAlert` (coach; Clients list kept beneath) | A Roman safety alert (`coach_alert`, owner 57d; urgent, eating-disorder or crisis) opens that alert by id (`{ alertId }`). If the coach can't read it, the screen goes to Command Center > Actions. Rows sent before 57d carry `CoachActionQueue`, which opens Actions |
 | `undefined` | No navigation | Informational only |
 
 Rows without `payload.title` use their kind's push title: "New content" (`drip_released`), "Your free trial" (`trial_ending`), "Payment" (`dunning_blocker`; the blocker shows its `payload.headline`), "New purchase" (`coach_new_purchase`). Other kinds fall back to "Update".
@@ -170,11 +174,11 @@ No additional env vars are required while mocked. When live, the standard `EXPO_
 - Rich push payloads (image, action buttons) — requires Expo Notifications v3 + backend change.
 - Per-schedule quiet hours (different windows per day of week).
 
-## Push tap routing (clinic launch)
+## Push tap routing (launch)
 
 - `installNotificationResponseHandler(routePushTap)` is installed once in `App.tsx` (skipped in screenshot mode). It handles live taps and the cold-start tap from `getLastNotificationResponseAsync`, de-duplicated by notification id.
 - `src/services/pushTapRouter.ts` delivers a tap only when RootNavigator reports an explicit app session (`setPushSession(pushSessionFor(authState, userId))`): `student`/`package_prompt` mount the client navigator, `coach` the coach navigator. Bootstrap and every onboarding root (lean questions, Day-1, Day-1 win, coach wizard) hold the tap. Sign-out drops it, a tap that arrives while signed out is dropped, and a session for a different user id drops it.
-- Destinations are a role-aware allow-list of real nested routes. Client: `Messages`, `NotificationCenter`, `Habits` -> `Home`; `Timeline`, `MoreIndex`, `Membership`, `Deliverables` -> `MoreTab`; `WorkoutMain` -> `WorkoutTab`; `CommunityEventDetail` -> `CommunityTab` (community + events flags). Coach: `Messages` (root tab); `NotificationCenter`, `NotificationPreferences` -> `ClientsStack`; `CreditPackCheckout` -> `SettingsStack` (gated wrapper, neutral copy on hidden iOS); `CommunityEventDetail` -> `CommunityStack/CoachCommunityEvents` (coach community + events flags). Unknown or unavailable names land on the role's notification center.
+- Destinations are a role-aware allow-list of real nested routes. Client: `Messages`, `NotificationCenter`, `Habits` -> `Home`; `Timeline`, `MoreIndex`, `Membership`, `Deliverables` -> `MoreTab`; `WorkoutMain` -> `WorkoutTab`; `CommunityEventDetail` -> `CommunityTab` (community + events flags). Coach: `Messages` (root tab); `NotificationCenter`, `NotificationPreferences` -> `ClientsStack`; `ClientConsultation`, `CoachSafetyAlert` -> `ClientsStack` (Clients list kept beneath); `CoachActionQueue` -> `CommandCenter` (Actions tab); `CreditPackCheckout` -> `SettingsStack` (gated wrapper, neutral copy on hidden iOS); `CommunityEventDetail` -> `CommunityStack/CoachCommunityEvents` (coach community + events flags). Unknown or unavailable names land on the role's notification center.
 - Client `UpdateCard` -> `MoreTab` opens the card screen with the More index kept beneath (`initial: false`): the payment blocker row, and the dunning "Payment" push once the backend sends `actionScreen: 'UpdateCard'`. A coach naming it lands on the notification center.
 - Push params are decoded to at most 8 string values (200 chars each); the delivered-id dedupe set keeps the last 200 ids.
-- The OS permission prompt is no longer shown at sign-in. `registerForPushNotifications({ requestPermission: false })` only registers the token when permission is already granted. The prompt comes from `components/home/PushPermissionCard.tsx` on client Home and on the coach Clients landing screen (`audience="coach"`, C-S-PUSH-3), and only when the user taps "Turn on".
+- The OS permission prompt is no longer shown at sign-in. `registerForPushNotifications({ requestPermission: false })` only registers the token when permission is already granted. The prompt comes from `components/home/PushPermissionCard.tsx` on client Home and on the coach landing screen (`audience="coach"`, C-S-PUSH-3): Clients, or Overview with `coachTabsV2` on (COACHLAND; `navigation/coachLanding.ts` picks the landing and places the ask there only, so it is asked once), and only when the user taps "Turn on".

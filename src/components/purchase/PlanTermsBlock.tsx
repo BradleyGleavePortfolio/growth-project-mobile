@@ -2,7 +2,9 @@
  * PlanTermsBlock — the terms a client reads before paying, shared by every
  * package-selling surface: price and interval, what is charged today
  * (including any one-time part), the trial length and the date of the first
- * charge, and that the plan can be canceled anytime in the app.
+ * charge, and that the plan can be canceled anytime in the app. Today's amount
+ * and the charge date come from the server's quote; without one that line is
+ * left out.
  */
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -12,24 +14,24 @@ import { planTerms, type PurchasablePackage } from "../../lib/planTerms";
 
 export default function PlanTermsBlock({
   pkg,
-  now,
   testID = "plan-terms",
 }: {
   pkg: PurchasablePackage;
-  now?: Date;
   testID?: string;
 }) {
   const { semanticColors } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
-  const terms = planTerms(pkg, now);
+  const terms = planTerms(pkg);
   return (
     <View style={styles.wrap} testID={testID} accessibilityRole="summary">
       <Text style={styles.price} testID={`${testID}-price`}>
         {terms.price}
       </Text>
-      <Text style={styles.line} testID={`${testID}-first-charge`}>
-        {terms.firstCharge}
-      </Text>
+      {terms.firstCharge ? (
+        <Text style={styles.line} testID={`${testID}-first-charge`}>
+          {terms.firstCharge}
+        </Text>
+      ) : null}
       {terms.renewal ? (
         <Text style={styles.line} testID={`${testID}-renewal`}>
           {terms.renewal}
