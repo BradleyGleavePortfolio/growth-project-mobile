@@ -202,7 +202,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
           </Text>
         ) : null}
         <Text style={styles.body}>
-          Open the Growth Project extension on the page you just logged into and enter this
+          Open the TGP Fitness extension on the page you just logged into and enter this
           code. It’s short-lived for your security, so enter it soon — this screen confirms here
           if it expires.
         </Text>

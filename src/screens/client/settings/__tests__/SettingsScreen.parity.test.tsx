@@ -101,7 +101,7 @@ it('groups every existing row into seven ordered sections without disclosure tap
     ['privacy', 'Privacy and data', ['Trust & Privacy', 'Coach sharing', 'Blocked users', 'My data']],
     ['roman', 'Roman', ['Roman and AI']],
     ['support', 'Support', ['Resume the tour']],
-    ['about', 'About', ['The Growth Project v1.0.0', 'A daily practice.']],
+    ['about', 'About', ['TGP Fitness v1.0.0', 'A daily practice.']],
   ] as const;
   expect(view.getAllByRole('header').map((header) => header.props.children))
     .toEqual(['Settings', ...groups.map(([, title]) => title)]);
@@ -135,7 +135,7 @@ it('uses a serif heading, flat themed sections and accessible 44-point controls'
   expect(view.getByText('Alex')).toBeTruthy();
   expect(view.getByText('alex@example.com')).toBeTruthy();
   expect(await view.findByText('7:30 AM')).toBeTruthy();
-  expect(view.getByText('The Growth Project v1.0.0')).toBeTruthy();
+  expect(view.getByText('TGP Fitness v1.0.0')).toBeTruthy();
   expect(view.getByText('A daily practice.')).toBeTruthy();
 });
 

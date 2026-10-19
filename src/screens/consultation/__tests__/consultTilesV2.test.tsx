@@ -136,7 +136,7 @@ describe('on', () => {
     const young = await renderQ('B2', { B2: '2015-01-01' });
     await fireEvent.press(young.r.getByTestId('consult-continue'));
     expect(young.onNext).not.toHaveBeenCalled();
-    expect(young.r.getByText('The Growth Project is for ages 16 and up.')).toBeTruthy();
+    expect(young.r.getByText('TGP Fitness is for ages 16 and up.')).toBeTruthy();
     await fireEvent.press(young.r.getByTestId('consult-under-age-change'));
     expect(young.r.getByTestId('consult-card-dob')).toBeTruthy();
   });

@@ -191,7 +191,7 @@ export function aiRefusalCopy(
   return {
     title: 'AI help is paused by a service problem',
     body:
-      `${what} could not run because of a problem with The Growth Project service. Your account and privacy settings are fine. ` +
+      `${what} could not run because of a problem with the TGP Fitness service. Your account and privacy settings are fine. ` +
       (short
         ? 'Contact support and share the reference below.'
         : 'Contact support and say what you were doing when this happened.'),

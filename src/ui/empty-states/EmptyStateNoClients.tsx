@@ -122,7 +122,7 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
     if (!code) return;
     // "Share my link" always carries a join link: the list row's deep link, or the app's universal invite link.
     const link = deepLink ?? buildInviteUniversalLink(code);
-    const message = `Join me on Growth Project. Use code ${code} or tap: ${link}`;
+    const message = `Join me on TGP Fitness. Use code ${code} or tap: ${link}`;
     setShareProblem(false);
     Share.share({ message }).catch(() => setShareProblem(true));
   }, [code, deepLink]);

@@ -375,7 +375,7 @@ describe('WearablesShell', () => {
       await fireEvent.press(await screen.findByLabelText('Open Health Connect'));
       expect(
         await screen.findByText(
-          'When Health Connect access is allowed for The Growth Project, tap Try again to bring in new data.',
+          'When Health Connect access is allowed for TGP Fitness, tap Try again to bring in new data.',
         ),
       ).toBeTruthy();
       await fireEvent.press(screen.getByLabelText('Try again to sync Health Connect'));

@@ -484,11 +484,11 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           {coachLine ? <BulletItem text={coachLine} /> : null}
           <BulletItem text="Members of your community spaces — the content you choose to share there. If you opt in to a leaderboard, other clients of your coach can also see your display name and participation score." />
           <BulletItem text={crisisText(trustRomanLine(coachView))} />
-          <BulletItem text="Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy" />
+          <BulletItem text="Service providers that run the app for TGP Fitness, such as Anthropic for Roman, only as described in the Privacy Policy" />
           <BulletItem text="Your data is never sold, and your health data is never used for advertising" />
 
           <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>Security and storage</Text>
-          <BulletItem text="Data sent to The Growth Project's servers is encrypted in transit." />
+          <BulletItem text="Data sent to TGP Fitness servers is encrypted in transit." />
           <BulletItem text="Authentication tokens use iOS Keychain or Android Keystore-backed secure storage." />
           <BulletItem text="Some app data is cached on this device. The Privacy Policy describes server storage and access." />
         </View>

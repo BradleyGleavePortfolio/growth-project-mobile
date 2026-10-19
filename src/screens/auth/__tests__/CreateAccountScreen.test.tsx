@@ -12,6 +12,7 @@ import React from 'react';
 import { Alert, Linking, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { SUPPORT_EMAIL } from '../../../constants/support';
 
 const mockGetSignupPolicy = jest.fn();
 const mockSignupWithCode = jest.fn();
@@ -1349,7 +1350,7 @@ describe('CreateAccountScreen Request access email', () => {
     const utils = await renderScreen();
     await fireEvent.press(await utils.findByTestId('request-access-link'));
     expect(openURL).toHaveBeenCalledWith(
-      'mailto:Bradleyapple1031@gmail.com?subject=Request%20access%20to%20The%20Growth%20Project',
+      `mailto:${SUPPORT_EMAIL}?subject=Request%20access%20to%20TGP%20Fitness`,
     );
     expect(utils.queryByTestId('request-access-fallback')).toBeNull();
   });

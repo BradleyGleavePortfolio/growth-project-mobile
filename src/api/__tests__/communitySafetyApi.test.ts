@@ -163,7 +163,7 @@ describe('error helpers', () => {
 
 describe('owner-approved community safety copy (2026-10-01 09:07 PDT)', () => {
   const H24 =
-    'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team.';
+    'Reports are reviewed within 24 hours, every day, by your coach and the TGP Fitness team.';
 
   it('pins the 24-hour moderation sentence and the full commitment', () => {
     expect(COMMUNITY_REVIEW_WITHIN_24H).toBe(H24);

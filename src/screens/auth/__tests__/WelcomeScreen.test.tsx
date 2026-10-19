@@ -39,7 +39,7 @@ describe('auth WelcomeScreen (prototype 00)', () => {
     expect(ui.getByTestId('welcome-wordmark', { includeHiddenElements: true }).props.children).toBe('TGP');
     expect(ui.queryByText('GP')).toBeNull();
     expect(ui.getByText('Personal training, in your pocket')).toBeTruthy();
-    const title = StyleSheet.flatten(ui.getByText('The Growth Project').props.style);
+    const title = StyleSheet.flatten(ui.getByText('TGP Fitness').props.style);
     expect(title.fontFamily).toMatch(/^CormorantGaramond/);
     expect(title.lineHeight).toBeGreaterThanOrEqual(1.2 * title.fontSize);
     expect(ui.getByText('A plan, daily targets, and a coach who knows you.')).toBeTruthy();

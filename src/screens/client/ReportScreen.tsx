@@ -132,7 +132,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
         {/* Cover */}
         <View style={styles.cover}>
           <View style={styles.coverDot} />
-          <Text style={styles.coverTitle}>The Growth Project</Text>
+          <Text style={styles.coverTitle}>TGP Fitness</Text>
           <Text style={styles.coverSubtitle}>Weekly progress report</Text>
           <Text style={styles.coverName}>
             {currentUser?.firstName || currentUser?.name}
@@ -208,7 +208,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
         {/* Footer */}
         <View style={styles.footer}>
           <View style={styles.footerDot} />
-          <Text style={styles.footerTitle}>The Growth Project</Text>
+          <Text style={styles.footerTitle}>TGP Fitness</Text>
         </View>
     </Screen>
   );

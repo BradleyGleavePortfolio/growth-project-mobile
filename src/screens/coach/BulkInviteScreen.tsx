@@ -344,7 +344,7 @@ export default function BulkInviteScreen() {
           multiline
           numberOfLines={3}
           maxLength={MESSAGE_MAX + 50}
-          placeholder="Hey — joining me on The Growth Project, here's your invite."
+          placeholder="Hey — joining me on TGP Fitness, here's your invite."
           placeholderTextColor={colors.textMuted}
           style={styles.messageInput}
           testID="bulk-message-input"

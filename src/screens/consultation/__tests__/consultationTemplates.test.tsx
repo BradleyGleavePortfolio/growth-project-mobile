@@ -72,7 +72,7 @@ describe('templates', () => {
     expect(r.queryByTestId('consult-validation')).toBeNull();
     await fireEvent.press(r.getByTestId('consult-continue'));
     expect(r.getByTestId('consult-screen-UNDER_AGE')).toBeTruthy();
-    expect(r.getByText('The Growth Project is for ages 16 and up.')).toBeTruthy();
+    expect(r.getByText('TGP Fitness is for ages 16 and up.')).toBeTruthy();
     expect(mockPut).not.toHaveBeenCalled();
     await fireEvent.press(r.getByTestId('consult-under-age-change'));
     expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: '2012' });

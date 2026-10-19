@@ -68,7 +68,7 @@ it('a thread row keeps a share card it can draw, and nothing else; with the flag
 });
 
 it('boards 5 and 6: the card draws under "Shared progress" on the coach\'s side and the client\'s, and says its facts', async () => {
-  const words = ['Shared progress', 'Weigh-ins', '14', 'days in a row', 'Oct 4', 'Oct 17', 'The Growth Project'];
+  const words = ['Shared progress', 'Weigh-ins', '14', 'days in a row', 'Oct 4', 'Oct 17', 'TGP Fitness'];
   const coach = await render(<MessageBubble message={bubble()} isMe={false} onLongPress={jest.fn()} />);
   words.forEach((w) => expect(coach.getByText(w)).toBeTruthy());
   expect(coach.getByLabelText(SPOKEN)).toBeTruthy();

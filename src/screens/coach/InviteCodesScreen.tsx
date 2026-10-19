@@ -122,7 +122,7 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
       const url = buildInviteUniversalLink(code);
       await Share.share({
         url,
-        message: `Join me on The Growth Project: ${url}\nInvite code: ${code}`,
+        message: `Join me on TGP Fitness: ${url}\nInvite code: ${code}`,
       });
     } catch (err) {
       console.error('InviteCodesScreen: share failed', err);

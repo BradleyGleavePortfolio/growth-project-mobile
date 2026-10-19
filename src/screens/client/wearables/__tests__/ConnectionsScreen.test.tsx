@@ -200,7 +200,7 @@ describe('ConnectionsScreen — interactions', () => {
     expect(screen.getByText('Disconnect Oura?')).toBeTruthy();
     expect(
       screen.getByText(
-        'The Growth Project stops receiving new Oura data, and your coach stops seeing new Oura data. Data already shared stays with your coach. You can connect Oura again at any time.',
+        'TGP Fitness stops receiving new Oura data, and your coach stops seeing new Oura data. Data already shared stays with your coach. You can connect Oura again at any time.',
       ),
     ).toBeTruthy();
   });
@@ -215,7 +215,7 @@ describe('ConnectionsScreen — interactions', () => {
       await fireEvent.press(screen.getByLabelText('Disconnect Oura'));
       expect(
         screen.getByText(
-          'The Growth Project stops receiving new Oura data. Data already brought in stays in your account. You can connect Oura again at any time.',
+          'TGP Fitness stops receiving new Oura data. Data already brought in stays in your account. You can connect Oura again at any time.',
         ),
       ).toBeTruthy();
     } finally {
@@ -279,7 +279,7 @@ describe('ConnectionsScreen — disconnect confirm (C-317-4)', () => {
   });
 
   it.each([
-    [null, /The Growth Project couldn't be reached, so Oura is still connected/, true],
+    [null, /TGP Fitness couldn't be reached, so Oura is still connected/, true],
     [429, /Too many tries in a short time, so Oura is still connected/, true],
     [401, /Your session has ended, so Oura is still connected/, false],
     [403, /client account only, so nothing changed/, false],
@@ -451,7 +451,7 @@ describe('ConnectionsScreen — Samsung Health row (B-364-1)', () => {
   it('copy names Health Connect and every app; empty import names the Samsung setting (C-364-2)', () => {
     expect(disconnectConfirmCopy('SAMSUNG_HEALTH', 'Samsung Health').body).toContain('every other app');
     expect(configFor('SAMSUNG_HEALTH').dataDescription).toBe(
-      'The Growth Project reads the Health Connect data on this phone, including what Samsung Health shares with Health Connect.',
+      'TGP Fitness reads the Health Connect data on this phone, including what Samsung Health shares with Health Connect.',
     );
     const empty = emptyImportMessage('SAMSUNG_HEALTH', 'Health Connect').text;
     expect(empty).toContain('Samsung Health is connected through Health Connect');

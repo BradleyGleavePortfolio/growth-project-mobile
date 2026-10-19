@@ -459,7 +459,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
 
         <SettingsSection title="About" id="about">
           <View style={styles.about}>
-            <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
+            <Text style={styles.aboutText}>TGP Fitness v1.0.0</Text>
             <Text style={styles.aboutSub}>A daily practice.</Text>
           </View>
         </SettingsSection>

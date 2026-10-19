@@ -899,7 +899,7 @@ export default function SettingsScreen() {
 
       {/* About */}
       <View style={styles.aboutSection}>
-        <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
+        <Text style={styles.aboutText}>TGP Fitness v1.0.0</Text>
         <Text style={styles.aboutSubText}>Coach edition</Text>
       </View>
 

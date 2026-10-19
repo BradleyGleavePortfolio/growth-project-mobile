@@ -158,7 +158,7 @@ describe('TrustCenterScreen source', () => {
       expect(line).not.toMatch(/\b(we|us|our|ours)\b/i);
       expect(line).not.toContain('!');
     }
-    expect(bullets).toContain('Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy');
+    expect(bullets).toContain('Service providers that run the app for TGP Fitness, such as Anthropic for Roman, only as described in the Privacy Policy');
     expect(bullets).toContain('Your data is never sold, and your health data is never used for advertising');
   });
 });
@@ -172,7 +172,7 @@ describe('TrustCenterScreen security copy (B-STORECOPY-1: no universal guarantee
     const bullets = [...SCREEN_SRC.matchAll(/<BulletItem text="([^"]+)"/g)].map((m) => m[1]);
     expect(bullets).toEqual(
       expect.arrayContaining([
-        "Data sent to The Growth Project's servers is encrypted in transit.",
+        "Data sent to TGP Fitness servers is encrypted in transit.",
         'Authentication tokens use iOS Keychain or Android Keystore-backed secure storage.',
         'Some app data is cached on this device. The Privacy Policy describes server storage and access.',
       ]),
