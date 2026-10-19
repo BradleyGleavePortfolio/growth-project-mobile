@@ -17,7 +17,7 @@ import { getTodayString } from '../../../utils/date';
 import { unitOf, type WeightUnit } from './progressV2';
 import { loadWeekReview, reviewTrend, reviewWeek, sleepLine, weekDate, workoutLine, type WeekReviewData } from './weekReview';
 
-type Nav = NavigationProp<ParamListBase>;
+type Nav = Pick<NavigationProp<ParamListBase>, 'goBack'>;
 export default function WeekInReviewScreen({ navigation }: { navigation: Nav }) {
   const user = useCurrentUser();
   // Remount on identity change: no summary or late response crosses accounts.

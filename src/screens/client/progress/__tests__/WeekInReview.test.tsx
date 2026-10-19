@@ -37,7 +37,7 @@ jest.mock('../../../../theme/ThemeProvider', () => {
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../wearables/components/useReduceMotion', () => ({ useReduceMotion: () => true }));
 
-const navigation = { goBack: mockBack } as React.ComponentProps<typeof WeekInReviewScreen>['navigation'];
+const navigation = { goBack: mockBack };
 const read = () => loadWeekReview('client-a', week);
 beforeEach(() => {
   jest.clearAllMocks();
