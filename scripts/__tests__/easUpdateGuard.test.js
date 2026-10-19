@@ -18,6 +18,7 @@ const SIG = Buffer.from('0123456789abcdef0123456789abcdef').toString('base64').r
 const jwt = (role) => [b64url({ alg: 'HS256', typ: 'JWT' }), b64url({ iss: 'supabase', role }), SIG].join('.');
 const PK_LIVE = ['pk', 'live', '51AbCdEfGhIjKlMnOpQrStUvWx0123'].join('_');
 const PK_TEST = ['pk', 'test', '51AbCdEfGhIjKlMnOpQrStUvWx0123'].join('_');
+const SB_PUBLISHABLE = ['sb', 'publishable', 'AbCdEfGhIjKlMnOpQrStUv', 'a1B2c3D4'].join('_');
 const DSN = 'https://0123456789abcdef0123456789abcdef@o123.ingest.us.sentry.io/4507';
 const TOKEN = ['sntrys', 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6'].join('_');
 
@@ -29,7 +30,7 @@ const FILE_MARKER = '***** (This is a file env variable. To access it, run comma
 const GOOD = {
   EXPO_PUBLIC_API_URL: 'https://api.trygrowthproject.com/api',
   EXPO_PUBLIC_SUPABASE_URL: 'https://abcdefghijkl.supabase.co',
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: jwt('anon'),
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: SB_PUBLISHABLE,
   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: PK_LIVE,
   EXPO_PUBLIC_SENTRY_DSN: DSN,
   [F]: 'true',
@@ -482,6 +483,23 @@ describe('eas-update-guard', () => {
       expect(code).toBe(1);
       expect(h.published()).toBe(false);
       expect(logs.some((m) => re.test(m))).toBe(true);
+    });
+
+    it('an update whose EAS Supabase key is a legacy anon JWT is refused on every channel, as the only problem, never printed', () => {
+      const legacy = jwt('anon');
+      const channels = guard.loadChannels(ROOT);
+      expect(Object.keys(channels)).toEqual(expect.arrayContaining(['preview', 'production', 'testing']));
+      for (const [channel, { environment }] of Object.entries(channels)) {
+        const argv = ['--channel', channel, '--environment', environment, '--message', 'fix'];
+        const h = harness({ list: withProject({ ...GOOD, EXPO_PUBLIC_SUPABASE_ANON_KEY: legacy }) });
+        const { code, logs } = runMain(argv, { h });
+        expect(code).toBe(1);
+        expect(h.published()).toBe(false);
+        expect(logs).toHaveLength(2);
+        expect(logs[0]).toMatch(new RegExp(`^EXPO_PUBLIC_SUPABASE_ANON_KEY is a legacy Supabase anon key \\(a JWT\\), and those keys are switched off for this project; .* in the bundle this update would ship to channel "${channel}" \\(value not printed\\)`));
+        expect(logs[1]).toBe('1 problem(s); nothing was published. Each line above names the variable and the fix.');
+        for (const m of logs) expect(m).not.toContain(legacy);
+      }
     });
 
     it('an ambiguous or unreadable name is reported once, not again as unset', () => {
