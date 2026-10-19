@@ -447,9 +447,11 @@ export interface SemanticTokens {
   /**
    * Style C v2 surfaces (MOCK-C1V2, index-v2 section 4). They hold short
    * text only; long text stays on bone. Text on masthead and forestBand uses
-   * textOnAccent and textOnMastheadMuted. Pairs: theme/__tests__/contrastStyleC.
+   * textOnAccent and textOnMastheadMuted. forestBandLine is the chip border on
+   * the rest band (section 5: 60% textOnAccent over forest, solid). Pairs:
+   * theme/__tests__/contrastStyleC.
    */
-  surface: { masthead: string; forestBand: string; sage: string; sageLine: string };
+  surface: { masthead: string; forestBand: string; forestBandLine: string; sage: string; sageLine: string };
   /** Secondary text on surface.masthead and surface.forestBand. */
   textOnMastheadMuted: string;
   /**
@@ -491,7 +493,7 @@ export const lightTokens: SemanticTokens = {
   border:      '#DCD5CC',
   // Ink (#1A1A18) at 0.40 — a calm dim that keeps the underlying screen legible.
   overlay:     'rgba(26, 26, 24, 0.40)',
-  surface: { masthead: brand[800], forestBand: brand[600], sage: semantic.success.bg, sageLine: '#C9D8CD' },
+  surface: { masthead: brand[800], forestBand: brand[600], forestBandLine: '#A8B2A6', sage: semantic.success.bg, sageLine: '#C9D8CD' },
   textOnMastheadMuted: brand[100],
   data: {
     leaf: chartLeaf, fern: '#7FA653', moss: '#4E7A3F', forest: brand[600], deep: brand[800],

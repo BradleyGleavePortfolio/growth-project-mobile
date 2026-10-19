@@ -62,6 +62,7 @@ import MessagesInboxScreen from '../screens/client/MessagesInboxScreen';
 import EducationScreen from '../screens/client/EducationScreen';
 import LearnScreen from '../screens/client/learn/LearnScreen';
 import LearnLessonScreen from '../screens/client/learn/LearnLessonScreen';
+import LearnGuidelinesScreen from '../screens/client/learn/LearnGuidelinesScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
@@ -503,7 +504,7 @@ function WorkoutStackNavigator() {
       <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} options={{ gestureEnabled: false }} />
       <WorkoutStackNav.Screen name="WorkoutHistoryEdit" component={ProtectedWorkoutHistoryEditScreen} />
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={ProtectedRoutineBuilderScreen} />
-      <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
+      <WorkoutStackNav.Screen name="CoachGuidelines" component={featureFlags.learnHub ? LearnGuidelinesScreen : CoachGuidelinesScreen} />
       {/* Mux video + exercise library v1. */}
       <WorkoutStackNav.Screen
         name="ExerciseLibrary"
@@ -564,7 +565,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       {featureFlags.learnHub && (
         <>
           <MoreStackNav.Screen name="LearnLesson" component={LearnLessonScreen} />
-          <MoreStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
+          <MoreStackNav.Screen name="CoachGuidelines" component={LearnGuidelinesScreen} />
         </>
       )}
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
