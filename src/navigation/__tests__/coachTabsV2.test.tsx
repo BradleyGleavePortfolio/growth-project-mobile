@@ -71,6 +71,8 @@ const PROBES: [string, Tap][] = [
   ['money/MoneyScreen', chatTap], // Message on an attention row
   ['money/MoneyChargeScreen', chatTap], // Message <client> on a charge
   ['CoachBriefScreen', briefTap],
+  ['CoachSafetyAlertScreen', chatTap], // SAFETY-CHAT-ROUTE: Message {first} on a safety alert
+  ['ClientInsightScreen', chatTap], // and Send check-in on a weekly insight (both in Clients)
 ];
 for (const [name, go] of PROBES) {
   jest.doMock(`../../screens/coach/${name}`, () => ({ __esModule: true, default: probe(`../screens/coach/${name}`, go) }));
@@ -332,6 +334,27 @@ it.each([true, false])("coachTabsV2 %s: Message on a client file's safety card o
   expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(back);
 });
 
+// SAFETY-CHAT-ROUTE (#CARD-MESSAGE-DEST op 1): the same from a safety alert (as Overview's Actions or its push opens it)
+// and a weekly insight. Back lands on the inbox, then on the alert or insight, kept in Clients.
+it.each([true, false].flatMap((on) => [[on, 'CoachSafetyAlert'], [on, 'ClientInsight']] as const))(
+  'coachTabsV2 %s: a chat from %s opens in Messages over the inbox, the screen kept in Clients (off: over it); Back lands there',
+  async (on, screen) => {
+    mockFlags.coachTabsV2 = on;
+    mockCommandCenter.__USING_MOCK_DATA = false; // what ships
+    const view = await mount();
+    await act(async () => ref.navigate('ClientsStack', { screen, params: CHAT, initial: false }));
+    await fireEvent.press(view.getByText(`../screens/coach/${screen}Screen`));
+    expect([focusedTab(), stackOf('Messages'), stackOf('ClientsStack'), ref.getCurrentRoute()?.params]).toEqual(on
+      ? ['Messages', ['MessagesInbox', 'ClientMessages'], ['ClientsList', screen], CHAT]
+      : ['ClientsStack', undefined, ['ClientsList', screen, 'ClientMessages'], CHAT]);
+    await act(async () => ref.goBack());
+    expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', screen]);
+    if (!on) return;
+    await act(async () => ref.goBack());
+    expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['ClientsStack', screen]);
+  },
+);
+
 it("flag off: Messages is today's single screen; its chat opens in Clients and Back lands on the client list", async () => {
   mockFlags.coachTabsV2 = false;
   mockCommandCenter.__USING_MOCK_DATA = false;
@@ -536,12 +559,14 @@ it('the real chat arms the same guard with its own unsent text', () => {
 
 it('every chat opened outside Clients goes through coachInbox.ts, and every file that does is a row above', () => {
   const callers = SOURCES.filter(([file, source]) => file !== 'coachInbox.ts' && /\b(openInboxChat|chatTarget)\(/.test(source));
-  // MessagesScreen renders CoachInboxV2; ClientDetailScreen's safety card has its own row (SAFETY-CARD) above.
-  const rows = [...ENTRIES.map(([probe]) => `${path.basename(probe)}.tsx`), 'CoachInboxV2.tsx', 'ClientDetailScreen.tsx'];
+  // MessagesScreen renders CoachInboxV2; ClientDetailScreen's safety card (SAFETY-CARD), the safety alert and the weekly
+  // insight (SAFETY-CHAT-ROUTE) have their own rows above.
+  const rows = [...ENTRIES.map(([probe]) => `${path.basename(probe)}.tsx`), 'CoachInboxV2.tsx', 'ClientDetailScreen.tsx',
+    'CoachSafetyAlertScreen.tsx', 'ClientInsightScreen.tsx'];
   expect(callers.map(([file]) => file).sort()).toEqual(rows.sort());
   // Only the navigator, the chat itself and Clients screens that open a chat over themselves name the route.
   const naming = SOURCES.filter(([, source]) => /["']ClientMessages["']/.test(source)).map(([file]) => file);
   expect(naming.sort()).toEqual(
-    ['ClientDetailScreen.tsx', 'ClientInsightScreen.tsx', 'ClientMessagesScreen.tsx', 'CoachNavigator.tsx', 'CoachSafetyAlertScreen.tsx', 'coachInbox.ts'].sort(),
+    ['ClientDetailScreen.tsx', 'ClientMessagesScreen.tsx', 'CoachNavigator.tsx', 'coachInbox.ts'].sort(),
   );
 });
