@@ -124,8 +124,8 @@ describe('bloodworkCopy — required safety phrases', () => {
     expect(COPY_SRC).toMatch(/not a diagnosis/i);
   });
 
-  it('contains "clinician" in the long-form disclaimer', () => {
-    expect(COPY_SRC).toMatch(/clinician/i);
+  it('contains "doctor" in the long-form disclaimer', () => {
+    expect(COPY_SRC).toMatch(/doctor/i);
   });
 
   it('exports the modal title constant', () => {

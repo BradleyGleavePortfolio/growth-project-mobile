@@ -150,7 +150,7 @@ describe("More: your plan rows (S-REACH)", () => {
   });
 });
 
-// AUDIT-11-125: the wearables rows were tied to the clinic tutorial flag, which
+// AUDIT-11-125: the wearables rows were tied to the client tutorial flag, which
 // the iOS store build leaves off, so an iPhone client had no way to reach Apple Health.
 describe("More: Health and sleep / Connected devices (AUDIT-11-125)", () => {
   const originalOS = Platform.OS;
@@ -201,7 +201,7 @@ describe("More: Health and sleep / Connected devices (AUDIT-11-125)", () => {
     expect(screen.getByLabelText("Health and sleep")).toBeTruthy();
   });
 
-  it("clinic tutorial on: the rows stay first, as before", async () => {
+  it("client tutorial on: the rows stay first, as before", async () => {
     setOS("android");
     mockFlags.clientTutorial = true;
     await render(<MoreScreen />);

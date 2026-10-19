@@ -19,7 +19,7 @@
  * The screen renders a minimal centered spinner while the redirect
  * happens; the user should never see it for more than a frame or two.
  *
- * Mounted in AuthNavigator under `AuthCallback` (clinic C10: the linking
+ * Mounted in AuthNavigator under `AuthCallback` (launch C10: the linking
  * entry used to point at an unmounted route, so the URL went nowhere).
  * The auth stack has no `Home` route, so the authenticated branch asks the
  * root to re-bootstrap (authEvents.emit) instead of resetting to a route

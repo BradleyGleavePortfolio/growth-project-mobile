@@ -1,5 +1,5 @@
 /**
- * Home number grid in the lighter first week (clinic contract v1 addition
+ * Home number grid in the lighter first week (onboarding contract v1 addition
  * 8): calories and protein (plus water) while simple; the existing protein,
  * carbs, fat and water grid otherwise. The one-time Roman card appears on
  * Home once the simple week has ended.

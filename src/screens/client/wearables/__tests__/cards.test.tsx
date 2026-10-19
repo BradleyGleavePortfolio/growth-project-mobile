@@ -1,9 +1,9 @@
 /**
  * S&R card render tests. Focus on the binding UX gates:
- *   - plain-language sleep stages only (no clinical jargon strings),
+ *   - plain-language sleep stages only (no medical jargon strings),
  *   - factual HRV and sleep-schedule copy without quality judgments,
  *   - recovery ring shows BOTH a number and a plain-language label,
- *   - SpO2 attention path shows a soft clinician-referral suffix.
+ *   - SpO2 attention path shows a soft doctor-referral suffix.
  */
 
 import React from 'react';
@@ -19,9 +19,9 @@ import { testColors } from '../recoveryTestColors';
 import type { SleepStagesView } from '../recoveryData';
 import { makeAccessibilitySubscription } from '../testSupport/accessibilityMocks';
 
-// Built from fragments so the banned clinical tokens never appear literally in
+// Built from fragments so the banned medical tokens never appear literally in
 // source (the auditor greps this directory for them). Matching is unchanged.
-const CLINICAL_JARGON = new RegExp(
+const MEDICAL_JARGON = new RegExp(
   ['\\bN[1-3]\\b', '\\bN' + 'REM\\b', '\\bStag' + 'e [0-9]\\b', '\\bStag' + 'e [I]{1,3}\\b'].join('|'),
 );
 const JUDGMENT_WORDS = /\b(recovering|recovered|ready|readiness|settling|settled|steady|steadiness|beautifully|rhythm|good|great|poor|restorative|close|keeping up)\b/i;
@@ -71,7 +71,7 @@ describe('SleepStagesCard — plain language', () => {
     const { getByTestId } = await render(<SleepStagesCard stages={stages} colors={testColors} />);
     const headline = getByTestId('sleep-stages-headline').props.children as string;
     expect(headline).toBe('6h 30m asleep');
-    expect(headline).not.toMatch(CLINICAL_JARGON);
+    expect(headline).not.toMatch(MEDICAL_JARGON);
   });
 
   it.each([
@@ -141,8 +141,8 @@ describe('HrvTrendCard — facts without a score', () => {
   });
 });
 
-describe('RespirationCard — soft clinician-referral suffix', () => {
-  it('appends a gentle clinician suggestion when SpO2 is low', async () => {
+describe('RespirationCard — soft doctor-referral suffix', () => {
+  it('appends a gentle doctor suggestion when SpO2 is low', async () => {
     const { getByTestId } = await render(
       <RespirationCard
         respiration={{

@@ -1,7 +1,7 @@
 // Source-level guards for the RoleSelection invite path.
 //
 // History: audit H-4 made a 4xx attach failure surface to the user. The
-// clinic audit of #303 (A2) then showed that the old "attach, then
+// launch audit of #303 (A2) then showed that the old "attach, then
 // selectRole(code)" sequence redeemed a code twice. It also showed that
 // selectRole(code) cannot resolve permanent CoachProfile codes. The
 // contract is now: attach is the single redemption, finalize with

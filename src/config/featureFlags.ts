@@ -31,6 +31,7 @@ const isDev =
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: process.env.EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2,
   EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2,
+  EXPO_PUBLIC_FF_CLIENT_TRAIN_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TRAIN_V2,
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
@@ -64,6 +65,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
   EXPO_PUBLIC_FF_FIRST_RUN_V2: process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2,
+  EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST: process.env.EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST,
   EXPO_PUBLIC_FF_HEALTH_PAGES: process.env.EXPO_PUBLIC_FF_HEALTH_PAGES,
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
@@ -109,6 +111,8 @@ export const featureFlags = {
   clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', false),
   /** TIMELINE: the Style C Timeline page, its door on Progress and its push route; off in every build. */
   clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', false),
+  /** C1-TRAIN-TAB: the Style C v2 top of the Train tab (week masthead, coach note, today's workout); off in every build. */
+  clientTrainV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TRAIN_V2', false),
   /** C5: the Style C buying pages (slice 2: the success moment and what unlocks); off in every build. */
   clientBillingV2: readFlag('EXPO_PUBLIC_FF_CLIENT_BILLING_V2', false),
   /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
@@ -165,7 +169,7 @@ export const featureFlags = {
    */
   consultationOnboarding: readFlag('EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', false),
 
-  // ─── Clinic launch — Roman-led client tutorial (C08 + C09) ───────────────
+  // ─── Launch — Roman-led client tutorial (C08 + C09) ──────────────────────
   /**
    * The action-gated Roman tour after the plan reveal, the pinned macro and
    * plan explanation cards on Home and Train, the Home "Message your coach"
@@ -451,6 +455,14 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
   mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
+  // ─── UI-3 food logging (V1_1_UI_SPEC UI-3, owner 2026-10-09) ─────────────
+  // ON: a coached client's Food tab opens on the day's plan as a checklist:
+  // the coach's meals in order, "Ate it as planned" logs one in a tap. No plan
+  // for the day, or no coach: today's Food log. OFF (default in every eas.json
+  // profile): today's Food log, unchanged. The switch-on is its own PR.
+  //
+  // env: EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST
+  foodPlanChecklist: readFlag('EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST', false),
   // UI-1 (owner 10-09, V1_1_UI_SPEC; v1 since owner 10-17 "home-v1"): the rings
   // and tiles client Home. Default off and set by no eas.json profile until the
   // owner switches it on in its own PR; off renders today's Home unchanged.
@@ -570,9 +582,9 @@ export const featureFlags = {
    */
   importReview: readFlag('EXPO_PUBLIC_FF_IMPORT_REVIEW', false),
 
-  // ─── Clinic launch (C11) — App Review 3.1 risk removal ───────────────────
+  // ─── Store launch (C11) — App Review 3.1 risk removal ────────────────────
   /**
-   * Clinic launch (App Review): hide, on iOS only, purchases that are NOT
+   * Store launch (App Review): hide, on iOS only, purchases that are NOT
    * 1:1 person-to-person services. Client purchases of 1:1 coach packages
    * stay available: they are real-time 1:1 coaching between a client and an
    * individual coach, filed under Guideline 3.1.3(d) and paid through

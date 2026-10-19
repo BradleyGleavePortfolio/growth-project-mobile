@@ -1,6 +1,6 @@
 /**
  * FullMacrosIntroCard — one quiet Roman card, shown once, on the day a
- * never-tracker's lighter first week ends (clinic onboarding contract v1
+ * never-tracker's lighter first week ends (onboarding contract v1
  * addition 8; owner ruling 2026-09-30 18:11).
  *
  * Visible only when the client started in the 'simple' macro view, that view

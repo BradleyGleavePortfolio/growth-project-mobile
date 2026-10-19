@@ -52,6 +52,14 @@ import {
 } from '../services/pushTapRouter';
 import { lightTokens } from '../theme/tokens';
 import { HapticService } from '../ui/haptics/haptics.service';
+import { chatTarget } from '../navigation/coachInbox';
+
+// SAFETY-CHAT-ROUTE: Message {first name} opens that client's chat through openInboxChat (in Messages with the six
+// tabs; off, over the alert). The routes and Back: coachChatRoute159.test.tsx.
+const chatOf = (clientId: string, clientName: string) => {
+  const { tab, params } = chatTarget(clientId, clientName);
+  return [tab, params];
+};
 
 const URGENT_LINE = 'Urgent: Roman sent Jane Doe a medical safety reply. Check in with them →';
 const ED_LINE = 'Roman sent Sam Lee an eating-disorder safety reply. Check in with them →';
@@ -169,7 +177,7 @@ describe('the detail screen', () => {
       getByText('Roman told them to contact their doctor or prescriber today, and to call 911 if symptoms are severe.'),
     ).toBeTruthy();
     await fireEvent.press(getByRole('button', { name: 'Message Jane' }));
-    expect(navigation.navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-1', clientName: 'Jane Doe' });
+    expect(navigation.navigate).toHaveBeenCalledWith(...chatOf('client-1', 'Jane Doe'));
     await fireEvent.press(getByRole('button', { name: 'Back' }));
     expect(navigation.goBack).toHaveBeenCalled();
     expect(HapticService.warning).toHaveBeenCalledTimes(1);
@@ -192,7 +200,7 @@ describe('the detail screen', () => {
     expect(queryByTestId('coach-safety-alert-loading')).toBeNull();
     expect(HapticService.warning).toHaveBeenCalledTimes(1);
     await fireEvent.press(getByRole('button', { name: 'Message Jane' }));
-    expect(navigation.navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-1', clientName: 'Jane Doe' });
+    expect(navigation.navigate).toHaveBeenCalledWith(...chatOf('client-1', 'Jane Doe'));
     expect(tabs.navigate).not.toHaveBeenCalled();
   });
 
@@ -237,7 +245,7 @@ describe('the detail screen', () => {
     expect(queryByTestId('coach-safety-alert-quote')).toBeNull();
     expect(queryByText(QUOTE)).toBeNull();
     await fireEvent.press(getByRole('button', { name: 'Message Maya' }));
-    expect(navigation.navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-3', clientName: 'Maya Collins' });
+    expect(navigation.navigate).toHaveBeenCalledWith(...chatOf('client-3', 'Maya Collins'));
     expect(HapticService.warning).toHaveBeenCalledTimes(1);
   });
 

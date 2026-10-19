@@ -1,5 +1,5 @@
 /**
- * Clinic C11: expo-updates / EAS Update config gate in
+ * Launch C11: expo-updates / EAS Update config gate in
  * scripts/validate-app-config.js. Runs the validator as a child process on
  * mutated copies of app.json / eas.json / package.json (same strategy as
  * validateAppConfig.test.js).
