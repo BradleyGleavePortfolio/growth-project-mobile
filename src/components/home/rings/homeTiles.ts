@@ -109,7 +109,7 @@ export function checkInTile(checkIn: unknown): TileView {
   if (!mood) return DASH;
   const energy = typeof c?.energy === 'number' ? ENERGY_LABELS[c.energy] : undefined;
   const slept = Number(c?.sleep_hours);
-  const parts = [energy ? `energy ${energy.toLowerCase()}` : '', slept > 0 ? `slept ${one(slept)} h` : ''].filter(Boolean).join(', ');
+  const parts = [energy ? `energy ${energy.toLowerCase()}` : '', slept > 0 ? `slept ${one(slept)}\u00a0h` : ''].filter(Boolean).join(', ');
   return { value: mood, small: '', sub: parts ? parts.charAt(0).toUpperCase() + parts.slice(1) : '', progress: null };
 }
 

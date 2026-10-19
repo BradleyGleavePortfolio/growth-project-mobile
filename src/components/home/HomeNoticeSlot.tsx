@@ -7,8 +7,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
-/** Most urgent first; Finish your profile last, never ahead of another (#RINGS-NOTICE-ORDER). Failed payment: under the dials (#RINGS-PAY-SLOT). */
-export const NOTICE_RANK = ['invite', 'push', 'finishJoining', 'coachIntro', 'fullMacros', 'tourReoffer', 'profile'] as const;
+/** Most urgent first; Finish joining ahead of push (#RINGS-JOIN-FIRST); Finish your profile last (#RINGS-NOTICE-ORDER). Failed payment: under the dials (#RINGS-PAY-SLOT). */
+export const NOTICE_RANK = ['invite', 'finishJoining', 'push', 'coachIntro', 'fullMacros', 'tourReoffer', 'profile'] as const;
 export type NoticeId = (typeof NOTICE_RANK)[number];
 
 const Slot = createContext<{ shown: NoticeId | undefined; report: (id: NoticeId, due: boolean) => void } | null>(null);
