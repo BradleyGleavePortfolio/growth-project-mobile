@@ -1,5 +1,4 @@
-// LEARN-M5 (flag learnCourses): the Train course banner, the course home, a week and a page lesson render the
-// course the server sends (routes typed from plan 7.A, mocked here until LEARN-BE2), and claim done only after it.
+// LEARN-M5 (flag learnCourses): banner, course home, week and page lesson; routes from plan 7.A mocked until LEARN-BE2.
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -24,8 +23,7 @@ jest.mock('../../../../hooks/useReducedMotion', () => ({ useReducedMotion: () =>
 jest.mock('../../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({ online: mockOnline }), isEffectivelyOnline: (n: { online: boolean }) => n.online }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn(), softImpact: jest.fn(), success: jest.fn(), error: jest.fn() } }));
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn() }, lessonsApi: { complete: jest.fn() } }));
-// Today is the Wednesday of week 3.
-jest.mock('../courseData', () => ({ ...jest.requireActual('../courseData'), today: () => '2026-10-14' }));
+jest.mock('../courseData', () => ({ ...jest.requireActual('../courseData'), today: () => '2026-10-14' })); // Wed of week 3
 
 const lesson = (id: string, title: string, done: boolean, extra: object = {}) => ({ id, title, kind: 'page', done, ...extra });
 const week = (id: string, position: number, title: string, open: boolean, opens_on: string, finish_by: string, lessons: object[], note?: string) => ({ id, position, title, open, opens_on, finish_by, lessons, note });
@@ -44,8 +42,7 @@ const COURSE = {
 };
 const ok = <T,>(data: T) => Promise.resolve({ data });
 const seen = (texts: string[]) => texts.forEach((t) => expect(screen.getByText(t)).toBeTruthy());
-const get = jest.mocked(api.get);
-const complete = jest.mocked(lessonsApi.complete);
+const [get, complete] = [jest.mocked(api.get), jest.mocked(lessonsApi.complete)];
 
 async function show(Comp: React.ComponentType) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
@@ -147,7 +144,10 @@ describe('Course week', () => {
 });
 
 describe('Course lesson', () => {
-  beforeEach(() => { mockParams = { id: 'k1', lesson: 'l32' }; });
+  beforeEach(() => {
+    mockParams = { id: 'k1', lesson: 'l32' };
+    mockNav.getState.mockReturnValue({ index: 2, routes: [{ name: 'Course' }, { name: 'CourseWeek' }, { name: 'CourseLesson' }] });
+  });
 
   it('shows the page and the note, and done only after the server saves it (c05)', async () => {
     await show(CourseLessonScreen);
@@ -163,8 +163,10 @@ describe('Course lesson', () => {
 
   it('a failed save keeps the button with the sentence above it', async () => {
     complete.mockImplementation(() => Promise.reject(new Error('offline')) as never);
+    mockNav.getState.mockReturnValue({ index: 1, routes: [{ name: 'Course' }, { name: 'CourseLesson' }] });
     await show(CourseLessonScreen);
-    await fireEvent.press(await screen.findByText('Mark as complete'));
+    expect(await screen.findByText('Knee Rehab, 8 weeks')).toBeTruthy(); // opened from Up next: Back returns to the course
+    await fireEvent.press(screen.getByText('Mark as complete'));
     expect(await screen.findByText('Lesson completion did not save. Check your connection and try again.')).toBeTruthy();
     expect(screen.getByText('Mark as complete')).toBeTruthy();
     expect(HapticService.error).toHaveBeenCalledTimes(1);

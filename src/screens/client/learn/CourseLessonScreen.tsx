@@ -61,6 +61,8 @@ export default function CourseLessonScreen() {
   };
 
   const reason = saveError ?? (online ? null : copy.offline);
+  // Back names where it returns: the week, or the course home when Up next opened the lesson.
+  const nav = navigation.getState?.(); const fromWeek = nav?.routes[nav.index - 1]?.name === 'CourseWeek';
   const footer = lesson.done ? undefined : (
     <View style={s.footer}>
       {reason ? <Text style={s.ink} accessibilityRole={saveError ? 'alert' : undefined} testID="course-lesson-reason">{reason}</Text> : null}
@@ -70,7 +72,7 @@ export default function CourseLessonScreen() {
 
   return (
     <Screen edges={['top']} footer={footer} testID="course-lesson">
-      <LearnBack navigation={navigation} label={`Week ${week.n}`} />
+      <LearnBack navigation={navigation} label={fromWeek ? `Week ${week.n}` : known?.title} />
       <Overline style={s.eyebrow}>{`Lesson ${lesson.n} · ${lessonMeta(lesson)}`}</Overline>
       <Text style={s.title} accessibilityRole="header">{lesson.title}</Text>
       {lesson.body ? <View style={s.text}><LearnText text={lesson.body} /></View> : null}

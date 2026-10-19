@@ -90,8 +90,7 @@ export function courseCopy(coach: string | null) {
 
 /** A 402 is never the plans sheet over a course (the reads never lock, #LEARN-LOCK op 1). */
 const quiet: AxiosRequestConfig & { quietPaywall: boolean } = { quietPaywall: true };
-const listKey = (uid?: string) => ['learn-courses', uid];
-const courseKey = (uid?: string, id?: string) => ['learn-course', uid, id];
+const [listKey, courseKey] = [(uid?: string) => ['learn-courses', uid], (uid?: string, id?: string) => ['learn-course', uid, id]];
 
 /** The courses the client owns; nothing is asked while the flag is off. */
 export function useCourses() {
