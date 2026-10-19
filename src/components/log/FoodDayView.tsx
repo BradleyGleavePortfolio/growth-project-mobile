@@ -1,18 +1,20 @@
 /**
  * FoodDayView: the Food tab as the day's meal checklist (V1_1_UI_SPEC UI-3, owner 2026-10-09: coached
- * plan checklist "render 2"). Behind featureFlags.foodPlanChecklist. A coached client with a plan for the
- * day ticks off the coach's meals in order. Every tap reuses a Food log path owned by LogScreen (plan
- * meal log, the search sheet, the edit sheet), so basic self logging stays open in every state. With no
- * plan for the day, or the flag off, FoodDayGate renders the classic Food log (its children) unchanged.
+ * plan checklist "render 2", coachless "concept 2"). Behind featureFlags.foodPlanChecklist. A coached
+ * client with a plan for the day ticks off the coach's meals in order; a client with no coach gets "Your
+ * usual day" from the meals they repeat. Every tap reuses a Food log path owned by LogScreen (plan meal
+ * log, repeat a past meal, the search sheet, the edit sheet), so basic self logging stays open in every
+ * state. With nothing to build the day from, or the flag off, FoodDayGate renders the classic Food log.
  */
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import api from '../../services/api';
+import api, { logApi } from '../../services/api';
 import { mealTemplatesApi } from '../../api/mealTemplatesApi';
 import HapticPressable from '../HapticPressable';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { PrimaryButton, TextLink } from '../../ui';
 import { QuietError, loadFailureMessage } from '../../ui/states/QuietStates';
@@ -20,7 +22,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { colors as palette, layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import type { FoodLog, MealType } from '../../types';
 import { addDays, getTodayString } from '../../utils/date';
-import { buildPlanDay, nextSlot, type DaySlot } from '../../utils/log/foodDay';
+import { buildPlanDay, buildUsualDay, dayWord, loggedOn, nextSlot, weekday, type DaySlot, type PastDay } from '../../utils/log/foodDay';
 import type { PlanLink } from '../../utils/log/planLink';
 
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
@@ -42,19 +44,22 @@ export interface FoodDayViewProps {
   water: React.ReactNode;
   onDateChange: (date: string) => void;
   onLogPlanned: (slot: DaySlot) => void;
+  /** Usual day: logs the slot's usual meal again with the same foods and portions. */
+  onRepeat: (slot: DaySlot) => void;
   /** Opens the search sheet for this meal; `link` (FOODLINK) is what the sheet's foods are logged for. */
   onSomethingElse: (mealType: MealType, link?: PlanLink) => void;
   onEditFood: (log: FoodLog) => void;
 }
 
 export function FoodDayGate({ on, children, ...p }: Omit<FoodDayViewProps, 'fallback'> & { on: boolean; children: React.ReactNode }) {
-  return on && p.coached ? <FoodDayView {...p} fallback={children} /> : <>{children}</>;
+  return on ? <FoodDayView {...p} fallback={children} /> : <>{children}</>;
 }
 
 export default function FoodDayView(p: FoodDayViewProps) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const { messageCoach } = useEntitlement();
   const [open, setOpen] = useState<string | null>(null);
   const today = getTodayString();
   const isToday = p.selectedDate === today;
@@ -63,20 +68,37 @@ export default function FoodDayView(p: FoodDayViewProps) {
     queryKey: ['meal-plan', 'today', p.selectedDate],
     queryFn: () => mealTemplatesApi.todayForClient(p.selectedDate).then((r) => r.data),
     staleTime: 5 * 60 * 1000,
+    enabled: p.coached,
   });
   const coach = useQuery({
     queryKey: ['clients', 'me', 'coach'],
     queryFn: () => api.get<{ name?: string }>('/v1/clients/me/coach').then((r) => r.data),
     staleTime: 5 * 60 * 1000,
+    enabled: p.coached,
+  });
+  // The seven days before the shown day, read like the search sheet's Recent (useFoodBrowse). A day
+  // that fails to read is left out; with none read there is no usual day and the classic log shows.
+  const past = useQuery({
+    queryKey: ['food', 'usual-day', p.selectedDate],
+    enabled: !p.coached,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<PastDay[]> => {
+      const dates = Array.from({ length: 7 }, (_, i) => addDays(p.selectedDate, -(i + 1)));
+      const read = await Promise.allSettled(dates.map((d) => logApi.getDaily(d)));
+      return read.flatMap((r, i) => (r.status === 'fulfilled' ? [{ date: dates[i], entries: r.value.data?.entries ?? [] }] : []));
+    },
   });
   const assigned = plan.data?.assignments?.[0]?.daily_meal_plan;
-  // Each food carries the plan meal it was logged for (FOODLINK), so the day is rebuilt from the server's log.
-  const day = useMemo(() => (assigned && assigned.slots.length > 0 ? buildPlanDay(assigned, p.foodLogs) : null),
-    [assigned, p.foodLogs]);
+  // Each food carries the plan or usual meal it was logged for (FOODLINK), so the day is rebuilt from the server's log.
+  const day = useMemo(() => {
+    if (p.coached) return assigned && assigned.slots.length > 0 ? buildPlanDay(assigned, p.foodLogs) : null;
+    const usual = past.data ? buildUsualDay(past.data, p.foodLogs) : null;
+    return usual && usual.slots.length > 0 ? usual : null;
+  }, [p.coached, assigned, past.data, p.foodLogs]);
 
-  // Until the day and the plan are read, the classic log stays open for logging.
-  if (!p.ready || plan.isLoading) return <>{p.fallback}</>;
-  if (plan.isError) {
+  // Until the day and the plan (or the past week) are read, the classic log stays open for logging.
+  if (!p.ready || (p.coached ? plan.isLoading : past.isLoading)) return <>{p.fallback}</>;
+  if (p.coached && plan.isError) {
     // The plan did not load: say so, offer the retry, and keep the classic log open under it.
     return (
       <>
@@ -86,11 +108,14 @@ export default function FoodDayView(p: FoodDayViewProps) {
       </>
     );
   }
-  if (!day || !assigned) return <>{p.fallback}</>;
+  if (!day) return <>{p.fallback}</>;
 
   const next = nextSlot(day);
   const done = day.slots.filter((x) => x.logs.length > 0).length;
-  const total = day.slots.reduce((t, x) => t + x.kcal, 0);
+  const isPlan = day.kind === 'plan';
+  // The plan's own total, or the client's target on a usual day (none without a target).
+  const total = isPlan ? day.slots.reduce((t, x) => t + x.kcal, 0) : p.targets?.calories ?? null;
+  const yesterday = isToday ? addDays(today, -1) : null;
   const coachFirst = (coach.data?.name ?? '').trim().split(/\s+/)[0];
   const initials = (coach.data?.name ?? '').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const restKcal = p.eaten.calories + day.slots.filter((x) => x.logs.length === 0).reduce((t, x) => t + x.kcal, 0);
@@ -103,21 +128,24 @@ export default function FoodDayView(p: FoodDayViewProps) {
     const isDone = x.logs.length > 0;
     const first = [...x.logs].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))[0];
     const label = isDone && first?.createdAt ? `${x.label}, ${clock(first.createdAt)}` : x.label;
-    const sub = isDone ? x.status : `${n(x.protein)} g protein`;
+    const sub = isDone ? x.status : x.usual
+      ? `${x.usual.meal.entries.length > 1 ? `${x.usual.meal.entries.length} foods, ` : ''}${n(x.protein)} g protein, last on ${weekday(x.usual.days[0])}`
+      : `${n(x.protein)} g protein`;
+    const name = !isDone && x.usual ? `Your usual: ${x.name}` : x.name;
     const kcal = n(isDone ? x.logs.reduce((t, l) => t + l.calories, 0) : x.kcal);
     const expanded = open === x.key;
     return (
       <View key={x.key}>
         <HapticPressable intent="light" disableAnimation disabled={!isDone} onPress={() => setOpen(expanded ? null : x.key)}
           accessibilityRole={isDone ? 'button' : undefined} accessibilityState={isDone ? { expanded } : undefined}
-          accessibilityLabel={`${label}. ${x.name}. ${sub}. ${kcal} kcal`}
+          accessibilityLabel={`${label}. ${name}. ${sub}. ${kcal} kcal`}
           style={s.slot} testID={`food-day-slot-${x.key}`}>
           <View style={[s.ring, isDone ? s.ringDone : s.ringSoft]}>
             {isDone ? <Ionicons name="checkmark" size={14} color={sc.textOnAccent} /> : null}
           </View>
           <View style={s.grow}>
             <Text style={s.eyebrow}>{label.toUpperCase()}</Text>
-            <Text style={s.slotName}>{x.name}</Text>
+            <Text style={s.slotName}>{name}</Text>
             {sub ? <Text style={s.meta}>{sub}</Text> : null}
           </View>
           <Text style={s.kcal}>{kcal}</Text>
@@ -136,11 +164,11 @@ export default function FoodDayView(p: FoodDayViewProps) {
   const nextCard = (x: DaySlot) => (
     <View key={x.key} style={s.now} testID="food-day-next">
       <View style={s.between}>
-        <Text style={[s.eyebrow, s.forest]}>{`Up next, ${x.label}`.toUpperCase()}</Text>
-        <Text style={s.smallMuted}>{n(x.kcal)} kcal</Text>
+        <Text style={[s.eyebrow, s.forest, s.shrink]}>{(x.usual ? `Up next, your usual ${x.mealType}` : `Up next, ${x.label}`).toUpperCase()}</Text>
+        <Text style={[s.smallMuted, s.fixed]}>{n(x.kcal)} kcal</Text>
       </View>
       <Text style={s.nowName}>{x.name}</Text>
-      <Text style={s.smallMuted}>{`${n(x.protein)} g protein, ${n(x.carbs)} g carbs, ${n(x.fat)} g fat`}</Text>
+      <Text style={s.smallMuted}>{x.usual ? loggedOn(x.usual.days, yesterday) : `${n(x.protein)} g protein, ${n(x.carbs)} g carbs, ${n(x.fat)} g fat`}</Text>
       {x.foods.length > 0 ? (
         <View style={s.items}>
           {x.foods.map((f, i) => (
@@ -151,9 +179,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
           ))}
         </View>
       ) : null}
-      <PrimaryButton label="Ate it as planned" loading={p.saving} haptic={false} style={s.nowPrimary} testID="food-day-primary"
-        onPress={() => p.onLogPlanned(x)} />
-      <HapticPressable intent="light" disabled={p.saving} style={s.outline} onPress={() => p.onSomethingElse(x.mealType, { planSlotId: x.key })}
+      <PrimaryButton label={x.usual ? `Repeat ${dayWord(x.usual.meal.date, yesterday)}'s ${x.mealType}` : 'Ate it as planned'} loading={p.saving}
+        haptic={false} wrap style={s.nowPrimary} testID="food-day-primary" onPress={() => (x.usual ? p.onRepeat(x) : p.onLogPlanned(x))} />
+      <HapticPressable intent="light" disabled={p.saving} style={s.outline}
+        onPress={() => p.onSomethingElse(x.mealType, x.usual ? { fillsUsualMeal: true } : { planSlotId: x.key })}
         accessibilityRole="button" accessibilityLabel="Something else" testID="food-day-something-else">
         <Text style={s.outlineText}>Something else</Text>
       </HapticPressable>
@@ -185,14 +214,23 @@ export default function FoodDayView(p: FoodDayViewProps) {
       {isToday ? <Text style={s.title} accessibilityRole="header">Today's meals</Text> : null}
 
       <View style={s.card} testID="food-day-head">
-        <View style={s.headRow}>
-          {initials ? <View style={s.avatar}><Text style={s.avatarText}>{initials}</Text></View> : null}
-          <View style={s.grow}>
-            <Text style={s.smallMd}>{coachFirst ? `${coachFirst}'s plan${isToday ? ' for today' : ''}` : assigned.name}</Text>
-            <Text style={s.smallMuted}>{`${assigned.name}, ${n(total)} kcal, ${n(day.slots.reduce((t, x) => t + x.protein, 0))} g protein`}</Text>
-          </View>
-        </View>
-        {assigned.notes?.trim() ? <Text style={[s.small, s.quote]}>{`\u201C${assigned.notes.trim()}\u201D`}</Text> : null}
+        {isPlan && assigned ? (
+          <>
+            <View style={s.headRow}>
+              {initials ? <View style={s.avatar}><Text style={s.avatarText}>{initials}</Text></View> : null}
+              <View style={s.grow}>
+                <Text style={s.smallMd}>{coachFirst ? `${coachFirst}'s plan${isToday ? ' for today' : ''}` : assigned.name}</Text>
+                <Text style={s.smallMuted}>{`${assigned.name}, ${n(total ?? 0)} kcal, ${n(day.slots.reduce((t, x) => t + x.protein, 0))} g protein`}</Text>
+              </View>
+            </View>
+            {assigned.notes?.trim() ? <Text style={[s.small, s.quote]}>{`\u201C${assigned.notes.trim()}\u201D`}</Text> : null}
+          </>
+        ) : (
+          <>
+            <Text style={s.smallMd}>Your usual day</Text>
+            <Text style={s.smallMuted}>{`Built from the meals you logged this week.${total ? ` ${n(total)} kcal target.` : ''}`}</Text>
+          </>
+        )}
         <View style={s.segs} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {day.slots.map((x) => (
             <View key={x.key} style={[s.seg, x.logs.length > 0 && s.segDone, x === next && s.segNext]}>
@@ -201,17 +239,17 @@ export default function FoodDayView(p: FoodDayViewProps) {
           ))}
         </View>
         <View style={s.stats}>
-          <Text style={s.smallMuted}>{`${done} of ${day.slots.length} meals done`}</Text>
-          <Text style={s.smallMuted}>{`${n(p.eaten.calories)} of ${n(total)} kcal`}</Text>
+          <Text style={s.smallMuted}>{`${done} of ${day.slots.length} meals ${isPlan ? 'done' : 'logged'}`}</Text>
+          {total ? <Text style={s.smallMuted}>{`${n(p.eaten.calories)} of ${n(total)} kcal`}</Text> : null}
         </View>
       </View>
       {p.notes}
 
       <View style={s.list}>{day.slots.map((x) => (x === next ? nextCard(x) : slotRow(x)))}</View>
 
-      {/* An extra goes to the meal up next and never ticks a plan meal off: only "Something else" does that. */}
+      {/* An extra goes to the meal up next and never ticks a meal off: only "Something else" does that. */}
       <View style={s.sect}>
-        <Text style={s.eyebrow}>EXTRAS, NOT IN THE PLAN</Text>
+        <Text style={s.eyebrow}>{isPlan ? 'EXTRAS, NOT IN THE PLAN' : 'EXTRAS'}</Text>
         <TextLink label="Add" tone="accent" underline={false} testID="food-day-add"
           onPress={() => p.onSomethingElse(next?.mealType ?? 'snack')} />
       </View>
@@ -230,12 +268,23 @@ export default function FoodDayView(p: FoodDayViewProps) {
       ))}
       <View style={s.water}>{p.water}</View>
 
-      {next && isToday ? (
+      {isPlan && next && isToday ? (
         <View style={s.quiet} testID="food-day-projection">
           <Text style={s.eyebrow}>IF YOU EAT THE REST AS PLANNED</Text>
           <Text style={s.body}>{`${n(restKcal)} kcal and ${n(restProtein)} g protein.${onTarget ? ' Both on target.' : ''}`}</Text>
         </View>
       ) : null}
+      {isPlan ? null : (
+        <View style={s.quiet} testID="food-day-join">
+          <Text style={s.eyebrow}>MEAL PLANS COME FROM A COACH</Text>
+          <Text style={s.body}>A coach can build your day here, meal by meal. Your own logging stays open.</Text>
+          <HapticPressable intent="light" onPress={messageCoach} style={[s.outline, s.join]} accessibilityRole="button"
+            accessibilityLabel="Join a coach" testID="food-day-join-coach">
+            {/* The app's "Join a coach" (JoinCoachState, JoinCoachBanner): the coach-code path. */}
+            <Text style={s.outlineText}>Join a coach</Text>
+          </HapticPressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -280,9 +329,11 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   now: { marginTop: 12, marginBottom: 4, padding: 16, borderRadius: radius.card, backgroundColor: sc.bgSurface, borderWidth: 1.5, borderColor: sc.accent },
   nowName: { ...typography.h3, color: sc.textPrimary, marginTop: 8 },
   items: { marginTop: 10 },
-  nowPrimary: { marginTop: 14 },
+  // Narrow side padding so "Repeat yesterday's snack" stays on its one line at large text on 360 pt.
+  nowPrimary: { marginTop: 14, paddingHorizontal: 8 },
   outline: { minHeight: 48, marginTop: 8, borderRadius: radius.button, borderWidth: 1, borderColor: sc.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   outlineText: { ...typography.bodyMd, color: sc.accentText },
+  join: { marginTop: 14 },
   sect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 4 },
   extra: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 8 },
   extraLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
