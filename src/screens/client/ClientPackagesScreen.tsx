@@ -66,7 +66,8 @@ import {
   type PaymentsResult,
 } from '../../api/clientPaymentsApi';
 import { useTheme } from '../../theme/ThemeProvider';
-import { Screen } from '../../ui';
+import { QuietOverline, Screen } from '../../ui';
+import { ForestStatusBar } from '../../components/StatusBarBand';
 import { DunningBanner as SmartDunningBanner } from '../../entitlements/dunning/DunningBanner';
 import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
@@ -365,11 +366,12 @@ export default function ClientPackagesScreen() {
     ) : null;
 
   return (
-    <Screen
+    <>{featureFlags.clientBillingV2 ? <ForestStatusBar /> : null}<Screen
       edges={['top']}
-      contentStyle={styles.content}
+      contentStyle={[styles.content, featureFlags.clientBillingV2 && { backgroundColor: semanticColors.bgPrimary }]}
+      style={featureFlags.clientBillingV2 ? { backgroundColor: semanticColors.surface.masthead } : undefined}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={featureFlags.clientBillingV2 ? semanticColors.textMuted : semanticColors.accent} />
       }
     >
       {/* U-MC-5: the More stack hides headers, so the screen brings its own
@@ -548,12 +550,13 @@ export default function ClientPackagesScreen() {
                   onOpen={() => setOpenPlanId(pkg.id)} />
                 {openPlanId !== pkg.id ? feedback : null}
                 {openPlanId === pkg.id ? (
-                  <Modal visible presentationStyle="fullScreen" animationType="none" onRequestClose={() => setOpenPlanId(null)}>
+                  <Modal visible testID="client-plan-modal" statusBarTranslucent presentationStyle="fullScreen" animationType="none" onRequestClose={() => setOpenPlanId(null)}>
                     <ClientPlanPage name={pkg.name} price={displayPrice} description={pkg.description}
                       features={pkg.features ?? []} coach={coachName} onBack={() => setOpenPlanId(null)}
                       footer={action ? <>
                         {sellable?.quote && !current ? (
-                          <View style={styles.dueToday} testID="plan-due-today">
+                          <View style={styles.dueToday} testID="plan-due-today" accessible
+                            accessibilityLabel={`${CLIENT_PLAN_COPY.due}, ${money(sellable.quote.dueTodayCents, sellable.quote.currency)}`}>
                             <Text style={styles.pkgDesc}>{CLIENT_PLAN_COPY.due}</Text>
                             <Text style={styles.dueAmount}>{money(sellable.quote.dueTodayCents, sellable.quote.currency)}</Text>
                           </View>
@@ -561,7 +564,7 @@ export default function ClientPackagesScreen() {
                         {action}
                       </> : undefined}
                     >
-                      {sellable && !current ? <Text style={styles.currentPlanLabel}>{CLIENT_PLAN_COPY.billing}</Text> : null}
+                      {sellable && !current ? <QuietOverline style={{ marginBottom: 12 }} accessibilityRole="header">{CLIENT_PLAN_COPY.billing}</QuietOverline> : null}
                       {details}
                     </ClientPlanPage>
                   </Modal>
@@ -631,7 +634,7 @@ export default function ClientPackagesScreen() {
         testID="plans-refund-support-fallback"
         centered
       />
-    </Screen>
+    </Screen></>
   );
 }
 

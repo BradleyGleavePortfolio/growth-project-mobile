@@ -9,7 +9,7 @@
  * was no Your plans panel.
  */
 import React from 'react';
-import { Alert, Modal, StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../theme/ThemeProvider', () => {
@@ -147,6 +147,7 @@ it('Style C opens the plan without checkout, shows the server quote, and returns
   expect(r.getByTestId('client-plan-page')).toBeTruthy();
   expect(r.getByText('From Coach Lee')).toBeTruthy();
   expect(within(r.getByTestId('plan-due-today')).getByText('$123.45')).toBeTruthy();
+  expect(r.getByLabelText('Due today, $123.45')).toBeTruthy();
   expect(r.getByTestId('plan-terms-pkg-monthly-first-charge').props.children).toContain('You pay $123.45 today');
   expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.disabled).toBe(false);
   const backs = r.getAllByLabelText('Back');
@@ -212,7 +213,7 @@ it('Style C keeps the current-plan action disabled and Android Back returns to t
   expect(action.props.accessibilityState.disabled).toBe(true);
   await fireEvent.press(action);
   expect(mockPost).not.toHaveBeenCalled();
-  await fireEvent(r.UNSAFE_getByType(Modal), 'requestClose');
+  await fireEvent(r.getByTestId('client-plan-modal'), 'requestClose');
   expect(r.queryByTestId('client-plan-page')).toBeNull();
   expect(mockGoBack).not.toHaveBeenCalled();
 });

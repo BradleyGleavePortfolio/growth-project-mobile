@@ -2,10 +2,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { radius, typography } from '../../../theme/tokens';
-import { Screen, useScreenInsets } from '../../../ui';
+import { colors, radius, typography } from '../../../theme/tokens';
+import { QuietOverline, Screen, useScreenInsets } from '../../../ui';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { CoachMark } from '../../../components/purchase/PlanActiveMoment';
 
 export const CLIENT_PLAN_COPY = {
   about: 'About this plan',
@@ -14,6 +16,17 @@ export const CLIENT_PLAN_COPY = {
   due: 'Due today',
   from: (coach: string) => `From ${coach}`,
 };
+
+function PlanInk({ children, fill = false }: { children: React.ReactNode; fill?: boolean }) {
+  const reduced = useReducedMotion();
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const ink = Animated.timing(opacity, { toValue: 1, duration: reduced ? 150 : 200, useNativeDriver: true });
+    ink.start();
+    return () => ink.stop();
+  }, [opacity, reduced]);
+  return <Animated.View style={[fill && { flex: 1 }, { opacity }]}>{children}</Animated.View>;
+}
 
 export function PlanMasthead({ title, coach, price, onBack }: {
   title: string; coach: string | null; price?: string; onBack?: () => void;
@@ -31,13 +44,9 @@ export function PlanMasthead({ title, coach, price, onBack }: {
           <Text style={[s.title, { color: c.textOnAccent }]} accessibilityRole="header">{title}</Text>
           {price ? <Text style={[s.meta, { color: c.textOnAccent }]}>{price}</Text> : null}
         </View>
-        {coach ? (
-          <View style={[s.seal, { backgroundColor: c.bgPrimary, borderColor: c.data.peak }]} accessible={false} importantForAccessibility="no-hide-descendants">
-            <Text allowFontScaling={false} style={[s.initial, { color: c.accentText }]}>{coach.trim().charAt(0)}</Text>
-          </View>
-        ) : null}
+        {coach ? <CoachMark name={coach} size={44} /> : null}
       </View>
-      <View style={[s.rule, { backgroundColor: c.data.peak }]} />
+      <View style={[s.rule, { backgroundColor: colors.camel }]} />
       <View style={[s.paperEdge, { backgroundColor: c.bgPrimary }]} />
     </View>
   );
@@ -53,7 +62,7 @@ function CoachNote({ description, coach, compact = false }: { description: strin
         </View>
       ) : null}
       <View style={s.headingText}>
-        <Text style={[s.quote, compact && s.cardQuote, { color: c.textPrimary }]}>{description}</Text>
+        <Text style={[s.quote, { color: c.textPrimary }]}>{description}</Text>
         {coach && !compact ? <Text style={[s.meta, { color: c.textMuted }]}>{CLIENT_PLAN_COPY.from(coach)}</Text> : null}
       </View>
     </View>
@@ -66,7 +75,7 @@ export function PlanOfferCard({ name, price, description, features, coach, onOpe
 }) {
   const { semanticColors: c } = useTheme();
   return (
-    <View style={[s.card, { backgroundColor: c.bgSurface, borderColor: c.border, borderLeftColor: c.data.peak }]} testID={testID}>
+    <PlanInk><View style={[s.card, { backgroundColor: c.bgSurface, borderColor: c.border, borderLeftColor: colors.camel }]} testID={testID}>
       <Text style={[s.cardTitle, { color: c.textPrimary }]} accessibilityRole="header">{name}</Text>
       <Text style={[s.cardPrice, { color: c.accentText }]}>{price}</Text>
       {features.length ? <Text style={[s.meta, { color: c.textPrimary }]}>{features.slice(0, 2).join(' · ')}</Text> : null}
@@ -78,7 +87,7 @@ export function PlanOfferCard({ name, price, description, features, coach, onOpe
         <Text style={[s.link, { color: c.accentText }]}>{CLIENT_PLAN_COPY.about}</Text>
         <Ionicons name="chevron-forward" size={18} color={c.accentText} />
       </TouchableOpacity>
-    </View>
+    </View></PlanInk>
   );
 }
 
@@ -88,37 +97,30 @@ export function ClientPlanPage({ name, price, description, features, coach, onBa
 }) {
   const { semanticColors: c } = useTheme();
   const insets = useScreenInsets();
-  const reduced = useReducedMotion();
-  const opacity = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const ink = Animated.timing(opacity, { toValue: 1, duration: reduced ? 150 : 200, useNativeDriver: true });
-    ink.start();
-    return () => ink.stop();
-  }, [opacity, reduced]);
   return (
-    <Screen
+    <PlanInk fill><StatusBar style="light" /><Screen
       edges={['bottom']} testID="client-plan-page"
-      header={<View style={{ backgroundColor: c.bgPrimary, paddingTop: insets.top + 12, paddingHorizontal: 24 }}>
+      header={<View style={{ backgroundColor: c.surface.masthead, paddingTop: insets.top + 12, paddingHorizontal: 24 }}>
         <PlanMasthead title={name} price={price} coach={coach} onBack={onBack} />
       </View>}
       footer={footer}
     >
-      <Animated.View style={{ opacity }}>
+      <>
         <CoachNote description={description} coach={coach} />
         {features.length ? (
           <View style={s.section}>
-            <Text style={[s.overline, { color: c.textMuted }]} accessibilityRole="header">{CLIENT_PLAN_COPY.included}</Text>
+            <QuietOverline style={s.overline} accessibilityRole="header">{CLIENT_PLAN_COPY.included}</QuietOverline>
             {features.map((feature, i) => (
               <View key={i} style={s.feature}>
-                <View style={[s.dot, { backgroundColor: c.data.peak }]} />
+                <View style={[s.dot, { backgroundColor: colors.camel }]} />
                 <Text style={[s.body, { color: c.textPrimary }]}>{feature}</Text>
               </View>
             ))}
           </View>
         ) : null}
         {children}
-      </Animated.View>
-    </Screen>
+      </>
+    </Screen></PlanInk>
   );
 }
 
@@ -126,10 +128,9 @@ const s = StyleSheet.create({
   masthead: { marginHorizontal: -24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 18 },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headingText: { flex: 1, minWidth: 0 },
-  title: { ...typography.h1 },
+  title: { ...typography.h2 },
   meta: { ...typography.bodySmall, marginTop: 6 },
   back: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  seal: { width: 44, height: 44, borderRadius: radius.chip, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   initial: { ...typography.h2, fontStyle: 'italic' },
   rule: { height: StyleSheet.hairlineWidth, marginTop: 20 },
   paperEdge: { height: 18, marginHorizontal: -24, marginTop: 12, marginBottom: -18, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
@@ -138,8 +139,7 @@ const s = StyleSheet.create({
   cardPrice: { ...typography.h3, fontVariant: ['tabular-nums'], marginTop: 6 },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginVertical: 18 },
   noteSeal: { width: 36, height: 36, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
-  quote: { ...typography.h2, fontStyle: 'italic' },
-  cardQuote: { ...typography.h3, fontStyle: 'italic' },
+  quote: { ...typography.h3, fontStyle: 'italic' },
   open: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, marginTop: 12, alignSelf: 'flex-start' },
   link: { ...typography.bodyMd },
   section: { marginVertical: 20 },
