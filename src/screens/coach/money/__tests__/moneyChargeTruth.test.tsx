@@ -24,6 +24,15 @@ jest.mock("expo-web-browser", () => ({
 jest.mock("../../../../hooks/useNetworkStatus", () => ({
   useNetworkStatus: () => ({ isOnline: true, isInternetReachable: true }),
 }));
+// PK-2: the AI pool reads the budget query; moneyAIPool.test.tsx covers it.
+jest.mock("../../../../hooks/useAIBudget", () => ({
+  useAIBudget: () => ({
+    data: undefined,
+    error: null,
+    isFetching: false,
+    refetch: async () => undefined,
+  }),
+}));
 jest.mock("@react-navigation/native", () => {
   const actual = jest.requireActual("@react-navigation/native");
   return {
@@ -35,6 +44,7 @@ jest.mock("@react-navigation/native", () => {
       canGoBack: () => true,
       getParent: () => ({ navigate: jest.fn() }),
     }),
+    useIsFocused: () => true,
     useFocusEffect: (cb: () => void) => {
       const R = jest.requireActual("react");
       R.useEffect(() => {

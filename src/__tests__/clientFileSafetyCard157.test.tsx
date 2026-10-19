@@ -133,7 +133,11 @@ beforeEach(() => {
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  const overlaps = jest.mocked(console.error).mock.calls.filter(([m]) => String(m).includes('overlapping act()'));
+  jest.restoreAllMocks();
+  expect(overlaps).toEqual([]); // TEST-LEAK: acts out of order leave React's act scope stuck for every later test
+});
 
 it.each(BOTH.flatMap((on) => LINES.map(([type, line]) => [on, type, line] as const)))(
   'coachTabsV2 %s: an open %s shows one calm card at the top of the file, on every tab: the approved line, Message and Dismiss, nothing else',
@@ -227,6 +231,42 @@ it('a failed Dismiss keeps the card and says so in the Actions queue words, with
   expect(summaryRead).toHaveBeenCalledTimes(1); // no read after a failed Dismiss
 });
 
+it("the file reused for another client (as Overview opens it): A's late read or late Dismiss never touches B's card", async () => {
+  const B = { clientId: 'client-b', clientName: 'Alex Kim' };
+  const lineB = LINES[1][1].replace('Sam', 'Alex');
+  const summary = (name: string, alert: unknown) => ({ data: { client_name: name, profile: {}, today: {}, open_safety_alert: alert } });
+  let lateRead: (v: unknown) => void = () => undefined;
+  let lateDismiss: (v: unknown) => void = () => undefined;
+  let firstA = true;
+  summaryRead.mockImplementation((id: string) => {
+    if (id === B.clientId) return Promise.resolve(summary(B.clientName, alertOf('roman_urgent_reply')));
+    if (firstA) { firstA = false; return new Promise((r) => { lateRead = r; }); }
+    return Promise.resolve(summary('Sam Rivera', alertOf('roman_crisis_reply')));
+  });
+  dismiss.mockImplementation(() => new Promise((r) => { lateDismiss = r; }));
+  const view = await mount();
+  const key = ref.getCurrentRoute()?.key;
+  const open = (to: typeof params) => act(async () => ref.navigate('ClientsStack', { screen: 'ClientDetail', params: to }));
+  await open(B); // A's first read still in flight
+  expect(ref.getCurrentRoute()?.key).toBe(key); // the same file, now B's
+  expect(await view.findByText(lineB)).toBeTruthy();
+  await act(async () => lateRead(summary('Sam Rivera', alertOf('roman_crisis_reply'))));
+  expect([view.queryByText(LINES[0][1]), view.getAllByTestId('file-safety-alert').length]).toEqual([null, 1]);
+  await open(params);
+  // A's crisis alert; the server is slow. The press's act stays open until Dismiss answers and draws the file meanwhile,
+  // so nothing in that window starts another act (TEST-LEAK: two open acts left React's act count stuck for later tests).
+  const pressed = fireEvent.press(await view.findByTestId('file-safety-dismiss'));
+  expect(dismiss).toHaveBeenCalledWith('alert-roman_crisis_reply');
+  ref.navigate('ClientsStack', { screen: 'ClientDetail', params: B });
+  expect(await view.findByText(lineB)).toBeTruthy(); // findBy waits outside act with real timers
+  lateDismiss({ data: { ok: true } });
+  await pressed;
+  expect(view.getByText(lineB)).toBeTruthy(); // B's alert stays
+  expect(summaryRead.mock.calls.map(([id]) => id)).toEqual(['client-test', 'client-b', 'client-test', 'client-b']); // no re-read of A
+  await fireEvent.press(view.getByTestId('file-safety-message'));
+  expect([ref.getCurrentRoute()?.name, ref.getCurrentRoute()?.params]).toEqual(['ClientMessages', B]);
+});
+
 it.each(BOTH)("coachTabsV2 %s: the file reused for B while A's first read is slow: A's late read changes nothing on B's file", async (on) => {
   mockFlags.coachTabsV2 = on;
   openAlert = null;
@@ -260,39 +300,4 @@ it.each(BOTH)('coachTabsV2 %s: the pinned Message Sam opens the chat in Messages
   expect([stackOf('Messages'), stackOf('ClientsStack')]).toEqual(on
     ? [['MessagesInbox', 'ClientMessages'], ['ClientsList', 'ClientDetail']]
     : [undefined, ['ClientsList', 'ClientDetail', 'ClientMessages']]);
-});
-
-it("the file reused for another client (as Overview opens it): A's late read or late Dismiss never touches B's card", async () => {
-  const B = { clientId: 'client-b', clientName: 'Alex Kim' };
-  const lineB = LINES[1][1].replace('Sam', 'Alex');
-  const summary = (name: string, alert: unknown) => ({ data: { client_name: name, profile: {}, today: {}, open_safety_alert: alert } });
-  let lateRead: (v: unknown) => void = () => undefined;
-  let lateDismiss: (v: unknown) => void = () => undefined;
-  let firstA = true;
-  summaryRead.mockImplementation((id: string) => {
-    if (id === B.clientId) return Promise.resolve(summary(B.clientName, alertOf('roman_urgent_reply')));
-    if (firstA) { firstA = false; return new Promise((r) => { lateRead = r; }); }
-    return Promise.resolve(summary('Sam Rivera', alertOf('roman_crisis_reply')));
-  });
-  dismiss.mockImplementation(() => new Promise((r) => { lateDismiss = r; }));
-  const view = await mount();
-  const key = ref.getCurrentRoute()?.key;
-  const open = (to: typeof params) => act(async () => ref.navigate('ClientsStack', { screen: 'ClientDetail', params: to }));
-  await open(B); // A's first read still in flight
-  expect(ref.getCurrentRoute()?.key).toBe(key); // the same file, now B's
-  expect(await view.findByText(lineB)).toBeTruthy();
-  await act(async () => lateRead(summary('Sam Rivera', alertOf('roman_crisis_reply'))));
-  expect([view.queryByText(LINES[0][1]), view.getAllByTestId('file-safety-alert').length]).toEqual([null, 1]);
-  await open(params);
-  // A's crisis alert; the server is slow (the press resolves when Dismiss does, so it is awaited at the end).
-  const pressed = fireEvent.press(await view.findByTestId('file-safety-dismiss'));
-  expect(dismiss).toHaveBeenCalledWith('alert-roman_crisis_reply');
-  await open(B);
-  expect(await view.findByText(lineB)).toBeTruthy();
-  await act(async () => lateDismiss({ data: { ok: true } }));
-  await pressed;
-  expect(view.getByText(lineB)).toBeTruthy(); // B's alert stays
-  expect(summaryRead.mock.calls.map(([id]) => id)).toEqual(['client-test', 'client-b', 'client-test', 'client-b']); // no re-read of A
-  await fireEvent.press(view.getByTestId('file-safety-message'));
-  expect([ref.getCurrentRoute()?.name, ref.getCurrentRoute()?.params]).toEqual(['ClientMessages', B]);
 });
