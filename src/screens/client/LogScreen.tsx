@@ -23,6 +23,9 @@ import WaterTracker from '../../components/WaterTracker';
 import DailySummaryBar from '../../components/log/DailySummaryBar';
 import MealSectionCard from '../../components/log/MealSectionCard';
 import FoodSearchModal from '../../components/log/FoodSearchModal';
+import { FoodDayGate } from '../../components/log/FoodDayView';
+import { featureFlags } from '../../config/featureFlags';
+import type { DaySlot } from '../../utils/log/foodDay';
 import { QuantityPickerContent } from '../../components/log/QuantityPickerModal';
 import { ManualFields } from '../../components/log/ManualFoodEntryForm';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
@@ -430,6 +433,38 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     }
   };
 
+  // UI-3 "Ate it as planned": one tap logs the plan meal with LogPlannedMealButton's write (offline queue included).
+  const logPlanned = async (slot: DaySlot) => {
+    if (!currentUser || foodSaving) return;
+    const v = (x: number) => String(Math.round(x * 10) / 10);
+    const args = {
+      foodName: slot.name, calories: v(slot.kcal), protein: v(slot.protein), carbs: v(slot.carbs), fat: v(slot.fat),
+      quantity: '1', unit: 'serving', date: selectedDate, mealType: slot.mealType,
+    };
+    setFoodSaving(true);
+    try {
+      if (!online) {
+        const name = await submitManualLogOffline(args);
+        void notifyPendingFoodLogs();
+        HapticService.success();
+        Alert.alert('Saved offline', `${name} will sync when you reconnect.`);
+        return;
+      }
+      await submitManualLogOnline(args);
+      await loadDayData(currentUser.id, selectedDate);
+      HapticService.success();
+      track(AnalyticsEvents.MEAL_LOGGED, { meal_type: slot.mealType, source: 'meal_plan' });
+      setSavedMessage(`${slot.name} added to ${mealLabel(slot.mealType)}.`);
+      onSaved?.();
+    } catch (err) {
+      console.error('LogScreen: plan meal log failed', err);
+      HapticService.error();
+      Alert.alert("Couldn't log food", errorMessage(err, 'This food was not added. Check the connection and try again.'));
+    } finally {
+      setFoodSaving(false);
+    }
+  };
+
   // F-2: open the inline edit modal for a logged entry, pre-filled with
   // whichever (originalQuantity, originalUnit) pair the backend sent back,
   // falling back to the multiplier when the row is a legacy one without
@@ -558,6 +593,30 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const editUnits = editLog ? editUnitsFor(editLog) : [];
 
+  const notesNode = (
+    <>
+      {pendingFoods > 0 ? (
+        <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending">
+          {pendingFoods === 1
+            ? `1 food saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
+            : `${pendingFoods} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+        </Text>
+      ) : null}
+      {savedMessage ? (
+        <Text style={[styles.note, styles.savedMessage]} accessibilityLiveRegion="polite">{savedMessage}</Text>
+      ) : null}
+    </>
+  );
+  const waterNode = (
+    <WaterTracker
+      currentOz={waterOz}
+      onAdd={handleAddWater}
+      entries={waterEntries}
+      onRemove={handleRemoveWater}
+      removingId={removingWaterId}
+    />
+  );
+
   return (
     <>
       <Screen
@@ -573,6 +632,23 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           />
         }
       >
+        {/* UI-3: behind featureFlags.foodPlanChecklist the day's plan checklist shows first; with no plan, this Food log. */}
+        <FoodDayGate
+          on={featureFlags.foodPlanChecklist && !!currentUser}
+          coached={!!currentUser?.coach_id}
+          selectedDate={selectedDate}
+          foodLogs={foodLogs}
+          eaten={{ calories: dailyTotals.calories, protein: dailyTotals.protein }}
+          targets={macroTargets ? { calories: macroTargets.calories, protein: macroTargets.protein } : null}
+          ready={hasLoadedDay && !loadError}
+          saving={foodSaving}
+          notes={notesNode}
+          water={waterNode}
+          onDateChange={handleDateChange}
+          onLogPlanned={(slot) => void logPlanned(slot)}
+          onSomethingElse={(meal) => void openAddFood(meal)}
+          onEditFood={handleEditFood}
+        >
         <Overline>Food log</Overline>
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />
 
@@ -589,16 +665,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         ) : null}
 
         {hasLoadedDay ? <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} targets={macroTargets} mode={macroMode} /> : null}
-        {pendingFoods > 0 ? (
-          <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending">
-            {pendingFoods === 1
-              ? `1 food saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
-              : `${pendingFoods} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
-          </Text>
-        ) : null}
-        {savedMessage ? (
-          <Text style={[styles.note, styles.savedMessage]} accessibilityLiveRegion="polite">{savedMessage}</Text>
-        ) : null}
+        {notesNode}
 
         {showDayLoading ? (
           // Meal-shaped placeholders on the page gutter (no zero totals, no empty-meal claims).
@@ -636,17 +703,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
                 tutorialTarget={i === 0}
               />
             ))}
-            {hasLoadedDay ? (
-              <WaterTracker
-                currentOz={waterOz}
-                onAdd={handleAddWater}
-                entries={waterEntries}
-                onRemove={handleRemoveWater}
-                removingId={removingWaterId}
-              />
-            ) : null}
+            {hasLoadedDay ? waterNode : null}
           </>
         )}
+        </FoodDayGate>
       </Screen>
 
       <FoodSearchModal
