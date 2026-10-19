@@ -106,7 +106,8 @@ beforeEach(() => {
   mockGet.mockResolvedValue({ data: SUMMARY });
   // GET /habits/logs?date: that day's ticks among the habits the server holds now.
   mockGetLogs.mockImplementation(async (date: string) => {
-    const { data } = await mockGetAll.getMockImplementation()?.();
+    const held = mockGetAll.getMockImplementation();
+    const { data } = held ? await held() : { data: [] };
     return { data: (data as { id: string; logs: { date: string }[] }[]).flatMap((h) => h.logs.filter((l) => l.date.startsWith(date)).map((l) => ({ ...l, habit_id: h.id }))) };
   });
   mockLog.mockResolvedValue({ data: {} });

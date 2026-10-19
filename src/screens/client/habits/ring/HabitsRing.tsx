@@ -234,7 +234,12 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     mast = (
       <>
         <View style={s.row}>
-          {unplanned ? left(<Text style={[s.serif, s.light, s.centerText]} accessibilityRole="header" testID="habits-ring-unplanned">{day === today ? C.nothingToday : C.nothingOn(weekdayName(day))}</Text>) : (
+          {unplanned ? left(
+            // "Wednesday" fills the ring's width at 32 pt, so this line holds its size like the ring's count.
+            <Text style={[s.serif, s.light, s.centerText]} numberOfLines={3} adjustsFontSizeToFit maxFontSizeMultiplier={1} accessibilityRole="header" testID="habits-ring-unplanned">
+              {day === today ? C.nothingToday : C.nothingOn(weekdayName(day))}
+            </Text>,
+          ) : (
             <SegmentedRing
               segments={parts.map((h): SegmentState => (isDone(h) ? 'done' : day < today ? 'missed' : 'planned'))} size={ring} onDark
               label={day === today ? C.ring(done, parts.length) : C.day(dayName(day), { planned: parts.length, done })}
