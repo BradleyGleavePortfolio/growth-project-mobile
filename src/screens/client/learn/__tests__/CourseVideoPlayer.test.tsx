@@ -14,7 +14,7 @@ import { courseFrom, courseCopy } from '../courseData';
 
 const mockHandlers: Record<string, (p: object) => void> = {};
 const mockPlayer = {
-  loop: true, timeUpdateEventInterval: 0, currentTime: 0, playing: false,
+  loop: true, timeUpdateEventInterval: 0, currentTime: 0, playing: false, duration: 420,
   addListener: jest.fn((event: string, fn: (p: object) => void) => { mockHandlers[event] = fn; return { remove: jest.fn() }; }),
 };
 const mockSources: unknown[] = [];
@@ -216,6 +216,15 @@ describe('CourseVideoPlayer: saving the place', () => {
     await view.unmount();
     expect(positionCalls()).toEqual([['/v1/client/lessons/l1/position', { position_seconds: 0 }, quiet]]);
     expect(seen).toHaveBeenLastCalledWith(0);
+  });
+
+  it('a stop in the last second saves 0 even before the finish event, and leaving there keeps 0', async () => {
+    const view = await render(player({ positionSeconds: 300 }));
+    await playing();
+    mockPlayer.currentTime = 419.6;
+    await act(async () => mockHandlers.playingChange({ isPlaying: false }));
+    await view.unmount();
+    expect(positionCalls()).toEqual([['/v1/client/lessons/l1/position', { position_seconds: 0 }, quiet]]);
   });
 
   it('saves the last known place when the lesson closes, even if the native player is gone', async () => {

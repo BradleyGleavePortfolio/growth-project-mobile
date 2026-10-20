@@ -13,6 +13,8 @@ import { savePosition, useLessonVideo } from './courseVideoApi';
 import type { CourseLesson } from './courseData';
 
 const SAVE_EVERY_S = 15;
+/** A stop in the last second is the finish (whichever native event comes first), so it saves 0. */
+const finishedIs0 = (at: number, length: number) => (length > 0 && at >= length - 1 ? 0 : at);
 
 interface Props {
   lesson: Pick<CourseLesson, 'id' | 'title' | 'positionSeconds'>;
@@ -45,13 +47,16 @@ function Playing({ url, lesson, place, onPosition, onFailed }: PlayingProps) {
   useEffect(() => {
     const subs = [
       player.addListener('timeUpdate', ({ currentTime }) => { if (ended.current) return; place.current = currentTime; if (player.playing) latest.current.save(currentTime); }),
-      player.addListener('playingChange', ({ isPlaying }) => { if (isPlaying) ended.current = false; else if (!ended.current) latest.current.save(player.currentTime); }),
+      player.addListener('playingChange', ({ isPlaying }) => {
+        if (isPlaying) { ended.current = false; return; }
+        if (!ended.current) latest.current.save(finishedIs0(player.currentTime, player.duration));
+      }),
       player.addListener('playToEnd', () => { ended.current = true; latest.current.save(0); }),
       player.addListener('statusChange', ({ status, error }) => { if (status === 'error') latest.current.onFailed(error?.message ?? ''); }),
     ];
     return () => {
       subs.forEach((x) => x.remove());
-      try { if (!ended.current && player.currentTime > 0) place.current = player.currentTime; } catch { /* the native player is already released */ }
+      try { if (!ended.current && player.currentTime > 0) place.current = finishedIs0(player.currentTime, player.duration); } catch { /* the native player is already released */ }
       latest.current.save(place.current);
     };
   }, [player, place]);
