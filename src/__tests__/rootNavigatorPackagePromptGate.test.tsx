@@ -303,8 +303,7 @@ describe('RootNavigator package prompt on first Home (#161-5 op 1)', () => {
   });
 });
 
-// #836 Sol B2 / Opus C1: the start-up decision reads this user's saved tour; the live tour store is still empty
-// here (TutorialHost mounts inside ClientNavigator, after RootNavigator decides).
+// #836 Sol B2 / Opus C1: start-up reads the saved tour; the live store is empty until TutorialHost mounts.
 describe('RootNavigator package prompt waits for Roman\'s tour after a restart', () => {
   const api = jest.requireMock('../services/api').default;
   const answer = (completed: boolean) => async (url: string) =>
