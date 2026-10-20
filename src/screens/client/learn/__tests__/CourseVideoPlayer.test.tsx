@@ -1,5 +1,6 @@
 // LEARN-M6 (flag learnCourses): a video lesson plays the lesson's address (GET /v1/client/lessons/:id/video), resumes where the server
 // saved it, saves the place (PUT /v1/client/lessons/:id/position { position_seconds }), and recovers from a failed or expired video.
+// The frame runs edge to edge as board c07 draws it (#161-12 op 1); a video that did not load says so (#161-13 op 1).
 // Both routes are OPERATOR RULING 6282886845 items 4 and 5, mocked here until b#1114 lands.
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
@@ -7,7 +8,7 @@ import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
-import { lightTokens } from '../../../../theme/tokens';
+import { layout, lightTokens } from '../../../../theme/tokens';
 import CourseVideoPlayer from '../CourseVideoPlayer';
 import CourseLessonScreen from '../CourseLessonScreen';
 import { courseFrom, courseCopy } from '../courseData';
@@ -20,6 +21,8 @@ const mockPlayer = {
 const mockSources: unknown[] = [];
 const mockStarts: number[] = [];
 let mockOnline = true;
+let mockWindow = { width: 390, height: 844 };
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => ({ ...mockWindow, scale: 3, fontScale: 1 }) }));
 jest.mock('expo-video', () => ({
   // One native player per address, as expo-video makes one per source; each records where it was told to start.
   useVideoPlayer: (src: unknown, setup?: (p: { currentTime: number }) => void) => require('react').useMemo(() => {
@@ -47,7 +50,7 @@ const copy = courseCopy('Sam');
 const quiet = { quietPaywall: true };
 
 function player(over: Partial<typeof base> = {}, props: Partial<React.ComponentProps<typeof CourseVideoPlayer>> = {}) {
-  return <CourseVideoPlayer lesson={{ ...base, ...over }} online={mockOnline} failed={copy.failed} noAnswer={copy.noAnswer} {...props} />;
+  return <CourseVideoPlayer lesson={{ ...base, ...over }} online={mockOnline} failed={copy.videoFailed} noAnswer={copy.noAnswer} {...props} />;
 }
 const playing = () => waitFor(() => expect(screen.getByTestId('course-video')).toBeTruthy());
 const fail = (message: string) => act(async () => mockHandlers.statusChange({ status: 'error', error: { message } }));
@@ -55,8 +58,40 @@ const fail = (message: string) => act(async () => mockHandlers.statusChange({ st
 beforeEach(() => {
   jest.clearAllMocks();
   Object.assign(mockPlayer, { loop: true, timeUpdateEventInterval: 0, currentTime: 0, playing: false });
-  mockSources.length = 0; mockStarts.length = 0; mockOnline = true;
+  mockSources.length = 0; mockStarts.length = 0; mockOnline = true; mockWindow = { width: 390, height: 844 };
   get.mockResolvedValue(address()); put.mockResolvedValue({ data: {} });
+});
+
+describe('CourseVideoPlayer: the frame runs edge to edge (board c07)', () => {
+  const box = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+  const edge = (w: number) => ({ width: w, height: Math.round((w * 9) / 16), marginHorizontal: -layout.gutter });
+
+  it.each([390, 360])('is the screen width at %i, 16:9 with no radius, out past the page gutter, in every state', async (width) => {
+    mockWindow = { width, height: 800 };
+    const never = new Promise<never>(() => undefined);
+    get.mockReturnValueOnce(never);
+    const view = await render(player());
+    expect(box('course-video-waiting')).toMatchObject(edge(width));
+    await view.unmount();
+    await render(player());
+    await playing();
+    expect(box('course-video')).toMatchObject(edge(width));
+    expect(box('course-video').borderRadius).toBeUndefined();
+    get.mockRejectedValueOnce(Object.assign(new Error('404'), { response: { status: 404 } }));
+    await fail('HTTP 403');
+    await waitFor(() => screen.getByTestId('course-video-failed'));
+    expect(box('course-video-failed')).toMatchObject(edge(width));
+    expect(box('course-video-failed').borderRadius).toBeUndefined();
+  });
+
+  it('keeps inside the safe area at the sides', async () => {
+    mockWindow = { width: 844, height: 390 };
+    await render(player(), { wrapper: ({ children }: { children: React.ReactNode }) => (
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 844, height: 390 }, insets: { top: 0, bottom: 21, left: 47, right: 47 } }}>{children}</SafeAreaProvider>
+    ) });
+    await playing();
+    expect(box('course-video')).toMatchObject(edge(750));
+  });
 });
 
 describe('CourseVideoPlayer: the address', () => {
@@ -87,10 +122,10 @@ describe('CourseVideoPlayer: the address', () => {
     expect(screen.queryByTestId('course-video')).toBeNull();
   });
 
-  it('an address that is not https is the failed frame with the course sentence, not the connection one; Try again asks again', async () => {
+  it('an address that is not https is the failed frame with the video sentence, not the connection one; Try again asks again', async () => {
     get.mockResolvedValueOnce(address('http://insecure.example.com/x.mp4'));
     await render(player());
-    await waitFor(() => screen.getByText(copy.failed));
+    await waitFor(() => screen.getByText('This video did not load.'));
     expect(screen.queryByText(copy.noAnswer)).toBeNull();
     expect(screen.queryByTestId('course-video')).toBeNull();
     await fireEvent.press(screen.getByText('Try again'));
@@ -98,10 +133,11 @@ describe('CourseVideoPlayer: the address', () => {
     expect(get).toHaveBeenCalledTimes(2);
   });
 
-  it('a lesson that is not available (404) is the course sentence with Try again; no answer is the connection sentence', async () => {
+  it('a lesson that is not available (404) is the video sentence with Try again; no answer is the connection sentence', async () => {
     get.mockRejectedValueOnce(Object.assign(new Error('404'), { response: { status: 404 } }));
     const view = await render(player());
-    await waitFor(() => screen.getByText(copy.failed));
+    await waitFor(() => screen.getByText(copy.videoFailed));
+    expect(screen.queryByText(copy.failed)).toBeNull();
     expect(screen.getByText('Try again')).toBeTruthy();
     expect(screen.queryByTestId('course-video')).toBeNull();
     await view.unmount();
@@ -128,7 +164,7 @@ describe('CourseVideoPlayer: the address', () => {
 });
 
 describe('CourseVideoPlayer: a video that fails after it loaded', () => {
-  it('shows the connection sentence with Try again, never a dead frame; Try again fetches a fresh address and plays on from the place', async () => {
+  it('says the video did not load, with Try again, never a dead frame; Try again fetches a fresh address and plays on from the place', async () => {
     await render(player());
     await playing();
     mockPlayer.playing = true;
@@ -137,13 +173,33 @@ describe('CourseVideoPlayer: a video that fails after it loaded', () => {
     await fail('The network connection was lost.');
     expect(screen.queryByTestId('course-video')).toBeNull();
     expect(screen.getByTestId('course-video-failed')).toBeTruthy();
-    expect(screen.getByText(copy.noAnswer)).toBeTruthy();
+    expect(screen.getByText(copy.videoFailed)).toBeTruthy();
+    expect(screen.queryByText(copy.noAnswer)).toBeNull();
     expect(get).toHaveBeenCalledTimes(1);
     await fireEvent.press(screen.getByText('Try again'));
     await playing();
     expect(get).toHaveBeenCalledTimes(2);
     expect(mockSources).toEqual([URL, FRESH]);
     expect(mockStarts).toEqual([0, 42]);
+  });
+
+  it('with the phone offline it is the connection sentence; Try again waits for the connection, then fetches a fresh address', async () => {
+    const view = await render(player());
+    await playing();
+    mockOnline = false;
+    await view.rerender(player());
+    await fail('The network connection was lost.');
+    expect(screen.getByText(copy.noAnswer)).toBeTruthy();
+    expect(screen.queryByText(copy.videoFailed)).toBeNull();
+    await fireEvent.press(screen.getByText('Try again'));
+    expect(screen.getByTestId('course-video-waiting')).toBeTruthy();
+    expect(get).toHaveBeenCalledTimes(1);
+    get.mockResolvedValueOnce(address(FRESH));
+    mockOnline = true;
+    await view.rerender(player());
+    await playing();
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(mockSources).toEqual([URL, FRESH]);
   });
 
   it('an expired address is replaced quietly and plays on from the place', async () => {
@@ -181,7 +237,7 @@ describe('CourseVideoPlayer: a video that fails after it loaded', () => {
     await playing();
     expect(get).toHaveBeenCalledTimes(2);
     await fail('Response code: 403');
-    expect(screen.getByTestId('course-video-failed')).toBeTruthy();
+    expect(screen.getByText(copy.videoFailed)).toBeTruthy();
     expect(get).toHaveBeenCalledTimes(2);
   });
 });
@@ -283,6 +339,16 @@ describe('CourseLessonScreen with a video', () => {
     await open(lesson({ kind: 'both', body_markdown: 'Some words.' }));
     await playing();
     expect(screen.getByText('Some words.')).toBeTruthy();
+  });
+
+  it('runs the frame edge to edge on the lesson page and says a missing video did not load', async () => {
+    get.mockImplementation((u: string) => (u === VIDEO ? Promise.reject(Object.assign(new Error('404'), { response: { status: 404 } })) : Promise.resolve({ data: course(lesson({})) })));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await render(<QueryClientProvider client={client}><CourseLessonScreen /></QueryClientProvider>);
+    await waitFor(() => screen.getByText('This video did not load.'));
+    expect(StyleSheet.flatten(screen.getByTestId('course-video-failed').props.style)).toMatchObject({ width: 390, marginHorizontal: -layout.gutter });
+    await fireEvent.press(screen.getByText('Try again'));
+    await waitFor(() => expect(get.mock.calls.filter(([u]) => u === VIDEO)).toHaveLength(2));
   });
 
   it('shows no player and asks for no address on a page lesson', async () => {

@@ -1,14 +1,16 @@
 /** LEARN-M6, board c07 (flag learnCourses; plan 8.A PR 6): a video lesson's player (expo-video, native controls, fullscreen).
  * It plays the lesson's address (courseVideoApi), starts at the place saved on the server, and saves the place on pause, every 15 s
- * while playing and on leaving; a finished video saves 0, so a rewatch starts at the start. The frame is dark from the first draw.
- * A video that stops with an error shows the failed sentence with Try again, never a dead frame. Offline: the frame waits, with the
- * approved offline line when the page has no footer to say it. */
+ * while playing and on leaving; a finished video saves 0, so a rewatch starts at the start. The frame is dark from the first draw and
+ * runs edge to edge as c07 draws it (#161-12 op 1): the full width inside the safe area, 16:9, no radius; the page text keeps the gutter.
+ * A video that does not load says "This video did not load." (#161-13 op 1) with Try again, never a dead frame; with no connection it
+ * says "Check the connection and try again.". Offline: the frame waits, with the offline line when the page has no footer to say it. */
 import React, { useEffect, useMemo, useRef } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { radius, typography, type SemanticTokens } from '../../../theme/tokens';
+import { layout, typography, type SemanticTokens } from '../../../theme/tokens';
 import { QuietError } from '../../../ui/states/QuietStates';
+import { useScreenInsets } from '../../../ui/layout/Screen';
 import { savePosition, useLessonVideo } from './courseVideoApi';
 import type { CourseLesson } from './courseData';
 
@@ -16,11 +18,18 @@ const SAVE_EVERY_S = 15;
 /** A stop in the last second is the finish (whichever native event comes first), so it saves 0. */
 const finishedIs0 = (at: number, length: number) => (length > 0 && at >= length - 1 ? 0 : at);
 
+/** The frame is the screen's width inside the safe area (Screen pads the side insets), held at 16:9. */
+function useFrameSize() {
+  const { width } = useWindowDimensions();
+  const { left, right } = useScreenInsets();
+  const w = width - left - right;
+  return { width: w, height: Math.round((w * 9) / 16) };
+}
+
 interface Props {
   lesson: Pick<CourseLesson, 'id' | 'title' | 'positionSeconds'>;
   online: boolean;
-  /** The frame's sentences: waiting offline (only when the page shows no footer reason), no address from the server, and no answer or
-   * a video that stopped. */
+  /** The frame's sentences: waiting offline (only when the page shows no footer reason), the video did not load, and no connection. */
   offline?: string;
   failed: string;
   noAnswer: string;
@@ -33,6 +42,7 @@ type PlayingProps = { url: string; lesson: Props['lesson']; place: React.Mutable
 function Playing({ url, lesson, place, onPosition, onFailed }: PlayingProps) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
+  const size = useFrameSize();
   const saved = useRef(place.current);
   const ended = useRef(false);
   const player = useVideoPlayer(url, (p) => { p.loop = false; p.timeUpdateEventInterval = SAVE_EVERY_S; if (place.current > 0) p.currentTime = place.current; });
@@ -60,30 +70,32 @@ function Playing({ url, lesson, place, onPosition, onFailed }: PlayingProps) {
       latest.current.save(place.current);
     };
   }, [player, place]);
-  return <VideoView style={[s.frame, s.dark]} player={player} fullscreenOptions={{ enable: true }} allowsPictureInPicture accessibilityLabel={lesson.title} testID="course-video" />;
+  return <VideoView style={[s.frame, size, s.dark]} player={player} fullscreenOptions={{ enable: true }} allowsPictureInPicture accessibilityLabel={lesson.title} testID="course-video" />;
 }
 
 export default function CourseVideoPlayer({ lesson, online, offline, failed, noAnswer, onPosition }: Props) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
+  const size = useFrameSize();
   const video = useLessonVideo(lesson.id, online);
   const place = useRef(lesson.positionSeconds);
   if (video.url) return <Playing url={video.url} lesson={lesson} place={place} onPosition={onPosition} onFailed={video.playerFailed} />;
   if (video.failed) {
-    return <View style={[s.frame, s.pad, s.card]} testID="course-video-failed"><QuietError layout="inline" message={video.failed === 'connection' ? noAnswer : failed} onRetry={video.retry} /></View>;
+    return <View style={[s.frame, size, s.pad, s.card]} testID="course-video-failed"><QuietError layout="inline" message={video.failed === 'connection' ? noAnswer : failed} onRetry={video.retry} /></View>;
   }
   const line = online ? null : offline;
   return (
-    <View style={[s.frame, s.dark, s.pad]} accessible accessibilityLabel={line ?? lesson.title} accessibilityState={{ busy: online }} testID="course-video-waiting">
+    <View style={[s.frame, size, s.dark, s.pad]} accessible accessibilityLabel={line ?? lesson.title} accessibilityState={{ busy: online }} testID="course-video-waiting">
       {online ? <ActivityIndicator color={sc.textOnMastheadMuted} /> : line ? <Text style={s.ink}>{line}</Text> : null}
     </View>
   );
 }
 
 const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
-  frame: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.card, overflow: 'hidden', backgroundColor: sc.bgSurface, marginBottom: 16, alignItems: 'center', justifyContent: 'center' },
+  // Out past the page gutter to the screen edges; 4 here plus the lesson line's 12 is c07's 16.
+  frame: { marginHorizontal: -layout.gutter, overflow: 'hidden', backgroundColor: sc.bgSurface, marginBottom: 4, alignItems: 'center', justifyContent: 'center' },
   dark: { backgroundColor: sc.surface.masthead },
-  pad: { padding: 16 },
-  card: { borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
+  pad: { paddingHorizontal: layout.gutter, paddingVertical: 16 },
+  card: { borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
   ink: { ...typography.bodySmall, color: sc.textOnMastheadMuted, textAlign: 'center' },
 });

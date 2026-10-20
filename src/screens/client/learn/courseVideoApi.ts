@@ -25,19 +25,20 @@ const WAIT = { url: null, failed: null } as const;
 
 /** The address to play. It is asked only while online and kept once found, so a dropped signal never stops a lesson that is playing.
  * When the player fails, an expired or refused address is replaced once, quietly, and plays on from the same place; any other failure
- * is the failed frame ('connection' when the server gave no answer or the video stopped, 'other' when it answered without an address),
- * and Try again asks for a fresh address. */
+ * is the failed frame ('connection' when the server gave no answer or the phone is offline, 'video' when the server answered without a
+ * playable address or the player could not play it), and Try again asks for a fresh address. */
 export function useLessonVideo(lessonId: string, online: boolean) {
-  const [state, setState] = useState<{ url: string | null; failed: 'connection' | 'other' | null }>(WAIT);
+  const [state, setState] = useState<{ url: string | null; failed: 'connection' | 'video' | null }>(WAIT);
   const expiresAt = useRef(0);
   const quietLeft = useRef(true); // one quiet replacement per Try again, so a server that keeps refusing ends at Try again, never a loop
+  const onlineNow = useRef(online); onlineNow.current = online;
   const waiting = !state.url && !state.failed;
   useEffect(() => {
     if (!online || !waiting) return;
     let live = true;
     lessonVideo(lessonId).then(
       (v) => { if (live) { expiresAt.current = v.expiresAt; setState({ url: v.url, failed: null }); } },
-      (err) => { if (live) setState({ url: null, failed: isConnectionFailure(err) ? 'connection' : 'other' }); },
+      (err) => { if (live) setState({ url: null, failed: isConnectionFailure(err) ? 'connection' : 'video' }); },
     );
     return () => { live = false; };
   }, [lessonId, online, waiting]);
@@ -45,7 +46,7 @@ export function useLessonVideo(lessonId: string, online: boolean) {
   const playerFailed = useCallback((message: string) => {
     const again = quietLeft.current && (Date.now() >= expiresAt.current || refused(message));
     if (again) quietLeft.current = false;
-    setState(again ? WAIT : { url: null, failed: 'connection' });
+    setState(again ? WAIT : { url: null, failed: onlineNow.current ? 'video' : 'connection' });
   }, []);
   return { ...state, retry, playerFailed };
 }

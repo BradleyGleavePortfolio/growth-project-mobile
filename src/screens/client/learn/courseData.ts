@@ -83,6 +83,7 @@ export function courseCopy(coach: string | null) {
     loading: `Loading ${whose} course`,
     failed: `${Whose} course did not load.`,
     noAnswer: 'Check the connection and try again.',
+    videoFailed: 'This video did not load.',
     offline: 'You’re offline. Pages in open weeks still read here. Videos and saving progress need a connection.',
   };
 }
