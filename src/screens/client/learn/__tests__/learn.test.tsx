@@ -125,11 +125,31 @@ describe('Learn', () => {
     expect(parent.navigate).toHaveBeenCalledWith('Home', { screen: 'Messages', initial: false });
   });
 
-  it('without a coach asks for no guidelines and shows no coach thread', async () => {
+  it('without a coach lists the kept lesson, asks for no guidelines and shows no coach thread', async () => {
     mockUser = { id: 'me', coach_id: null };
+    lessons.getAll.mockImplementation(() => ok([LESSONS[0]]) as never);
+    await show(LearnScreen);
+    expect(await screen.findByText('1 of 1 done')).toBeTruthy();
+    expect(screen.getByText('From your coach')).toBeTruthy();
+    expect(screen.getByLabelText('Lesson 1, How Sam builds your week, complete')).toBeTruthy();
+    expect(screen.queryByTestId('learn-guidelines')).toBeNull();
+    expect(screen.queryByTestId('learn-empty')).toBeNull();
+    expect(screen.queryByText(/Read lesson/)).toBeNull();
+    expect(screen.queryByText('Message your coach')).toBeNull();
+    expect(guidelines).not.toHaveBeenCalled();
+    expect(api.get).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText('Lesson 1, How Sam builds your week, complete'));
+    expect(mockNav.navigate).toHaveBeenLastCalledWith('LearnLesson', { id: 'l1' });
+  });
+
+  it('without a coach and with nothing kept says so, with no Message button', async () => {
+    mockUser = { id: 'me', coach_id: null };
+    lessons.getAll.mockImplementation(() => ok([]) as never);
     await show(LearnScreen);
     expect(await screen.findByText('Nothing from your coach yet')).toBeTruthy();
     expect(screen.queryByText('Message your coach')).toBeNull();
+    expect(screen.queryByTestId('learn-message')).toBeNull();
+    expect(lessons.getAll).toHaveBeenCalledTimes(1);
     expect(guidelines).not.toHaveBeenCalled();
   });
 

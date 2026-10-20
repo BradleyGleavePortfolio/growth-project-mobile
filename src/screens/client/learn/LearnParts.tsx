@@ -26,7 +26,8 @@ export function LearnBack({ navigation, onDark = false, label: named }: { naviga
 }
 
 /**
- * The You list's Learn row shows only once the coach has written guidelines or a lesson (#LEARN-COACHLESS op 1).
+ * The You list's Learn row shows only once there is something to read: the coach's guidelines or a lesson, or a
+ * lesson a coachless client kept after their coach deleted their account (#LEARN-COACHLESS op 1).
  * It is the only door, so while it is hidden a You list kept in the background asks again when it is back in
  * view or the phone is back online (the first mount has just asked).
  */

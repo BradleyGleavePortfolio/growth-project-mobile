@@ -1,7 +1,7 @@
 /**
  * LEARN-A (flag learnHub): the reads behind Learn and its lesson view. The
  * server is the only record. GET /lessons holds the current coach's lessons
- * and this client's completions (a client whose coach left keeps the single lessons they completed); GET
+ * and this client's completions (a client whose coach deleted their account keeps the single lessons they completed); GET
  * /coach/my-guidelines holds the one guidelines page that coach wrote.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -57,7 +57,7 @@ async function readGuidelines(): Promise<LearnGuidelines> {
   }
 }
 
-/** One read set for Learn, the lesson view and the You row. Coach and guidelines need a coach; lessons only need the client, so lessons kept after the coach left still load. */
+/** One read set for Learn, the lesson view and the You row. Coach and guidelines need a coach; lessons only need the client, so lessons kept after the coach deleted their account still load. */
 export function useLearn() {
   const current = useCurrentUser();
   const user = readUserCacheSync() ?? current;

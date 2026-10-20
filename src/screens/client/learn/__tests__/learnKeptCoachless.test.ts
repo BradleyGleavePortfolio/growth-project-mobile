@@ -1,4 +1,4 @@
-// LEARN-KEPT (#LEARN-COACHLESS op 1): lessons a client completed stay readable after the coach left or deleted their account.
+// LEARN-KEPT (#LEARN-COACHLESS op 1): lessons a client completed stay readable after the coach deleted their account.
 // With a user id and no coach, useLearn still reads GET /lessons, and Learn has content only when a lesson is kept.
 import React from 'react';
 import { renderHook, waitFor } from '@testing-library/react-native';

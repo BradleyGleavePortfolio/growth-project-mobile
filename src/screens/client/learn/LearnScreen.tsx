@@ -55,8 +55,7 @@ export default function LearnScreen() {
   );
 
   let body: React.ReactNode;
-  if (learn.user && !learn.coachId) body = empty;
-  else if (!known && !online) body = <Text style={s.offline} testID="learn-offline">{copy.offline}</Text>;
+  if (!known && !online) body = <Text style={s.offline} testID="learn-offline">{copy.offline}</Text>;
   else if (!known && learn.error) {
     body = <QuietError layout="inline" message={isConnectionFailure(learn.error) ? `${copy.failed} ${copy.noAnswer}` : copy.failed}
       onRetry={() => void refetch()} testID="learn-error" />;
