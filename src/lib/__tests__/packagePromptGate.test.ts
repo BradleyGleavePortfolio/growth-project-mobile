@@ -4,8 +4,12 @@ jest.mock('../../api/clientPaymentsApi', () => ({
 }));
 let mockUser: { id: string; coach_id?: string } | null = { id: 'client-1', coach_id: 'coach-1' };
 jest.mock('../userCache', () => ({ readUserCache: async () => mockUser }));
+// GET /v1/checkout/dunning body, read through the real mobile normaliser (#836 Opus C2).
 const mockDunning = jest.fn();
-jest.mock('../../entitlements/dunning/dunningApi', () => ({ dunningApi: { getStatus: () => mockDunning() } }));
+jest.mock('../../entitlements/dunning/dunningApi', () => {
+  const { normalizeDunningStatus } = jest.requireActual('../../entitlements/dunning/dunningApi');
+  return { dunningApi: { getStatus: async () => normalizeDunningStatus(await mockDunning()) } };
+});
 const mockOnboardingState = jest.fn();
 jest.mock('../../api/consultationApi', () => ({ consultationApi: { getState: () => mockOnboardingState() } }));
 let mockTourFlags = { clientTutorial: true, consultationOnboarding: true };
@@ -36,7 +40,7 @@ const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurab
 beforeEach(async () => {
   jest.clearAllMocks();
   mockUser = { id: 'client-1', coach_id: 'coach-1' };
-  mockDunning.mockResolvedValue({ enabled: true, state: 'none' });
+  mockDunning.mockResolvedValue({ enabled: true, state: 'none', kind: null, reason: null, purchase_id: null });
   mockTourFlags = { clientTutorial: true, consultationOnboarding: true };
   mockOnboardingState.mockResolvedValue({ completed: false, answers: null });
   __resetTutorialStoreForTests();
@@ -89,17 +93,37 @@ describe('shouldOfferPackagePrompt (fail closed, #304 Sol B1; 1:1 rule, #161-5 o
     expect(await shouldOfferPackagePrompt()).toBe(false);
   });
 
-  // #836 Opus C1: a failing payment, the Day-10 lock or a paused plan keeps the sheet away. The states
-  // backend dunning-v2 sends (#836 Opus C2): past_due (days 0-9), locked (day 10), and a dispute or
-  // refund pause as past_due or locked with a reason.
+  // #836 Opus C1: a failing payment, the Day-10 lock or a paused plan keeps the sheet away. Bodies as backend
+  // dunning-v2 getClientStatus sends them (#836 Opus C2): state is only 'none' | 'past_due' | 'locked'; a
+  // dispute or refund pause is past_due or locked with kind and reason set.
+  const cycle = { enabled: true, purchase_id: 'pur-1', currency: 'usd', failed_at: '2026-10-10T00:00:00.000Z' };
   it.each([
-    ['payment failing', { state: 'past_due', locked: false, reason: null }],
-    ['Day-10 lock', { state: 'locked', locked: true, reason: null }],
-    ['dispute pause', { state: 'past_due', locked: false, reason: 'dispute_paused' }],
-    ['refund pause, locked', { state: 'locked', locked: true, reason: 'refund_paused' }],
-  ])('never offers while dunning is %s', async (_label, status) => {
+    ['payment failing (days 0-9)', { ...cycle, state: 'past_due', kind: 'payment', reason: 'payment_failed' }],
+    ['Day-10 lock', { ...cycle, state: 'locked', kind: 'payment', reason: 'payment_failed' }],
+    ['dispute pause', { ...cycle, state: 'past_due', kind: 'dispute', reason: 'dispute_paused', access_ended: true }],
+    ['dispute pause, locked', { ...cycle, state: 'locked', kind: 'dispute', reason: 'dispute_paused', access_ended: true }],
+    ['refund pause', { ...cycle, state: 'locked', kind: 'refund', reason: 'refund_paused', access_ended: true }],
+  ])('never offers while dunning is %s', async (_label, body) => {
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    mockDunning.mockResolvedValue({ enabled: true, ...status });
+    mockDunning.mockResolvedValue(body);
+    expect(await shouldOfferPackagePrompt()).toBe(false);
+  });
+
+  it.each([
+    ['no cycle', { enabled: true, state: 'none', kind: null, reason: null, purchase_id: null }],
+    ['dunning switched off', { enabled: false, state: 'none', kind: null, reason: null, purchase_id: null }],
+  ])('offers when dunning is %s', async (_label, body) => {
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    mockDunning.mockResolvedValue(body);
+    expect(await shouldOfferPackagePrompt()).toBe(true);
+  });
+
+  it.each([
+    ['a state the backend never sends', { enabled: true, state: 'dispute_paused', purchase_id: 'pur-1' }],
+    ['past_due with no purchase', { enabled: true, state: 'past_due', purchase_id: null }],
+  ])('fails closed on %s', async (_label, body) => {
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    mockDunning.mockResolvedValue(body);
     expect(await shouldOfferPackagePrompt()).toBe(false);
   });
 

@@ -113,7 +113,7 @@ describe('Day1WinScreen package prompt is fail closed', () => {
   });
 
   it('payment failing (dunning past_due): no sheet, straight into the app (#836 C1)', async () => {
-    mockDunning.mockResolvedValue({ enabled: true, state: 'past_due', locked: true });
+    mockDunning.mockResolvedValue({ enabled: true, state: 'past_due', kind: 'payment', reason: 'payment_failed', purchase_id: 'pur-1' });
     const r = await skipAndSettle(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
     await waitFor(() => expect(r.onComplete).toHaveBeenCalledTimes(1));
     expect(r.queryByTestId('package-sheet')).toBeNull();
