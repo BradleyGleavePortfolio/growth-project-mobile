@@ -145,7 +145,8 @@ export default function CommandCenterScreen({
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
-        if (featureFlags.coachHomeV11) {
+        // PK-2a: UI-2 never switches on without its Money tab (coachTabsV2), which also lands on Overview.
+        if (featureFlags.coachHomeV11 && featureFlags.coachTabsV2) {
           return (
             <CoachHomeV11
               onSelectClient={selectClient}

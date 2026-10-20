@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import { commandCenterApi, type AtRiskEntry, type CommandCenterOverview } from '../../../services/commandCenterApi';
-import { fetchUnreadCount } from '../../../services/notificationsApi';
+import { useClientUnreadCount } from '../../../hooks/useClientUnreadCount';
 import { usePendingAiDrafts } from '../../../hooks/usePendingAiDrafts';
 import { isStream2Capability } from '../../../api/types/coachAiExecution';
 import { isSubCoachBillingBlocked } from '../../../lib/coachSetup/errors';
@@ -38,6 +38,8 @@ export interface CoachHomeData {
 export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources) {
   const isFocused = useIsFocused();
   const drafts = usePendingAiDrafts({ enabled: isFocused });
+  // The bell polls every 30 s and on foreground while Overview is in view, and re-reads on each return to it.
+  const unreadNotifications = useClientUnreadCount(isFocused);
   const [overview, setOverview] = useState<CommandCenterOverview | null>(null);
   const [overviewFailed, setOverviewFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,7 +48,6 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources) {
   const [ltv, setLtv] = useState<LtvMetrics | null>(null);
   const [month, setMonth] = useState<MonthState>({ kind: 'loading' });
   const [payout, setPayout] = useState<MoneyPayout | null>(null);
-  const [unreadNotifications, setUnread] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const seq = useRef(0);
   useEffect(() => () => { seq.current += 1; }, []);
@@ -76,7 +77,6 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources) {
     loadUrgent(mine);
     settle(sources.ltv, setLtv, null);
     settle(sources.nextPayout, setPayout, null);
-    settle(fetchUnreadCount, setUnread, 0);
     try {
       const res = await commandCenterApi.getOverview();
       if (fresh()) setOverview(res.data);

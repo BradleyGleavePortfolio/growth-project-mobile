@@ -144,7 +144,7 @@
     "EXPO_PUBLIC_FF_COACH_HOME_V11": {
       "kind": "flag",
       "default": "off",
-      "reason": "UI-2 coach Home (render 2), with Overview as the landing tab; off by default in featureFlags.ts with no eas.json line, so the OTA switch works, until the owner switches it on. Its Money tab is the six-tab Money tab (COACH_TABS_V2)."
+      "reason": "UI-2 coach Home (render 2), drawn only with COACH_TABS_V2 on too (owner PK-2a: never without its Money tab); off by default in featureFlags.ts with no eas.json line, so the OTA switch works, until the owner switches it on."
     },
     "EXPO_PUBLIC_FF_COACH_LESSONS": {
       "kind": "flag",
