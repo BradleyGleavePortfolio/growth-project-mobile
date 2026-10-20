@@ -123,7 +123,7 @@ beforeEach(() => {
   Object.assign(mockFlags, { iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false });
   mockRole = 'head_coach';
   mockBudgetLoading = false;
-  mockUseRole.mockClear();
+  mockUseRole.mockReset().mockImplementation(() => mockRole);
   mockBudget = { ...mockBudget, used_displayed_cents: 10000, remaining_displayed_cents: 0 };
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
   mockCreateCheckout.mockReset().mockResolvedValue({
@@ -427,7 +427,8 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(screen.getByTestId('credit-pack-error')).toHaveTextContent('Custom packs must be between $10 and $500.', { exact: false });
     expect(mockCreateCheckout).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('credit-pack-retry'));
-    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    // The typed amount keeps the custom path open when the packs come back.
+    expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('5');
     await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20.50');
     await fireEvent.press(screen.getByLabelText('Buy $20.50 of credits'));
     expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 2050 }));
