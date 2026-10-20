@@ -208,15 +208,22 @@ it('keeps the classic log when the plan cannot load, with a working retry', asyn
 
 it('shows the classic log with no plan, no usual meal, or the flag off', async () => {
   serve({ date: today, assignments: [] });
-  const first = await show();
-  expect(await screen.findByText('Classic food log')).toBeTruthy();
-  await first.unmount();
-  const second = await show({ coached: false });
-  await waitFor(() => expect(mockDaily).toHaveBeenCalledTimes(7));
-  expect(await screen.findByText('Classic food log')).toBeTruthy();
-  await second.unmount();
+  const week = Array.from({ length: 7 }, (_, i) => [addDays(today, -(i + 1))]);
+  // Each mount reads the seven days before today exactly once; wait until its week read has settled, then count.
+  const oneWeek = async (view: Awaited<ReturnType<typeof show>>) => {
+    await waitFor(() => expect([view.client.getQueryState(['food', 'usual-day', today])?.status, view.client.isFetching()])
+      .toEqual(['success', 0]));
+    expect(mockDaily.mock.calls).toEqual(week);
+    expect(await screen.findByText('Classic food log')).toBeTruthy();
+    await view.unmount();
+    mockDaily.mockClear();
+  };
+  // Coached with no plan (UI-3b) and coachless: both read the week once and, with no usual meal, keep the classic log.
+  await oneWeek(await show());
+  await oneWeek(await show({ coached: false }));
   await show({ on: false });
   expect(screen.getByText('Classic food log')).toBeTruthy();
+  expect(mockDaily).not.toHaveBeenCalled();
   expect(mockGet).toHaveBeenCalledTimes(2);
 });
 
