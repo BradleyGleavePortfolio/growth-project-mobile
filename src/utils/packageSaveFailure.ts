@@ -147,16 +147,17 @@ function capitalise(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Failure titles name the action the coach tried (C-321-4). */
 /**
  * SMALL-T2: while a coach's account deletion is scheduled the server refuses
  * package create, publish and re-enable (backend coach-selling.ts) with a 403
  * and the auth guard's fixed sentence, and no machine code. That sentence is
  * the only signal, so this is the one check that reads the message. Shared
  * with the setup wizard's describeError so every package path says the same.
+ * The way out names what the coach taps: the coach Settings row "Deletion
+ * scheduled" (settings/DangerZone.tsx), then "Keep account" (SettingsScreen).
  */
 export const LEAVING_COACH_LINE =
-  'You cannot create or publish packages while your account is scheduled for deletion. Cancel the deletion in Settings to sell again.';
+  'You cannot create or publish packages while your account is scheduled for deletion. To sell again, open Settings, tap Deletion scheduled, then Keep account.';
 
 export function isLeavingCoachRefusal(
   status: number | null | undefined,
@@ -165,6 +166,7 @@ export function isLeavingCoachRefusal(
   return status === 403 && /^Account is scheduled for deletion\b/.test(message ?? '');
 }
 
+/** Failure titles name the action the coach tried (C-321-4). */
 function failedTitle(mode: PackageSaveMode): string {
   switch (mode) {
     case 'create':

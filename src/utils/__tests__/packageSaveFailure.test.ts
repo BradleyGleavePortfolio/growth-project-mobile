@@ -4,6 +4,8 @@ jest.mock('../../services/sentry', () => ({
   captureError: (...a: unknown[]) => mockCaptureError(...a),
 }));
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { describePackageSaveFailure, LEAVING_COACH_LINE } from '../packageSaveFailure';
 import { describeError } from '../../lib/coachSetup/errors';
 
@@ -31,6 +33,15 @@ describe('SMALL-T2 leaving coach', () => {
       expect([f.title, f.body, f.retryable]).toEqual([`TGP could not ${action}`, LEAVING_COACH_LINE, false]);
     }
     expect(mockCaptureError).not.toHaveBeenCalled();
+  });
+
+  it('names the Settings row and the button the coach really taps (Opus C2)', () => {
+    const coach = (file: string) =>
+      fs.readFileSync(path.join(__dirname, '..', '..', 'screens', 'coach', file), 'utf8');
+    expect(LEAVING_COACH_LINE).toMatch(/To sell again, open Settings, tap Deletion scheduled, then Keep account\.$/);
+    expect(LEAVING_COACH_LINE).not.toMatch(/Cancel the deletion/);
+    expect(coach(path.join('settings', 'DangerZone.tsx'))).toMatch(/>\s*Deletion scheduled\s*</);
+    expect(coach('SettingsScreen.tsx')).toContain("text: 'Keep account'");
   });
 
   it('any other 403 keeps its own copy', () => {
