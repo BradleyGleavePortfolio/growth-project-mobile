@@ -54,7 +54,7 @@ import { useLeanOnboardingReconcile } from '../hooks/useLeanOnboardingReconcile'
 // navigator. On first cold start after onboarding the app checks
 // GET /me/first-win/status; if incomplete the Day1WinScreen is shown once.
 // 'coach_wizard' — shown when GET /coach/onboarding returns is_complete:false.
-// 'package_prompt' — re-surfaces PackageSelectionSheet after 24h dismissal gap.
+// 'package_prompt' — PackageSelectionSheet, at most once per 24h (lib/packagePromptGate).
 type AuthState =
   | 'loading'
   | 'unauthenticated'
