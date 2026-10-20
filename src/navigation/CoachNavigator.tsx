@@ -195,7 +195,8 @@ export type SafetyAlertParams = {
 };
 
 export type ClientsStackParamList = {
-  ClientsList: undefined;
+  /** view 'needs' (lookup flag on): the Needs you list at any roster size, for the coach Home's Needs you tile. */
+  ClientsList: { view?: 'needs' } | undefined;
   /** initialTab: opens on that tab (the daily brief opens Workouts). */
   ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' };
   /**
