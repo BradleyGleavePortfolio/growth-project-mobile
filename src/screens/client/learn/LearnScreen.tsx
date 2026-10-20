@@ -31,7 +31,7 @@ export default function LearnScreen() {
   const [italic] = useFonts({ CormorantGaramond_400Regular_Italic });
   const learn = useLearn();
   const { lessons, guidelines: g, known, refetch } = learn;
-  const copy = learnCopy(learn.name);
+  const copy = learnCopy(learn.name, !learn.coachId && lessons.length > 0);
 
   // Offline on first open: the page loads by itself once the phone is back online.
   const wasOnline = useRef(online);

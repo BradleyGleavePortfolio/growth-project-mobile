@@ -106,13 +106,13 @@ export function updatedOn(iso: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', ...year });
 }
 
-/** Every Learn sentence, with the coach's first name or "your coach". */
-export function learnCopy(name: string | null) {
+/** Every Learn sentence, with the coach's first name or "your coach". former: no coach now, but kept lessons (LK-01). */
+export function learnCopy(name: string | null, former = false) {
   const who = name ?? 'your coach';
   const whose = name ? `${name}'s` : "your coach's";
   const Whose = name ? whose : "Your coach's";
   return {
-    from: `From ${who}`,
+    from: former ? 'From your former coach' : `From ${who}`,
     lede: `${Whose} guidelines and lessons for you.`,
     loading: `Loading ${whose} guidelines and lessons`,
     failed: `${Whose} guidelines and lessons did not load.`,
