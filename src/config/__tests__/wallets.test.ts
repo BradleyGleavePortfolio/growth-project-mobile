@@ -95,7 +95,7 @@ describe('app.config.js Stripe wallet plugin', () => {
       name === 'production' || (!!eas.build[name].extends && fromProduction(eas.build[name].extends));
     const names = Object.keys(eas.build);
     const built = names.filter(fromProduction);
-    const useEnv = (name: string) => {
+    const applyProfileEnv = (name: string) => {
       const env = resolveProfile(eas, name).env as Record<string, string | undefined>;
       for (const n of NAMES) {
         if (env[n] === undefined) delete process.env[n];
@@ -115,7 +115,7 @@ describe('app.config.js Stripe wallet plugin', () => {
 
     it('their env adds the Apple Pay entitlement and offers Apple Pay on iOS only', () => {
       for (const name of built) {
-        useEnv(name);
+        applyProfileEnv(name);
         expect(stripeEntry(plugins())).toEqual([
           '@stripe/stripe-react-native',
           { merchantIdentifier: MERCHANT, enableGooglePay: false },
@@ -132,7 +132,7 @@ describe('app.config.js Stripe wallet plugin', () => {
     it('development and preview stay without it (no plugin, as before)', () => {
       expect(names.filter((n) => !fromProduction(n)).sort()).toEqual(['development', 'preview']);
       for (const name of ['development', 'preview']) {
-        useEnv(name);
+        applyProfileEnv(name);
         expect(stripeEntry(plugins())).toBeUndefined();
       }
     });
