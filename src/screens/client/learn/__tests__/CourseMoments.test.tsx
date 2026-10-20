@@ -1,6 +1,6 @@
 // LEARN-M7 (flag learnCourses): the lesson, week and course moments (c06, c08, c09, c10) and where the course home and a week show them.
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
@@ -52,7 +52,7 @@ beforeEach(() => { jest.clearAllMocks(); run += 1; mockFocused = true; mockParam
 describe('c06 lesson complete', () => {
   const [l] = coursesFrom([raw([true, false])])[0].weeks[2].lessons;
   const [, next] = coursesFrom([raw([true, false])])[0].weeks[2].lessons;
-  const view = (props: object) => render(<SafeAreaProvider><LessonCompleteMoment lesson={l} done={1} total={2} {...props} /></SafeAreaProvider>);
+  const view = (props: object) => render(<LessonCompleteMoment lesson={l} done={1} total={2} {...props} />, { wrapper: wrap(client()) });
 
   it('says the approved lines and Next opens the next lesson', async () => {
     const onNext = jest.fn();
@@ -97,7 +97,8 @@ describe('c08 week complete', () => {
     mockFocused = true;
     await view.rerender(<CourseWeekScreen />);
     await waitFor(() => expect(screen.getByTestId('week-moment')).toBeTruthy());
-    ['Week 3 done', '2 of 2 lessons · Build the base', 'Week 4 opens Mon Oct 19.', '3 of 4 weeks'].forEach((t) => expect(screen.getByText(t)).toBeTruthy());
+    const peak = within(screen.getByTestId('week-moment')); // the week page also says when Week 4 opens
+    ['Week 3 done', '2 of 2 lessons · Build the base', 'Week 4 opens Mon Oct 19.', '3 of 4 weeks'].forEach((t) => expect(peak.getByText(t)).toBeTruthy());
     expect(HapticService.success).toHaveBeenCalledTimes(1);
     await fireEvent.press(screen.getByTestId('week-moment-close'));
     expect(mockNav.goBack).toHaveBeenCalledTimes(1);
@@ -144,7 +145,7 @@ describe('c10 course complete', () => {
     await render(<CourseCompleteScreen />, { wrapper: wrap(client()) });
     await screen.findByText('Your record');
     ['Course complete', 'Knee Rehab, 8 weeks', 'Taught by Sam', 'Started', 'Sep 28, 2026', 'Lessons', '6 of 6', 'Weeks', '4 of 4', 'Every lesson stays open to watch or read again.']
-      .forEach((t) => expect(screen.getByText(t)).toBeTruthy());
+      .forEach((t) => expect(screen.getAllByText(t).length).toBeGreaterThan(0)); // the course name is also the back label
     await fireEvent.press(await screen.findByTestId('course-complete-back'));
     expect(mockNav.navigate).toHaveBeenCalledWith('WorkoutMain');
   });
