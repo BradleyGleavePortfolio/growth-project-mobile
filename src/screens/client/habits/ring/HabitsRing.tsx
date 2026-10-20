@@ -72,9 +72,10 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
   const past = day !== today;
   const dayLogs = useQuery<ApiHabitLog[]>({ queryKey: ['habits', 'logs', day], queryFn: async () => (await habitsApi.getLogs(day)).data, enabled: past });
   const held = (h: RingHabit, on: string) => (on === day && past && dayLogs.data ? dayLogs.data.some((l) => l.habit_id === h.id && l.completed) : doneOn(h, on));
-  // Until a past day's ticks and its week are in, they wait (or say they did not load); never the 30-tick list, never a tick.
+  // Until a past day's ticks and its week are in, they wait; never the 30-tick list, never a tick. Only an unread day
+  // says it did not load (with Try again): a failed week alone drops its strip and count, as today's strip does.
   const dayUnknown = past && !dayLogs.data;
-  const readFailed = (dayUnknown && dayLogs.isError) || (past && shownWeek.isError && !shownWeek.data);
+  const readFailed = dayUnknown && dayLogs.isError;
 
   // The masthead's forest runs under the native back header, with today's two tabs on its right.
   const checkIn = useRef(onCheckIn);

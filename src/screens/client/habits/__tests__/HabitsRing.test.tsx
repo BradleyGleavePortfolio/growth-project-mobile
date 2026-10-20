@@ -391,7 +391,7 @@ it('a past day whose read fails says so with Try again and takes no tick; Try ag
   expect(mockLog).toHaveBeenCalledWith('w', { date: '2026-10-18', completed: false, value: 0 });
 });
 
-it('a past week whose summary fails draws no strip and no count, says so, and Try again draws it', async () => {
+it('a past week whose summary fails alone drops its strip and count, keeps the read day\'s tiles, and pull to refresh draws it', async () => {
   const v = await mountMonday();
   const served = mockGet.getMockImplementation() as (...a: unknown[]) => Promise<unknown>;
   let down = true;
@@ -401,15 +401,45 @@ it('a past week whose summary fails draws no strip and no count, says so, and Tr
   });
   await waitFor(() => expect(v.getByLabelText('Previous week')).toBeTruthy());
   await fireEvent.press(v.getByLabelText('Previous week'));
-  await waitFor(() => expect(v.getByTestId('habits-ring-past-error')).toHaveTextContent(FAILED));
+  await waitFor(() => expect(v.getByTestId('habits-ring-tile-w')).toBeTruthy());
+  await waitFor(() => expect(v.getByText('Sunday, October 18')).toBeTruthy());
   expect(v.queryByTestId('habits-ring-pick-2026-10-17')).toBeNull();
   expect(v.queryByText(/last week/)).toBeNull();
-  expect(v.getByText('Sunday, October 18')).toBeTruthy();
+  // The day itself was read, so no "did not load" sentence and no Try again over live tiles.
+  expect(v.queryByTestId('habits-ring-past-error')).toBeNull();
+  expect(v.queryByTestId('habits-ring-retry')).toBeNull();
+  expect(v.queryByText(FAILED)).toBeNull();
+  down = false;
+  await act(async () => { await v.getByTestId('habits-ring-screen-scroll').props.refreshControl.props.onRefresh(); });
+  await waitFor(() => expect(v.getByText('6 of 7 last week')).toBeTruthy());
+  expect(v.getByTestId('habits-ring-pick-2026-10-17').props.accessibilityLabel).toBe('Saturday 17, 1 of 1 done');
+});
+
+it('offline on a past day (its ticks and its week both fail): the sentence and Try again, no tile; Try again brings both back', async () => {
+  const v = await mountMonday();
+  const served = mockGet.getMockImplementation() as (...a: unknown[]) => Promise<unknown>;
+  let down = true;
+  mockGet.mockImplementation(async (url: string, o: { params: { from: string } }) => {
+    if (down && o.params.from === '2026-10-12') throw new Error('offline');
+    return served(url, o);
+  });
+  mockGetLogs.mockImplementation(async () => {
+    if (down) throw new Error('offline');
+    return { data: [] };
+  });
+  await waitFor(() => expect(v.getByLabelText('Previous week')).toBeTruthy());
+  await fireEvent.press(v.getByLabelText('Previous week'));
+  await waitFor(() => expect(v.getByTestId('habits-ring-past-error')).toHaveTextContent(FAILED));
+  expect(v.queryByTestId('habits-ring-pick-2026-10-17')).toBeNull();
+  expect(v.queryByTestId('habits-ring-tile-w')).toBeNull();
+  expect(mockLog).not.toHaveBeenCalled();
   down = false;
   await fireEvent.press(v.getByTestId('habits-ring-retry'));
   await waitFor(() => expect(v.getByText('6 of 7 last week')).toBeTruthy());
+  await waitFor(() => expect(v.getByTestId('habits-ring-tile-w')).toBeTruthy());
   expect(v.getByTestId('habits-ring-pick-2026-10-17').props.accessibilityLabel).toBe('Saturday 17, 1 of 1 done');
   expect(v.queryByTestId('habits-ring-past-error')).toBeNull();
+  expect(v.queryByTestId('habits-ring-retry')).toBeNull();
 });
 
 it('a tick the server refuses goes back, with a calm line and the error haptic', async () => {
