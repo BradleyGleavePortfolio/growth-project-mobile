@@ -48,8 +48,9 @@ export function resolveAppLink(path: string, role: 'student' | 'coach'): AppLink
   if (role === 'student') {
     if (first === 'meal-plan' && uuidPair) return nested('MoreTab', 'ClientDailyMealPlan', { assignmentId: id });
     if (first === 'workouts' && uuidPair) return nested('MoreTab', 'WorkoutAssignmentDetail', { assignmentId: id });
-    if (plain === 'workouts') return nested('WorkoutTab', 'WorkoutMain');
-    if (plain === 'home') return nested('Home', 'HomeMain');
+    // A tab's root carries pop: back to the open one, never a second copy (TRAIN-ROOT-RETURN).
+    if (plain === 'workouts') return { ...nested('WorkoutTab', 'WorkoutMain'), pop: true };
+    if (plain === 'home') return { ...nested('Home', 'HomeMain'), pop: true };
     if (plain === 'plan') return nested('MoreTab', 'ClientDailyMealPlan');
     if (plain === 'weight') return nested('MoreTab', 'Progress');
     if (plain === 'timeline') return nested('MoreTab', 'Timeline');

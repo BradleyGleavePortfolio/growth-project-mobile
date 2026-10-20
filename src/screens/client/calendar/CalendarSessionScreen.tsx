@@ -111,7 +111,7 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
         <Headline level="h2">This link is incomplete</Headline>
         <Lede>Open Calendar to find your session.</Lede>
       </View>,
-      <PrimaryButton label="Open calendar" onPress={() => navigation.navigate('CalendarHome')} testID="calendar-session-open-home" />,
+      <PrimaryButton label="Open calendar" onPress={() => navigation.popTo('CalendarHome')} testID="calendar-session-open-home" />,
     );
   }
   if (q.isLoading) return wrap(<QuietLoading label="Loading this session" rows={4} testID="calendar-session-loading" />);

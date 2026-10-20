@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
+import { StackActions } from '@react-navigation/native';
 import { radius, typography } from '../../../theme/tokens';
 const mockAccept = jest.fn(), mockSession = jest.fn();
 jest.mock('../../../api/invites', () => ({ invitesApi: { acceptInvite: (...a: unknown[]) => mockAccept(...a) } }));
@@ -15,7 +16,7 @@ import EmailVerifiedScreen from '../EmailVerifiedScreen';
 type InviteProps = React.ComponentProps<typeof AcceptInviteScreen>;
 type VerifiedProps = React.ComponentProps<typeof EmailVerifiedScreen>;
 function nav(routes = ['EmailVerified']) {
-  return { navigate: jest.fn(), replace: jest.fn(), goBack: jest.fn(),
+  return { navigate: jest.fn(), replace: jest.fn(), goBack: jest.fn(), dispatch: jest.fn(),
     getState: jest.fn().mockReturnValue({ index: routes.length - 1, routes: routes.map(name => ({ name })) }) };
 }
 function invite(navigation = nav()) {
@@ -64,14 +65,14 @@ describe('Invite copy and frozen action parity', () => {
     const navigation = nav(), view = await render(invite(navigation));
     const button = await view.findByLabelText('Back to welcome');
     await fireEvent.press(button);
-    expect(navigation.navigate).toHaveBeenCalledWith('Welcome');
+    expect(navigation.dispatch).toHaveBeenCalledWith(StackActions.popTo('Welcome'));
   });
   it('network failure retains both Welcome and the retry effect', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     mockAccept.mockRejectedValueOnce(new Error('Network unavailable'));
     const navigation = nav(), view = await render(invite(navigation));
     await fireEvent.press(await view.findByLabelText('Back to welcome'));
-    expect(navigation.navigate).toHaveBeenCalledWith('Welcome');
+    expect(navigation.dispatch).toHaveBeenCalledWith(StackActions.popTo('Welcome'));
     await fireEvent.press(view.getByLabelText('Try again'));
     expect(await view.findByText('Invite ready')).toBeTruthy();
     expect(mockAccept).toHaveBeenCalledTimes(2);
