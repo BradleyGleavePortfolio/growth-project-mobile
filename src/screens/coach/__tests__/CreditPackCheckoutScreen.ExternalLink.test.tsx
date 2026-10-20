@@ -434,7 +434,9 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
   });
 
   it('Other amounts only opens: it leaves, focus moves into the field, and a tile brings both buttons back', async () => {
+    // The preset's focus is one shared jest.fn on every mocked host; count from here, on the field.
     const focus = jest.spyOn(TextInput.prototype, 'focus');
+    focus.mockClear();
     const spoken = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
     await render(<CreditPackCheckoutScreen />);
     await fireEvent.press(screen.getByTestId('credit-pack-9900'));
@@ -444,7 +446,8 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
     expect(screen.getByTestId('credit-pack-other-amounts')).toBeTruthy();
     expect(focus).toHaveBeenCalledTimes(1);
-    expect(spoken).toHaveBeenCalledWith(expect.anything(), 'focus');
+    expect(focus.mock.contexts[0]).toBeInstanceOf(TextInput);
+    expect(spoken).toHaveBeenCalledWith(focus.mock.contexts[0], 'focus');
     await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
     expect(focus).toHaveBeenCalledTimes(1);
     await fireEvent.press(screen.getByTestId('credit-pack-1000'));

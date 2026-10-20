@@ -122,7 +122,8 @@ describe('PrimaryButton', () => {
       </>,
     );
     expect(r.getByTestId('a').props.accessibilityState).toEqual({ disabled: false, busy: false, expanded: false });
-    expect(r.getByTestId('b').props.accessibilityState).not.toHaveProperty('expanded');
+    // React Native fills every accessibilityState key; the plain button leaves expanded unset.
+    expect(r.getByTestId('b').props.accessibilityState.expanded).toBeUndefined();
   });
 
   it('loading shows a spinner, is busy and ignores presses', async () => {
