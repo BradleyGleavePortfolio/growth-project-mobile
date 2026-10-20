@@ -38,6 +38,7 @@ import { featureFlags } from '../../../config/featureFlags';
 import CoachHomeV11 from '../home-v11/CoachHomeV11';
 import { openInboxChat } from '../../../navigation/coachInbox';
 import { HapticService } from '../../../ui/haptics/haptics.service';
+import CreditMomentsHost from '../../../components/coach/credits/CreditMomentsHost';
 
 export type CommandCenterTab =
   | 'overview'
@@ -144,7 +145,8 @@ export default function CommandCenterScreen({
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
-        if (featureFlags.coachHomeV11) {
+        // PK-2a: UI-2 never switches on without its Money tab (coachTabsV2), which also lands on Overview.
+        if (featureFlags.coachHomeV11 && featureFlags.coachTabsV2) {
           return (
             <CoachHomeV11
               onSelectClient={selectClient}
@@ -221,6 +223,8 @@ export default function CommandCenterScreen({
 
       {/* Screen content */}
       {renderContent()}
+      {/* CREDITBUILD: the 80 % / 100 % AI credit sheets (flag off until the Money pool ships). */}
+      {featureFlags.coachAiCredits ? <CreditMomentsHost /> : null}
     </Screen>
   );
 }

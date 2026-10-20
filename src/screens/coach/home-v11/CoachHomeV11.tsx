@@ -2,10 +2,10 @@
  * UI-2 coach Home (V1_1_UI_SPEC UI-2, owner 10-09 "render 2"), behind featureFlags.coachHomeV11: the date and
  * bell, three dials, Roman with the one action "Approve Roman's drafts →", the clients who need the coach as
  * tiles, and Business. Only real numbers are drawn; a dial with no real base is left out. Zero clients: the
- * Clients and Earnings dials, then the existing setup cards (`header`). The chips filter the roster section:
- * Needs you (tiles, then the Steady wall, as in the mockup), Steady (the wall) and Streaks (streak tiles).
- * C-S-PUSH-3: Overview is the landing with this Home on (coachLanding.ts), so it carries the coach's push ask:
- * in `header` at zero clients, else between the roster section and Business, as on today's Overview.
+ * Clients and Earnings dials. The chips filter the roster section: Needs you (tiles, then the Steady wall, as in
+ * the mockup), Steady (the wall) and Streaks (streak tiles). Every roster size: the existing setup cards (`header`:
+ * setup checklist, today's brief, the Money card and, as Overview is the landing, the coach's push ask, C-S-PUSH-3),
+ * below the roster section, then Business.
  */
 import React, { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -15,7 +15,6 @@ import { layout, radius, typography } from '../../../theme/tokens';
 import { QuietOverline, TextLink } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
-import PushPermissionCard from '../../../components/home/PushPermissionCard';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, lastActiveWords, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
@@ -39,7 +38,7 @@ interface Props {
   onOpenNotifications: () => void;
   /** Only when Roman's coach chat is on. */
   onAskRoman?: () => void;
-  /** Zero clients: the existing setup checklist and Money card. */
+  /** The existing Home cards (CoachHomeCards), for every roster size. */
   header?: React.ReactNode;
   sources?: CoachHomeSources;
   rosterSources?: RosterSources;
@@ -110,6 +109,10 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
     : [];
   const filter: RosterFilter | null = chips.find((c) => c.key === picked)?.key ?? chips[0]?.key ?? null;
   const showWall = wall !== null && wall.length > 0 && (filter === 'needs' || filter === 'steady');
+  // Business tiles need clients; the month error shows at any roster size. No tile and no error: no heading.
+  const month = roster > 0 && data.month.kind === 'ok' && hasMonthMoney(data.month.summary) ? data.month.summary : null;
+  const payout = roster > 0 ? data.payout : null;
+  const monthFailed = data.month.kind === 'error';
 
   return (
     <ScrollView
@@ -176,8 +179,6 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
         </View>
       ) : null}
 
-      {o && roster === 0 ? <View style={styles.section}>{header}</View> : null}
-
       {o && roster > 0 ? (
         <View style={styles.rosterSection} testID="coach-home-v11-roster">
           {chips.length > 0 ? <FilterChips chips={chips} selected={filter} onSelect={setPicked} /> : null}
@@ -213,30 +214,29 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
         </View>
       ) : null}
 
-      {o && roster > 0 ? (
-        <View style={styles.section}>
-          <PushPermissionCard audience="coach" presentation="section" />
-          {data.month.kind !== 'loading' || data.payout ? (
-            <View testID="coach-home-v11-business">
-              <QuietOverline accessibilityRole="header">Business</QuietOverline>
-              {data.month.kind === 'error' ? (
-                <QuietError message="This month's earnings could not load." onRetry={retryMonth} testID="coach-home-v11-month-error" />
+      {o ? <View style={styles.section}>{header}</View> : null}
+
+      {o && (month || payout || monthFailed) ? (
+        <View style={styles.section} testID="coach-home-v11-business">
+          <QuietOverline accessibilityRole="header">Business</QuietOverline>
+          {monthFailed ? (
+            <QuietError message="This month's earnings could not load." onRetry={retryMonth} testID="coach-home-v11-month-error" />
+          ) : null}
+          {month || payout ? (
+            <View style={styles.tiles}>
+              {month ? (
+                <BusinessTile
+                  label={monthOverline(data.now)} value={heroAmount(month.totals.netCents, month.currency)}
+                  sub={paceLine(month.totals.netCents, month.currency, data.now)}
+                  width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-month"
+                />
               ) : null}
-              <View style={styles.tiles}>
-                {data.month.kind === 'ok' && hasMonthMoney(data.month.summary) ? (
-                  <BusinessTile
-                    label={monthOverline(data.now)} value={heroAmount(data.month.summary.totals.netCents, data.month.summary.currency)}
-                    sub={paceLine(data.month.summary.totals.netCents, data.month.summary.currency, data.now)}
-                    width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-month"
-                  />
-                ) : null}
-                {data.payout ? (
-                  <BusinessTile
-                    label="Next payout" value={heroAmount(data.payout.amountCents, data.payout.currency)} sub={cap(payoutWords(data.payout, data.now))}
-                    width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-payout"
-                  />
-                ) : null}
-              </View>
+              {payout ? (
+                <BusinessTile
+                  label="Next payout" value={heroAmount(payout.amountCents, payout.currency)} sub={cap(payoutWords(payout, data.now))}
+                  width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-payout"
+                />
+              ) : null}
             </View>
           ) : null}
         </View>

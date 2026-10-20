@@ -1,7 +1,7 @@
 /**
- * UI-2 coach Home (featureFlags.coachHomeV11): real numbers only, every tap arrives somewhere real, Money opens
- * the six-tab Money tab (coachTabsV2) or Settings' Money page, the Home lands first and carries the coach's push
- * ask, and the flag is off by default with no eas.json line (the OTA switch).
+ * UI-2 coach Home (featureFlags.coachHomeV11, drawn only with coachTabsV2 on: owner PK-2a): real numbers only,
+ * every tap arrives somewhere real, Money opens the six-tab Money tab, the setup cards (with the push ask) show
+ * at every roster size, the bell stays current, and the flag is off by default with no eas.json line.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -9,10 +9,11 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockNavigate = jest.fn();
+const mockFocus = { current: true };
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({ navigate: mockNavigate }),
-  useIsFocused: () => true,
+  useIsFocused: () => mockFocus.current,
 }));
 jest.mock('react-native-safe-area-context', () => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -32,10 +33,11 @@ jest.mock('../services/commandCenterApi', () => ({
   ...jest.requireActual('../services/commandCenterApi'),
   commandCenterApi: { getOverview: () => mockOverview() },
 }));
-jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => Promise.resolve(2) }));
+const mockUnread = jest.fn();
+jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => mockUnread() }));
 const mockDrafts = jest.fn();
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => mockDrafts() }));
-const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: false };
+const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: true };
 jest.mock('../config/featureFlags', () => ({ featureFlags: mockFlags }));
 const mockStub = (testID: string) => () => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -70,7 +72,9 @@ const summary = (netCents: number) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.coachHomeV11 = true;
-  mockFlags.coachTabsV2 = false;
+  mockFlags.coachTabsV2 = true;
+  mockFocus.current = true;
+  mockUnread.mockResolvedValue(2);
   mockOverview.mockResolvedValue({ data: overview(30) });
   mockSources.atRisk.mockResolvedValue([entry('c1', 'Casey Lin', 'No check-in for 8 days'), entry('c2', 'Ana Ruiz', 'Payment failed')]);
   mockSources.ltv.mockResolvedValue({ active_client_count: 30, churn_rate_pct: 3, mrr_30d_ago_cents: 100000 });
@@ -134,43 +138,70 @@ describe('UI-2 coach Home, flag on', () => {
     expect(v.getByTestId('coach-home-v11-ask-roman')).toBeTruthy();
   });
 
-  it('opens Roman, the bell, a client, Clients and Money', async () => {
+  it('opens Roman, the bell, a client, Clients and the Money tab', async () => {
     const v = await renderHome();
-    await fireEvent.press(v.getByTestId('coach-home-v11-ask-roman'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'RomanChat', initial: false });
+    const pressOpens = async (testID: string, ...args: unknown[]) => {
+      mockNavigate.mockClear();
+      await fireEvent.press(v.getByTestId(testID));
+      expect(mockNavigate).toHaveBeenCalledWith(...args);
+    };
+    await pressOpens('coach-home-v11-ask-roman', 'SettingsStack', { screen: 'RomanChat', initial: false });
     expect(v.getByTestId('coach-home-v11-bell').props.accessibilityLabel).toBe('Notifications, 2 unread');
-    await fireEvent.press(v.getByTestId('coach-home-v11-bell'));
-    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', initial: false });
+    await pressOpens('coach-home-v11-bell', 'ClientsStack', { screen: 'NotificationCenter', initial: false });
     expect(v.getByTestId('coach-home-v11-chip-needs').props.accessibilityLabel).toBe('Needs you, 2');
-    await fireEvent.press(v.getByTestId('coach-home-v11-client-c1'));
-    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientDetail', params: { clientId: 'c1', clientName: 'Casey Lin' }, initial: false });
-    await fireEvent.press(v.getByTestId('coach-home-v11-all-clients'));
-    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList', pop: true });
+    await pressOpens('coach-home-v11-client-c1', 'ClientsStack', { screen: 'ClientDetail', params: { clientId: 'c1', clientName: 'Casey Lin' }, initial: false });
+    await pressOpens('coach-home-v11-all-clients', 'ClientsStack', { screen: 'ClientsList', pop: true });
     expect(v.getByText('Next payout')).toBeTruthy();
-    await fireEvent.press(v.getByTestId('coach-home-v11-payout'));
-    await fireEvent.press(v.getByTestId('coach-home-v11-month'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
+    await pressOpens('coach-home-v11-payout', 'MoneyStack', { screen: 'CoachMoney', pop: true });
+    await pressOpens('coach-home-v11-month', 'MoneyStack', { screen: 'CoachMoney', pop: true });
     expect(mockHaptics.softImpact).toHaveBeenCalled();
-  });
-
-  it('opens the six-tab Money tab from Business when coachTabsV2 is on too', async () => {
-    mockFlags.coachTabsV2 = true;
-    const v = await renderHome();
-    await fireEvent.press(v.getByTestId('coach-home-v11-month'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoneyStack', { screen: 'CoachMoney', pop: true });
-    await fireEvent.press(v.getByTestId('coach-home-v11-payout'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoneyStack', { screen: 'CoachMoney', pop: true });
     expect(v.getByTestId('command-center-settings')).toBeTruthy();
   });
 
-  it("carries the coach's push ask once, between the client tiles and Business (C-S-PUSH-3)", async () => {
+  it('re-reads the bell on each return to Overview and every 30 s, so a read or new notification shows', async () => {
+    const poll = jest.spyOn(global, 'setInterval');
     const v = await renderHome();
-    expect(v.getAllByTestId('push-ask')).toHaveLength(1);
+    const bell = () => v.getByTestId('coach-home-v11-bell').props.accessibilityLabel;
+    expect(bell()).toBe('Notifications, 2 unread');
+    // The coach reads them in Notifications (another tab) and comes back.
+    mockUnread.mockResolvedValue(0);
+    for (const focused of [false, true]) { mockFocus.current = focused; await v.rerender(<CommandCenterScreen />); }
+    await waitFor(() => expect(bell()).toBe('Notifications'));
+    // A notification arrives while the Home is open: the 30 s poll shows it.
+    mockUnread.mockResolvedValue(4);
+    await act(async () => { poll.mock.calls.forEach(([fn, ms]) => { if (ms === 30000) (fn as () => void)(); }); });
+    await waitFor(() => expect(bell()).toBe('Notifications, 4 unread'));
+    poll.mockRestore();
+  });
+
+  it('shows the setup cards (with the push ask, C-S-PUSH-3) once for a coach with clients, between the tiles and Business', async () => {
+    const v = await renderHome();
+    expect(v.getAllByTestId('setup-cards')).toHaveLength(1);
+    // CoachHomeCards carries the push ask on the Overview landing; the Home adds no second one.
+    expect(v.queryByTestId('push-ask')).toBeNull();
     const order = testIdsInOrder(v.toJSON());
     const at = (id: string) => order.indexOf(id);
     expect(at('coach-home-v11-all-clients')).toBeGreaterThanOrEqual(0);
-    expect(at('coach-home-v11-all-clients')).toBeLessThan(at('push-ask'));
-    expect(at('push-ask')).toBeLessThan(at('coach-home-v11-business'));
+    expect(at('coach-home-v11-all-clients')).toBeLessThan(at('setup-cards'));
+    expect(at('setup-cards')).toBeLessThan(at('coach-home-v11-business'));
+  });
+
+  it('draws no Business heading when there is no money this month, no payout and no error', async () => {
+    mockSources.monthSoFar.mockResolvedValue(summary(0));
+    mockSources.nextPayout.mockResolvedValue(null);
+    const v = await renderHome();
+    expect(v.queryByTestId('coach-home-v11-business')).toBeNull();
+    expect(v.queryByText('Business')).toBeNull();
+  });
+
+  it("shows the month's error with Try again at zero clients too", async () => {
+    mockOverview.mockResolvedValue({ data: overview(0) });
+    mockSources.monthSoFar.mockRejectedValueOnce(new Error('down'));
+    const v = await renderHome();
+    expect(v.getByTestId('coach-home-v11-month-error')).toBeTruthy();
+    expect(v.queryByTestId('coach-home-v11-dial-earnings')).toBeNull();
+    await fireEvent.press(v.getByTestId('coach-home-v11-month-error-retry'));
+    await waitFor(() => expect(v.getByTestId('coach-home-v11-dial-earnings')).toBeTruthy());
   });
 
   it('shows the Clients and Earnings dials and the setup cards for a coach with no clients', async () => {
@@ -180,8 +211,6 @@ describe('UI-2 coach Home, flag on', () => {
     expect(v.getByTestId('coach-home-v11-dial-clients').props.accessibilityLabel).toBe('Clients: 0 clients. None yet');
     expect(v.getByTestId('coach-home-v11-dial-earnings').props.accessibilityLabel).toMatch(/^Earnings: \$0(\.00)? this month\. \w+ so far$/);
     expect(v.getByTestId('setup-cards')).toBeTruthy();
-    // At zero clients the setup cards (CoachHomeCards) carry the push ask, so the Home does not add a second one.
-    expect(v.queryByTestId('push-ask')).toBeNull();
     expect(v.queryByTestId('coach-home-v11-all-clients')).toBeNull();
     expect(v.queryByTestId('coach-home-v11-business')).toBeNull();
   });
@@ -229,16 +258,17 @@ describe('UI-2 coach Home, flag on', () => {
   });
 });
 
-describe('UI-2 flag off', () => {
-  it("keeps today's Overview", async () => {
-    mockFlags.coachHomeV11 = false;
+describe('UI-2 off', () => {
+  // PK-2a: never without its Money tab (coachTabsV2).
+  it.each([[{ coachHomeV11: false }], [{ coachTabsV2: false }]])("keeps today's Overview with %o", async (flags) => {
+    Object.assign(mockFlags, flags);
     const v = await render(<CommandCenterScreen />);
     expect(v.getByTestId('today-overview')).toBeTruthy();
     expect(v.queryByTestId('coach-home-v11')).toBeNull();
   });
 });
 
-describe('UI-2 landing, Money tab and flag wiring', () => {
+describe('UI-2 Money tab and flag wiring', () => {
   const ROOT = path.resolve(__dirname, '..', '..');
   const nav = fs.readFileSync(path.join(ROOT, 'src', 'navigation', 'CoachNavigator.tsx'), 'utf8');
 
@@ -246,17 +276,6 @@ describe('UI-2 landing, Money tab and flag wiring', () => {
     expect(nav.match(/name="MoneyStack"/g)).toHaveLength(1);
     expect(nav).toMatch(/\{tabsV2 && \(\s*<Tab\.Screen\s+name="MoneyStack"\s+component=\{MoneyStackNavigator\}/);
     expect(nav).not.toMatch(/coachHomeV11/);
-  });
-
-  it('opens the app on the new Home with the flag on (coachLanding.ts)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { coachLandingTab } = require('../navigation/coachLanding') as typeof import('../navigation/coachLanding');
-    expect(nav).toMatch(/const initialTab = coachLandingTab\(\);/);
-    expect(coachLandingTab()).toBe('CommandCenter');
-    mockFlags.coachHomeV11 = false;
-    expect(coachLandingTab()).toBe('ClientsStack');
-    mockFlags.coachTabsV2 = true;
-    expect(coachLandingTab()).toBe('CommandCenter');
   });
 
   it('is off by default in featureFlags.ts and in no EAS profile, so the default is the OTA switch', () => {

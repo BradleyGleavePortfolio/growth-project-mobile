@@ -136,6 +136,7 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 - The 4-tab bar (Home / Train / Log / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
 - The `MoreStack` registers `AIGuide` and `Membership` (sale-readiness, #67). Both are static targets of `MoreScreen` rows; neither is a deep-link target and neither requires backend changes (`Membership` reads only `usersApi.getFoundingNumber` and `aiApi.getStructuredContext`).
 - LEARN-A (flag `learnHub`, off): `Learn` renders `LearnScreen` instead of `EducationScreen`, and the `MoreStack` adds `LearnLesson` (`{ id: string }`, the lesson view; Next replaces it so Back returns to Learn) and `CoachGuidelines` (Read all on Learn). With the flag off neither route exists. With it on, `CoachGuidelines` in both the `WorkoutStack` (Train header) and the `MoreStack` renders `LearnGuidelinesScreen`.
+- LEARN-M5 (flag `learnCourses`, off): the `WorkoutStack` adds `Course` (`{ id }`, the course home opened from Train's banner), `CourseWeek` (`{ id, week }`) and `CourseLesson` (`{ id, lesson }`). With the flag off none of them exists.
 - `RecipeDetail` is a serialisable-only route. The list passes `{ recipeId }`, the detail screen reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById`. The shape is asserted in `src/navigation/__tests__/clientNavigator.test.ts`. Do not add screens that pass full domain objects through navigation params.
 - There is no global floating chat widget. The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind were deleted in #63. If a future feature wants a shared AI surface, it must be a real screen registered under the relevant navigator — the doctrine (`docs/QUIET_LUXURY_DOCTRINE.md` §6) forbids reintroducing a global FAB.
 - `ShareCard` (MoreStack) is registered only while `featureFlags.shareSheetV2` is off (SHARE-A). On, Share on Progress and on the Session summary opens `components/share/ShareSheet` over the screen instead, so no route or param shape is needed; see `docs/share-card.md`.
@@ -195,8 +196,6 @@ CoachNavigator tabs: ClientsStack | Dashboard | Templates | Messages | Settings
 ```
 CoachNavigator tabs: CommandCenter | ClientsStack | Templates | Messages | Settings
 ```
-
-**UI-2 (`featureFlags.coachHomeV11`, off by default, no eas.json line):** the app opens on `CommandCenter` (`coachLanding.ts`) and Overview shows the UI-2 Home. Its Money is the six-tab `MoneyStack` (`coachTabsV2`); with the six tabs off, Money opens in Settings. The Home carries the coach's push ask for every roster size (C-S-PUSH-3).
 
 The `CoachHomeScreen` (`Dashboard`) is preserved as a sub-screen inside `ClientsStack` under the route name `Dashboard`, so any existing `navigate('Dashboard')` calls in analytics payloads, push notification handlers, or deep links keep resolving without a crash.
 

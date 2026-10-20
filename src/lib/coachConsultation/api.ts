@@ -11,7 +11,7 @@
 import api from '../../services/api';
 import { advanceWizardTo, coachSetupApi } from '../../api/coachSetupApi';
 import { errorStatus } from '../../types/common';
-import { isStepId, sanitizeAnswers, wireAnswers } from './flow';
+import { isStepId, sanitizeAnswers, wireAnswers, wireStep } from './flow';
 import type { CoachConsultAnswers, CoachStepId } from './types';
 
 export interface ServerConsultation {
@@ -61,7 +61,7 @@ export const coachConsultApi: CoachConsultApi = {
 
   async saveDraft(answers, step) {
     try {
-      await api.put('/coach/consultation', { ...wireAnswers(answers), step });
+      await api.put('/coach/consultation', { ...wireAnswers(answers), step: wireStep(step) });
       return 'saved';
     } catch (err) {
       return notDeployed(err) ? 'unavailable' : 'failed';
