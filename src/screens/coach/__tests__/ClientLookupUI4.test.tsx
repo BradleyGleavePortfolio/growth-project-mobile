@@ -157,6 +157,12 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     expect(screen.getByText(count)).toBeTruthy();
     expect(screen.getAllByText('Maya Brooks').length).toBeGreaterThan(0); // the last list stays
   });
+  it('a failed switch to Archived does not count the active list as archived', async () => {
+    await mount(MANY, {}, async () => { throw new Error('offline'); });
+    await fireEvent.press(screen.getByTestId('lookup-chip-archived'));
+    await waitFor(() => expect(screen.getByText('Clients did not refresh. Pull down to try again.')).toBeTruthy());
+    expect(screen.queryByText(/archived clients/)).toBeNull();
+  });
   it('view "needs" (the coach Home Needs you tile) shows the Needs you list at 15 or more, only clients with an action', async () => {
     const rows = [...NAMES.slice(0, 14).map((n, i) => wire(`m${i}`, n, { last: day(-1) })), wire('n1', 'Nina Cole', { last: day(0), review: 1 })];
     await mount(rows, {}, undefined, { params: { view: 'needs' } });
