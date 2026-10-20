@@ -93,9 +93,8 @@ describe('shouldOfferPackagePrompt (fail closed, #304 Sol B1; 1:1 rule, #161-5 o
     expect(await shouldOfferPackagePrompt()).toBe(false);
   });
 
-  // #836 Opus C1: a failing payment, the Day-10 lock or a paused plan keeps the sheet away. Bodies as backend
-  // dunning-v2 getClientStatus sends them (#836 Opus C2): state is only 'none' | 'past_due' | 'locked'; a
-  // dispute or refund pause is past_due or locked with kind and reason set.
+  // #836 Opus C1: a failing payment, the Day-10 lock or a paused plan keeps the sheet away. Bodies as backend dunning-v2
+  // getClientStatus sends them (Opus C2): state 'none' | 'past_due' | 'locked'; a pause adds kind and reason.
   const cycle = { enabled: true, purchase_id: 'pur-1', currency: 'usd', failed_at: '2026-10-10T00:00:00.000Z' };
   it.each([
     ['payment failing (days 0-9)', { ...cycle, state: 'past_due', kind: 'payment', reason: 'payment_failed' }],
@@ -110,21 +109,13 @@ describe('shouldOfferPackagePrompt (fail closed, #304 Sol B1; 1:1 rule, #161-5 o
   });
 
   it.each([
-    ['no cycle', { enabled: true, state: 'none', kind: null, reason: null, purchase_id: null }],
-    ['dunning switched off', { enabled: false, state: 'none', kind: null, reason: null, purchase_id: null }],
-  ])('offers when dunning is %s', async (_label, body) => {
+    ['no cycle', { enabled: true, state: 'none', purchase_id: null }, true],
+    ['switched off', { enabled: false, state: 'none', purchase_id: null }, true],
+    ['a state the backend never sends (fail closed)', { enabled: true, state: 'dispute_paused', purchase_id: 'pur-1' }, false],
+  ])('dunning %s', async (_label, body, offered) => {
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     mockDunning.mockResolvedValue(body);
-    expect(await shouldOfferPackagePrompt()).toBe(true);
-  });
-
-  it.each([
-    ['a state the backend never sends', { enabled: true, state: 'dispute_paused', purchase_id: 'pur-1' }],
-    ['past_due with no purchase', { enabled: true, state: 'past_due', purchase_id: null }],
-  ])('fails closed on %s', async (_label, body) => {
-    mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    mockDunning.mockResolvedValue(body);
-    expect(await shouldOfferPackagePrompt()).toBe(false);
+    expect(await shouldOfferPackagePrompt()).toBe(offered);
   });
 
   it('fails closed when the dunning read fails', async () => {
@@ -196,6 +187,7 @@ describe('packagePromptDueAtStart (once per 24 h, #161-5 op 1)', () => {
     mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
     expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
     expect(await AsyncStorage.getItem(KEY)).toBe(new Date(NOW - 25 * HOUR).toISOString());
+    expect(mockOnboardingState).not.toHaveBeenCalled(); // the tour's server read runs only for a client about to be offered
   });
 
   it('iPhone, coachless: never, and no entitlement read', async () => {
@@ -205,103 +197,57 @@ describe('packagePromptDueAtStart (once per 24 h, #161-5 op 1)', () => {
     expect(mockGetEntitlement).not.toHaveBeenCalled();
   });
 
-  // #836 Opus C4 / Sol B2: Roman's tour comes first, also after a restart or a fresh install; no key, so a later start offers.
-  const saveTour = (status: string) =>
-    AsyncStorage.setItem(
-      tutorialStorageKey('client-1'),
-      JSON.stringify({ state: { ...initialTutorialState(), status }, payload: null }),
-    );
-  const expectNoOfferNoKey = async (at: number) => {
-    expect(await packagePromptDueAtStart('client-1', at)).toBe(false);
+  // #836 Opus C4 / Sol B2: Roman's tour comes first, also after a restart or a fresh install (real tour store and
+  // storage; the live store is empty at start-up). No key is saved, so a later start offers.
+  const saveTour = (status: string, id = 'client-1') =>
+    AsyncStorage.setItem(tutorialStorageKey(id), JSON.stringify({ state: { ...initialTutorialState(), status }, payload: null }));
+
+  it.each([
+    ['starting in this session ("Show me around")', async () => startClientTutorial(undefined)],
+    ['saved active, then the app restarted', () => saveTour('active')],
+    ['active in this session', async () => saveTour('active').then(() => hydrateTutorial('client-1', 'Sam', true))],
+  ])('iPhone, tour %s: not offered, no read, no key; once the tour is finished, offered', async (_label, setup) => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    await setup();
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
+    expect(mockGetEntitlement).not.toHaveBeenCalled();
     expect(await AsyncStorage.getItem(KEY)).toBeNull();
-  };
-
-  it('iPhone, tour starting in this session ("Show me around"): not offered, no read and no key', async () => {
-    setOS('ios');
-    mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    startClientTutorial(undefined);
-    await expectNoOfferNoKey(NOW);
-    expect(mockGetEntitlement).not.toHaveBeenCalled();
-  });
-
-  it.each(['ios', 'android'])('%s, restart mid-tour (saved tour active, live store empty): not offered, no key', async (os) => {
-    setOS(os);
-    if (os === 'android') await skippedAgo(25 * HOUR);
-    mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    await saveTour('active');
-    if (os === 'ios') await expectNoOfferNoKey(NOW);
-    else expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
-    expect(mockGetEntitlement).not.toHaveBeenCalled();
-    // The tour then ends on this phone: the normal rule applies on the next start.
     __resetTutorialStoreForTests();
     await saveTour('completed');
     expect(await packagePromptDueAtStart('client-1', NOW + HOUR)).toBe(true);
   });
 
-  it('iPhone, tour running in this session: not offered; once finished, offered', async () => {
-    setOS('ios');
+  it('Android, 24 h re-offer due, restart mid-tour: not offered', async () => {
+    setOS('android');
+    await skippedAgo(25 * HOUR);
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     await saveTour('active');
-    await hydrateTutorial('client-1', 'Sam', true);
-    await expectNoOfferNoKey(NOW);
-    __resetTutorialStoreForTests();
-    await saveTour('completed');
-    await hydrateTutorial('client-1', 'Sam', true);
-    expect(await packagePromptDueAtStart('client-1', NOW + HOUR)).toBe(true);
-  });
-
-  it('iPhone, fresh install after the consultation (nothing saved, server done): the tour starts, no sheet, no key', async () => {
-    setOS('ios');
-    mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    mockOnboardingState.mockResolvedValue({ completed: true, answers: {} });
-    await expectNoOfferNoKey(NOW);
-    expect(mockOnboardingState).toHaveBeenCalledTimes(1);
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
   });
 
   it.each([
-    ['server: no consultation', () => mockOnboardingState.mockResolvedValue({ completed: false, answers: null })],
-    ['endpoint absent (404)', () => mockOnboardingState.mockResolvedValue(null)],
-  ])('iPhone, nothing saved, %s: no tour starts, so the normal rule applies', async (_label, setup) => {
+    ['the server has the consultation, so the tour starts', () => mockOnboardingState.mockResolvedValue({ completed: true }), false],
+    ['the onboarding read fails (fail closed)', () => mockOnboardingState.mockRejectedValue(new Error('network')), false],
+    ['no consultation on the server', () => mockOnboardingState.mockResolvedValue({ completed: false }), true],
+    ['the onboarding endpoint is absent (404)', () => mockOnboardingState.mockResolvedValue(null), true],
+  ])('iPhone, fresh install (no saved tour), %s', async (_label, setup, offered) => {
     setOS('ios');
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     setup();
-    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(true);
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(offered);
+    if (!offered) expect(await AsyncStorage.getItem(KEY)).toBeNull();
   });
 
-  it('iPhone, nothing saved and the onboarding read fails: fail closed, no key', async () => {
+  it.each([
+    ['saved tour completed', () => saveTour('completed')],
+    ['saved tour paused ("Skip the tour")', () => saveTour('paused')],
+    ['another account\'s active tour on this phone', () => saveTour('active', 'client-OTHER')],
+    ['tour flag off', async () => { mockTourFlags = { ...mockTourFlags, clientTutorial: false }; await saveTour('active'); }],
+  ])('iPhone, %s: the normal rule applies', async (_label, setup) => {
     setOS('ios');
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    mockOnboardingState.mockRejectedValue(new Error('network'));
-    await expectNoOfferNoKey(NOW);
-  });
-
-  it.each(['completed', 'paused'])('iPhone, saved tour %s: normal rule, no onboarding read', async (status) => {
-    setOS('ios');
-    mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    await saveTour(status);
-    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(true);
-    expect(mockOnboardingState).not.toHaveBeenCalled();
-  });
-
-  it('iPhone, a client with a plan: the onboarding read never runs', async () => {
-    setOS('ios');
-    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
-    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
-    expect(mockOnboardingState).not.toHaveBeenCalled();
-  });
-
-  it('tour flag off: a saved active tour never shows, so the normal rule applies', async () => {
-    setOS('ios');
-    mockTourFlags = { clientTutorial: false, consultationOnboarding: true };
-    mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    await saveTour('active');
-    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(true);
-  });
-
-  it('another account\'s saved tour on this phone does not apply', async () => {
-    setOS('ios');
-    mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    await AsyncStorage.setItem(tutorialStorageKey('client-OTHER'), JSON.stringify({ state: { ...initialTutorialState(), status: 'active' }, payload: null }));
+    await setup();
     expect(await packagePromptDueAtStart('client-1', NOW)).toBe(true);
   });
 

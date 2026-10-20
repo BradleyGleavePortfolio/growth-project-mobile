@@ -303,54 +303,42 @@ describe('RootNavigator package prompt on first Home (#161-5 op 1)', () => {
   });
 });
 
-// #836 Sol B2 / Opus C1: the start-up decision reads this user's saved tour, because the live tour store is
-// still empty when RootNavigator decides (TutorialHost mounts inside ClientNavigator, after it).
+// #836 Sol B2 / Opus C1: the start-up decision reads this user's saved tour; the live tour store is still empty
+// here (TutorialHost mounts inside ClientNavigator, after RootNavigator decides).
 describe('RootNavigator package prompt waits for Roman\'s tour after a restart', () => {
   const api = jest.requireMock('../services/api').default;
-  const saveTour = (status: string) =>
-    AsyncStorage.setItem(tutorialStorageKey('client-S'), JSON.stringify({ state: { ...initialTutorialState(), status }, payload: null }));
-  const serverConsultation = (completed: boolean) =>
-    api.get.mockImplementation(async (url: string) =>
-      url === '/me/onboarding' ? { data: { completed, answers: null } } : { data: { is_complete: true } },
-    );
-  beforeEach(async () => {
+  const answer = (completed: boolean) => async (url: string) =>
+    ({ data: url === '/me/onboarding' ? { completed } : { is_complete: true } });
+  beforeEach(() => {
     mockTourOn = true;
     __resetTutorialStoreForTests();
     setOS('ios');
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
-    serverConsultation(true);
-    await AsyncStorage.removeItem(PROMPT_KEY);
   });
   afterEach(() => {
     mockTourOn = false;
     api.get.mockImplementation(async () => ({ data: { is_complete: true } }));
   });
 
-  it('iPhone, restart mid-tour: Home with the tour, no sheet, and the day\'s showing is not used', async () => {
-    await saveTour('active');
+  it.each([
+    ['restart mid-tour', 'active', false, false],
+    ['fresh install after the consultation (nothing saved)', null, true, false],
+    ['tour finished', 'completed', true, true],
+    ['tour skipped ("Skip the tour")', 'paused', true, true],
+    ['nothing saved, no consultation on the server', null, false, true],
+  ])('iPhone, %s', async (_label, tour, consulted, sheet) => {
+    api.get.mockImplementation(answer(consulted as boolean));
+    if (tour) {
+      const saved = { state: { ...initialTutorialState(), status: tour }, payload: null };
+      await AsyncStorage.setItem(tutorialStorageKey('client-S'), JSON.stringify(saved));
+    }
     const r = await mount();
-    await r.findByTestId('nav-client');
-    expect(r.queryByTestId('package-prompt')).toBeNull();
-    expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
-  });
-
-  it('iPhone, fresh install after the consultation (nothing saved): the tour starts, no sheet', async () => {
-    const r = await mount();
-    await r.findByTestId('nav-client');
-    expect(r.queryByTestId('package-prompt')).toBeNull();
-    expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
-  });
-
-  it.each(['completed', 'paused'])('iPhone, tour %s: the normal rule applies and the sheet opens', async (status) => {
-    await saveTour(status);
-    const r = await mount();
-    expect((await r.findByTestId('package-prompt')).props.recordShown).toBe(true);
-  });
-
-  it('iPhone, nothing saved and no consultation on the server: no tour starts, the sheet opens', async () => {
-    serverConsultation(false);
-    const r = await mount();
-    await r.findByTestId('package-prompt');
+    if (sheet) expect((await r.findByTestId('package-prompt')).props.recordShown).toBe(true);
+    else {
+      await r.findByTestId('nav-client');
+      expect(r.queryByTestId('package-prompt')).toBeNull();
+      expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
+    }
   });
 });
 

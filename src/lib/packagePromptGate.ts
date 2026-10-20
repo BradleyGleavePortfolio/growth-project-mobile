@@ -31,9 +31,8 @@
  *    the Day 1 sheet, and when it does not offer the sheet it saves the time,
  *    so the entitlement read runs at most once a day. Android asks only after
  *    a skip, as before. Never while Roman's tour is unfinished or about to
- *    start (#836 Opus C4, Sol B2), including after a restart or a fresh
- *    install (tourAtStart): the tour comes first, nothing is saved, and a
- *    later start offers the sheet.
+ *    start, also after a restart (tourAtStart, #836 Opus C4, Sol B2): the
+ *    tour comes first, nothing is saved, and a later start offers the sheet.
  */
 import { Platform } from 'react-native';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
@@ -49,11 +48,9 @@ import { readUserCache } from './userCache';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * What Roman's tour does on the Home this start opens. RootNavigator decides
- * before ClientNavigator (and so TutorialHost) mounts, so after a restart or
- * on a fresh install the live store is still empty: read this user's saved
- * tour. 'ask' = nothing saved yet, so TutorialHost starts the tour if the
- * server has the finished consultation (Sol B-310-4).
+ * Roman's tour on the Home this start opens. RootNavigator decides before TutorialHost mounts, so the live
+ * store is empty after a restart: read this user's saved tour. 'ask' = nothing saved, so TutorialHost starts
+ * the tour if the server has the finished consultation (Sol B-310-4).
  */
 async function tourAtStart(userId: string): Promise<TutorialStatus | 'starting' | 'ask' | 'off'> {
   if (!featureFlags.clientTutorial) return 'off';
