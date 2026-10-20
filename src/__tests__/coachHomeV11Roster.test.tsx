@@ -1,6 +1,6 @@
 /**
  * UI-2 second PR (featureFlags.coachHomeV11): the chips filter the roster section with real counts, the Steady
- * wall draws a ring only from a shared log day, every face and tile opens that client, and the tiles carry the
+ * wall draws a ring only from a log day, every face and tile opens that client, and the tiles carry the
  * client's unread messages and the Clients list's "Logged ..." words.
  */
 import React from 'react';
@@ -45,18 +45,18 @@ const client = (id: string, name: string, activity: RosterClient['activity'], st
     createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', activity,
   } as RosterClient;
 };
-const shared = (lastActiveOn: string | null) => ({ shared: true, lastActiveOn, checkInsToReview: null });
+const logged = (lastActiveOn: string | null) => ({ lastActiveOn, checkInsToReview: null });
 const entry = (id: string, name: string, factor: string) => ({
   user_id: id, display_name: name, bucket: 'amber', risk_score: null, last_active_at: new Date().toISOString(), top_factor: factor, days_since_checkin: 8,
 });
 const overview = { roster_size: 5, active_today: 2, check_in_rate_7day: 0.8, open_alerts: 0, at_risk_count: 2, win_streak_count: 9, unread_messages: 3, pending_actions: 0 };
 const roster = () => [
-  client('c1', 'Casey Lin', shared(dayAgo(8))),
+  client('c1', 'Casey Lin', logged(dayAgo(8))),
   client('c2', 'Ana Ruiz', null),
-  client('s1', 'Hana Mori', shared(dayAgo(0))),
-  client('s2', 'Noah Kim', shared(dayAgo(1))),
-  client('s3', 'Ivy Brook', { shared: false, lastActiveOn: null, checkInsToReview: null }),
-  client('x1', 'Zed Archer', shared(dayAgo(0)), 'archived'),
+  client('s1', 'Hana Mori', logged(dayAgo(0))),
+  client('s2', 'Noah Kim', logged(dayAgo(1))),
+  client('s3', 'Ivy Brook', null),
+  client('x1', 'Zed Archer', logged(dayAgo(0)), 'archived'),
 ];
 
 const sources = { monthSoFar: jest.fn(), nextPayout: jest.fn(), ltv: jest.fn(), atRisk: jest.fn() };
@@ -178,7 +178,7 @@ describe('UI-2 roster section', () => {
   });
 
   it('past 24 steady clients the last place shows how many more and opens Clients', async () => {
-    const many = Array.from({ length: 30 }, (_, i) => client(`m${i}`, `Client ${String(i).padStart(2, '0')}`, shared(dayAgo(0))));
+    const many = Array.from({ length: 30 }, (_, i) => client(`m${i}`, `Client ${String(i).padStart(2, '0')}`, logged(dayAgo(0))));
     rosterSources.clients.mockResolvedValue(many);
     mockOverview.mockResolvedValue({ data: { ...overview, roster_size: 32 } });
     const v = await renderHome('coach-home-v11-wall');
@@ -246,12 +246,11 @@ describe('UI-2 roster reads', () => {
 });
 
 describe('UI-2 roster rules', () => {
-  it('rings from a shared log day only; a day ahead of the device (time zones) still reads as today', () => {
+  it('rings from the latest log day only; a day ahead of the device (time zones) still reads as today', () => {
     const now = new Date();
-    expect(wallRing(client('a', 'A B', shared(localDay(now))), now)).toBe('logged');
-    expect(wallRing(client('a', 'A B', shared(localDay(new Date(now.getTime() + DAY)))), now)).toBe('logged');
-    expect(wallRing(client('a', 'A B', shared(null)), now)).toBe('notYet');
-    expect(wallRing(client('a', 'A B', { shared: false, lastActiveOn: localDay(now), checkInsToReview: null }), now)).toBe('unknown');
+    expect(wallRing(client('a', 'A B', logged(localDay(now))), now)).toBe('logged');
+    expect(wallRing(client('a', 'A B', logged(localDay(new Date(now.getTime() + DAY)))), now)).toBe('logged');
+    expect(wallRing(client('a', 'A B', logged(null)), now)).toBe('notYet');
     expect(wallRing(client('a', 'A B', null), now)).toBe('unknown');
   });
 

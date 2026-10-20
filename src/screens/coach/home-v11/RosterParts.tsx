@@ -81,7 +81,7 @@ function WallFace({ member, width, onPress }: { member: WallMember; width: numbe
 
 /**
  * "Steady, {n}" and how many logged today, a six-across wall of the steady clients (forest ring: logged today;
- * hairline ring: not yet; no ring when the client shares no logs), and the legend. Each face opens that client.
+ * hairline ring: not yet; no ring when the server sent no activity), and the legend. Each face opens that client.
  */
 export function SteadyWall({ members, width, total, flushTop, onSelect, onOpenClients }: {
   members: WallMember[]; width: number; total: number; flushTop?: boolean;
