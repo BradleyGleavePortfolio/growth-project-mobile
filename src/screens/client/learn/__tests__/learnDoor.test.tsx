@@ -113,7 +113,8 @@ describe('Learn door on the You list (#LEARN-DOOR op 2, #LEARN-COACHLESS op 1)',
   it.each([
     ['the coach has written something', [LESSON], GUIDE, 'c1', true],
     ['nothing written', [], null, 'c1', false],
-    ['no coach', [LESSON], GUIDE, null, false],
+    ['no coach, nothing kept', [], null, null, false],
+    ['no coach, a kept lesson', [LESSON], null, null, true],
   ])('the You home (C9-S1) Support group: %s, the Learn row shows = %s', async (_label, rows, guide, coach, shows) => {
     mockUser = { id: 'me', coach_id: coach };
     answer(rows, guide);
@@ -126,11 +127,13 @@ describe('Learn door on the You list (#LEARN-DOOR op 2, #LEARN-COACHLESS op 1)',
     }
   });
 
-  it('without a coach the row stays hidden and nothing is read', async () => {
+  it('without a coach the row stays hidden when no lesson is kept, and no guidelines are read', async () => {
     mockUser = { id: 'me', coach_id: null };
+    answer([], GUIDE);
     await show(MoreScreen);
     expect(screen.queryByLabelText('Learn')).toBeNull();
-    expect(lessons).not.toHaveBeenCalled();
+    expect(lessons).toHaveBeenCalledTimes(1);
+    expect(guidelines).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Settings')).toBeTruthy();
   });
 });
