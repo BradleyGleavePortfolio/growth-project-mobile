@@ -16,12 +16,13 @@ export const SCREENSHOT_TARGETS: ScreenshotTarget[] = [
   { slug: '03-workout', audience: 'client', route: 'ActiveWorkout', tab: 'WorkoutTab', readyText: 'Bench press' },
   { slug: '04-food', audience: 'client', route: 'Log', tab: 'Log', readyText: 'Oats with berries' },
   { slug: '05-messages', audience: 'client', route: 'Messages', tab: 'Home', readyText: 'Travelling Thursday' },
-  { slug: '06-coach-overview', audience: 'coach', route: 'CommandCenter', readyText: '14' },
+  { slug: '06-coach-overview', audience: 'coach', route: 'CommandCenter', readyText: 'All fourteen' },
 ];
 
+// Apple's two iPhone slots: large display (6.9") and the required medium display (6.3").
 export const SCREENSHOT_SIZES = [
   { width: 1320, height: 2868 },
-  { width: 1290, height: 2796 },
+  { width: 1206, height: 2622 },
 ];
 
 // Owner decision pending. These options remain data, never baked into PNGs.

@@ -1,8 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isScreenshotMode } from './mode';
 import { secureStorage } from '../services/secureStorage';
-import { DEMO_USER } from './fixtures';
+import { DEMO_USER, DEMO_WORKOUT_PARAMS } from './fixtures';
 import { setUserCache } from '../lib/userCache';
+import { saveTutorial } from '../tutorial/tutorialStorage';
+import { TUTORIAL_STEPS } from '../tutorial/tutorialSteps';
+import { clearActiveWorkoutSession, saveActiveWorkoutSession } from '../storage/activeWorkoutSession';
+import { routineSessionExercises } from '../utils/workout/workoutLogging';
 
 /**
  * Seed AsyncStorage + SecureStore so RootNavigator routes the demo user
@@ -49,4 +53,33 @@ export async function seedDemoUser(audience: 'client' | 'coach' = 'client'): Pro
       height: heightInches,
     }),
   );
+
+  // A finished tour plus the onboarding payload the backend returns
+  // (coach id + display name), so Home names the coach as it does live.
+  if (audience === 'client') {
+    await clearActiveWorkoutSession(DEMO_USER.id); // only the workout frame has one
+    const done = '2026-04-15T09:30:00Z';
+    await saveTutorial(DEMO_USER.id, {
+      state: { version: 3, status: 'completed', stepIndex: TUTORIAL_STEPS.length - 1, gateIndex: 0,
+        outcomes: {}, startedAt: done, completedAt: done, updatedAt: done },
+      payload: {
+        macros: { calories: 2200, protein_g: 165, carbs_g: 230, fat_g: 70 },
+        program: null, spaces: [], coach: { id: DEMO_USER.coach_id!, display_name: 'Sam Carter' },
+      },
+    });
+  }
+}
+
+/** The workout frame opens mid-session: two Bench press sets ticked, 14:32 in. */
+export async function seedDemoWorkout(): Promise<void> {
+  if (!isScreenshotMode()) return;
+  const sessionExercises = routineSessionExercises(DEMO_WORKOUT_PARAMS.exercises);
+  sessionExercises[0].sets.slice(0, 2).forEach((set) => { set.completed = true; });
+  await saveActiveWorkoutSession(DEMO_USER.id, {
+    startedAtMs: Date.now() - (14 * 60 + 32) * 1000,
+    routineName: DEMO_WORKOUT_PARAMS.routineName,
+    exercisesJson: DEMO_WORKOUT_PARAMS.exercises,
+    idempotencyKey: '',
+    sessionExercises,
+  });
 }

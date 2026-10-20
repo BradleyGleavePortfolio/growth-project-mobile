@@ -70,7 +70,7 @@ describe('screenshot targets', () => {
     expect(SCREENSHOT_TARGETS.map((t) => t.route)).toEqual(
       ['HomeMain', 'RomanChat', 'ActiveWorkout', 'Log', 'Messages', 'CommandCenter'],
     );
-    expect(SCREENSHOT_SIZES).toEqual([{ width: 1320, height: 2868 }, { width: 1290, height: 2796 }]);
+    expect(SCREENSHOT_SIZES).toEqual([{ width: 1320, height: 2868 }, { width: 1206, height: 2622 }]);
     expect(SCREENSHOT_CAPTIONS.flatMap((c) => c.ids)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
     expect(screenshotState(SCREENSHOT_TARGETS[2], { exercises: '[]' }).routes[0]).toEqual({
       name: 'WorkoutTab', state: { routes: [{ name: 'ActiveWorkout', params: { exercises: '[]' } }] },

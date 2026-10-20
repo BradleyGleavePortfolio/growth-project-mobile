@@ -23,9 +23,9 @@ const DEMO_COACH_ID = 'demo-coach-screenshot';
 export const DEMO_USER: CurrentUser = {
   id: DEMO_USER_ID,
   email: 'demo@trygrowthproject.com',
-  name: 'Alex Morgan',
-  firstName: 'Alex',
-  lastName: 'Morgan',
+  name: 'Riley Hartwell',
+  firstName: 'Riley',
+  lastName: 'Hartwell',
   role: 'student',
   coach_id: DEMO_COACH_ID,
   createdAt: '2026-04-15T09:00:00Z',
@@ -361,8 +361,8 @@ export const DEMO_AUTH_ME = {
 export const DEMO_WORKOUT_PARAMS = {
   routineName: 'Upper body',
   exercises: JSON.stringify([
-    { exerciseId: 'bench', exerciseName: 'Bench press', sets: 3, reps: 8, restSec: 90 },
-    { exerciseId: 'row', exerciseName: 'Seated row', sets: 3, reps: 10, restSec: 90 },
+    { exerciseId: 'bench', exerciseName: 'Bench press', sets: 3, reps: 8, weightLbs: 135, restSec: 90 },
+    { exerciseId: 'row', exerciseName: 'Seated row', sets: 3, reps: 10, weightLbs: 100, restSec: 90 },
   ]),
 };
 
