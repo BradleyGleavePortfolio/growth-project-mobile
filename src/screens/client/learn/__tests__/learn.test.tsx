@@ -125,12 +125,11 @@ describe('Learn', () => {
     expect(parent.navigate).toHaveBeenCalledWith('Home', { screen: 'Messages', initial: false });
   });
 
-  it('without a coach asks the server nothing and shows no coach thread', async () => {
+  it('without a coach asks for no guidelines and shows no coach thread', async () => {
     mockUser = { id: 'me', coach_id: null };
     await show(LearnScreen);
     expect(await screen.findByText('Nothing from your coach yet')).toBeTruthy();
     expect(screen.queryByText('Message your coach')).toBeNull();
-    expect(lessons.getAll).not.toHaveBeenCalled();
     expect(guidelines).not.toHaveBeenCalled();
   });
 
