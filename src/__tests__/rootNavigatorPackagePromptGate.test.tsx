@@ -309,7 +309,8 @@ describe('RootNavigator package prompt waits for Roman\'s tour after a restart',
   const api = jest.requireMock('../services/api').default;
   const answer = (completed: boolean) => async (url: string) =>
     ({ data: url === '/me/onboarding' ? { completed } : { is_complete: true } });
-  beforeEach(() => {
+  beforeEach(async () => {
+    await AsyncStorage.removeItem(PROMPT_KEY); // iPhone first Home: no time saved yet
     mockTourOn = true;
     __resetTutorialStoreForTests();
     setOS('ios');
