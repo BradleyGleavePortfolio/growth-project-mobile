@@ -1,5 +1,6 @@
 /** LEARN-M5, board c04 (flag learnCourses): one open week with its dates, the coach's note and its lessons (kind and minutes; the first not done says Up
- * next), then when the next week opens. Finishing the last lesson shows the week's c08 page (LEARN-M7) once the client is back here. */
+ * next), then when the next week opens. Finishing the last lesson shows the week's c08 page (LEARN-M7) once the client is back here, or the record
+ * (c10) when that lesson finishes the course. */
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,7 @@ export default function CourseWeekScreen() {
   const { query, course, known } = useCourse(id);
   const copy = courseCopy(known?.coach ?? null);
   const week = course?.weeks.find((w) => w.id === weekId && w.open);
-  const moment = useWeekMoment(week && [week]);
+  const moment = useWeekMoment(course, weekId);
 
   if (!course || !week) {
     return (

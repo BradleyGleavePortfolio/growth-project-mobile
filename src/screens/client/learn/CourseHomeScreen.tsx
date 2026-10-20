@@ -1,6 +1,6 @@
 /** LEARN-M5, boards c03, c12, c13 (flag learnCourses): the course home. This week and its end date over one bar per week, Up next with the one forest
- * button, then the weeks; a week not open yet says when it opens and opens its sheet (c09, LEARN-M7). A week just finished shows c08; a finished
- * course swaps Up next for the record (c10). */
+ * button, then the weeks; a week not open yet says when it opens and opens its sheet (c09, LEARN-M7). A week just finished shows c08 (the week that
+ * finishes the course opens c10); a finished course swaps Up next for the record (c10). A week with no lessons counts as done. */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +14,7 @@ import FadeInView from '../../../components/FadeInView';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { CourseMark, CourseMasthead, makeCourseStyles } from './CourseParts';
-import { LockedWeekSheet, WeekCompleteSheet, useWeekMoment } from './CourseMomentSheet';
+import { LockedWeekSheet, WeekCompleteSheet, useWeekMoment, weekDone } from './CourseMomentSheet';
 import { courseCopy, courseNow, dayLabel, doneIn, lessonMeta, today, useCourse, type CourseWeek } from './courseData';
 
 export default function CourseHomeScreen() {
@@ -26,7 +26,7 @@ export default function CourseHomeScreen() {
   const { query, course, known } = useCourse(id);
   const copy = courseCopy(known?.coach ?? null);
   const [locked, setLocked] = useState<CourseWeek | null>(null);
-  const moment = useWeekMoment(course?.weeks);
+  const moment = useWeekMoment(course);
 
   // Offline on first open: the page loads by itself once the phone is back online (as Learn).
   const wasOnline = useRef(online);
@@ -71,7 +71,7 @@ export default function CourseHomeScreen() {
           {course.weeks.map((w) => (
             <View key={w.id} style={s.barCol}>
               <View style={[s.bar, w === week && s.barNow]}>
-                <View style={[s.barFill, { flex: doneIn(w) }]} /><View style={{ flex: w.lessons.length - doneIn(w) }} />
+                <View style={[s.barFill, { flex: w.lessons.length ? doneIn(w) : 1 }]} /><View style={{ flex: w.lessons.length - doneIn(w) }} />
               </View>
               <Text style={[s.barN, w === week && s.barNNow]}>{w.n}</Text>
             </View>
@@ -108,7 +108,7 @@ export default function CourseHomeScreen() {
         <View style={s.list}>
           {course.weeks.map((w, i) => {
             const d = doneIn(w);
-            const all = w.lessons.length > 0 && d === w.lessons.length;
+            const all = weekDone(w);
             const name = w.title ? `Week ${w.n} · ${w.title}` : `Week ${w.n}`;
             const line = !w.open ? (w.opensOn ? `Opens ${dayLabel(w.opensOn)}` : '')
               : all ? 'Done' : `${d} of ${w.lessons.length} done${w.finishBy && w.finishBy >= on ? ` · finish by ${dayLabel(w.finishBy)}` : ''}`;
@@ -124,7 +124,7 @@ export default function CourseHomeScreen() {
           })}
         </View>
       </FadeInView>
-      {locked ? <LockedWeekSheet week={locked} onClose={() => setLocked(null)} /> : null}
+      {locked ? <LockedWeekSheet course={course} week={locked} onClose={() => setLocked(null)} /> : null}
       {moment.week ? <WeekCompleteSheet course={course} week={moment.week} onClose={moment.close} /> : null}
     </Screen>
   );

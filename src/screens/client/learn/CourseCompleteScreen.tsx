@@ -1,16 +1,24 @@
 /** LEARN-M7, board c10 (flag learnCourses; MOCK-LEARN2 option A, plan PR 7): the record of a finished course. Gold only here, on the deep top.
- * Opened from the course home once every lesson is done; it reads what the home read (the Finished date waits for a server field, see the PR). */
+ * Opened when the last lesson of the course is done (useWeekMoment) and from the course home's record card; it reads what the home read (the
+ * Finished date waits for a server field, see the PR). A course that is not finished (yet, or again after the coach added a lesson) shows where it
+ * stands, without the gold. The back control and Back to Train both return to the Train root (the board's "Train"), never a second Train page. */
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import { StackActions, useNavigation, useRoute, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography, type SemanticTokens } from '../../../theme/tokens';
 import { Overline, PrimaryButton, Screen } from '../../../ui';
 import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import { CourseMasthead, makeCourseStyles } from './CourseParts';
 import { weekDone } from './CourseMomentSheet';
-import { courseCopy, courseNow, dayLabel, useCourse } from './courseData';
+import { courseCopy, courseNow, useCourse } from './courseData';
+
+/** "September 28, 2026" (board c10) from a calendar day. */
+const longDay = (d: string) => {
+  const [y, m, n] = d.split('-').map(Number);
+  return new Date(y, m - 1, n).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+};
 
 export default function CourseCompleteScreen() {
   const { semanticColors: sc } = useTheme();
@@ -19,26 +27,27 @@ export default function CourseCompleteScreen() {
   const { id } = (useRoute().params ?? {}) as { id?: string };
   const { query, course, known } = useCourse(id);
   const copy = courseCopy(known?.coach ?? null);
-  const { done, total } = course ? courseNow(course) : { done: 0, total: 0 };
+  const toTrain = () => navigation.dispatch(StackActions.popToTop());
 
-  if (!course || total === 0 || done < total) {
+  if (!course) {
     return (
       <Screen edges={[]} contentStyle={s.page} testID="course-complete">
-        <CourseMasthead navigation={navigation} back={known?.title}><View /></CourseMasthead>
-        <View style={s.body}>{query.error || course ? <QuietError layout="inline" message={copy.failed} onRetry={() => void query.refetch()} /> : <QuietLoading label={copy.loading} rows={3} />}</View>
+        <CourseMasthead navigation={navigation} back="Train" onBack={toTrain}><View /></CourseMasthead>
+        <View style={s.body}>{query.error ? <QuietError layout="inline" message={copy.failed} onRetry={() => void query.refetch()} /> : <QuietLoading label={copy.loading} rows={3} />}</View>
       </Screen>
     );
   }
 
-  const started = course.startsOn ? `${dayLabel(course.startsOn, false)}, ${course.startsOn.slice(0, 4)}` : null;
-  const rows = [started && ['Started', started], ['Lessons', `${done} of ${total}`], ['Weeks', `${course.weeks.filter(weekDone).length} of ${course.weeks.length}`]].filter((r): r is string[] => !!r);
-  const footer = <PrimaryButton label="Back to Train" onPress={() => navigation.navigate('WorkoutMain')} testID="course-complete-back" />;
+  const { done, total } = courseNow(course);
+  const complete = total > 0 && done === total;
+  const rows = [course.startsOn && ['Started', longDay(course.startsOn)], ['Lessons', `${done} of ${total}`], ['Weeks', `${course.weeks.filter(weekDone).length} of ${course.weeks.length}`]]
+    .filter((r): r is string[] => !!r);
+  const footer = <PrimaryButton label="Back to Train" onPress={toTrain} testID="course-complete-back" />;
 
   return (
     <Screen edges={[]} contentStyle={s.page} footer={footer} testID="course-complete">
-      <CourseMasthead navigation={navigation} back={course.title}>
-        <Ionicons name="ribbon-outline" size={40} color={sc.data.peak} style={s.ribbon} />
-        <Overline style={{ color: sc.data.peak }}>Course complete</Overline>
+      <CourseMasthead navigation={navigation} back="Train" onBack={toTrain}>
+        {complete ? <><Ionicons name="ribbon-outline" size={40} color={sc.data.peak} style={s.ribbon} /><Overline style={{ color: sc.data.peak }}>Course complete</Overline></> : null}
         <Text style={s.title} accessibilityRole="header">{course.title}</Text>
         {course.coach ? <Text style={s.onDarkBody}>{`Taught by ${course.coach}`}</Text> : null}
       </CourseMasthead>
@@ -52,7 +61,7 @@ export default function CourseCompleteScreen() {
             </View>
           ))}
         </View>
-        <Text style={s.again}>Every lesson stays open to watch or read again.</Text>
+        {complete ? <Text style={s.again}>Every lesson stays open to watch or read again.</Text> : null}
       </View>
     </Screen>
   );
