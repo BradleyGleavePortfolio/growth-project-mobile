@@ -72,7 +72,9 @@ export const PERMANENTLY_DELETED: readonly string[] = [
   'Health and activity data synced from Apple Health or connected devices, and bloodwork you entered, including uploaded files',
   'Your conversations with Roman, the AI assistant',
   'Your messages, community posts, comments, direct messages, voice notes and reactions',
-  'Coach media, notes and briefs, if you coach',
+  // SMALL-T1: clients keep the coach's lessons they completed or are enrolled in, with their
+  // videos (b#1108), and assigned plans; b#1110 adds paid media. "Your clients keep" stays true for both.
+  'Coach media, notes and briefs, if you coach, except lessons and paid content your clients keep',
   'Your targets, recipes, lists and preferences',
   'Notification settings and push notification tokens',
 ];
