@@ -25,6 +25,8 @@ import { CREDIT_PACK_NON_REFUNDABLE, creditPacksHidden } from '../../../config/p
 export interface PackOptionsRowProps {
   /** Pack option face-values in cents (server-provided). */
   options: number[];
+  /** S3 fallback marks $99 when no pack can be suggested; taps still buy. */
+  selected?: number;
   onSelect: (amountCents: number | 'custom') => void;
   style?: ViewStyle;
   testID?: string;
@@ -32,6 +34,7 @@ export interface PackOptionsRowProps {
 
 export function PackOptionsRow({
   options,
+  selected,
   onSelect,
   style,
   testID,
@@ -53,8 +56,9 @@ export function PackOptionsRow({
             intent="medium"
             onPress={() => onSelect(cents)}
             accessibilityRole="button"
-            accessibilityLabel={`Buy ${formatCents(cents)} credit pack`}
-            style={styles.btn}
+            accessibilityLabel={selected === undefined ? `Buy ${formatCents(cents)} credit pack` : `${formatCents(cents)} pack`}
+            accessibilityState={selected === undefined ? undefined : { selected: cents === selected }}
+            style={[styles.btn, cents === selected && styles.selected]}
             testID={`ai-pack-option-${cents}`}
           >
             <Text style={styles.btnText}>{formatCents(cents)}</Text>
@@ -103,6 +107,7 @@ function makeStyles(colors: ThemeColors) {
       letterSpacing: 0.4,
       fontSize: 15,
     },
+    selected: { borderWidth: 2, borderColor: colors.textPrimary },
     btnGhost: {
       backgroundColor: 'transparent',
       borderWidth: 1,
