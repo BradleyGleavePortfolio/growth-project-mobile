@@ -2,7 +2,9 @@
  * S2's three pack tiles in the CREDIT-S hybrid: one row of equal tiles
  * ("$10", "$25", "$99"), the chosen one drawn in forest with a check. A
  * radio group to a screen reader; each tile is spoken as "{amount} pack"
- * (S2-3). A tap gives the selection haptic through HapticService.
+ * (S2-3). A tap gives the selection haptic through HapticService. On the ink
+ * Suggested card (`onInk`) forest barely shows against the card, so the chosen
+ * tile takes a 2 pt `data.frameOnDark` ring (5.1:1 on ink, about 3:1 on cream).
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -17,10 +19,12 @@ export default function CreditPackTiles({
   packs,
   selected,
   onSelect,
+  onInk = false,
 }: {
   packs: readonly number[];
   selected: number | null;
   onSelect: (cents: number) => void;
+  onInk?: boolean;
 }) {
   const { semanticColors: sc } = useTheme();
   return (
@@ -41,8 +45,8 @@ export default function CreditPackTiles({
             style={({ pressed }) => [
               styles.tile,
               {
-                borderColor: on ? sc.accent : sc.border,
-                borderWidth: on ? 1.5 : StyleSheet.hairlineWidth,
+                borderColor: on ? (onInk ? sc.data.frameOnDark : sc.accent) : sc.border,
+                borderWidth: on ? (onInk ? 2 : 1.5) : StyleSheet.hairlineWidth,
                 backgroundColor: on ? sc.bgPrimary : sc.bgSurface,
               },
               pressed && styles.pressed,
