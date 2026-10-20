@@ -22,7 +22,7 @@ import { rosterDisplayName, type RosterClient } from '../../../utils/coach/clien
 
 export type PeekTarget =
   | { screen: 'ClientDetail'; tab?: 'logs' | 'workouts' | 'timeline' }
-  | { screen: 'ClientMessages' }
+  | { screen: 'chat' }
   | { screen: 'ClientPayments' };
 
 type Props = {
@@ -133,7 +133,7 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
             ) : null}
             <View style={s.buttons}>
               <View style={s.flex}>
-                <HapticPressable intent="medium" style={s.primary} onPress={() => open({ screen: 'ClientMessages' })} accessibilityRole="button" accessibilityLabel={`Message ${first}`} testID="peek-message">
+                <HapticPressable intent="medium" style={s.primary} onPress={() => open({ screen: 'chat' })} accessibilityRole="button" accessibilityLabel={`Message ${first}`} testID="peek-message">
                   <Text style={s.primaryText} numberOfLines={2}>{`Message ${first}`}</Text>
                 </HapticPressable>
               </View>

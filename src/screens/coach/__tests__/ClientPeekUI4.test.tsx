@@ -92,7 +92,7 @@ describe('UI-4 peek sheet', () => {
     await mount(maya);
     const taps: Array<[string, unknown]> = [
       ['peek-review', { screen: 'ClientDetail', tab: 'timeline' }],
-      ['peek-message', { screen: 'ClientMessages' }],
+      ['peek-message', { screen: 'chat' }], // the lookup opens it through openInboxChat
       ['peek-chip-Food log', { screen: 'ClientDetail', tab: 'logs' }],
       ['peek-chip-Workouts', { screen: 'ClientDetail', tab: 'workouts' }],
       ['peek-chip-Full profile', { screen: 'ClientDetail' }],

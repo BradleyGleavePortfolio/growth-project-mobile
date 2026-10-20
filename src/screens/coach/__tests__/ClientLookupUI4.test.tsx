@@ -42,6 +42,7 @@ jest.mock('../lookup/ClientPeekSheet', () => ({
     return p.client ? h(View, null, mockText(`peek ${p.client.id}`),
       tap('stub-logs', () => p.onOpen(p.client, { screen: 'ClientDetail', tab: 'logs' })),
       tap('stub-pay', () => p.onOpen(p.client, { screen: 'ClientPayments' })),
+      tap('stub-message', () => p.onOpen(p.client, { screen: 'chat' })),
       tap('stub-nudge', () => p.onNudge(p.client)), p.children) : null;
   },
 }));
@@ -126,6 +127,10 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     await fireEvent.press(screen.getByTestId('lookup-row-c2'));
     await fireEvent.press(screen.getByTestId('stub-pay'));
     expect(navigate).toHaveBeenLastCalledWith('ClientPayments', { clientId: 'c2', clientName: 'Theo Grant' });
+    await fireEvent.press(screen.getByTestId('lookup-row-c2'));
+    await fireEvent.press(screen.getByTestId('stub-message')); // Message {first}
+    expect(navigate).toHaveBeenLastCalledWith(...chatOverList('c2', 'Theo Grant'));
+    expect(screen.queryByText('peek c2')).toBeNull();
     await fireEvent.press(screen.getByTestId('lookup-row-c2'));
     await fireEvent.press(screen.getByTestId('stub-nudge'));
     expect(screen.getByText('peek c2')).toBeTruthy(); // the nudge form opens over the sheet

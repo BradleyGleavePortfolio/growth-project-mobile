@@ -111,9 +111,10 @@ export default function ClientLookupScreen({ navigation }: Props) {
     const p = { clientId: c.id, clientName: rosterDisplayName(c) };
     if (t.screen === 'ClientDetail') navigation.navigate('ClientDetail', t.tab ? { ...p, initialTab: t.tab } : p);
     else if (t.screen === 'ClientPayments') navigation.navigate('ClientPayments', p);
-    else navigation.navigate('ClientMessages', p);
+    // #CARD-MESSAGE-ALL, #COACH-CHAT-BACK: with the six tabs the chat opens in Messages over the inbox; off, over this list.
+    else openInboxChat(navigation, c.id, p.clientName);
   };
-  const openMessages = (c: RosterClient) => openTarget(c, { screen: 'ClientMessages' });
+  const openMessages = (c: RosterClient) => openTarget(c, { screen: 'chat' });
   const runAction = (c: RosterClient, a: LookupAction) =>
     a === 'review' ? openTarget(c, { screen: 'ClientDetail', tab: 'timeline' }) : a === 'nudge' ? nudge.open(c) : openMessages(c);
   const toggleArchived = () => { setChip(null); setFilterStatus(archived ? 'active' : 'archived'); };
