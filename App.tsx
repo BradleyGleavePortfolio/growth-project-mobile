@@ -49,7 +49,7 @@ import BiometricUnlockGate from './src/components/BiometricUnlockGate';
 // In development and screenshot capture runs, the real module is used.
 // Do NOT use a dynamic require() guarded by __DEV__ here — __DEV__ is a
 // runtime constant and Metro cannot tree-shake dynamic requires at bundle time.
-import { installAxiosMockAdapter, isScreenshotMode, seedDemoUser } from './src/screenshots';
+import { installAxiosMockAdapter, isScreenshotMode, seedDemoUser, ScreenshotNavigator } from './src/screenshots';
 
 // Initialise Sentry as early as possible so even import-time failures get
 // captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
@@ -198,10 +198,9 @@ function App() {
       if (isScreenshotMode()) {
         // Skip analytics in screenshot mode — it can throw modal UI on top of
         // the screen we are trying to capture. Seed AsyncStorage so
-        // RootNavigator routes the demo user straight into ClientNavigator.
-        // The local SQLite database is also skipped: none of the
-        // marketing-target screens (Home / Log / Plan / Recipes / Progress /
-        // Fast) read from it, and the web build of expo-sqlite needs
+        // ScreenshotNavigator then selects the frame's client/coach identity.
+        // Skip local SQLite initialization; these frames use the API fixtures
+        // and route-provided workout. The web build of expo-sqlite needs
         // cross-origin-isolation that the dev server does not set, which
         // would hang the boot.
         await seedDemoUser();
@@ -285,7 +284,7 @@ function App() {
                 It sits inside ThemeProvider so the locked-state UI uses the
                 same theme as the rest of the app. */}
             <BiometricUnlockGate>
-              <RootNavigator />
+              {isScreenshotMode() ? <ScreenshotNavigator /> : <RootNavigator />}
             </BiometricUnlockGate>
           </ThemeProvider>
         </QueryClientProvider>
