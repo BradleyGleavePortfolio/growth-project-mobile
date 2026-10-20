@@ -49,6 +49,13 @@ order (`compareEntries`: a usable name first, then name, priority, detail, id, l
 and sorts every list A to Z, so the same items in any order give exactly the same rows. Team Mode is an argument
 (`selectBriefActions(items, { teamMode })`, default `featureFlags.teamMode`).
 
+Screen (`brief/CoachBriefLightScreen.tsx`, `BriefField.tsx`): with the gate on, `CoachBrief` shows Concept A, "Roman in the
+light": Roman's face and the date, the greeting, his words, up to two rows, then "Thank you, Roman" (closes onto the coach's
+landing tab, `coachLandingTab`). The tab bar steps aside while it is open (`EntryTabBar` passes the open route's `tabBarStyle`).
+States: preparing (checks every 5 s for 60 s), could not load, could not be prepared, prepared too often; each has "Continue".
+Marked read once. Motion: 1.3 s reveal (a tap completes it), 6 s glow; Reduce Motion and screen readers get everything at once.
+Haptics: `softImpact` on every row; one `error` when a retry fails again. A "See ..." list row keeps the brief; other rows close it.
+
 `CoachBriefList` (`brief/CoachBriefListScreen.tsx`) lists exactly the items the row counted (passed as route params, never
 stored), each opening that client like the single-client row; Back returns to the brief.
 
@@ -70,4 +77,5 @@ stored), each opening that client like the single-client row; Back returns to th
 | `src/services/__tests__/pushTapRouter.test.ts` | `CoachBrief` push tap opens the brief with Settings underneath. |
 | `src/screens/coach/brief/__tests__/briefActions.test.ts` | Action rows: messages {0,1,2,6} x weight {0,1,2,6} x check-ins {0,1,5}, whole result equal when reversed and shuffled; every order of tricky sets; repeats, names, ids, unknown kinds; head coach rows with Team Mode off and on. |
 | `src/screens/coach/brief/__tests__/CoachBriefListScreen.test.tsx` | Every counted client listed and opened; no "Client"; Back; empty list. |
-| `src/navigation/__tests__/coachBriefGateFlagOff.test.ts` | Gate defaults off, no profile sets it, list route only behind both flags. |
+| `src/screens/coach/brief/__tests__/CoachBriefLightScreen.test.tsx` | Every state, every row's destination, haptics, mark read once, announce once, reveal never takes a hidden tap. |
+| `src/navigation/__tests__/coachBriefGateFlagOff.test.ts` | Gate defaults off, no profile sets it; gate off keeps `CoachBriefScreen`, the tab bar and no list route. |
