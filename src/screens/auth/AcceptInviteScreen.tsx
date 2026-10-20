@@ -29,7 +29,7 @@ import {
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { NavigationProp, RouteProp } from '@react-navigation/native';
+import { StackActions, type NavigationProp, type RouteProp } from '@react-navigation/native';
 import { invitesApi } from '../../api/invites';
 import type { AcceptInviteResponse } from '../../types/invites';
 import { secureStorage } from '../../services/secureStorage';
@@ -139,8 +139,9 @@ export default function AcceptInviteScreen({
     });
   }, [state, navigation, token]);
 
+  // Back to the Welcome already beneath a link opened in a running app (never a second copy).
   const onBackToWelcome = useCallback(() => {
-    navigation.navigate('Welcome');
+    navigation.dispatch(StackActions.popTo('Welcome'));
   }, [navigation]);
 
   if (state.kind === 'loading') {
