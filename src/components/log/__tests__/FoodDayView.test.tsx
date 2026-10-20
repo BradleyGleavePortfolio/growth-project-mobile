@@ -298,3 +298,115 @@ it('keeps an extra out of a usual day with four meals open, and lets Something e
   expect(screen.getByText('1 of 4 meals logged')).toBeTruthy();
   expect(screen.getByLabelText('Eggs, logged to breakfast, 140 kcal')).toBeTruthy();
 });
+
+// UI-3b (owner 10-19, option 1): a coached client with no plan for the day gets the same usual day as a client with no coach.
+describe('UI-3b: coached client with no plan for the day', () => {
+  const noPlan = { date: today, assignments: [] };
+  const usualPast = () => mockDaily.mockImplementation(async (date: string) => ({ data: { entries: past[date] ?? [] } }));
+
+  it('builds the usual day from the seven-day read, with no join-a-coach card', async () => {
+    serve(noPlan);
+    usualPast();
+    await show({ foodLogs: [logs[0]], eaten: { calories: 390, protein: 20 } });
+    expect(await screen.findByText('Your usual day')).toBeTruthy();
+    expect(screen.getByText('Built from the meals you logged this week. 1,250 kcal target.')).toBeTruthy();
+    expect(screen.getByText('UP NEXT, YOUR USUAL SNACK')).toBeTruthy();
+    expect(screen.getByText('Your usual: Turkey chili and Cheddar')).toBeTruthy();
+    expect(screen.getByText('0 of 2 meals logged')).toBeTruthy();
+    expect(mockDaily).toHaveBeenCalledTimes(7);
+    expect(screen.queryByText('MEAL PLANS COME FROM A COACH')).toBeNull();
+    expect(screen.queryByTestId('food-day-join')).toBeNull();
+    expect(screen.queryByLabelText('Join a coach')).toBeNull();
+    expect(screen.queryByTestId('food-day-projection')).toBeNull();
+    expect(screen.queryByText('Classic food log')).toBeNull();
+    expect(mockMessageCoach).not.toHaveBeenCalled();
+  });
+
+  it('sends Repeat, Something else and Extras Add to the same Food log paths as a client with no coach', async () => {
+    serve(noPlan);
+    usualPast();
+    await show({ foodLogs: [], eaten: { calories: 0, protein: 0 } });
+    await fireEvent.press(await screen.findByText("Repeat yesterday's snack"));
+    expect(props.onRepeat).toHaveBeenCalledWith(expect.objectContaining({ mealType: 'snack', usual: expect.objectContaining({ days: [addDays(today, -1), addDays(today, -4)] }) }));
+    await fireEvent.press(screen.getByTestId('food-day-something-else'));
+    expect(props.onSomethingElse).toHaveBeenLastCalledWith('snack', { fillsUsualMeal: true });
+    await fireEvent.press(screen.getByTestId('food-day-add'));
+    expect(props.onSomethingElse).toHaveBeenLastCalledWith('snack');
+    expect(props.onLogPlanned).not.toHaveBeenCalled();
+  });
+
+  it('keeps the classic log when the week has no usual meal, and shows no join-a-coach card', async () => {
+    serve(noPlan);
+    await show();
+    await waitFor(() => expect(mockDaily).toHaveBeenCalledTimes(7));
+    expect(await screen.findByText('Classic food log')).toBeTruthy();
+    expect(screen.queryByTestId('food-day')).toBeNull();
+    expect(screen.queryByTestId('food-day-join')).toBeNull();
+  });
+
+  it('keeps the classic log when every day of the week fails to read', async () => {
+    serve(noPlan);
+    mockDaily.mockRejectedValue(new Error('Network Error'));
+    await show();
+    await waitFor(() => expect(mockDaily).toHaveBeenCalledTimes(7));
+    expect(await screen.findByText('Classic food log')).toBeTruthy();
+    expect(screen.queryByTestId('food-day')).toBeNull();
+  });
+
+  it('treats a plan with no meals as no plan', async () => {
+    serve({ date: today, assignments: [{ daily_meal_plan: { id: 'empty', name: 'Empty week', slots: [] } }] });
+    usualPast();
+    await show();
+    expect(await screen.findByText('Your usual day')).toBeTruthy();
+    expect(screen.queryByText('Empty week')).toBeNull();
+  });
+
+  it('keeps the coach plan, and never reads the past week, on a day with a plan', async () => {
+    serve(planDay);
+    usualPast();
+    await show();
+    expect(await screen.findByText("Jordan's plan for today")).toBeTruthy();
+    expect(screen.queryByText('Your usual day')).toBeNull();
+    expect(screen.queryByTestId('food-day-join')).toBeNull();
+    expect(mockDaily).not.toHaveBeenCalled();
+  });
+
+  it('shows the plan error and the classic log, and does not read the past week, when the plan cannot load', async () => {
+    serve(noPlan, true);
+    usualPast();
+    await show();
+    expect(await screen.findByTestId('food-day-plan-error')).toBeTruthy();
+    expect(screen.getByText('Classic food log')).toBeTruthy();
+    expect(screen.queryByText('Your usual day')).toBeNull();
+    expect(mockDaily).not.toHaveBeenCalled();
+  });
+
+  it('keeps the classic log open while the plan is loading, without reading the past week', async () => {
+    mockGet.mockReturnValue(new Promise(() => {}));
+    usualPast();
+    await show();
+    expect(screen.getByText('Classic food log')).toBeTruthy();
+    expect(mockDaily).not.toHaveBeenCalled();
+  });
+
+  it('moves from the usual day to the plan when the client changes to a day with a plan', async () => {
+    mockGet.mockImplementation(async (url: string) => {
+      if (url.startsWith('/me/meal-plan/today')) return { data: url.includes(addDays(today, 1)) ? { ...planDay, date: addDays(today, 1) } : noPlan };
+      return { data: { name: 'Jordan Hale' } };
+    });
+    usualPast();
+    const view = await show({ foodLogs: [], eaten: { calories: 0, protein: 0 } });
+    expect(await screen.findByText('Your usual day')).toBeTruthy();
+    await view.update({ selectedDate: addDays(today, 1) });
+    expect(await screen.findByText('Lean week 2, 1,210 kcal, 90 g protein')).toBeTruthy();
+    expect(screen.queryByText('Your usual day')).toBeNull();
+  });
+
+  it('still shows the join-a-coach card to a client with no coach', async () => {
+    usualPast();
+    await show({ coached: false });
+    expect(await screen.findByText('MEAL PLANS COME FROM A COACH')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Join a coach'));
+    expect(mockMessageCoach).toHaveBeenCalledTimes(1);
+  });
+});

@@ -177,8 +177,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   // FOODLINK: what this sheet's foods are logged for (the Food tab's "Something else"); every open resets it.
   const [sheetLink, setSheetLink] = useState<PlanLink | undefined>(undefined);
-  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink) => {
+  // UI-3d: only the Food tab's Extras "Add" (no link) lets the client switch the meal in the sheet.
+  const [mealChoice, setMealChoice] = useState(false);
+  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink, choose = false) => {
     setSheetLink(link);
+    setMealChoice(choose);
     searchRequest.current += 1;
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     setSearching(false);
@@ -654,7 +657,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           onDateChange={handleDateChange}
           onLogPlanned={(slot) => void logPlanned(slot)}
           onRepeat={(slot) => void repeatMealTo(slot.usual?.meal ?? null, slot.mealType, { fillsUsualMeal: true })}
-          onSomethingElse={(meal, link) => void openAddFood(meal, link)}
+          onSomethingElse={(meal, link) => void openAddFood(meal, link, !link)}
           onEditFood={handleEditFood}
         >
         <Overline>Food log</Overline>
@@ -720,6 +723,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       <FoodSearchModal
         visible={modalVisible && !suspended}
         activeMealType={activeMealType}
+        onMealChange={mealChoice ? setActiveMealType : undefined}
         addedFoodName={addedFoodName}
         onClose={() => {
           if (!foodSaving) {
