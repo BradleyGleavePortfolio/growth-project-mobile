@@ -61,6 +61,8 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const focusedOnce = useRef(!navigation.isFocused());
   const [everyoneY, setEveryoneY] = useState<number | null>(null);
   const activeTotal = useRef<number | null>(null);
+  const shownStatus = useRef<string | null>(null); // which list (active or archived) the rows on screen are
+  const shownList = useRef<unknown>(null);
   const nudge = useLookupNudge(colors);
   const teamEntry = useContext(CoachTeamEntryContext); // COACHTABS: a Team Mode head coach opens Team here, as on today's list
   const archived = filterStatus === 'archived';
@@ -95,7 +97,9 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
 
   const roster = useMemo(() => sortRoster(clients, 'name'), [clients]);
   if (!archived && !isLoading && !loadError) activeTotal.current = roster.length;
-  const known = !isLoading && (!loadError || roster.length > 0); // a failed refresh keeps the last count
+  if (!isLoading && !loadError && clients !== shownList.current) { shownList.current = clients; shownStatus.current = filterStatus; }
+  // A failed refresh keeps the last count, but only for the list it counted (a failed switch to Archived shows none).
+  const known = !isLoading && (!loadError || (roster.length > 0 && shownStatus.current === filterStatus));
   const needsView = route?.params?.view === 'needs';
   const searchFirst = archived || (!needsView && (activeTotal.current ?? roster.length) >= SEARCH_FIRST_AT);
   const parsed = parseLookupQuery(query);
