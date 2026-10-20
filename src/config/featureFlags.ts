@@ -44,6 +44,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_BILLING_V2: process.env.EXPO_PUBLIC_FF_CLIENT_BILLING_V2,
   EXPO_PUBLIC_FF_COACH_AI_CREDITS: process.env.EXPO_PUBLIC_FF_COACH_AI_CREDITS,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
+  EXPO_PUBLIC_FF_COACH_BRIEF_GATE: process.env.EXPO_PUBLIC_FF_COACH_BRIEF_GATE,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
   EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT: process.env.EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT,
@@ -210,6 +211,10 @@ export const featureFlags = {
   clientPathCopilot: readFlag('EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT', isDev),
   /** Coach Brief — daily morning brief on the coach home tab. */
   coachBrief: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF', isDev),
+  /** BRIEFA: today's brief as Concept A, "Roman in the light" (full screen,
+   *  at most two suggested actions, list rows for busy kinds). Needs coachBrief
+   *  too. Off in every profile; off shows today's brief screen unchanged. */
+  coachBriefGate: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF_GATE', false),
   /** Admin Control Room — governance view, gated to admin role. */
   adminControlRoom: readFlag('EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM', isDev),
   /** Private community hub — rooms, cohorts, announcements, coach-led threads. */
