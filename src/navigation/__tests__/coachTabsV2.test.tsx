@@ -564,9 +564,9 @@ it('every chat opened outside Clients goes through coachInbox.ts, and every file
   const rows = [...ENTRIES.map(([probe]) => `${path.basename(probe)}.tsx`), 'CoachInboxV2.tsx', 'ClientDetailScreen.tsx',
     'CoachSafetyAlertScreen.tsx', 'ClientInsightScreen.tsx'];
   expect(callers.map(([file]) => file).sort()).toEqual(rows.sort());
-  // Only the navigator, the chat itself and Clients screens that open a chat over themselves name the route.
+  // Only the navigator, the chat itself and Clients screens that open a chat over themselves (the detail, the UI-4 lookup and its peek sheet) name the route.
   const naming = SOURCES.filter(([, source]) => /["']ClientMessages["']/.test(source)).map(([file]) => file);
   expect(naming.sort()).toEqual(
-    ['ClientDetailScreen.tsx', 'ClientMessagesScreen.tsx', 'CoachNavigator.tsx', 'coachInbox.ts'].sort(),
+    ['ClientDetailScreen.tsx', 'ClientLookupScreen.tsx', 'ClientMessagesScreen.tsx', 'ClientPeekSheet.tsx', 'CoachNavigator.tsx', 'coachInbox.ts'].sort(),
   );
 });
