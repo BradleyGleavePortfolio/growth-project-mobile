@@ -1,5 +1,5 @@
 /** LEARN-M5, board c04 (flag learnCourses): one open week with its dates, the coach's note and its lessons (kind and minutes; the first not done says Up
- * next), then when the next week opens. */
+ * next), then when the next week opens. Finishing the last lesson shows the week's c08 page (LEARN-M7) once the client is back here. */
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { radius, typography, type SemanticTokens } from '../../../theme/tokens';
 import { Overline, Screen } from '../../../ui';
 import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import { HapticService } from '../../../ui/haptics/haptics.service';
+import { WeekCompleteSheet, useWeekMoment } from './CourseMomentSheet';
 import { CoachNote, CourseMark, CourseMasthead, makeCourseStyles } from './CourseParts';
 import { courseCopy, dayLabel, doneIn, lessonMeta, useCourse } from './courseData';
 
@@ -20,6 +21,7 @@ export default function CourseWeekScreen() {
   const { query, course, known } = useCourse(id);
   const copy = courseCopy(known?.coach ?? null);
   const week = course?.weeks.find((w) => w.id === weekId && w.open);
+  const moment = useWeekMoment(week && [week]);
 
   if (!course || !week) {
     return (
@@ -70,6 +72,7 @@ export default function CourseWeekScreen() {
           </View>
         ) : null}
       </View>
+      {moment.week ? <WeekCompleteSheet course={course} week={moment.week} onClose={() => { moment.close(); navigation.goBack(); }} /> : null}
     </Screen>
   );
 }

@@ -1,6 +1,7 @@
 /** LEARN-M5, boards c03, c12, c13 (flag learnCourses): the course home. This week and its end date over one bar per week, Up next with the one forest
- * button, then the weeks; a week not open yet says when it opens (its sheet is PR 7). */
-import React, { useEffect, useMemo, useRef } from 'react';
+ * button, then the weeks; a week not open yet says when it opens and opens its sheet (c09, LEARN-M7). A week just finished shows c08; a finished
+ * course swaps Up next for the record (c10). */
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type NavigationProp, type ParamListBase } from '@react-navigation/native';
@@ -13,6 +14,7 @@ import FadeInView from '../../../components/FadeInView';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { CourseMark, CourseMasthead, makeCourseStyles } from './CourseParts';
+import { LockedWeekSheet, WeekCompleteSheet, useWeekMoment } from './CourseMomentSheet';
 import { courseCopy, courseNow, dayLabel, doneIn, lessonMeta, today, useCourse, type CourseWeek } from './courseData';
 
 export default function CourseHomeScreen() {
@@ -23,6 +25,8 @@ export default function CourseHomeScreen() {
   const online = isEffectivelyOnline(useNetworkStatus());
   const { query, course, known } = useCourse(id);
   const copy = courseCopy(known?.coach ?? null);
+  const [locked, setLocked] = useState<CourseWeek | null>(null);
+  const moment = useWeekMoment(course?.weeks);
 
   // Offline on first open: the page loads by itself once the phone is back online (as Learn).
   const wasOnline = useRef(online);
@@ -55,7 +59,7 @@ export default function CourseHomeScreen() {
   const on = today();
   const { week, until, next, nextWeek, done, total } = courseNow(course, on);
   const shown = week ?? course.weeks[0];
-  const openWeek = (w: CourseWeek) => { void HapticService.selection(); navigation.navigate('CourseWeek', { id: course.id, week: w.id }); };
+  const openWeek = (w: CourseWeek) => { void HapticService.selection(); if (w.open) navigation.navigate('CourseWeek', { id: course.id, week: w.id }); else setLocked(w); };
 
   return (
     <Screen edges={[]} contentStyle={s.page} testID="course-home">
@@ -93,6 +97,12 @@ export default function CourseHomeScreen() {
             <PrimaryButton label={next.kind === 'page' ? `Read lesson ${next.n}` : `Watch lesson ${next.n}`} style={s.cardButton} testID="course-next"
               onPress={() => navigation.navigate('CourseLesson', { id: course.id, lesson: next.id })} />
           </View>
+        ) : total > 0 && done === total ? (
+          <View style={s.card} testID="course-record-card">
+            <Overline>Course complete</Overline>
+            <Text style={s.cardTitle}>{course.title}</Text>
+            <PrimaryButton label="Your record" style={s.cardButton} testID="course-record-open" onPress={() => navigation.navigate('CourseComplete', { id: course.id })} />
+          </View>
         ) : null}
         <Overline style={s.section}>Weeks</Overline>
         <View style={s.list}>
@@ -102,9 +112,9 @@ export default function CourseHomeScreen() {
             const name = w.title ? `Week ${w.n} · ${w.title}` : `Week ${w.n}`;
             const line = !w.open ? (w.opensOn ? `Opens ${dayLabel(w.opensOn)}` : '')
               : all ? 'Done' : `${d} of ${w.lessons.length} done${w.finishBy && w.finishBy >= on ? ` · finish by ${dayLabel(w.finishBy)}` : ''}`;
-            // A week not open yet is not a button: no chevron, no press (its sheet is plan PR 7).
+            // A week not open yet opens its sheet (c09): no chevron, a lock.
             return (
-              <Pressable key={w.id} onPress={() => openWeek(w)} disabled={!w.open} accessibilityRole={w.open ? 'button' : undefined}
+              <Pressable key={w.id} onPress={() => openWeek(w)} accessibilityRole="button"
                 accessibilityLabel={`${name}, ${line}`} testID={`course-week-${w.n}`} style={({ pressed }) => [s.row, i > 0 && s.rowLine, pressed && s.pressed]}>
                 {w.open ? <CourseMark state={all ? 'done' : 'next'} n={w.n} /> : <CourseMark state="later" icon="locked" />}
                 <View style={s.fill}><Text style={s.rowTitle}>{name}</Text><Text style={s.muted}>{line}</Text></View>
@@ -114,6 +124,8 @@ export default function CourseHomeScreen() {
           })}
         </View>
       </FadeInView>
+      {locked ? <LockedWeekSheet week={locked} onClose={() => setLocked(null)} /> : null}
+      {moment.week ? <WeekCompleteSheet course={course} week={moment.week} onClose={moment.close} /> : null}
     </Screen>
   );
 }
