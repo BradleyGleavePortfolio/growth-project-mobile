@@ -1,4 +1,4 @@
-import { mondayOf, runLine, segmentsOf, weekCount, weekStrip, type RingHabit } from '../ring/ringModel';
+import { firstDay, mondayOf, runLine, segmentsOf, weekCount, weekStrip, weekTotal, type RingHabit } from '../ring/ringModel';
 
 const TODAY = '2026-10-14'; // a Wednesday
 const h = (extra: Partial<RingHabit>): RingHabit => ({ id: 'h', user_id: 'u', name: 'Walk', created_at: '', logs: [], ...extra });
@@ -24,9 +24,20 @@ it('the week count is the server\'s, moved by ticks on their way and never past 
 it('the strip runs Monday to Sunday: past gaps dashed, days to come planned, the days the screen holds from it', () => {
   expect(mondayOf('2026-10-18')).toBe('2026-10-12');
   expect(segmentsOf({ planned: 3, done: 1 }, true)).toEqual(['done', 'missed', 'missed']);
-  const days = weekStrip({ today: TODAY, days: [{ date: '2026-10-13', planned: 2, done: 1 }] }, TODAY, (d) => (d === TODAY ? { planned: 3, done: 3 } : null));
+  const days = weekStrip({ today: TODAY, days: [{ date: '2026-10-13', planned: 2, done: 1 }] }, '2026-10-12', TODAY, (d) => (d === TODAY ? { planned: 3, done: 3 } : null));
   expect(days.map((d) => d.date)).toEqual(['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']);
   expect(days[1].segments).toEqual(['done', 'missed']);
   expect(days[2].segments).toEqual(['done', 'done', 'done']);
   expect(days[0].segments).toEqual([]);
+  const earlier = weekStrip({ today: TODAY, days: [{ date: '2026-10-06', planned: 1, done: 0 }] }, '2026-10-05', TODAY, () => null);
+  expect(earlier.map((d) => d.date)).toEqual(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']);
+  expect(earlier[1].segments).toEqual(['missed']);
+});
+
+it('the strip reaches back to the first start (a start date, or a tick held here if earlier); a week counts as the server does', () => {
+  expect(firstDay([h({ starts_on: '2026-10-07' }), h({ logs: [tick('2026-10-02')] })], TODAY)).toBe('2026-10-02');
+  expect(firstDay([h({ starts_on: '2026-10-07T00:00:00.000Z', logs: [tick('2026-10-09')] })], TODAY)).toBe('2026-10-07');
+  expect(firstDay([h({})], TODAY)).toBe(TODAY);
+  expect(weekTotal({ today: TODAY, days: [], habits: [{ id: 'a', planned: 7, done: 6 }, { id: 'b', planned: 3, done: 1 }] })).toEqual({ planned: 10, done: 7 });
+  expect(weekTotal({ today: TODAY, days: [] })).toBeNull();
 });

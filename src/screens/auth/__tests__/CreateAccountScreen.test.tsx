@@ -3,7 +3,7 @@
  *
  *  - Signup policy is read from `invite_code_required` + `providers`
  *    (live backend shape), with Google only when providers has 'google'.
- *  - "Paste invite code" fills the field from a GP code or a /join URL.
+ *  - "Paste code" fills the field from a code or a /join URL, only on a tap.
  *  - `invite_attached:false` after signup routes to the RoleSelection
  *    enter-code retry step (with the reason) instead of continuing silently.
  *  - Apple failures show friendly copy, never the raw server message.
@@ -321,6 +321,18 @@ describe('CreateAccountScreen', () => {
     await fireEvent.press(getByTestId('paste-invite-code'));
     expect(await findByText(/You will be paired with/)).toBeTruthy();
     expect(queryByTestId('create-coach-card')).toBeNull();
+  });
+
+  it('INVITE-PASTE-CODE: first open shows Paste code and never reads the clipboard until it is tapped', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+    mockGetString.mockClear();
+    mockGetString.mockResolvedValue('TGP-K7M2QX3');
+    const { getByTestId, getByRole } = await renderScreen();
+    expect(getByRole('button', { name: 'Paste code' })).toBeTruthy();
+    expect(mockGetString).not.toHaveBeenCalled();
+    await fireEvent.press(getByTestId('paste-invite-code'));
+    await waitFor(() => expect(getByTestId('invite-code-input').props.value).toBe('TGP-K7M2QX3'));
+    expect(mockGetString).toHaveBeenCalledTimes(1);
   });
 
   it('paste with no code on the clipboard shows guidance and leaves the field empty', async () => {

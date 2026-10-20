@@ -44,6 +44,8 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import AiRefusalNotice from '../../../components/ai/AiRefusalNotice';
 import { aiRefusalOf } from '../../../lib/ai/aiRefusal';
+import { romanRequiresCoachOf } from '../../../lib/ai/romanRequiresCoach';
+import { ROMAN_LOCK_TITLE } from '../../../components/coachless/JoinCoachState';
 import { ZodError } from 'zod';
 
 import {
@@ -113,10 +115,9 @@ function sanitizeWearableError(error: unknown): string {
   }
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? 0;
-    if (status === 401 || status === 403) {
-      return 'Please sign in again to see your insights.';
-    }
-    if (status === 404) return 'No insight is available yet.';
+    if (status === 401) return 'Please sign in again to see your insights.';
+    // WEAR-AI-02: a 403 that is not an AI refusal is not a sign-in problem.
+    if (status === 403 || status === 404) return 'No insight is available yet.';
     if (status >= 500) return 'The server is temporarily unavailable.';
     if (status === 0) return 'Check your connection and try again.';
   }
@@ -201,6 +202,27 @@ export function ClientWearableInsightPanel({
         <SkeletonBar width="80%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
         <SkeletonBar width="86%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
         <SkeletonBar width="100%" height={44} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonCta} />
+      </View>
+    );
+  }
+
+  // ── WEAR-AI-01 (#GAPS3-F1): a client with no coach gets 403
+  //    ROMAN_REQUIRES_COACH. One calm line, no Retry (it would fail the same
+  //    way), no error styling; the tracker data around the card stays. ──
+  if (query.isError && romanRequiresCoachOf(query.error)) {
+    return (
+      <View
+        style={[styles.card, { borderColor: withAlpha(tone.accent, 0.3) }]}
+        accessibilityRole={CARD_REGION_ROLE}
+        accessibilityLabel={`AI insight, ${BUCKET_LABEL[bucket]}`}
+        testID="client-insight-needs-coach"
+      >
+        <View style={styles.row}>
+          <Ionicons name="sparkles-outline" size={16} color={tone.accent} />
+          <Text style={styles.primary} accessibilityRole="text">
+            {ROMAN_LOCK_TITLE}
+          </Text>
+        </View>
       </View>
     );
   }
