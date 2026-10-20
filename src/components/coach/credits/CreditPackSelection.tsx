@@ -1,22 +1,24 @@
 /**
- * S3 group 12: one suggested pack, with other amounts disclosed on request.
- * The existing head-coach gate supplies the pace; this view never calculates
- * a pace or changes checkout. Without a suggestion, keep the original row.
+ * S3 group 12 with S2's three pack tiles (#CREDIT-S): one suggested pack, with
+ * Roman's coverage sentence and the three tiles under it, the suggestion
+ * chosen. The one primary button buys the chosen tile; "Other amounts" opens
+ * the custom amount. The existing head-coach gate supplies the pace; this view
+ * never calculates a pace or changes checkout. Without a suggestion, keep the
+ * original row.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, spacing, typography } from '../../../theme/tokens';
 import { PrimaryButton } from '../../../ui/buttons/PrimaryButton';
-import { HapticService } from '../../../ui/haptics/haptics.service';
 import { formatCents } from '../../../api/types/coachAIBudget';
 import { CREDIT_PACK_NON_REFUNDABLE } from '../../../config/purchaseSurfaces';
 import { renewalDay } from '../../../screens/coach/settings/AICreditsRow';
 import { PackOptionsRow } from '../ai-budget/PackOptionsRow';
 import { useCoachCredits } from './useCoachCredits';
 import { paceOf } from './creditPace';
-import { buyAmountLabel, CREDIT_MOMENT_COPY, packTileLabel } from './creditCopy';
+import CreditPackTiles from './CreditPackTiles';
+import { buyAmountLabel, CREDIT_MOMENT_COPY } from './creditCopy';
 
 export default function CreditPackSelection({
   options,
@@ -37,14 +39,12 @@ export default function CreditPackSelection({
   const credits = useCoachCredits();
   const suggestion = credits?.packsSold ? paceOf(credits.budget)?.suggestedCents : null;
   const renews = credits ? renewalDay(credits.budget.period_end) : null;
-  const [expanded, setExpanded] = useState(initiallyCustom);
   const [custom, setCustom] = useState(initiallyCustom);
+  const [picked, setPicked] = useState<number | null>(null);
+  const packs = useMemo(() => [...options].sort((x, y) => x - y), [options]);
   // Keep an in-progress custom path visible when the head/pool read finishes.
   useEffect(() => {
-    if (customEntered) {
-      setExpanded(true);
-      setCustom(true);
-    }
+    if (customEntered) setCustom(true);
   }, [customEntered]);
   if (suggestion == null || !renews) {
     return (
@@ -54,6 +54,7 @@ export default function CreditPackSelection({
       </>
     );
   }
+  const pack = picked ?? suggestion;
   const roman = `A ${formatCents(suggestion)} pack should cover you until ${renews}.`;
   return (
     <View style={styles.stack}>
@@ -61,56 +62,31 @@ export default function CreditPackSelection({
         <Text style={[styles.caption, { color: sc.bgPrimary }]}>Suggested</Text>
         <Text style={[styles.amount, { color: sc.bgPrimary }]}>{formatCents(suggestion)}</Text>
         <Text style={[styles.roman, { color: sc.bgPrimary }]}>{roman}</Text>
+        <View style={styles.tiles}>
+          <CreditPackTiles packs={packs} selected={custom ? null : pack} onSelect={(cents) => { setPicked(cents); setCustom(false); }} />
+        </View>
       </View>
       {!custom ? (
-        <PrimaryButton label={buyAmountLabel(suggestion)} onPress={() => onSelect(suggestion)} testID="credit-pack-buy" />
+        <PrimaryButton label={buyAmountLabel(pack)} onPress={() => onSelect(pack)} testID="credit-pack-buy" />
       ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={CREDIT_MOMENT_COPY.otherAmounts}
-        accessibilityState={{ expanded }}
-        onPress={() => { setExpanded(!expanded); setCustom(false); }}
+        accessibilityState={{ expanded: custom }}
+        onPress={() => setCustom(!custom)}
         style={styles.other}
         testID="credit-pack-other"
       >
         <Text style={[styles.otherLabel, { color: sc.textPrimary }]}>{CREDIT_MOMENT_COPY.otherAmounts}</Text>
       </Pressable>
-      {expanded ? (
-        <View testID="credit-pack-other-amounts">
-          {options.filter((cents) => cents !== suggestion).map((cents) => (
-            <Pressable
-              key={cents}
-              accessibilityRole="button"
-              accessibilityLabel={packTileLabel(cents)}
-              onPress={() => { void HapticService.selection(); onSelect(cents); }}
-              style={({ pressed }) => [styles.row, { borderColor: sc.border }, pressed && styles.pressed]}
-              testID={`ai-pack-option-${cents}`}
-            >
-              <Text style={[styles.price, { color: sc.textPrimary }]}>{formatCents(cents)}</Text>
-              <Ionicons name="chevron-forward" size={18} color={sc.textMuted} />
-            </Pressable>
-          ))}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Custom amount"
-            accessibilityState={{ expanded: custom }}
-            onPress={() => { void HapticService.selection(); setCustom(true); }}
-            style={({ pressed }) => [styles.row, { borderColor: sc.border }, pressed && styles.pressed]}
-            testID="credit-pack-custom-open"
-          >
-            <Text style={[styles.custom, { color: sc.textPrimary }]}>Custom amount</Text>
-            <Ionicons name="chevron-forward" size={18} color={sc.textMuted} />
-          </Pressable>
-          {custom ? (
-            <View style={styles.stack}>
-              {customField}
-              <PrimaryButton
-                label={customCents == null ? 'Custom' : buyAmountLabel(customCents)}
-                onPress={() => onSelect('custom')}
-                testID="ai-pack-option-custom"
-              />
-            </View>
-          ) : null}
+      {custom ? (
+        <View style={styles.stack} testID="credit-pack-other-amounts">
+          {customField}
+          <PrimaryButton
+            label={customCents == null ? 'Custom' : buyAmountLabel(customCents)}
+            onPress={() => onSelect('custom')}
+            testID="ai-pack-option-custom"
+          />
         </View>
       ) : null}
       <Text style={[styles.fine, { color: sc.textMuted }]} testID="ai-pack-non-refundable">
@@ -128,9 +104,6 @@ const styles = StyleSheet.create({
   roman: { ...typography.bodySmall, marginTop: spacing.md },
   other: { minHeight: layout.touchMin, minWidth: layout.touchMin, justifyContent: 'center', marginTop: spacing.sm },
   otherLabel: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular_Italic' },
-  row: { minHeight: layout.rowMinHeight, paddingVertical: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  price: { ...typography.bodyMd, fontVariant: ['tabular-nums'] },
-  custom: { ...typography.bodyMd },
+  tiles: { marginTop: spacing.lg },
   fine: { ...typography.bodySmall },
-  pressed: { opacity: 0.85 },
 });

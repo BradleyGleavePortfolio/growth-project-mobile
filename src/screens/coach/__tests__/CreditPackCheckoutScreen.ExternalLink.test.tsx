@@ -15,7 +15,7 @@
  */
 import React from 'react';
 import { AppState, Linking, Platform, StyleSheet, type AppStateStatus } from 'react-native';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { layout, radius } from '../../../theme/tokens';
 
 const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false };
@@ -331,6 +331,14 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     );
     expect(screen.getByText('Suggested')).toBeTruthy();
     expect(screen.getByText('A $25 pack should cover you until Nov 1.')).toBeTruthy();
+    // #CREDIT-S: the three packs sit inside the Suggested card, under Roman's sentence, $25 chosen.
+    const card = screen.getByTestId('credit-pack-suggested');
+    expect(within(card).getByTestId('credit-pack-tiles')).toBeTruthy();
+    const textsInOrder = card.findAll((n) => typeof n.props.children === 'string').map((n) => n.props.children);
+    expect(textsInOrder.indexOf('A $25 pack should cover you until Nov 1.')).toBeLessThan(textsInOrder.indexOf('$10'));
+    expect(within(card).getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(within(card).getByLabelText('$10 pack').props.accessibilityState).toEqual({ selected: false, checked: false });
+    expect(within(card).getByLabelText('$99 pack')).toBeTruthy();
     expect(screen.queryByTestId('credit-pack-other-amounts')).toBeNull();
     expect(screen.queryByTestId('credit-pack-custom-input')).toBeNull();
     expect(mockCreateCheckout).not.toHaveBeenCalled();
@@ -343,28 +351,29 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
   });
 
-  it.each([1000, 9900])('Other amounts reveals $10 / $99 / Custom amount and $%s keeps its checkout path', async (cents) => {
+  it.each([1000, 9900])('picking the $%s tile updates the primary button, then buys that pack', async (cents) => {
     await render(<CreditPackCheckoutScreen />);
-    await fireEvent.press(screen.getByTestId('credit-pack-other'));
-    expect(screen.getByLabelText('$10 pack')).toBeTruthy();
-    expect(screen.getByLabelText('$99 pack')).toBeTruthy();
-    expect(screen.getByLabelText('Custom amount')).toBeTruthy();
-    expect(screen.queryByTestId('ai-pack-option-2500')).toBeNull();
-    await fireEvent.press(screen.getByLabelText(`${cents === 1000 ? '$10' : '$99'} pack`));
+    await fireEvent.press(screen.getByTestId(`credit-pack-${cents}`));
+    expect(screen.getByLabelText(`${cents === 1000 ? '$10' : '$99'} pack`).props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(screen.getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: false, checked: false });
+    expect(screen.queryByLabelText('Buy $25 of credits')).toBeNull();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText(`Buy ${cents === 1000 ? '$10' : '$99'} of credits`));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
     expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: cents }));
     expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
   });
 
   it('Other amounts closes again, restores the suggested primary, and preserves custom input', async () => {
     await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-9900'));
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
-    await fireEvent.press(screen.getByTestId('credit-pack-custom-open'));
     await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+    expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
     expect(screen.queryByTestId('credit-pack-other-amounts')).toBeNull();
-    expect(screen.getByLabelText('Buy $25 of credits')).toBeTruthy();
+    expect(screen.getByLabelText('Buy $99 of credits')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
-    await fireEvent.press(screen.getByTestId('credit-pack-custom-open'));
     expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('20');
   });
 
@@ -409,7 +418,6 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
   it('Custom amount reveals the original input, rejects out-of-bounds, then buys the entered amount', async () => {
     await render(<CreditPackCheckoutScreen />);
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
-    await fireEvent.press(screen.getByTestId('credit-pack-custom-open'));
     expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
     const input = screen.getByTestId('credit-pack-custom-input');
     expect(StyleSheet.flatten(input.props.style).minHeight).toBe(layout.touchMin);
@@ -419,7 +427,6 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(mockCreateCheckout).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('credit-pack-retry'));
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
-    await fireEvent.press(screen.getByTestId('credit-pack-custom-open'));
     await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20.50');
     await fireEvent.press(screen.getByLabelText('Buy $20.50 of credits'));
     expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 2050 }));
