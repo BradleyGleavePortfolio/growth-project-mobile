@@ -6,7 +6,8 @@ import { isConnectionFailure } from '../../../ui/states/QuietStates';
 import { quiet } from './courseData';
 
 /** GET /v1/client/lessons/:id/video → { url, expires_at }. The server answers only for the caller's own enrolment, a published course, an
- * open week and a lesson with a video (404 otherwise). An address that is not https is refused. */
+ * open week and a lesson with a video (404 otherwise). An address that is not https is refused. expires_at is null for a coach's own
+ * video link: it never expires, so it is replaced only when the player reports an error. */
 export async function lessonVideo(lessonId: string): Promise<{ url: string; expiresAt: number }> {
   const { data } = await api.get<{ url?: unknown; expires_at?: unknown }>(`/v1/client/lessons/${encodeURIComponent(lessonId)}/video`, quiet);
   if (typeof data?.url !== 'string' || !data.url.startsWith('https://')) throw new Error('no playback address');

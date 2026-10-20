@@ -40,7 +40,7 @@ const VIDEO = '/v1/client/lessons/l1/video';
 const URL = 'https://stream.example.com/l1.m3u8?token=abc';
 const FRESH = 'https://stream.example.com/l1.m3u8?token=new';
 const later = (ms: number) => new Date(Date.now() + ms).toISOString();
-const address = (url = URL, expires_at = later(3_600_000)) => ({ data: { url, expires_at } });
+const address = (url = URL, expires_at: string | null = later(3_600_000)) => ({ data: { url, expires_at } });
 const base = { id: 'l1', title: 'Stairs without fear', positionSeconds: 0 };
 const positionCalls = () => put.mock.calls.filter(([u]) => String(u).endsWith('/position'));
 const copy = courseCopy('Sam');
@@ -98,10 +98,12 @@ describe('CourseVideoPlayer: the address', () => {
     expect(get).toHaveBeenCalledTimes(2);
   });
 
-  it('a refused lesson (404) is the course sentence; no answer is the connection sentence', async () => {
+  it('a lesson that is not available (404) is the course sentence with Try again; no answer is the connection sentence', async () => {
     get.mockRejectedValueOnce(Object.assign(new Error('404'), { response: { status: 404 } }));
     const view = await render(player());
     await waitFor(() => screen.getByText(copy.failed));
+    expect(screen.getByText('Try again')).toBeTruthy();
+    expect(screen.queryByTestId('course-video')).toBeNull();
     await view.unmount();
     get.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { isAxiosError: true }));
     await render(player());
@@ -155,6 +157,20 @@ describe('CourseVideoPlayer: a video that fails after it loaded', () => {
     expect(screen.queryByTestId('course-video-failed')).toBeNull();
     expect(mockSources).toEqual([URL, FRESH]);
     expect(mockStarts).toEqual([0, 75]);
+  });
+
+  it('an address with no expiry (expires_at null) is never replaced on time alone; an error is Try again, which asks again', async () => {
+    get.mockResolvedValueOnce(address(URL, null));
+    await render(player());
+    await playing();
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2099-01-01T00:00:00Z'));
+    await fail('The network connection was lost.');
+    now.mockRestore();
+    expect(screen.getByTestId('course-video-failed')).toBeTruthy();
+    expect(get).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByText('Try again'));
+    await playing();
+    expect(get).toHaveBeenCalledTimes(2);
   });
 
   it('a refused address is replaced once; if the fresh one is refused too, it is Try again, not a loop', async () => {
