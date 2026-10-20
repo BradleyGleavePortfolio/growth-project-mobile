@@ -49,6 +49,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   AppState,
   Keyboard,
   Linking,
@@ -186,6 +187,21 @@ export default function CreditPackCheckoutScreen({
     const sub = Keyboard.addListener('keyboardDidShow', () => selectScroll.current?.scrollToEnd({ animated: true }));
     return () => sub.remove();
   }, [concierge]);
+  // Other amounts only opens the field and then leaves (#161-8 op 1), so focus
+  // moves into the field: the cursor and number pad, and the screen reader.
+  const customRef = useRef<TextInput>(null);
+  const focusCustom = useRef(false);
+  const choosePack = useCallback((next: PackChoice) => {
+    focusCustom.current = next.custom;
+    setPackChoice(next);
+  }, []);
+  useEffect(() => {
+    const input = customRef.current;
+    if (!focusCustom.current || !input) return;
+    focusCustom.current = false;
+    input.focus();
+    if (Platform.OS !== 'web') AccessibilityInfo.sendAccessibilityEvent(input, 'focus');
+  }, [packChoice.custom]);
 
   const packOptions = useMemo(
     () => budget?.pack_options_cents ?? [1000, 2500, 9900],
@@ -195,6 +211,11 @@ export default function CreditPackCheckoutScreen({
     min: CUSTOM_PACK_MIN_CENTS,
     max: CUSTOM_PACK_MAX_CENTS,
   };
+  // The custom Buy stays disabled ("Enter an amount") until the typed amount is
+  // a valid pack (#161-8 op 1); handleSelect still checks it again.
+  const typedCents = parseDollarsToCents(customInput);
+  const validCustomCents =
+    typedCents !== null && typedCents >= bounds.min && typedCents <= bounds.max ? typedCents : null;
 
   const mintCheckout = useCallback(
     async (amountCents: number) => {
@@ -379,6 +400,7 @@ export default function CreditPackCheckoutScreen({
       <View style={styles.customInputWrap} testID="credit-pack-custom-field">
         <Text style={styles.customInputPrefix}>$</Text>
         <TextInput
+          ref={customRef}
           value={customInput}
           onChangeText={(text) => {
             setCustomInput(text);
@@ -443,9 +465,9 @@ export default function CreditPackCheckoutScreen({
               options={packOptions}
               onSelect={handleSelect}
               customField={customField}
-              customCents={parseDollarsToCents(customInput)}
+              customCents={validCustomCents}
               choice={packChoice}
-              onChoice={setPackChoice}
+              onChoice={choosePack}
             />
           ) : (
             <>

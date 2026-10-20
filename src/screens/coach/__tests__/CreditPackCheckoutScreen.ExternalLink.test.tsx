@@ -14,9 +14,20 @@
  * the amount field).
  */
 import React from 'react';
-import { AppState, Keyboard, Linking, Platform, ScrollView, StyleSheet, type AppStateStatus } from 'react-native';
+import {
+  AccessibilityInfo,
+  AppState,
+  Keyboard,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  type AppStateStatus,
+} from 'react-native';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { layout, lightTokens, radius } from '../../../theme/tokens';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 
 const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false };
 jest.mock('../../../config/featureFlags', () => {
@@ -407,17 +418,71 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     else expect(toEnd).not.toHaveBeenCalled();
   });
 
-  it('Other amounts closes again, restores the suggested primary, and preserves custom input', async () => {
+  it('Other amounts is the same full dark green button as Buy, with its own light haptic', async () => {
+    const soft = jest.spyOn(HapticService, 'softImpact').mockResolvedValue(undefined);
+    await render(<CreditPackCheckoutScreen />);
+    const other = screen.getByTestId('credit-pack-other');
+    const style = StyleSheet.flatten(other.props.style);
+    expect(style).toEqual(StyleSheet.flatten(screen.getByTestId('credit-pack-buy').props.style));
+    expect(style).toMatchObject({ backgroundColor: lightTokens.accent, borderRadius: radius.button });
+    expect(style.minHeight).toBeGreaterThanOrEqual(layout.touchMin);
+    expect(other).toHaveTextContent('Other amounts');
+    expect(other.props.accessibilityRole).toBe('button');
+    expect(other.props.accessibilityState).toEqual({ disabled: false, busy: false, expanded: false });
+    await fireEvent.press(other);
+    expect(soft).toHaveBeenCalledTimes(1);
+  });
+
+  it('Other amounts only opens: it leaves, focus moves into the field, and a tile brings both buttons back', async () => {
+    const focus = jest.spyOn(TextInput.prototype, 'focus');
+    const spoken = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
     await render(<CreditPackCheckoutScreen />);
     await fireEvent.press(screen.getByTestId('credit-pack-9900'));
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
-    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+    // No second tap is possible: the button is not drawn while the field is open.
+    expect(screen.queryByTestId('credit-pack-other')).toBeNull();
     expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
-    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    expect(screen.getByTestId('credit-pack-other-amounts')).toBeTruthy();
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(spoken).toHaveBeenCalledWith(expect.anything(), 'focus');
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+    expect(focus).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByTestId('credit-pack-1000'));
     expect(screen.queryByTestId('credit-pack-other-amounts')).toBeNull();
-    expect(screen.getByLabelText('Buy $99 of credits')).toBeTruthy();
+    expect(screen.getByLabelText('$10 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(screen.getByLabelText('Buy $10 of credits')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-other')).toBeTruthy();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
     expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('20');
+    expect(screen.getByLabelText('Buy $20 of credits')).toBeTruthy();
+  });
+
+  it('empty or out-of-range: "Enter an amount", disabled, no haptic, nothing sent; a valid amount buys it', async () => {
+    const soft = jest.spyOn(HapticService, 'softImpact').mockResolvedValue(undefined);
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    soft.mockClear();
+    expect(screen.queryByText('Custom')).toBeNull();
+    for (const typed of ['', '5', '600', 'abc']) {
+      await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), typed);
+      const off = screen.getByTestId('ai-pack-option-custom');
+      expect(off).toHaveTextContent('Enter an amount');
+      expect(off.props.accessibilityState).toEqual({ disabled: true, busy: false });
+      await fireEvent.press(off);
+    }
+    expect(soft).not.toHaveBeenCalled();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('credit-pack-error')).toBeNull();
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20.50');
+    const on = screen.getByTestId('ai-pack-option-custom');
+    expect(on).toHaveTextContent('Buy $20.50 of credits');
+    expect(on.props.accessibilityState).toEqual({ disabled: false, busy: false });
+    // The press is onSelect('custom'): the screen sends the typed amount.
+    await fireEvent.press(on);
+    expect(soft).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 2050 }));
   });
 
   it('keeps a custom amount typed before the role/pool resolves visible once the suggestion loads', async () => {
@@ -458,22 +523,19 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(mockCreateCheckout).not.toHaveBeenCalled();
   });
 
-  it('Custom amount reveals the original input, rejects out-of-bounds, then buys the entered amount', async () => {
+  it('a failed custom checkout comes back with the field open and the typed amount kept', async () => {
+    mockCreateCheckout.mockRejectedValueOnce(new Error('Request failed with status code 500'));
     await render(<CreditPackCheckoutScreen />);
     await fireEvent.press(screen.getByTestId('credit-pack-other'));
-    expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
-    const input = screen.getByTestId('credit-pack-custom-input');
-    expect(StyleSheet.flatten(input.props.style).minHeight).toBe(layout.touchMin);
-    await fireEvent.changeText(input, '5');
-    await fireEvent.press(screen.getByTestId('ai-pack-option-custom'));
-    expect(screen.getByTestId('credit-pack-error')).toHaveTextContent('Custom packs must be between $10 and $500.', { exact: false });
-    expect(mockCreateCheckout).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByTestId('credit-pack-retry'));
-    // The typed amount keeps the custom path open when the packs come back.
-    expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('5');
+    expect(StyleSheet.flatten(screen.getByTestId('credit-pack-custom-input').props.style).minHeight).toBe(layout.touchMin);
     await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20.50');
     await fireEvent.press(screen.getByLabelText('Buy $20.50 of credits'));
-    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 2050 }));
+    await fireEvent.press(screen.getByTestId('credit-pack-retry'));
+    expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('20.50');
+    expect(screen.queryByTestId('credit-pack-other')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Buy $20.50 of credits'));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(2);
+    expect(mockCreateCheckout).toHaveBeenLastCalledWith(expect.objectContaining({ amount_cents: 2050 }));
   });
 
   it('numeric preselect still starts once; custom preselect reveals and focuses the custom field', async () => {
@@ -492,5 +554,10 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(screen.getByTestId('ai-pack-option-2500')).toBeTruthy();
     expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
     expect(mockUseRole).not.toHaveBeenCalled();
+    // As on main: the Custom pill stays on and an out-of-range amount gets the error screen.
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '5');
+    await fireEvent.press(screen.getByTestId('ai-pack-option-custom'));
+    expect(screen.getByTestId('credit-pack-error')).toHaveTextContent('Custom packs must be between $10 and $500.', { exact: false });
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
   });
 });

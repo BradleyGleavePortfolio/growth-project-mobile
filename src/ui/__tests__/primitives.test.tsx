@@ -114,6 +114,17 @@ describe('PrimaryButton', () => {
     expect(r.getByTestId('b').props.accessibilityState).toMatchObject({ disabled: true });
   });
 
+  it('says open or closed only when it opens a section (expanded)', async () => {
+    const r = await render(
+      <>
+        <PrimaryButton label="Other amounts" onPress={jest.fn()} expanded={false} testID="a" />
+        <PrimaryButton label="Continue" onPress={jest.fn()} testID="b" />
+      </>,
+    );
+    expect(r.getByTestId('a').props.accessibilityState).toEqual({ disabled: false, busy: false, expanded: false });
+    expect(r.getByTestId('b').props.accessibilityState).not.toHaveProperty('expanded');
+  });
+
   it('loading shows a spinner, is busy and ignores presses', async () => {
     const onPress = jest.fn();
     const r = await render(<PrimaryButton label="Saving" onPress={onPress} loading testID="b" />);
