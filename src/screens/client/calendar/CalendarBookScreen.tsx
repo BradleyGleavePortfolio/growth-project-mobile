@@ -318,7 +318,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
             testID="calendar-welcome-open"
           />
         ) : null}
-        <SecondaryButton label="See Calendar" onPress={() => navigation.navigate('CalendarHome')} testID="calendar-welcome-home" />
+        <SecondaryButton label="See Calendar" onPress={() => navigation.popTo('CalendarHome')} testID="calendar-welcome-home" />
       </View>,
     );
   }
@@ -362,7 +362,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
         )) : null}
         {type ? <SecondaryButton label="Refresh open times" onPress={() => void slotsQ.refetch()} /> : null}
         <SecondaryButton label="Message your coach" onPress={openMessages} testID="calendar-fallback-message" />
-        <SecondaryButton label="See Calendar" onPress={() => navigation.navigate('CalendarHome')} testID="calendar-fallback-home" />
+        <SecondaryButton label="See Calendar" onPress={() => navigation.popTo('CalendarHome')} testID="calendar-fallback-home" />
       </View>,
     );
   }
@@ -435,7 +435,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
       ) : null}
       {error ? <Note text={error} testID="calendar-book-error" /> : null}
       {verifyBooking ? (
-        <SecondaryButton label="Check Calendar before booking again" onPress={() => navigation.navigate('CalendarHome')} testID="calendar-verify-booking" />
+        <SecondaryButton label="Check Calendar before booking again" onPress={() => navigation.popTo('CalendarHome')} testID="calendar-verify-booking" />
       ) : null}
       {pageButtons}
       <SecondaryButton label="Refresh open times" onPress={() => { setPicked(null); void slotsQ.refetch(); }} disabled={busy} />

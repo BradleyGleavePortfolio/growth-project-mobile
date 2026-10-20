@@ -9,7 +9,7 @@ import { HapticService } from '../../../../ui/haptics/haptics.service';
 import { featureFlags } from '../../../../config/featureFlags';
 import LearnScreen from '../LearnScreen';
 import LearnLessonScreen from '../LearnLessonScreen';
-import { GUIDELINES_PLAN_TITLE, lessonMeta, lessonsFrom } from '../learnData';
+import { GUIDELINES_PLAN_TITLE, learnCopy, lessonMeta, lessonsFrom } from '../learnData';
 
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), dispatch: jest.fn(), getParent: jest.fn(), getState: jest.fn() };
 let mockParams: { id?: string } = {};
@@ -77,6 +77,7 @@ describe('Learn', () => {
     await show(LearnScreen);
     expect(await screen.findByText('1 of 3 done')).toBeTruthy();
     expect(screen.getByText('From Sam')).toBeTruthy();
+    expect(screen.queryByText('From your former coach')).toBeNull();
     expect(screen.getByText("Sam's guidelines and lessons for you.")).toBeTruthy();
     expect(screen.getByText('You')).toBeTruthy();
     expect(screen.getByText('Food Protein at every meal, about a palm. A water bottle on your desk.')).toBeTruthy();
@@ -125,13 +126,42 @@ describe('Learn', () => {
     expect(parent.navigate).toHaveBeenCalledWith('Home', { screen: 'Messages', initial: false });
   });
 
-  it('without a coach asks the server nothing and shows no coach thread', async () => {
+  it('without a coach lists the kept lesson, asks for no guidelines and shows no coach thread', async () => {
     mockUser = { id: 'me', coach_id: null };
+    lessons.getAll.mockImplementation(() => ok([LESSONS[0]]) as never);
+    await show(LearnScreen);
+    expect(await screen.findByText('1 of 1 done')).toBeTruthy();
+    expect(screen.getByText('From your former coach')).toBeTruthy();
+    expect(screen.queryByText('From your coach')).toBeNull();
+    expect(screen.getByLabelText('Lesson 1, How Sam builds your week, complete')).toBeTruthy();
+    expect(screen.queryByTestId('learn-guidelines')).toBeNull();
+    expect(screen.queryByTestId('learn-empty')).toBeNull();
+    expect(screen.queryByText(/Read lesson/)).toBeNull();
+    expect(screen.queryByText('Message your coach')).toBeNull();
+    expect(guidelines).not.toHaveBeenCalled();
+    expect(api.get).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText('Lesson 1, How Sam builds your week, complete'));
+    expect(mockNav.navigate).toHaveBeenLastCalledWith('LearnLesson', { id: 'l1' });
+  });
+
+  it('without a coach and with nothing kept says so, with no Message button', async () => {
+    mockUser = { id: 'me', coach_id: null };
+    lessons.getAll.mockImplementation(() => ok([]) as never);
     await show(LearnScreen);
     expect(await screen.findByText('Nothing from your coach yet')).toBeTruthy();
+    expect(screen.getByText('From your coach')).toBeTruthy();
+    expect(screen.queryByText('From your former coach')).toBeNull();
     expect(screen.queryByText('Message your coach')).toBeNull();
-    expect(lessons.getAll).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('learn-message')).toBeNull();
+    expect(lessons.getAll).toHaveBeenCalledTimes(1);
     expect(guidelines).not.toHaveBeenCalled();
+  });
+
+  it('LK-01: only a client with no coach and kept lessons reads "From your former coach"', () => {
+    expect(learnCopy('Sam').from).toBe('From Sam');
+    expect(learnCopy(null).from).toBe('From your coach');
+    expect(learnCopy(null, true).from).toBe('From your former coach');
+    expect(learnCopy(null, true).lede).toBe("Your coach's guidelines and lessons for you.");
   });
 
   it('a failed read is one calm sentence and Try again', async () => {

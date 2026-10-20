@@ -137,7 +137,7 @@ const SLOT_A = { start_at: '2030-10-07T16:00:00.000Z', end_at: '2030-10-07T16:20
 const SLOT_B = { start_at: '2030-10-07T17:00:00.000Z', end_at: '2030-10-07T17:20:00.000Z' };
 
 function nav() {
-  return { navigate: jest.fn(), goBack: jest.fn() };
+  return { navigate: jest.fn(), goBack: jest.fn(), popTo: jest.fn() };
 }
 
 const clients: QueryClient[] = [];
@@ -163,7 +163,7 @@ beforeEach(() => {
 function testNavigation<RouteName extends keyof CalendarStackParamList>(
   n: ReturnType<typeof nav>,
 ): NativeStackNavigationProp<CalendarStackParamList, RouteName> {
-  // @ts-expect-error R0 partial navigator test double supplies the only two navigation methods these screens use; no real navigation container runs.
+  // @ts-expect-error R0 partial navigator test double supplies the only navigation methods these screens use; no real navigation container runs.
   return n;
 }
 const homeProps = (n = nav()) => ({ navigation: testNavigation<'CalendarHome'>(n), route: { key: 'h', name: 'CalendarHome' as const } });
@@ -406,7 +406,7 @@ describe('CalendarBookScreen', () => {
     const r = await renderQ(<CalendarBookScreen {...bookProps({ welcome: true }, n)} />);
     await waitFor(() => expect(r.getByText(/Waiting for Bradley to confirm\./)).toBeTruthy());
     await fireEvent.press(r.getByTestId('calendar-welcome-home'));
-    expect(n.navigate).toHaveBeenCalledWith('CalendarHome');
+    expect(n.popTo).toHaveBeenCalledWith('CalendarHome');
   });
 
   it('pending request limit and busy calendar get their own next step', async () => {
@@ -434,7 +434,7 @@ describe('CalendarBookScreen', () => {
     const r = await renderQ(<CalendarBookScreen {...bookProps({ welcome: true }, n)} />);
     await waitFor(() => expect(r.getByTestId('calendar-book-fallback')).toBeTruthy());
     await fireEvent.press(r.getByTestId('calendar-fallback-home'));
-    expect(n.navigate).toHaveBeenCalledWith('CalendarHome');
+    expect(n.popTo).toHaveBeenCalledWith('CalendarHome');
     await fireEvent.press(r.getByTestId('calendar-fallback-message'));
     expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
   });
@@ -495,7 +495,7 @@ describe('CalendarSessionScreen', () => {
     expect(r.getByText('This link is incomplete')).toBeTruthy();
     expect(api.getSession).not.toHaveBeenCalled();
     await fireEvent.press(r.getByText('Open calendar'));
-    expect(n.navigate).toHaveBeenCalledWith('CalendarHome');
+    expect(n.popTo).toHaveBeenCalledWith('CalendarHome');
   });
 
   it('Join shows only with a real link inside the join window', () => {

@@ -91,6 +91,7 @@ When the toggle changes:
 | `LoginScreen` (`firstRunV2` on) | `error()` | A sign-in failure is shown (once per failure) |
 | `LoginScreen`, `CreateAccountScreen`, `ResetPasswordScreen` (`firstRunV2` on) | `selection()` | Show or hide password |
 | `RoleChoice` tiles (`firstRunV2` on) | `selection()` | A role tile is picked |
+| `invite/PasteInviteCodeButton` (CreateAccount, RoleSelection) | `selection()`; `warning()` | Paste code fills the invite field from the clipboard; nothing usable on the clipboard (the existing no-code line shows). None without a tap |
 | `ForgotPasswordScreen` (`firstRunV2` on) | `softImpact()` | The reset request is submitted (the forest card shows) |
 | `ResetPasswordScreen` (`firstRunV2` on) | `success()` | The new password is saved |
 | `CoachLessons` (`coachLessons` on) | `selection()`; `warning()`; `success()`; `error()` | Opens the editor or moves a lesson; a missing title, a bad link or the delete confirm; a lesson is saved or deleted; a save, delete or move fails |
@@ -99,8 +100,10 @@ When the toggle changes:
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
 | `CourseHomeScreen` / `CourseWeekScreen` rows (`learnCourses` on) | `selection()` | A week or a lesson opens (Open the course and Read lesson are `PrimaryButton`s: `softImpact()`) |
 | `CourseLessonScreen` (`learnCourses` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
+| `CourseHomeScreen` / `CourseWeekScreen` week done (`useWeekMoment`, `learnCourses` on) | `success()` | A week turns done and its Week done page (c08) opens; when that week finishes the course, the course record (c10) opens with it instead |
+| `CourseHomeScreen` week not open yet (`learnCourses` on) | `selection()` | Its sheet (c09) opens: when it opens, why, its lesson titles, OK and Message {coach} (OK is a `PrimaryButton`: `softImpact()`; Message, a text action, adds none, as Learn's) |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
-| `habits/ring/HabitsRing` (HB-B1, HB-B1b, `habitsRing` off by default) | `softImpact()`; `success()`; `selection()`; `mediumImpact()`; `error()` | A tick (the part draws); the tick that completes the day's ring, instead; an untick, a strip day up to today or the Check-in tab; an idea tile on the first run (success when the server creates it); a tick or an idea the server refuses. None for a future day: its quiet line only |
+| `habits/ring/HabitsRing` (HB-B1, HB-B1b, HB-B1c, `habitsRing` off by default) | `softImpact()`; `success()`; `selection()`; `mediumImpact()`; `error()` | A tick (the part draws); the tick that completes the day's ring, instead; an untick, a strip day up to today, Previous week or Next week, or the Check-in tab; an idea tile on the first run (success when the server creates it); a tick or an idea the server refuses. None for a future day: its quiet line only |
 | `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
 | `HomeTile` (rings Home) | `selection()` | A tile opens its screen |
 | `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |

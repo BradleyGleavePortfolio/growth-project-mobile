@@ -193,7 +193,7 @@ it('keeps every navigation row, preference, biometric and tutorial action on thi
   expect(setBiometricOptIn).toHaveBeenLastCalledWith(false);
   await fireEvent.press(view.getByLabelText('Resume the tour'));
   expect(dispatchTutorial).toHaveBeenCalledWith({ type: 'RESUME' });
-  expect(mockParentNavigate).toHaveBeenCalledWith('Home', { screen: 'HomeMain' });
+  expect(mockParentNavigate).toHaveBeenCalledWith('Home', { screen: 'HomeMain', pop: true });
   mockTutorialStatus = 'completed';
   await view.rerender(<ThemeProvider><SettingsScreen navigation={navigation} /></ThemeProvider>);
   await fireEvent.press(view.getByLabelText('Take the tour again'));

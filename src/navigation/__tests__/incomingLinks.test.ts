@@ -58,6 +58,10 @@ it.each([
   expect(resolveAppLink(path, 'student')).toMatchObject({ root, screen, initial: false });
 });
 
+it.each(['workouts', 'home'])('the client root path %s returns to the open root (pop), never a second copy', (path) => {
+  expect(resolveAppLink(path, 'student')).toMatchObject({ pop: true });
+});
+
 it.each([
   [`coach/clients/${ID}`, 'ClientsStack', 'ClientDetail'],
   [`coach/clients/${ID}/checkins`, 'ClientsStack', 'ClientDetail'],

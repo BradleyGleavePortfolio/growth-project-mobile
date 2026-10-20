@@ -80,6 +80,7 @@ export function courseCopy(coach: string | null) {
     openUntil: (n: number, d: string | null) => `Week ${n} open until ${dayLabel(d)}`,
     weekOf: (n: number, total: number) => `Week ${n} of ${total}`,
     from: `From ${coach ?? 'your coach'}`,
+    paced: (start: string) => `${coach ?? 'Your coach'} set this course to open one week at a time, from your start on ${dayLabel(start, false)}.`,
     loading: `Loading ${whose} course`,
     failed: `${Whose} course did not load.`,
     noAnswer: 'Check the connection and try again.',

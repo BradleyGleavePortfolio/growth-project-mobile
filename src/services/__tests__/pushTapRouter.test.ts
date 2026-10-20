@@ -110,6 +110,16 @@ describe('pushTapRouter', () => {
       });
     });
 
+    it.each([['WorkoutMain', 'WorkoutTab'], ['MoreIndex', 'MoreTab']])(
+      '%s is a stack root: back to the open one, never a second copy (TRAIN-ROOT-RETURN)', (screen, root) => {
+        const nav = makeNav(CLIENT_TABS);
+        attachPushNavigator(nav);
+        setPushSession(STUDENT_A);
+        routePushTap(screen);
+        expect(nav.navigate).toHaveBeenCalledWith(root, { screen, params: undefined, pop: true });
+      },
+    );
+
     it('CommunityEventDetail -> CommunityTab stack when community + events flags are on', () => {
       const nav = makeNav(CLIENT_TABS);
       attachPushNavigator(nav);

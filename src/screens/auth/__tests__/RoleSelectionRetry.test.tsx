@@ -32,7 +32,11 @@ jest.mock('../../../services/queryClient', () => ({
   purgePersistedQueryCacheForAllUsers: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  // Paste code is the shared QuietTextButton, which reads semantic tokens.
+  useTheme: () => ({
+    colors: new Proxy({}, { get: () => '#000000' }),
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
+  }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 const mockCaptureError = jest.fn();
