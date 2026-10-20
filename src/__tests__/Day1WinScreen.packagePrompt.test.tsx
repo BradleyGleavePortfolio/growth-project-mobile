@@ -42,11 +42,13 @@ const mockGetEntitlement = jest.fn();
 jest.mock('../api/clientPaymentsApi', () => ({
   clientPaymentsApi: { getEntitlement: () => mockGetEntitlement() },
 }));
+const mockDunning = jest.fn();
+jest.mock('../entitlements/dunning/dunningApi', () => ({ dunningApi: { getStatus: () => mockDunning() } }));
 jest.mock('../components/PackageSelectionSheet', () => {
   const R = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
-  return ({ visible }: { visible: boolean }) =>
-    visible ? R.createElement(Text, { testID: 'package-sheet' }, 'sheet') : null;
+  return ({ visible, recordShown }: { visible: boolean; recordShown?: boolean }) =>
+    visible ? R.createElement(Text, { testID: 'package-sheet', recordShown }, 'sheet') : null;
 });
 let mockCoachId: string | undefined = 'coach-1';
 jest.mock('../lib/userCache', () => ({
@@ -69,7 +71,9 @@ describe('Day1WinScreen package prompt is fail closed', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCoachId = 'coach-1';
+    mockDunning.mockResolvedValue({ enabled: true, state: 'none' });
   });
+  afterEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' }));
 
   it('comp (active) client: no sheet, straight into the app', async () => {
     const r = await skipAndSettle(async () => ({ ok: true, data: { active: true, entitlement_active: true } }));
@@ -93,11 +97,26 @@ describe('Day1WinScreen package prompt is fail closed', () => {
     expect(r.onComplete).not.toHaveBeenCalled();
   });
 
-  it('iPhone, coached, no plan: the 1:1 sheet is offered (#161-5 op 1)', async () => {
+  it('iPhone, coached, no plan: the 1:1 sheet is offered (#161-5 op 1) and saves its 24 h time on open (#836 B1)', async () => {
     expect(Platform.OS).toBe('ios');
     const r = await skipAndSettle(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
     await waitFor(() => expect(r.getByTestId('package-sheet')).toBeTruthy());
+    expect(r.getByTestId('package-sheet').props.recordShown).toBe(true);
     expect(r.onComplete).not.toHaveBeenCalled();
+  });
+
+  it('Android: the sheet keeps its skip-only 24 h time', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+    const r = await skipAndSettle(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
+    await waitFor(() => expect(r.getByTestId('package-sheet')).toBeTruthy());
+    expect(r.getByTestId('package-sheet').props.recordShown).toBe(false);
+  });
+
+  it('payment failing (dunning past_due): no sheet, straight into the app (#836 C1)', async () => {
+    mockDunning.mockResolvedValue({ enabled: true, state: 'past_due', locked: true });
+    const r = await skipAndSettle(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
+    await waitFor(() => expect(r.onComplete).toHaveBeenCalledTimes(1));
+    expect(r.queryByTestId('package-sheet')).toBeNull();
   });
 
   it('coachless: no sheet and no entitlement lookup', async () => {

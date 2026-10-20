@@ -28,7 +28,9 @@
  *   MMKV key 'onboarding.package_prompt_dismissed_at:<userId>' (ISO string).
  *   If set and < 24h ago → call onDismiss() immediately.
  *   If set and > 24h ago (or not set) → show sheet.
- *   Written on "Skip for now" tap.
+ *   Written on "Skip for now" tap, and (`recordShown`, the unsolicited
+ *   sheet) the moment it opens, so closing the app, going back or an empty
+ *   list never brings it back inside 24h (#836 Sol B1).
  */
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
@@ -90,6 +92,8 @@ export interface PackageSelectionSheetProps {
   recheckDelaysMs?: number[];
   /** Coachless Home hand-off: select this package once the list loads (when it is in the list). */
   initialPackageId?: string | null;
+  /** Unsolicited sheet (package_prompt, Day 1 on iPhone): save the 24h time when it opens, not only on Skip. */
+  recordShown?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -120,6 +124,7 @@ export default function PackageSelectionSheet({
   entitlementPollDelaysMs,
   recheckDelaysMs,
   initialPackageId,
+  recordShown = false,
 }: PackageSelectionSheetProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
@@ -181,10 +186,18 @@ export default function PackageSelectionSheet({
       } catch {
         // best-effort; show if check fails
       }
+      if (cancelled) return;
+      if (recordShown) {
+        try {
+          await prefsStorage.set(dismissedKey, new Date().toISOString());
+        } catch {
+          // best-effort; still show
+        }
+      }
       if (!cancelled) setReady(true);
     })();
     return () => { cancelled = true; };
-  }, [visible, dismissedKey]);
+  }, [visible, dismissedKey, recordShown]);
 
   // ── Fetch packages when ready (and after a price / terms change) ──────────
   useEffect(() => {

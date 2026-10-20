@@ -916,9 +916,10 @@ export default function RootNavigator() {
           role: 'student',
         });
 
-        // PackageSelectionSheet, once per 24 h after a skip; on iPhone also on
-        // first Home after the consultation (#161-5 op 1). Coached clients with
-        // no active plan only; the rule lives in lib/packagePromptGate.ts.
+        // PackageSelectionSheet, once per 24 h after it was last shown or
+        // skipped; on iPhone also on first Home after the consultation (#161-5
+        // op 1). Coached clients with no active plan only; the rule lives in
+        // lib/packagePromptGate.ts.
         try {
           if (user?.id && (await withStartupTimeout(packagePromptDueAtStart(user.id), 'package prompt'))) {
             setAuthState('package_prompt');
@@ -1097,6 +1098,7 @@ export default function RootNavigator() {
           </DunningLockoutProvider>
           <PackageSelectionSheet
             visible
+            recordShown
             onDismiss={() => setAuthStateNow('student')}
             onPaymentSuccess={() => setAuthStateNow('student')}
           />

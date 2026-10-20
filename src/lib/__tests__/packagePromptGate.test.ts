@@ -4,6 +4,10 @@ jest.mock('../../api/clientPaymentsApi', () => ({
 }));
 let mockUser: { id: string; coach_id?: string } | null = { id: 'client-1', coach_id: 'coach-1' };
 jest.mock('../userCache', () => ({ readUserCache: async () => mockUser }));
+const mockDunning = jest.fn();
+jest.mock('../../entitlements/dunning/dunningApi', () => ({ dunningApi: { getStatus: () => mockDunning() } }));
+let mockTour: { pendingStart: unknown; userId: string | null; tutorial: { status: string } };
+jest.mock('../../tutorial/tutorialStore', () => ({ useTutorialStore: { getState: () => mockTour } }));
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,6 +23,8 @@ const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurab
 beforeEach(async () => {
   jest.clearAllMocks();
   mockUser = { id: 'client-1', coach_id: 'coach-1' };
+  mockDunning.mockResolvedValue({ enabled: true, state: 'none' });
+  mockTour = { pendingStart: null, userId: null, tutorial: { status: 'not_started' } };
   await AsyncStorage.clear();
 });
 afterEach(() => setOS(realOS));
@@ -66,6 +72,25 @@ describe('shouldOfferPackagePrompt (fail closed, #304 Sol B1; 1:1 rule, #161-5 o
   it('suppresses the prompt when the lookup rejects', async () => {
     mockGetEntitlement.mockRejectedValue(new Error('boom'));
     expect(await shouldOfferPackagePrompt()).toBe(false);
+  });
+
+  // #836 Opus C1: a failing payment, the Day-10 lock or a paused plan keeps the sheet away.
+  it.each(['past_due', 'dispute_paused', 'refund_paused'])('never offers while dunning is %s', async (state) => {
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    mockDunning.mockResolvedValue({ enabled: true, state, locked: state === 'past_due' });
+    expect(await shouldOfferPackagePrompt()).toBe(false);
+  });
+
+  it('fails closed when the dunning read fails', async () => {
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    mockDunning.mockRejectedValue(new Error('network'));
+    expect(await shouldOfferPackagePrompt()).toBe(false);
+  });
+
+  it('an active plan never reads dunning', async () => {
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
+    expect(await shouldOfferPackagePrompt()).toBe(false);
+    expect(mockDunning).not.toHaveBeenCalled();
   });
 });
 
@@ -132,6 +157,21 @@ describe('packagePromptDueAtStart (once per 24 h, #161-5 op 1)', () => {
     mockUser = { id: 'client-1' };
     expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
     expect(mockGetEntitlement).not.toHaveBeenCalled();
+  });
+
+  // #836 Opus C4: Roman's tour the client just asked for comes first; no key, so the next start offers.
+  it.each([
+    ['starting', { pendingStart: { restart: false }, userId: null, tutorial: { status: 'not_started' } }],
+    ['running', { pendingStart: null, userId: 'client-1', tutorial: { status: 'active' } }],
+  ])('iPhone, tour %s: not offered, no read and no key', async (_label, tour) => {
+    setOS('ios');
+    mockTour = tour;
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
+    expect(mockGetEntitlement).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem(KEY)).toBeNull();
+    mockTour = { pendingStart: null, userId: 'client-1', tutorial: { status: 'completed' } };
+    expect(await packagePromptDueAtStart('client-1', NOW + HOUR)).toBe(true);
   });
 
   it('a skip by another account on this phone does not apply (R15)', async () => {

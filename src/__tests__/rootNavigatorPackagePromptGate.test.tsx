@@ -114,7 +114,8 @@ jest.mock('../components/OfflineBanner', () => () => null);
 jest.mock('../components/PackageSelectionSheet', () => {
   const React = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
-  return () => React.createElement(Text, { testID: 'package-prompt' }, 'prompt');
+  return ({ recordShown }: { recordShown?: boolean }) =>
+    React.createElement(Text, { testID: 'package-prompt', recordShown }, 'prompt');
 });
 const mockGetEntitlement = jest.fn();
 jest.mock('../api/clientPaymentsApi', () => ({
@@ -234,7 +235,8 @@ describe('RootNavigator package prompt on first Home (#161-5 op 1)', () => {
     setOS('ios');
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     const r = await mount();
-    await r.findByTestId('package-prompt');
+    // The gate leaves the key; the sheet saves it the moment it opens (#836 Sol B1).
+    expect((await r.findByTestId('package-prompt')).props.recordShown).toBe(true);
     expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
   });
 

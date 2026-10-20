@@ -17,14 +17,27 @@
  *    B-PACKAGE-135): a free or prepaid code grants its package at join, so
  *    that client is active; a paid code attaches the client only once paid
  *    (JoinPackageScreen), so until then there is no coach here.
- *  - Once per 24 h (packagePromptDueAtStart): a day after the last "Skip for
- *    now". iPhone also asks on first Home, because the consultation skips the
- *    Day 1 sheet, and when it does not offer the sheet it saves the time in the
- *    same key, so the entitlement read runs at most once a day. Android asks
- *    only after a skip, as before.
+ *  - Not while a payment is failing or a plan is paused (fix round 1 of #836,
+ *    Opus C1): any dunning state other than 'none' (past due, the Day-10
+ *    lock, a dispute or refund pause) keeps the sheet away, because the
+ *    dunning banner and lockout screens own that moment and a second plan
+ *    must not start beside an unpaid one. Read only when the entitlement is
+ *    already inactive; a failed read fails closed.
+ *  - Once per 24 h (packagePromptDueAtStart): a day after the sheet was last
+ *    shown or skipped. The unsolicited sheet saves the time in the same key
+ *    the moment it opens (PackageSelectionSheet `recordShown`, #836 Sol B1),
+ *    so closing the app, going back or an empty list never brings it back
+ *    sooner. iPhone also asks on first Home, because the consultation skips
+ *    the Day 1 sheet, and when it does not offer the sheet it saves the time,
+ *    so the entitlement read runs at most once a day. Android asks only after
+ *    a skip, as before. Never while Roman's tour is starting or running in
+ *    this session (#836 Opus C4): the tour the client just asked for comes
+ *    first, and the next start offers the sheet.
  */
 import { Platform } from 'react-native';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
+import { dunningApi } from '../entitlements/dunning/dunningApi';
+import { useTutorialStore } from '../tutorial/tutorialStore';
 import { prefsStorage } from '../storage/mmkv';
 import { readUserCache } from './userCache';
 
@@ -37,8 +50,8 @@ export async function shouldOfferPackagePrompt(): Promise<boolean> {
     if (!res || !res.ok) return false;
     const data = res.data as { active?: unknown; entitlement_active?: unknown } | null | undefined;
     if (!data || typeof data !== 'object') return false;
-    if (data.entitlement_active === true) return false;
-    return data.active === false;
+    if (data.entitlement_active === true || data.active !== false) return false;
+    return (await dunningApi.getStatus()).state === 'none';
   } catch {
     return false;
   }
@@ -51,6 +64,8 @@ export async function packagePromptDueAtStart(userId: string, now: number = Date
     const lastAt = await prefsStorage.getStringAsync(key);
     const ios = Platform.OS === 'ios';
     if (lastAt ? !(now - new Date(lastAt).getTime() > DAY_MS) : !ios) return false;
+    const tour = useTutorialStore.getState();
+    if (tour.pendingStart || (tour.userId === userId && tour.tutorial.status === 'active')) return false;
     if (await shouldOfferPackagePrompt()) return true;
     if (ios) await prefsStorage.set(key, new Date(now).toISOString());
     return false;

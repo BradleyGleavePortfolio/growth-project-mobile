@@ -24,6 +24,7 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { firstWinApi, WinType } from '../../services/firstWinApi';
@@ -214,9 +215,12 @@ export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenPro
   if (done && aiMessage) {
     return (
       <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}>
-        {/* PackageSelectionSheet — shown as Modal overlay on top of Day1WinScreen */}
+        {/* PackageSelectionSheet — shown as Modal overlay on top of Day1WinScreen.
+            iPhone saves the 24h time when it opens (#836 Sol B1); Android keeps
+            its re-offer for clients who tapped Skip. */}
         <PackageSelectionSheet
           visible={showPackageSheet}
+          recordShown={Platform.OS === 'ios'}
           onDismiss={() => { setShowPackageSheet(false); onComplete(undefined); }}
           onPaymentSuccess={() => { setShowPackageSheet(false); onComplete(undefined); }}
         />
@@ -256,6 +260,7 @@ export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenPro
       {/* PackageSelectionSheet — shown as Modal overlay on top of Day1WinScreen */}
       <PackageSelectionSheet
         visible={showPackageSheet}
+        recordShown={Platform.OS === 'ios'}
         onDismiss={() => { setShowPackageSheet(false); onComplete(undefined); }}
         onPaymentSuccess={() => { setShowPackageSheet(false); onComplete(undefined); }}
       />
