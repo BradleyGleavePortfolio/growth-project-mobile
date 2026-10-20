@@ -741,7 +741,7 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
     try {
       tabNavRef.current?.navigate(
         t.tab,
-        t.screen ? { screen: t.screen, ...(t.params ? { params: t.params } : {}) } : undefined,
+        t.screen ? { screen: t.screen, ...(t.params ? { params: t.params } : {}), ...(t.pop ? { pop: true } : {}) } : undefined,
       );
     } catch (err) {
       logger.warn('ClientNavigator', 'tutorial navigate failed', err);
