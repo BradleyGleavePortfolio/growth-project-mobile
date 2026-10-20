@@ -12,3 +12,4 @@ export { isScreenshotMode } from './mode';
 export { seedDemoUser } from './seed';
 export { installAxiosMockAdapter } from './mockAdapter';
 export { SCREENSHOT_TARGETS } from './screens';
+export { ScreenshotNavigator } from './ScreenshotNavigator';
