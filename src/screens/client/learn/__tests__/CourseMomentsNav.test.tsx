@@ -98,6 +98,8 @@ it.each([['the course home', false], ['a week page', true]] as const)(
   'the lesson that finishes the course ends on the record when the client is back on %s', async (_label, onWeek) => {
     const below = [home, ...(onWeek ? [week4()] : [])];
     await mount(course('open'), [...below, { name: 'CourseLesson', params: { id: 'k1', lesson: '4b' } }]);
+    // The pages under the lesson have read the course (week 4 to do) before the lesson saves, as in the app.
+    for (const t of onWeek ? ['Week 1 of 4', 'Part 4'] : ['Week 1 of 4']) await screen.findAllByText(t, { includeHiddenElements: true });
     // The lesson screen saved the last lesson of the course, then the client goes back.
     await act(async () => { qc.setQueryData<Course>(['learn-course', 'me', 'k1'], (c) => c && ({ ...c, weeks: c.weeks.map((w) => ({ ...w, lessons: w.lessons.map((l) => ({ ...l, done: true })) })) })); });
     await act(async () => ref.goBack());
