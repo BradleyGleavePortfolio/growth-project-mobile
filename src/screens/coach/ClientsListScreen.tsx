@@ -10,6 +10,7 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import PushPermissionCard from '../../components/home/PushPermissionCard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { featureFlags } from '../../config/featureFlags';
@@ -36,6 +37,7 @@ import {
 
 type Props = {
   navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>;
+  route?: RouteProp<ClientsStackParamList, 'ClientsList'>;
 };
 
 type RosterFilter = 'all' | 'active' | 'archived';

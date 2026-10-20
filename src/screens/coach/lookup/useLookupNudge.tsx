@@ -1,5 +1,5 @@
 /** UI-4: the bell and Nudge buttons open today's nudge form (client-detail NudgeModal) over the list. */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import { errorMessage } from '../../../types/common';
@@ -15,6 +15,7 @@ export function useLookupNudge(colors: ThemeColors) {
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const draftFor = useRef<string | null>(null); // the draft belongs to one client: Cancel keeps it for that client only
 
   const close = () => { setClient(null); setError(''); };
   const send = async () => {
@@ -54,5 +55,10 @@ export function useLookupNudge(colors: ThemeColors) {
       styles={styles}
     />
   );
-  return { open: (c: RosterClient) => setClient(c), modal };
+  const open = (c: RosterClient) => {
+    if (draftFor.current !== c.id) { draftFor.current = c.id; setTitle(''); setBody(''); }
+    setError('');
+    setClient(c);
+  };
+  return { open, modal };
 }

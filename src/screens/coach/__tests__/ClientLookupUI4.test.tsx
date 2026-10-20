@@ -5,14 +5,15 @@
 import React from 'react';
 import fs from 'fs';
 import path from 'path';
-import { ScrollView } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockGetClients = jest.fn();
 const mockUnread = jest.fn();
 const mockSendNudge = jest.fn();
 const mockCache = new Map<string, string>();
-const mockHaptic = { success: jest.fn(), error: jest.fn(), warning: jest.fn() };
+const mockHaptic = { success: jest.fn(), error: jest.fn(), warning: jest.fn(), selection: jest.fn() };
+const mockRenders = { az: 0 }; // A to Z row renders (Opus B1: a scroll must not redraw the rows)
 jest.mock('../../../services/api', () => ({
   coachApi: { getClients: (...a: unknown[]) => mockGetClients(...a), getUnreadCounts: () => mockUnread(), sendNudge: (...a: unknown[]) => mockSendNudge(...a) },
 }));
@@ -26,7 +27,11 @@ jest.mock('../../../theme/ThemeProvider', () => {
   return { useTheme: () => ({ colors: anyColor, semanticColors: anyColor }) };
 });
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('../../../components/HapticPressable', () => jest.requireActual('react-native').Pressable);
+jest.mock('../../../components/HapticPressable', () => {
+  const { Pressable } = jest.requireActual('react-native');
+  const { createElement } = jest.requireActual('react');
+  return (p: { testID?: string }) => { if (p.testID?.startsWith('lookup-az-')) mockRenders.az += 1; return createElement(Pressable, p); };
+});
 const mockText = (t: string) => React.createElement(jest.requireActual('react-native').Text, null, t);
 jest.mock('../../../ui', () => ({ Overline: jest.requireActual('react-native').Text, useScreenInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../../../ui/states/QuietStates', () => ({ QuietLoading: () => mockText('Loading clients'), QuietError: (p: { message: string }) => mockText(p.message) }));
@@ -70,10 +75,10 @@ const nav = { navigate, isFocused: () => focused, addListener: (_e: string, cb: 
 // Six tabs off, a chat opens over the lookup through openInboxChat (the six-tab placement: navigation/__tests__/coachTabsV2.test.tsx).
 const chatOverList = (clientId: string, clientName: string) => ['ClientsStack', { screen: 'ClientMessages', params: { clientId, clientName }, initial: false }];
 
-async function mount(rows: ReturnType<typeof wire>[], unread: Record<string, number> = {}, archivedReply = async (_cursor?: string) => ({ data: [wire('z1', 'Zed Old')] })) {
+async function mount(rows: ReturnType<typeof wire>[], unread: Record<string, number> = {}, archivedReply = async (_cursor?: string) => ({ data: [wire('z1', 'Zed Old')] }), route?: { params: { view: 'needs' } }) {
   mockGetClients.mockImplementation(async (status: string, cursor?: string) => (status === 'archived' ? archivedReply(cursor) : { data: rows }));
   mockUnread.mockResolvedValue({ data: { total: 0, by_client: unread } });
-  await render(<CoachTeamEntryContext.Provider value><ClientLookupScreen navigation={nav} /></CoachTeamEntryContext.Provider>);
+  await render(<CoachTeamEntryContext.Provider value><ClientLookupScreen navigation={nav} route={route as never} /></CoachTeamEntryContext.Provider>);
   await waitFor(() => expect(screen.getByTestId('lookup-count')).toBeTruthy());
 }
 
@@ -144,6 +149,22 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     await fireEvent.press(screen.getByTestId('lookup-archived-link'));
     await waitFor(() => expect(screen.getByText('1 archived client')).toBeTruthy());
   });
+  it.each([['3 active clients', UNDER_15], ['15 active clients', null]])('a failed pull-to-refresh keeps "%s" and says it did not refresh (Opus B3)', async (count, rows) => {
+    await mount(rows ?? MANY);
+    mockGetClients.mockRejectedValue(new Error('offline'));
+    await act(async () => { await screen.getByTestId('lookup-scroll').props.refreshControl.props.onRefresh(); });
+    expect(screen.getByText('Clients did not refresh. Pull down to try again.')).toBeTruthy();
+    expect(screen.getByText(count)).toBeTruthy();
+    expect(screen.getAllByText('Maya Brooks').length).toBeGreaterThan(0); // the last list stays
+  });
+  it('view "needs" (the coach Home Needs you tile) shows the Needs you list at 15 or more, only clients with an action', async () => {
+    const rows = [...NAMES.slice(0, 14).map((n, i) => wire(`m${i}`, n, { last: day(-1) })), wire('n1', 'Nina Cole', { last: day(0), review: 1 })];
+    await mount(rows, {}, undefined, { params: { view: 'needs' } });
+    expect(screen.queryByTestId('lookup-search')).toBeNull();
+    expect(screen.getByText('One needs you today.')).toBeTruthy();
+    expect(screen.getByTestId('lookup-act-n1')).toBeTruthy();
+    expect(screen.queryByTestId('lookup-row-m0')).toBeNull(); // steady clients stay on the full list
+  });
   it.each([[true, 0], [false, 1]])('mounted focused %s: the first focus reloads the roster and side counts %s times (Sol B2: Clients mounts unseen)', async (seen, reloads) => {
     focused = seen;
     await mount(UNDER_15);
@@ -211,14 +232,63 @@ describe('UI-4 Search first (15 or more)', () => {
     expect(screen.getByText('peek m0')).toBeTruthy();
     await waitFor(() => expect(JSON.parse(mockCache.get('coach_lookup_recent:coach-1') ?? '[]')).toEqual(['m0', 'moved-away', 'm9']));
   });
-  it('the side index appears once Everyone is near the top and scrolls to a letter', async () => {
+  it('the side index appears once Everyone is near the top; a touch, a slide or a screen reader step jumps to a letter', async () => {
     await mount(MANY);
     await fireEvent(screen.getByTestId('lookup-everyone'), 'layout', { nativeEvent: { layout: { y: 600, height: 20 } } });
-    await fireEvent(screen.getByTestId('lookup-letter-B'), 'layout', { nativeEvent: { layout: { y: 140, height: 120 } } });
+    for (const [l, y] of [['A', 0], ['B', 140], ['C', 260]] as const) await fireEvent(screen.getByTestId(`lookup-letter-${l}`), 'layout', { nativeEvent: { layout: { y, height: 120 } } });
     expect(screen.queryByTestId('lookup-index')).toBeNull(); // not over the header, search or chips
     await fireEvent.scroll(screen.getByTestId('lookup-scroll'), { nativeEvent: { contentOffset: { y: 600 } } });
+    const index = () => screen.getByTestId('lookup-index');
+    expect(index().props).toMatchObject({ accessibilityRole: 'adjustable', accessibilityLabel: 'A to Z' });
+    expect(StyleSheet.flatten(index().props.style).width).toBeGreaterThanOrEqual(44); // one 44 pt wide control, not 26 small taps
     const scrollTo = (ScrollView.prototype as unknown as { scrollTo: jest.Mock }).scrollTo;
-    await fireEvent.press(screen.getByTestId('lookup-index-B'));
-    expect(scrollTo).toHaveBeenCalled();
+    scrollTo.mockClear();
+    await fireEvent(index(), 'layout', { nativeEvent: { layout: { height: 260 } } }); // 10 pt a letter
+    await fireEvent(index(), 'responderGrant', { nativeEvent: { locationY: 15 } }); // touch B
+    expect(index().props.accessibilityValue).toEqual({ text: 'B' });
+    expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ animated: true }));
+    await fireEvent(index(), 'responderMove', { nativeEvent: { locationY: 25 } }); // slide to C
+    expect(index().props.accessibilityValue).toEqual({ text: 'C' });
+    expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ animated: false }));
+    await fireEvent(index(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } }); // VoiceOver swipe down
+    expect(index().props.accessibilityValue).toEqual({ text: 'B' });
+    expect(mockHaptic.selection).toHaveBeenCalledTimes(3);
+  });
+  it.each([15, 300])('a scroll redraws no client row at %s clients (Opus B1)', async (n) => {
+    const rows = n === 15 ? MANY : Array.from({ length: n }, (_, i) => wire(`r${i}`, `${String.fromCharCode(65 + (i % 26))}lex Person${i}`, { last: day(-1) }));
+    await mount(rows);
+    await fireEvent(screen.getByTestId('lookup-everyone'), 'layout', { nativeEvent: { layout: { y: 600, height: 20 } } });
+    const before = mockRenders.az;
+    for (const y of [0, 120, 380, 420, 900, 2400, 300, 5000]) await fireEvent.scroll(screen.getByTestId('lookup-scroll'), { nativeEvent: { contentOffset: { y } } });
+    expect(mockRenders.az - before).toBe(0);
+    expect(screen.getByTestId('lookup-index')).toBeTruthy(); // the index still follows the scroll
+  });
+  it('every filter chip and Archived is a 44 pt target around a 36 pt pill (Opus B2, Sol B3)', async () => {
+    await mount(MANY);
+    for (const id of ['review', 'messages', 'quiet', 'new', 'archived']) {
+      expect(StyleSheet.flatten(screen.getByTestId(`lookup-chip-${id}`).props.style).minHeight).toBeGreaterThanOrEqual(44);
+    }
+  });
+  it('a cancelled nudge stays with its client: A, Cancel, B opens a clean form; A again keeps A\'s words (Sol B1)', async () => {
+    mockSendNudge.mockResolvedValue({});
+    await mount(MANY);
+    await fireEvent.changeText(screen.getByTestId('lookup-search'), 'ben');
+    await fireEvent.press(screen.getByTestId('lookup-nudge-m2'));
+    await fireEvent.changeText(screen.getByPlaceholderText('e.g. Great job today'), 'Ben');
+    await fireEvent.changeText(screen.getByPlaceholderText('Write a short message...'), 'For Ben only');
+    await fireEvent.press(screen.getByLabelText('Cancel'));
+    await fireEvent.press(screen.getByTestId('lookup-nudge-m2')); // same client: the draft is kept
+    expect(screen.UNSAFE_getByType(KeyboardAvoidingView)).toBeTruthy(); // Send and Cancel stay above the keyboard
+    for (const l of ['Cancel', 'Send nudge']) expect(StyleSheet.flatten(screen.getByLabelText(l).props.style).minHeight).toBeGreaterThanOrEqual(44);
+    expect(screen.getByPlaceholderText('Write a short message...').props.value).toBe('For Ben only');
+    await fireEvent.press(screen.getByLabelText('Cancel'));
+    await fireEvent.changeText(screen.getByTestId('lookup-search'), 'theo');
+    await fireEvent.press(screen.getByTestId('lookup-nudge-m13')); // another client: a clean form
+    expect([screen.getByPlaceholderText('e.g. Great job today').props.value, screen.getByPlaceholderText('Write a short message...').props.value]).toEqual(['', '']);
+    await fireEvent.changeText(screen.getByPlaceholderText('e.g. Great job today'), 'Theo');
+    await fireEvent.changeText(screen.getByPlaceholderText('Write a short message...'), 'For Theo');
+    await fireEvent.press(screen.getByLabelText('Send nudge'));
+    expect(mockSendNudge).toHaveBeenCalledTimes(1);
+    expect(mockSendNudge).toHaveBeenCalledWith('m13', { title: 'Theo', body: 'For Theo' });
   });
 });
