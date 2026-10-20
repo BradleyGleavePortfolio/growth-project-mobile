@@ -91,6 +91,7 @@ When the toggle changes:
 | `LoginScreen` (`firstRunV2` on) | `error()` | A sign-in failure is shown (once per failure) |
 | `LoginScreen`, `CreateAccountScreen`, `ResetPasswordScreen` (`firstRunV2` on) | `selection()` | Show or hide password |
 | `RoleChoice` tiles (`firstRunV2` on) | `selection()` | A role tile is picked |
+| `invite/PasteInviteCodeButton` (CreateAccount, RoleSelection) | `selection()`; `warning()` | Paste code fills the invite field from the clipboard; nothing usable on the clipboard (the existing no-code line shows). None without a tap |
 | `ForgotPasswordScreen` (`firstRunV2` on) | `softImpact()` | The reset request is submitted (the forest card shows) |
 | `ResetPasswordScreen` (`firstRunV2` on) | `success()` | The new password is saved |
 | `CoachLessons` (`coachLessons` on) | `selection()`; `warning()`; `success()`; `error()` | Opens the editor or moves a lesson; a missing title, a bad link or the delete confirm; a lesson is saved or deleted; a save, delete or move fails |
