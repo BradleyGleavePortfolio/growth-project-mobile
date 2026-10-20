@@ -34,6 +34,21 @@ describe('coachBriefGate flag', () => {
   });
 });
 
+describe('CoachBrief route', () => {
+  it('shows Concept A only with coachBriefGate on; otherwise today\'s CoachBriefScreen', () => {
+    expect(COACH_NAV).toMatch(
+      /\{featureFlags\.coachBrief && \(\s*<SettingsStack\.Screen\s+name="CoachBrief"\s+component=\{featureFlags\.coachBriefGate \? CoachBriefLightScreen : CoachBriefScreen\}/,
+    );
+    expect(COACH_NAV.match(/component=\{[^}]*CoachBriefLightScreen/g)).toHaveLength(1);
+  });
+
+  it('hides the tab bar only for Concept A', () => {
+    expect(COACH_NAV).toMatch(
+      /\.\.\.\(featureFlags\.coachBrief && featureFlags\.coachBriefGate && getFocusedRouteNameFromRoute\(route\) === 'CoachBrief'\s*\?\s*\{ tabBarStyle: \{ display: 'none' as const \} \}\s*:\s*\{\}\)/,
+    );
+  });
+});
+
 describe('CoachBriefList route', () => {
   it('is registered once, only behind coachBrief and coachBriefGate', () => {
     const screens = COACH_NAV.match(/name="CoachBriefList"/g) ?? [];
