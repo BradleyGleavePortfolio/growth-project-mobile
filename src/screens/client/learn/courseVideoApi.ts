@@ -1,41 +1,50 @@
-/** LEARN-M6 (flag learnCourses; plan 8.A PR 6): a lesson's playback address and its saved place. Signed addresses expire and carry
- * access, so they live in component state only, never in the persisted query cache. */
+/** LEARN-M6 (flag learnCourses; plan 8.A PR 6; contract: OPERATOR RULING 6282886845 items 4 and 5): a course lesson's video address and
+ * its saved place. The address expires and carries access, so it lives in component state only, never in the persisted query cache. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../../services/api';
-import type { CourseLesson } from './courseData';
+import { isConnectionFailure } from '../../../ui/states/QuietStates';
+import { quiet } from './courseData';
 
-const https = (v: unknown): v is string => typeof v === 'string' && v.startsWith('https://');
-
-/** GET /v1/client/media/:id/signed-url → { url }; the server signs only for a client who may watch the asset. */
-export async function signedUrl(mediaId: string): Promise<string> {
-  const { data } = await api.get<{ url?: unknown }>(`/v1/client/media/${encodeURIComponent(mediaId)}/signed-url`);
-  if (!https(data?.url)) throw new Error('no playback address');
-  return data.url;
+/** GET /v1/client/lessons/:id/video → { url, expires_at }. The server answers only for the caller's own enrolment, a published course, an
+ * open week and a lesson with a video (404 otherwise). An address that is not https is refused. */
+export async function lessonVideo(lessonId: string): Promise<{ url: string; expiresAt: number }> {
+  const { data } = await api.get<{ url?: unknown; expires_at?: unknown }>(`/v1/client/lessons/${encodeURIComponent(lessonId)}/video`, quiet);
+  if (typeof data?.url !== 'string' || !data.url.startsWith('https://')) throw new Error('no playback address');
+  return { url: data.url, expiresAt: Date.parse(String(data.expires_at)) || Infinity };
 }
 
-/** PUT /v1/client/lessons/:id/position, whole seconds. Best effort: a missed save only means resuming a little earlier. */
+/** PUT /v1/client/lessons/:id/position with { position_seconds }, whole seconds. Best effort: a missed save only means resuming earlier. */
 export async function savePosition(lessonId: string, seconds: number): Promise<void> {
-  try { await api.put(`/v1/client/lessons/${encodeURIComponent(lessonId)}/position`, { position_seconds: Math.max(0, Math.floor(seconds)) }); } catch { /* resume falls back to the last saved place */ }
+  try { await api.put(`/v1/client/lessons/${encodeURIComponent(lessonId)}/position`, { position_seconds: Math.max(0, Math.floor(seconds)) }, quiet); } catch { /* resume falls back to the last saved place */ }
 }
 
-/** The address to play: the signed one for the lesson's media, else the lesson's own video address. It is asked only while online, and
- * once found it is kept, so a dropped signal never interrupts a lesson that is playing. */
-export function usePlaybackUrl(lesson: Pick<CourseLesson, 'mediaId' | 'videoUrl'>, online: boolean) {
-  const { mediaId, videoUrl } = lesson;
-  const [state, setState] = useState<{ url: string | null; failed: boolean }>({ url: null, failed: false });
-  const [attempt, setAttempt] = useState(0);
-  const have = useRef(false);
+/** How the player words a refused or expired address: iOS "HTTP 403: Forbidden", Android "Response code: 403". */
+const refused = (message: string) => /\b40[13]\b|forbidden|unauthori[sz]ed|expired/i.test(message);
+const WAIT = { url: null, failed: null } as const;
+
+/** The address to play. It is asked only while online and kept once found, so a dropped signal never stops a lesson that is playing.
+ * When the player fails, an expired or refused address is replaced once, quietly, and plays on from the same place; any other failure
+ * is the failed frame ('connection' when the server gave no answer or the video stopped, 'other' when it answered without an address),
+ * and Try again asks for a fresh address. */
+export function useLessonVideo(lessonId: string, online: boolean) {
+  const [state, setState] = useState<{ url: string | null; failed: 'connection' | 'other' | null }>(WAIT);
+  const expiresAt = useRef(0);
+  const quietLeft = useRef(true); // one quiet replacement per Try again, so a server that keeps refusing ends at Try again, never a loop
+  const waiting = !state.url && !state.failed;
   useEffect(() => {
-    if (!online || have.current) return;
+    if (!online || !waiting) return;
     let live = true;
-    const fallback = https(videoUrl) ? videoUrl : null;
-    (mediaId ? signedUrl(mediaId).catch(() => fallback) : Promise.resolve(fallback)).then((url) => {
-      if (!live) return;
-      have.current = !!url;
-      setState({ url, failed: !url });
-    });
+    lessonVideo(lessonId).then(
+      (v) => { if (live) { expiresAt.current = v.expiresAt; setState({ url: v.url, failed: null }); } },
+      (err) => { if (live) setState({ url: null, failed: isConnectionFailure(err) ? 'connection' : 'other' }); },
+    );
     return () => { live = false; };
-  }, [mediaId, videoUrl, online, attempt]);
-  const retry = useCallback(() => { have.current = false; setState({ url: null, failed: false }); setAttempt((n) => n + 1); }, []);
-  return { ...state, retry };
+  }, [lessonId, online, waiting]);
+  const retry = useCallback(() => { quietLeft.current = true; setState(WAIT); }, []);
+  const playerFailed = useCallback((message: string) => {
+    const again = quietLeft.current && (Date.now() >= expiresAt.current || refused(message));
+    if (again) quietLeft.current = false;
+    setState(again ? WAIT : { url: null, failed: 'connection' });
+  }, []);
+  return { ...state, retry, playerFailed };
 }

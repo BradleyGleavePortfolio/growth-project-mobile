@@ -71,8 +71,10 @@ export default function CourseLessonScreen() {
   return (
     <Screen edges={['top']} footer={footer} testID="course-lesson">
       <LearnBack navigation={navigation} label={fromWeek ? `Week ${week.n}` : known?.title} />
-      {lesson.mediaId || lesson.videoUrl ? (
-        <View style={s.eyebrow}><CourseVideoPlayer key={lesson.id} lesson={lesson} online={online} offline={lesson.done ? copy.offline : undefined} failed={copy.noAnswer} onPosition={(sec) => markPosition(lesson.id, sec)} /></View>
+      {lesson.kind !== 'page' ? (
+        <View style={s.eyebrow}>
+          <CourseVideoPlayer key={lesson.id} lesson={lesson} online={online} offline={lesson.done ? copy.offline : undefined} failed={copy.failed} noAnswer={copy.noAnswer} onPosition={(sec) => markPosition(lesson.id, sec)} />
+        </View>
       ) : null}
       <Overline style={s.eyebrow}>{`Lesson ${lesson.n} · ${lessonMeta(lesson)}`}</Overline>
       <Text style={s.title} accessibilityRole="header">{lesson.title}</Text>
