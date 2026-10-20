@@ -23,6 +23,7 @@ import WaterTracker from '../../components/WaterTracker';
 import DailySummaryBar from '../../components/log/DailySummaryBar';
 import MealSectionCard from '../../components/log/MealSectionCard';
 import FoodSearchModal from '../../components/log/FoodSearchModal';
+import MealChoiceRow from '../../components/log/MealChoiceRow';
 import { FoodDayGate } from '../../components/log/FoodDayView';
 import { featureFlags } from '../../config/featureFlags';
 import type { DaySlot } from '../../utils/log/foodDay';
@@ -828,23 +829,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
               ))}
             </View>
             <Overline style={styles.fieldLabel}>Meal</Overline>
-            <View style={styles.chipRow}>
-              {MEAL_SECTIONS.map((meal) => (
-                <HapticPressable
-                  key={meal.type}
-                  intent="light"
-                  disableAnimation
-                  accessibilityRole="button"
-                  accessibilityLabel={meal.label}
-                  accessibilityState={{ selected: editMealType === meal.type }}
-                  disabled={editSaving}
-                  onPress={() => setEditMealType(meal.type)}
-                  style={[styles.chip, editMealType === meal.type && styles.chipSelected]}
-                >
-                  <Text style={[styles.chipText, editMealType === meal.type && styles.chipTextSelected]}>{meal.label}</Text>
-                </HapticPressable>
-              ))}
-            </View>
+            <MealChoiceRow testID="log-edit-meals" value={editMealType} onChange={setEditMealType} disabled={editSaving} />
             <PrimaryButton
               label="Save changes"
               loading={editSaving}

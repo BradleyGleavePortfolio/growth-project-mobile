@@ -9,19 +9,20 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { layout, typography, type SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import { TextLink, useScreenInsets } from '../../ui';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import FoodSearchView from './FoodSearchView';
+import MealChoiceRow from './MealChoiceRow';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
 
 interface Props {
   visible: boolean;
   activeMealType: MealType;
-  /** UI-3d: when set (the Food tab's Extras "Add"), the meal pills show and a tap files the next food under that meal. */
+  /** UI-3d: when set (the Food tab's Extras "Add"), the meal choice shows and a tap files the next food under that meal. */
   onMealChange?: (mealType: MealType) => void;
   onClose: () => void;
   addedFoodName?: string | null;
@@ -105,18 +106,8 @@ export default function FoodSearchModal(props: Props) {
           </View>
 
           {props.onMealChange ? (
-            <View style={styles.mealRow} testID="food-search-meals">
-              {MEAL_SECTIONS.map((meal) => {
-                const on = meal.type === activeMealType;
-                return (
-                  <HapticPressable key={meal.type} intent="light" disableAnimation disabled={props.saving}
-                    onPress={() => props.onMealChange?.(meal.type)} accessibilityRole="button" accessibilityLabel={meal.label}
-                    accessibilityState={{ selected: on }} style={[styles.pill, on && styles.pillOn]}>
-                    <Text style={[styles.pillText, on && styles.pillTextOn]}>{meal.label}</Text>
-                  </HapticPressable>
-                );
-              })}
-            </View>
+            <MealChoiceRow testID="food-search-meals" value={activeMealType} onChange={props.onMealChange} disabled={props.saving}
+              style={styles.mealRow} />
           ) : null}
 
           {props.addedFoodName ? (
@@ -166,12 +157,7 @@ export default function FoodSearchModal(props: Props) {
 const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   addedMessage: { ...typography.bodySmall, color: sc.accentText, paddingHorizontal: layout.gutter, paddingTop: 12 },
   closeButton: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
-  mealRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: layout.gutter, paddingTop: 12 },
-  pill: { minHeight: layout.touchMin, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
-  pillOn: { borderWidth: 1, borderColor: sc.accent },
-  pillText: { ...typography.bodySmall, color: sc.textMuted },
-  pillTextOn: { fontFamily: typography.bodyMd.fontFamily, color: sc.accentText },
+  mealRow: { marginHorizontal: layout.gutter, marginTop: 12 },
   modalContainer: {
     flex: 1,
   },
