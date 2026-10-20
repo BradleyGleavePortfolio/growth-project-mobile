@@ -17,6 +17,7 @@ const mockNav = { navigate: jest.fn(), goBack: jest.fn(), getState: jest.fn() };
 let mockParams: Record<string, string> = {};
 let [mockOnline, mockToday, mockOpen] = [true, '2026-10-14', () => undefined as void]; // today: Wed of week 3
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useRoute: () => ({ params: mockParams }) }));
+jest.mock('expo-video', () => ({ useVideoPlayer: () => ({ addListener: () => ({ remove: () => undefined }) }), VideoView: () => null }));
 jest.mock('@expo-google-fonts/cormorant-garamond', () => ({ CormorantGaramond_400Regular_Italic: 1, useFonts: () => [true] }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me', coach_id: 'c1' }) }));
