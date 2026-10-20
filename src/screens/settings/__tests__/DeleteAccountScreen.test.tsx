@@ -83,6 +83,7 @@ import DeleteAccountScreen, {
   APPLE_FALLBACK_LATER_IF_APPLE,
   APPLE_REMOVAL_STEPS,
   KEPT_RECORDS,
+  PERMANENTLY_DELETED,
 } from '../DeleteAccountScreen';
 import { deletionApi } from '../../../services/api';
 import { signOut } from '../../../services/authActions';
@@ -209,6 +210,15 @@ describe('DeleteAccountScreen', () => {
       expect(getAllByText(/cancelled when the deletion completes/i).length).toBeGreaterThan(0);
       expect(getByText(/conversations with Roman/i)).toBeTruthy();
       expect(getByText(/usually within a day/i)).toBeTruthy();
+    });
+
+    it('SMALL-T1: the coach line keeps the lessons and paid content clients keep', async () => {
+      const line =
+        'Coach media, notes and briefs, if you coach, except the lessons and paid content your clients keep';
+      expect(PERMANENTLY_DELETED).toContain(line);
+      expect(PERMANENTLY_DELETED.filter((item) => /coach media/i.test(item))).toEqual([line]);
+      const { getByText } = await renderScreen();
+      await waitFor(() => getByText(line));
     });
 
     it('C-313-1: uses the grace period the server reports', async () => {
