@@ -9,6 +9,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } 
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ClientsStackParamList } from '../../../navigation/CoachNavigator';
 import { CoachTeamEntryContext } from '../../../navigation/coachTeamEntry';
@@ -30,13 +31,14 @@ import {
   type LookupAction, type LookupFilter, type LookupReason, type UnreadByClient,
 } from '../../../utils/coach/clientLookup';
 import { useLookupNudge } from './useLookupNudge';
+import LookupSideIndex, { LETTERS } from './LookupSideIndex';
 
-type Props = { navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'> };
+// route.params.view 'needs' (for the coach Home's Needs you tile): the Needs you layout at any roster size, only clients with an action.
+type Props = { navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>; route?: RouteProp<ClientsStackParamList, 'ClientsList'> };
 const FILTERS = Object.keys(FILTER_LABELS) as LookupFilter[];
-const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const ACTION_LABEL: Record<LookupAction, string> = { review: 'Review', reply: 'Reply', nudge: 'Nudge', hello: 'Say hello' };
 
-export default function ClientLookupScreen({ navigation }: Props) {
+export default function ClientLookupScreen({ navigation, route }: Props) {
   const theme = useTheme();
   const s = useMemo(() => makeStyles(theme), [theme]);
   const { colors } = theme;
@@ -49,7 +51,9 @@ export default function ClientLookupScreen({ navigation }: Props) {
   const [archivedCount, setArchivedCount] = useState<number | null>(null);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [scrollY, setScrollY] = useState(0);
+  // Scroll position lives in refs: a scroll never re-renders the list (only the side index, when it shows or hides).
+  const scrollY = useRef(0);
+  const onScrollY = useRef<((y: number) => void) | undefined>(undefined);
   const scrollRef = useRef<ScrollView>(null);
   const sectionY = useRef<Record<string, number>>({});
   const azBase = useRef(0);
@@ -91,8 +95,9 @@ export default function ClientLookupScreen({ navigation }: Props) {
 
   const roster = useMemo(() => sortRoster(clients, 'name'), [clients]);
   if (!archived && !isLoading && !loadError) activeTotal.current = roster.length;
-  const known = !isLoading && !loadError;
-  const searchFirst = archived || (activeTotal.current ?? roster.length) >= SEARCH_FIRST_AT;
+  const known = !isLoading && (!loadError || roster.length > 0); // a failed refresh keeps the last count
+  const needsView = route?.params?.view === 'needs';
+  const searchFirst = archived || (!needsView && (activeTotal.current ?? roster.length) >= SEARCH_FIRST_AT);
   const parsed = parseLookupQuery(query);
   const filters = chip && !parsed.filters.includes(chip) ? [...parsed.filters, chip] : parsed.filters;
   const narrowing = parsed.text.length > 0 || filters.length > 0;
@@ -107,11 +112,12 @@ export default function ClientLookupScreen({ navigation }: Props) {
   const openMessages = (c: RosterClient) => openInboxChat(navigation, c.id, rosterDisplayName(c));
   const runAction = (c: RosterClient, a: LookupAction) => (a === 'review' ? openClient(c) : a === 'nudge' ? nudge.open(c) : openMessages(c));
   const toggleArchived = () => { setChip(null); setFilterStatus(archived ? 'active' : 'archived'); };
-  const jumpTo = (letter: string) => {
+  const jumpTo = (letter: string, animated: boolean) => {
     const present = LETTERS.slice(LETTERS.indexOf(letter)).find((l) => sectionY.current[l] != null);
-    if (!present) return;
+    if (!present) return null;
     const y = azBase.current + sectionY.current[present] - insets.top - layout.statusBarGap;
-    scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: true });
+    scrollRef.current?.scrollTo({ y: Math.max(0, y), animated });
+    return present;
   };
 
   const avatar = (c: RosterClient, size: number) => (
@@ -174,6 +180,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
       {coachLandingTab() === 'ClientsStack' ? <PushPermissionCard audience="coach" /> /* C-S-PUSH-3 + COACHLAND, as on today's list */ : null}
     </View>
   );
+  const stale = loadError && roster.length > 0 ? <Text style={s.note} testID="lookup-stale">Clients did not refresh. Pull down to try again.</Text> : null;
   const privacy = (
     <View style={s.privacy}>
       <Ionicons name="shield-outline" size={16} color={colors.textMuted} style={s.privacyIcon} />
@@ -181,16 +188,19 @@ export default function ClientLookupScreen({ navigation }: Props) {
     </View>
   );
 
+  const sections = searchFirst ? groupByLetter(roster) : [];
+  const presentLetters = sections.map((x) => x.letter).filter((l) => LETTERS.includes(l));
   let body: React.ReactNode;
   if (isLoading) body = <QuietLoading label="Loading clients" rows={5} testID="lookup-loading" />;
   else if (loadError && roster.length === 0) {
     body = <QuietError message={loadError} onRetry={() => coachId && loadClients(coachId, filterStatus)} testID="lookup-error" />;
   } else if (!searchFirst) {
     // Mockup 1's order: last logged first (sortRoster 'recent').
-    const rows = sortRoster(roster, 'recent').map((c) => ({ c, r: lookupReason(c, unread, 'needs') }));
+    const rows = sortRoster(roster, 'recent').map((c) => ({ c, r: lookupReason(c, unread, 'needs') })).filter((x) => !needsView || x.r.action);
     const needs = rows.filter((x) => x.r.action).length;
     body = (
       <>
+        {stale}
         {rows.length > 0 ? <Text style={s.sentence} testID="lookup-sentence">{needsYouSentence(needs, rows.length - needs)}</Text> : null}
         {rows.map(({ c, r }) => clientRow(c, r, r.action ? (
           <HapticPressable intent="light" style={s.act} onPress={() => runAction(c, r.action as LookupAction)} accessibilityRole="button" accessibilityLabel={`${ACTION_LABEL[r.action]}, ${rosterDisplayName(c)}`} testID={`lookup-act-${c.id}`}>
@@ -214,7 +224,6 @@ export default function ClientLookupScreen({ navigation }: Props) {
     );
   } else {
     const chipCount = (f: LookupFilter) => roster.filter((c) => matchesLookupFilter(c, f, unread)).length;
-    const sections = groupByLetter(roster);
     body = (
       <>
         <View style={s.search}>
@@ -223,17 +232,17 @@ export default function ClientLookupScreen({ navigation }: Props) {
         </View>
         <View style={s.chips}>
           {(archived ? [] : FILTERS).map((f) => (
-            <HapticPressable key={f} intent="light" style={[s.chip, chip === f && s.chipOn]} onPress={() => setChip(chip === f ? null : f)} accessibilityRole="button" accessibilityState={{ selected: chip === f }} accessibilityLabel={`${FILTER_LABELS[f]}, ${chipCount(f)}`} testID={`lookup-chip-${f}`}>
-              <Text style={[s.chipText, chip === f && s.chipTextOn]}>{FILTER_LABELS[f]} <Text style={s.chipCount}>{chipCount(f)}</Text></Text>
+            <HapticPressable key={f} intent="light" style={s.chipTarget} onPress={() => setChip(chip === f ? null : f)} accessibilityRole="button" accessibilityState={{ selected: chip === f }} accessibilityLabel={`${FILTER_LABELS[f]}, ${chipCount(f)}`} testID={`lookup-chip-${f}`}>
+              <View style={[s.chip, chip === f && s.chipOn]}><Text style={[s.chipText, chip === f && s.chipTextOn]}>{FILTER_LABELS[f]} <Text style={s.chipCount}>{chipCount(f)}</Text></Text></View>
             </HapticPressable>
           ))}
-          <HapticPressable intent="light" style={[s.chip, archived && s.chipOn]} onPress={toggleArchived} accessibilityRole="button" accessibilityState={{ selected: archived }} accessibilityLabel={archivedCount != null || archived ? `Archived, ${archived ? roster.length : archivedCount}` : 'Archived'} testID="lookup-chip-archived">
-            <Text style={[s.chipText, archived && s.chipTextOn]}>
+          <HapticPressable intent="light" style={s.chipTarget} onPress={toggleArchived} accessibilityRole="button" accessibilityState={{ selected: archived }} accessibilityLabel={archivedCount != null || archived ? `Archived, ${archived ? roster.length : archivedCount}` : 'Archived'} testID="lookup-chip-archived">
+            <View style={[s.chip, archived && s.chipOn]}><Text style={[s.chipText, archived && s.chipTextOn]}>
               Archived{archived || archivedCount != null ? <Text style={s.chipCount}> {archived ? roster.length : archivedCount}</Text> : null}
-            </Text>
+            </Text></View>
           </HapticPressable>
         </View>
-        {loadError ? <Text style={s.note}>Clients did not refresh. Pull down to try again.</Text> : null}
+        {stale}
         {narrowing ? (
           <>
             <View style={s.sect}><Overline style={s.eyebrow}>{results.length} {results.length === 1 ? 'result' : 'results'}</Overline></View>
@@ -277,8 +286,6 @@ export default function ClientLookupScreen({ navigation }: Props) {
     );
   }
 
-  // The index (top at insets.top + 72) shows once Everyone is near the top, so it never sits beside the header or search box.
-  const showIndex = searchFirst && !narrowing && everyoneY != null && scrollY >= everyoneY - insets.top - 200 && roster.length > 0;
   return (
     <View style={s.screen}>
       <ScrollView
@@ -288,21 +295,23 @@ export default function ClientLookupScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         scrollEventThrottle={64}
-        onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
+        onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; onScrollY.current?.(scrollY.current); }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
         {header}
         {body}
       </ScrollView>
-      {showIndex ? (
-        <View style={[s.index, { top: insets.top + 72 }]} testID="lookup-index">
-          {LETTERS.map((l) => (
-            <HapticPressable key={l} intent="light" onPress={() => jumpTo(l)} hitSlop={{ left: 12, right: 6 }} accessibilityRole="button" accessibilityLabel={l} testID={`lookup-index-${l}`}>
-              <Text style={s.indexLetter}>{l}</Text>
-            </HapticPressable>
-          ))}
-        </View>
-      ) : null}
+      {/* The index (top at insets.top + 72) shows once Everyone is near the top, so it never sits beside the header or search box. */}
+      <LookupSideIndex
+        enabled={searchFirst && !narrowing && everyoneY != null && roster.length > 0}
+        from={(everyoneY ?? 0) - insets.top - 200}
+        scrollY={scrollY}
+        listen={onScrollY}
+        present={presentLetters}
+        onJump={jumpTo}
+        style={[s.index, { top: insets.top + 72 }]}
+        letterStyle={s.indexLetter}
+      />
       {nudge.modal}
     </View>
   );
@@ -344,8 +353,9 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     archivedLink: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
     search: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 54, marginTop: 14, paddingHorizontal: 14, borderRadius: radius.input, borderWidth: 1.5, borderColor: colors.primary, backgroundColor: sem.bgSurface },
     searchInput: { ...typography.body, flex: 1, minWidth: 0, color: colors.textPrimary, paddingVertical: 0 },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-    chip: { height: 36, paddingHorizontal: 14, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: sem.border, backgroundColor: sem.bgSurface },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, marginTop: 8 }, // 44 pt targets around 36 pt pills (as the peek sheet)
+    chipTarget: { minHeight: layout.touchMin, paddingVertical: 4, justifyContent: 'center' },
+    chip: { minHeight: 36, paddingHorizontal: 14, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: sem.border, backgroundColor: sem.bgSurface },
     chipOn: { borderColor: colors.primary },
     chipText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', lineHeight: 18, color: colors.textPrimary },
     chipTextOn: { color: colors.primary },
@@ -358,6 +368,6 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     azRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
     azName: { ...typography.h4, flex: 1, color: colors.textPrimary },
     azWhen: { ...typography.bodySmall, color: colors.textMuted, maxWidth: '45%', textAlign: 'right' },
-    index: { position: 'absolute', right: 4, alignItems: 'center' },
+    index: { position: 'absolute', right: 0, width: layout.touchMin, alignItems: 'flex-end', paddingRight: 4 }, // one 44 pt wide strip over the row's right padding
     indexLetter: { ...typography.caption, fontFamily: 'Inter_600SemiBold', fontSize: 11, lineHeight: 17, letterSpacing: 0, color: colors.primary, paddingHorizontal: 4 },
   });
