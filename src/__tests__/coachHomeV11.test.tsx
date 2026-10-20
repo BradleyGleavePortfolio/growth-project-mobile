@@ -224,8 +224,9 @@ describe('UI-2 coach Home, flag on', () => {
     expect(v.queryByTestId('setup-cards')).toBeNull();
     // C-S-PUSH-3: the old cards are gone, so the Home itself carries the push ask, once, after the setup steps.
     expect(v.getAllByTestId('push-ask')).toHaveLength(1);
-    const order = JSON.stringify(v.toJSON());
-    expect(order.indexOf('"testID":"coach-home-v11-empty-wall"')).toBeLessThan(order.indexOf('"testID":"push-ask"'));
+    const order = testIdsInOrder(v.toJSON());
+    expect(order.indexOf('coach-home-v11-empty-wall')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('coach-home-v11-empty-wall')).toBeLessThan(order.indexOf('push-ask'));
     expect(v.queryByTestId('coach-home-v11-all-clients')).toBeNull();
     expect(v.queryByTestId('coach-home-v11-business')).toBeNull();
   });
