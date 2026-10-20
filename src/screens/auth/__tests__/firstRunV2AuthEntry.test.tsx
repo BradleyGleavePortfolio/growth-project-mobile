@@ -130,7 +130,7 @@ it('the flag is off by default, so the existing auth suites cover main', () => {
 it('Welcome: Get started opens Create account with mediumImpact; Log in opens Sign in', async () => {
   const n = nav();
   const view = await render(welcome(n));
-  expect(view.getByText('The Growth Project')).toBeTruthy();
+  expect(view.getByText('TGP Fitness')).toBeTruthy();
   await fireEvent.press(view.getByTestId('welcome-get-started'));
   expect(HapticService.mediumImpact).toHaveBeenCalledTimes(1);
   expect(n.navigate).toHaveBeenLastCalledWith('CreateAccount');

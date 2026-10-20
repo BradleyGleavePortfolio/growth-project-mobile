@@ -7,7 +7,7 @@
  * plan with "Plans that renew each month or year are started from
  * Membership..." and never called POST /v1/checkout/subscription-intent.
  *
- * Backend contract: growth-project-backend #654 (agent/clinic/b-recur-subscriptions)
+ * Backend contract: growth-project-backend #654 (recurring subscriptions)
  *   POST /v1/checkout/subscription-intent { package_id, idempotency_key, expected_amount_cents?, expected_one_time_cents? }
  *     -> { mode: 'payment'|'setup', client_secret, ephemeral_key, customer_id,
  *          publishable_key, purchase_id, subscription_id, status, reused, plan{...} }
@@ -206,7 +206,7 @@ describe('a renewing plan sells as a subscription', () => {
         customerId: 'cus_test_sub',
         customerEphemeralKeySecret: 'ek_test_sub',
         paymentIntentClientSecret: 'pi_test_sub_secret_yyy',
-        merchantDisplayName: 'The Growth Project',
+        merchantDisplayName: 'TGP Fitness',
       }),
     );
     expect(params.setupIntentClientSecret).toBeUndefined();

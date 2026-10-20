@@ -260,7 +260,7 @@ describe('You home', () => {
     expect([title, message, buttons.map((b) => b.text)]).toEqual(['Sign out', 'Are you sure you want to sign out?', ['Cancel', 'Sign out']]);
     buttons[1].onPress?.();
     expect(mockSignOut).toHaveBeenCalled();
-    expect(screen.getByText('The Growth Project v1.0.0')).toBeTruthy();
+    expect(screen.getByText('TGP Fitness v1.0.0')).toBeTruthy();
   });
 });
 

@@ -145,7 +145,7 @@ export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenPro
 
   // Check the 24h gate and package availability, then either show sheet or call onComplete.
   const maybeShowPackageSheet = useCallback(async (target?: WinType) => {
-    // Clinic launch: never offer packages to an already-entitled (comp)
+    // Launch: never offer packages to an already-entitled (comp)
     // client, and never on iOS while purchase surfaces are hidden.
     if (!(await shouldOfferPackagePrompt())) {
       onComplete(target);

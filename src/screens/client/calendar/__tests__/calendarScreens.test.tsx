@@ -203,11 +203,11 @@ describe('CalendarHomeScreen', () => {
     await waitFor(() => expect(r.getByTestId('calendar-no-coach')).toBeTruthy());
     expect(r.queryByTestId('calendar-support-fallback')).toBeNull();
     await fireEvent.press(r.getByTestId('calendar-contact-support'));
-    expect(open).toHaveBeenCalledWith('mailto:Bradleyapple1031@gmail.com?subject=Calendar%20help');
+    expect(open).toHaveBeenCalledWith('mailto:support@thegrowthproject.site?subject=Calendar%20help');
     await waitFor(() => expect(r.getByTestId('calendar-support-fallback-status')).toBeTruthy());
-    expect(r.getByTestId('calendar-support-fallback-address').props.children).toBe('Bradleyapple1031@gmail.com');
+    expect(r.getByTestId('calendar-support-fallback-address').props.children).toBe('support@thegrowthproject.site');
     await fireEvent.press(r.getByTestId('calendar-support-fallback-copy'));
-    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('Bradleyapple1031@gmail.com'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('support@thegrowthproject.site'));
     await fireEvent.press(r.getByTestId('calendar-support-fallback-retry'));
     await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
     open.mockRestore();

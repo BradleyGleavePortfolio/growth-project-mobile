@@ -314,7 +314,7 @@ describe('WearablesShell', () => {
   it('an unexpected refresh failure shows a reference and support path, and is reported', async () => {
     mockImportHistory.mockRejectedValue(new Error('boom'));
     await render(<WearablesShell />);
-    await waitFor(() => expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy());
     expect(mockReportUnexpected).toHaveBeenCalled();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
   });
@@ -375,7 +375,7 @@ describe('WearablesShell', () => {
       await fireEvent.press(await screen.findByLabelText('Open Health Connect'));
       expect(
         await screen.findByText(
-          'When Health Connect access is allowed for The Growth Project, tap Try again to bring in new data.',
+          'When Health Connect access is allowed for TGP Fitness, tap Try again to bring in new data.',
         ),
       ).toBeTruthy();
       await fireEvent.press(screen.getByLabelText('Try again to sync Health Connect'));

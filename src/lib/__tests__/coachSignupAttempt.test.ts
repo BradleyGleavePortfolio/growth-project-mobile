@@ -63,9 +63,9 @@ describe('coachSignupAttempt (#306 r4, Sol B1-R3 / B2-R3)', () => {
   });
 
   it('provider entries are scoped to the provider email when both sides know it', async () => {
-    await rememberUnconfirmedCoachSignup('google', 'Pat@Gmail.com', 1000);
-    expect(await hasUnconfirmedCoachSignup('google', 'pat@gmail.com', 2000)).toBe(true);
-    expect(await hasUnconfirmedCoachSignup('google', 'someone@gmail.com', 2000)).toBe(false);
+    await rememberUnconfirmedCoachSignup('google', 'Pat@Mail.test', 1000);
+    expect(await hasUnconfirmedCoachSignup('google', 'pat@mail.test', 2000)).toBe(true);
+    expect(await hasUnconfirmedCoachSignup('google', 'someone@mail.test', 2000)).toBe(false);
     // An answer without an email cannot prove it is someone else, so the
     // device keeps caution, but nothing is bound to it (#306 r7).
     expect(await hasUnconfirmedCoachSignup('google', undefined, 2000)).toBe(false);

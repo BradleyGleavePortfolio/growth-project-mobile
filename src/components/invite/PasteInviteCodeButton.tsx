@@ -2,7 +2,7 @@
  * "Paste invite code" affordance.
  *
  * After a client installs from the App Store the deep link that carried the
- * invite code is lost (no deferred deep linking in v1). The clinic poster and
+ * invite code is lost (no deferred deep linking in v1). The partner poster and
  * the /join landing page tell them to copy the code; this button reads the
  * clipboard (expo-clipboard, already a dependency, no native permission) and
  * accepts either a bare `GP-XXXX` code or a `/join/<code>` URL.

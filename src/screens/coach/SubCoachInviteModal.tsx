@@ -145,7 +145,7 @@ export default function SubCoachInviteModal({
     try {
       await Share.share({
         url: result.inviteUrl,
-        message: `You've been invited to join as a sub-coach on The Growth Project: ${result.inviteUrl}`,
+        message: `You've been invited to join as a sub-coach on TGP Fitness: ${result.inviteUrl}`,
       });
     } catch {
       // dismissed

@@ -151,7 +151,7 @@ export const PLAN_POLL_DELAYS_MS = [
 ];
 export const ENTITLEMENT_POLL_DELAYS_MS = [0, 1500, 2500, 3000, 3000];
 export const RECHECK_DELAYS_MS = [0, 2000, 4000];
-const MERCHANT_DISPLAY_NAME = "The Growth Project";
+const MERCHANT_DISPLAY_NAME = "TGP Fitness";
 
 const IDLE: PurchaseState = {
   phase: "idle",

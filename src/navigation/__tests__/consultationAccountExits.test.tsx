@@ -88,7 +88,7 @@ async function pickUnder16(r: R) {
     await fireEvent(r.getByTestId('wheel-dob-year'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
   }
   await fireEvent.press(r.getByTestId('consult-continue'));
-  expect(r.getByText('The Growth Project is for ages 16 and up.')).toBeTruthy();
+  expect(r.getByText('TGP Fitness is for ages 16 and up.')).toBeTruthy();
 }
 
 const PATHS: Array<[string, string, (r: R) => Promise<void>]> = [

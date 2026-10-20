@@ -1011,8 +1011,8 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
     await waitFor(() => r.getByTestId('consult-problem-unknown'));
     expect(r.getByTestId('consult-problem-action')).toBeTruthy();
     await fireEvent.press(r.getByTestId('consult-support'));
-    expect(SUPPORT_EMAIL).toBe('Bradleyapple1031@gmail.com');
-    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^mailto:Bradleyapple1031@gmail\.com\?subject=/));
+    expect(SUPPORT_EMAIL).toBe('support@thegrowthproject.site');
+    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^mailto:support@thegrowthproject\.site\?subject=/));
     await fireEvent.press(r.getByTestId('consult-sign-out'));
     expect(onSignOut).not.toHaveBeenCalled(); // asks first
     const buttons = (alert.mock.calls[alert.mock.calls.length - 1][2] ?? []) as AlertButton[];
@@ -1031,7 +1031,7 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
     expect(r.queryByTestId('consult-support-fallback')).toBeNull();
     await fireEvent.press(r.getByTestId('consult-support'));
     await waitFor(() => r.getByTestId('consult-support-fallback'));
-    expect(open).toHaveBeenCalledWith('mailto:Bradleyapple1031@gmail.com?subject=Help%20with%20my%20consultation');
+    expect(open).toHaveBeenCalledWith('mailto:support@thegrowthproject.site?subject=Help%20with%20my%20consultation');
     expect(r.getByTestId('consult-support-fallback-status').props.children).toMatch(/could not open an email app/);
     const address = r.getByTestId('consult-support-fallback-address');
     expect(address.props.selectable).toBe(true);

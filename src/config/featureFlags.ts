@@ -31,6 +31,7 @@ const isDev =
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2: process.env.EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2,
   EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2,
+  EXPO_PUBLIC_FF_CLIENT_TRAIN_V2: process.env.EXPO_PUBLIC_FF_CLIENT_TRAIN_V2,
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
@@ -41,9 +42,12 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_CLIENT_BILLING_V2: process.env.EXPO_PUBLIC_FF_CLIENT_BILLING_V2,
+  EXPO_PUBLIC_FF_COACH_AI_CREDITS: process.env.EXPO_PUBLIC_FF_COACH_AI_CREDITS,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
+  EXPO_PUBLIC_FF_COACH_BRIEF_GATE: process.env.EXPO_PUBLIC_FF_COACH_BRIEF_GATE,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
+  EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT: process.env.EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT,
   EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
@@ -65,10 +69,12 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
   EXPO_PUBLIC_FF_FIRST_RUN_V2: process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2,
   EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST: process.env.EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST,
+  EXPO_PUBLIC_FF_HABITS_RING: process.env.EXPO_PUBLIC_FF_HABITS_RING,
   EXPO_PUBLIC_FF_HEALTH_PAGES: process.env.EXPO_PUBLIC_FF_HEALTH_PAGES,
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
+  EXPO_PUBLIC_FF_LEARN_COURSES: process.env.EXPO_PUBLIC_FF_LEARN_COURSES,
   EXPO_PUBLIC_FF_LEARN_HUB: process.env.EXPO_PUBLIC_FF_LEARN_HUB,
   EXPO_PUBLIC_FF_MEAL_PLANS_V2: process.env.EXPO_PUBLIC_FF_MEAL_PLANS_V2,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
@@ -109,6 +115,8 @@ export const featureFlags = {
   clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', false),
   /** TIMELINE: the Style C Timeline page, its door on Progress and its push route; off in every build. */
   clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', false),
+  /** C1-TRAIN-TAB: the Style C v2 top of the Train tab (week masthead, coach note, today's workout); off in every build. */
+  clientTrainV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TRAIN_V2', false),
   /** C5: the Style C buying pages (slice 2: the success moment and what unlocks); off in every build. */
   clientBillingV2: readFlag('EXPO_PUBLIC_FF_CLIENT_BILLING_V2', false),
   /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
@@ -165,7 +173,7 @@ export const featureFlags = {
    */
   consultationOnboarding: readFlag('EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', false),
 
-  // ─── Clinic launch — Roman-led client tutorial (C08 + C09) ───────────────
+  // ─── Launch — Roman-led client tutorial (C08 + C09) ──────────────────────
   /**
    * The action-gated Roman tour after the plan reveal, the pinned macro and
    * plan explanation cards on Home and Train, the Home "Message your coach"
@@ -203,6 +211,10 @@ export const featureFlags = {
   clientPathCopilot: readFlag('EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT', isDev),
   /** Coach Brief — daily morning brief on the coach home tab. */
   coachBrief: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF', isDev),
+  /** BRIEFA: today's brief as Concept A, "Roman in the light" (full screen,
+   *  at most two suggested actions, list rows for busy kinds). Needs coachBrief
+   *  too. Off in every profile; off shows today's brief screen unchanged. */
+  coachBriefGate: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF_GATE', false),
   /** Admin Control Room — governance view, gated to admin role. */
   adminControlRoom: readFlag('EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM', isDev),
   /** Private community hub — rooms, cohorts, announcements, coach-led threads. */
@@ -578,9 +590,9 @@ export const featureFlags = {
    */
   importReview: readFlag('EXPO_PUBLIC_FF_IMPORT_REVIEW', false),
 
-  // ─── Clinic launch (C11) — App Review 3.1 risk removal ───────────────────
+  // ─── Store launch (C11) — App Review 3.1 risk removal ────────────────────
   /**
-   * Clinic launch (App Review): hide, on iOS only, purchases that are NOT
+   * Store launch (App Review): hide, on iOS only, purchases that are NOT
    * 1:1 person-to-person services. Client purchases of 1:1 coach packages
    * stay available: they are real-time 1:1 coaching between a client and an
    * individual coach, filed under Guideline 3.1.3(d) and paid through
@@ -627,6 +639,29 @@ export const featureFlags = {
    */
   androidCreditPackLink: readFlag('EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK', false),
 
+  // ─── CREDITBUILD-143 — coach AI credit pool screens (CREDIT-1/W/S/SW) ─────
+  /**
+   * The coach AI credit screens the owner approved on 10-13 (Concept 1 "A
+   * page in setup" in the S3 look): the "Your AI credits." page after K6/K7
+   * in the coach consultation and the "AI credits" row on "Your practice is
+   * ready.". Head coaches only; sub-coaches never see them (TM-W). OFF by
+   * default unconditionally (not `isDev`) and in every EAS profile. Turn it
+   * on only once the Money page shows the AI pool with "Buy more credits"
+   * (mobile #686), because the page says that is where they live.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_AI_CREDITS
+   */
+  coachAiCredits: readFlag('EXPO_PUBLIC_FF_COACH_AI_CREDITS', false),
+  /**
+   * Roman's line N7 ("Ask me as often as you like. Every conversation uses
+   * your AI credits.") on the AI credit screens. It is true only once
+   * backend #1016 (coaches have no daily Roman number, NOLOCK-R3) is deployed,
+   * so it has its own switch. OFF by default unconditionally.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT
+   */
+  coachRomanNoDailyLimit: readFlag('EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT', false),
+
   // ─── S14 — client AI wearable insight panel ──────────────────────────────
   /**
    * The client Health and Sleep views can show an AI-written insight panel
@@ -668,6 +703,9 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_HEALTH_PAGES
    */
   healthPages: readFlag('EXPO_PUBLIC_FF_HEALTH_PAGES', false),
+  /** HB-B1 (#HABITS-CONCEPT, concept B): Habits opens on the ring, the week strip and tiles.
+   * Off in every build; off, Habits is main's list. env: EXPO_PUBLIC_FF_HABITS_RING */
+  habitsRing: readFlag('EXPO_PUBLIC_FF_HABITS_RING', false),
   /**
    * SHARE-A (#SHARE-SEND op 1): Share on Progress and the Session summary opens
    * one ShareSheet over the screen; no ShareCard route. Off in every build.
@@ -700,6 +738,8 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_LEARN_HUB
    */
   learnHub: readFlag('EXPO_PUBLIC_FF_LEARN_HUB', false),
+  /** LEARN-M5 (MOCK-LEARN2 A): Train's course banner and the course home, week and lesson. Off; off, Train is main's. env: EXPO_PUBLIC_FF_LEARN_COURSES */
+  learnCourses: readFlag('EXPO_PUBLIC_FF_LEARN_COURSES', false),
   /** MEALBUILD (MOCK-K5 C): Programs > Meal plans and Meals. Off; off, Programs is main's. env: EXPO_PUBLIC_FF_MEAL_PLANS_V2 */
   mealPlansV2: readFlag('EXPO_PUBLIC_FF_MEAL_PLANS_V2', false),
 

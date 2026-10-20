@@ -17,8 +17,15 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
+import { featureFlags } from '../../config/featureFlags';
+import WeekInReviewScreen from './progress/WeekInReviewScreen';
 
-export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
+type ReportNavigation = Pick<NavigationProp<ParamListBase>, 'goBack'>;
+export default function ReportScreen({ navigation }: { navigation: ReportNavigation }) {
+  return featureFlags.clientProgressV2 ? <WeekInReviewScreen navigation={navigation} /> : <LegacyReportScreen navigation={navigation} />;
+}
+
+function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
@@ -132,7 +139,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
         {/* Cover */}
         <View style={styles.cover}>
           <View style={styles.coverDot} />
-          <Text style={styles.coverTitle}>The Growth Project</Text>
+          <Text style={styles.coverTitle}>TGP Fitness</Text>
           <Text style={styles.coverSubtitle}>Weekly progress report</Text>
           <Text style={styles.coverName}>
             {currentUser?.firstName || currentUser?.name}
@@ -208,7 +215,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
         {/* Footer */}
         <View style={styles.footer}>
           <View style={styles.footerDot} />
-          <Text style={styles.footerTitle}>The Growth Project</Text>
+          <Text style={styles.footerTitle}>TGP Fitness</Text>
         </View>
     </Screen>
   );

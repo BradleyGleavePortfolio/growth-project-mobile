@@ -4,7 +4,7 @@
  *
  *   - a bare code:           `GP-7K2Q`, `gp-7k2q`, ` GP-7K2Q\n`, `GP-AB-CD`
  *   - a join link:           `https://app.trygrowthproject.com/join/GP-7K2Q`
- *   - a custom-scheme link:  `tgp://join/GP-7K2Q`, `tgp://join/CLINIC2026`
+ *   - a custom-scheme link:  `tgp://join/GP-7K2Q`, `tgp://join/LAUNCH2026`
  *   - a query-style link:    `.../join?code=GP-7K2Q` or `?invite_code=...`
  *   - a sentence that contains one of the above ("Use code GP-7K2Q to join")
  *

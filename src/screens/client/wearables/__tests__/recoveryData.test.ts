@@ -81,7 +81,7 @@ describe('sleepStages — plain language only', () => {
     const view = sleepStages(data)!;
     expect(view.totalMinutes).toBe(420);
     const labels = view.slices.map((s) => s.label);
-    // Plain language ONLY — never clinical sleep-stage codes.
+    // Plain language ONLY — never medical sleep-stage codes.
     expect(labels).toEqual(['REM', 'Deep sleep', 'Light sleep', 'Awake']);
     const rem = view.slices.find((s) => s.key === 'rem')!;
     expect(rem.minutes).toBe(90);
@@ -153,7 +153,7 @@ describe('sleepDeficit', () => {
 });
 
 describe('respiration', () => {
-  it('flags SpO2 below the clinical-attention threshold', () => {
+  it('flags SpO2 below the medical-attention threshold', () => {
     const data = resp([
       { metric: 'RESPIRATORY_RATE_BRPM', unit: 'br/min', provider_used: 'OURA', sample_count: 1, samples: [sample(14.2)] },
       { metric: 'SPO2_PCT', unit: '%', provider_used: 'OURA', sample_count: 1, samples: [sample(88)] },

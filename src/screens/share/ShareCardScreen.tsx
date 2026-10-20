@@ -98,7 +98,7 @@ function ShareCard({ milestone, colors }: CardProps) {
   return (
     <View style={styles.card}>
       {/* Brand mark */}
-      <Text style={styles.brandMark}>The Growth Project</Text>
+      <Text style={styles.brandMark}>TGP Fitness</Text>
 
       {/* Icon */}
       <View style={styles.iconContainer}>

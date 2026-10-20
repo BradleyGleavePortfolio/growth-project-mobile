@@ -174,7 +174,7 @@ No additional env vars are required while mocked. When live, the standard `EXPO_
 - Rich push payloads (image, action buttons) — requires Expo Notifications v3 + backend change.
 - Per-schedule quiet hours (different windows per day of week).
 
-## Push tap routing (clinic launch)
+## Push tap routing (launch)
 
 - `installNotificationResponseHandler(routePushTap)` is installed once in `App.tsx` (skipped in screenshot mode). It handles live taps and the cold-start tap from `getLastNotificationResponseAsync`, de-duplicated by notification id.
 - `src/services/pushTapRouter.ts` delivers a tap only when RootNavigator reports an explicit app session (`setPushSession(pushSessionFor(authState, userId))`): `student`/`package_prompt` mount the client navigator, `coach` the coach navigator. Bootstrap and every onboarding root (lean questions, Day-1, Day-1 win, coach wizard) hold the tap. Sign-out drops it, a tap that arrives while signed out is dropped, and a session for a different user id drops it.

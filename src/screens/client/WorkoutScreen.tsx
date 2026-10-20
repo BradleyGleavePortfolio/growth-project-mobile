@@ -35,7 +35,7 @@ import { buildCompletionLogBase, normalizeError } from './_completionLogging';
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, radius, type SemanticTokens } from '../../theme/tokens';
-import { Screen } from '../../ui';
+import { QuietTextButton, Screen } from '../../ui';
 import { QuietOverline } from '../../ui/sections/QuietSection';
 import QuietBar from '../../ui/progress/QuietBar';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
@@ -46,11 +46,14 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 // so this build hid them from the user entirely.
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
-// Clinic tutorial (C08): pinned plan explanation card; flag-gated, renders
+// Client tutorial (C08): pinned plan explanation card; flag-gated, renders
 // nothing unless featureFlags.clientTutorial and a program exists.
 import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
 import WorkoutSyncCards from '../../components/workout/WorkoutSyncCards';
 import { featureFlags } from '../../config/featureFlags';
+import { getTodayString } from '../../utils/date';
+// C1-TRAIN-TAB (featureFlags.clientTrainV2, off): the Style C v2 top of the tab.
+import { TrainDay, TrainHead, featuredWorkout, type StartParams } from './train/TrainToday';
 // §2.8 Workout complete — Roman speaks beside his face (the card co-locates
 // <RomanAvatar />). Gated behind featureFlags.romanChat (default OFF), the
 // dedicated Roman flag. TRAIN-TAB-FIN-130: a load failure shows CoachErrorState
@@ -58,6 +61,7 @@ import { featureFlags } from '../../config/featureFlags';
 // had run and failed, but nothing retries this load (services/api.ts retries
 // only 401s).
 import RomanWorkoutCompleteCard from '../../components/roman/RomanWorkoutCompleteCard';
+import CourseBanner from './learn/CourseBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -640,6 +644,56 @@ export default function WorkoutScreen() {
     setRetrying(false);
   };
 
+  // C1-TRAIN-TAB: with clientTrainV2 on, the week masthead and today's workout (Start workout under its name,
+  // #TRAIN-START-TOP) replace the From your coach hero; every other row and route below stays.
+  const trainV2 = featureFlags.clientTrainV2;
+  const today = getTodayString();
+  const assignmentRows = Array.isArray(assignmentsQuery.data) ? assignmentsQuery.data : [];
+  const featured = trainV2 ? featuredWorkout(assignmentRows, today) : null;
+  const trainState = assignmentsQuery.isLoading ? 'loading' : assignmentsQuery.isError && !assignmentRows.length ? 'failed' : 'ready';
+  const startAssigned = (params: StartParams) => navigation.navigate('ActiveWorkout', params);
+  const headIcon = trainV2 ? sc.textOnAccent : sc.textMuted;
+  // The tab's header: on the masthead with the flag on (also while the first load runs), as today with it off.
+  const header = (
+    <View style={styles.header}>
+      <Text style={[styles.title, trainV2 && { color: sc.textOnAccent }]}>Workouts</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+        {/* S-REACH: the exercise library (GET /exercise-catalog) had no entry. */}
+        <HapticPressable
+          intent="light"
+          onPress={() => navigation.navigate('ExerciseLibrary')}
+          hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
+          accessibilityRole="button"
+          accessibilityLabel="Exercise library"
+          testID="workout-exercise-library"
+        >
+          <Ionicons name="library-outline" size={22} color={headIcon} />
+        </HapticPressable>
+        {coachless ? null : (
+          <HapticPressable
+            intent="light"
+            onPress={() => navigation.navigate('CoachGuidelines')}
+            hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
+            accessibilityRole="button"
+            accessibilityLabel="Coach guidelines"
+            testID="workout-coach-guidelines"
+          >
+            <Ionicons name="clipboard-outline" size={22} color={headIcon} />
+          </HapticPressable>
+        )}
+      </View>
+    </View>
+  );
+
+  if (isLoading && trainV2) {
+    return (
+      <Screen edges={[]} testID="workout" contentStyle={styles.content}>
+        <TrainHead on rows={[]} today={today} state="loading">{header}</TrainHead>
+        <TrainDay workout={null} hasAny={false} state="loading" coachless={coachless} userId={currentUser?.id}
+          onStart={startAssigned} onRetry={refreshAssignments} today={today} />
+      </Screen>
+    );
+  }
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -661,50 +715,31 @@ export default function WorkoutScreen() {
     pendingAssignments.length === 1
       ? (assignmentPlanName(pendingAssignments[0]) ?? 'New workout assigned')
       : `${pendingAssignments.length} workouts waiting`;
-  const assignedLeads = !loadError && pendingAssignments.length > 0;
-  const quickLeads = !loadError && pendingAssignments.length === 0;
-  // U10: completed coach workouts were reachable only with 2+ pending.
-  const showAllCoachRow = completedAssignments > 0 && pendingAssignments.length < 2;
+  const assignedLeads = !trainV2 && !loadError && pendingAssignments.length > 0;
+  const quickLeads = !loadError && (trainV2 ? trainState !== 'loading' && !featured : pendingAssignments.length === 0);
+  // U10: completed coach workouts were reachable only with 2+ pending. C1-TRAIN-TAB: the list is one tap away
+  // whenever it holds more than the workout shown at the top.
+  const showAllCoachRow = trainV2 ? assignmentRows.length > (featured ? 1 : 0) : completedAssignments > 0 && pendingAssignments.length < 2;
 
   return (
     <Screen
-      edges={['top']}
+      edges={trainV2 ? [] : ['top']}
       testID="workout"
       contentStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={sc.accent} colors={[sc.accent]} />}
     >
-        <View style={styles.header}>
-          <Text style={styles.title}>Workouts</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-            {/* S-REACH: the exercise library (GET /exercise-catalog) had no entry. */}
-            <HapticPressable
-              intent="light"
-              onPress={() => navigation.navigate('ExerciseLibrary')}
-              hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
-              accessibilityRole="button"
-              accessibilityLabel="Exercise library"
-              testID="workout-exercise-library"
-            >
-              <Ionicons name="library-outline" size={22} color={sc.textMuted} />
-            </HapticPressable>
-            {coachless ? null : (
-              <HapticPressable
-                intent="light"
-                onPress={() => navigation.navigate('CoachGuidelines')}
-                hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
-                accessibilityRole="button"
-                accessibilityLabel="Coach guidelines"
-                testID="workout-coach-guidelines"
-              >
-                <Ionicons name="clipboard-outline" size={22} color={sc.textMuted} />
-              </HapticPressable>
-            )}
-          </View>
-        </View>
+        <TrainHead on={trainV2} rows={assignmentRows} today={today} state={trainState}>
+          {header}
+        </TrainHead>
 
         <PlanExplanationCard />
 
         <WorkoutSyncCards userId={currentUser?.id} onSynced={loadData} />
+
+        {trainV2 ? (
+          <TrainDay workout={featured} hasAny={assignmentRows.length > 0} state={trainState} coachless={coachless}
+            coachId={currentUser?.coach_id} userId={currentUser?.id} onStart={startAssigned} onRetry={refreshAssignments} today={today} />
+        ) : null}
 
         {assignedLeads ? (
           <View style={styles.hero}>
@@ -749,11 +784,11 @@ export default function WorkoutScreen() {
         ) : null}
         {showAllCoachRow || !quickLeads ? (
           <View style={styles.rows}>
-            {loadError && pendingAssignments.length > 0 ? (
+            {!trainV2 && loadError && pendingAssignments.length > 0 ? (
               <QuietRow title={assignedTitle} meta="From your coach" label={assignedLabel} onPress={openAssignedList} styles={styles} iconColor={sc.textMuted} />
             ) : null}
             {showAllCoachRow ? (
-              <QuietRow title="All coach workouts" meta={`${completedAssignments} completed`} label="All coach workouts" onPress={() => openInMoreTab('ClientWorkoutViewer')} testID="workout-all-coach-workouts" styles={styles} iconColor={sc.textMuted} />
+              <QuietRow title="All coach workouts" meta={completedAssignments > 0 || !trainV2 ? `${completedAssignments} completed` : `${pendingAssignments.length} workouts waiting`} label="All coach workouts" onPress={() => openInMoreTab('ClientWorkoutViewer')} testID="workout-all-coach-workouts" styles={styles} iconColor={sc.textMuted} />
             ) : null}
             {quickLeads ? null : (
               <QuietRow title="Quick workout" meta="Start an empty session" label="Quick workout" onPress={startQuickWorkout} testID="workout-quick-start" styles={styles} iconColor={sc.textMuted} />
@@ -770,7 +805,14 @@ export default function WorkoutScreen() {
           </HapticPressable>
         </View>
 
-        {loadError ? (
+        {/* C1-TRAIN-TAB: with a workout at the top, Start workout stays the one forest action, so after a failed
+            load Try again is a quiet link; otherwise the failure surface below is today's (romanP3FlagOff). */}
+        {loadError && featured ? (
+          <View style={styles.hero} testID="workout-load-error">
+            <Text style={styles.heroNote}>Your routines and history did not load. Check the connection, then try again.</Text>
+            <QuietTextButton label="Try again" onPress={() => void retryLoad()} disabled={retrying} testID="workout-load-error-retry" />
+          </View>
+        ) : <>{loadError ? (
           <CoachErrorState
             message="Your routines and history did not load. Check the connection, then try again."
             onRetry={() => void retryLoad()}
@@ -813,7 +855,7 @@ export default function WorkoutScreen() {
               </HapticPressable>
             );
           })
-        )}
+        )}</>}
 
         {/* Recent workouts */}
         {loadError ? null : <QuietOverline style={styles.sectionOverline}>Recent workouts</QuietOverline>}
@@ -929,6 +971,8 @@ export default function WorkoutScreen() {
             </View>
           ) : <Text style={styles.chartEmptyText}>Log a workout to see muscle breakdown</Text>}
         </FadeInView>}
+        {/* LEARN-M5: the course banner at the very bottom (#TRAIN-START-TOP); nothing unless featureFlags.learnCourses. */}
+        <CourseBanner refreshing={refreshing} />
     </Screen>
   );
 }

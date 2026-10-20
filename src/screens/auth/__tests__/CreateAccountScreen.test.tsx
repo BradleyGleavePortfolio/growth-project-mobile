@@ -12,6 +12,7 @@ import React from 'react';
 import { Alert, Linking, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { SUPPORT_EMAIL } from '../../../constants/support';
 
 const mockGetSignupPolicy = jest.fn();
 const mockSignupWithCode = jest.fn();
@@ -324,7 +325,7 @@ describe('CreateAccountScreen', () => {
 
   it('paste with no code on the clipboard shows guidance and leaves the field empty', async () => {
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
-    mockGetString.mockResolvedValue('see you at the clinic!');
+    mockGetString.mockResolvedValue('see you at the gym!');
     const { getByTestId, findByText } = await renderScreen();
     await fireEvent.press(getByTestId('paste-invite-code'));
     expect(await findByText(/No invite code was found on your clipboard/i)).toBeTruthy();
@@ -1320,7 +1321,7 @@ describe('CreateAccountScreen', () => {
 
     it('guard: a different address in the response is ignored', async () => {
       mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
-      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true, email: 'someone@else.com' } });
+      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true, email: 'someone@example.test' } });
       mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
       const utils = await renderScreen();
       await fillAndSubmit(utils);
@@ -1349,7 +1350,7 @@ describe('CreateAccountScreen Request access email', () => {
     const utils = await renderScreen();
     await fireEvent.press(await utils.findByTestId('request-access-link'));
     expect(openURL).toHaveBeenCalledWith(
-      'mailto:Bradleyapple1031@gmail.com?subject=Request%20access%20to%20The%20Growth%20Project',
+      `mailto:${SUPPORT_EMAIL}?subject=Request%20access%20to%20TGP%20Fitness`,
     );
     expect(utils.queryByTestId('request-access-fallback')).toBeNull();
   });
@@ -1365,9 +1366,9 @@ describe('CreateAccountScreen Request access email', () => {
     );
     const address = utils.getByTestId('request-access-fallback-address');
     expect(address.props.selectable).toBe(true);
-    expect(address.props.children).toBe('Bradleyapple1031@gmail.com');
+    expect(address.props.children).toBe('support@thegrowthproject.site');
     await fireEvent.press(utils.getByTestId('request-access-fallback-copy'));
-    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('Bradleyapple1031@gmail.com'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('support@thegrowthproject.site'));
     await waitFor(() =>
       expect(utils.getByTestId('request-access-fallback-status').props.children).toMatch(/Address copied/),
     );

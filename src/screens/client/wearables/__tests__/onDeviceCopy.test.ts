@@ -84,7 +84,7 @@ describe('connectFailureMessage', () => {
     [
       new OnDeviceStepError('register', networkError()),
       'connect',
-      /The Growth Project couldn't be reached/,
+      /TGP Fitness couldn't be reached/,
     ],
     [new OnDeviceStepError('import', networkError()), 'resume', /connection dropped/],
     [new OnDeviceStepError('import', httpError(401, {})), 'login', /session ended/],
@@ -103,7 +103,7 @@ describe('connectFailureMessage', () => {
     [
       new OnDeviceStepError('import', new HealthConnectPermissionDeniedError(['Steps'])),
       'open_settings',
-      /access is turned off for The Growth Project/,
+      /access is turned off for TGP Fitness/,
     ],
     [
       new OnDeviceStepError('import', new HealthConnectUnavailableError()),

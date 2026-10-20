@@ -1,5 +1,9 @@
 # Navigation
 
+| Slice | Behavior |
+|---|---|
+| C8-WEEK | No new route: `Report` renders Week in review only with `clientProgressV2` on. Progress keeps its existing View progress report door; Back uses the existing More stack. The flag stays off by default. |
+
 C8V2-2B adds no route. With clientProgressV2 on, More > Progress keeps its back-only
 header in the masthead forest with light text and status bar (`backOnlyHeader(title,
 onMasthead)`), so the bar and the page read as one surface.
@@ -132,6 +136,7 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 - The 4-tab bar (Home / Train / Log / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
 - The `MoreStack` registers `AIGuide` and `Membership` (sale-readiness, #67). Both are static targets of `MoreScreen` rows; neither is a deep-link target and neither requires backend changes (`Membership` reads only `usersApi.getFoundingNumber` and `aiApi.getStructuredContext`).
 - LEARN-A (flag `learnHub`, off): `Learn` renders `LearnScreen` instead of `EducationScreen`, and the `MoreStack` adds `LearnLesson` (`{ id: string }`, the lesson view; Next replaces it so Back returns to Learn) and `CoachGuidelines` (Read all on Learn). With the flag off neither route exists. With it on, `CoachGuidelines` in both the `WorkoutStack` (Train header) and the `MoreStack` renders `LearnGuidelinesScreen`.
+- LEARN-M5 (flag `learnCourses`, off): the `WorkoutStack` adds `Course` (`{ id }`, the course home opened from Train's banner), `CourseWeek` (`{ id, week }`) and `CourseLesson` (`{ id, lesson }`). With the flag off none of them exists.
 - `RecipeDetail` is a serialisable-only route. The list passes `{ recipeId }`, the detail screen reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById`. The shape is asserted in `src/navigation/__tests__/clientNavigator.test.ts`. Do not add screens that pass full domain objects through navigation params.
 - There is no global floating chat widget. The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind were deleted in #63. If a future feature wants a shared AI surface, it must be a real screen registered under the relevant navigator — the doctrine (`docs/QUIET_LUXURY_DOCTRINE.md` §6) forbids reintroducing a global FAB.
 - `ShareCard` (MoreStack) is registered only while `featureFlags.shareSheetV2` is off (SHARE-A). On, Share on Progress and on the Session summary opens `components/share/ShareSheet` over the screen instead, so no route or param shape is needed; see `docs/share-card.md`.
@@ -144,7 +149,7 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 Both `ClientNavigator` and `CoachNavigator` now inject a bell icon into the header of their respective primary stack navigators.
 
 ### ClientNavigator
-- Clinic tutorial (featureFlags.clientTutorial, default OFF): the tab navigator is wrapped in `TutorialHost`, and `screenListeners` is now a function. It reports the focused route path (`state` event, via `src/tutorial/navigationFocus.ts`) to the tutorial step machine and captures the tab navigation object so the overlay's "Take me there" can open `Home/Messages`, `MoreTab/Connections` and `MoreTab/Health`. Tab list and routes are unchanged. With the flag OFF the host is a pass-through. See `src/tutorial/README.md`.
+- Client tutorial (featureFlags.clientTutorial, default OFF): the tab navigator is wrapped in `TutorialHost`, and `screenListeners` is now a function. It reports the focused route path (`state` event, via `src/tutorial/navigationFocus.ts`) to the tutorial step machine and captures the tab navigation object so the overlay's "Take me there" can open `Home/Messages`, `MoreTab/Connections` and `MoreTab/Health`. Tab list and routes are unchanged. With the flag OFF the host is a pass-through. See `src/tutorial/README.md`.
 
 Home renders the bell in `HomeHeaderActions` (not `headerRight`), alongside the coach-message entry with its unread count (clients with a coach only; a coachless client sees "Ask Roman" or nothing there, B25). The bell's `NotificationBadge` shows the live unread count (polled every 30 s, refreshed on foreground); tapping opens `HomeStack → NotificationCenter`. When `featureFlags.romanChat` is on, a 32 pt neutral Roman avatar in a 44 pt target opens the existing `MoreTab → RomanChat` destination with `initial: false`, preserving `MoreIndex` underneath on first entry. Roman chat has its own labelled 44 pt Back control in every load state for both client and coach stacks. The More entry, Messages and tab list remain unchanged. With `featureFlags.c3StyleB` and Roman chat on (C3B-S2, MOCK-C3 Style B), the coach entry, the Roman avatar and "Ask Roman" open `HomeStack → MessagesInbox` instead: the client's Messages list, whose coach card opens `HomeStack → Messages` and whose Roman card opens `MoreTab → RomanChat` (`initial: false`). The route is registered always and reached only from those entries.
 

@@ -319,7 +319,7 @@ export default function ConnectProviderSheet({
         await finishReturn(ticket, target);
         return;
       }
-      // Clinic tutorial: only an explicit success counts as connected; a
+      // Client tutorial: only an explicit success counts as connected; a
       // dismiss is confirmed (or not) by the re-read connections list.
       if (result.type === 'success') emitTutorialSignal('wearable_connected');
       if (result.type === 'success' || result.type === 'dismiss') {
@@ -762,7 +762,7 @@ export function onDeviceDisclosure(
     : 'so your coach can personalize your training, recovery, and check-ins.';
   return (
     `When you continue, ${provider === 'SAMSUNG_HEALTH' ? 'Health Connect' : displayName} asks ` +
-    `for permission on this phone. The Growth Project then brings in your last 30 days of ${data} ` +
+    `for permission on this phone. TGP Fitness then brings in your last 30 days of ${data} ` +
     `and new data each time you open Health, ${purpose} Nothing is read or shared until you allow it.`
   );
 }

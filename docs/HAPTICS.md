@@ -57,6 +57,7 @@ When the toggle changes:
 
 | Location | Method | Trigger |
 |---|---|---|
+| `progress/WeekInReviewScreen` (C8-WEEK, `clientProgressV2` off by default) | none on read; shared QuietError retry uses `softImpact()` | No fabricated save/completion haptic on a read-only recap; the retry text action keeps the shared preference-aware feedback. The ring is static and needs no Reduce Motion variant. |
 | `ClientNavigator` tab bar | `selection()` | Every tab press |
 | `progress/ProgressV2` and `LogWeightSheetV2` (C8V2-2B, `clientProgressV2` off by default) | `selection()`; `success()`; `warning()`; `error()` | Week / Month / All and each 0.1 stepper; once when the server saves the weigh-in (the Save tap itself fires nothing); a weight outside the range; the save fails |
 | `CoachNavigator` tab bar | `selection()` | Every tab press, including the selected tab under Settings, Community or Team (COACHTABS) |
@@ -82,6 +83,7 @@ When the toggle changes:
 | `share/ShareSheet` (SHARE-A, `shareSheetV2` off by default) | `softImpact()`; `success()`; `error()` | A tap on Send to {coach}, Share outside the app or the Session summary Share link; once, only when the server confirms a send (none for Share outside the app: the app cannot know whether the person finished; none when the card waits offline in the thread outbox, SHARE-B); a picture or a send fails |
 | `ShareCardScreen` (flag off) | `error()` | The picture could not be made or the share failed (the success haptic before the picture is gone) |
 | Send to Sam handler (C1V2-C5) | `success()` | Once, in the tap that passes the parts their `event`; the parts draw and fire nothing. Not on a screen yet |
+| `client/train/TrainToday` (C1-TRAIN-TAB, `clientTrainV2` off by default) | `mediumImpact()` | Start workout (or Resume workout) under today's workout name on the Train tab; the button's own soft haptic is off. None when the week ring or day strip draws |
 | `MessagesInboxScreen` (client, `c3StyleB` on) | `selection()` | A tap on the coach card, Roman card, privacy line, Your conversations with Roman, Join a coach or Contact support |
 | Consultation T1, B1, B3, N1, N2 (`consultTilesV2` on) | `selection()` | A tile, chip, or Imperial / Metric tap (ONBQ-TILES) |
 | `roman/RomanCrisisActions` (CRISIS-BTN, `crisisActions` on) | `softImpact()` | Call 911, Call 988, Text 988 or Message <coach> under Roman's marked crisis reply; none when the reply arrives |
@@ -95,7 +97,10 @@ When the toggle changes:
 | `LearnScreen` lesson rows (`learnHub` on) | `selection()` | A lesson opens |
 | `LearnLessonScreen` (`learnHub` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
+| `CourseHomeScreen` / `CourseWeekScreen` rows (`learnCourses` on) | `selection()` | A week or a lesson opens (Open the course and Read lesson are `PrimaryButton`s: `softImpact()`) |
+| `CourseLessonScreen` (`learnCourses` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
+| `habits/ring/HabitsRing` (HB-B1, HB-B1b, `habitsRing` off by default) | `softImpact()`; `success()`; `selection()`; `mediumImpact()`; `error()` | A tick (the part draws); the tick that completes the day's ring, instead; an untick, a strip day up to today or the Check-in tab; an idea tile on the first run (success when the server creates it); a tick or an idea the server refuses. None for a future day: its quiet line only |
 | `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |
 | `HomeTile` (rings Home) | `selection()` | A tile opens its screen |
 | `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |

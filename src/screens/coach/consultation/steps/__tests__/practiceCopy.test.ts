@@ -44,7 +44,7 @@ describe('K6 link text', () => {
   it('prints the link without the scheme and shares the real url', () => {
     expect(displayUrl('https://thegrowthproject.app/join/RS7K2Q/')).toBe('thegrowthproject.app/join/RS7K2Q');
     expect(shareMessage('https://thegrowthproject.app/join/RS7K2Q')).toBe(
-      'Join my coaching on The Growth Project: https://thegrowthproject.app/join/RS7K2Q',
+      'Join my coaching on TGP Fitness: https://thegrowthproject.app/join/RS7K2Q',
     );
   });
 });

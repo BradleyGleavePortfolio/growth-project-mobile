@@ -105,12 +105,12 @@ function healthScreenMessage(message: OnDeviceMessage): OnDeviceMessage {
 function returnToHealthMessage(target: 'settings' | 'store', opened: boolean, name: string) {
   if (opened) {
     return target === 'settings'
-      ? `When ${name} access is allowed for The Growth Project, tap Try again to bring in new data.`
+      ? `When ${name} access is allowed for TGP Fitness, tap Try again to bring in new data.`
       : 'When Health Connect is installed or updated, tap Try again to bring in new data.';
   }
   return target === 'settings'
     ? `Health Connect didn't open. Open Settings on this phone, search for Health Connect, choose ` +
-        `App permissions, then The Growth Project, and allow access. Then come back and tap Try again.`
+        `App permissions, then TGP Fitness, and allow access. Then come back and tap Try again.`
     : `The Play Store didn't open. Open the Play Store, search for Health Connect and install or ` +
         `update it, then come back and tap Try again.`;
 }

@@ -41,6 +41,7 @@ import { AddHabitSheet } from './habits/AddHabitSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
 import { ProtectedScreen } from '../../entitlements/ProtectedScreen';
+import HabitsRing from './habits/ring/HabitsRing';
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 const word = (n: number) => WORDS[n] ?? String(n);
@@ -277,6 +278,42 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
     );
   };
 
+  const addSheet = (
+    <AddHabitSheet
+      visible={showAddModal}
+      onClose={() => setShowAddModal(false)}
+      newName={newName}
+      setNewName={setNewName}
+      newTarget={newTarget}
+      setNewTarget={setNewTarget}
+      newUnit={newUnit}
+      setNewUnit={setNewUnit}
+      onAdd={handleAddHabit}
+      isSaving={createHabit.isPending}
+      sc={sc}
+      styles={styles}
+    />
+  );
+
+  // HB-B1: concept B, the ring, behind habitsRing (off: the list below). Check-in stays today's tab.
+  if (featureFlags.habitsRing && tab === 'habits') {
+    return (
+      <>
+        <HabitsRing
+          habits={habitsQ.data}
+          loading={habitsQ.isLoading}
+          failed={habitsQ.isError}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          onAdd={() => setShowAddModal(true)}
+          onCheckIn={() => setTab('checkin')}
+          onSaved={onSaved}
+        />
+        {addSheet}
+      </>
+    );
+  }
+
   return (
     // Under the Home stack's back-only native header inside the tab bar: the
     // header owns the top inset and the tab bar the bottom (no paddingTop 60).
@@ -423,20 +460,7 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
         </>
       )}
 
-      <AddHabitSheet
-        visible={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        newName={newName}
-        setNewName={setNewName}
-        newTarget={newTarget}
-        setNewTarget={setNewTarget}
-        newUnit={newUnit}
-        setNewUnit={setNewUnit}
-        onAdd={handleAddHabit}
-        isSaving={createHabit.isPending}
-        sc={sc}
-        styles={styles}
-      />
+      {addSheet}
     </Screen>
   );
 }

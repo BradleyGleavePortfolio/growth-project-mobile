@@ -141,7 +141,7 @@ describe('B-1: the refund line is true and has its own support action', () => {
     const r = await render(<ClientPackagesScreen />);
     await waitFor(() => expect(r.getByTestId('plans-refund-support')).toBeTruthy());
     expect(
-      r.getByText(/Refunds are issued by The Growth Project team; to ask for one, email support\./),
+      r.getByText(/Refunds are issued by the TGP Fitness team; to ask for one, email support\./),
     ).toBeTruthy();
     expect(r.queryByText(/through your coach/)).toBeNull();
     expect(r.queryByText(/Settings > Support/)).toBeNull();

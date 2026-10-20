@@ -37,7 +37,7 @@ const consent = () => ({
 const http400 = Object.assign(new Error('HTTP 400'), { response: { status: 400 } });
 const INTRO = 'Your coach sees your workouts, food logs, weigh-ins, check-ins and habits.';
 const devices = (health: string) =>
-  `Your coach also sees data from ${health} and other devices you connect. To stop new data, disconnect it in Connected devices or turn The Growth Project off in your phone's ${health} permissions. Data already shared stays with your coach.`;
+  `Your coach also sees data from ${health} and other devices you connect. To stop new data, disconnect it in Connected devices or turn TGP Fitness off in your phone's ${health} permissions. Data already shared stays with your coach.`;
 
 const originalOS = Platform.OS;
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });

@@ -190,7 +190,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const styles = useMemo(() => (v2 ? { ...makeStyles(colors), ...bField } : makeStyles(colors)), [colors, v2, bField]);
   // Sol B-324-1: "Request access" opens the one support inbox; if no email
   // app opens, the address, Copy and Try again are shown under the hint.
-  const requestAccessEmail = useSupportEmail('Request access to The Growth Project');
+  const requestAccessEmail = useSupportEmail('Request access to TGP Fitness');
   // Role choice (C13): asked only when the live signup policy advertises
   // `role_choice: true` (backend #597). People who arrive with an invite /
   // QR code are always clients and skip it; everyone else picks first.
@@ -543,7 +543,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         // Audit A2: preflight through the public preview, which resolves both
         // code families (permanent CoachProfile GP- links and InviteCode rows).
         // /auth/validate-invite-code only knows InviteCode rows and rejected
-        // the permanent clinic QR code. A preview failure (network) does not
+        // the permanent partner QR code. A preview failure (network) does not
         // block: signup-with-code re-checks the code authoritatively.
         try {
           const res = await authApi.getInvitePreview(trimmedCode);
@@ -1208,7 +1208,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       >
           <View style={styles.header}>
             <Overline style={styles.eyebrow}>Welcome</Overline>
-            <Headline style={styles.title}>How will you use The Growth Project?</Headline>
+            <Headline style={styles.title}>How will you use TGP Fitness?</Headline>
           </View>
           {error ? (
             <View style={styles.errorBox} accessible accessibilityRole="alert" accessibilityLiveRegion="assertive">

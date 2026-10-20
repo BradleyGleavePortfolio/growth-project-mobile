@@ -7,7 +7,7 @@
  * prescriptive language. If you need to add a string, add it here, not
  * inline in a screen — that way the audit can catch it.
  *
- * Tone: educational, coaching context, never clinical authority.
+ * Tone: educational, coaching context, never medical authority.
  */
 
 /**
@@ -58,9 +58,9 @@ export const BLOODWORK_AWAITING_REVIEW_NOTE =
   'Your coach is reviewing this. Tips appear here once they sign off.';
 
 /**
- * Copy used when a coach marks a row as "needs clinician context".
+ * Copy used when a coach refers a row to the client's doctor.
  */
-export const BLOODWORK_CLINICIAN_REFERRAL_NOTE =
+export const BLOODWORK_DOCTOR_REFERRAL_NOTE =
   'Your coach has flagged this for your doctor. Please share these ' +
   'results with your doctor — your coach will not interpret it for you.';
 
@@ -123,7 +123,7 @@ export const BLOODWORK_FORM_LABELS = {
 export const BLOODWORK_COACH_ACTIONS = {
   markReviewed: 'Mark as reviewed',
   requestSource: 'Ask client for source',
-  referToClinician: 'Refer to doctor',
+  referToDoctor: 'Refer to doctor',
   hideFromClient: 'Hide from client',
   flagDisputed: 'Flag as disputed',
   approveAIDraft: 'Approve educational draft',
@@ -140,9 +140,9 @@ export const BLOODWORK_COACH_ACTIONS = {
  * disclaimer next to them.
  */
 /**
- * The list bans phrases that *make* a clinical claim. We deliberately do
+ * The list bans phrases that *make* a medical claim. We deliberately do
  * NOT ban the bare word "diagnosis" — the long-form disclaimer needs to
- * say "not a diagnosis", which is the opposite of a clinical claim. If a
+ * say "not a diagnosis", which is the opposite of a medical claim. If a
  * future copy edit wants to say "diagnose" or "diagnostic" in a way that
  * implies the app is doing diagnosis, the per-phrase entries below catch
  * it.

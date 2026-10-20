@@ -86,7 +86,7 @@ import { HapticService } from '../../../../ui/haptics/haptics.service';
 import { subscribeTutorialSignals } from '../../../../tutorial/tutorialEvents';
 import type { TutorialSignal } from '../../../../tutorial/types';
 
-// Clinic tutorial: the wearable step completes on the sheet's real grant.
+// Client tutorial: the wearable step completes on the sheet's real grant.
 const tutorialSignals: TutorialSignal[] = [];
 let unsubscribeTutorial: () => void = () => undefined;
 beforeEach(() => {
@@ -284,7 +284,7 @@ describe('ConnectProviderSheet — cloud connect failures (Sol B-317-8)', () => 
     await waitFor(() =>
       expect(
         screen.getByText(
-          "The Growth Project couldn't be reached, so Oura isn't connected yet. Check your internet connection, then tap Continue.",
+          "TGP Fitness couldn't be reached, so Oura isn't connected yet. Check your internet connection, then tap Continue.",
         ),
       ).toBeTruthy(),
     );
@@ -325,7 +325,7 @@ describe('ConnectProviderSheet — cloud connect failures (Sol B-317-8)', () => 
     mockStartOauthMutateAsync.mockRejectedValue(httpError(500, {}, 'abcd1234-ffff'));
     await pressOura();
     await waitFor(() => expect(screen.getByText(/Reference abcd1234/)).toBeTruthy());
-    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy();
     expect(screen.queryByText(/internet/)).toBeNull();
     expect(mockReport).toHaveBeenCalledWith(
       'wearables.cloud_connect',
@@ -380,7 +380,7 @@ describe('ConnectProviderSheet — S14 history import', () => {
     await waitFor(() =>
       expect(screen.getByText(/history didn't finish coming in because of an unexpected problem/)).toBeTruthy(),
     );
-    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.getByText(/support@thegrowthproject.site/)).toBeTruthy();
     expect(mockInvalidate).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -568,7 +568,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
     mockConnectOnDevice.mockResolvedValue('denied');
     await render(<ConnectProviderSheet provider="HEALTH_CONNECT" visible onClose={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
-    await waitFor(() => expect(screen.getByText(/choose App permissions, then The Growth Project/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/choose App permissions, then TGP Fitness/)).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('Open Health Connect'));
     expect(mockOpenHcPermissions).toHaveBeenCalledTimes(1);
     await waitFor(() =>
@@ -667,7 +667,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
   // FW-BODY U10 (failing on main): a client with no coach was told a coach personalizes their training.
   it('a client with no coach: no coach personalizes anything, and a coach they join can see the data', async () => {
     const COACHLESS =
-      'When you continue, Apple Health asks for permission on this phone. The Growth Project then brings in your last 30 days of Apple Health data, and new data each time you open Health, so your activity, heart rate and sleep show there. If you join a coach, your coach can see this data too. Nothing is read or shared until you allow it.';
+      'When you continue, Apple Health asks for permission on this phone. TGP Fitness then brings in your last 30 days of Apple Health data, and new data each time you open Health, so your activity, heart rate and sleep show there. If you join a coach, your coach can see this data too. Nothing is read or shared until you allow it.';
     expect(onDeviceDisclosure('Apple Health', 'APPLE_HEALTHKIT', true)).toBe(COACHLESS);
     const samsung = onDeviceDisclosure('Samsung Health', 'SAMSUNG_HEALTH', true);
     expect(samsung).toContain('Health Connect data, from Samsung Health and every other app that shares with Health Connect,');
