@@ -31,6 +31,8 @@ jest.mock('../../services/api', () => ({ coachApi: {
 } }));
 jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
 jest.mock('../../components/home/PushPermissionCard', () => () => null);
+jest.mock('../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: {} }) })); // the UI-4 peek sheet's reads
+jest.mock('../../hooks/useMacros', () => ({ useCurrentMacrosForClient: () => ({ isSuccess: false }) }));
 jest.mock('../../services/notificationsApi', () => ({ fetchUnreadCount: async () => 0 }));
 const mockCommandCenter = { __USING_MOCK_DATA: true };
 jest.mock('../../services/commandCenterApi', () => mockCommandCenter);
@@ -569,15 +571,18 @@ it('the real chat arms the same guard with its own unsent text', () => {
   expect(chat).toMatch(/^ {2}useKeepUnsentChat\(inputText\.trim\(\) !== ''\);$/m);
 });
 
-// UI-4 lookup (#CARD-MESSAGE-ALL, #CHATS-MESSAGES, #COACH-CHAT-BACK): the real lookup in Clients. Its Needs you Reply (and
-// Say hello and the row's Message {first}, the same handler) opens the chat the inbox way; Back lands on the inbox.
-it.each([true, false])("coachTabsV2 %s: the lookup's Reply opens the chat in Messages over the inbox (off: over the lookup); Back lands there", async (on) => {
+// UI-4 lookup (#CARD-MESSAGE-ALL, #CHATS-MESSAGES, #COACH-CHAT-BACK): the real lookup and peek sheet in Clients. Needs you
+// Reply (Say hello and the row's Message {first} share its handler) and the peek's Message {first} open the chat the inbox
+// way; Back lands on the inbox.
+const REPLY = ['lookup-act-client-1'];
+const PEEK_MESSAGE = ['lookup-row-client-1', 'peek-message'];
+it.each([true, false].flatMap((on) => [[on, 'Reply', REPLY], [on, 'the peek Message Sam', PEEK_MESSAGE]] as const))("coachTabsV2 %s: the lookup's %s opens the chat in Messages over the inbox (off: over the lookup); Back lands there", async (on, _path, taps) => {
   mockFlags.coachTabsV2 = on;
   mockLookup = true;
   mockCommandCenter.__USING_MOCK_DATA = false; // what ships
   const view = await mount();
   await fireEvent.press(view.getByRole('tab', { name: /^Clients, tab/ }));
-  await fireEvent.press(await view.findByTestId('lookup-act-client-1'));
+  for (const id of taps) await fireEvent.press(await view.findByTestId(id));
   expect([focusedTab(), stackOf('Messages'), stackOf('ClientsStack'), ref.getCurrentRoute()?.params]).toEqual(on
     ? ['Messages', ['MessagesInbox', 'ClientMessages'], ['ClientsList'], CHAT]
     : ['ClientsStack', undefined, ['ClientsList', 'ClientMessages'], CHAT]);
@@ -586,7 +591,7 @@ it.each([true, false])("coachTabsV2 %s: the lookup's Reply opens the chat in Mes
   expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', 'ClientsList']);
 });
 
-it("flag on: unsent text in another chat left open in Messages asks before the lookup's Reply closes it", async () => {
+it.each([['Reply', REPLY], ['peek Message Sam', PEEK_MESSAGE]])("flag on: unsent text in another chat left open in Messages asks before the lookup's %s closes it", async (_path, taps) => {
   const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   mockLookup = true;
   const view = await mount();
@@ -594,7 +599,7 @@ it("flag on: unsent text in another chat left open in Messages asks before the l
   await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
   const kept = messagesKeys();
   await fireEvent.press(view.getByRole('tab', { name: /^Clients, tab/ }));
-  await fireEvent.press(await view.findByTestId('lookup-act-client-1'));
+  for (const id of taps) await fireEvent.press(await view.findByTestId(id));
   expect(ask.mock.calls.map(([title, , buttons]) => [title, buttons?.map((b) => b.text)])).toEqual([['Discard this message?', ['Keep editing', 'Discard']]]);
   expect([focusedTab(), messagesKeys(), ref.getCurrentRoute()?.params]).toEqual(['Messages', kept, OTHER]); // Keep editing
   expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('See you at six');

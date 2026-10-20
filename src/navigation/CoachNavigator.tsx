@@ -198,7 +198,7 @@ export type ClientsStackParamList = {
   /** view 'needs' (lookup flag on): the Needs you list at any roster size, for the coach Home's Needs you tile. */
   ClientsList: { view?: 'needs' } | undefined;
   /** initialTab: opens on that tab (the daily brief opens Workouts). */
-  ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' };
+  ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' | 'logs' | 'timeline' };
   /**
    * S14 round 3: the coach-only wearable coaching prompts for one client,
    * opened from the client's Health tab. Registered only behind
