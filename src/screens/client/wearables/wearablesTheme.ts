@@ -295,19 +295,46 @@ export const METRIC_META: Partial<Record<WearableMetricType, MetricMeta>> = {
 };
 
 /**
+ * WEAR-AI-LABELS: plain names for the Sleep & Recovery metrics, which have no
+ * {@link METRIC_META} entry, so no screen prints a unit-suffixed code such as
+ * "Sleep Duration Min" (the AI insight card lists them under "Based on").
+ */
+const PLAIN_LABEL: Partial<Record<WearableMetricType, string>> = {
+  SLEEP_DURATION_MIN: 'Sleep Duration',
+  SLEEP_TOTAL_MIN: 'Time Asleep',
+  SLEEP_REM_MIN: 'REM Sleep',
+  SLEEP_DEEP_MIN: 'Deep Sleep',
+  SLEEP_LIGHT_MIN: 'Light Sleep',
+  SLEEP_AWAKE_MIN: 'Time Awake',
+  SLEEP_EFFICIENCY_PCT: 'Sleep Efficiency',
+  SLEEP_ONSET_ISO: 'Bedtime',
+  SLEEP_WAKE_ISO: 'Wake Time',
+  HRV_MS: 'HRV',
+  RECOVERY_SCORE: 'Recovery',
+  READINESS_SCORE: 'Readiness',
+  STRAIN_SCORE: 'Strain',
+  BODY_BATTERY: 'Body Battery',
+  BODY_TEMP_DEVIATION_C: 'Body Temperature',
+  RESPIRATORY_RATE_BRPM: 'Breathing Rate',
+  SPO2_PCT: 'Blood Oxygen',
+};
+
+/**
  * Resolve presentation metadata for any metric. Falls back to a safe generic
- * presentation (humanised enum + the server-provided unit) for metrics not in
- * {@link METRIC_META} — so a newly-seeded backend metric renders sanely rather
- * than crashing the Metric Detail screen.
+ * presentation (plain name, else humanised enum, + the server-provided unit) for
+ * metrics not in {@link METRIC_META} — so a newly-seeded backend metric renders
+ * sanely rather than crashing the Metric Detail screen.
  */
 export function metricMeta(metric: WearableMetricType): MetricMeta {
   const known = METRIC_META[metric];
   if (known) return known;
-  const label = metric
-    .toLowerCase()
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  const label =
+    PLAIN_LABEL[metric] ??
+    metric
+      .toLowerCase()
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
   return {
     metric,
     label,
