@@ -16,6 +16,7 @@ import {
   CONSULT_CONSENT_CRISIS_COPY_VERSION,
   CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_PRE_BRAND_COPY_VERSIONS,
 } from './consentVersion';
 
 /** The P0 versions this build displays (owner 62 / 62y2: the coach-free one; CRISIS-APP-COPY: v9 / v10, v10 / v11-coach-free). */
@@ -30,6 +31,8 @@ const CURRENT_CONSENT_VERSIONS: readonly unknown[] = [
   CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION,
   CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION,
+  // W-BRAND-AGREEMENT: an agreement to a screen before TGP Fitness stays as it is (owner op 1).
+  ...CONSULT_CONSENT_PRE_BRAND_COPY_VERSIONS,
 ];
 import type {
   AnswerValue,
