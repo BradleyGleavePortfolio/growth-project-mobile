@@ -304,7 +304,7 @@ describe('TutorialSettingsRow', () => {
     const { rerender } = await render(<TutorialSettingsRow />);
     await fireEvent.press(screen.getByLabelText('Resume the tour'));
     expect(useTutorialStore.getState().tutorial.status).toBe('active');
-    expect(mockParentNavigate).toHaveBeenCalledWith('Home', { screen: 'HomeMain' });
+    expect(mockParentNavigate).toHaveBeenCalledWith('Home', { screen: 'HomeMain', pop: true });
 
     useTutorialStore.setState({
       tutorial: { ...useTutorialStore.getState().tutorial, status: 'completed' },

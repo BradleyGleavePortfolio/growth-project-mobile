@@ -65,6 +65,7 @@ import LearnLessonScreen from '../screens/client/learn/LearnLessonScreen';
 import LearnGuidelinesScreen from '../screens/client/learn/LearnGuidelinesScreen';
 import CourseHomeScreen from '../screens/client/learn/CourseHomeScreen';
 import CourseWeekScreen from '../screens/client/learn/CourseWeekScreen';
+import CourseCompleteScreen from '../screens/client/learn/CourseCompleteScreen';
 import CourseLessonScreen from '../screens/client/learn/CourseLessonScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
@@ -276,6 +277,7 @@ export type WorkoutStackParamList = {
   Course: { id: string };
   CourseWeek: { id: string; week: string };
   CourseLesson: { id: string; lesson: string };
+  CourseComplete: { id: string };
 };
 
 // MoreStack: all non-tab screens live here. Screen names preserved.
@@ -533,6 +535,7 @@ function WorkoutStackNavigator() {
       {featureFlags.learnCourses && <WorkoutStackNav.Screen name="Course" component={CourseHomeScreen} />}
       {featureFlags.learnCourses && <WorkoutStackNav.Screen name="CourseWeek" component={CourseWeekScreen} />}
       {featureFlags.learnCourses && <WorkoutStackNav.Screen name="CourseLesson" component={CourseLessonScreen} />}
+      {featureFlags.learnCourses && <WorkoutStackNav.Screen name="CourseComplete" component={CourseCompleteScreen} />}
     </WorkoutStackNav.Navigator>
   );
 }

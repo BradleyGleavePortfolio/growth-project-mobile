@@ -79,7 +79,7 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
     featureFlags.clientTimelineV2
       ? { root: 'MoreTab', screen: 'Timeline', beneath: ['MoreIndex', 'Progress'] }
       : { root: 'MoreTab', screen: 'Timeline' },
-  MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex' }),
+  MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex', pop: true }),
   // Legacy Guidance notifications open Roman when available, otherwise You.
   AIGuide: () => ({
     root: 'MoreTab', screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
@@ -87,7 +87,7 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Membership: () => ({ root: 'MoreTab', screen: 'Membership' }),
   Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
   UpdateCard: () => ({ root: 'MoreTab', screen: 'UpdateCard', initial: false }),
-  WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain' }),
+  WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain', pop: true }),
   Log: () => ({ root: 'Log' }),
   // S-SCHED destination for the existing actionScreen/actionParams format.
   // Backend booking delivery must supply this format before launch; registering

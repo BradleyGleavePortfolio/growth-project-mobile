@@ -406,7 +406,7 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
           />
           <View
             accessibilityHint="Pastes an invite code or join link you copied"
-            accessibilityLabel="Paste invite code"
+            accessibilityLabel="Paste code"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -428,15 +428,10 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
             accessible={true}
             collapsable={false}
             focusable={true}
-            hitSlop={
-              {
-                "bottom": 8,
-                "left": 8,
-                "right": 8,
-                "top": 8,
-              }
-            }
+            hitSlop={8}
+            onBlur={[Function]}
             onClick={[Function]}
+            onFocus={[Function]}
             onResponderGrant={[Function]}
             onResponderMove={[Function]}
             onResponderRelease={[Function]}
@@ -444,12 +439,20 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
             style={
-              {
-                "alignSelf": "flex-start",
-                "marginTop": 8,
-                "opacity": 1,
-                "paddingVertical": 4,
-              }
+              [
+                {
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "paddingHorizontal": 4,
+                },
+                {
+                  "alignSelf": "flex-start",
+                },
+                false,
+                {
+                  "paddingHorizontal": 0,
+                },
+              ]
             }
             testID="paste-invite-code"
           >
@@ -457,19 +460,20 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
               style={
                 [
                   {
-                    "fontFamily": "Inter_500Medium",
+                    "fontFamily": "Inter_400Regular",
                     "fontSize": 16,
-                    "fontWeight": "500",
+                    "fontWeight": "400",
                     "letterSpacing": -0.16,
-                    "lineHeight": 26,
+                    "lineHeight": 22,
                   },
                   {
-                    "color": "#000000",
+                    "color": "#2C4A36",
                   },
+                  false,
                 ]
               }
             >
-              Paste invite code
+              Paste code
             </Text>
           </View>
         </View>
@@ -1970,7 +1974,7 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
           />
           <View
             accessibilityHint="Pastes an invite code or join link you copied"
-            accessibilityLabel="Paste invite code"
+            accessibilityLabel="Paste code"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1992,15 +1996,10 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
             accessible={true}
             collapsable={false}
             focusable={true}
-            hitSlop={
-              {
-                "bottom": 8,
-                "left": 8,
-                "right": 8,
-                "top": 8,
-              }
-            }
+            hitSlop={8}
+            onBlur={[Function]}
             onClick={[Function]}
+            onFocus={[Function]}
             onResponderGrant={[Function]}
             onResponderMove={[Function]}
             onResponderRelease={[Function]}
@@ -2008,12 +2007,20 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
             style={
-              {
-                "alignSelf": "flex-start",
-                "marginTop": 8,
-                "opacity": 1,
-                "paddingVertical": 4,
-              }
+              [
+                {
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "paddingHorizontal": 4,
+                },
+                {
+                  "alignSelf": "flex-start",
+                },
+                false,
+                {
+                  "paddingHorizontal": 0,
+                },
+              ]
             }
             testID="paste-invite-code"
           >
@@ -2021,19 +2028,20 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
               style={
                 [
                   {
-                    "fontFamily": "Inter_500Medium",
+                    "fontFamily": "Inter_400Regular",
                     "fontSize": 16,
-                    "fontWeight": "500",
+                    "fontWeight": "400",
                     "letterSpacing": -0.16,
-                    "lineHeight": 26,
+                    "lineHeight": 22,
                   },
                   {
-                    "color": "#000000",
+                    "color": "#2C4A36",
                   },
+                  false,
                 ]
               }
             >
-              Paste invite code
+              Paste code
             </Text>
           </View>
         </View>

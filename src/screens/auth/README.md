@@ -164,9 +164,9 @@ npm run lint
 
 `/auth/signup-with-code` (and `/auth/apple`) may return `invite_attached: false` plus `invite_attach_error`. The account exists but has no coach. CreateAccount never continues silently: after email verification (or Apple success) it replaces to `RoleSelection` with `{ inviteAttachError, inviteCode }`. RoleSelection then shows a retry banner with friendly copy (`lib/inviteAttachOutcome.inviteAttachErrorMessage`, never the raw reason), prefills the code, and requires a code to continue. An explicit "Continue without a coach for now" link is offered only when the live policy is codeless.
 
-## Paste invite code
+## Paste code
 
-Both CreateAccount and RoleSelection have a "Paste invite code" button (`components/invite/PasteInviteCodeButton`, expo-clipboard). The clipboard is read only on tap. It accepts a bare code (`GP-XXXX`) or a join link (`https://app.trygrowthproject.com/join/<code>`, `tgp://join/<code>`, `?code=`); see `lib/inviteCodeInput.extractInviteCode`.
+Both CreateAccount and RoleSelection have a "Paste code" button (`components/invite/PasteInviteCodeButton`, expo-clipboard; the /join page offers "Copy code" for a visitor who installs first). The clipboard is read only on tap; the shared quiet text action gives it a 44 pt target; `selection()` when the field fills, `warning()` with the existing no-code line when nothing usable is there. It accepts a bare code (`GP-XXXX`) or a join link (`https://app.trygrowthproject.com/join/<code>`, `tgp://join/<code>`, `?code=`); see `lib/inviteCodeInput.extractInviteCode`.
 
 ## Signup role choice (C13, backend #597)
 

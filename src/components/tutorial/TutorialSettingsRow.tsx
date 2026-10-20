@@ -31,7 +31,7 @@ export default function TutorialSettingsRow(): React.ReactElement | null {
   const onPress = () => {
     if (status === 'paused') dispatchTutorial({ type: 'RESUME' });
     else if (status !== 'active') startClientTutorial(null, { restart: true });
-    navigation.getParent?.()?.navigate('Home', { screen: 'HomeMain' });
+    navigation.getParent?.()?.navigate('Home', { screen: 'HomeMain', pop: true });
   };
 
   return (
