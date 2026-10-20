@@ -61,6 +61,7 @@ import { TrainDay, TrainHead, featuredWorkout, type StartParams } from './train/
 // had run and failed, but nothing retries this load (services/api.ts retries
 // only 401s).
 import RomanWorkoutCompleteCard from '../../components/roman/RomanWorkoutCompleteCard';
+import CourseBanner from './learn/CourseBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -970,6 +971,8 @@ export default function WorkoutScreen() {
             </View>
           ) : <Text style={styles.chartEmptyText}>Log a workout to see muscle breakdown</Text>}
         </FadeInView>}
+        {/* LEARN-M5: the course banner at the very bottom (#TRAIN-START-TOP); nothing unless featureFlags.learnCourses. */}
+        <CourseBanner refreshing={refreshing} />
     </Screen>
   );
 }
