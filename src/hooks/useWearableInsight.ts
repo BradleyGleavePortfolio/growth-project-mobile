@@ -17,6 +17,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { aiRefusalOf } from '../lib/ai/aiRefusal';
+import { romanRequiresCoachOf } from '../lib/ai/romanRequiresCoach';
 import {
   fetchCoachInsight,
   fetchClientInsight,
@@ -35,12 +36,13 @@ import type { WearableMetricBucket } from '../api/wearablesSamplesApi';
 const INSIGHT_STALE_MS = 6 * 60 * 60 * 1_000;
 
 /**
- * R2b: a consent / egress refusal is a stable answer, not a transient fault,
- * so it is shown at once instead of after three silent retries. Anything else
- * keeps React Query's default of three retries.
+ * R2b: a consent / egress refusal, or WEAR-AI's 403 ROMAN_REQUIRES_COACH (a
+ * client with no coach), is a stable answer, not a transient fault, so it is
+ * shown at once instead of after three silent retries. Anything else keeps
+ * React Query's default of three retries.
  */
 export function retryUnlessAiRefused(failureCount: number, error: unknown): boolean {
-  return aiRefusalOf(error) === null && failureCount < 3;
+  return aiRefusalOf(error) === null && !romanRequiresCoachOf(error) && failureCount < 3;
 }
 
 export function useCoachInsight(args: {
