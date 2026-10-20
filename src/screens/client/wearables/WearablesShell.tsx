@@ -318,8 +318,8 @@ export default function WearablesShell() {
 
   // Each bucket screen can render the client AI insight panel in its
   // `aiPanelSlot` (the read-only HK-5b surface — no approve/dismiss; that is
-  // coach-only, HK-6). S14: only behind `wearableAiInsights` (default OFF)
-  // until the panel honours the D2 AI-processing consent.
+  // coach-only, HK-6). S14: only behind `wearableAiInsights` (default OFF;
+  // the D2 box-2 check is live on the server; the ALL-ON PR flips it).
   const aiPanelsOn = featureFlags.wearableAiInsights;
   const fitnessV2 = v2 && bucket === 'HEALTH_FITNESS';
   const content =

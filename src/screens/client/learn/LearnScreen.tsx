@@ -31,7 +31,7 @@ export default function LearnScreen() {
   const [italic] = useFonts({ CormorantGaramond_400Regular_Italic });
   const learn = useLearn();
   const { lessons, guidelines: g, known, refetch } = learn;
-  const copy = learnCopy(learn.name);
+  const copy = learnCopy(learn.name, !learn.coachId && lessons.length > 0);
 
   // Offline on first open: the page loads by itself once the phone is back online.
   const wasOnline = useRef(online);
@@ -55,8 +55,7 @@ export default function LearnScreen() {
   );
 
   let body: React.ReactNode;
-  if (learn.user && !learn.coachId) body = empty;
-  else if (!known && !online) body = <Text style={s.offline} testID="learn-offline">{copy.offline}</Text>;
+  if (!known && !online) body = <Text style={s.offline} testID="learn-offline">{copy.offline}</Text>;
   else if (!known && learn.error) {
     body = <QuietError layout="inline" message={isConnectionFailure(learn.error) ? `${copy.failed} ${copy.noAnswer}` : copy.failed}
       onRetry={() => void refetch()} testID="learn-error" />;
