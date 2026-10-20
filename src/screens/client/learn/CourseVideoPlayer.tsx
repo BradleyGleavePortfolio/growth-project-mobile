@@ -96,6 +96,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   frame: { marginHorizontal: -layout.gutter, overflow: 'hidden', backgroundColor: sc.bgSurface, marginBottom: 4, alignItems: 'center', justifyContent: 'center' },
   dark: { backgroundColor: sc.surface.masthead },
   pad: { paddingHorizontal: layout.gutter, paddingVertical: 16 },
-  card: { borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
+  // The failed line and Try again sit on the page gutter, in line with the lesson text below.
+  card: { alignItems: 'stretch', borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
   ink: { ...typography.bodySmall, color: sc.textOnMastheadMuted, textAlign: 'center' },
 });
