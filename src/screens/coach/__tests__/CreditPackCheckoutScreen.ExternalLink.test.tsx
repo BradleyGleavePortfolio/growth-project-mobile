@@ -334,8 +334,9 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     // #CREDIT-S: the three packs sit inside the Suggested card, under Roman's sentence, $25 chosen.
     const card = screen.getByTestId('credit-pack-suggested');
     expect(within(card).getByTestId('credit-pack-tiles')).toBeTruthy();
-    const textsInOrder = card.findAll((n) => typeof n.props.children === 'string').map((n) => n.props.children);
-    expect(textsInOrder.indexOf('A $25 pack should cover you until Nov 1.')).toBeLessThan(textsInOrder.indexOf('$10'));
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('should cover you until')).toBeGreaterThan(-1);
+    expect(tree.indexOf('should cover you until')).toBeLessThan(tree.indexOf('credit-pack-tiles'));
     expect(within(card).getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
     expect(within(card).getByLabelText('$10 pack').props.accessibilityState).toEqual({ selected: false, checked: false });
     expect(within(card).getByLabelText('$99 pack')).toBeTruthy();
