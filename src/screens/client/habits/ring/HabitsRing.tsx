@@ -8,7 +8,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { AccessibilityInfo, Animated, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api, { habitsApi } from '../../../../services/api';
 import { useLogHabit, type ApiHabitLog } from '../../../../hooks/useApi';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
@@ -67,10 +67,14 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
   const day = picked && picked >= start && picked <= today ? picked : today;
   const monday = mondayOf(day);
   const thisMonday = mondayOf(today);
-  const shownWeek = useQuery({ ...summaryOf(monday), placeholderData: keepPreviousData });
+  const shownWeek = useQuery(summaryOf(monday));
   // An earlier day reads its own ticks (GET /habits holds each habit's latest 30), so an older week shows true.
-  const dayLogs = useQuery<ApiHabitLog[]>({ queryKey: ['habits', 'logs', day], queryFn: async () => (await habitsApi.getLogs(day)).data, enabled: day !== today });
-  const held = (h: RingHabit, on: string) => (on === day && on !== today && dayLogs.data ? dayLogs.data.some((l) => l.habit_id === h.id && l.completed) : doneOn(h, on));
+  const past = day !== today;
+  const dayLogs = useQuery<ApiHabitLog[]>({ queryKey: ['habits', 'logs', day], queryFn: async () => (await habitsApi.getLogs(day)).data, enabled: past });
+  const held = (h: RingHabit, on: string) => (on === day && past && dayLogs.data ? dayLogs.data.some((l) => l.habit_id === h.id && l.completed) : doneOn(h, on));
+  // Until a past day's ticks and its week are in, they wait (or say they did not load); never the 30-tick list, never a tick.
+  const dayUnknown = past && !dayLogs.data;
+  const readFailed = (dayUnknown && dayLogs.isError) || (past && shownWeek.isError && !shownWeek.data);
 
   // The masthead's forest runs under the native back header, with today's two tabs on its right.
   const checkIn = useRef(onCheckIn);
@@ -179,7 +183,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     onError: () => { void HapticService.error(); },
   });
 
-  const refresh = () => { onRefresh(); void qc.invalidateQueries({ queryKey: ['habits', 'summary'] }); if (day !== today) void dayLogs.refetch(); };
+  const refresh = () => { onRefresh(); void qc.invalidateQueries({ queryKey: ['habits', 'summary'] }); if (past) void dayLogs.refetch(); };
   const ring = Math.min(148, Math.round((width - layout.gutter * 2) * 0.46));
   const dayWidth = Math.min(layout.touchMin, (width - layout.gutter * 2) / 7); // 44 pt, or a seventh of a narrow strip
   const tileWidth = fontScale > 1.15 ? width - layout.gutter * 2 : (width - layout.gutter * 2 - GAP) / 2;
@@ -205,11 +209,12 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
   const first = empty && coachless;
 
   const left = (content: React.ReactNode) => <View style={[s.center, { width: ring, minHeight: ring }]}>{content}</View>;
+  const waitRing = left(<View style={[s.placeholder, { width: ring, height: ring, borderRadius: ring / 2 }]} />);
   let mast: React.ReactNode;
   if (loading) {
     mast = (
       <View style={s.row} accessible accessibilityLabel={C.loading} testID="habits-ring-loading">
-        {left(<View style={[s.placeholder, { width: ring, height: ring, borderRadius: ring / 2 }]} />)}
+        {waitRing}
         <View style={s.flex}><View style={[s.placeholder, s.bar]} /><View style={[s.placeholder, s.bar, s.barShort]} /></View>
       </View>
     );
@@ -234,7 +239,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
     mast = (
       <>
         <View style={s.row}>
-          {unplanned ? left(
+          {dayUnknown ? (dayLogs.isError ? left(<Text style={[typography.eyebrow, s.muted]}>{weekdayName(day)}</Text>) : waitRing) : unplanned ? left(
             // "Wednesday" fills the ring's width at 32 pt, so this line holds its size like the ring's count.
             <Text style={[s.serif, s.light, s.centerText]} numberOfLines={3} adjustsFontSizeToFit maxFontSizeMultiplier={1} accessibilityRole="header" testID="habits-ring-unplanned">
               {day === today ? C.nothingToday : C.nothingOn(weekdayName(day))}
@@ -252,7 +257,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
           <View style={s.flex}>
             <Text style={[typography.eyebrow, s.muted]}>{weekdayName(today)}</Text>
             {day === today ? (week?.planned ? <Text style={[typography.body, s.light]} testID="habits-ring-week">{C.thisWeek(week.done, week.planned)}</Text> : null)
-              : lastWeek && shownWeek.isPlaceholderData ? null
+              : lastWeek && shownWeek.isPending ? null
               : last?.planned ? <Text style={[typography.body, s.light]} testID="habits-ring-week">{C.lastWeek(last.done, last.planned)}</Text>
               : <Text style={[typography.body, s.light]}>{longDate(day)}</Text>}
             {start < thisMonday ? (
@@ -265,7 +270,7 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
         </View>
         {shownWeek.data ? (
           <View style={s.strip} testID="habits-ring-strip">
-            {weekStrip(shownWeek.data, monday, today, (on) => (on === today || on === day ? countOn(on) : null)).map((d) => {
+            {weekStrip(shownWeek.data, monday, today, (on) => (on === today || (on === day && !dayUnknown) ? countOn(on) : null)).map((d) => {
               const on = d.date === day;
               const before = d.date < start; // before the first habit's start: nothing to log
               return (
@@ -285,7 +290,8 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
               );
             })}
           </View>
-        ) : null}
+        ) : shownWeek.isPending ? <View style={[s.placeholder, s.stripWait]} /> : null}
+        {readFailed ? <Text style={[typography.body, s.light]} accessibilityLiveRegion="polite" testID="habits-ring-past-error">{C.failed}</Text> : null}
       </>
     );
   }
@@ -349,7 +355,8 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
         {coachName ? <TextLink label={C.askCoach(coachName)} tone="accent" onPress={() => navigation.navigate('Messages')} testID="habits-ring-ask" /> : null}
       </>
     );
-  } else {
+  } else if (dayUnknown) body = dayLogs.isError ? null : <QuietLoading label={C.loading} rows={3} />;
+  else {
     body = (
       <>
         {tiles.length === 0 ? (
@@ -371,6 +378,8 @@ export default function HabitsRing({ habits, loading, failed, refreshing, onRefr
       </>
     );
   }
+
+  if (readFailed) footer = <PrimaryButton label={C.tryAgain} onPress={refresh} loading={dayLogs.isFetching || shownWeek.isFetching} testID="habits-ring-retry" />;
 
   return (
     <>
@@ -417,6 +426,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   day: { alignItems: 'center', gap: 6 },
   letter: { ...typography.caption },
   mark: { width: 18, height: 3 },
+  stripWait: { height: MINI + 33, borderRadius: radius.card }, // the strip (letter, ring, mark) while its week loads
   before: { opacity: 0.4 },
   weeks: { flexDirection: 'row', marginLeft: (22 - layout.touchMin) / 2 }, // the chevron's glyph lines up with the words
   weekButton: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },

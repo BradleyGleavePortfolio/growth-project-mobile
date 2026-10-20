@@ -169,7 +169,7 @@ it('a strip day up to today opens in the ring, dashed gaps and its date, and tic
   await waitFor(() => expect(v.getByTestId('habits-ring-pick-2026-10-13')).toBeTruthy());
   await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-13'));
   expect(HapticService.selection).toHaveBeenCalledTimes(1);
-  expect(lastRing('habits-ring')).toMatchObject({ label: 'Tuesday 13, 1 of 4 done', segments: ['missed', 'missed', 'missed', 'done'] });
+  await waitFor(() => expect(lastRing('habits-ring')).toMatchObject({ label: 'Tuesday 13, 1 of 4 done', segments: ['missed', 'missed', 'missed', 'done'] }));
   expect(v.getByText('Tuesday')).toBeTruthy();
   expect(v.getByText('Tuesday, October 13')).toBeTruthy();
   expect(v.getByTestId('habits-ring-pick-2026-10-13').props.accessibilityState).toEqual({ selected: true });
@@ -204,7 +204,7 @@ it.each([
   const tuesday = () => v.getByTestId('habits-ring-pick-2026-10-13').props.accessibilityLabel;
   await waitFor(() => expect(tuesday()).toBe('Tuesday 13, 1 of 2 done'));
   await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-13'));
-  expect(lastRing('habits-ring')).toMatchObject({ label: 'Tuesday 13, 1 of 2 done', segments: ['missed', 'done'] });
+  await waitFor(() => expect(lastRing('habits-ring')).toMatchObject({ label: 'Tuesday 13, 1 of 2 done', segments: ['missed', 'done'] }));
   expect(tuesday()).toBe('Tuesday 13, 1 of 2 done');
   expect(v.queryByTestId('habits-ring-tile-m')).toBeNull();
   expect(mockLog).not.toHaveBeenCalled();
@@ -248,10 +248,10 @@ it('a day with nothing planned: "Nothing planned today" (a past day: "Nothing pl
   expect(v.queryByText('Tap a habit when it is done.')).toBeNull();
   expect(v.getByTestId('habits-ring-add')).toBeTruthy();
   await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-12'));
-  expect(lastRing('habits-ring').label).toBe('Monday 12, 0 of 2 done');
+  await waitFor(() => expect(lastRing('habits-ring').label).toBe('Monday 12, 0 of 2 done'));
   expect(v.getByTestId('habits-ring-tile-h3')).toBeTruthy();
   await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-13'));
-  expect(v.getByTestId('habits-ring-unplanned')).toHaveTextContent('Nothing planned on Tuesday');
+  await waitFor(() => expect(v.getByTestId('habits-ring-unplanned')).toHaveTextContent('Nothing planned on Tuesday'));
   expect(v.getByText('Tuesday, October 13')).toBeTruthy();
   expect(v.getByText('Stretch 10 minutes')).toBeTruthy();
   expect(v.getByText('Lights out by 11')).toBeTruthy();
@@ -294,7 +294,7 @@ it('Monday: Previous week opens the missed Sunday; its tick moves 6 of 7 last we
   expect(HapticService.selection).toHaveBeenCalledTimes(1);
   await waitFor(() => expect(v.getByText('6 of 7 last week')).toBeTruthy());
   expect(mockGet).toHaveBeenCalledWith('/habits/summary', { params: { from: '2026-10-12', to: '2026-10-18' } });
-  expect(lastRing('habits-ring')).toMatchObject({ label: 'Sunday 18, 0 of 1 done', segments: ['missed'] });
+  await waitFor(() => expect(lastRing('habits-ring')).toMatchObject({ label: 'Sunday 18, 0 of 1 done', segments: ['missed'] }));
   expect(v.getByText('Monday')).toBeTruthy();
   expect(v.getByTestId('habits-ring-pick-2026-10-18').props.accessibilityState).toEqual({ selected: true });
   expect(v.getByLabelText('Saturday 17, 1 of 1 done')).toBeTruthy();
@@ -309,7 +309,7 @@ it('Monday: Previous week opens the missed Sunday; its tick moves 6 of 7 last we
   expect(v.getByLabelText('Walk 30 minutes, done on Sunday 18, 7 days in a row, You added')).toBeTruthy();
   // The strip picks any day of last week; Next week comes back to today.
   await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-12'));
-  expect(lastRing('habits-ring').label).toBe('Monday 12, 1 of 1 done');
+  await waitFor(() => expect(lastRing('habits-ring').label).toBe('Monday 12, 1 of 1 done'));
   expect(v.getByText('7 of 7 last week')).toBeTruthy();
   await fireEvent.press(v.getByLabelText('Next week'));
   expect(lastRing('habits-ring').label).toBe('Today, 0 of 1 habits done');
@@ -327,18 +327,89 @@ it('an earlier week keeps the date line; the strip stops at the first habit\'s s
   await waitFor(() => expect(v.getByText('Sunday, October 11')).toBeTruthy());
   expect(mockGet).toHaveBeenCalledWith('/habits/summary', { params: { from: '2026-10-05', to: '2026-10-11' } });
   expect(v.queryByText(/last week/)).toBeNull();
-  expect(lastRing('habits-ring')).toMatchObject({ label: 'Sunday 11, 0 of 1 done', segments: ['missed'] });
+  await waitFor(() => expect(lastRing('habits-ring')).toMatchObject({ label: 'Sunday 11, 0 of 1 done', segments: ['missed'] }));
   expect(mockGetLogs).toHaveBeenCalledWith('2026-10-11');
   expect(v.queryByLabelText('Previous week')).toBeNull();
+  await waitFor(() => expect(v.getByTestId('habits-ring-pick-2026-10-06')).toBeTruthy());
   const tuesday = v.getByTestId('habits-ring-pick-2026-10-06');
   expect(tuesday.props.accessibilityState).toEqual({ disabled: true });
   await fireEvent.press(tuesday);
   expect(lastRing('habits-ring').label).toBe('Sunday 11, 0 of 1 done');
   await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-07'));
-  expect(lastRing('habits-ring').label).toBe('Wednesday 7, 0 of 1 done');
+  await waitFor(() => expect(lastRing('habits-ring').label).toBe('Wednesday 7, 0 of 1 done'));
   expect(v.getByText('Wednesday, October 7')).toBeTruthy();
   await fireEvent.press(v.getByLabelText('Next week'));
-  expect(lastRing('habits-ring').label).toBe('Sunday 18, 0 of 1 done');
+  await waitFor(() => expect(lastRing('habits-ring').label).toBe('Sunday 18, 0 of 1 done'));
+});
+
+// A past day and its week show only what the server holds for them (GET /habits keeps each habit's latest 30 ticks).
+const pastRing = (day: string) => mockRing.mock.calls.some(([p]) => p.testID === 'habits-ring' && p.label.startsWith(day));
+const FAILED = 'Habits did not load. Check your connection, then try again.';
+
+it('a ticked day older than the 30-tick list waits for its own read, then shows done and unticks', async () => {
+  let answer: (v: unknown) => void = () => undefined;
+  mockGetLogs.mockImplementation((date: string) => (date === '2026-10-11' ? new Promise((r) => { answer = r; }) : Promise.resolve({ data: [] })));
+  const v = await mountMonday();
+  await waitFor(() => expect(v.getByLabelText('Previous week')).toBeTruthy());
+  await fireEvent.press(v.getByLabelText('Previous week'));
+  await waitFor(() => expect(v.getByText('6 of 7 last week')).toBeTruthy());
+  await fireEvent.press(v.getByLabelText('Previous week'));
+  await waitFor(() => expect(v.getByText('Sunday, October 11')).toBeTruthy());
+  expect(v.getByLabelText('Loading habits')).toBeTruthy();
+  expect(v.queryByTestId('habits-ring-tile-w')).toBeNull();
+  expect(pastRing('Sunday 11')).toBe(false);
+  await act(async () => { answer({ data: [{ ...log('2026-10-11'), habit_id: 'w' }] }); });
+  await waitFor(() => expect(lastRing('habits-ring')).toMatchObject({ label: 'Sunday 11, 1 of 1 done', segments: ['done'] }));
+  expect(v.getByTestId('habits-ring-tile-w').props.accessibilityState).toMatchObject({ checked: true });
+  await fireEvent.press(v.getByTestId('habits-ring-tile-w'));
+  expect(mockLog).toHaveBeenCalledWith('w', { date: '2026-10-11', completed: false, value: 0 });
+});
+
+it('a past day whose read fails says so with Try again and takes no tick; Try again brings its tick back', async () => {
+  // Sunday 18 is ticked on the server but not in the list this screen holds.
+  let down = true;
+  mockGetLogs.mockImplementation(async (date: string) => {
+    if (date !== '2026-10-18') return { data: [] };
+    if (down) throw new Error('offline');
+    return { data: [{ ...log(date), habit_id: 'w' }] };
+  });
+  const v = await mountMonday();
+  await waitFor(() => expect(v.getByLabelText('Previous week')).toBeTruthy());
+  await fireEvent.press(v.getByLabelText('Previous week'));
+  await waitFor(() => expect(v.getByTestId('habits-ring-past-error')).toHaveTextContent(FAILED));
+  expect(v.getByText('Sunday')).toBeTruthy();
+  expect(v.queryByTestId('habits-ring-tile-w')).toBeNull();
+  expect(pastRing('Sunday 18')).toBe(false);
+  expect(mockLog).not.toHaveBeenCalled();
+  down = false;
+  await fireEvent.press(v.getByTestId('habits-ring-retry'));
+  await waitFor(() => expect(lastRing('habits-ring')).toMatchObject({ label: 'Sunday 18, 1 of 1 done', segments: ['done'] }));
+  expect(v.queryByTestId('habits-ring-past-error')).toBeNull();
+  expect(v.queryByTestId('habits-ring-retry')).toBeNull();
+  expect(v.getByTestId('habits-ring-tile-w').props.accessibilityState).toMatchObject({ checked: true });
+  await fireEvent.press(v.getByTestId('habits-ring-tile-w'));
+  expect(mockLog).toHaveBeenCalledWith('w', { date: '2026-10-18', completed: false, value: 0 });
+});
+
+it('a past week whose summary fails draws no strip and no count, says so, and Try again draws it', async () => {
+  const v = await mountMonday();
+  const served = mockGet.getMockImplementation() as (...a: unknown[]) => Promise<unknown>;
+  let down = true;
+  mockGet.mockImplementation(async (url: string, o: { params: { from: string } }) => {
+    if (down && o.params.from === '2026-10-12') throw new Error('offline');
+    return served(url, o);
+  });
+  await waitFor(() => expect(v.getByLabelText('Previous week')).toBeTruthy());
+  await fireEvent.press(v.getByLabelText('Previous week'));
+  await waitFor(() => expect(v.getByTestId('habits-ring-past-error')).toHaveTextContent(FAILED));
+  expect(v.queryByTestId('habits-ring-pick-2026-10-17')).toBeNull();
+  expect(v.queryByText(/last week/)).toBeNull();
+  expect(v.getByText('Sunday, October 18')).toBeTruthy();
+  down = false;
+  await fireEvent.press(v.getByTestId('habits-ring-retry'));
+  await waitFor(() => expect(v.getByText('6 of 7 last week')).toBeTruthy());
+  expect(v.getByTestId('habits-ring-pick-2026-10-17').props.accessibilityLabel).toBe('Saturday 17, 1 of 1 done');
+  expect(v.queryByTestId('habits-ring-past-error')).toBeNull();
 });
 
 it('a tick the server refuses goes back, with a calm line and the error haptic', async () => {
