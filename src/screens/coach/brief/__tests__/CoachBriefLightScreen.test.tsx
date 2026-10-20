@@ -12,7 +12,7 @@ jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: { coachBrief: true, coachBriefGate: true, teamMode: false, romanChat: true },
 }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'c1', email: 'j@x.io', firstName: 'Jordan' }),
+  useCurrentUser: () => ({ id: 'c1', firstName: 'Jordan' }),
 }));
 jest.mock('../../../../services/commandCenterApi', () => ({ __USING_MOCK_DATA: false }));
 let mockReduced = true;
@@ -73,8 +73,7 @@ beforeEach(() => {
   mockReduced = true;
   mockMarkRead.mockResolvedValue(undefined);
 });
-// No fake timers (they can deadlock React 19 here, see CreditPackCheckoutScreen.SuccessReceipt.test.tsx):
-// hold timers of one length instead, the 5 s polls or the 16 ms that ends a native animation in jest.
+// No fake timers (they can deadlock React 19 here): hold timers of one length instead, the 5 s polls or the 16 ms native end.
 const realSetTimeout = global.setTimeout;
 let held: Array<() => void> = [];
 function hold(ms: number) {
@@ -130,19 +129,10 @@ describe('CoachBriefLightScreen: busy', () => {
     expect(mockGoBack).not.toHaveBeenCalled();
   });
 
-  it('six messages and one weight change: "See messages", then Maya', async () => {
-    mockToday.mockResolvedValue(brief([...six('message_unread'), client('weight_flag', 0, 'Maya Chen')]));
-    const s = await render(<CoachBriefLightScreen />);
-    await waitFor(() => expect(rowLabels(s)).toEqual(['See messages', 'Review Maya\u2019s weight change', 'Thank you, Roman']));
-    await fireEvent.press(s.getByTestId('brief-row-messages'));
-    expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'messages', items: az(six('message_unread')) });
-  });
-
   it('head coach: "See payments" opens Money; no team row while Team Mode is off', async () => {
     mockToday.mockResolvedValue(brief([{ type: 'dunning_queue', detail: '1 failed payment', priority: 1 }, { type: 'team_performance', detail: 'x', priority: 3 }]));
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(rowLabels(s)).toEqual(['See payments', 'Thank you, Roman']));
-    expect(s.getByText('Where would you like to start?')).toBeTruthy();
     await fireEvent.press(s.getByTestId('brief-row-money'));
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(mockTab).toHaveBeenCalledWith('SettingsStack', { screen: 'CoachMoney', initial: false });

@@ -1,9 +1,7 @@
 /**
- * BriefField: Concept A's room. A deep forest field (D-A1, D-A2) with a cream
- * and gold glow rising from the bottom edge and two faint gold arcs (D-A3,
- * D-A7). Decorative only: hidden from assistive tech and never touchable.
- * The glow lights with the reveal (`lit`) and breathes on a slow 6 s loop
- * (opacity 0.9 to 1.0, D-A5) unless `still`; the loop stops in the background.
+ * BriefField: Concept A's room. A deep forest field (D-A1, D-A2) with a cream and gold glow rising from the bottom edge
+ * and two faint gold arcs (D-A3, D-A7). Decorative only. The glow lights with the reveal (`lit`) and breathes on a 6 s
+ * loop (opacity 0.9 to 1.0, D-A5) unless `still`; the loop stops in the background.
  */
 import React, { useEffect, useRef } from 'react';
 import { Animated, AppState, Easing, StyleSheet, View, useWindowDimensions } from 'react-native';

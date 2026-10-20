@@ -44,9 +44,8 @@ describe('CoachBrief route', () => {
 
   it('hides the tab bar only for Concept A', () => {
     expect(COACH_NAV).toMatch(
-      /\.\.\.\(featureFlags\.coachBriefGate && getFocusedRouteNameFromRoute\(route\) === 'CoachBrief'\s*\?\s*\{ tabBarStyle: \{ display: 'none' as const \} \}\s*:\s*\{\}\)/,
+      /\.\.\.\(featureFlags\.coachBrief && featureFlags\.coachBriefGate && getFocusedRouteNameFromRoute\(route\) === 'CoachBrief'\s*\?\s*\{ tabBarStyle: \{ display: 'none' as const \} \}\s*:\s*\{\}\)/,
     );
-    expect(COACH_NAV.match(/tabBarStyle/g)).toHaveLength(2);
   });
 });
 

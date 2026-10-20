@@ -1,14 +1,7 @@
 /**
- * CoachBriefLightScreen: today's brief as Concept A, "Roman in the light"
- * (BRIEFA, behind coachBriefGate). Roman's face, the date, his words, at most
- * two suggested actions from selectBriefActions, then "Thank you, Roman".
- *
- * States: busy, quiet, still being prepared (checks every 5 s for 60 s, then
- * offers Try again), could not load, could not be prepared, prepared too
- * often. Every state has a way out. The brief is marked read once, when its
- * words show. Motion: the glow lights, the words and rows rise in over 1.3 s
- * and a tap anywhere completes it; Reduce Motion and screen readers get
- * everything at once with a 150 ms fade and a still glow.
+ * CoachBriefLightScreen: today's brief as Concept A, "Roman in the light" (BRIEFA, behind coachBriefGate): Roman's face,
+ * the date, his words, at most two actions from selectBriefActions, then "Thank you, Roman". Every state has a way out;
+ * the brief is marked read once, when its words show. Reduce Motion and screen readers get everything at once.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -67,7 +60,6 @@ type Nav = {
 
 type Row = { key: string; label: string; hint?: string; onPress: () => void };
 
-/** The narrative opens with "Good morning, {name}."; that sentence is set on its own. */
 function splitGreeting(narrative: string): [string | null, string] {
   const m = /^\s*(Good morning\b[^.?]*[.?])\s*([\s\S]*)$/.exec(narrative);
   return m ? [m[1], m[2].trim()] : [null, narrative.trim()];
@@ -129,7 +121,6 @@ export default function CoachBriefLightScreen() {
     return false;
   }, []);
 
-  /** Resolves false when the brief could not load or could not be prepared. */
   const load = useCallback(async (): Promise<boolean> => {
     try {
       for (let i = 0; i < BRIEF_LIGHT_POLL_TRIES; i += 1) {
@@ -342,7 +333,6 @@ export default function CoachBriefLightScreen() {
           ) : null}
         </ScrollView>
         {fit.content > fit.view + 1 ? (
-          // Long words scroll above the rows; a 32 pt fade shows there is more.
           <Svg height={32} width="100%" style={styles.more} pointerEvents="none" testID="brief-more">
             <Defs>
               <LinearGradient id="more" x1="0" y1="0" x2="0" y2="1">

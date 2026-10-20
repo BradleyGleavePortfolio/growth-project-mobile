@@ -753,10 +753,14 @@ const entryTabOf = (name: string): keyof CoachTabParamList | undefined =>
   featureFlags.coachTabsV2 ? ENTRY_TAB[name as keyof CoachTabParamList] : undefined;
 
 function EntryTabBar(props: BottomTabBarProps) {
-  const { state } = props;
-  const entry = entryTabOf(state.routes[state.index].name);
-  const index = entry ? state.routes.findIndex((r) => r.name === entry) : -1;
-  return <BottomTabBar {...props} state={index >= 0 ? { ...state, index } : state} />;
+  const { state, descriptors } = props;
+  const open = state.routes[state.index];
+  const index = state.routes.findIndex((r) => r.name === entryTabOf(open.name));
+  if (index < 0) return <BottomTabBar {...props} />;
+  // BRIEFA: the bar's hide rule is the open route's, not the selected entry tab's.
+  const { key } = state.routes[index];
+  const options = { ...descriptors[key].options, tabBarStyle: descriptors[open.key].options.tabBarStyle };
+  return <BottomTabBar {...props} state={{ ...state, index }} descriptors={{ ...descriptors, [key]: { ...descriptors[key], options } }} />;
 }
 
 /**
@@ -1045,7 +1049,7 @@ export default function CoachNavigator() {
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
           // BRIEFA: Concept A's brief is full screen; the tab bar steps aside while it is open.
-          ...(featureFlags.coachBriefGate && getFocusedRouteNameFromRoute(route) === 'CoachBrief'
+          ...(featureFlags.coachBrief && featureFlags.coachBriefGate && getFocusedRouteNameFromRoute(route) === 'CoachBrief'
             ? { tabBarStyle: { display: 'none' as const } }
             : {}),
         })}
