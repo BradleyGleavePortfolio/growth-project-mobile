@@ -38,6 +38,7 @@ import { featureFlags } from '../../../config/featureFlags';
 import CoachHomeV11 from '../home-v11/CoachHomeV11';
 import { openInboxChat } from '../../../navigation/coachInbox';
 import { HapticService } from '../../../ui/haptics/haptics.service';
+import CreditMomentsHost from '../../../components/coach/credits/CreditMomentsHost';
 
 export type CommandCenterTab =
   | 'overview'
@@ -221,6 +222,8 @@ export default function CommandCenterScreen({
 
       {/* Screen content */}
       {renderContent()}
+      {/* CREDITBUILD: the 80 % / 100 % AI credit sheets (flag off until the Money pool ships). */}
+      {featureFlags.coachAiCredits ? <CreditMomentsHost /> : null}
     </Screen>
   );
 }

@@ -21,6 +21,7 @@ import { coachConsultApi, type CoachConsultApi } from '../../../lib/coachConsult
 import { withStartupTimeout } from '../../../lib/startupTimebox';
 import type { CoachConsultAnswers, CoachStepId } from '../../../lib/coachConsultation/types';
 import { STEP_COMPONENTS, type StepRegistry } from './registry';
+import type { CoachCredits } from '../../../components/coach/credits/useCoachCredits';
 
 export interface CoachConsultationFlowProps {
   userId: string;
@@ -31,6 +32,8 @@ export interface CoachConsultationFlowProps {
   api?: CoachConsultApi;
   steps?: StepRegistry;
   importOn?: boolean;
+  /** A head coach's AI credit pool: shows KC and the K8 row (WithCoachCredits). */
+  credits?: CoachCredits | null;
 }
 
 type Phase = 'loading' | 'step' | 'paused' | 'saving' | 'problem';
@@ -40,8 +43,13 @@ const DRAFT_DEBOUNCE_MS = 300;
 
 export default function CoachConsultationFlow(props: CoachConsultationFlowProps) {
   const { userId, user, onComplete, onSignOut, api = coachConsultApi, steps = STEP_COMPONENTS, importOn = false } = props;
+  const credits = props.credits ?? null;
+  const creditsOn = credits !== null;
   const { semanticColors: sc } = useTheme();
-  const ctx: FlowContext = useMemo(() => ({ built: new Set(Object.keys(steps) as CoachStepId[]), importOn }), [steps, importOn]);
+  const ctx: FlowContext = useMemo(
+    () => ({ built: new Set(Object.keys(steps) as CoachStepId[]), importOn, creditsOn }),
+    [steps, importOn, creditsOn],
+  );
   const [phase, setPhase] = useState<Phase>('loading');
   const [step, setStep] = useState<CoachStepId>('K0');
   const [answers, setAnswersState] = useState<CoachConsultAnswers>({});
@@ -230,6 +238,7 @@ export default function CoachConsultationFlow(props: CoachConsultationFlowProps)
       eyebrow={eyebrowFor(progress)}
       firstName={firstNameOf(user)}
       completing={completing}
+      credits={credits}
     />
   );
 }

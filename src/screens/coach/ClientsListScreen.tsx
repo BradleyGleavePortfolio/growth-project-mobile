@@ -365,11 +365,11 @@ export default function ClientsListScreen({ navigation }: Props) {
       }
       ListHeaderComponent={listHeader}
       ListEmptyComponent={isLoading ? (
-        <>
+        <View>
           {[0, 1, 2, 3, 4].map((i) => (
             <SkeletonClientCard key={i} />
           ))}
-        </>
+        </View>
       ) : loadError ? (
         // Network/server failure with no prior data — show an explicit error
         // surface with a retry button instead of falling through to the

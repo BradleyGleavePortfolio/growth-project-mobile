@@ -7,9 +7,11 @@
  *     overline, today's workout name, Start workout, the coach's note on sage (the first coach note in its rows),
  *     the details line, then its lettered blocks (rows next to each other in one superset share a letter).
  * A coachless client keeps every logging route and reads "Your plan" with no coach voice (NOLOCK-R).
- * Reads only GET /assignments/me, the signed-in client's own rows; no write. Not wired here (the next PR): the
- * changed-by-coach marks (`sets_before`, `client_reason`) and the day note (`client_note`), whose data is on
- * backend main; "Week 3, day 2" still waits for `program_week` and `program_day`, which are not on main.
+ * Reads only GET /assignments/me, the signed-in client's own rows; no write. TRAIN-TAB-2 (agent 160) reads three more of
+ * its fields (backend main, C1V2-C1): the coach's day note (`client_note`) leads the note card; a changed row reads
+ * "Changed by Sam · 3 sets, was 4" on sage with the coach's reason (`sets_before`, `client_reason`); a skipped day
+ * (`skipped_at`) is never offered with Start and reads missed on the strip, as on the coach's This week.
+ * "Week 3, day 2" still waits for `program_week` and `program_day`, which are not on main.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -27,9 +29,8 @@ import { DayMark, SegmentedRing, type DayState } from '../../../ui/charts/StyleC
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { assignmentPrescription } from '../../../utils/workout/assignmentPrescription';
 import { buildActiveWorkoutExercises, prettifyExerciseName } from '../../../utils/workout/buildActiveWorkout';
-import { bucketDateLocal, getLocalWeekStart } from '../../../utils/date';
+import { bucketDateLocal } from '../../../utils/date';
 import { doneLine, workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
-import { trainingWeek } from '../progress/progressV2';
 import { DAY_LABELS } from '../habits/constants';
 
 /** C1 wording IDs (index.md section 10). New ones wait for the owner (PR "Wording needed"); the rest are today's. */
@@ -51,25 +52,38 @@ export const TRAIN_COPY = {
   names: 'Loading exercise names', // today's
   failed: 'This workout did not load.', // today's
   retry: 'Try again', // today's
-  adjusted: 'Updated by your coach', // today's (WorkoutAssignmentDetail, rows Roman adjusted with the coach's approval)
+  adjusted: 'Updated by your coach', // today's (WorkoutAssignmentDetail); kept for a change saved without its sets before
+  adjustedToday: (coach: string | null) => `${coach ?? 'Your coach'} adjusted today's workout.`, // C1-S-36
+  changed: (coach: string | null, sets: number, was: number) =>
+    `Changed by ${coach ?? 'your coach'} · ${sets} ${sets === 1 ? 'set' : 'sets'}, was ${was}`, // C1-C-07, C1-S-04, C1-B-46
 };
 const c = TRAIN_COPY;
 const CAP = 1.3;
 
 export type TrainState = 'loading' | 'failed' | 'ready';
 export type StartParams = { routineId: string; routineName: string; exercises: string; assignmentId: string };
-type Row = Pick<ClientWorkoutAssignmentWithPlan, 'scheduled_for' | 'completed_at'>;
+interface Row extends Pick<ClientWorkoutAssignmentWithPlan, 'scheduled_for' | 'completed_at'> { skipped_at?: string | null }
+/** GET /assignments/me also returns the coach's day note and the day the client skipped (C1V2-C1, backend main). */
+export interface TrainWorkout extends ClientWorkoutAssignmentWithPlan { client_note?: string | null; skipped_at?: string | null }
+/** One coach-approved change as the server sends it: the sets before it and the coach's reason, null when not saved. */
+type Change = { order: number; sets_before?: number | null; client_reason?: string | null };
 
+const DAY = 86_400_000;
 const dayOf = (a: Row) => bucketDateLocal(new Date(a.scheduled_for));
 const firstName = (name?: string) => name?.trim().split(/\s+/)[0] || null;
 
-/** The ring and strip: this week's workouts (Progress v2's reading); with none, the bare week with today marked. */
-export const trainWeek = (rows: ReadonlyArray<Row>, today: string): WorkoutWeek =>
-  trainingWeek([...rows], today) ?? workoutWeek({ week_start: getLocalWeekStart(), today, assignments: [] });
+/** The ring and strip, Monday to Sunday around `today`; a skipped day reads missed (the coach's This week rule). */
+export function trainWeek(rows: ReadonlyArray<Row>, today: string): WorkoutWeek {
+  const t = Date.parse(today);
+  const week_start = new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10);
+  const end = new Date(Date.parse(week_start) + 6 * DAY).toISOString().slice(0, 10);
+  const assignments = rows.map((a) => ({ day: dayOf(a), completed_at: a.completed_at, skipped_at: a.skipped_at }));
+  return workoutWeek({ week_start, today, assignments: assignments.filter((a) => a.day >= week_start && a.day <= end) });
+}
 
-/** Today's open workout; else the next open one; else the latest still open (a missed day). */
+/** Today's open workout; else the next open one; else the latest still open (a missed day). A skipped day is not open. */
 export function featuredWorkout<T extends Row>(rows: ReadonlyArray<T>, today: string): T | null {
-  const open = rows.filter((a) => !a.completed_at).sort((a, b) => Date.parse(a.scheduled_for) - Date.parse(b.scheduled_for));
+  const open = rows.filter((a) => !a.completed_at && !a.skipped_at).sort((a, b) => Date.parse(a.scheduled_for) - Date.parse(b.scheduled_for));
   return open.find((a) => dayOf(a) >= today) ?? open[open.length - 1] ?? null;
 }
 
@@ -151,7 +165,7 @@ export function TrainHead({ on, children, ...rest }: React.ComponentProps<typeof
  * calm empty line (the tab's Quick workout stays the one forest action below it); with every workout done, nothing.
  */
 export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, onStart, onRetry, today }: {
-  workout: ClientWorkoutAssignmentWithPlan | null; hasAny: boolean; state: TrainState; coachless: boolean;
+  workout: TrainWorkout | null; hasAny: boolean; state: TrainState; coachless: boolean;
   coachId?: string | null; userId?: string; onStart: (params: StartParams) => void; onRetry: () => unknown; today: string;
 }) {
   const sc = useTheme().semanticColors;
@@ -214,8 +228,11 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
     );
   }
 
-  const note = coachless ? undefined : plan.exercises.find((e) => e.notes?.trim())?.notes?.trim();
-  const when = dayOf(workout) === today
+  // The day's note first; before the coach writes one, the first coach note in its rows (plan C1 section 8).
+  const note = coachless ? undefined : workout.client_note?.trim() || plan.exercises.find((e) => e.notes?.trim())?.notes?.trim();
+  const changes = new Map(((workout.roman_adjusted_sets ?? []) as Change[]).map((x) => [x.order, x]));
+  const isToday = dayOf(workout) === today;
+  const when = isToday
     ? c.today
     : new Date(workout.scheduled_for).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const minutes = plan.durationMinutes ? ` · ${c.minutes(plan.durationMinutes)}` : '';
@@ -236,6 +253,9 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
           accessibilityHint={`Opens ${plan.name} as a live workout`} testID="train-start"
         />
       </View>
+      {isToday && plan.adjustedOrders.size > 0 ? (
+        <Text style={[typography.h4, ink, s.lead]} testID="train-adjusted-lead">{c.adjustedToday(author)}</Text>
+      ) : null}
       {note ? (
         <View style={[s.card, { backgroundColor: sc.surface.sage }]} testID="train-coach-note" accessible>
           {author ? (
@@ -250,20 +270,28 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
         </View>
       ) : null}
       <Text style={[typography.bodySmall, muted, s.tabular, s.meta]} testID="train-details">{`${c.exercises(plan.exercises.length)}${minutes}`}</Text>
-      {blocksOf(plan.exercises).map((b) => (
-        <View key={b.letter} style={[s.block, { borderTopColor: sc.border }]} accessible testID={`train-block-${b.letter}`}>
-          <View style={[s.letter, { borderColor: sc.data.moss }]}>
-            <Text maxFontSizeMultiplier={1.15} style={[typography.h3, ink]}>{b.letter}</Text>
+      {blocksOf(plan.exercises).map((b) => {
+        const changed = b.rows.find((r) => plan.adjustedOrders.has(r.order));
+        const change = changed ? changes.get(changed.order) : undefined;
+        const reason = typeof change?.client_reason === 'string' ? change.client_reason.trim() : '';
+        return (
+          <View key={b.letter} style={[s.block, { borderTopColor: sc.border }]} accessible testID={`train-block-${b.letter}`}>
+            <View style={[s.letter, { borderColor: sc.data.moss }]}>
+              <Text maxFontSizeMultiplier={1.15} style={[typography.h3, ink]}>{b.letter}</Text>
+            </View>
+            <View style={[s.flex, changed && [s.changed, { backgroundColor: sc.surface.sage, borderLeftColor: sc.data.forest }]]}>
+              <Text style={[typography.h4, ink]}>{b.rows.map((r) => nameOf(r.exercise_external_id)).join(' + ')}</Text>
+              <Text style={[typography.bodySmall, muted, s.tabular]}>{blockLine(b)}</Text>
+              {changed ? (
+                <Text style={[typography.bodySmall, s.mark, s.tabular, { color: sc.accentText }]} testID={`train-block-${b.letter}-adjusted`}>
+                  {typeof change?.sets_before === 'number' ? c.changed(author, changed.sets, change.sets_before) : c.adjusted}
+                </Text>
+              ) : null}
+              {reason ? <Text style={[typography.h3, italic && s.italic, ink, s.reason]} testID={`train-block-${b.letter}-reason`}>{reason}</Text> : null}
+            </View>
           </View>
-          <View style={s.flex}>
-            <Text style={[typography.h4, ink]}>{b.rows.map((r) => nameOf(r.exercise_external_id)).join(' + ')}</Text>
-            <Text style={[typography.bodySmall, muted, s.tabular]}>{blockLine(b)}</Text>
-            {b.rows.some((r) => plan.adjustedOrders.has(r.order)) ? (
-              <Text style={[typography.bodySmall, { color: sc.accentText }]} testID={`train-block-${b.letter}-adjusted`}>{c.adjusted}</Text>
-            ) : null}
-          </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -289,6 +317,10 @@ const s = StyleSheet.create({
   italic: { fontFamily: 'CormorantGaramond_400Regular_Italic', fontWeight: '400' },
   startWrap: { marginTop: 16, marginBottom: 20 },
   meta: { marginBottom: 12 },
+  lead: { marginBottom: 12 },
+  changed: { borderLeftWidth: 3, borderTopRightRadius: radius.card, borderBottomRightRadius: radius.card, paddingVertical: 10, paddingHorizontal: 14 },
+  mark: { fontFamily: 'Inter_600SemiBold', marginTop: 2 },
+  reason: { marginTop: 6 },
   block: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: layout.rowMinHeight, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   letter: { width: 32, height: 32, borderRadius: radius.control, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   overSkel: { width: '30%', marginBottom: 8 },

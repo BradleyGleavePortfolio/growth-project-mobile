@@ -1,7 +1,8 @@
 // HB-B1: Habits as the ring behind habitsRing; every tap on every state lands somewhere real.
 // Flag off, the list is main's (HabitsFasting.launch and HabitsCheckInGate keep covering it).
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import HabitsScreen from '../../HabitsScreen';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
@@ -102,7 +103,9 @@ beforeEach(() => {
   mockGet.mockResolvedValue({ data: SUMMARY });
   mockLog.mockResolvedValue({ data: {} });
   mockCreate.mockResolvedValue({ data: {} });
+  jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
 });
+afterEach(() => jest.useRealTimers());
 
 it('today: the ring has a part per habit planned today, the week line, the strip and the tiles', async () => {
   const v = await mount();
@@ -149,6 +152,94 @@ it('a tick that does not close the day is a soft tap; an untick is a selection a
   await waitFor(() => expect(mockGetAll).toHaveBeenCalledTimes(2));
   await fireEvent.press(v.getByTestId('habits-ring-tile-h1'));
   expect(HapticService.softImpact).toHaveBeenCalledTimes(1);
+});
+
+it('a strip day up to today opens in the ring, dashed gaps and its date, and ticks for that day; today brings it back', async () => {
+  const v = await mount();
+  await waitFor(() => expect(v.getByTestId('habits-ring-pick-2026-10-13')).toBeTruthy());
+  await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-13'));
+  expect(HapticService.selection).toHaveBeenCalledTimes(1);
+  expect(lastRing('habits-ring')).toMatchObject({ label: 'Tuesday 13, 1 of 4 done', segments: ['missed', 'missed', 'missed', 'done'] });
+  expect(v.getByText('Tuesday')).toBeTruthy();
+  expect(v.getByText('Tuesday, October 13')).toBeTruthy();
+  expect(v.getByTestId('habits-ring-pick-2026-10-13').props.accessibilityState).toEqual({ selected: true });
+  expect(v.getByLabelText('Walk 30 minutes, not done on Tuesday 13, Open · best run 9 days, Sam added')).toBeTruthy();
+  expect(v.getByLabelText('Read, done on Tuesday 13, You added')).toBeTruthy();
+  // The server's answer: Tuesday is ticked and this week moves.
+  mockGetAll.mockResolvedValue({ data: HABITS.map((h) => (h.id === 'h2' ? { ...h, logs: [log('2026-10-13')], week: { planned: 7, done: 3 } } : h)) });
+  await fireEvent.press(v.getByTestId('habits-ring-tile-h2'));
+  expect(mockLog).toHaveBeenCalledWith('h2', { date: '2026-10-13', completed: true, value: 8 });
+  expect(lastRing('habits-ring').label).toBe('Tuesday 13, 2 of 4 done');
+  expect(v.getByTestId('habits-ring-pick-2026-10-13').props.accessibilityLabel).toBe('Tuesday 13, 2 of 4 done');
+  await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-14'));
+  expect(lastRing('habits-ring').label).toBe('Today, 2 of 3 habits done');
+  await waitFor(() => expect(v.getByText('12 of 23 this week')).toBeTruthy());
+});
+
+// Tuesday 13 holds an every-day habit (open), a Tuesdays habit (done), a twice-a-week habit met Monday and Wednesday
+// (not ticked Tuesday: no part, as HB3's summary) and a Mondays habit (not that day: no tile).
+it.each([
+  ['every day, open that day', 'd', false, 'Tuesday 13, 2 of 2 done', 0],
+  ['chosen days, done that day', 'c', true, 'Tuesday 13, 0 of 2 done', undefined],
+  ['times a week, met on other days, open that day', 'f', false, 'Tuesday 13, 2 of 3 done', 2],
+] as const)('a past day counts as HB3 does (%s): picking it writes nothing; a tick and an untick move only that day', async (_n, id, was, after, drawIndex) => {
+  mockGetAll.mockResolvedValue({ data: [
+    habit('d', 'Walk 30 minutes', {}),
+    habit('c', 'Lights out by 11', { schedule_kind: 'days', schedule_days: [2], logs: [log('2026-10-13')] }),
+    habit('f', 'Read', { schedule_kind: 'times_per_week', times_per_week: 2, logs: [log('2026-10-12'), log(TODAY)] }),
+    habit('m', 'Stretch 10 minutes', { schedule_kind: 'days', schedule_days: [1] }),
+  ] });
+  mockGet.mockResolvedValue({ data: { today: TODAY, days: [{ date: '2026-10-13', planned: 2, done: 1 }] } });
+  const v = await mount();
+  const tuesday = () => v.getByTestId('habits-ring-pick-2026-10-13').props.accessibilityLabel;
+  await waitFor(() => expect(tuesday()).toBe('Tuesday 13, 1 of 2 done'));
+  await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-13'));
+  expect(lastRing('habits-ring')).toMatchObject({ label: 'Tuesday 13, 1 of 2 done', segments: ['missed', 'done'] });
+  expect(tuesday()).toBe('Tuesday 13, 1 of 2 done');
+  expect(v.queryByTestId('habits-ring-tile-m')).toBeNull();
+  expect(mockLog).not.toHaveBeenCalled();
+  await fireEvent.press(v.getByTestId(`habits-ring-tile-${id}`));
+  expect(mockLog).toHaveBeenLastCalledWith(id, { date: '2026-10-13', completed: !was, value: was ? 0 : 1 });
+  expect(lastRing('habits-ring')).toMatchObject({ label: after, drawIndex });
+  expect(tuesday()).toBe(after);
+  await waitFor(() => expect(mockGetAll.mock.calls.length).toBeGreaterThan(1));
+  await act(async () => {});
+  await fireEvent.press(v.getByTestId(`habits-ring-tile-${id}`));
+  expect(mockLog).toHaveBeenLastCalledWith(id, { date: '2026-10-13', completed: was, value: was ? 1 : 0 });
+  expect(lastRing('habits-ring').label).toBe('Tuesday 13, 1 of 2 done');
+  expect(tuesday()).toBe('Tuesday 13, 1 of 2 done');
+});
+
+it.each([false, true])('a future day is never logged: "Cannot log future events", red italic, spoken, gone by itself (Reduce Motion %s)', async (reduce) => {
+  jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(reduce);
+  const v = await mount();
+  await waitFor(() => expect(v.getByTestId('habits-ring-pick-2026-10-15')).toBeTruthy());
+  jest.useFakeTimers();
+  await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-15'));
+  expect(v.getByText('Cannot log future events')).toHaveStyle({ fontStyle: 'italic', color: colors.error });
+  expect(v.getByTestId('habits-ring-future')).toHaveStyle({ opacity: reduce ? 1 : 0 });
+  expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith('Cannot log future events');
+  expect(mockLog).not.toHaveBeenCalled();
+  expect(HapticService.selection).not.toHaveBeenCalled();
+  expect(lastRing('habits-ring').label).toBe('Today, 2 of 3 habits done');
+  await act(async () => { jest.advanceTimersByTime(3000); });
+  expect(v.queryByText('Cannot log future events')).toBeNull();
+});
+
+it('a day with nothing planned: "Nothing planned today" over the client\'s habits, no 0 of 0 and no tiles', async () => {
+  // Wednesday: Stretch is Monday and Friday, Lights out is Sunday and Monday.
+  mockGetAll.mockResolvedValue({ data: [{ ...HABITS[2], schedule_days: [1, 5], logs: [] }, { ...HABITS[3], schedule_days: [0, 1] }] });
+  const v = await mount();
+  await waitFor(() => expect(v.getByText('Nothing planned today')).toBeTruthy());
+  expect(v.getByText('Stretch 10 minutes')).toBeTruthy();
+  expect(v.getByText('Lights out by 11')).toBeTruthy();
+  expect(v.queryByText('0 of 0')).toBeNull();
+  expect(v.queryByTestId('habits-ring-tile-h3')).toBeNull();
+  expect(v.queryByText('Tap a habit when it is done.')).toBeNull();
+  expect(v.getByTestId('habits-ring-add')).toBeTruthy();
+  await fireEvent.press(v.getByTestId('habits-ring-pick-2026-10-12'));
+  expect(lastRing('habits-ring').label).toBe('Monday 12, 0 of 2 done');
+  expect(v.getByTestId('habits-ring-tile-h3')).toBeTruthy();
 });
 
 it('a tick the server refuses goes back, with a calm line and the error haptic', async () => {

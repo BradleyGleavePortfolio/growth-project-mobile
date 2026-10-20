@@ -42,10 +42,13 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_CLIENT_BILLING_V2: process.env.EXPO_PUBLIC_FF_CLIENT_BILLING_V2,
+  EXPO_PUBLIC_FF_COACH_AI_CREDITS: process.env.EXPO_PUBLIC_FF_COACH_AI_CREDITS,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
+  EXPO_PUBLIC_FF_COACH_BRIEF_GATE: process.env.EXPO_PUBLIC_FF_COACH_BRIEF_GATE,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COACH_HOME_V11: process.env.EXPO_PUBLIC_FF_COACH_HOME_V11,
   EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
+  EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT: process.env.EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT,
   EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
@@ -72,6 +75,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
+  EXPO_PUBLIC_FF_LEARN_COURSES: process.env.EXPO_PUBLIC_FF_LEARN_COURSES,
   EXPO_PUBLIC_FF_LEARN_HUB: process.env.EXPO_PUBLIC_FF_LEARN_HUB,
   EXPO_PUBLIC_FF_MEAL_PLANS_V2: process.env.EXPO_PUBLIC_FF_MEAL_PLANS_V2,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
@@ -216,6 +220,10 @@ export const featureFlags = {
   clientPathCopilot: readFlag('EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT', isDev),
   /** Coach Brief — daily morning brief on the coach home tab. */
   coachBrief: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF', isDev),
+  /** BRIEFA: today's brief as Concept A, "Roman in the light" (full screen,
+   *  at most two suggested actions, list rows for busy kinds). Needs coachBrief
+   *  too. Off in every profile; off shows today's brief screen unchanged. */
+  coachBriefGate: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF_GATE', false),
   /** Admin Control Room — governance view, gated to admin role. */
   adminControlRoom: readFlag('EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM', isDev),
   /** Private community hub — rooms, cohorts, announcements, coach-led threads. */
@@ -640,6 +648,29 @@ export const featureFlags = {
    */
   androidCreditPackLink: readFlag('EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK', false),
 
+  // ─── CREDITBUILD-143 — coach AI credit pool screens (CREDIT-1/W/S/SW) ─────
+  /**
+   * The coach AI credit screens the owner approved on 10-13 (Concept 1 "A
+   * page in setup" in the S3 look): the "Your AI credits." page after K6/K7
+   * in the coach consultation and the "AI credits" row on "Your practice is
+   * ready.". Head coaches only; sub-coaches never see them (TM-W). OFF by
+   * default unconditionally (not `isDev`) and in every EAS profile. Turn it
+   * on only once the Money page shows the AI pool with "Buy more credits"
+   * (mobile #686), because the page says that is where they live.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_AI_CREDITS
+   */
+  coachAiCredits: readFlag('EXPO_PUBLIC_FF_COACH_AI_CREDITS', false),
+  /**
+   * Roman's line N7 ("Ask me as often as you like. Every conversation uses
+   * your AI credits.") on the AI credit screens. It is true only once
+   * backend #1016 (coaches have no daily Roman number, NOLOCK-R3) is deployed,
+   * so it has its own switch. OFF by default unconditionally.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT
+   */
+  coachRomanNoDailyLimit: readFlag('EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT', false),
+
   // ─── S14 — client AI wearable insight panel ──────────────────────────────
   /**
    * The client Health and Sleep views can show an AI-written insight panel
@@ -716,6 +747,8 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_LEARN_HUB
    */
   learnHub: readFlag('EXPO_PUBLIC_FF_LEARN_HUB', false),
+  /** LEARN-M5 (MOCK-LEARN2 A): Train's course banner and the course home, week and lesson. Off; off, Train is main's. env: EXPO_PUBLIC_FF_LEARN_COURSES */
+  learnCourses: readFlag('EXPO_PUBLIC_FF_LEARN_COURSES', false),
   /** MEALBUILD (MOCK-K5 C): Programs > Meal plans and Meals. Off; off, Programs is main's. env: EXPO_PUBLIC_FF_MEAL_PLANS_V2 */
   mealPlansV2: readFlag('EXPO_PUBLIC_FF_MEAL_PLANS_V2', false),
 
