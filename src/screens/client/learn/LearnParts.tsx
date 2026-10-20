@@ -10,11 +10,11 @@ import { useLearn } from './learnData';
 
 const BACK: Record<string, string> = { MoreIndex: 'You', Learn: 'Learn', WorkoutMain: 'Train' };
 
-/** Chevron and the name of the page it returns to; 44 pt. */
-export function LearnBack({ navigation, onDark = false }: { navigation: NavigationProp<ParamListBase>; onDark?: boolean }) {
+/** Chevron and the name of the page it returns to (or `label`, LEARN-M5's course and week names); 44 pt. */
+export function LearnBack({ navigation, onDark = false, label: named }: { navigation: NavigationProp<ParamListBase>; onDark?: boolean; label?: string }) {
   const { semanticColors: sc } = useTheme();
   const state = navigation.getState?.();
-  const label = BACK[state?.routes[state.index - 1]?.name ?? ''] ?? 'Back';
+  const label = named || (BACK[state?.routes[state.index - 1]?.name ?? ''] ?? 'Back');
   const color = onDark ? sc.textOnAccent : sc.textPrimary;
   return (
     <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" hitSlop={8} testID="learn-back"

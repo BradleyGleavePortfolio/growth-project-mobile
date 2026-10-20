@@ -21,12 +21,12 @@ it('the week count is the server\'s, moved by ticks on their way and never past 
   expect(weekCount([h({})], TODAY, () => false)).toBeNull();
 });
 
-it('the strip runs Monday to Sunday: past gaps dashed, days to come planned, today from the screen', () => {
+it('the strip runs Monday to Sunday: past gaps dashed, days to come planned, the days the screen holds from it', () => {
   expect(mondayOf('2026-10-18')).toBe('2026-10-12');
   expect(segmentsOf({ planned: 3, done: 1 }, true)).toEqual(['done', 'missed', 'missed']);
-  const days = weekStrip({ today: TODAY, days: [{ date: '2026-10-13', planned: 2, done: 1 }] }, TODAY, { planned: 3, done: 3 });
+  const days = weekStrip({ today: TODAY, days: [{ date: '2026-10-13', planned: 2, done: 1 }] }, TODAY, (d) => (d === TODAY ? { planned: 3, done: 3 } : null));
   expect(days.map((d) => d.date)).toEqual(['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']);
   expect(days[1].segments).toEqual(['done', 'missed']);
-  expect(days[2]).toMatchObject({ isToday: true, segments: ['done', 'done', 'done'] });
+  expect(days[2].segments).toEqual(['done', 'done', 'done']);
   expect(days[0].segments).toEqual([]);
 });

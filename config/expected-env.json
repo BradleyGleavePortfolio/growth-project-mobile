@@ -111,6 +111,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_COACH_BRIEF_GATE": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
     "EXPO_PUBLIC_FF_COACH_COMMUNITY": {
       "kind": "flag",
       "default": "off",
@@ -270,6 +275,11 @@
       "kind": "flag",
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key. On only for builds offered solely on the US App Store (credit packs open Stripe Checkout in the system browser)."
+    },
+    "EXPO_PUBLIC_FF_LEARN_COURSES": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (the Train course banner and the course home, week and lesson pages, MOCK-LEARN2, LEARN-M5). Off in every EAS profile until the owner turns it on."
     },
     "EXPO_PUBLIC_FF_LEARN_HUB": {
       "kind": "flag",
