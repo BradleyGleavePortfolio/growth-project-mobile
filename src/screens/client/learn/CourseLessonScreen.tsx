@@ -1,5 +1,5 @@
 /** LEARN-M5, board c05 (flag learnCourses): one lesson's page, the coach's note and Mark as complete, done only after the server saves it
- * (300 ms fade, none with Reduce Motion; success haptic). Offline the page reads and the button waits, with the reason. Video player: plan PR 6; finish moments: plan PR 7. */
+ * (300 ms fade, none with Reduce Motion; success haptic). Offline the page reads and the button waits, with the reason. Video player (LEARN-M6): CourseVideoPlayer; finish moments: plan PR 7. */
 import React, { useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, type NavigationProp, type ParamListBase } from '@react-navigation/native';
@@ -13,6 +13,7 @@ import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetwork
 import { lessonsApi } from '../../../services/api';
 import { LearnBack, LearnText, LessonMark } from './LearnParts';
 import { CoachNote } from './CourseParts';
+import CourseVideoPlayer from './CourseVideoPlayer';
 import { courseCopy, lessonMeta, useCourse } from './courseData';
 
 export default function CourseLessonScreen() {
@@ -22,7 +23,7 @@ export default function CourseLessonScreen() {
   const { id, lesson: lessonId } = (useRoute().params ?? {}) as { id?: string; lesson?: string };
   const reduced = useReducedMotion();
   const online = isEffectivelyOnline(useNetworkStatus());
-  const { query, course, known, markDone } = useCourse(id);
+  const { query, course, known, markDone, markPosition } = useCourse(id);
   const copy = courseCopy(known?.coach ?? null);
   const week = course?.weeks.find((w) => w.open && w.lessons.some((l) => l.id === lessonId));
   const lesson = week?.lessons.find((l) => l.id === lessonId);
@@ -70,6 +71,11 @@ export default function CourseLessonScreen() {
   return (
     <Screen edges={['top']} footer={footer} testID="course-lesson">
       <LearnBack navigation={navigation} label={fromWeek ? `Week ${week.n}` : known?.title} />
+      {lesson.kind !== 'page' ? (
+        <View style={s.eyebrow}>
+          <CourseVideoPlayer key={lesson.id} lesson={lesson} online={online} offline={lesson.done ? copy.offline : undefined} failed={copy.videoFailed} noAnswer={copy.noAnswer} onPosition={(sec) => markPosition(lesson.id, sec)} />
+        </View>
+      ) : null}
       <Overline style={s.eyebrow}>{`Lesson ${lesson.n} · ${lessonMeta(lesson)}`}</Overline>
       <Text style={s.title} accessibilityRole="header">{lesson.title}</Text>
       {lesson.body ? <View style={s.text}><LearnText text={lesson.body} /></View> : null}
