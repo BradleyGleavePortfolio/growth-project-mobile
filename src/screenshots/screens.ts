@@ -1,31 +1,51 @@
-/**
- * The screens we capture for the App Store / Play Store listing. Each entry
- * names a navigation route reachable from `ClientNavigator`. The capture
- * scripts walk this list, deep-link to the route via `tgp://` (or set the
- * initial route on web), then snapshot the simulator/page.
- *
- * Order matters — App Store Connect uses the first three slots most heavily.
- */
+import type { ClientTabParamList } from '../navigation/ClientNavigator';
+
 export interface ScreenshotTarget {
-  /** Stable identifier used as the output filename slug. */
   slug: string;
-  /** Human-friendly caption for the marketing layout, optional. */
-  caption: string;
-  /** Navigation route name in `ClientNavigator`. */
+  audience: 'client' | 'coach';
   route: string;
-  /**
-   * Tab to select first (one of the four bottom tabs) before pushing to the
-   * route, when the route lives inside a stack. Omit when `route` is itself
-   * a tab.
-   */
-  tab?: 'Home' | 'WorkoutTab' | 'Log' | 'MoreTab';
+  tab?: keyof ClientTabParamList;
+  /** Existing screen content which must be visible before capture. */
+  readyText: string;
 }
 
+// One manifest for the app and both capture drivers. No caption is rendered.
 export const SCREENSHOT_TARGETS: ScreenshotTarget[] = [
-  { slug: '01-home',     caption: 'One thought, today.',       route: 'Home',     tab: 'Home' },
-  { slug: '02-log',      caption: 'Log a meal in seconds.',    route: 'Log',      tab: 'Log' },
-  { slug: '03-plan',     caption: 'This week, dialled in.',    route: 'ClientDailyMealPlan', tab: 'MoreTab' },
-  { slug: '04-recipes',  caption: 'Coach-made recipes.',       route: 'Recipes',  tab: 'MoreTab' },
-  { slug: '05-progress', caption: 'A trend, not a number.',    route: 'Progress', tab: 'MoreTab' },
-  { slug: '06-fasting',  caption: 'Fast on protocol.',         route: 'Fast',     tab: 'MoreTab' },
+  { slug: '01-home', audience: 'client', route: 'HomeMain', tab: 'Home', readyText: 'Message Sam' },
+  { slug: '02-roman', audience: 'client', route: 'RomanChat', tab: 'MoreTab', readyText: 'top of your food log' },
+  { slug: '03-workout', audience: 'client', route: 'ActiveWorkout', tab: 'WorkoutTab', readyText: 'Bench press' },
+  { slug: '04-food', audience: 'client', route: 'Log', tab: 'Log', readyText: 'Oats with berries' },
+  { slug: '05-messages', audience: 'client', route: 'Messages', tab: 'Home', readyText: 'Travelling Thursday' },
+  { slug: '06-coach-overview', audience: 'coach', route: 'CommandCenter', readyText: 'All fourteen' },
 ];
+
+// Apple's two iPhone slots: large display (6.9") and the required medium display (6.3").
+export const SCREENSHOT_SIZES = [
+  { width: 1320, height: 2868 },
+  { width: 1206, height: 2622 },
+];
+
+// Owner approved (#162-3, 10-20): option A (MOCK-STORESHOTS-<id>) per frame; B options dropped.
+// Data only, never baked into PNGs.
+export const SCREENSHOT_CAPTIONS = [
+  { slug: '01-home', id: 1, text: 'Start every day knowing what to do.' },
+  { slug: '02-roman', id: 3, text: 'Clear answers, built on your own numbers.' },
+  { slug: '03-workout', id: 5, text: 'Every set builds on the last.' },
+  { slug: '04-food', id: 7, text: "Always know what's left for today." },
+  { slug: '05-messages', id: 9, text: 'Your coach is one message away.' },
+  { slug: '06-coach-overview', id: 11, text: 'Coaches see who needs them today.' },
+];
+
+export function screenshotTarget(url: string | null): ScreenshotTarget {
+  const slug = url?.match(/screenshot\/([^/?#]+)/)?.[1] ?? '01-home';
+  const target = SCREENSHOT_TARGETS.find((entry) => entry.slug === slug);
+  if (!target) throw new Error(`Unknown screenshot: ${slug}`);
+  return target;
+}
+
+export function screenshotState(target: ScreenshotTarget, params?: object) {
+  const leaf = { name: target.route, ...(params ? { params } : {}) };
+  return { routes: target.tab && target.tab !== target.route
+    ? [{ name: target.tab, state: { routes: [leaf] } }]
+    : [leaf] };
+}
