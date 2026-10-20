@@ -66,6 +66,7 @@ describe('AI credit words', () => {
       },
       newBalance: 'New balance',
       otherAmounts: 'Other amounts',
+      enterAmount: 'Enter an amount',
       notNow: 'Not now',
       gotIt: 'Got it',
     });

@@ -14,11 +14,22 @@
  * the amount field).
  */
 import React from 'react';
-import { AppState, Linking, Platform, StyleSheet, type AppStateStatus } from 'react-native';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-native';
-import { layout, radius } from '../../../theme/tokens';
+import {
+  AccessibilityInfo,
+  AppState,
+  Keyboard,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  type AppStateStatus,
+} from 'react-native';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { layout, lightTokens, radius } from '../../../theme/tokens';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 
-const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false };
+const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false };
 jest.mock('../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../config/featureFlags');
   return {
@@ -36,10 +47,20 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack }),
   useIsFocused: () => true,
 }));
+let mockBudget = {
+  period_start: '2026-10-01T00:00:00.000Z',
+  period_end: '2026-11-01T00:00:00.000Z',
+  used_displayed_cents: 10000,
+  remaining_displayed_cents: 0,
+  pack_options_cents: [1000, 2500, 9900],
+  custom_pack_bounds_cents: { min: 1000, max: 50000 },
+};
+let mockRole: 'head_coach' | 'sub_coach' | 'unknown' = 'head_coach';
+let mockBudgetLoading = false;
+const mockUseRole = jest.fn(() => mockRole);
+jest.mock('../../../hooks/useCoachRoleType', () => ({ useCoachRoleType: () => mockUseRole() }));
 jest.mock('../../../hooks/useAIBudget', () => ({
-  useAIBudget: () => ({
-    data: { remaining_displayed_cents: 0, pack_options_cents: [1000, 2500, 9900], custom_pack_bounds_cents: { min: 1000, max: 50000 } },
-  }),
+  useAIBudget: () => ({ data: mockBudgetLoading ? undefined : mockBudget }),
   COACH_AI_BUDGET_QUERY_KEY: ['coachAIBudget'],
 }));
 const mockInvalidate = jest.fn();
@@ -110,7 +131,11 @@ let openURL: jest.SpyInstance;
 
 beforeEach(() => {
   g.__DEV__ = false;
-  Object.assign(mockFlags, { iosUsCreditPackLink: true, androidCreditPackLink: false });
+  Object.assign(mockFlags, { iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false });
+  mockRole = 'head_coach';
+  mockBudgetLoading = false;
+  mockUseRole.mockReset().mockImplementation(() => mockRole);
+  mockBudget = { ...mockBudget, used_displayed_cents: 10000, remaining_displayed_cents: 0 };
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
   mockCreateCheckout.mockReset().mockResolvedValue({
     data: { checkout_session_id: 'cs_live_abc', checkout_url: CHECKOUT_URL, amount_cents: 1000 },
@@ -297,5 +322,283 @@ describe('checkoutStartErrorMessage', () => {
       'Checkout could not start. Try again in a minute. Nothing was charged.',
     );
     expect(checkoutStartErrorMessage(undefined)).toMatch(/Nothing was charged/);
+  });
+});
+
+describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
+  beforeEach(() => {
+    mockFlags.coachAiCredits = true;
+    mockBudget.remaining_displayed_cents = 2500;
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    jest.setSystemTime(new Date('2026-10-22T00:00:00.000Z'));
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('uses the CB-PACE $25 suggestion, verbatim G2/G4, then the existing browser checkout', async () => {
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.getByTestId('credit-pack-select')).toHaveTextContent(
+      'You pay face value. $10 of credit is $10 of AI usage.',
+      { exact: false },
+    );
+    expect(screen.getByText('Suggested')).toBeTruthy();
+    expect(screen.getByText('A $25 pack should cover you until Nov 1.')).toBeTruthy();
+    // #CREDIT-S: the three packs sit inside the Suggested card, under Roman's sentence, $25 chosen.
+    const card = screen.getByTestId('credit-pack-suggested');
+    expect(within(card).getByTestId('credit-pack-tiles')).toBeTruthy();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('should cover you until')).toBeGreaterThan(-1);
+    expect(tree.indexOf('should cover you until')).toBeLessThan(tree.indexOf('credit-pack-tiles'));
+    expect(within(card).getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(within(card).getByLabelText('$10 pack').props.accessibilityState).toEqual({ selected: false, checked: false });
+    expect(within(card).getByLabelText('$99 pack')).toBeTruthy();
+    // On the ink card the chosen tile's ring is the on-dark frame token, not forest.
+    expect(StyleSheet.flatten(within(card).getByLabelText('$25 pack').props.style)).toMatchObject({
+      borderColor: lightTokens.data.frameOnDark,
+      borderWidth: 2,
+    });
+    expect(screen.queryByTestId('credit-pack-other-amounts')).toBeNull();
+    expect(screen.queryByTestId('credit-pack-custom-input')).toBeNull();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    expect(StyleSheet.flatten(screen.getByTestId('credit-pack-buy').props.style).minHeight).toBeGreaterThanOrEqual(layout.touchMin);
+    await fireEvent.press(screen.getByTestId('credit-pack-buy'));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ amount_cents: 2500, success_url: EXTERNAL_SUCCESS_URL }),
+    );
+    expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
+  });
+
+  it.each([1000, 9900])('picking the $%s tile updates the primary button, then buys that pack', async (cents) => {
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId(`credit-pack-${cents}`));
+    expect(screen.getByLabelText(`${cents === 1000 ? '$10' : '$99'} pack`).props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(screen.getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: false, checked: false });
+    expect(screen.queryByLabelText('Buy $25 of credits')).toBeNull();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText(`Buy ${cents === 1000 ? '$10' : '$99'} of credits`));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: cents }));
+    expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
+  });
+
+  it.each(['cancel', 'Try again'] as const)('the chosen tile survives a checkout %s', async (way) => {
+    if (way === 'Try again') mockCreateCheckout.mockRejectedValueOnce(new Error('Request failed with status code 500'));
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-9900'));
+    await fireEvent.press(screen.getByLabelText('Buy $99 of credits'));
+    if (way === 'cancel') {
+      await act(async () => {
+        urlListener?.({ url: 'tgp://checkout/cancel' });
+      });
+    } else {
+      await fireEvent.press(screen.getByTestId('credit-pack-retry'));
+    }
+    expect(screen.getByLabelText('$99 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(screen.getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: false, checked: false });
+    await fireEvent.press(screen.getByLabelText('Buy $99 of credits'));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(2);
+    expect(mockCreateCheckout).toHaveBeenLastCalledWith(expect.objectContaining({ amount_cents: 9900 }));
+  });
+
+  it.each([true, false])('number pad (flag %s): keyboard insets on; with the flag on, Buy scrolls into view', async (on) => {
+    mockFlags.coachAiCredits = on;
+    const shown: Array<() => void> = [];
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, cb: () => void) => {
+      if (event === 'keyboardDidShow') shown.push(cb);
+      return { remove: jest.fn() };
+    }) as never);
+    // The preset's ScrollView mock shares one scrollToEnd jest.fn across tests.
+    const toEnd = jest.spyOn(ScrollView.prototype, 'scrollToEnd').mockClear();
+    await render(<CreditPackCheckoutScreen route={routeWith('custom')} />);
+    expect(screen.getByTestId('credit-pack-select').props.automaticallyAdjustKeyboardInsets).toBe(true);
+    expect(screen.getByTestId('credit-pack-custom-input').props.autoFocus).toBe(true);
+    expect(screen.getByTestId('ai-pack-option-custom')).toBeTruthy();
+    await act(async () => shown.forEach((cb) => cb()));
+    if (on) expect(toEnd).toHaveBeenCalledWith({ animated: true });
+    else expect(toEnd).not.toHaveBeenCalled();
+  });
+
+  it('Other amounts is the same full dark green button as Buy, with its own light haptic', async () => {
+    const soft = jest.spyOn(HapticService, 'softImpact').mockResolvedValue(undefined);
+    await render(<CreditPackCheckoutScreen />);
+    const other = screen.getByTestId('credit-pack-other');
+    const style = StyleSheet.flatten(other.props.style);
+    expect(style).toEqual(StyleSheet.flatten(screen.getByTestId('credit-pack-buy').props.style));
+    expect(style).toMatchObject({ backgroundColor: lightTokens.accent, borderRadius: radius.button });
+    expect(style.minHeight).toBeGreaterThanOrEqual(layout.touchMin);
+    expect(other).toHaveTextContent('Other amounts');
+    expect(other.props.accessibilityRole).toBe('button');
+    expect(other.props.accessibilityState).toEqual({ disabled: false, busy: false, expanded: false });
+    await fireEvent.press(other);
+    expect(soft).toHaveBeenCalledTimes(1);
+  });
+
+  it('Other amounts only opens: it leaves, focus moves into the field, and a tile brings both buttons back', async () => {
+    // The preset's focus is one shared jest.fn on every mocked host; count from here, on the field.
+    const focus = jest.spyOn(TextInput.prototype, 'focus');
+    focus.mockClear();
+    const spoken = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-9900'));
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    // No second tap is possible: the button is not drawn while the field is open.
+    expect(screen.queryByTestId('credit-pack-other')).toBeNull();
+    expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
+    expect(screen.getByTestId('credit-pack-other-amounts')).toBeTruthy();
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(focus.mock.contexts[0]).toBeInstanceOf(TextInput);
+    expect(spoken).toHaveBeenCalledWith(focus.mock.contexts[0], 'focus');
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+    expect(focus).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByTestId('credit-pack-1000'));
+    expect(screen.queryByTestId('credit-pack-other-amounts')).toBeNull();
+    expect(screen.getByLabelText('$10 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(screen.getByLabelText('Buy $10 of credits')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-other')).toBeTruthy();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('20');
+    expect(screen.getByLabelText('Buy $20 of credits')).toBeTruthy();
+  });
+
+  it('empty or out-of-range: "Enter an amount", disabled, no haptic, nothing sent; a valid amount buys it', async () => {
+    const soft = jest.spyOn(HapticService, 'softImpact').mockResolvedValue(undefined);
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    soft.mockClear();
+    expect(screen.queryByText('Custom')).toBeNull();
+    for (const typed of ['', '5', '600', 'abc']) {
+      await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), typed);
+      const off = screen.getByTestId('ai-pack-option-custom');
+      expect(off).toHaveTextContent('Enter an amount');
+      expect(off.props.accessibilityState).toEqual({ disabled: true, busy: false });
+      await fireEvent.press(off);
+    }
+    expect(soft).not.toHaveBeenCalled();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('credit-pack-error')).toBeNull();
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20.50');
+    const on = screen.getByTestId('ai-pack-option-custom');
+    expect(on).toHaveTextContent('Buy $20.50 of credits');
+    expect(on.props.accessibilityState).toEqual({ disabled: false, busy: false });
+    // The press is onSelect('custom'): the screen sends the typed amount.
+    await fireEvent.press(on);
+    expect(soft).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 2050 }));
+  });
+
+  it('keeps a custom amount typed before the role/pool resolves visible once the suggestion loads', async () => {
+    mockRole = 'unknown';
+    const ui = await render(<CreditPackCheckoutScreen />);
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20');
+    mockRole = 'head_coach';
+    await ui.rerender(<CreditPackCheckoutScreen />);
+    expect(screen.getByTestId('credit-pack-suggested')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('20');
+    expect(screen.getByLabelText('Buy $20 of credits')).toBeTruthy();
+  });
+
+  it.each([0, 50000])('no suggestion for usage %s: original choices, $99 marked selected, no coverage claim', async (used) => {
+    mockBudget.used_displayed_cents = used;
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
+    expect(screen.getByLabelText('$99 pack').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: false });
+    expect(screen.getByTestId('credit-pack-custom-input')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('$99 pack'));
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 9900 }));
+  });
+
+  it('without a loaded pool, shows the original row with $99 and makes no coverage claim', async () => {
+    mockBudgetLoading = true;
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
+    expect(screen.getByLabelText('$99 pack').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId('credit-pack-custom-input')).toBeTruthy();
+  });
+
+  it.each(['sub_coach', 'unknown'] as const)('never derives a suggestion from the retained head pool for %s', async (role) => {
+    mockRole = role;
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
+    expect(screen.queryByText(/should cover you until/)).toBeNull();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+  });
+
+  it('a failed custom checkout comes back with the field open and the typed amount kept', async () => {
+    mockCreateCheckout.mockRejectedValueOnce(new Error('Request failed with status code 500'));
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-other'));
+    expect(StyleSheet.flatten(screen.getByTestId('credit-pack-custom-input').props.style).minHeight).toBe(layout.touchMin);
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '20.50');
+    await fireEvent.press(screen.getByLabelText('Buy $20.50 of credits'));
+    await fireEvent.press(screen.getByTestId('credit-pack-retry'));
+    expect(screen.getByTestId('credit-pack-custom-input').props.value).toBe('20.50');
+    expect(screen.queryByTestId('credit-pack-other')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Buy $20.50 of credits'));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(2);
+    expect(mockCreateCheckout).toHaveBeenLastCalledWith(expect.objectContaining({ amount_cents: 2050 }));
+  });
+
+  it('numeric preselect still starts once; custom preselect reveals and focuses the custom field', async () => {
+    const ui = await render(<CreditPackCheckoutScreen route={routeWith('custom')} />);
+    expect(screen.getByTestId('credit-pack-custom-input').props.autoFocus).toBe(true);
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    await ui.unmount();
+    await render(<CreditPackCheckoutScreen route={routeWith(2500)} />);
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 2500 }));
+  });
+
+  // #161-15 op 1: the sheets' and Roman chat's Other amounts send preselect 'custom'.
+  it('arriving from Other amounts: the field is open and focused, "Enter an amount" is disabled, then a typed amount buys', async () => {
+    const focus = jest.spyOn(TextInput.prototype, 'focus');
+    focus.mockClear();
+    const spoken = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
+    await render(<CreditPackCheckoutScreen route={routeWith('custom')} />);
+    expect(screen.getByTestId('credit-pack-suggested')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-other-amounts')).toBeTruthy();
+    expect(screen.queryByTestId('credit-pack-other')).toBeNull();
+    expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
+    for (const label of ['$10 pack', '$25 pack', '$99 pack']) {
+      expect(screen.getByLabelText(label).props.accessibilityState).toEqual({ selected: false, checked: false });
+    }
+    const input = screen.getByTestId('credit-pack-custom-input');
+    expect(input.props.autoFocus).toBe(true);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(spoken).toHaveBeenCalledWith(focus.mock.contexts[0], 'focus');
+    const off = screen.getByTestId('ai-pack-option-custom');
+    expect(off).toHaveTextContent('Enter an amount');
+    expect(off.props.accessibilityState).toEqual({ disabled: true, busy: false });
+    await fireEvent.press(off);
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    await fireEvent.changeText(input, '40');
+    await fireEvent.press(screen.getByLabelText('Buy $40 of credits'));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 4000 }));
+  });
+
+  it('opened with no preselect (Money, push): the field stays closed behind Other amounts', async () => {
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(screen.getByTestId('credit-pack-buy')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-other')).toBeTruthy();
+    expect(screen.queryByTestId('credit-pack-custom-input')).toBeNull();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+  });
+
+  it('flag off keeps old words, all choices and no new role read', async () => {
+    mockFlags.coachAiCredits = false;
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.getByTestId('credit-pack-select')).toHaveTextContent('no multiplier math.', { exact: false });
+    expect(screen.getByTestId('ai-pack-option-2500')).toBeTruthy();
+    expect(screen.queryByTestId('credit-pack-suggested')).toBeNull();
+    expect(mockUseRole).not.toHaveBeenCalled();
+    // As on main: the Custom pill stays on and an out-of-range amount gets the error screen.
+    await fireEvent.changeText(screen.getByTestId('credit-pack-custom-input'), '5');
+    await fireEvent.press(screen.getByTestId('ai-pack-option-custom'));
+    expect(screen.getByTestId('credit-pack-error')).toHaveTextContent('Custom packs must be between $10 and $500.', { exact: false });
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
   });
 });

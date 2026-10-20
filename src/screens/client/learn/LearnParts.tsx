@@ -10,14 +10,14 @@ import { useLearn } from './learnData';
 
 const BACK: Record<string, string> = { MoreIndex: 'You', Learn: 'Learn', WorkoutMain: 'Train' };
 
-/** Chevron and the name of the page it returns to (or `label`, LEARN-M5's course and week names); 44 pt. */
-export function LearnBack({ navigation, onDark = false, label: named }: { navigation: NavigationProp<ParamListBase>; onDark?: boolean; label?: string }) {
+/** Chevron and the name of the page it returns to (or `label`, LEARN-M5's course and week names; `onPress` when that page is not the one below); 44 pt. */
+export function LearnBack({ navigation, onDark = false, label: named, onPress }: { navigation: NavigationProp<ParamListBase>; onDark?: boolean; label?: string; onPress?: () => void }) {
   const { semanticColors: sc } = useTheme();
   const state = navigation.getState?.();
   const label = named || (BACK[state?.routes[state.index - 1]?.name ?? ''] ?? 'Back');
   const color = onDark ? sc.textOnAccent : sc.textPrimary;
   return (
-    <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" hitSlop={8} testID="learn-back"
+    <Pressable onPress={onPress ?? (() => navigation.goBack())} accessibilityRole="button" hitSlop={8} testID="learn-back"
       style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
       <Ionicons name="chevron-back" size={22} color={color} />
       <Text style={[styles.backLabel, { color }]}>{label}</Text>

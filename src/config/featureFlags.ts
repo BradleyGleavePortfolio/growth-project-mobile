@@ -665,11 +665,15 @@ export const featureFlags = {
   // ─── S14 — client AI wearable insight panel ──────────────────────────────
   /**
    * The client Health and Sleep views can show an AI-written insight panel
-   * (backend WearableInsightsService, drafted through the AI gateway). The
-   * panel has no per-client AI-processing consent check yet, and owner
-   * decision D2 makes AI processing opt-in (consent box 2). Until that check
-   * exists the panel stays OFF UNCONDITIONALLY (not `isDev`), and no EAS
-   * profile sets this. Off, the views show only the client's own data.
+   * (backend WearableInsightsService, drafted through the AI gateway). AI
+   * processing is opt-in (owner D2, consent box 2), and the server checks the
+   * client's live box-2 grant on both insight routes, before the cache and
+   * before any AI call. Without it the panel shows "AI help is off" with
+   * "Allow AI help" (the box-2 sheet); a client with no coach sees "Roman works
+   * with a coach" (403 ROMAN_REQUIRES_COACH). Live notes also need the server
+   * allow-list value with wearable_insight.* (WEAR-AI-BE); the ALL-ON PR flips
+   * this default. No EAS profile sets it. Off, the views show only the client's
+   * own data.
    *
    * env: EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS
    */
