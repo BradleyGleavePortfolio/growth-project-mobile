@@ -12,6 +12,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ClientsStackParamList } from '../../../navigation/CoachNavigator';
 import { CoachTeamEntryContext } from '../../../navigation/coachTeamEntry';
+import { openInboxChat } from '../../../navigation/coachInbox';
 import { coachLandingTab } from '../../../navigation/coachLanding';
 import PushPermissionCard from '../../../components/home/PushPermissionCard';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
@@ -52,7 +53,8 @@ export default function ClientLookupScreen({ navigation }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const sectionY = useRef<Record<string, number>>({});
   const azBase = useRef(0);
-  const focusedOnce = useRef(false);
+  // The first focus is the mount, loaded below, unless the lookup mounted unseen (six tabs: Clients opens with the app).
+  const focusedOnce = useRef(!navigation.isFocused());
   const [everyoneY, setEveryoneY] = useState<number | null>(null);
   const activeTotal = useRef<number | null>(null);
   const nudge = useLookupNudge(colors);
@@ -75,7 +77,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
   useEffect(() => {
     void loadSide();
     return navigation.addListener('focus', () => {
-      if (!focusedOnce.current) return void (focusedOnce.current = true); // the mount, loaded above
+      if (!focusedOnce.current) return void (focusedOnce.current = true);
       if (coachId) loadClients(coachId, filterStatus, { silent: true });
       void loadSide();
     });
@@ -101,8 +103,8 @@ export default function ClientLookupScreen({ navigation }: Props) {
     if (coachId) void rememberRecentClient(coachId, c.id).then(setRecentIds);
     navigation.navigate('ClientDetail', { clientId: c.id, clientName: rosterDisplayName(c) });
   };
-  const openMessages = (c: RosterClient) =>
-    navigation.navigate('ClientMessages', { clientId: c.id, clientName: rosterDisplayName(c) });
+  // #CARD-MESSAGE-ALL, #COACH-CHAT-BACK: with the six tabs the chat opens in Messages over the inbox; off, over this list.
+  const openMessages = (c: RosterClient) => openInboxChat(navigation, c.id, rosterDisplayName(c));
   const runAction = (c: RosterClient, a: LookupAction) => (a === 'review' ? openClient(c) : a === 'nudge' ? nudge.open(c) : openMessages(c));
   const toggleArchived = () => { setChip(null); setFilterStatus(archived ? 'active' : 'archived'); };
   const jumpTo = (letter: string) => {

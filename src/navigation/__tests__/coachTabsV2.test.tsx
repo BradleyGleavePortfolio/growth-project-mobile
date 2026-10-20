@@ -22,9 +22,15 @@ const mockTeam = { role: 'head_coach', hasSubCoaches: true };
 jest.mock('../../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => mockTeam }));
 jest.mock('../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ semanticColors: jest.requireActual('../../theme/tokens').lightTokens }),
+  useTheme: () => ({ semanticColors: jest.requireActual('../../theme/tokens').lightTokens, colors: new Proxy({}, { get: () => '#000000' }) }),
 }));
-jest.mock('../../services/api', () => ({ coachApi: { getUnreadCounts: async () => ({ data: { total: 0 } }) } }));
+// UI-4: the real lookup reads one client, Sam, with one unread message (its Needs you action is Reply).
+jest.mock('../../services/api', () => ({ coachApi: {
+  getUnreadCounts: async () => ({ data: { total: 0, by_client: { 'client-1': 1 } } }),
+  getClients: async (status: string) => ({ data: status === 'archived' ? [] : [{ id: 'client-1', name: 'Sam', email: 's@example.com', created_at: '2026-01-01T00:00:00.000Z' }] }),
+} }));
+jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
+jest.mock('../../components/home/PushPermissionCard', () => () => null);
 jest.mock('../../services/notificationsApi', () => ({ fetchUnreadCount: async () => 0 }));
 const mockCommandCenter = { __USING_MOCK_DATA: true };
 jest.mock('../../services/commandCenterApi', () => mockCommandCenter);
@@ -43,10 +49,14 @@ for (const match of navSource.matchAll(/^import (?!type\b)[^;]*? from '(\.\.\/sc
   const modulePath = match[1];
   jest.doMock(`../${modulePath}`, () => ({ __esModule: true, default: () => <Text>{modulePath}</Text> }));
 }
-// Clients shows whether the navigator offers its Team entry.
+// Clients shows whether the navigator offers its Team entry; with the UI-4 lookup on, it is the real ClientLookupScreen.
+let mockLookup = false;
 function ClientsListProbe() {
+  const navigation = useNavigation();
   const team = React.useContext(require('../coachTeamEntry').CoachTeamEntryContext);
-  return <Text>{`ClientsList team:${team}`}</Text>;
+  if (!mockLookup) return <Text>{`ClientsList team:${team}`}</Text>;
+  const Lookup = require('../../screens/coach/lookup/ClientLookupScreen').default;
+  return <Lookup navigation={navigation} />;
 }
 jest.doMock('../../screens/coach/ClientsListScreen', () => ({ __esModule: true, default: ClientsListProbe }));
 // COACHTABS-NAV: the inbox, a client's file and a chat open the next screen the way the real ones do.
@@ -133,6 +143,7 @@ beforeEach(() => {
   HapticService.selection.mockClear();
   inboxTap = chatTap;
   mockUnsent = false;
+  mockLookup = false;
 });
 afterAll(() => Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS }));
 
@@ -558,18 +569,52 @@ it('the real chat arms the same guard with its own unsent text', () => {
   expect(chat).toMatch(/^ {2}useKeepUnsentChat\(inputText\.trim\(\) !== ''\);$/m);
 });
 
+// UI-4 lookup (#CARD-MESSAGE-ALL, #CHATS-MESSAGES, #COACH-CHAT-BACK): the real lookup in Clients. Its Needs you Reply (and
+// Say hello and the row's Message {first}, the same handler) opens the chat the inbox way; Back lands on the inbox.
+it.each([true, false])("coachTabsV2 %s: the lookup's Reply opens the chat in Messages over the inbox (off: over the lookup); Back lands there", async (on) => {
+  mockFlags.coachTabsV2 = on;
+  mockLookup = true;
+  mockCommandCenter.__USING_MOCK_DATA = false; // what ships
+  const view = await mount();
+  await fireEvent.press(view.getByRole('tab', { name: /^Clients, tab/ }));
+  await fireEvent.press(await view.findByTestId('lookup-act-client-1'));
+  expect([focusedTab(), stackOf('Messages'), stackOf('ClientsStack'), ref.getCurrentRoute()?.params]).toEqual(on
+    ? ['Messages', ['MessagesInbox', 'ClientMessages'], ['ClientsList'], CHAT]
+    : ['ClientsStack', undefined, ['ClientsList', 'ClientMessages'], CHAT]);
+  expect(view.getByRole('tab', { name: on ? MESSAGES_TAB : /^Clients, tab/ })).toBeSelected();
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', 'ClientsList']);
+});
+
+it("flag on: unsent text in another chat left open in Messages asks before the lookup's Reply closes it", async () => {
+  const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockLookup = true;
+  const view = await mount();
+  await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: OTHER, initial: false }));
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+  const kept = messagesKeys();
+  await fireEvent.press(view.getByRole('tab', { name: /^Clients, tab/ }));
+  await fireEvent.press(await view.findByTestId('lookup-act-client-1'));
+  expect(ask.mock.calls.map(([title, , buttons]) => [title, buttons?.map((b) => b.text)])).toEqual([['Discard this message?', ['Keep editing', 'Discard']]]);
+  expect([focusedTab(), messagesKeys(), ref.getCurrentRoute()?.params]).toEqual(['Messages', kept, OTHER]); // Keep editing
+  expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('See you at six');
+  await act(async () => ask.mock.calls[0][2]?.[1]?.onPress?.()); // Discard
+  expect([stackOf('Messages'), ref.getCurrentRoute()?.params]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT]);
+  ask.mockRestore();
+});
+
 it('every chat opened outside Clients goes through coachInbox.ts, and every file that does is a row above', () => {
   const callers = SOURCES.filter(([file, source]) => file !== 'coachInbox.ts' && /\b(openInboxChat|chatTarget)\(/.test(source));
   // MessagesScreen renders CoachInboxV2; ClientDetailScreen's safety card (SAFETY-CARD), the safety alert and the weekly
-  // insight (SAFETY-CHAT-ROUTE) have their own rows above.
+  // insight (SAFETY-CHAT-ROUTE) and the UI-4 lookup have their own rows above.
   // The brief's row takes its target from brief/briefActions.ts, which CoachBriefScreen re-exports (BRIEFA).
   const rows = [...ENTRIES.map(([probe]) => (probe === 'CoachBriefScreen' ? 'briefActions.ts' : `${path.basename(probe)}.tsx`)),
-    'CoachInboxV2.tsx', 'ClientDetailScreen.tsx', 'CoachSafetyAlertScreen.tsx', 'ClientInsightScreen.tsx'];
+    'CoachInboxV2.tsx', 'ClientDetailScreen.tsx', 'CoachSafetyAlertScreen.tsx', 'ClientInsightScreen.tsx', 'ClientLookupScreen.tsx'];
   expect(callers.map(([file]) => file).sort()).toEqual(rows.sort());
-  // Only the navigator, the chat itself and Clients screens that open a chat over themselves (the detail and the UI-4 lookup) name the route.
+  // Only the navigator, the chat itself and Clients screens that open a chat over themselves name the route.
   const naming = SOURCES.filter(([, source]) => /["']ClientMessages["']/.test(source)).map(([file]) => file);
   expect(naming.sort()).toEqual(
-    ['ClientDetailScreen.tsx', 'ClientLookupScreen.tsx', 'ClientMessagesScreen.tsx', 'CoachNavigator.tsx', 'coachInbox.ts'].sort(),
+    ['ClientDetailScreen.tsx', 'ClientMessagesScreen.tsx', 'CoachNavigator.tsx', 'coachInbox.ts'].sort(),
   );
 });
 
