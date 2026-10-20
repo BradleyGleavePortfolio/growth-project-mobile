@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
-const mockFlags = { coachCommunity: true, mwbPrograms: true, teamMode: true, coachBrief: true, coachTabsV2: true };
+const mockFlags = { coachCommunity: true, mwbPrograms: true, teamMode: true, coachBrief: true, coachBriefGate: false, coachTabsV2: true };
 const mockTeam = { role: 'head_coach', hasSubCoaches: true };
 jest.mock('../../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => mockTeam }));
@@ -127,6 +127,7 @@ const originalOS = Platform.OS;
 beforeEach(() => {
   Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
   mockFlags.coachTabsV2 = true;
+  mockFlags.coachBriefGate = false;
   mockCommandCenter.__USING_MOCK_DATA = true;
   mockTeam.hasSubCoaches = true;
   HapticService.selection.mockClear();
@@ -570,4 +571,17 @@ it('every chat opened outside Clients goes through coachInbox.ts, and every file
   expect(naming.sort()).toEqual(
     ['ClientDetailScreen.tsx', 'ClientLookupScreen.tsx', 'ClientMessagesScreen.tsx', 'CoachNavigator.tsx', 'coachInbox.ts'].sort(),
   );
+});
+
+it.each([
+  [true, true, 0],
+  [true, false, 6],
+])('BRIEFA: with coachBrief %s and coachBriefGate %s the open brief leaves %s tabs on the bar, and leaving it restores six', async (brief, gate, shown) => {
+  Object.assign(mockFlags, { coachBrief: brief, coachBriefGate: gate });
+  const view = await mount();
+  await act(async () => ref.navigate('SettingsStack', { screen: 'CoachBrief' }));
+  expect(view.queryAllByRole('tab')).toHaveLength(shown);
+  await act(async () => ref.navigate('SettingsStack', { screen: 'SettingsHome' }));
+  expect(view.getAllByRole('tab')).toHaveLength(6);
+  mockFlags.coachBrief = true;
 });
