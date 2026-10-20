@@ -3,11 +3,14 @@
  * verbatim, and the small helpers that fill them from the real pool.
  */
 import {
+  CREDIT_MOMENT_COPY,
   CREDIT_ROMAN_ASK,
   CREDIT_SETUP_COPY,
   CREDIT_USAGE_LABEL,
   K8_CREDITS_LABEL,
+  buyAmountLabel,
   k8CreditsSentence,
+  packTileLabel,
   renewsLine,
   setupRows,
   usageAmount,
@@ -49,5 +52,24 @@ describe('AI credit words', () => {
   it('says when the pool renews (UTC day, like Settings), or nothing for a bad date', () => {
     expect(renewsLine('2026-11-01T00:00:00.000Z')).toBe('Renews Nov 1.');
     expect(renewsLine('not a date')).toBeNull();
+  });
+
+  it('keeps the approved low and used-up sheet words', () => {
+    expect(CREDIT_MOMENT_COPY).toEqual({
+      low: {
+        title: 'Your AI credits are low.',
+        line: 'If they run out before then, Roman and AI features pause for you and your clients.',
+      },
+      usedUp: {
+        title: 'Your AI credits are used up.',
+        line: 'Roman and AI features are paused for you and your clients. Everything else keeps working.',
+      },
+      newBalance: 'New balance',
+      otherAmounts: 'Other amounts',
+      notNow: 'Not now',
+      gotIt: 'Got it',
+    });
+    expect(buyAmountLabel(2500)).toBe('Buy $25 of credits');
+    expect(packTileLabel(9900)).toBe('$99 pack');
   });
 });
