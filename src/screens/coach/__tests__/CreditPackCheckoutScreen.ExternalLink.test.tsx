@@ -548,6 +548,44 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     await ui.unmount();
     await render(<CreditPackCheckoutScreen route={routeWith(2500)} />);
     expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 2500 }));
+  });
+
+  // #161-15 op 1: the sheets' and Roman chat's Other amounts send preselect 'custom'.
+  it('arriving from Other amounts: the field is open and focused, "Enter an amount" is disabled, then a typed amount buys', async () => {
+    const focus = jest.spyOn(TextInput.prototype, 'focus');
+    focus.mockClear();
+    const spoken = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
+    await render(<CreditPackCheckoutScreen route={routeWith('custom')} />);
+    expect(screen.getByTestId('credit-pack-suggested')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-other-amounts')).toBeTruthy();
+    expect(screen.queryByTestId('credit-pack-other')).toBeNull();
+    expect(screen.queryByTestId('credit-pack-buy')).toBeNull();
+    for (const label of ['$10 pack', '$25 pack', '$99 pack']) {
+      expect(screen.getByLabelText(label).props.accessibilityState).toEqual({ selected: false, checked: false });
+    }
+    const input = screen.getByTestId('credit-pack-custom-input');
+    expect(input.props.autoFocus).toBe(true);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(spoken).toHaveBeenCalledWith(focus.mock.contexts[0], 'focus');
+    const off = screen.getByTestId('ai-pack-option-custom');
+    expect(off).toHaveTextContent('Enter an amount');
+    expect(off.props.accessibilityState).toEqual({ disabled: true, busy: false });
+    await fireEvent.press(off);
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+    await fireEvent.changeText(input, '40');
+    await fireEvent.press(screen.getByLabelText('Buy $40 of credits'));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: 4000 }));
+  });
+
+  it('opened with no preselect (Money, push): the field stays closed behind Other amounts', async () => {
+    await render(<CreditPackCheckoutScreen />);
+    expect(screen.getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(screen.getByTestId('credit-pack-buy')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-other')).toBeTruthy();
+    expect(screen.queryByTestId('credit-pack-custom-input')).toBeNull();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
   });
 
   it('flag off keeps old words, all choices and no new role read', async () => {

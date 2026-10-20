@@ -40,8 +40,10 @@ describe('Roman used-up buy links', () => {
     expect(screen.getByText('At your usual pace, a $25 pack should cover you until Nov 1.')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Buy $25 of credits'));
     expect(mockNavigate).toHaveBeenLastCalledWith('CreditPackCheckout', { preselect: 2500 });
+    // #161-15 op 1: Other amounts opens the pack screen with the amount field open.
     await fireEvent.press(screen.getByLabelText('Other amounts'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('CreditPackCheckout', undefined);
+    expect(mockNavigate).toHaveBeenLastCalledWith('CreditPackCheckout', { preselect: 'custom' });
+    expect(mockNavigate).toHaveBeenCalledTimes(2);
   });
 
   it('offers the largest pack without a pace line when no pack is enough', async () => {

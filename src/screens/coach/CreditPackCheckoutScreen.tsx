@@ -35,9 +35,11 @@
  * EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK on takes the same path.
  *
  * Preselect (PACKS-BOTH-131): `route.params.preselect` comes from
- * AIBudgetMount. A pack amount tapped on the tutorial or hard-pause card
- * starts that pack's checkout once on open (no second tap on the list);
- * 'custom' opens with the custom-amount field focused.
+ * AIBudgetMount, CreditMomentsHost and CreditPoolEmptyLinks. A pack amount
+ * tapped on the tutorial or hard-pause card starts that pack's checkout once
+ * on open (no second tap on the list); 'custom' opens with the custom-amount
+ * field focused (also sent by the credit sheets' and Roman chat's "Other
+ * amounts", #161-15 op 1).
  *
  * Optimistic UI: NONE. Stripe Checkout is the source of truth for payment
  * success; the budget query is invalidated only after the webhook applies
@@ -189,8 +191,9 @@ export default function CreditPackCheckoutScreen({
   }, [concierge]);
   // Other amounts only opens the field and then leaves (#161-8 op 1), so focus
   // moves into the field: the cursor and number pad, and the screen reader.
+  // The sheets' and Roman chat's Other amounts arrive the same way (#161-15).
   const customRef = useRef<TextInput>(null);
-  const focusCustom = useRef(false);
+  const focusCustom = useRef(concierge && route?.params?.preselect === 'custom');
   const choosePack = useCallback((next: PackChoice) => {
     focusCustom.current = next.custom;
     setPackChoice(next);
