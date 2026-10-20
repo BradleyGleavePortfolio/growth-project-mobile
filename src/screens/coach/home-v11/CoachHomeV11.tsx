@@ -3,10 +3,11 @@
  * bell, three dials, Roman with the one action "Approve Roman's drafts →", the clients who need the coach as
  * tiles, and Business. Only real numbers are drawn; a dial with no real base is left out. Zero clients: the
  * Setup, Clients and Earnings dials, Roman's next step, the open setup steps as tiles and the empty wall, as in
- * the zero-client mockup. The chips filter the roster section:
- * Needs you (tiles, then the Steady wall, as in the mockup), Steady (the wall) and Streaks (streak tiles).
- * C-S-PUSH-3: Overview is the landing with this Home on (coachLanding.ts), so it carries the coach's push ask:
- * after the roster section (zero clients: the setup steps) and before Business, as on today's Overview.
+ * the zero-client mockup (which draws no other setup card, so the existing cards stay off at zero clients). The
+ * chips filter the roster section: Needs you (tiles, then the Steady wall, as in the mockup), Steady (the wall) and
+ * Streaks (streak tiles). With clients: the existing setup cards (`header`: setup checklist, today's brief, the
+ * Money card and, as Overview is the landing, the coach's push ask, C-S-PUSH-3) below the roster section; zero
+ * clients: the push ask alone, after the setup steps. Then Business.
  */
 import React, { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -47,6 +48,8 @@ interface Props {
   onAskRoman?: () => void;
   /** A setup step's screen (Stripe, packages, the invite link); the payment step opens Money. */
   onOpenSetup: (target: ChecklistTarget) => void;
+  /** The existing Home cards (CoachHomeCards), once the coach has clients. */
+  header?: React.ReactNode;
   sources?: CoachHomeSources;
   rosterSources?: RosterSources;
 }
@@ -84,7 +87,7 @@ export function homeDials(d: CoachHomeData, setup: SetupPlan | null = null): Dia
   return dials;
 }
 
-export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, onOpenSetup, sources, rosterSources = liveRosterSources }: Props) {
+export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, onOpenSetup, header, sources, rosterSources = liveRosterSources }: Props) {
   const { semanticColors: sc } = useTheme();
   const { width } = useWindowDimensions();
   const { data, reload, retryMonth, retryUrgent, retryDrafts } = useCoachHomeV11(sources);
@@ -122,6 +125,10 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
     : [];
   const filter: RosterFilter | null = chips.find((c) => c.key === picked)?.key ?? chips[0]?.key ?? null;
   const showWall = wall !== null && wall.length > 0 && (filter === 'needs' || filter === 'steady');
+  // Business tiles need clients; the month error shows at any roster size. No tile and no error: no heading.
+  const month = roster > 0 && data.month.kind === 'ok' && hasMonthMoney(data.month.summary) ? data.month.summary : null;
+  const payout = roster > 0 ? data.payout : null;
+  const monthFailed = data.month.kind === 'error';
 
   return (
     <ScrollView
@@ -250,29 +257,30 @@ export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMone
       ) : null}
 
       {o && (!zero || setupSnap) ? (
-        <View style={styles.section}>
-          <PushPermissionCard audience="coach" presentation="section" />
-          {!zero && (data.month.kind !== 'loading' || data.payout) ? (
-            <View testID="coach-home-v11-business">
-              <QuietOverline accessibilityRole="header">Business</QuietOverline>
-              {data.month.kind === 'error' ? (
-                <QuietError message="This month's earnings could not load." onRetry={retryMonth} testID="coach-home-v11-month-error" />
+        <View style={styles.section}>{zero ? <PushPermissionCard audience="coach" presentation="section" /> : header}</View>
+      ) : null}
+
+      {o && (!zero || setupSnap) && (month || payout || monthFailed) ? (
+        <View style={styles.section} testID="coach-home-v11-business">
+          <QuietOverline accessibilityRole="header">Business</QuietOverline>
+          {monthFailed ? (
+            <QuietError message="This month's earnings could not load." onRetry={retryMonth} testID="coach-home-v11-month-error" />
+          ) : null}
+          {month || payout ? (
+            <View style={styles.tiles}>
+              {month ? (
+                <BusinessTile
+                  label={monthOverline(data.now)} value={heroAmount(month.totals.netCents, month.currency)}
+                  sub={paceLine(month.totals.netCents, month.currency, data.now)}
+                  width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-month"
+                />
               ) : null}
-              <View style={styles.tiles}>
-                {data.month.kind === 'ok' && hasMonthMoney(data.month.summary) ? (
-                  <BusinessTile
-                    label={monthOverline(data.now)} value={heroAmount(data.month.summary.totals.netCents, data.month.summary.currency)}
-                    sub={paceLine(data.month.summary.totals.netCents, data.month.summary.currency, data.now)}
-                    width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-month"
-                  />
-                ) : null}
-                {data.payout ? (
-                  <BusinessTile
-                    label="Next payout" value={heroAmount(data.payout.amountCents, data.payout.currency)} sub={cap(payoutWords(data.payout, data.now))}
-                    width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-payout"
-                  />
-                ) : null}
-              </View>
+              {payout ? (
+                <BusinessTile
+                  label="Next payout" value={heroAmount(payout.amountCents, payout.currency)} sub={cap(payoutWords(payout, data.now))}
+                  width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-payout"
+                />
+              ) : null}
             </View>
           ) : null}
         </View>

@@ -58,6 +58,7 @@ import InviteShareCard from "../components/coach/setup/InviteShareCard";
 import SetupNotice from "../components/coach/setup/SetupNotice";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import CoachConsultationFlow from "../screens/coach/consultation/CoachConsultationFlow";
+import { WithCoachCredits, type CoachCredits } from "../components/coach/credits/useCoachCredits";
 import { readUserCache } from "../lib/userCache";
 import type { CurrentUser } from "../hooks/useCurrentUser";
 import { signOut } from "../services/authActions";
@@ -982,15 +983,18 @@ export default function CoachWizardNavigator() {
       </View>
     );
   }
-  return (
+  const flow = (credits: CoachCredits | null) => (
     <CoachConsultationFlow
       userId={who?.id ?? "coach"}
       user={who}
       importOn={featureFlags.extensionImport}
+      credits={credits}
       onComplete={() => {
         void persistWizardCompleteFlag().then(() => authEvents.emit());
       }}
       onSignOut={() => void signOut(who?.id ?? null)}
     />
   );
+  // "Your AI credits." (CREDITBUILD-143) reads the pool only with its flag on.
+  return featureFlags.coachAiCredits ? <WithCoachCredits>{flow}</WithCoachCredits> : flow(null);
 }

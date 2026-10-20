@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { AppState, Platform, Pressable, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { BottomTabBar, createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { CommonActions, type NavigatorScreenParams } from '@react-navigation/native';
+import { CommonActions, getFocusedRouteNameFromRoute, type NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { coachApi } from '../services/api';
 import { logger } from '../utils/logger';
@@ -40,6 +40,8 @@ import TrustCenterScreen from '../screens/TrustCenterScreen';
 // when the matching feature flag is explicitly true, so stub surfaces never
 // reach production binaries.
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
+import CoachBriefListScreen, { type CoachBriefListParams } from '../screens/coach/brief/CoachBriefListScreen';
+import CoachBriefLightScreen from '../screens/coach/brief/CoachBriefLightScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
 import { featureFlags } from '../config/featureFlags';
 // Community v1-6 — coach community sub-stack (six screens). Mounted as a
@@ -281,6 +283,8 @@ export type SettingsStackParamList = {
   TrustCenter: undefined;
   // Wave 11 — runtime scaffolding (flag-gated; safe to mount).
   CoachBrief: undefined;
+  /** BRIEFA: the clients behind one brief row ("See weight logs"); behind coachBrief and coachBriefGate. */
+  CoachBriefList: CoachBriefListParams;
   AdminControlRoom: undefined;
   // Phase 11 Track 9 — Crisp support inbox.
   SupportInbox: undefined;
@@ -561,7 +565,13 @@ function SettingsStackNavigator({ initialRouteName }: { initialRouteName?: keyof
           flag is explicitly true, so stub/coming-soon surfaces never reach
           production binaries. */}
       {featureFlags.coachBrief && (
-        <SettingsStack.Screen name="CoachBrief" component={CoachBriefScreen} />
+        <SettingsStack.Screen
+          name="CoachBrief"
+          component={featureFlags.coachBriefGate ? CoachBriefLightScreen : CoachBriefScreen}
+        />
+      )}
+      {featureFlags.coachBrief && featureFlags.coachBriefGate && (
+        <SettingsStack.Screen name="CoachBriefList" component={CoachBriefListScreen} />
       )}
       {featureFlags.adminControlRoom && (
         <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
@@ -743,10 +753,14 @@ const entryTabOf = (name: string): keyof CoachTabParamList | undefined =>
   featureFlags.coachTabsV2 ? ENTRY_TAB[name as keyof CoachTabParamList] : undefined;
 
 function EntryTabBar(props: BottomTabBarProps) {
-  const { state } = props;
-  const entry = entryTabOf(state.routes[state.index].name);
-  const index = entry ? state.routes.findIndex((r) => r.name === entry) : -1;
-  return <BottomTabBar {...props} state={index >= 0 ? { ...state, index } : state} />;
+  const { state, descriptors } = props;
+  const open = state.routes[state.index];
+  const index = state.routes.findIndex((r) => r.name === entryTabOf(open.name));
+  if (index < 0) return <BottomTabBar {...props} />;
+  // BRIEFA: the bar's hide rule is the open route's, not the selected entry tab's.
+  const { key } = state.routes[index];
+  const options = { ...descriptors[key].options, tabBarStyle: descriptors[open.key].options.tabBarStyle };
+  return <BottomTabBar {...props} state={{ ...state, index }} descriptors={{ ...descriptors, [key]: { ...descriptors[key], options } }} />;
 }
 
 /**
@@ -1028,13 +1042,17 @@ export default function CoachNavigator() {
       <Tab.Screen
         name="SettingsStack"
         component={SettingsStackNavigator}
-        options={{
+        options={({ route }) => ({
           title: 'Settings',
           tabBarAccessibilityLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
-        }}
+          // BRIEFA: Concept A's brief is full screen; the tab bar steps aside while it is open.
+          ...(featureFlags.coachBrief && featureFlags.coachBriefGate && getFocusedRouteNameFromRoute(route) === 'CoachBrief'
+            ? { tabBarStyle: { display: 'none' as const } }
+            : {}),
+        })}
       />
     </Tab.Navigator>
     {/* COACH-AI-CONSENT: asked once over coach Home, when the server says never asked. */}

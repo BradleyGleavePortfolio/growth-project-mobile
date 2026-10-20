@@ -11,7 +11,7 @@ const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', '
 
 describe('Money opens the Money tab, not a copy inside Settings (flag on)', () => {
   it.each([
-    ['Brief Money action', 'screens/coach/CoachBriefScreen.tsx', /featureFlags\.coachTabsV2\s*\?\s*\{ tab: 'MoneyStack', params: \{ screen: 'CoachMoney', pop: true \} \}\s*:\s*\{ tab: 'SettingsStack', params: \{ screen: 'CoachMoney', initial: false \} \}/],
+    ['Brief Money action', 'screens/coach/brief/briefActions.ts', /featureFlags\.coachTabsV2\s*\?\s*\{ tab: 'MoneyStack', params: \{ screen: 'CoachMoney', pop: true \} \}\s*:\s*\{ tab: 'SettingsStack', params: \{ screen: 'CoachMoney', initial: false \} \}/],
     ['Team profile Open Money', 'screens/coach/CoachTeamProfileScreen.tsx', /featureFlags\.coachTabsV2\s*\?\s*navigation\.navigate\('MoneyStack', \{ screen: 'CoachMoney', pop: true \}\)\s*:\s*navigation\.navigate\('CoachMoney'\)/],
     ['Package edit Open Money', 'screens/coach/payments/CoachPackageEditScreen.tsx', /featureFlags\.coachTabsV2\s*\?\s*navigation\.navigate\("MoneyStack", \{ screen: "CoachMoney", pop: true \}\)\s*:\s*navigation\.navigate\("CoachMoney"\)/],
   ])('%s', (_name, file, wire) => {
