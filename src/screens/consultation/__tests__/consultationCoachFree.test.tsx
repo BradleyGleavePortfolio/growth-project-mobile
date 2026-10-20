@@ -4,7 +4,8 @@
  * "Before you join a coach" (C3-S-84), led by C3-S-83, with the coached paragraph 4 and box 2
  * (client-ai-v6, so the grant covers Roman once a coach is linked), and the footer "Nothing is sent
  * until you continue.". P0 records that whole screen (FIX684: consult-consent-v8-coach-free, v9-coach-free
- * with the server's memory paragraph; the table at the end). A grant the server refuses (403
+ * with the server's memory paragraph; W-BRAND-AGREEMENT: v12 / v13-coach-free, the same screens with
+ * TGP Fitness; the table at the end). A grant the server refuses (403
  * ROMAN_REQUIRES_COACH) is quiet: unsaved, no notice. The coach-free box 2 copies stay known so a grant
  * recorded before 62y2 is still read with its own text.
  */
@@ -226,10 +227,10 @@ describe('P0 for a client with no coach (W-CONSENT)', () => {
 
 // FIX684 (Sol B1): every P0 screen this build shows, and the record it names: [no coach, memory on, P0 version, digest].
 const SCREENS: Array<[boolean, boolean, string, string]> = [
-  [false, false, 'consult-consent-v7', '7711079209acecedfb50c31787787124af843f076154e9bfbd1e33550e861e09'],
-  [false, true, 'consult-consent-v8', 'b98e160e884aecdca059b90f7a88803ba84eeac79b692e83eba9f734f93274b2'],
-  [true, false, 'consult-consent-v8-coach-free', '5369ee9c57412dd2233850a7cae2043a32645431ee3b3484a14c19b8c503c633'],
-  [true, true, 'consult-consent-v9-coach-free', '4a1e19730f3fab3b8a6a8119f5425cd3c0f6ed2f502d229d25dbb7fe5df35771'],
+  [false, false, 'consult-consent-v11', '4b1686a8e835297d0e6bbd91dce988b4b5b9046eb9d70aebbda9e1d36c70f926'],
+  [false, true, 'consult-consent-v12', '8989ac25a1d87a5d6c2f355b74e1a260fb3b35231bf571a371440229d4c9f6a9'],
+  [true, false, 'consult-consent-v12-coach-free', 'a655bb7c794629a25fc27246dace79078a516a8ef45c357751bc2d2271ba0d64'],
+  [true, true, 'consult-consent-v13-coach-free', '336fcf0271843d9b9bfca35ce321480aba4925196f935b1e0ac51e260cba468b'],
 ];
 // The server's client-ai-v7 memory paragraph (v5's with the 57c exception after the promise), its copy sha256 rebuilt from text.
 const V7_PARAGRAPH = V5_PARAGRAPH.replace('his notes about you.', `his notes about you. ${AI_CONSENT_SAFETY_EXCEPTION}`);
