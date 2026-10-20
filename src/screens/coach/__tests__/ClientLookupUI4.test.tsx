@@ -5,7 +5,7 @@
 import React from 'react';
 import fs from 'fs';
 import path from 'path';
-import { ScrollView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockGetClients = jest.fn();
@@ -249,6 +249,8 @@ describe('UI-4 Search first (15 or more)', () => {
     await fireEvent.changeText(screen.getByPlaceholderText('Write a short message...'), 'For Ben only');
     await fireEvent.press(screen.getByLabelText('Cancel'));
     await fireEvent.press(screen.getByTestId('lookup-nudge-m2')); // same client: the draft is kept
+    expect(screen.UNSAFE_getByType(KeyboardAvoidingView)).toBeTruthy(); // Send and Cancel stay above the keyboard
+    for (const l of ['Cancel', 'Send nudge']) expect(StyleSheet.flatten(screen.getByLabelText(l).props.style).minHeight).toBeGreaterThanOrEqual(44);
     expect(screen.getByPlaceholderText('Write a short message...').props.value).toBe('For Ben only');
     await fireEvent.press(screen.getByLabelText('Cancel'));
     await fireEvent.changeText(screen.getByTestId('lookup-search'), 'theo');
