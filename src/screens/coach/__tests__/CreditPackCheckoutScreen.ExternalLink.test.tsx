@@ -14,9 +14,9 @@
  * the amount field).
  */
 import React from 'react';
-import { AppState, Linking, Platform, StyleSheet, type AppStateStatus } from 'react-native';
+import { AppState, Keyboard, Linking, Platform, ScrollView, StyleSheet, type AppStateStatus } from 'react-native';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
-import { layout, radius } from '../../../theme/tokens';
+import { layout, lightTokens, radius } from '../../../theme/tokens';
 
 const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false, coachAiCredits: false };
 jest.mock('../../../config/featureFlags', () => {
@@ -340,6 +340,11 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(within(card).getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
     expect(within(card).getByLabelText('$10 pack').props.accessibilityState).toEqual({ selected: false, checked: false });
     expect(within(card).getByLabelText('$99 pack')).toBeTruthy();
+    // On the ink card the chosen tile's ring is the on-dark frame token, not forest.
+    expect(StyleSheet.flatten(within(card).getByLabelText('$25 pack').props.style)).toMatchObject({
+      borderColor: lightTokens.data.frameOnDark,
+      borderWidth: 2,
+    });
     expect(screen.queryByTestId('credit-pack-other-amounts')).toBeNull();
     expect(screen.queryByTestId('credit-pack-custom-input')).toBeNull();
     expect(mockCreateCheckout).not.toHaveBeenCalled();
@@ -363,6 +368,43 @@ describe('PACKSCREEN S3 selection (coachAiCredits on)', () => {
     expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
     expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount_cents: cents }));
     expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
+  });
+
+  it.each(['cancel', 'Try again'] as const)('the chosen tile survives a checkout %s', async (way) => {
+    if (way === 'Try again') mockCreateCheckout.mockRejectedValueOnce(new Error('Request failed with status code 500'));
+    await render(<CreditPackCheckoutScreen />);
+    await fireEvent.press(screen.getByTestId('credit-pack-9900'));
+    await fireEvent.press(screen.getByLabelText('Buy $99 of credits'));
+    if (way === 'cancel') {
+      await act(async () => {
+        urlListener?.({ url: 'tgp://checkout/cancel' });
+      });
+    } else {
+      await fireEvent.press(screen.getByTestId('credit-pack-retry'));
+    }
+    expect(screen.getByLabelText('$99 pack').props.accessibilityState).toEqual({ selected: true, checked: true });
+    expect(screen.getByLabelText('$25 pack').props.accessibilityState).toEqual({ selected: false, checked: false });
+    await fireEvent.press(screen.getByLabelText('Buy $99 of credits'));
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(2);
+    expect(mockCreateCheckout).toHaveBeenLastCalledWith(expect.objectContaining({ amount_cents: 9900 }));
+  });
+
+  it.each([true, false])('number pad (flag %s): keyboard insets on; with the flag on, Buy scrolls into view', async (on) => {
+    mockFlags.coachAiCredits = on;
+    const shown: Array<() => void> = [];
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, cb: () => void) => {
+      if (event === 'keyboardDidShow') shown.push(cb);
+      return { remove: jest.fn() };
+    }) as never);
+    // The preset's ScrollView mock shares one scrollToEnd jest.fn across tests.
+    const toEnd = jest.spyOn(ScrollView.prototype, 'scrollToEnd').mockClear();
+    await render(<CreditPackCheckoutScreen route={routeWith('custom')} />);
+    expect(screen.getByTestId('credit-pack-select').props.automaticallyAdjustKeyboardInsets).toBe(true);
+    expect(screen.getByTestId('credit-pack-custom-input').props.autoFocus).toBe(true);
+    expect(screen.getByTestId('ai-pack-option-custom')).toBeTruthy();
+    await act(async () => shown.forEach((cb) => cb()));
+    if (on) expect(toEnd).toHaveBeenCalledWith({ animated: true });
+    else expect(toEnd).not.toHaveBeenCalled();
   });
 
   it('Other amounts closes again, restores the suggested primary, and preserves custom input', async () => {

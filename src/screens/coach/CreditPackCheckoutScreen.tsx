@@ -50,6 +50,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
+  Keyboard,
   Linking,
   View,
   Text,
@@ -80,7 +81,7 @@ import HapticPressable from '../../components/HapticPressable';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
 import { layout, motion, radius, typography } from '../../theme/tokens';
 import { PackOptionsRow } from '../../components/coach/ai-budget/PackOptionsRow';
-import CreditPackSelection from '../../components/coach/credits/CreditPackSelection';
+import CreditPackSelection, { type PackChoice } from '../../components/coach/credits/CreditPackSelection';
 import { featureFlags } from '../../config/featureFlags';
 import {
   coachAiBudgetApi,
@@ -172,8 +173,19 @@ export default function CreditPackCheckoutScreen({
 
   const [phase, setPhase] = useState<Phase>({ kind: 'select' });
   const [customInput, setCustomInput] = useState<string>('');
+  // The chosen tile lives beside the typed amount, so a cancelled or failed
+  // checkout comes back to the same choice.
+  const [packChoice, setPackChoice] = useState<PackChoice>({ cents: null, custom: route?.params?.preselect === 'custom' });
   const external = creditPackCheckoutMode() === 'external';
   const concierge = featureFlags.coachAiCredits;
+  // Buy sits under the custom amount: once the number pad is up, scroll it
+  // into view (iOS insets come from automaticallyAdjustKeyboardInsets).
+  const selectScroll = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (!concierge) return undefined;
+    const sub = Keyboard.addListener('keyboardDidShow', () => selectScroll.current?.scrollToEnd({ animated: true }));
+    return () => sub.remove();
+  }, [concierge]);
 
   const packOptions = useMemo(
     () => budget?.pack_options_cents ?? [1000, 2500, 9900],
@@ -368,7 +380,11 @@ export default function CreditPackCheckoutScreen({
         <Text style={styles.customInputPrefix}>$</Text>
         <TextInput
           value={customInput}
-          onChangeText={setCustomInput}
+          onChangeText={(text) => {
+            setCustomInput(text);
+            // A typed amount keeps the custom path open once the suggestion loads.
+            if (text) setPackChoice((c) => (c.custom ? c : { ...c, custom: true }));
+          }}
           keyboardType="decimal-pad"
           placeholder="25.00"
           placeholderTextColor={colors.textMuted}
@@ -403,7 +419,13 @@ export default function CreditPackCheckoutScreen({
       </View>
 
       {phase.kind === 'select' && (
-        <ScrollView contentContainerStyle={styles.selectionBody} keyboardShouldPersistTaps="handled" testID="credit-pack-select">
+        <ScrollView
+          ref={selectScroll}
+          contentContainerStyle={[styles.selectionBody, concierge && styles.conciergeBody]}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          testID="credit-pack-select"
+        >
           <Text style={[styles.heading, concierge && styles.conciergeHeading]}>Pick a pack</Text>
           <Text style={styles.helper}>
             {concierge
@@ -422,8 +444,8 @@ export default function CreditPackCheckoutScreen({
               onSelect={handleSelect}
               customField={customField}
               customCents={parseDollarsToCents(customInput)}
-              customEntered={customInput.length > 0}
-              initiallyCustom={preselect === 'custom'}
+              choice={packChoice}
+              onChoice={setPackChoice}
             />
           ) : (
             <>
@@ -704,7 +726,8 @@ function makeStyles(colors: ThemeColors) {
     conciergeHeader: { backgroundColor: colors.background, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
     conciergeHeaderTitle: { ...typography.bodyMd, color: colors.textPrimary },
     conciergeHeading: { ...typography.h2 },
-    selectionBody: { flexGrow: 1, paddingHorizontal: layout.gutter, paddingTop: 24, paddingBottom: layout.gutter, gap: 16 },
+    selectionBody: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 24, paddingBottom: layout.gutter, gap: 16 },
+    conciergeBody: { paddingHorizontal: layout.gutter },
     headerTitle: {
       flex: 1,
       color: colors.textOnPrimary,

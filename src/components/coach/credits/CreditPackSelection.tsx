@@ -4,9 +4,10 @@
  * chosen. The one primary button buys the chosen tile; "Other amounts" opens
  * the custom amount. The existing head-coach gate supplies the pace; this view
  * never calculates a pace or changes checkout. Without a suggestion, keep the
- * original row.
+ * original row. The screen owns the choice, so a cancelled or failed checkout
+ * comes back to the same tile or the same open custom amount.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, spacing, typography } from '../../../theme/tokens';
@@ -20,32 +21,30 @@ import { paceOf } from './creditPace';
 import CreditPackTiles from './CreditPackTiles';
 import { buyAmountLabel, CREDIT_MOMENT_COPY } from './creditCopy';
 
+/** The chosen tile (null = the suggestion) and whether Other amounts is open. */
+export type PackChoice = { cents: number | null; custom: boolean };
+
 export default function CreditPackSelection({
   options,
   onSelect,
   customField,
   customCents,
-  customEntered,
-  initiallyCustom,
+  choice,
+  onChoice,
 }: {
   options: number[];
   onSelect: (choice: number | 'custom') => void;
   customField: React.ReactNode;
   customCents: number | null;
-  customEntered: boolean;
-  initiallyCustom: boolean;
+  choice: PackChoice;
+  onChoice: (choice: PackChoice) => void;
 }) {
   const { semanticColors: sc } = useTheme();
   const credits = useCoachCredits();
   const suggestion = credits?.packsSold ? paceOf(credits.budget)?.suggestedCents : null;
   const renews = credits ? renewalDay(credits.budget.period_end) : null;
-  const [custom, setCustom] = useState(initiallyCustom);
-  const [picked, setPicked] = useState<number | null>(null);
   const packs = useMemo(() => [...options].sort((x, y) => x - y), [options]);
-  // Keep an in-progress custom path visible when the head/pool read finishes.
-  useEffect(() => {
-    if (customEntered) setCustom(true);
-  }, [customEntered]);
+  const { custom } = choice;
   if (suggestion == null || !renews) {
     return (
       <>
@@ -54,7 +53,7 @@ export default function CreditPackSelection({
       </>
     );
   }
-  const pack = picked ?? suggestion;
+  const pack = choice.cents ?? suggestion;
   const roman = `A ${formatCents(suggestion)} pack should cover you until ${renews}.`;
   return (
     <View style={styles.stack}>
@@ -63,7 +62,7 @@ export default function CreditPackSelection({
         <Text style={[styles.amount, { color: sc.bgPrimary }]}>{formatCents(suggestion)}</Text>
         <Text style={[styles.roman, { color: sc.bgPrimary }]}>{roman}</Text>
         <View style={styles.tiles}>
-          <CreditPackTiles packs={packs} selected={custom ? null : pack} onSelect={(cents) => { setPicked(cents); setCustom(false); }} />
+          <CreditPackTiles packs={packs} selected={custom ? null : pack} onSelect={(cents) => onChoice({ cents, custom: false })} onInk />
         </View>
       </View>
       {!custom ? (
@@ -73,7 +72,7 @@ export default function CreditPackSelection({
         accessibilityRole="button"
         accessibilityLabel={CREDIT_MOMENT_COPY.otherAmounts}
         accessibilityState={{ expanded: custom }}
-        onPress={() => setCustom(!custom)}
+        onPress={() => onChoice({ ...choice, custom: !custom })}
         style={styles.other}
         testID="credit-pack-other"
       >
