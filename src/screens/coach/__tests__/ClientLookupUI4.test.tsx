@@ -245,6 +245,7 @@ describe('UI-4 Search first (15 or more)', () => {
     await mount(MANY);
     await fireEvent.changeText(screen.getByTestId('lookup-search'), 'ben');
     await fireEvent.press(screen.getByTestId('lookup-nudge-m2'));
+    await fireEvent.changeText(screen.getByPlaceholderText('e.g. Great job today'), 'Ben');
     await fireEvent.changeText(screen.getByPlaceholderText('Write a short message...'), 'For Ben only');
     await fireEvent.press(screen.getByLabelText('Cancel'));
     await fireEvent.press(screen.getByTestId('lookup-nudge-m2')); // same client: the draft is kept
@@ -252,10 +253,11 @@ describe('UI-4 Search first (15 or more)', () => {
     await fireEvent.press(screen.getByLabelText('Cancel'));
     await fireEvent.changeText(screen.getByTestId('lookup-search'), 'theo');
     await fireEvent.press(screen.getByTestId('lookup-nudge-m13')); // another client: a clean form
-    expect(screen.getByPlaceholderText('Write a short message...').props.value).toBe('');
+    expect([screen.getByPlaceholderText('e.g. Great job today').props.value, screen.getByPlaceholderText('Write a short message...').props.value]).toEqual(['', '']);
+    await fireEvent.changeText(screen.getByPlaceholderText('e.g. Great job today'), 'Theo');
     await fireEvent.changeText(screen.getByPlaceholderText('Write a short message...'), 'For Theo');
     await fireEvent.press(screen.getByLabelText('Send nudge'));
     expect(mockSendNudge).toHaveBeenCalledTimes(1);
-    expect(mockSendNudge).toHaveBeenCalledWith('m13', expect.objectContaining({ body: 'For Theo' }));
+    expect(mockSendNudge).toHaveBeenCalledWith('m13', { title: 'Theo', body: 'For Theo' });
   });
 });
