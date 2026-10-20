@@ -1,7 +1,7 @@
 /**
  * LEARN-A (flag learnHub): the reads behind Learn and its lesson view. The
  * server is the only record. GET /lessons holds the current coach's lessons
- * and this client's completions (nothing without a coach); GET
+ * and this client's completions (a client whose coach deleted their account keeps the single lessons they completed); GET
  * /coach/my-guidelines holds the one guidelines page that coach wrote.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -57,22 +57,23 @@ async function readGuidelines(): Promise<LearnGuidelines> {
   }
 }
 
-/** One read set for Learn, the lesson view and the You row; enabled only for a client with a coach. */
+/** One read set for Learn, the lesson view and the You row. Coach and guidelines need a coach; lessons only need the client, so lessons kept after the coach deleted their account still load. */
 export function useLearn() {
   const current = useCurrentUser();
   const user = readUserCacheSync() ?? current;
   const coachId = user?.coach_id ?? null;
   const enabled = !!coachId;
+  const hasUser = !!user?.id;
   const lessonsKey = ['learn-lessons', user?.id, coachId];
   const coach = useQuery({
     queryKey: ['you-coach', user?.id, coachId],
     queryFn: async () => (await api.get<{ name?: string }>('/v1/clients/me/coach')).data,
     enabled,
   });
-  const lessons = useQuery({ queryKey: lessonsKey, queryFn: async () => lessonsFrom((await lessonsApi.getAll()).data), enabled });
+  const lessons = useQuery({ queryKey: lessonsKey, queryFn: async () => lessonsFrom((await lessonsApi.getAll()).data), enabled: hasUser });
   const guidelines = useQuery({ queryKey: ['learn-guidelines', user?.id, coachId], queryFn: readGuidelines, enabled });
   const qc = useQueryClient();
-  const known = lessons.data !== undefined && guidelines.data !== undefined;
+  const known = lessons.data !== undefined && (!enabled || guidelines.data !== undefined);
   return {
     user,
     coachId,
@@ -83,7 +84,10 @@ export function useLearn() {
     known,
     error: known ? null : lessons.error ?? guidelines.error,
     hasContent: !!guidelines.data || (lessons.data?.length ?? 0) > 0,
-    refetch: () => (enabled ? Promise.all([lessons.refetch(), guidelines.refetch(), coach.refetch()]) : Promise.resolve()),
+    refetch: () =>
+      hasUser
+        ? Promise.all([lessons.refetch(), ...(enabled ? [guidelines.refetch(), coach.refetch()] : [])])
+        : Promise.resolve(),
     markDone: (id: string) =>
       qc.setQueryData<LearnLesson[]>(lessonsKey, (prev) => prev?.map((l) => (l.id === id ? { ...l, done: true } : l))),
   };
@@ -102,13 +106,13 @@ export function updatedOn(iso: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', ...year });
 }
 
-/** Every Learn sentence, with the coach's first name or "your coach". */
-export function learnCopy(name: string | null) {
+/** Every Learn sentence, with the coach's first name or "your coach". former: no coach now, but kept lessons (LK-01). */
+export function learnCopy(name: string | null, former = false) {
   const who = name ?? 'your coach';
   const whose = name ? `${name}'s` : "your coach's";
   const Whose = name ? whose : "Your coach's";
   return {
-    from: `From ${who}`,
+    from: former ? 'From your former coach' : `From ${who}`,
     lede: `${Whose} guidelines and lessons for you.`,
     loading: `Loading ${whose} guidelines and lessons`,
     failed: `${Whose} guidelines and lessons did not load.`,
