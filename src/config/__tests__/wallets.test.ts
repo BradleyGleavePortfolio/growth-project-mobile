@@ -5,6 +5,7 @@
  * Failing before: src/config/wallets.ts did not exist and app.config.js had
  * no wallet plugin logic.
  */
+import * as path from 'path';
 import { resolveWalletConfig } from '../wallets';
 
 const NAMES = [
@@ -81,5 +82,59 @@ describe('app.config.js Stripe wallet plugin', () => {
   it('Google Pay only', () => {
     process.env.EXPO_PUBLIC_GOOGLE_PAY_ENABLED = '1';
     expect(stripeEntry(plugins())).toEqual(['@stripe/stripe-react-native', { enableGooglePay: true }]);
+  });
+
+  // APPLE-PAY-ID: eas.json build.production.env carries the registered Apple merchant ID, so the
+  // production profile and every profile that extends it (testing and the store builds) get the
+  // Apple Pay entitlement and the PaymentSheet Apple Pay option. Failing before: no profile set it.
+  describe('eas.json profiles built from production', () => {
+    const MERCHANT = 'merchant.com.growthproject.app';
+    const { loadEas, resolveProfile } = require('../../../scripts/eas-profile.js');
+    const eas = loadEas(path.join(__dirname, '..', '..', '..'));
+    const fromProduction = (name: string): boolean =>
+      name === 'production' || (!!eas.build[name].extends && fromProduction(eas.build[name].extends));
+    const names = Object.keys(eas.build);
+    const built = names.filter(fromProduction);
+    const useEnv = (name: string) => {
+      const env = resolveProfile(eas, name).env as Record<string, string | undefined>;
+      for (const n of NAMES) {
+        if (env[n] === undefined) delete process.env[n];
+        else process.env[n] = env[n];
+      }
+    };
+
+    it('production, testing and both store builds set the registered merchant ID', () => {
+      expect(built).toEqual(expect.arrayContaining(['production', 'testing']));
+      expect(built).toHaveLength(4);
+      for (const name of built) {
+        const value = resolveProfile(eas, name).env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER;
+        expect(value).toMatch(/^merchant\.[A-Za-z0-9.-]+$/);
+        expect(value).toBe(MERCHANT);
+      }
+    });
+
+    it('their env adds the Apple Pay entitlement and offers Apple Pay on iOS only', () => {
+      for (const name of built) {
+        useEnv(name);
+        expect(stripeEntry(plugins())).toEqual([
+          '@stripe/stripe-react-native',
+          { merchantIdentifier: MERCHANT, enableGooglePay: false },
+        ]);
+        const live = { currency: 'usd', publishableKey: 'pk_live_x' };
+        expect(resolveWalletConfig({ ...live, os: 'ios' })).toEqual({
+          merchantIdentifier: MERCHANT,
+          applePay: { merchantCountryCode: 'US' },
+        });
+        expect(resolveWalletConfig({ ...live, os: 'android' })).toEqual({});
+      }
+    });
+
+    it('development and preview stay without it (no plugin, as before)', () => {
+      expect(names.filter((n) => !fromProduction(n)).sort()).toEqual(['development', 'preview']);
+      for (const name of ['development', 'preview']) {
+        useEnv(name);
+        expect(stripeEntry(plugins())).toBeUndefined();
+      }
+    });
   });
 });
