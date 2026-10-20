@@ -97,6 +97,8 @@ When the toggle changes:
 | `LearnScreen` lesson rows (`learnHub` on) | `selection()` | A lesson opens |
 | `LearnLessonScreen` (`learnHub` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
+| `CourseHomeScreen` / `CourseWeekScreen` rows (`learnCourses` on) | `selection()` | A week or a lesson opens (Open the course and Read lesson are `PrimaryButton`s: `softImpact()`) |
+| `CourseLessonScreen` (`learnCourses` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
 | `habits/ring/HabitsRing` (HB-B1, HB-B1b, `habitsRing` off by default) | `softImpact()`; `success()`; `selection()`; `mediumImpact()`; `error()` | A tick (the part draws); the tick that completes the day's ring, instead; an untick, a strip day up to today or the Check-in tab; an idea tile on the first run (success when the server creates it); a tick or an idea the server refuses. None for a future day: its quiet line only |
 | `RingsHomeScreen` | `softImpact()` (PrimaryButton) | The day's one forest button |

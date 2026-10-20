@@ -15,9 +15,9 @@ import type {
   Specialty,
 } from './types';
 
-export const STEP_ORDER: readonly CoachStepId[] = ['K0', 'K1', 'K2', 'K3', 'K4', 'K5', 'K6', 'K7', 'K8'];
+export const STEP_ORDER: readonly CoachStepId[] = ['K0', 'K1', 'K2', 'K3', 'K4', 'K5', 'K6', 'K7', 'KC', 'K8'];
 
-/** Chapter of each framed step (K0 and K8 have no bar). K4 and K5 share chapter 4. */
+/** Chapter of each framed step (K0 and K8 have no bar). K4 and K5 share chapter 4; K6, K7 and KC chapter 5. */
 const CHAPTER: Partial<Record<CoachStepId, CoachProgress['chapter']>> = {
   K1: 1,
   K2: 2,
@@ -26,6 +26,7 @@ const CHAPTER: Partial<Record<CoachStepId, CoachProgress['chapter']>> = {
   K5: 4,
   K6: 5,
   K7: 5,
+  KC: 5,
 };
 
 export const NAME_MAX = 80;
@@ -72,11 +73,14 @@ export interface FlowContext {
   built: ReadonlySet<CoachStepId>;
   /** featureFlags.extensionImport (K7). */
   importOn: boolean;
+  /** KC: a head coach's AI credit pool has loaded (WithCoachCredits). */
+  creditsOn?: boolean;
 }
 
 export function isStepVisible(id: CoachStepId, a: CoachConsultAnswers, ctx: FlowContext): boolean {
   if (!ctx.built.has(id)) return false;
   if (id === 'K7') return ctx.importOn && a.clients_today !== undefined && a.clients_today !== 'none';
+  if (id === 'KC') return ctx.creditsOn === true;
   return true;
 }
 
@@ -182,6 +186,15 @@ export function sanitizeAnswers(raw: unknown): CoachConsultAnswers {
 
 export function isStepId(v: unknown): v is CoachStepId {
   return typeof v === 'string' && (STEP_ORDER as readonly string[]).includes(v);
+}
+
+/**
+ * The step the server stores. Its PUT accepts only K0-K8, so KC goes as K7:
+ * a resume from the server alone opens K7 (or K6 when K7 is hidden) and the
+ * next tap reaches KC again. The phone draft keeps KC itself.
+ */
+export function wireStep(id: CoachStepId): Exclude<CoachStepId, 'KC'> {
+  return id === 'KC' ? 'K7' : id;
 }
 
 /** Wire body for PUT / complete: backend keys only ("" on an optional field = null). */

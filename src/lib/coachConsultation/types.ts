@@ -4,7 +4,12 @@
  * vocabularies match the backend contract (COACH-CONSULT-BE-134, /coach/consultation).
  */
 
-export type CoachStepId = 'K0' | 'K1' | 'K2' | 'K3' | 'K4' | 'K5' | 'K6' | 'K7' | 'K8';
+/**
+ * KC is the "Your AI credits." page (CREDITBUILD-143, CREDIT-1 Concept 1),
+ * between K6/K7 and K8. The server knows only K0-K8, so the wire carries K7
+ * for it (wireStep, flow.ts).
+ */
+export type CoachStepId = 'K0' | 'K1' | 'K2' | 'K3' | 'K4' | 'K5' | 'K6' | 'K7' | 'KC' | 'K8';
 
 export type Specialty =
   | 'fat_loss'

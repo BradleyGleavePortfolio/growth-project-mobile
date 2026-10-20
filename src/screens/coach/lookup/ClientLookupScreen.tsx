@@ -12,6 +12,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ClientsStackParamList } from '../../../navigation/CoachNavigator';
 import { CoachTeamEntryContext } from '../../../navigation/coachTeamEntry';
+import { openInboxChat } from '../../../navigation/coachInbox';
 import { coachLandingTab } from '../../../navigation/coachLanding';
 import PushPermissionCard from '../../../components/home/PushPermissionCard';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
@@ -54,7 +55,8 @@ export default function ClientLookupScreen({ navigation }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const sectionY = useRef<Record<string, number>>({});
   const azBase = useRef(0);
-  const focusedOnce = useRef(false);
+  // The first focus is the mount, loaded below, unless the lookup mounted unseen (six tabs: Clients opens with the app).
+  const focusedOnce = useRef(!navigation.isFocused());
   const [everyoneY, setEveryoneY] = useState<number | null>(null);
   const activeTotal = useRef<number | null>(null);
   const nudge = useLookupNudge(colors);
@@ -77,7 +79,7 @@ export default function ClientLookupScreen({ navigation }: Props) {
   useEffect(() => {
     void loadSide();
     return navigation.addListener('focus', () => {
-      if (!focusedOnce.current) return void (focusedOnce.current = true); // the mount, loaded above
+      if (!focusedOnce.current) return void (focusedOnce.current = true);
       if (coachId) loadClients(coachId, filterStatus, { silent: true });
       void loadSide();
     });
