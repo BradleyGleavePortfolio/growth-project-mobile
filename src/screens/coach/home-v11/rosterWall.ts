@@ -1,12 +1,12 @@
 /**
  * UI-2 (V1_1_UI_SPEC UI-2, second PR): who sits on the Steady wall, what each ring means, and the filter chips.
  * Pure, so the screen and the tests share one rule. The ring comes from the roster's `activity` block
- * (GET /coach/clients): the latest day the client logged anything they share with this coach.
+ * (GET /coach/clients): the latest day the client logged anything (a current client's logs always reach the coach).
  */
 import { rosterActivityLine, rosterDisplayName, type RosterClient } from '../../../utils/coach/clientRoster';
 import type { WinStreakEntry } from '../../../services/commandCenterApi';
 
-/** 'logged' / 'notYet' from a shared log day; 'unknown' when the client shares no logs or the server sent none. */
+/** 'logged' / 'notYet' from the latest log day; 'unknown' when the server sent no activity block. */
 export type WallRing = 'logged' | 'notYet' | 'unknown';
 
 export interface WallMember { id: string; name: string; label: string; ring: WallRing }
@@ -23,7 +23,7 @@ export function localDay(d: Date): string {
 
 export function wallRing(c: RosterClient, today: Date): WallRing {
   const a = c.activity;
-  if (!a || !a.shared) return 'unknown';
+  if (!a) return 'unknown';
   return a.lastActiveOn !== null && a.lastActiveOn >= localDay(today) ? 'logged' : 'notYet';
 }
 
@@ -40,11 +40,11 @@ export function steadyWall(clients: RosterClient[], needsYou: ReadonlySet<string
 
 /**
  * A needs-you tile's last line in the Clients list words ("Logged today", "Last logged 8 days ago") when the
- * roster has a shared log day for the client; otherwise null and the tile keeps its "Active ..." line.
+ * roster has a log day for the client; otherwise null and the tile keeps its "Active ..." line.
  */
 export function loggedLine(c: RosterClient | undefined, today: Date): string | null {
   const a = c?.activity;
-  if (!c || !a || !a.shared || !a.lastActiveOn) return null;
+  if (!c || !a || !a.lastActiveOn) return null;
   return rosterActivityLine(c, today).text;
 }
 
