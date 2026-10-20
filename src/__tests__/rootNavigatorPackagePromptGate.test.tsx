@@ -1,10 +1,11 @@
 /**
- * Fix round #304 (Sol B1), caller level: RootNavigator's 24h package-prompt
- * re-surface uses the real packagePromptGate and is offered only after an
- * explicit inactive entitlement. Comp (active) and every unknown/error
- * lookup must land the client in the app with no prompt. Harness mirrors
- * rootNavigatorPersistedCacheGate.test.tsx (real RootNavigator, mocked
- * native/network edges).
+ * Fix round #304 (Sol B1) and #161-5 op 1, caller level: RootNavigator's
+ * package prompt uses the real packagePromptGate. A coached client with an
+ * explicit inactive entitlement gets it once per 24 h, and on iPhone also on
+ * first Home (after the consultation). Comp (active), coachless and every
+ * unknown/error lookup land the client in the app with no prompt; Android
+ * still waits for a skip. Harness mirrors rootNavigatorPersistedCacheGate.test.tsx
+ * (real RootNavigator, mocked native/network edges).
  */
 const mockSecure: Record<string, string | null> = {};
 const mockNavigate = jest.fn();
@@ -146,15 +147,10 @@ jest.mock('../offline', () => ({ triggerSync: jest.fn(async () => undefined) }))
 jest.mock('../entitlements/EntitlementProvider', () => ({
   EntitlementProvider: ({ children }: { children: unknown }) => children,
 }));
-
-let mockHidden = false;
-jest.mock('../config/purchaseSurfaces', () => ({
-  ...jest.requireActual('../config/purchaseSurfaces'),
-  nonP2PPurchasesHidden: () => mockHidden,
-}));
 import React from 'react';
 import { render, cleanup, act, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import RootNavigator from '../navigation/RootNavigator';
 import { queryClient } from '../services/queryClient';
@@ -164,8 +160,13 @@ const STUDENT = {
   email: 's@example.com',
   role: 'student',
   name: 'Sam',
+  coach_id: 'coach-1',
   profile: { onboarding_completed: true, day_one_completed: true },
 };
+const PROMPT_KEY = 'prefs:onboarding.package_prompt_dismissed_at:client-S';
+const NO_PLAN = { ok: true, data: { active: false, entitlement_active: false } };
+const realOS = Platform.OS;
+const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -174,19 +175,16 @@ beforeEach(async () => {
   queryClient.clear();
   for (const k of Object.keys(mockSecure)) delete mockSecure[k];
   mockGetEntitlement.mockReset();
-  mockHidden = false;
   mockSecure['supabase_token'] = 'jwt-S';
   await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify(STUDENT));
   await AsyncStorage.setItem('onboarding_complete', 'true');
   await AsyncStorage.setItem('day_one_completed', 'true');
   // Dismissed more than 24h ago, so only the entitlement decides.
-  await AsyncStorage.setItem(
-    'prefs:onboarding.package_prompt_dismissed_at:client-S',
-    new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-  );
+  await AsyncStorage.setItem(PROMPT_KEY, new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString());
 });
 afterEach(async () => {
   await cleanup();
+  setOS(realOS);
 });
 
 const mount = () =>
@@ -218,19 +216,74 @@ describe('RootNavigator 24h package prompt is fail closed', () => {
     expect(mockGetEntitlement).toHaveBeenCalled();
   });
 
-  it('explicitly inactive client: the prompt re-surfaces', async () => {
-    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: false, entitlement_active: false } });
+  it.each(['ios', 'android'])('%s, coached, no plan, skipped over 24 h ago: the prompt re-surfaces', async (os) => {
+    setOS(os);
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
     const r = await mount();
     await r.findByTestId('package-prompt');
   });
+});
 
-  it('hidden iOS build: no prompt even for an explicitly inactive client', async () => {
-    mockHidden = true;
-    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: false, entitlement_active: false } });
+// #161-5 op 1: the 1:1 package sheet on iPhone after the consultation.
+describe('RootNavigator package prompt on first Home (#161-5 op 1)', () => {
+  beforeEach(async () => {
+    await AsyncStorage.removeItem(PROMPT_KEY);
+  });
+
+  it('iPhone, coached, no plan, no skip yet: the 1:1 sheet opens on first Home', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    const r = await mount();
+    await r.findByTestId('package-prompt');
+    expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
+  });
+
+  it('iPhone, active plan: no sheet, and the next look is a day later', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true, entitlement_active: true } });
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+    const lookedAt = Date.parse(String(await AsyncStorage.getItem(PROMPT_KEY)));
+    expect(Date.now() - lookedAt).toBeLessThan(60_000);
+  });
+
+  it('iPhone, entitlement read fails: fail closed, no sheet', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockRejectedValue(new Error('network'));
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+  });
+
+  it('iPhone, skipped under 24 h ago: no sheet and no entitlement read', async () => {
+    setOS('ios');
+    await AsyncStorage.setItem(PROMPT_KEY, new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
     const r = await mount();
     await r.findByTestId('nav-client');
     expect(r.queryByTestId('package-prompt')).toBeNull();
     expect(mockGetEntitlement).not.toHaveBeenCalled();
+  });
+
+  it('iPhone, coachless: never, and no entitlement read', async () => {
+    setOS('ios');
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({ ...STUDENT, coach_id: undefined }));
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+    expect(mockGetEntitlement).not.toHaveBeenCalled();
+  });
+
+  it('Android, no skip yet: unchanged, no sheet and no entitlement read', async () => {
+    setOS('android');
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+    expect(mockGetEntitlement).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
   });
 });
 

@@ -40,6 +40,7 @@ import {
   Pressable,
   ScrollView,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../theme/tokens';
@@ -51,6 +52,8 @@ import { usePackagePurchase } from '../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from './purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from './purchase/PlanTermsBlock';
 import PurchaseFeedback from './purchase/PurchaseFeedback';
+import { QuietOverline as Overline } from '../ui/sections/QuietSection';
+import { oneToOneCoachingLabel } from '../config/purchaseSurfaces';
 import {
   planTerms,
   priceLabel,
@@ -134,6 +137,7 @@ export default function PackageSelectionSheet({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ready, setReady] = useState(false); // passed 24h suppression check
   const [reloadTick, setReloadTick] = useState(0);
+  const [coachName, setCoachName] = useState<string | null>(null);
 
   // Latest-ref pattern: callers may pass an inline onDismiss that re-creates
   // every render. Subscribing the effects below to `onDismiss` directly would
@@ -193,6 +197,10 @@ export default function PackageSelectionSheet({
     }
     (async () => {
       try {
+        // #161-5: on iOS the list is labelled 1:1 coaching with the coach by name, as on ClientPackages.
+        const coachRead = Platform.OS === 'ios' && firstLoad
+          ? (async () => (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name)().catch(() => null)
+          : null;
         const res = await api.get<{ packages: unknown[] } | unknown[]>(
           '/v1/clients/me/coach/packages',
         );
@@ -215,6 +223,9 @@ export default function PackageSelectionSheet({
           if (firstLoad) onDismissRef.current();
           return;
         }
+        const name = await coachRead;
+        if (cancelled) return;
+        if (typeof name === 'string') setCoachName(name);
         setPackages(list);
         setDescriptions(desc);
         if (firstLoad && initialPackageId && list.some((p) => p.id === initialPackageId)) {
@@ -279,6 +290,10 @@ export default function PackageSelectionSheet({
 
           <Text style={styles.heading}>Choose your plan</Text>
           <Text style={styles.subtext}>Start with a plan that fits your goals.</Text>
+
+          {Platform.OS === 'ios' && !loading ? (
+            <Overline testID="package-sheet-one-to-one">{oneToOneCoachingLabel(coachName)}</Overline>
+          ) : null}
 
           {/* Package cards */}
           {loading ? (
