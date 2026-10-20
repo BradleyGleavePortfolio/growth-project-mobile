@@ -12,7 +12,7 @@ export interface ScreenshotTarget {
 // One manifest for the app and both capture drivers. No caption is rendered.
 export const SCREENSHOT_TARGETS: ScreenshotTarget[] = [
   { slug: '01-home', audience: 'client', route: 'HomeMain', tab: 'Home', readyText: 'Message Sam' },
-  { slug: '02-roman', audience: 'client', route: 'RomanChat', tab: 'MoreTab', readyText: 'Protein first' },
+  { slug: '02-roman', audience: 'client', route: 'RomanChat', tab: 'MoreTab', readyText: 'top of your food log' },
   { slug: '03-workout', audience: 'client', route: 'ActiveWorkout', tab: 'WorkoutTab', readyText: 'Bench press' },
   { slug: '04-food', audience: 'client', route: 'Log', tab: 'Log', readyText: 'Oats with berries' },
   { slug: '05-messages', audience: 'client', route: 'Messages', tab: 'Home', readyText: 'Travelling Thursday' },
@@ -25,14 +25,15 @@ export const SCREENSHOT_SIZES = [
   { width: 1206, height: 2622 },
 ];
 
-// Owner decision pending. These options remain data, never baked into PNGs.
+// Owner approved (#162-3, 10-20): option A (MOCK-STORESHOTS-<id>) per frame; B options dropped.
+// Data only, never baked into PNGs.
 export const SCREENSHOT_CAPTIONS = [
-  { ids: [1, 2], a: 'Start every day knowing what to do.', b: "Today's workout and macros, on one screen." },
-  { ids: [3, 4], a: 'Clear answers, built on your own numbers.', b: 'Roman, an AI guide for training and food.' },
-  { ids: [5, 6], a: 'Every set builds on the last.', b: 'Log every set, with last time in view.' },
-  { ids: [7, 8], a: "Always know what's left for today.", b: 'Log meals with search and recent foods.' },
-  { ids: [9, 10], a: 'Your coach is one message away.', b: 'Message your coach right in the app.' },
-  { ids: [11, 12], a: 'Coaches see who needs them today.', b: 'For coaches: clients, money and alerts.' },
+  { slug: '01-home', id: 1, text: 'Start every day knowing what to do.' },
+  { slug: '02-roman', id: 3, text: 'Clear answers, built on your own numbers.' },
+  { slug: '03-workout', id: 5, text: 'Every set builds on the last.' },
+  { slug: '04-food', id: 7, text: "Always know what's left for today." },
+  { slug: '05-messages', id: 9, text: 'Your coach is one message away.' },
+  { slug: '06-coach-overview', id: 11, text: 'Coaches see who needs them today.' },
 ];
 
 export function screenshotTarget(url: string | null): ScreenshotTarget {

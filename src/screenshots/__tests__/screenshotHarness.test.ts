@@ -66,12 +66,14 @@ describe('screenshot targets', () => {
     }
   });
 
-  it('has the six listing frames, both exact sizes, and pending captions only as data', () => {
+  it('has the six listing frames, both exact sizes, and the approved captions only as data', () => {
     expect(SCREENSHOT_TARGETS.map((t) => t.route)).toEqual(
       ['HomeMain', 'RomanChat', 'ActiveWorkout', 'Log', 'Messages', 'CommandCenter'],
     );
     expect(SCREENSHOT_SIZES).toEqual([{ width: 1320, height: 2868 }, { width: 1206, height: 2622 }]);
-    expect(SCREENSHOT_CAPTIONS.flatMap((c) => c.ids)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+    expect(SCREENSHOT_CAPTIONS.map((c) => c.id)).toEqual([1, 3, 5, 7, 9, 11]);
+    expect(SCREENSHOT_CAPTIONS.map((c) => c.slug)).toEqual(SCREENSHOT_TARGETS.map((t) => t.slug));
+    expect(SCREENSHOT_CAPTIONS.every((c) => !('b' in c))).toBe(true);
     expect(screenshotState(SCREENSHOT_TARGETS[2], { exercises: '[]' }).routes[0]).toEqual({
       name: 'WorkoutTab', state: { routes: [{ name: 'ActiveWorkout', params: { exercises: '[]' } }] },
     });

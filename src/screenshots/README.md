@@ -3,8 +3,8 @@
 The existing tool captures **real app screens**, not drawn substitutes:
 client Home, Roman chat, active workout logging, food logging, coach messages,
 then coach Overview. `screens.ts` is the single target/size manifest consumed
-by the app and both drivers. Its caption options retain MOCK-STORESHOTS ids
-1–12 (prefix `MOCK-STORESHOTS-`); owner selection is pending. Captures have no
+by the app and both drivers. Its captions hold the owner-approved option A
+per frame (`MOCK-STORESHOTS-` 1, 3, 5, 7, 9, 11; owner #162-3). Captures have no
 caption, frame, device illustration or marketing overlay.
 
 ## Isolation and navigation

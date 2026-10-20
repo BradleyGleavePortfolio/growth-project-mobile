@@ -372,6 +372,6 @@ export const DEMO_ROMAN_SESSION = {
 };
 
 export const DEMO_ROMAN_MESSAGES = [
-  { id: 'roman-2', role: 'roman', content: 'Protein first, then carbs around training. Your targets are in your food log.', interrupted: false, createdAt: '2026-05-02T09:01:00Z' },
+  { id: 'roman-2', role: 'roman', content: 'Your targets are at the top of your food log: 2,200 kcal and 165 g of protein.', interrupted: false, createdAt: '2026-05-02T09:01:00Z' },
   { id: 'roman-1', role: 'user', content: 'Where can I see my food targets?', interrupted: false, createdAt: '2026-05-02T09:00:00Z' },
 ];
