@@ -278,7 +278,9 @@ describe('UI-4 Search first (15 or more)', () => {
     await fireEvent.changeText(screen.getByPlaceholderText('Write a short message...'), 'For Ben only');
     await fireEvent.press(screen.getByLabelText('Cancel'));
     await fireEvent.press(screen.getByTestId('lookup-nudge-m2')); // same client: the draft is kept
-    expect(screen.UNSAFE_getByType(KeyboardAvoidingView)).toBeTruthy(); // Send and Cancel stay above the keyboard
+    let up = screen.getByText('Send Nudge').parent, avoids = false; // Send and Cancel stay above the keyboard
+    while (up) { avoids ||= up.type === KeyboardAvoidingView; up = up.parent; }
+    expect(avoids).toBe(true);
     for (const l of ['Cancel', 'Send nudge']) expect(StyleSheet.flatten(screen.getByLabelText(l).props.style).minHeight).toBeGreaterThanOrEqual(44);
     expect(screen.getByPlaceholderText('Write a short message...').props.value).toBe('For Ben only');
     await fireEvent.press(screen.getByLabelText('Cancel'));
