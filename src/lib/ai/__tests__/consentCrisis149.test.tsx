@@ -62,12 +62,12 @@ const B_V6 = `${B_V4} ${B_EXCEPTION}`;
 const B_V7 = `${V5_HEAD}${B_EXCEPTION} ${B_V5.slice(V5_HEAD.length)}`;
 const B_V8 = `${B_V6} ${B_TOLD}`;
 const B_V9 = `${V5_HEAD}${B_EXCEPTION} ${B_TOLD} ${B_V5.slice(V5_HEAD.length)}`;
-// b#1041's pins: client-ai-v8 / v9 copy, consult-consent-v9 / v10 screen.
+// b#1041's pins: client-ai-v8 / v9 copy; its consult-consent-v9 / v10 screens with TGP Fitness (W-BRAND-AGREEMENT: v13 / v14).
 const PIN = {
   v8: 'af4cc4fa55aa72cab8e7c6cdcee881d6ba1f448df048088e47acd5e7d479e0ef',
   v9: '16074f18ce0e985e35ba7cfb3f12233cd993159585a35759c4580a730ed3c9dd',
-  p0v9: '1daf2cde65d223686b4bd60f786b85866f93714176dcc8781ff94b4c9f0e30bf',
-  p0v10: '5f36acf2704699f1e7faa68d7c65b8b8ed1f1988d197774a61914b97f22ff512',
+  p0v13: '2f22065286d2284cc70e38921da11fcafa8c11a03887025e8781347592a163d6',
+  p0v14: '82f3993ef5ce2262d15afe64a45b8d5ad63ca1fa42cd3e172e597d4fe761ba81',
 };
 
 const sha = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
@@ -143,26 +143,26 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
     },
   },
   {
-    row: 'pins and digests of client-ai-v8 / v9 and consult-consent-v9 / v10 equal b#1041 byte for byte; P0 uses them only when answered',
+    row: 'pins and digests of client-ai-v8 / v9 (b#1041) and consult-consent-v13 / v14 (b#1109) byte for byte; P0 uses them only when answered',
     check: (on) => {
       expect([copy.AI_CONSENT_PARAGRAPH, copy.AI_CONSENT_PARAGRAPH_CRISIS]).toEqual([B_V6, B_V8]);
       expect([sha(`${B_V8}\n\n${B_LABEL}`), sha(`${B_V9}\n\n${B_LABEL}`)]).toEqual([PIN.v8, PIN.v9]);
       expect([copy.AI_CONSENT_CRISIS_COPY_SHA256, copy.AI_CONSENT_CRISIS_MEMORY_COPY_SHA256]).toEqual([PIN.v8, PIN.v9]);
-      expect([sha(copy.consentCopyText(B_V8)), sha(copy.consentCopyText(B_V9))]).toEqual([PIN.p0v9, PIN.p0v10]);
-      expect([copy.CONSENT_CRISIS_COPY_SHA256, copy.CONSENT_CRISIS_MEMORY_COPY_SHA256]).toEqual([PIN.p0v9, PIN.p0v10]);
+      expect([sha(copy.consentCopyText(B_V8)), sha(copy.consentCopyText(B_V9))]).toEqual([PIN.p0v13, PIN.p0v14]);
+      expect([copy.CONSENT_CRISIS_COPY_SHA256, copy.CONSENT_CRISIS_MEMORY_COPY_SHA256]).toEqual([PIN.p0v13, PIN.p0v14]);
       expect(romanFamily(false, true)).toMatchObject({ baseVersion: 'client-ai-v8', baseSha256: PIN.v8, memoryVersion: 'client-ai-v9', memorySha256: PIN.v9 });
       expect(copy.consentScreenCopy(false, on)).toMatchObject({
         aiParagraph: on ? B_V8 : B_V6,
-        version: on ? 'consult-consent-v9' : 'consult-consent-v7',
-        sha256: on ? PIN.p0v9 : copy.CONSENT_COPY_SHA256,
-        memoryVersion: on ? 'consult-consent-v10' : 'consult-consent-v8',
-        memorySha256: on ? PIN.p0v10 : copy.CONSENT_MEMORY_COPY_SHA256,
+        version: on ? 'consult-consent-v13' : 'consult-consent-v11',
+        sha256: on ? PIN.p0v13 : copy.CONSENT_COPY_SHA256,
+        memoryVersion: on ? 'consult-consent-v14' : 'consult-consent-v12',
+        memorySha256: on ? PIN.p0v14 : copy.CONSENT_MEMORY_COPY_SHA256,
       });
       expect(source('screens/consultation/QuestionScreen.tsx')).toContain('consentScreenCopy(!!ctx?.coachless, !!state?.aiCrisis)');
     },
   },
   {
-    row: 'P0 box 2: always asks crisis_alert (no flag read before the age step), shows the server text, records consult-consent-v10 and grants client-ai-v9',
+    row: 'P0 box 2: always asks crisis_alert (no flag read before the age step), shows the server text, records consult-consent-v14 and grants client-ai-v9',
     check: async (on) => {
       const api = makeApi({ getRomanConsent: ledger(true, on) });
       const r = await toP0(api);
@@ -176,7 +176,7 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
         on ? { version: 'client-ai-v9', copy_sha256: PIN.v9 } : { version: 'client-ai-v7', copy_sha256: copy.AI_CONSENT_MEMORY_COPY_SHA256 },
       );
       expect(api.save.mock.calls[0][0].answers.P0).toMatchObject(
-        on ? { copy_version: 'consult-consent-v10', text_sha256: PIN.p0v10 } : { copy_version: 'consult-consent-v8', text_sha256: copy.CONSENT_MEMORY_COPY_SHA256 },
+        on ? { copy_version: 'consult-consent-v14', text_sha256: PIN.p0v14 } : { copy_version: 'consult-consent-v12', text_sha256: copy.CONSENT_MEMORY_COPY_SHA256 },
       );
     },
   },
@@ -252,8 +252,8 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
     check: async (on) => {
       expect(copy.consentScreenCopy(true, on)).toMatchObject({
         aiParagraph: on ? B_V8 : B_V6,
-        version: on ? 'consult-consent-v10-coach-free' : 'consult-consent-v8-coach-free',
-        memoryVersion: on ? 'consult-consent-v11-coach-free' : 'consult-consent-v9-coach-free',
+        version: on ? 'consult-consent-v14-coach-free' : 'consult-consent-v12-coach-free',
+        memoryVersion: on ? 'consult-consent-v15-coach-free' : 'consult-consent-v13-coach-free',
       });
       const api = makeApi({ getRomanConsent: ledger(true, on) });
       const r = await toP0(api, true);
