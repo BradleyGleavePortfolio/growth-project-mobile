@@ -74,7 +74,7 @@ export const PERMANENTLY_DELETED: readonly string[] = [
   'Your messages, community posts, comments, direct messages, voice notes and reactions',
   // SMALL-T1: clients keep the coach's lessons they completed or are enrolled in, with their
   // videos (b#1108), and assigned plans; b#1110 adds paid media. "Your clients keep" stays true for both.
-  'Coach media, notes and briefs, if you coach, except the lessons and paid content your clients keep',
+  'Coach media, notes and briefs, if you coach, except lessons and paid content your clients keep',
   'Your targets, recipes, lists and preferences',
   'Notification settings and push notification tokens',
 ];

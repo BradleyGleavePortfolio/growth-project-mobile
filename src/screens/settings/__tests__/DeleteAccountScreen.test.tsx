@@ -214,7 +214,7 @@ describe('DeleteAccountScreen', () => {
 
     it('SMALL-T1: the coach line keeps the lessons and paid content clients keep', async () => {
       const line =
-        'Coach media, notes and briefs, if you coach, except the lessons and paid content your clients keep';
+        'Coach media, notes and briefs, if you coach, except lessons and paid content your clients keep';
       expect(PERMANENTLY_DELETED).toContain(line);
       expect(PERMANENTLY_DELETED.filter((item) => /coach media/i.test(item))).toEqual([line]);
       const { getByText } = await renderScreen();
