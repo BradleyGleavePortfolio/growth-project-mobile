@@ -17,7 +17,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
-const mockFlags = { coachCommunity: true, mwbPrograms: true, teamMode: true, coachBrief: true, coachTabsV2: true };
+// romanChat on registers RomanChat, so the UI-2 Home's Ask Roman entry (flag-gated) lands too.
+const mockFlags = { coachCommunity: true, mwbPrograms: true, teamMode: true, coachBrief: true, coachTabsV2: true, romanChat: true };
 const mockTeam = { role: 'head_coach', hasSubCoaches: true };
 jest.mock('../../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../../hooks/useCoachRoleType', () => ({ useCoachTeamStatus: () => mockTeam }));
