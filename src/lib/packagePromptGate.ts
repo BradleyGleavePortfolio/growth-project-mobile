@@ -30,18 +30,39 @@
  *    sooner. iPhone also asks on first Home, because the consultation skips
  *    the Day 1 sheet, and when it does not offer the sheet it saves the time,
  *    so the entitlement read runs at most once a day. Android asks only after
- *    a skip, as before. Never while Roman's tour is starting or running in
- *    this session (#836 Opus C4): the tour the client just asked for comes
- *    first, and the next start offers the sheet.
+ *    a skip, as before. Never while Roman's tour is unfinished or about to
+ *    start (#836 Opus C4, Sol B2), including after a restart or a fresh
+ *    install (tourAtStart): the tour comes first, nothing is saved, and a
+ *    later start offers the sheet.
  */
 import { Platform } from 'react-native';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
+import { consultationApi } from '../api/consultationApi';
+import { featureFlags } from '../config/featureFlags';
 import { dunningApi } from '../entitlements/dunning/dunningApi';
 import { useTutorialStore } from '../tutorial/tutorialStore';
+import { loadTutorial } from '../tutorial/tutorialStorage';
+import type { TutorialStatus } from '../tutorial/types';
 import { prefsStorage } from '../storage/mmkv';
 import { readUserCache } from './userCache';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * What Roman's tour does on the Home this start opens. RootNavigator decides
+ * before ClientNavigator (and so TutorialHost) mounts, so after a restart or
+ * on a fresh install the live store is still empty: read this user's saved
+ * tour. 'ask' = nothing saved yet, so TutorialHost starts the tour if the
+ * server has the finished consultation (Sol B-310-4).
+ */
+async function tourAtStart(userId: string): Promise<TutorialStatus | 'starting' | 'ask' | 'off'> {
+  if (!featureFlags.clientTutorial) return 'off';
+  const live = useTutorialStore.getState();
+  if (live.pendingStart) return 'starting';
+  if (live.hydrated && live.userId === userId) return live.tutorial.status;
+  const saved = (await loadTutorial(userId))?.state.status ?? 'not_started';
+  return saved === 'not_started' && featureFlags.consultationOnboarding ? 'ask' : saved;
+}
 
 export async function shouldOfferPackagePrompt(): Promise<boolean> {
   try {
@@ -64,9 +85,11 @@ export async function packagePromptDueAtStart(userId: string, now: number = Date
     const lastAt = await prefsStorage.getStringAsync(key);
     const ios = Platform.OS === 'ios';
     if (lastAt ? !(now - new Date(lastAt).getTime() > DAY_MS) : !ios) return false;
-    const tour = useTutorialStore.getState();
-    if (tour.pendingStart || (tour.userId === userId && tour.tutorial.status === 'active')) return false;
-    if (await shouldOfferPackagePrompt()) return true;
+    const tour = await tourAtStart(userId);
+    if (tour === 'starting' || tour === 'active') return false;
+    if (await shouldOfferPackagePrompt()) {
+      return !(tour === 'ask' && (await consultationApi.getState())?.completed === true);
+    }
     if (ios) await prefsStorage.set(key, new Date(now).toISOString());
     return false;
   } catch {

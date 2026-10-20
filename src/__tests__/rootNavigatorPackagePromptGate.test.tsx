@@ -148,6 +148,17 @@ jest.mock('../offline', () => ({ triggerSync: jest.fn(async () => undefined) }))
 jest.mock('../entitlements/EntitlementProvider', () => ({
   EntitlementProvider: ({ children }: { children: unknown }) => children,
 }));
+// #836 Sol B2: Roman's tour on (with the consultation) only where a test says so.
+let mockTourOn = false;
+jest.mock('../config/featureFlags', () => {
+  const actual = jest.requireActual('../config/featureFlags');
+  return {
+    ...actual,
+    featureFlags: new Proxy(actual.featureFlags, {
+      get: (t, k) => (k === 'clientTutorial' || k === 'consultationOnboarding' ? mockTourOn : Reflect.get(t, k)),
+    }),
+  };
+});
 import React from 'react';
 import { render, cleanup, act, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -155,6 +166,9 @@ import { Platform } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import RootNavigator from '../navigation/RootNavigator';
 import { queryClient } from '../services/queryClient';
+import { __resetTutorialStoreForTests } from '../tutorial/tutorialStore';
+import { tutorialStorageKey } from '../tutorial/tutorialStorage';
+import { initialTutorialState } from '../tutorial/tutorialMachine';
 
 const STUDENT = {
   id: 'client-S',
@@ -286,6 +300,57 @@ describe('RootNavigator package prompt on first Home (#161-5 op 1)', () => {
     expect(r.queryByTestId('package-prompt')).toBeNull();
     expect(mockGetEntitlement).not.toHaveBeenCalled();
     expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
+  });
+});
+
+// #836 Sol B2 / Opus C1: the start-up decision reads this user's saved tour, because the live tour store is
+// still empty when RootNavigator decides (TutorialHost mounts inside ClientNavigator, after it).
+describe('RootNavigator package prompt waits for Roman\'s tour after a restart', () => {
+  const api = jest.requireMock('../services/api').default;
+  const saveTour = (status: string) =>
+    AsyncStorage.setItem(tutorialStorageKey('client-S'), JSON.stringify({ state: { ...initialTutorialState(), status }, payload: null }));
+  const serverConsultation = (completed: boolean) =>
+    api.get.mockImplementation(async (url: string) =>
+      url === '/me/onboarding' ? { data: { completed, answers: null } } : { data: { is_complete: true } },
+    );
+  beforeEach(async () => {
+    mockTourOn = true;
+    __resetTutorialStoreForTests();
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue(NO_PLAN);
+    serverConsultation(true);
+    await AsyncStorage.removeItem(PROMPT_KEY);
+  });
+  afterEach(() => {
+    mockTourOn = false;
+    api.get.mockImplementation(async () => ({ data: { is_complete: true } }));
+  });
+
+  it('iPhone, restart mid-tour: Home with the tour, no sheet, and the day\'s showing is not used', async () => {
+    await saveTour('active');
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+    expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
+  });
+
+  it('iPhone, fresh install after the consultation (nothing saved): the tour starts, no sheet', async () => {
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+    expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
+  });
+
+  it.each(['completed', 'paused'])('iPhone, tour %s: the normal rule applies and the sheet opens', async (status) => {
+    await saveTour(status);
+    const r = await mount();
+    expect((await r.findByTestId('package-prompt')).props.recordShown).toBe(true);
+  });
+
+  it('iPhone, nothing saved and no consultation on the server: no tour starts, the sheet opens', async () => {
+    serverConsultation(false);
+    const r = await mount();
+    await r.findByTestId('package-prompt');
   });
 });
 
