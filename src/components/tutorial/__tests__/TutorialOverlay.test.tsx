@@ -269,7 +269,7 @@ describe('TutorialOverlay', () => {
       fireEvent.press(screen.getByLabelText('Got it'));
     });
     expect(useTutorialStore.getState().tutorial.status).toBe('completed');
-    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain' });
+    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain', pop: true });
     expect(screen.queryByTestId('tutorial-overlay')).toBeNull();
   });
 
@@ -291,7 +291,7 @@ describe('TutorialOverlay', () => {
       fireEvent.press(screen.getByLabelText('Not now'));
     });
     expect(mockAnswer).toHaveBeenCalledWith(false);
-    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain' });
+    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain', pop: true });
     expect(screen.queryByTestId('tutorial-overlay')).toBeNull();
   });
 
@@ -308,7 +308,7 @@ describe('TutorialOverlay', () => {
       fireEvent.press(screen.getByLabelText('Turn on notifications'));
     });
     expect(mockAnswer).toHaveBeenCalledWith(true);
-    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain' });
+    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain', pop: true });
   });
 
   it('a coachless client meets Roman at beat six', async () => {

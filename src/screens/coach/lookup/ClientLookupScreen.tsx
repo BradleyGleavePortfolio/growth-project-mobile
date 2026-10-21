@@ -31,6 +31,7 @@ import {
   type LookupAction, type LookupFilter, type LookupReason, type UnreadByClient,
 } from '../../../utils/coach/clientLookup';
 import { useLookupNudge } from './useLookupNudge';
+import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
 
 // route.params.view 'needs' (for the coach Home's Needs you tile): the Needs you layout at any roster size, only clients with an action.
@@ -50,6 +51,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const [unread, setUnread] = useState<UnreadByClient>({});
   const [archivedCount, setArchivedCount] = useState<number | null>(null);
   const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [peek, setPeek] = useState<RosterClient | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Scroll position lives in refs: a scroll never re-renders the list (only the side index, when it shows or hides).
   const scrollY = useRef(0);
@@ -108,13 +110,22 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const results = roster.filter((c) => matchesRosterSearch(c, parsed.text) && filters.every((f) => matchesLookupFilter(c, f, unread)));
   const recent = recentFromRoster(recentIds, archived ? [] : roster);
 
+  // A row tap opens the peek sheet (and Opened recently); each sheet button opens today's screen for it.
   const openClient = (c: RosterClient) => {
     if (coachId) void rememberRecentClient(coachId, c.id).then(setRecentIds);
-    navigation.navigate('ClientDetail', { clientId: c.id, clientName: rosterDisplayName(c) });
+    setPeek(c);
   };
-  // #CARD-MESSAGE-ALL, #COACH-CHAT-BACK: with the six tabs the chat opens in Messages over the inbox; off, over this list.
-  const openMessages = (c: RosterClient) => openInboxChat(navigation, c.id, rosterDisplayName(c));
-  const runAction = (c: RosterClient, a: LookupAction) => (a === 'review' ? openClient(c) : a === 'nudge' ? nudge.open(c) : openMessages(c));
+  const openTarget = (c: RosterClient, t: PeekTarget) => {
+    setPeek(null);
+    const p = { clientId: c.id, clientName: rosterDisplayName(c) };
+    if (t.screen === 'ClientDetail') navigation.navigate('ClientDetail', t.tab ? { ...p, initialTab: t.tab } : p);
+    else if (t.screen === 'ClientPayments') navigation.navigate('ClientPayments', p);
+    // #CARD-MESSAGE-ALL, #COACH-CHAT-BACK: with the six tabs the chat opens in Messages over the inbox; off, over this list.
+    else openInboxChat(navigation, c.id, p.clientName);
+  };
+  const openMessages = (c: RosterClient) => openTarget(c, { screen: 'chat' });
+  const runAction = (c: RosterClient, a: LookupAction) =>
+    a === 'review' ? openTarget(c, { screen: 'ClientDetail', tab: 'timeline' }) : a === 'nudge' ? nudge.open(c) : openMessages(c);
   const toggleArchived = () => { setChip(null); setFilterStatus(archived ? 'active' : 'archived'); };
   const jumpTo = (letter: string, animated: boolean) => {
     const present = LETTERS.slice(LETTERS.indexOf(letter)).find((l) => sectionY.current[l] != null);
@@ -316,7 +327,10 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
         style={[s.index, { top: insets.top + 72 }]}
         letterStyle={s.indexLetter}
       />
-      {nudge.modal}
+      {peek ? null : nudge.modal}
+      <ClientPeekSheet client={peek} coachId={coachId} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open}>
+        {peek ? nudge.modal : null}
+      </ClientPeekSheet>
     </View>
   );
 }

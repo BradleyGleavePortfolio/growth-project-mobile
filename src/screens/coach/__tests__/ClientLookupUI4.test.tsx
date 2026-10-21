@@ -36,6 +36,21 @@ const mockText = (t: string) => React.createElement(jest.requireActual('react-na
 jest.mock('../../../ui', () => ({ Overline: jest.requireActual('react-native').Text, useScreenInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../../../ui/states/QuietStates', () => ({ QuietLoading: () => mockText('Loading clients'), QuietError: (p: { message: string }) => mockText(p.message) }));
 jest.mock('../../../ui/empty-states', () => ({ EmptyStateNoResults: () => mockText('No results') }));
+// The peek sheet has its own tests (ClientPeekUI4); here a stub proves the lookup routes each of its taps.
+type MockPeek = { client: { id: string } | null; onOpen: (c: unknown, t: unknown) => void; onNudge: (c: unknown) => void; children?: React.ReactNode };
+jest.mock('../lookup/ClientPeekSheet', () => ({
+  __esModule: true,
+  default: (p: MockPeek) => {
+    const { createElement: h } = jest.requireActual('react');
+    const { Pressable, View } = jest.requireActual('react-native');
+    const tap = (id: string, run: () => void) => h(Pressable, { testID: id, onPress: run });
+    return p.client ? h(View, null, mockText(`peek ${p.client.id}`),
+      tap('stub-logs', () => p.onOpen(p.client, { screen: 'ClientDetail', tab: 'logs' })),
+      tap('stub-pay', () => p.onOpen(p.client, { screen: 'ClientPayments' })),
+      tap('stub-message', () => p.onOpen(p.client, { screen: 'chat' })),
+      tap('stub-nudge', () => p.onNudge(p.client)), p.children) : null;
+  },
+}));
 jest.mock('../../../components/home/PushPermissionCard', () => () => mockText('push-ask'));
 jest.mock('../../../navigation/coachLanding', () => ({ coachLandingTab: () => 'ClientsStack' }));
 
@@ -106,11 +121,25 @@ describe('UI-4 Needs you (under 15 clients)', () => {
   it('every button opens a real screen', async () => {
     await mount(UNDER_15);
     await fireEvent.press(screen.getByTestId('lookup-act-c1'));
-    expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'c1', clientName: 'Maya Brooks' });
+    expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'c1', clientName: 'Maya Brooks', initialTab: 'timeline' });
     await fireEvent.press(screen.getByTestId('lookup-act-c3'));
     expect(navigate).toHaveBeenLastCalledWith(...chatOverList('c3', 'Priya Nair')); // Say hello
     await fireEvent.press(screen.getByTestId('lookup-row-c2'));
-    expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'c2', clientName: 'Theo Grant' });
+    expect(screen.getByText('peek c2')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('stub-logs'));
+    expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'c2', clientName: 'Theo Grant', initialTab: 'logs' });
+    expect(screen.queryByText('peek c2')).toBeNull();
+    await fireEvent.press(screen.getByTestId('lookup-row-c2'));
+    await fireEvent.press(screen.getByTestId('stub-pay'));
+    expect(navigate).toHaveBeenLastCalledWith('ClientPayments', { clientId: 'c2', clientName: 'Theo Grant' });
+    await fireEvent.press(screen.getByTestId('lookup-row-c2'));
+    await fireEvent.press(screen.getByTestId('stub-message')); // Message {first}
+    expect(navigate).toHaveBeenLastCalledWith(...chatOverList('c2', 'Theo Grant'));
+    expect(screen.queryByText('peek c2')).toBeNull();
+    await fireEvent.press(screen.getByTestId('lookup-row-c2'));
+    await fireEvent.press(screen.getByTestId('stub-nudge'));
+    expect(screen.getByText('peek c2')).toBeTruthy(); // the nudge form opens over the sheet
+    expect(screen.getByPlaceholderText('e.g. Great job today')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('lookup-share-code'));
     expect(navigate).toHaveBeenLastCalledWith('InviteCodes');
     await fireEvent.press(screen.getByTestId('lookup-invite'));
@@ -206,7 +235,7 @@ describe('UI-4 Search first (15 or more)', () => {
     expect(screen.getAllByText('Maya Brooks').length).toBe(2);
     expect(screen.queryByTestId('lookup-row-moved-away')).toBeNull();
     await fireEvent.press(screen.getByTestId('lookup-az-m0'));
-    expect(navigate).toHaveBeenLastCalledWith('ClientDetail', { clientId: 'm0', clientName: 'Ana Lopez' });
+    expect(screen.getByText('peek m0')).toBeTruthy();
     await waitFor(() => expect(JSON.parse(mockCache.get('coach_lookup_recent:coach-1') ?? '[]')).toEqual(['m0', 'moved-away', 'm9']));
   });
   it('the side index appears once Everyone is near the top; a touch, a slide or a screen reader step jumps to a letter', async () => {
