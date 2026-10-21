@@ -14,7 +14,7 @@ import { ASK_COPY as A, changedThisWeek, dayMonth } from './askWords';
 export function WeekBlock({ week, compact, now }: { week: CopilotWeek; compact: boolean; now?: Date }) {
   const { semanticColors: sc } = useTheme();
   const { width, fontScale } = useWindowDimensions();
-  const stack = width / fontScale < 340;
+  const stack = width / fontScale < 375;
   const light = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
   const kcal = week.target ? Math.round(week.target.kcal).toLocaleString('en-US') : null;
