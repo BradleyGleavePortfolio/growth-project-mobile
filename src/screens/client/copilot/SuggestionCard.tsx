@@ -34,6 +34,8 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
   const [sent, setSent] = useState<CopilotSuggestion | null>(suggestion.status === 'suggested' ? null : suggestion);
   const [refusal, setRefusal] = useState<AiRefusal | null>(null);
   const [line, setLine] = useState<string | null>(null);
+  /** The server says the suggestion lapsed: its words stay, Send goes (asking again is Roman's job). */
+  const [gone, setGone] = useState(false);
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (sent) Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -52,8 +54,10 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
       void HapticService.error();
       const r = aiRefusalOf(err);
       const e = copilotErrorOf(err);
+      const lapsed = !r && e.code === 'COPILOT_SUGGESTION_EXPIRED' && !!e.message;
       if (r) setRefusal(r);
-      else setLine(e.code === 'COPILOT_SUGGESTION_EXPIRED' && e.message ? e.message : C.failed);
+      else setLine(lapsed ? e.message : C.failed);
+      if (lapsed) setGone(true);
     } finally {
       setBusy(false);
     }
@@ -85,7 +89,7 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
       <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`${C.nothingYet(coach)} ${C.privacy(coach)}`}</Text>
       {refusal ? <AiRefusalNotice refusal={refusal} audience="client" surface="roman" onRetry={() => void onSend()} compact /> : null}
       {line ? <Text style={[typography.bodySmall, { color: forestPop.error }]} accessibilityRole="alert" testID="copilot-send-error">{line}</Text> : null}
-      <PrimaryButton label={C.send(coach)} onPress={() => void onSend()} loading={busy} haptic={false} wrap testID="copilot-send" />
+      {gone ? null : <PrimaryButton label={C.send(coach)} onPress={() => void onSend()} loading={busy} haptic={false} wrap testID="copilot-send" />}
       {onDismiss ? <TextLink label={C.notNow} onPress={onDismiss} tone="muted" align="center" testID="copilot-not-now" /> : null}
     </View>
   );

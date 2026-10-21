@@ -15,7 +15,7 @@ export function ChangeTiles({ from, to, inset = false }: { from: string; to: str
         <Text style={[typography.caption, { color: sc.textMuted }]}>{C.now}</Text>
         <Text style={[typography.bodyMd, s.value, { color: sc.textPrimary }]}>{from}</Text>
       </View>
-      <Ionicons name="arrow-forward" size={16} color={forestPop.moss} />
+      <Ionicons name="arrow-forward" size={16} color={forestPop.moss} style={s.arrow} />
       <View style={[s.tile, { backgroundColor: pathTint.leaf, borderColor: forestPop.leaf, borderWidth: 1 }]}>
         <Text style={[typography.caption, { color: forestPop.forest }]}>{C.next}</Text>
         <Text style={[typography.bodyMd, s.value, { color: forestPop.forest }]}>{to}</Text>
@@ -25,7 +25,9 @@ export function ChangeTiles({ from, to, inset = false }: { from: string; to: str
 }
 
 const s = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // Stretch: both tiles keep one height when a value wraps at large text.
+  row: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  arrow: { alignSelf: 'center' },
   tile: { flex: 1, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 10, gap: 2, minHeight: 56, justifyContent: 'center' },
   value: { fontWeight: '600' },
 });
