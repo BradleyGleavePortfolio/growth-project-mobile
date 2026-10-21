@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 import { LayoutAnimation, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { forestPop, pathTint, radius, typography } from '../../../theme/tokens';
+import { forestPop, layout, pathTint, radius, typography } from '../../../theme/tokens';
 import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
@@ -126,13 +126,15 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
           placeholderTextColor={sc.textMuted} returnKeyType="done" accessibilityLabel={C.notePlaceholder(first)} style={[typography.body, s.input, field]} testID="path-draft-note" />
       ) : null}
       {gone ? null : mode === 'view' ? (
-        <View style={s.actions}>
-          {planChanged ? null : <PrimaryButton label={C.approve} onPress={() => void go({ decision: 'approved' })} loading={busy} haptic={false} style={s.flex} testID="path-draft-approve" />}
-          <Pressable onPress={() => setMode('edit')} disabled={busy} accessibilityRole="button" style={[s.outline, planChanged && s.flex, { borderColor: sc.textPrimary }]} testID="path-draft-edit">
-            <Text style={[typography.bodyMd, s.value, { color: sc.textPrimary }]}>{C.edit}</Text>
-          </Pressable>
+        <>
+          <View style={s.actions}>
+            {planChanged ? null : <PrimaryButton label={C.approve} onPress={() => void go({ decision: 'approved' })} loading={busy} haptic={false} style={s.flex} testID="path-draft-approve" />}
+            <Pressable onPress={() => setMode('edit')} disabled={busy} accessibilityRole="button" style={[s.outline, s.flex, { borderColor: sc.textPrimary }]} testID="path-draft-edit">
+              <Text style={[typography.bodyMd, s.value, { color: sc.textPrimary }]}>{C.edit}</Text>
+            </Pressable>
+          </View>
           <TextLink label={C.decline} onPress={() => setMode('decline')} tone="muted" disabled={busy} testID="path-draft-decline" />
-        </View>
+        </>
       ) : (
         <View style={s.actions}>
           <PrimaryButton label={mode === 'edit' ? C.approve : C.decline} onPress={mode === 'edit' ? approveEdit : decline} loading={busy} haptic={false}
@@ -167,7 +169,7 @@ const s = StyleSheet.create({
   panel: { borderRadius: radius.button, padding: 12, gap: 10 },
   mark: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  outline: { minHeight: 48, minWidth: 88, paddingHorizontal: 18, borderWidth: 1, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
+  outline: { minHeight: layout.buttonHeight, paddingHorizontal: 18, borderWidth: 1, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
   input: { minHeight: 44, borderWidth: 1, borderRadius: radius.button, paddingHorizontal: 12 },
   step: { flexDirection: 'row', gap: 4, minHeight: 44, paddingHorizontal: 10 },
   off: { opacity: 0.35 },
