@@ -158,7 +158,7 @@ describe('M4a: iOS privacy manifest', () => {
   // ProductPersonalization: Roman's answers are built from the client's saved data (backend
   // roman-client-context.service.ts: first name, age, sex, goals, injuries, diet, weight, logs,
   // workouts, check-in notes, wearables, consultation and safety answers, coach messages, posts).
-  const ROMAN_TURN = ['src/api/romanApi.ts', '/roman/sessions/${encodeURIComponent(sessionId)}/messages'];
+  const ROMAN_TURN = ['src/api/romanApi.ts', 'const url = `${env.API_URL}/roman/sessions/${encodeURIComponent(sessionId)}/messages`'];
   const COLLECTED = [
     // Recipes hide the dishes that hold the client's saved allergens (backend loadViewerAllergens).
     ['Health', ['AppFunctionality', 'ProductPersonalization'], 'src/services/health/healthkit/healthKitClient.ts', 'AppleHealthKit.getHeartRateSamples', { also: [ROMAN_TURN, ['src/screens/client/RecipesScreen.tsx', 'profileApi.update({ diet_restrictions: restrictions })']] }],
