@@ -180,8 +180,9 @@ describe('coach Home, flag on, with home (b#1123)', () => {
   });
   it('drops the win line at large text and puts Approve over the kinds, on the first screen (LS B2)', async () => {
     mockWindow.fontScale = 1.3;
-    const tree = JSON.stringify((await renderHome()).toJSON());
-    expect([tree.includes('home-win-w1'), tree.indexOf('home-drafts') < tree.indexOf('Workouts'), tree.includes('12 wins this week. See all')]).toEqual([false, true, true]);
+    const v = await renderHome();
+    const first = v.getAllByText(/^Approve Roman|Workouts$/)[0].props.children; // in screen order
+    expect([!!v.queryByTestId('home-win-w1'), /^Approve/.test(String(first)), label(v, 'home-wins-all')]).toEqual([false, true, '12 wins this week. See all']);
   });
   it("opens alerts in Actions with the tab row back, and labels Roman's drafts", async () => {
     const v = await renderHome();
