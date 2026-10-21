@@ -3,15 +3,17 @@
  *
  * The masthead holds the week block (frames 02, 13; it folds to two chips once a question is asked, frame 03). Below:
  * "Ask about your path" with the starter questions, Roman's answers with the facts he used (frame 03), the suggestion
- * card under an answer that offers a change (frame 04) and the sent suggestions (frame 05). Questions go through
- * Roman's normal send path with the Copilot opt-in header (backend #1129), in the client's open Roman chat.
+ * card under an answer that offers a change (frame 04), the sent suggestions (frame 05) and "Past questions" (14).
+ * Questions go through Roman's normal send path with the Copilot opt-in header (backend #1129), in the client's
+ * open Roman chat. One screen, three views on the same route: Your path, Past questions, and one past answer.
  * Behind `featureFlags.clientPathCopilot` (off) and the server switch: a server without Copilot (404, or no
  * `copilot` on the reply) shows the plain Roman reply and no week block (truthful fallback). Coachless: Roman's lock.
  */
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type ParamListBase, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { forestPop, pathTint, typography, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -32,16 +34,19 @@ import { aiRefusalOf } from '../../lib/ai/aiRefusal';
 import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import type { RomanApiError } from '../../api/romanApi';
-import { copilotApi, type CopilotSuggestion } from '../../api/copilotApi';
+import { copilotApi, type CopilotSuggestion, type PastQuestion } from '../../api/copilotApi';
 import { COPILOT_COPY as C } from './copilot/pathChangeWords';
-import { ASK_COPY as A, changedThisWeek, timeOf } from './copilot/askWords';
+import { ASK_COPY as A, changedThisWeek, monthYear, timeOf } from './copilot/askWords';
 import { SuggestionStatusList } from './copilot/SuggestionStatusList';
 import { SuggestionCard } from './copilot/SuggestionCard';
 import { AnswerCard } from './copilot/AnswerCard';
 import { WeekBlock } from './copilot/WeekBlock';
+import { PastQuestionsList, PastQuestionsRow, usePastQuestions } from './copilot/PastQuestions';
 import { useCopilotAsk, type CopilotTurn } from './copilot/useCopilotAsk';
 
 export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
+type Params = { view?: 'questions' | 'answer'; item?: PastQuestion };
+type Nav = NativeStackNavigationProp<ParamListBase>;
 
 /** The coach's first name for "Send to {coach}" and the status lines, or "your coach" when it is not known yet. */
 export function useCoachFirstName(): string {
@@ -66,10 +71,15 @@ function CoachLock() {
 }
 
 function PathCopilot() {
-  return useClientNeedsCoach() ? <CoachLock /> : <PathView />;
+  const needsCoach = useClientNeedsCoach();
+  const p = useRoute<RouteProp<Record<string, Params | undefined>, string>>().params ?? {};
+  if (needsCoach) return <CoachLock />;
+  if (p.view === 'questions') return <QuestionsView />;
+  if (p.view === 'answer' && p.item) return <AnswerView item={p.item} />;
+  return <PathView />;
 }
 
-/** The forest masthead: back, the serif title, then the week block. */
+/** The forest masthead: back, the serif title, then the week block or a chip. */
 function Mast({ back, title, compact, children }: { back: string; title: string; compact?: boolean; children?: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   const insets = useScreenInsets();
@@ -89,14 +99,17 @@ function Mast({ back, title, compact, children }: { back: string; title: string;
 
 function PathView() {
   const { semanticColors: sc } = useTheme();
+  const navigation = useNavigation<Nav>();
   const qc = useQueryClient();
   const coach = useCoachFirstName();
   const q = useQuery({ queryKey: COPILOT_RECENT_KEY, queryFn: () => copilotApi.recent() });
+  const past = usePastQuestions();
   const { turns, busy, ask } = useCopilotAsk();
   const [draft, setDraft] = useState('');
   const refusal = q.error ? aiRefusalOf(q.error) : null;
   const week = q.data?.week ?? null;
   const items = q.data?.suggestions ?? [];
+  const total = past.data?.pages[0]?.total ?? 0;
   const asked = turns.length > 0;
   if (turns.some((t) => t.error?.kind === 'requiresCoach')) return <CoachLock />;
 
@@ -140,6 +153,7 @@ function PathView() {
             </View>
           )}
           {items.length > 0 ? <SuggestionStatusList items={items} coach={coach} /> : null}
+          {total > 0 ? <PastQuestionsRow total={total} onPress={() => navigation.push('Copilot', { view: 'questions' })} /> : null}
         </View>
       </Screen>
     </>
@@ -204,6 +218,63 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
   );
 }
 
+function QuestionsView() {
+  const { semanticColors: sc } = useTheme();
+  const navigation = useNavigation<Nav>();
+  const coach = useCoachFirstName();
+  const q = usePastQuestions();
+  const first = q.data?.pages[0] ?? null;
+  const items = (q.data?.pages ?? []).flatMap((pg) => pg?.items ?? []);
+  return (
+    <>
+      <ForestStatusBar />
+      <Screen edges={['bottom']} testID="copilot-questions" contentStyle={s.page}
+        refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} tintColor={sc.textMuted} />}>
+        <Mast back={C.title} title={A.past} compact>
+          {first?.since ? (
+            <View style={[s.chip, { backgroundColor: sc.surface.forestBand }]}>
+              <Text style={[typography.bodySmall, { color: sc.textOnAccent }]}>{A.since(first.total, monthYear(first.since))}</Text>
+            </View>
+          ) : null}
+        </Mast>
+        <View style={s.body}>
+          {q.isPending ? <QuietLoading label="Loading past questions" rows={4} testID="copilot-past-loading" /> : null}
+          {q.error ? <QuietError message={loadFailureMessage(q.error, A.past)} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-past-error" /> : null}
+          <PastQuestionsList items={items} coach={coach} more={q.hasNextPage} loadingMore={q.isFetchingNextPage}
+            onMore={() => void q.fetchNextPage()} onOpen={(item) => navigation.push('Copilot', { view: 'answer', item })} />
+        </View>
+      </Screen>
+    </>
+  );
+}
+
+function AnswerView({ item }: { item: PastQuestion }) {
+  const coach = useCoachFirstName();
+  const q = useQuery({
+    queryKey: ['copilot', 'answer', item.messageId],
+    queryFn: async () => {
+      const found = await copilotApi.answer(item.sessionId, item.messageId);
+      if (!found) throw new Error('Copilot answer not found');
+      return found;
+    },
+  });
+  return (
+    <>
+      <ForestStatusBar />
+      <Screen edges={['bottom']} testID="copilot-past-answer" contentStyle={s.page}>
+        <Mast back={A.past} title={C.title} compact />
+        <View style={[s.body, s.turn]}>
+          <Asked question={item.question ?? ''} at={new Date(item.askedAt)} />
+          {q.isPending ? <QuietLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
+          {q.error ? <QuietError message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
+          {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} /> : null}
+          {q.data ? <SuggestionSlot suggestion={q.data.reply?.suggestion ?? null} coach={coach} /> : null}
+        </View>
+      </Screen>
+    </>
+  );
+}
+
 const s = StyleSheet.create({
   flagOff: { flex: 1, justifyContent: 'center' },
   page: { paddingHorizontal: 0 },
@@ -219,4 +290,5 @@ const s = StyleSheet.create({
   pad: { padding: 16, gap: 12 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  chip: { alignSelf: 'flex-start', borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 4 },
 });

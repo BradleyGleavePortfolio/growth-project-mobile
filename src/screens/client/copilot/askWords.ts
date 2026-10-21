@@ -1,6 +1,6 @@
 /**
  * Path Copilot turn words (style A board, planning/MOCKUP3/COPILOT/index.md; ids in comments) and the date lines
- * the week block composes. CP-A-10 and CP-A-12 are main's Roman words, reused as they are.
+ * the week block and past questions compose. CP-A-10 and CP-A-12 are main's Roman words, reused as they are.
  */
 import { calendarDateInZone, formatTime } from '../../../calendar/calendarTime';
 import { resolveClientTimezone } from '../../../api/schedulingApi';
@@ -20,6 +20,9 @@ export const ASK_COPY = {
   workoutsChip: (done: number, total: number) => `${done} of ${total} workouts`, // CP-A-13
   youAsked: (time: string) => `You asked · ${time}`, // CP-A-14
   fromData: 'From your data', // CP-A-15
+  past: 'Past questions', // CP-A-44
+  since: (n: number, month: string) => `${n.toLocaleString('en-US')} ${n === 1 ? 'question' : 'questions'} since ${month}`, // CP-A-45
+  older: 'Show older questions', // CP-A-45
   roman: 'Roman',
   none: '—',
 } as const;
@@ -46,6 +49,8 @@ export function changedThisWeek(from: string, now = new Date()): string | null {
 
 /** "18 Oct" for a YYYY-MM-DD day (a calendar day, so no zone shift). */
 export const dayMonth = (ymd: string) => fmt({ day: 'numeric', month: 'short' }, new Date(`${ymd}T12:00:00Z`), 'UTC');
+/** "Oct 2025" (CP-A-45) and "October 2026" (the month headings). */
+export const monthYear = (at: string, long = false) => fmt({ month: long ? 'long' : 'short', year: 'numeric' }, new Date(at));
 /** "2:31 PM" in the client's zone (CP-A-14). */
 export const timeOf = (at: Date) => formatTime(at, tz());
 

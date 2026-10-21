@@ -23,10 +23,11 @@ Calls: `src/api/copilotApi.ts` (strict parsers; an older server's bare drafts ar
 | Week block | `copilot/WeekBlock.tsx` | `GET /client/copilot` `week`: "Week {n} with {coach}", the daily target ("Changed {weekday}" when it changed this local week), workouts this week, the last check-in; "—" for no data. Folds to two chips once a question is asked. No `week` (older server): no block. |
 | Ask and answer | `ClientPathCopilotScreen.tsx`, `copilot/useCopilotAsk.ts`, `copilot/AnswerCard.tsx` | Starter questions and the composer send through Roman's normal path (`POST /roman/sessions/:id/messages` in the client's open chat) with `x-roman-copilot: 1`, the only place that header is sent (`sendMessage(..., { copilot: true })`). The answer: the first sentence as the serif lead, the rest, then "From your data" with one row per cited fact (tag + the server's label and detail). No `copilot` on the reply (older server): the plain reply. Crisis replies keep their buttons. |
 | Suggestion under the answer | `copilot/SuggestionCard.tsx` | Mounted from `copilot.suggestion` while it is `suggested`, with its source tags; once sent or decided it shows its status line. |
+| Past questions | `copilot/PastQuestions.tsx` | `GET /client/copilot/questions`: the "Past questions · {n}" row, then the list by month with "{n} questions since {month year}", outcomes and "Show older questions". A row opens that answer with its facts (`GET /roman/sessions/:id/messages` with the header). 404: nothing drawn. |
 | States | `ClientPathCopilotScreen.tsx` | Coachless: Roman's lock page. A failed turn keeps the question and says so in Roman's words: offline, error, rate limit, credits used up, AI help off (the shared notice), the daily cap pop-up. |
 
-Past questions (CP-A-44/45) come in the stacked PR after this one. Not built: the You row (CP-A-01/02), the queue
-shell, the coach row's source tags.
+The three views (Your path, Past questions, one past answer) are the same `Copilot` route pushed with a `view` param,
+so Back always returns one step. Not built: the You row (CP-A-01/02), the queue shell, the coach row's source tags.
 
 ## Flags
 
