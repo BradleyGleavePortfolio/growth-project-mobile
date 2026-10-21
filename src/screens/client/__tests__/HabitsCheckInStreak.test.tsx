@@ -1,4 +1,5 @@
 // ROMAN-EXTRAS-M (#161-2 op 1): Roman's streak line on the Daily check-in tab counts the server's check-in streak.
+// OPERATOR RULING 6325497927: coached clients only; a coachless client (Roman locked) keeps the normal saved lines.
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -16,9 +17,9 @@ jest.mock('../../../services/api', () => ({
 jest.mock('../../../entitlements/EntitlementProvider', () => ({
   useEntitlement: () => ({ entitlementActive: true, status: 'active', checking: false, confirmedActive: true, refreshEntitlement: jest.fn(), openPlans: jest.fn(), messageCoach: jest.fn(), paywallVisible: false, paywallMessage: null, dismissPaywall: jest.fn() }),
 }));
-jest.mock('../../../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'client-s', role: 'student', coach_id: 'coach-s', firstName: 'Ava' }),
-}));
+const COACHED = { id: 'client-s', role: 'student', coach_id: 'coach-s', firstName: 'Ava' };
+let mockUser: Record<string, unknown> = COACHED;
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => null }));
 jest.mock('../../../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => false }));
 jest.mock('../../../theme/ThemeProvider', () => ({
@@ -47,6 +48,7 @@ let client: QueryClient;
 beforeEach(() => {
   jest.clearAllMocks();
   Object.assign(mockFlags, { romanChat: true, romanStreakBackendLive: true });
+  mockUser = COACHED;
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } });
   mockGetCheckIns.mockResolvedValue({ data: [] });
 });
@@ -63,14 +65,42 @@ async function saveOn(days: number, milestone: number | null) {
   return { s, success };
 }
 
-it('on the seventh day running, Roman\u2019s line takes the place of "Check-in saved"', async () => {
-  const { s, success } = await saveOn(7, 7);
+const mode = (d: 3 | 7 | 30) => (d === 3 ? 'default' : 'celebration');
+const crop = (d: 3 | 7 | 30) => (d === 3 ? 'neutral' : 'smile');
+
+it.each([3, 7, 30] as const)('coached, day %i: Roman\u2019s line takes the place of "Check-in saved" on save', async (d) => {
+  const { s, success } = await saveOn(d, d);
   await waitFor(() => expect(s.getByTestId('checkin-streak')).toBeTruthy());
-  expect(s.getByText(romanStreak({ tier: 7, firstName: 'Ava', mode: 'celebration' }))).toBeTruthy();
-  expect(s.getByTestId('streak-avatar').props.children).toBe('smile');
+  expect(s.getByText(romanStreak({ tier: d, firstName: 'Ava', mode: mode(d) }))).toBeTruthy();
+  expect(s.getByTestId('streak-avatar').props.children).toBe(crop(d));
   expect(s.getByTestId('checkin-streak').props.accessibilityLiveRegion).toBe('polite');
   expect(s.queryByText('Check-in saved')).toBeNull();
   expect(success).toHaveBeenCalledTimes(1);
+});
+
+it.each([3, 7, 30] as const)('coached, day %i: opening the tab shows Roman\u2019s line from today\u2019s check-in', async (d) => {
+  mockGetCheckIns.mockResolvedValue({ data: [row(d, d)] });
+  const s = await render(<QueryClientProvider client={client}><HabitsScreen initialTab="checkin" /></QueryClientProvider>);
+  await waitFor(() => expect(s.getByTestId('checkin-streak')).toBeTruthy());
+  expect(s.getByText(romanStreak({ tier: d, firstName: 'Ava', mode: mode(d) }))).toBeTruthy();
+  expect(s.queryByText('Saved for today. Change anything and update.')).toBeNull();
+});
+
+it.each([3, 7, 30] as const)('coachless, day %i: no Roman line and no haptic; "Check-in saved" on save', async (d) => {
+  mockUser = { ...COACHED, coach_id: null };
+  const { s, success } = await saveOn(d, d);
+  await waitFor(() => expect(s.getByText('Check-in saved')).toBeTruthy());
+  expect(s.queryByTestId('checkin-streak')).toBeNull();
+  expect(s.queryByTestId('streak-avatar')).toBeNull();
+  expect(success).not.toHaveBeenCalled();
+});
+
+it.each([3, 7, 30] as const)('coachless, day %i: opening the tab shows the normal saved line', async (d) => {
+  mockUser = { ...COACHED, coach_id: null };
+  mockGetCheckIns.mockResolvedValue({ data: [row(d, d)] });
+  const s = await render(<QueryClientProvider client={client}><HabitsScreen initialTab="checkin" /></QueryClientProvider>);
+  await waitFor(() => expect(s.getByText('Saved for today. Change anything and update.')).toBeTruthy());
+  expect(s.queryByTestId('checkin-streak')).toBeNull();
 });
 
 it('a day that is not 3, 7 or 30 keeps "Check-in saved"', async () => {
@@ -78,14 +108,6 @@ it('a day that is not 3, 7 or 30 keeps "Check-in saved"', async () => {
   await waitFor(() => expect(s.getByText('Check-in saved')).toBeTruthy());
   expect(s.queryByTestId('checkin-streak')).toBeNull();
   expect(success).not.toHaveBeenCalled();
-});
-
-it('opening the tab on the third day shows Roman\u2019s measured line from today\u2019s check-in', async () => {
-  mockGetCheckIns.mockResolvedValue({ data: [row(3, 3)] });
-  const s = await render(<QueryClientProvider client={client}><HabitsScreen initialTab="checkin" /></QueryClientProvider>);
-  await waitFor(() => expect(s.getByTestId('checkin-streak')).toBeTruthy());
-  expect(s.getByText(romanStreak({ tier: 3, firstName: 'Ava', mode: 'default' }))).toBeTruthy();
-  expect(s.getByTestId('streak-avatar').props.children).toBe('neutral');
 });
 
 it('stays hidden until the server streak is live', async () => {

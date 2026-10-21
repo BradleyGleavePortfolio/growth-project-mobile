@@ -44,6 +44,7 @@ import FadeInView from '../../components/FadeInView';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { romanStreak, type RomanStreakTier } from '../../lib/roman/copy';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import { forestPop, radius } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { ProtectedScreen } from '../../entitlements/ProtectedScreen';
@@ -82,6 +83,9 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
   const deleteHabit = useDeleteHabit();
   const saveCheckIn = useSaveCheckIn();
   const firstName = (useCurrentUser()?.firstName ?? '').trim() || 'there';
+  // Roman is locked for a client with no coach (the app's Roman lock test), so no streak line for them (OPERATOR RULING 6325497927).
+  const romanLocked = useClientNeedsCoach();
+  const romanStreakOn = featureFlags.romanChat && featureFlags.romanStreakBackendLive && !romanLocked;
 
   // Check-in form state — hydrated from server, edited locally before save.
   const [mood, setMood] = useState(3);
@@ -175,8 +179,8 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
 
   const checkInSaved = !!todayCheckInQ.data;
   // ROMAN-EXTRAS-M (#161-2 op 1): the server's check-in streak, from the save reply or today's row. On the day it
-  // reaches 3, 7 or 30, Roman's line takes the place of "Check-in saved" (gated like Progress's streak card).
-  const milestone = featureFlags.romanChat && featureFlags.romanStreakBackendLive && checkInSaved
+  // reaches 3, 7 or 30, Roman's line takes the place of "Check-in saved" (coached clients only).
+  const milestone = romanStreakOn && checkInSaved
     ? streakMilestone(saveCheckIn.data) ?? streakMilestone(todayCheckInQ.data)
     : null;
 
@@ -256,7 +260,7 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
       {
         onSuccess: (reply) => {
           setLastCheckInDate(today);
-          if (featureFlags.romanChat && featureFlags.romanStreakBackendLive && streakMilestone(reply)) void HapticService.success();
+          if (romanStreakOn && streakMilestone(reply)) void HapticService.success();
           setCheckInToast(true);
           setTimeout(() => setCheckInToast(false), 2200);
         },
