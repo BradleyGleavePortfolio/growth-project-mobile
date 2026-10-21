@@ -15,7 +15,7 @@ import {
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockUser = { id: 'train-root-client', role: 'client', coach_id: 'coach', profile: {} };
-const mockFlags = { clientCalendar: true, communityTab: true, romanChat: false };
+const mockFlags = { clientCalendar: true, communityTab: true, romanChat: false, clientTutorial: false };
 let mockMutateOptions: { onSuccess?: (data: unknown) => void } | null = null;
 const mockLoadSession = jest.fn();
 
@@ -49,7 +49,12 @@ jest.mock('../../offline', () => ({
 }));
 jest.mock('../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../components/roman/RomanVoiceLogReadback', () => () => null);
-jest.mock('../../components/tutorial/TutorialHost', () => ({ children }: { children: React.ReactNode }) => children);
+let mockTourNavigate: ((target: object) => void) | null = null;
+jest.mock('../../components/tutorial/TutorialHost', () =>
+  ({ children, onNavigate }: { children: React.ReactNode; onNavigate: (target: object) => void }) => {
+    mockTourNavigate = onNavigate;
+    return children;
+  });
 jest.mock('../../entitlements/withProtectedScreen', () => ({ withProtectedScreen: (screen: unknown) => screen }));
 jest.mock('../../components/community/CommunityTermsGate', () => ({ withCommunityTerms: (screen: unknown) => screen }));
 jest.mock('../../components/community/UnreadBadge', () => () => null);
@@ -111,4 +116,90 @@ it.each([true, false])('finishing a workout (romanChat=%s) leaves one WorkoutMai
   expect(routes.map((route) => route.name)).toEqual(['WorkoutMain']);
   expect((routes[0].params as { justCompletedId?: string } | undefined)?.justCompletedId)
     .toBe(roman ? 'server-123' : undefined);
+});
+
+// NAV-FIX C1: a Train push or tgp://workouts never closes open work in the Train stack.
+// NAV-FIX C2: the tour's return to Home goes back to the one Home root.
+const push = require('../../services/pushTapRouter');
+const stackOf = (ref: ReturnType<typeof createNavigationContainerRef<ParamListBase>>, tab: string) =>
+  (ref.getRootState().routes.find((route) => route.name === tab)?.state as NavigationState | undefined)
+    ?.routes.map((route) => route.name);
+const focusedTab = (ref: ReturnType<typeof createNavigationContainerRef<ParamListBase>>) => {
+  const root = ref.getRootState();
+  return root.routes[root.index].name;
+};
+const trainTaps: [string, () => void][] = [
+  ['a workout push', () => push.routePushTap('WorkoutMain', undefined, 'nav-fix-1', 'tgp://workouts')],
+  ['tgp://workouts', () => push.routeAppLink('workouts', false)],
+];
+
+async function mountClient() {
+  const ref = createNavigationContainerRef<ParamListBase>();
+  const view = await render(<NavigationContainer ref={ref}><ClientNavigator /></NavigationContainer>);
+  push.__resetPushTapRouterForTests();
+  push.attachPushNavigator(ref);
+  push.setPushSession({ kind: 'app', userId: mockUser.id, role: 'student' });
+  await act(async () => ref.navigate('WorkoutTab'));
+  return { ref, view };
+}
+
+describe('NAV-FIX: a Train link keeps open work', () => {
+  beforeEach(() => { mockFlags.romanChat = false; });
+
+  it.each(trainTaps)('%s mid-workout keeps the live workout and asks nothing', async (_label, tap) => {
+    const { ref, view } = await mountClient();
+    await act(async () => ref.navigate('WorkoutTab', {
+      screen: 'ActiveWorkout',
+      params: { routineName: 'Push Day', exercises: '[]', assignmentId: null },
+    }));
+    await waitFor(() => expect(view.getByText('Push Day')).toBeTruthy());
+    await act(async () => ref.navigate('Home'));
+
+    await act(async () => tap());
+
+    expect(focusedTab(ref)).toBe('WorkoutTab');
+    expect(stackOf(ref, 'WorkoutTab')).toEqual(['WorkoutMain', 'ActiveWorkout']);
+    expect(Alert.alert).not.toHaveBeenCalledWith('Log this workout?', expect.anything(), expect.anything());
+    expect(view.getByText('Push Day')).toBeTruthy();
+  });
+
+  it.each(['RoutineBuilder', 'WorkoutHistoryEdit'])('a workout push keeps an open %s and its edits', async (screen) => {
+    const { ref } = await mountClient();
+    await act(async () => ref.navigate('WorkoutTab', { screen }));
+    await act(async () => ref.navigate('Home'));
+
+    await act(async () => trainTaps[0][1]());
+
+    expect(focusedTab(ref)).toBe('WorkoutTab');
+    expect(stackOf(ref, 'WorkoutTab')).toEqual(['WorkoutMain', screen]);
+  });
+
+  it('with nothing open, a workout push still returns to the one Train root', async () => {
+    const { ref } = await mountClient();
+    await act(async () => ref.navigate('WorkoutTab', { screen: 'CoachGuidelines' }));
+
+    await act(async () => trainTaps[1][1]());
+
+    expect(stackOf(ref, 'WorkoutTab')).toEqual(['WorkoutMain']);
+  });
+
+  it('the tour lands on the one Home root, never a second copy', async () => {
+    mockFlags.clientTutorial = true;
+    try {
+      const ref = createNavigationContainerRef<ParamListBase>();
+      await render(<NavigationContainer ref={ref}><ClientNavigator /></NavigationContainer>);
+      await act(async () => ref.navigate('Home', { screen: 'Messages' }));
+      expect(stackOf(ref, 'Home')).toEqual(['HomeMain', 'Messages']);
+
+      await act(async () => mockTourNavigate!({ tab: 'Home', screen: 'HomeMain', pop: true }));
+      expect(stackOf(ref, 'Home')).toEqual(['HomeMain']);
+
+      // Without pop (main before NAV-FIX) the same return stacked a second Home.
+      await act(async () => ref.navigate('Home', { screen: 'Messages' }));
+      await act(async () => mockTourNavigate!({ tab: 'Home', screen: 'HomeMain' }));
+      expect(stackOf(ref, 'Home')).toEqual(['HomeMain', 'Messages', 'HomeMain']);
+    } finally {
+      mockFlags.clientTutorial = false;
+    }
+  });
 });

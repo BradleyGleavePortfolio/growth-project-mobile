@@ -249,11 +249,11 @@ describe('loaded state', () => {
     expect(
       getByText('Your resting heart rate is trending down this week'),
     ).toBeTruthy();
-    expect(getByText('Norm comparison')).toBeTruthy();
+    expect(getByText('How this compares')).toBeTruthy();
     expect(
       getByText('That is below the typical range for your age group'),
     ).toBeTruthy();
-    expect(getByText('Intervention')).toBeTruthy();
+    expect(getByText('Try this')).toBeTruthy();
     expect(
       getByText('Keep your easy runs easy — your aerobic base is building'),
     ).toBeTruthy();
@@ -446,15 +446,27 @@ describe('source_metrics provenance', () => {
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-source-metrics')).toBeTruthy();
-    expect(getByText('Source metrics')).toBeTruthy();
+    expect(getByText('Based on')).toBeTruthy();
+    expect(getByText('Resting Heart Rate, Heart Rate')).toBeTruthy();
     expect(
-      getByText('RESTING_HEART_RATE_BPM, HEART_RATE_BPM'),
+      getByLabelText('Based on: Resting Heart Rate, Heart Rate'),
     ).toBeTruthy();
-    expect(
-      getByLabelText(
-        'Source metrics: RESTING_HEART_RATE_BPM, HEART_RATE_BPM',
-      ),
-    ).toBeTruthy();
+  });
+
+  // WEAR-AI-LABELS: a Sleep & Recovery card names every metric in plain words, never a code.
+  it('names Sleep & Recovery metrics in plain words', async () => {
+    mockUseClientInsight.mockReturnValue(
+      queryState({
+        data: fullInsight({
+          source_metrics: ['SLEEP_DURATION_MIN', 'RESTING_HEART_RATE_BPM', 'HRV_MS'],
+        }),
+      }),
+    );
+    const { getByText, queryByText } = await render(
+      <ClientWearableInsightPanel {...baseProps} />,
+    );
+    expect(getByText('Sleep Duration, Resting Heart Rate, HRV')).toBeTruthy();
+    expect(queryByText(/[A-Z]+_[A-Z]+/)).toBeNull();
   });
 
   it('shows the first three metrics + a "+N more" suffix when there are extras', async () => {
@@ -475,7 +487,7 @@ describe('source_metrics provenance', () => {
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(
-      getByText('STEPS, HEART_RATE_BPM, VO2_MAX +2 more'),
+      getByText('Steps, Heart Rate, VO₂ Max +2 more'),
     ).toBeTruthy();
   });
 });

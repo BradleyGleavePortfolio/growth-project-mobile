@@ -10,8 +10,11 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import PushPermissionCard from '../../components/home/PushPermissionCard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { featureFlags } from '../../config/featureFlags';
+import ClientLookupScreen from './lookup/ClientLookupScreen';
 import { CoachTeamEntryContext } from '../../navigation/coachTeamEntry';
 import { coachLandingTab } from '../../navigation/coachLanding';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -34,6 +37,7 @@ import {
 
 type Props = {
   navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>;
+  route?: RouteProp<ClientsStackParamList, 'ClientsList'>;
 };
 
 type RosterFilter = 'all' | 'active' | 'archived';
@@ -51,7 +55,12 @@ function initials(c: RosterClient): string {
   return `${first}${second}`.toUpperCase();
 }
 
-export default function ClientsListScreen({ navigation }: Props) {
+/** UI-4: the client lookup replaces this list only while its flag is on. */
+export default function ClientsListScreen(props: Props) {
+  return featureFlags.coachClientLookup ? <ClientLookupScreen {...props} /> : <ClientsRosterList {...props} />;
+}
+
+function ClientsRosterList({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // REDO-COACH-133: the Clients tab hides the stack header, so the screen owns

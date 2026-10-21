@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 
@@ -32,7 +32,8 @@ export function NudgeModal({
 }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.nudgeModalOverlay}>
+      {/* The form sits above the keyboard, so Send and Cancel stay reachable while typing (as LogPlannedMealButton). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.nudgeModalOverlay}>
         <View style={styles.nudgeModalContent}>
           <Text style={styles.nudgeModalTitle}>Send Nudge</Text>
           <Text style={styles.nudgeModalDesc}>
@@ -88,7 +89,7 @@ export function NudgeModal({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
