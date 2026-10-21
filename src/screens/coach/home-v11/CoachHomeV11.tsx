@@ -74,7 +74,7 @@ export default function CoachHomeV11(p: Props) {
   const rosterN = formatCount(roster);
   const items = home?.wins.items ?? [];
   const turn = useWinTurn(items.length);
-  const win = items.length > 0 ? items[turn % items.length] : undefined;
+  const win = items.length > 0 ? items[turn % Math.min(3, items.length)] : undefined; // the newest three take turns (spec item 2)
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
