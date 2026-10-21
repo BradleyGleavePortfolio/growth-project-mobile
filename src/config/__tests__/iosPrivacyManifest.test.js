@@ -161,6 +161,10 @@ describe('M4a: iOS privacy manifest', () => {
     ['Name', ['AppFunctionality'], 'src/services/api.ts', "api.post<RegisterResponse>('/auth/register', body)"],
     ['PhoneNumber', ['AppFunctionality'], 'src/screens/auth/CreateAccountScreen.tsx', 'phone: phone || undefined'],
     ['UserID', ['AppFunctionality', 'Analytics'], 'src/services/sentry.ts', 'Sentry.setUser({ id: user.id })'],
+    // The Expo push token (APNs device token + Expo install ID) is kept on the account until sign-out
+    // (PATCH /users/me/push-token). PostHog also keeps a device_id that survives sign-out and sends it
+    // with the account ID to its flags API, hence Analytics too.
+    ['DeviceID', ['AppFunctionality', 'Analytics'], 'src/services/pushNotifications.ts', 'Notifications.getExpoPushTokenAsync()'],
     ['EmailsOrTextMessages', ['AppFunctionality'], 'src/api/messagesApi.ts', "api.post('/messages', {"],
     ['PhotosorVideos', ['AppFunctionality'], 'src/api/coachMediaApi.ts', 'uploadAsync(url, file.uri'],
     ['OtherUserContent', ['AppFunctionality'], 'src/api/communityWinsApi.ts', "api.post<unknown>('/community/wins'"],
@@ -170,6 +174,9 @@ describe('M4a: iOS privacy manifest', () => {
     ['CrashData', ['AppFunctionality'], 'src/services/sentry.ts', 'enableNative: true'],
     ['PerformanceData', ['AppFunctionality'], 'src/services/sentry.ts', 'tracesSampleRate:'],
     ['ProductInteraction', ['Analytics'], 'src/lib/analytics.ts', 'getClient()?.capture(event'],
+    // Food search words are kept as the server's 24 h cache key (food:search:v1:<words>) with no user ID,
+    // so collected but not linked. Exercise search (5 min cache) is the same class.
+    ['SearchHistory', ['AppFunctionality'], 'src/services/api.ts', '/foods/search?q=', { linked: false }],
     // PostHog works out an approximate location from the IP of each event; no location permission.
     ['CoarseLocation', ['Analytics'], 'src/lib/analytics.ts', '_client = new PostHog(key, {'],
     // Pregnancy or childbirth answer in the consultation (on in production, eas.json).
@@ -182,14 +189,14 @@ describe('M4a: iOS privacy manifest', () => {
     ['OtherFinancialInfo', ['AppFunctionality'], 'src/api/coachMoneyApi.ts', 'api.get("/coach/connect/payouts"'],
   ];
 
-  test('collected data types match the code that collects them, linked to the account, never tracking', () => {
+  test('collected data types match the code that collects them, linked as declared, never tracking', () => {
     const byType = Object.fromEntries(
       manifest.NSPrivacyCollectedDataTypes.map((t) => [t.NSPrivacyCollectedDataType.replace('NSPrivacyCollectedDataType', ''), t]),
     );
     expect(Object.keys(byType).sort()).toEqual(COLLECTED.map(([type]) => type).sort());
-    for (const [type, purposes, file, anchor] of COLLECTED) {
+    for (const [type, purposes, file, anchor, { linked = true } = {}] of COLLECTED) {
       expect(fs.readFileSync(path.join(ROOT, file), 'utf8')).toContain(anchor);
-      expect(byType[type].NSPrivacyCollectedDataTypeLinked).toBe(true);
+      expect(byType[type].NSPrivacyCollectedDataTypeLinked).toBe(linked);
       expect(byType[type].NSPrivacyCollectedDataTypeTracking).toBe(false);
       expect(byType[type].NSPrivacyCollectedDataTypePurposes).toEqual(
         purposes.map((p) => `NSPrivacyCollectedDataTypePurpose${p}`),
