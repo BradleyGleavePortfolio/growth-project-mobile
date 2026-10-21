@@ -130,7 +130,7 @@ describe('the words: byte for byte from #1117, every sha pinned', () => {
       expect(isConsentAnswerCurrent({ agreed: true, copy_version: version, agreed_at: NOW.toISOString(), text_sha256: pin } as never)).toBe(true);
     }
     // No coach, memory off: no Health-notes twin, so the screen stays today's.
-    expect(consentScreenCopy(true, true, true)).toMatchObject({ version: 'consult-consent-v14-coach-free', aiParagraph: AI_CONSENT_PARAGRAPH });
+    expect(consentScreenCopy(true, true, true)).toMatchObject({ version: 'consult-consent-v14-coach-free', aiParagraph: AI_CONSENT_PARAGRAPH_CRISIS });
   });
 
   it('readers: a live client-ai-v10 to v13 grant is read with its own family, version and pin', () => {
