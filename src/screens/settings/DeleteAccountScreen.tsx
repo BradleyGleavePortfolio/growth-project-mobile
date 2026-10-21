@@ -86,8 +86,12 @@ export const KEPT_RECORDS: readonly string[] = [
   'If you coach: your clients are not deleted. They keep their own data and the plans you assigned, unchanged and without your contact details, and are no longer linked to you.',
 ];
 
+// SMALL-T2: b#1110 takes a leaving coach's packages off sale and stops his clients' renewals from the
+// confirmed request (clients keep the paid time). Keep my account (cancelDeletion) puts the packages
+// back on sale and resumes only plans still running: a plan whose paid term ended in the grace days
+// is canceled and is never revived (ClientBillingService.syncPlansOfLeavingCoaches, FIX-838-R1 B1).
 export const BILLING_NOTE =
-  'Any subscription or payment plan you have, as a client or as a coach, is cancelled when the deletion completes, and scheduled reminders and emails stop. Until then it stays active.';
+  'Any subscription or payment plan you have, as a client or as a coach, is cancelled when the deletion completes, and scheduled reminders and emails stop. Until then a plan you pay for stays active. If you coach, your packages come off sale once you confirm, and your clients’ plans stop renewing; they keep the time they have paid for. If you tap Keep my account before the deletion date, your packages go back on sale and those plans renew again. A plan whose paid time ran out before then has ended and does not restart.';
 
 // The steps are Apple's (Apple Support 102571) and match the backend's
 // SIGN_IN_WITH_APPLE_DELETION_TEXT (#611, C-611-18). Settings > your name >
