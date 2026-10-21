@@ -21,6 +21,10 @@ import {
 } from "../../utils/correlation";
 import { errorStatus } from "../../types/common";
 import { SUPPORT_EMAIL } from "../../constants/support";
+import {
+  LEAVING_COACH_LINE,
+  isLeavingCoachRefusal,
+} from "../../utils/packageSaveFailure";
 
 /** Support inbox for coach money and setup problems (the one app address). */
 export const COACH_SUPPORT_EMAIL = SUPPORT_EMAIL;
@@ -280,6 +284,15 @@ export function describeError(err: unknown, action: string): FriendlyError {
       ...base,
       title: "That currency is not on your account",
       body: "Pick one of the currencies shown at the top of Money.",
+      retryable: false,
+    };
+  }
+  if (isLeavingCoachRefusal(status, message)) {
+    // SMALL-T2: package create / publish while the coach's deletion is scheduled.
+    return {
+      ...base,
+      title: `TGP could not ${action}`,
+      body: LEAVING_COACH_LINE,
       retryable: false,
     };
   }
