@@ -30,58 +30,58 @@ beforeEach(async () => {
 });
 
 it('keeps half-typed text per chat and brings it back when that chat opens again', async () => {
-  const a = renderHook(() => useChatDraft('client:coach'));
-  act(() => a.result.current[1]('Hey, loved th'));
+  const a = await renderHook(() => useChatDraft('client:coach'));
+  await act(async () => { a.result.current[1]('Hey, loved th'); });
   a.unmount();
   await flush();
   expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:client:coach`)).toContain('Hey, loved th');
-  expect(renderHook(() => useChatDraft('dm:w:coach-1')).result.current[0]).toBe('');
-  expect(renderHook(() => useChatDraft('client:coach')).result.current[0]).toBe('Hey, loved th');
+  expect((await renderHook(() => useChatDraft('dm:w:coach-1'))).result.current[0]).toBe('');
+  expect((await renderHook(() => useChatDraft('client:coach'))).result.current[0]).toBe('Hey, loved th');
 });
 
 it('reads the device copy after the app closed (memory empty) and never shows it to another account', async () => {
   mockDisk.set(`${CHAT_DRAFT_KEY_PREFIX}client-1:roman`, JSON.stringify({ text: 'What should I eat' }));
-  const same = renderHook(() => useChatDraft('roman'));
+  const same = await renderHook(() => useChatDraft('roman'));
   await flush();
   expect(same.result.current[0]).toBe('What should I eat');
   mockUser = { id: 'client-2' };
-  const other = renderHook(() => useChatDraft('roman'));
+  const other = await renderHook(() => useChatDraft('roman'));
   await flush();
   expect(other.result.current[0]).toBe('');
 });
 
 it('a failed send keeps its key with its text; sending (an empty box) drops both', async () => {
-  const a = renderHook(() => useChatDraft('coach:client-1'));
-  act(() => a.result.current[1]('see you at 6'));
-  act(() => a.result.current[2].keepFailed('see you at 6', 'key-1'));
+  const a = await renderHook(() => useChatDraft('coach:client-1'));
+  await act(async () => { a.result.current[1]('see you at 6'); });
+  await act(async () => { a.result.current[2].keepFailed('see you at 6', 'key-1'); });
   a.unmount();
-  const b = renderHook(() => useChatDraft('coach:client-1'));
+  const b = await renderHook(() => useChatDraft('coach:client-1'));
   expect(b.result.current[2].keyFor('see you at 6')).toBe('key-1');
   expect(b.result.current[2].keyFor('see you at 7')).toBeUndefined();
-  act(() => b.result.current[1](''));
+  await act(async () => { b.result.current[1](''); });
   await flush();
   expect(b.result.current[2].keyFor('see you at 6')).toBeUndefined();
   expect([...mockDisk.keys()]).toEqual([]);
 });
 
 it('a passed draft wins over kept text; a sign-out removes every kept text from memory and the device', async () => {
-  const a = renderHook(() => useChatDraft('coach:client-1'));
-  act(() => a.result.current[1]('old reply'));
+  const a = await renderHook(() => useChatDraft('coach:client-1'));
+  await act(async () => { a.result.current[1]('old reply'); });
   a.unmount();
-  expect(renderHook(() => useChatDraft('coach:client-1', 'How did the week go?')).result.current[0]).toBe('How did the week go?');
-  act(() => authEvents.emit('logout'));
+  expect((await renderHook(() => useChatDraft('coach:client-1', 'How did the week go?'))).result.current[0]).toBe('How did the week go?');
+  await act(async () => { authEvents.emit('logout'); });
   await flush();
   expect([...mockDisk.keys()]).toEqual([]);
-  const after = renderHook(() => useChatDraft('coach:client-1'));
+  const after = await renderHook(() => useChatDraft('coach:client-1'));
   await flush();
   expect(after.result.current[0]).toBe('');
 });
 
 it('without a chat (null) the box keeps nothing', async () => {
-  const a = renderHook(() => useChatDraft(null));
-  act(() => a.result.current[1]('a comment'));
+  const a = await renderHook(() => useChatDraft(null));
+  await act(async () => { a.result.current[1]('a comment'); });
   expect(a.result.current[0]).toBe('a comment');
   a.unmount();
-  expect(renderHook(() => useChatDraft(null)).result.current[0]).toBe('');
+  expect((await renderHook(() => useChatDraft(null))).result.current[0]).toBe('');
   expect([...mockDisk.keys()]).toEqual([]);
 });
