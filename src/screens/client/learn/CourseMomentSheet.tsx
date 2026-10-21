@@ -37,7 +37,7 @@ export function LessonCompleteMoment({ lesson, done, total, next, onNext }: { le
           <Text style={s.muted}>{`${done} of ${total} done`}</Text>
         </View>
       </View>
-      {next && onNext ? <PrimaryButton label={`Next: ${next.title}`} onPress={() => onNext(next)} testID="lesson-moment-next" /> : null}
+      {next && onNext ? <PrimaryButton label={`Next: ${next.title}`} onPress={() => onNext(next)} wrap testID="lesson-moment-next" /> : null}
     </Animated.View>
   );
 }

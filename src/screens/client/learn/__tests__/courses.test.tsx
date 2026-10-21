@@ -13,10 +13,13 @@ import CourseWeekScreen from '../CourseWeekScreen';
 import CourseLessonScreen from '../CourseLessonScreen';
 import { courseNow, coursesFrom } from '../courseData';
 
-const mockNav = { navigate: jest.fn(), goBack: jest.fn(), getState: jest.fn() };
+const mockNav = { navigate: jest.fn(), goBack: jest.fn(), dispatch: jest.fn(), getState: jest.fn() };
 let mockParams: Record<string, string> = {};
 let [mockOnline, mockToday, mockOpen] = [true, '2026-10-14', () => undefined as void]; // today: Wed of week 3
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useRoute: () => ({ params: mockParams }), useIsFocused: () => true }));
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => mockNav, useRoute: () => ({ params: mockParams }), useIsFocused: () => true,
+  StackActions: { replace: (name: string, params: object) => ({ type: 'REPLACE', payload: { name, params } }) },
+}));
 jest.mock('expo-video', () => ({ useVideoPlayer: () => ({ addListener: () => ({ remove: () => undefined }) }), VideoView: () => null }));
 jest.mock('@expo-google-fonts/cormorant-garamond', () => ({ CormorantGaramond_400Regular_Italic: 1, useFonts: () => [true] }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
@@ -162,16 +165,42 @@ describe('Course lesson', () => {
     mockNav.getState.mockReturnValue({ index: 2, routes: [{ name: 'Course' }, { name: 'CourseWeek' }, { name: 'CourseLesson' }] });
   });
 
-  it('shows the page and the note, and done only after the server saves it (c05)', async () => {
+  it('shows the page and the note, and done only after the server saves it (c05), then the c06 footer: the count and Next', async () => {
     await show(CourseLessonScreen);
     expect(await screen.findByText('Lesson 3.2 · Page · 1 min')).toBeTruthy();
     seen(['Week 3', 'Some discomfort is normal.', 'Up to 3 is fine.', 'Watch the morning, not the moment.']);
     expect(screen.queryByText('Lesson 3.2 complete.')).toBeNull();
+    expect(screen.queryByTestId('lesson-moment')).toBeNull();
     await fireEvent.press(screen.getByText('Mark as complete'));
     expect(complete).toHaveBeenCalledWith('l32');
-    expect(await screen.findByText('Lesson 3.2 complete.')).toBeTruthy();
+    expect(await screen.findByTestId('lesson-moment')).toBeTruthy();
+    seen(['Lesson 3.2 complete.', '2 of 3 done', 'Next: Stairs without fear']);
     expect(screen.queryByText('Mark as complete')).toBeNull();
     expect(HapticService.success).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByTestId('lesson-moment-next'));
+    // Next takes this lesson's place, so Back from 3.3 still returns to Week 3.
+    expect(mockNav.dispatch).toHaveBeenCalledWith({ type: 'REPLACE', payload: { name: 'CourseLesson', params: { id: 'k1', lesson: 'l33' } } });
+    expect(mockNav.navigate).not.toHaveBeenCalled();
+  });
+
+  it('the week\'s last lesson ends on the count with no Next; a done lesson opens on the c06 footer, without the button', async () => {
+    get.mockImplementation(((url: string) => ok(url === '/v1/client/courses' ? [COURSE] : {
+      ...COURSE, modules: COURSE.modules.map((m) => (m.id === 'm3' ? { ...m, lessons: m.lessons.map((l) => ({ ...l, done: l.id !== 'l32' })) } : m)),
+    })) as never);
+    const view = await show(CourseLessonScreen);
+    await fireEvent.press(await screen.findByText('Mark as complete'));
+    expect(await screen.findByText('Lesson 3.2 complete.')).toBeTruthy();
+    expect(screen.getByText('3 of 3 done')).toBeTruthy();
+    expect(screen.queryByTestId('lesson-moment-next')).toBeNull();
+    await view.unmount();
+    mockParams = { id: 'k1', lesson: 'l11' };
+    jest.mocked(HapticService.success).mockClear();
+    await show(CourseLessonScreen);
+    expect(await screen.findByText('Lesson 1.1 complete.')).toBeTruthy();
+    expect(screen.getByText('1 of 1 done')).toBeTruthy();
+    expect(screen.queryByText('Mark as complete')).toBeNull();
+    expect(screen.queryByTestId('lesson-moment-next')).toBeNull();
+    expect(HapticService.success).not.toHaveBeenCalled();
   });
 
   it('a failed save keeps the button with the sentence above it', async () => {
