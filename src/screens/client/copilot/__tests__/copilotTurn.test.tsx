@@ -11,7 +11,8 @@ let mockNeedsCoach = false;
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn() } }));
 jest.mock('../../../../api/romanApi', () => {
   class RomanApiError extends Error {
-    constructor(public kind: string, message: string) { super(message); }
+    readonly kind: string;
+    constructor(mockKind: string, message: string) { super(message); this.kind = mockKind; }
   }
   return { ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError, openOrResumeSession: jest.fn(), sendMessage: jest.fn() };
 });
@@ -94,7 +95,7 @@ test('an older server (404, no copilot field) shows the plain Roman reply; a sen
   expect(s.queryByText('From your data')).toBeNull();
   expect(s.queryByTestId('copilot-week')).toBeNull();
   send.mockResolvedValueOnce({ text: 'Sent.', messageId: 'm3', interrupted: false, copilot: { sources: [], suggestion: { ...SUGGESTED, status: 'pending', sent_at: '2026-10-21T21:34:00Z' } } } as never);
-  fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'Can I move Thursday?');
+  await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'Can I move Thursday?'));
   await act(async () => fireEvent.press(s.getByLabelText('Send message')));
   expect(s.getByText('Awaiting coach approval')).toBeTruthy();
   expect(s.queryByText('Send to Alex')).toBeNull();
@@ -112,7 +113,7 @@ test('a failed turn keeps the question and Try again asks it once more; no coach
   expect(send).toHaveBeenNthCalledWith(2, 'sess-1', 'Explain my targets', { copilot: true });
   expect(s.getByText('Here it is.')).toBeTruthy();
   send.mockRejectedValueOnce(new RomanApiError('requiresCoach', 'no coach'));
-  fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'And next week?');
+  await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'And next week?'));
   await act(async () => fireEvent.press(s.getByLabelText('Send message')));
   expect(s.getByText('Roman works with a coach')).toBeTruthy();
   await s.unmount();
