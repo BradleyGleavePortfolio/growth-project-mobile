@@ -26,7 +26,7 @@
  * silent failure and never a fabricated success that would hide a real outage.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -34,12 +34,14 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import axios from 'axios';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AiRefusalNotice from '../../../components/ai/AiRefusalNotice';
 import { aiRefusalOf } from '../../../lib/ai/aiRefusal';
@@ -460,6 +462,8 @@ function MessageDraftReviewSheet({
   } | null>(null);
 
   const approve = useApproveDraft();
+  // As the shared Screen: the safe-area context, or no inset outside a provider.
+  const topInset = useContext(SafeAreaInsetsContext)?.top ?? 0;
   // Exact comparison, never trimmed: the server refuses an `approve` whose
   // text is not Roman's stored suggestion.
   const edited = body !== original;
@@ -506,7 +510,7 @@ function MessageDraftReviewSheet({
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
-      {/* The sheet rises above the keyboard so the draft and Approve stay in view (as LogPlannedMealButton). */}
+      {/* The sheet rises above the keyboard (as LogPlannedMealButton); the backdrop behind it still closes. */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.scrim} testID="coach-insight-keyboard-avoider">
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -514,29 +518,37 @@ function MessageDraftReviewSheet({
           accessibilityLabel="Dismiss the review sheet"
           onPress={onClose}
         />
-        <Pressable style={styles.sheet} onPress={() => {}}>
+        {/* Capped below the status bar: the draft scrolls, Approve / Edit / Dismiss stay pinned above the keyboard. */}
+        <View style={[styles.sheet, { marginTop: topInset + spacing.md }]} testID="coach-insight-sheet">
           <View style={styles.grabber} accessibilityElementsHidden />
-          <Text style={styles.sheetTitle} accessibilityRole="header">
-            Review message
-          </Text>
-          <Text style={styles.secondary}>
-            Edit if you like — nothing sends until you approve.
-          </Text>
+          <ScrollView
+            style={styles.sheetBody}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            testID="coach-insight-sheet-body"
+          >
+            <Text style={styles.sheetTitle} accessibilityRole="header">
+              Review message
+            </Text>
+            <Text style={styles.secondary}>
+              Edit if you like — nothing sends until you approve.
+            </Text>
 
-          <TextInput
-            style={styles.input}
-            value={body}
-            onChangeText={setBody}
-            multiline
-            maxLength={DRAFT_MAX}
-            accessibilityLabel="Editable message draft"
-            testID="coach-insight-draft-input"
-            placeholder="Message to your client"
-            placeholderTextColor={colors.stone}
-          />
-          <Text style={styles.charCount}>
-            {body.length}/{DRAFT_MAX}
-          </Text>
+            <TextInput
+              style={styles.input}
+              value={body}
+              onChangeText={setBody}
+              multiline
+              maxLength={DRAFT_MAX}
+              accessibilityLabel="Editable message draft"
+              testID="coach-insight-draft-input"
+              placeholder="Message to your client"
+              placeholderTextColor={colors.stone}
+            />
+            <Text style={styles.charCount}>
+              {body.length}/{DRAFT_MAX}
+            </Text>
+          </ScrollView>
 
           {errorCopy != null && (
             <View style={styles.sheetErrorRow}>
@@ -605,7 +617,7 @@ function MessageDraftReviewSheet({
           >
             <Text style={styles.ghostBtnText}>Dismiss</Text>
           </Pressable>
-        </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -730,6 +742,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     paddingBottom: spacing['2xl'],
+    flexShrink: 1,
+  },
+  sheetBody: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   grabber: {
     alignSelf: 'center',
@@ -751,6 +768,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
     minHeight: 96,
+    maxHeight: 160, // a long draft scrolls inside the field instead of pushing the sheet off screen
     textAlignVertical: 'top',
     marginTop: spacing.md,
   },
