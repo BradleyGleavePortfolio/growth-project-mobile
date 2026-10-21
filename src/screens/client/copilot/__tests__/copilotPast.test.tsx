@@ -33,8 +33,8 @@ const PAGE1 = { total: 186, since: '2025-10-02T09:00:00Z', next_cursor: 'c2', it
 ] };
 const PAGE2 = { total: 186, since: PAGE1.since, next_cursor: null, items: [Q('m9', 'How was my week', '2026-08-23T09:00:00Z')] };
 const route = (pages: unknown[], other: unknown = { data: { week: null, suggestions: [] } }) =>
-  get.mockImplementation(async (url: string, cfg?: { params?: { cursor?: string } }) =>
-    (url === COPILOT_PATHS.questions ? { data: pages[cfg?.params?.cursor ? 1 : 0] } : other) as never);
+  get.mockImplementation((async (url: string, cfg?: { params?: { cursor?: string } }) =>
+    (url === COPILOT_PATHS.questions ? { data: pages[cfg?.params?.cursor ? 1 : 0] } : other)) as never);
 
 beforeEach(() => { jest.resetAllMocks(); mockParams = undefined; });
 
