@@ -565,7 +565,7 @@ it.each(ENTRIES.slice(1).flatMap(([probe, home]) => DRAFTS.map(([name, left, con
 // COACH-CHAT-KEEP (LO-W2M C1 on m#840): a reply typed and not sent stays with its own client's chat when the chat
 // closes without asking (Back, a message push or tgp://messages opening the inbox), and is back in the box when that
 // chat opens again. Never in another client's chat; sending, Discard or a sign-in or sign-out removes it.
-const box = (view: ReturnType<typeof render>) => view.getByLabelText('Message text').props.value;
+const box = (view: Awaited<ReturnType<typeof render>>) => view.getByLabelText('Message text').props.value;
 const openChat = (params: object) => act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params, initial: false }));
 const pushTap = () => {
   attachPushNavigator(ref);
