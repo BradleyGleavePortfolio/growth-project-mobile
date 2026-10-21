@@ -164,13 +164,22 @@ describe('M4a: iOS privacy manifest', () => {
     ['EmailsOrTextMessages', ['AppFunctionality'], 'src/api/messagesApi.ts', "api.post('/messages', {"],
     ['PhotosorVideos', ['AppFunctionality'], 'src/api/coachMediaApi.ts', 'uploadAsync(url, file.uri'],
     ['OtherUserContent', ['AppFunctionality'], 'src/api/communityWinsApi.ts', "api.post<unknown>('/community/wins'"],
+    // Voice notes (community and coach DMs) are stored for playback; declared whether or not the voice flag is on.
+    ['AudioData', ['AppFunctionality'], 'src/api/communityVoiceApi.ts', '/voice-notes/upload-url'],
     ['CustomerSupport', ['AppFunctionality'], 'src/services/support/crisp.service.ts', 'export function openSupportChat'],
     ['CrashData', ['AppFunctionality'], 'src/services/sentry.ts', 'enableNative: true'],
     ['PerformanceData', ['AppFunctionality'], 'src/services/sentry.ts', 'tracesSampleRate:'],
     ['ProductInteraction', ['Analytics'], 'src/lib/analytics.ts', 'getClient()?.capture(event'],
+    // PostHog works out an approximate location from the IP of each event; no location permission.
+    ['CoarseLocation', ['Analytics'], 'src/lib/analytics.ts', '_client = new PostHog(key, {'],
     // Pregnancy or childbirth answer in the consultation (on in production, eas.json).
     ['SensitiveInfo', ['AppFunctionality'], 'src/lib/consultation/definitions.ts', 'Are you currently pregnant, or have you given birth in the last 6 months?'],
     ['PurchaseHistory', ['AppFunctionality'], 'src/lib/packagePayment.ts', 'export const PAYMENT_INTENT_PATH = "/v1/checkout/payment-intent"'],
+    // The card is typed into the in-app Stripe sheet and TGP keeps its brand, last four and expiry
+    // (coach payout accounts: bank name and last four), so the payment-service exemption does not apply.
+    ['PaymentInfo', ['AppFunctionality'], 'src/entitlements/dunning/updateCard.ts', 'setupIntentClientSecret: setup.setup_intent_client_secret'],
+    // A coach's payout amounts and status (their income) are kept and shown in Money.
+    ['OtherFinancialInfo', ['AppFunctionality'], 'src/api/coachMoneyApi.ts', 'api.get("/coach/connect/payouts"'],
   ];
 
   test('collected data types match the code that collects them, linked to the account, never tracking', () => {
