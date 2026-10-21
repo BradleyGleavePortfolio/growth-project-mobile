@@ -233,14 +233,16 @@ export async function readRomanConsent(
  * FIX-850-R1 B1: the copies a new agreement (Allow, memory on, memory off) is made in: the ones the server served for
  * `ask` (its memory offer, else its current copies), within the copies that ask names (Health-notes v12 / v10 or
  * v13 / v11; crisis_alert v8 / v9 or v6 / v7; else v6 / v7). Never rebuilt from the phone's crisis flag, which only
- * picks when the answer names none of them.
+ * picks when the answer names none of them. A live grant's copies are its own (B-A, b#1047), so outside the
+ * Health-notes ask they name nothing new.
  */
 export function offeredFamilyOf(status: AiConsentStatusResponse | null | undefined, ask: AiConsentAsk): RomanCopyFamily {
   const fallback = romanFamily(ask.coachFree, !!ask.crisis, !!ask.healthNotes);
   if (!status || ask.coachFree) return fallback;
   const named = ask.healthNotes ? [HEALTH_CRISIS_FAMILY, HEALTH_FAMILY] : ask.crisis ? [CRISIS_FAMILY, COACHED_FAMILY] : [COACHED_FAMILY];
   const offer = (status.memory_copy ?? status.upgrade)?.version;
-  return named.find((f) => f.memoryVersion === offer) ?? named.find((f) => f === romanFamilyOf(status)) ?? fallback;
+  const own = !status.granted || ask.healthNotes ? named.find((f) => f === romanFamilyOf(status)) : undefined;
+  return named.find((f) => f.memoryVersion === offer) ?? own ?? fallback;
 }
 
 /** A well-formed memory copy of `family` with its pinned sha256 and this build's box 2 label, else null. */

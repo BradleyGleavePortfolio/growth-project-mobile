@@ -219,12 +219,15 @@ describe('CONSENT-SETTINGS: Settings > Roman and AI makes every choice in what t
       const srv = server(on, held, { old, memoryOn });
       const today = TODAY(flag === true);
       // The copies the server serves for each ask: Health-notes by its switch; today's crisis_alert as the server
-      // answers it (asked only while the flag reads on: its offer, else its copies), safety_exception v6 / v7.
+      // answers it (asked only while the flag reads on: its offer, else its copies), safety_exception v6 / v7. A live
+      // grant's copies are its own, so with no offer the phone keeps the copies it asked for (B-A, b#1047).
       const servedFamily = (h: boolean) => {
         if (h) return FAMILIES[on ? 'health_crisis' : 'health'];
         const answer = srv.raw(variantOf(today));
+        if (flag !== true) return FAMILIES.coached;
+        if (answer.granted && !answer.memory_copy) return FAMILIES.crisis;
         const answered = familyOf(answer.memory_copy?.version ?? answer.current_version); // its offer, else its copies
-        return FAMILIES[flag === true && (answered === 'crisis' || answered === 'coached') ? answered : 'coached'];
+        return FAMILIES[answered === 'crisis' || answered === 'coached' ? answered : 'coached'];
       };
       const servesNow = () => servesHealthNotes(parseStatus(srv.raw('health_notes')) as AiConsentStatusResponse);
       let served = health;
