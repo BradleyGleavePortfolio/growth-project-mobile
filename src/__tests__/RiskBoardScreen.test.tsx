@@ -237,6 +237,7 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
     });
     const { findByText, getAllByText } = await render(<RiskBoardScreen />);
     expect(await findByText('Alex Trent')).toBeTruthy();
+    expect((await findByText('Alex Trent')).props.numberOfLines).toBe(2); // the name wraps at large text, never an ellipsis
     expect(await findByText('alex@example.com')).toBeTruthy();
     // Coach sees the uppercased bucket label (not a numeric percentage).
     // 'Red' appears twice: once in the filter chip row and once in the data row.

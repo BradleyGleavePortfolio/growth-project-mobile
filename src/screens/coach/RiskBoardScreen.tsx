@@ -183,7 +183,7 @@ export default function RiskBoardScreen() {
     >
       <RiskDot bucket={item.bucket} size={12} />
       <View style={styles.rowBody}>
-        <Text style={styles.rowName} numberOfLines={1}>
+        <Text style={styles.rowName} numberOfLines={2}>
           {item.name}
         </Text>
         <Text style={styles.rowEmail} numberOfLines={1}>
