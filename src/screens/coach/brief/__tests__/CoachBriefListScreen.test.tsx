@@ -75,11 +75,12 @@ describe('CoachBriefListScreen', () => {
   });
 
   it('shows the detail, not "Client", for a client with no name', async () => {
-    const { getByText, queryByText } = await render(
+    const { getByText, getAllByText, queryByText } = await render(
       <CoachBriefListScreen route={{ params: { kind: 'checkins', items: [{ type: 'checkin_missing', client_id: 'c-1', client_name: 'Client', detail: 'Has not checked in today', priority: 3 }] } }} />,
     );
     expect(getByText('Check-ins')).toBeTruthy();
-    expect(getByText('Has not checked in today')).toBeTruthy();
+    // The group header and the nameless row both read the detail.
+    expect(getAllByText('Has not checked in today')).toHaveLength(2);
     expect(queryByText('Client')).toBeNull();
   });
 
@@ -94,5 +95,48 @@ describe('CoachBriefListScreen', () => {
     expect(getByTestId('brief-list-empty')).toBeTruthy();
     expect(getByText('Nothing needs you right now.')).toBeTruthy();
     expect(getByTestId('brief-list-top-back')).toBeTruthy();
+  });
+
+  // ROMAN-EXTRAS-M: grouped check-ins and new clients, ten rows a group at a time.
+  it('groups check-ins under their header with its count and shows ten rows a group, then Show more', async () => {
+    const item = (type: string, n: number, detail: string): CoachBriefActionItem => ({
+      type, client_id: `${type}-${n}`, client_name: `Name${String(n).padStart(2, '0')} Lee`, detail, priority: 2,
+    });
+    const items = [
+      ...Array.from({ length: 50 }, (_, n) => item('checkin_review', n, 'Check-in needs review')),
+      ...Array.from({ length: 23 }, (_, n) => item('checkin_missing', n, 'Has not checked in today')),
+    ];
+    const s = await render(<CoachBriefListScreen route={{ params: { kind: 'checkins', items } }} />);
+    const heads = s.getAllByRole('header').map((h) => h.props.accessibilityLabel).filter(Boolean);
+    expect(heads).toEqual(['Check-in needs review, 50', 'Has not checked in today, 23']);
+    const rows = (type: string) => s.queryAllByTestId(new RegExp(`^brief-list-row-${type}-`));
+    expect(rows('checkin_review')).toHaveLength(10);
+    expect(rows('checkin_missing')).toHaveLength(10);
+    expect(s.getByText('Name00 Lee')).toBeTruthy();
+    expect(rows('checkin_review')[0].props.accessibilityLabel).toBe('Name00 Lee');
+    await fireEvent.press(s.getByTestId('brief-list-more-Check-in needs review'));
+    expect(rows('checkin_review')).toHaveLength(20);
+    expect(rows('checkin_missing')).toHaveLength(10);
+    await fireEvent.press(s.getByTestId('brief-list-more-Has not checked in today'));
+    await fireEvent.press(s.getByTestId('brief-list-more-Has not checked in today'));
+    expect(rows('checkin_missing')).toHaveLength(23);
+    expect(s.queryByTestId('brief-list-more-Has not checked in today')).toBeNull();
+  });
+
+  it('lists new clients by the day they joined; each opens the chat to say hello', async () => {
+    const joined = (n: number, detail: string): CoachBriefActionItem => ({
+      type: 'client_joined', client_id: `j-${n}`, client_name: `New${n} Park`, detail, priority: 1,
+    });
+    const s = await render(
+      <CoachBriefListScreen route={{ params: { kind: 'welcome', items: [joined(1, 'Joined today'), joined(2, 'Joined yesterday')] } }} />,
+    );
+    expect(s.getByText('New clients')).toBeTruthy();
+    expect(s.getAllByRole('header').map((h) => h.props.accessibilityLabel).filter(Boolean)).toEqual(['Joined today, 1', 'Joined yesterday, 1']);
+    await fireEvent.press(s.getByTestId('brief-list-row-j-2'));
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', {
+      screen: 'ClientMessages',
+      params: { clientId: 'j-2', clientName: 'New2 Park' },
+      initial: false,
+    });
   });
 });
