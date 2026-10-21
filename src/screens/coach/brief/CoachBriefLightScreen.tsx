@@ -118,8 +118,10 @@ export default function CoachBriefLightScreen() {
   const [revealed, setRevealed] = useState(false);
   const [fit, setFit] = useState({ view: 0, content: 0 });
   const [openKind, setOpenKind] = useState<BriefKind | null>(null);
+  // While a fold is open the words keep Roman's greeting and the faded top of the next line; the rows scroll below.
   const [keep, setKeep] = useState(0);
   const rowsRef = useRef<ScrollView>(null);
+  const rowsView = useRef(0);
   const mounted = useRef(true);
   const markedRead = useRef<string | null>(null);
   const waited = useRef(false);
@@ -305,6 +307,7 @@ export default function CoachBriefLightScreen() {
       words = '';
       rows = [way('Continue')];
   }
+  const folded = rows.some((r) => r.fold?.open);
   const paras = [greeting, words, actions.length > 0 ? 'Where would you like to start?' : ''].filter(Boolean);
   const dots = state.kind === 'loading' || (state.kind === 'preparing' && state.polling);
   const rise = (start: number, dy: number, dur = 250) => {
@@ -330,7 +333,7 @@ export default function CoachBriefLightScreen() {
       <BriefField lit={t.interpolate({ inputRange: [0, 300], outputRange: [0, 1], extrapolate: 'clamp' })} still={still} />
       <Animated.View style={[styles.fill, { opacity: fade }]}>
         <ScrollView
-          style={[styles.words, openKind && keep ? { minHeight: keep } : null]}
+          style={[styles.words, folded && keep ? { height: Math.min(keep, fit.content || keep), flexShrink: 0 } : null]}
           contentContainerStyle={{ paddingTop: insets.top + (wide ? 60 : 40), paddingBottom: 8, paddingHorizontal: gutter }}
           showsVerticalScrollIndicator={false}
           onLayout={(e) => setFit((f) => ({ ...f, view: e.nativeEvent.layout.height }))}
@@ -365,7 +368,7 @@ export default function CoachBriefLightScreen() {
             <Animated.View
               key={`${i}-${p.slice(0, 12)}`}
               style={[{ marginTop: i === 0 ? 24 : 14 }, rise(300 + i * step, 4)]}
-              onLayout={i === 0 ? (e) => setKeep(e.nativeEvent.layout.y + e.nativeEvent.layout.height + 8) : undefined}
+              onLayout={i === 0 ? (e) => setKeep(e.nativeEvent.layout.y + e.nativeEvent.layout.height + 40) : undefined}
             >
               <Text
                 ref={i === 0 ? greetingRef : undefined}
@@ -395,12 +398,13 @@ export default function CoachBriefLightScreen() {
           </Svg>
         ) : null}
         <Animated.View
-          style={[styles.rows, openKind ? styles.rowsOpen : null, rise(1000, 8, 300)]}
+          style={[styles.rows, folded ? styles.rowsOpen : null, rise(1000, 8, 300)]}
           pointerEvents={revealed ? 'auto' : 'none'}
         >
           <ScrollView
             ref={rowsRef}
             style={styles.rowsScroll}
+            onLayout={(e) => (rowsView.current = e.nativeEvent.layout.height)}
             contentContainerStyle={{ gap: 8, paddingBottom: Math.max(insets.bottom, 16) + 16, paddingHorizontal: gutter }}
             showsVerticalScrollIndicator={false}
           >
@@ -438,7 +442,11 @@ export default function CoachBriefLightScreen() {
                 <View
                   key={row.key}
                   style={styles.fold}
-                  onLayout={(e) => rowsRef.current?.scrollTo({ y: e.nativeEvent.layout.y, animated: !still })}
+                  onLayout={({ nativeEvent: { layout: l } }) => {
+                    // Bring the whole fold into view, its top first when it is taller than the rows area.
+                    const y = Math.max(0, Math.min(l.y, l.y + l.height + 8 - rowsView.current));
+                    rowsRef.current?.scrollTo({ y, animated: !still });
+                  }}
                   testID={`brief-fold-${kind}`}
                 >
                   {header}
@@ -527,7 +535,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   pressed: { backgroundColor: 'rgba(8,14,10,0.98)' },
-  out: { backgroundColor: 'transparent', borderColor: 'rgba(251,247,240,0.16)' },
+  out: { backgroundColor: 'rgba(16,30,21,0.6)', borderColor: 'rgba(251,247,240,0.16)' },
   center: { textAlign: 'center' },
   inFold: { backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0 },
   fold: {

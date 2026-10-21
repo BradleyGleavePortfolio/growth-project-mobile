@@ -416,7 +416,7 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
             ) : (
               <>
                 {milestone ? (
-                  <FadeInView duration={300} style={streakStyles.card}>
+                  <FadeInView duration={300} style={{ ...streakStyles.card, backgroundColor: sc.bgSurface }}>
                     <View style={streakStyles.row} accessibilityLiveRegion="polite" testID="checkin-streak">
                       <RomanAvatar crop={milestone === 3 ? 'neutral' : 'smile'} size={40} />
                       <Text style={[streakStyles.line, { color: sc.textPrimary }]}>
@@ -494,14 +494,8 @@ function streakMilestone(row: unknown): RomanStreakTier | null {
 }
 
 const streakStyles = StyleSheet.create({
-  card: {
-    padding: 16,
-    marginBottom: 16,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    backgroundColor: `${forestPop.leaf}24`,
-    borderColor: `${forestPop.leaf}66`,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  // A leaf wash over the surface colour (the Style A boards' streak card), with a leaf edge.
+  card: { marginBottom: 16, borderRadius: radius.card, borderWidth: 1, borderColor: `${forestPop.leaf}66`, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: `${forestPop.leaf}24` },
   line: { flex: 1, fontFamily: 'CormorantGaramond_400Regular', fontSize: 21, lineHeight: 27 },
 });
