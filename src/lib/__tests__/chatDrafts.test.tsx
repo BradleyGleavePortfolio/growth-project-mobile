@@ -2,7 +2,9 @@
  * CHAT-DISCARD (owner 10-21, op 1): half-typed chat text is kept on the device per signed-in user and per chat, and a
  * failed send keeps its key with its text (Sol B1, m#841).
  */
-import { act, renderHook } from '@testing-library/react-native';
+import React from 'react';
+import { Text, TextInput } from 'react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockDisk = new Map<string, string>();
 jest.mock('../../storage/mmkv', () => ({
@@ -20,68 +22,80 @@ jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser 
 const { useChatDraft, CHAT_DRAFT_KEY_PREFIX } = require('../chatDrafts');
 const { authEvents } = require('../../utils/authEvents');
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+function Box({ thread, initial, failed }: { thread: string | null; initial?: string; failed?: [string, string] }) {
+  const [text, setText, sendKey] = useChatDraft(thread, initial);
+  return (
+    <>
+      <TextInput accessibilityLabel="box" value={text} onChangeText={setText} />
+      <Text testID="key">{sendKey.keyFor(text) ?? 'none'}</Text>
+      <Text testID="fail" onPress={() => failed && sendKey.keepFailed(failed[0], failed[1])}>fail</Text>
+    </>
+  );
+}
+const value = (v: { getByLabelText: (l: string) => { props: { value: string } } }) => v.getByLabelText('box').props.value;
+const diskKeys = () => [...mockDisk.keys()];
 
 beforeEach(async () => {
   mockUser = { id: 'client-1' };
   authEvents.emit('logout');
-  await flush();
+  await waitFor(() => expect(diskKeys()).toEqual([]));
   mockDisk.clear();
 });
 
 it('keeps half-typed text per chat and brings it back when that chat opens again', async () => {
-  const a = await renderHook(() => useChatDraft('client:coach'));
-  await act(async () => { a.result.current[1]('Hey, loved th'); });
-  a.unmount();
-  await flush();
-  expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:client:coach`)).toContain('Hey, loved th');
-  expect((await renderHook(() => useChatDraft('dm:w:coach-1'))).result.current[0]).toBe('');
-  expect((await renderHook(() => useChatDraft('client:coach'))).result.current[0]).toBe('Hey, loved th');
+  const a = await render(<Box thread="client:coach" />);
+  await fireEvent.changeText(a.getByLabelText('box'), 'Hey, loved th');
+  await a.unmount();
+  await waitFor(() => expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:client:coach`)).toContain('Hey, loved th'));
+  const other = await render(<Box thread="dm:w:coach-1" />);
+  expect(value(other)).toBe('');
+  await other.unmount();
+  expect(value(await render(<Box thread="client:coach" />))).toBe('Hey, loved th');
 });
 
 it('reads the device copy after the app closed (memory empty) and never shows it to another account', async () => {
   mockDisk.set(`${CHAT_DRAFT_KEY_PREFIX}client-1:roman`, JSON.stringify({ text: 'What should I eat' }));
-  const same = await renderHook(() => useChatDraft('roman'));
-  await flush();
-  expect(same.result.current[0]).toBe('What should I eat');
+  const same = await render(<Box thread="roman" />);
+  await waitFor(() => expect(value(same)).toBe('What should I eat'));
+  await same.unmount();
   mockUser = { id: 'client-2' };
-  const other = await renderHook(() => useChatDraft('roman'));
-  await flush();
-  expect(other.result.current[0]).toBe('');
+  const other = await render(<Box thread="roman" />);
+  await waitFor(() => expect(other.getByTestId('key').props.children).toBe('none'));
+  expect(value(other)).toBe('');
 });
 
-it('a failed send keeps its key with its text; sending (an empty box) drops both', async () => {
-  const a = await renderHook(() => useChatDraft('coach:client-1'));
-  await act(async () => { a.result.current[1]('see you at 6'); });
-  await act(async () => { a.result.current[2].keepFailed('see you at 6', 'key-1'); });
-  a.unmount();
-  const b = await renderHook(() => useChatDraft('coach:client-1'));
-  expect(b.result.current[2].keyFor('see you at 6')).toBe('key-1');
-  expect(b.result.current[2].keyFor('see you at 7')).toBeUndefined();
-  await act(async () => { b.result.current[1](''); });
-  await flush();
-  expect(b.result.current[2].keyFor('see you at 6')).toBeUndefined();
-  expect([...mockDisk.keys()]).toEqual([]);
+it('a failed send keeps its key with its text; an edit is a new send; an empty box (sent) drops both', async () => {
+  const a = await render(<Box thread="coach:client-1" failed={['see you at 6', 'key-1']} />);
+  await fireEvent.changeText(a.getByLabelText('box'), 'see you at 6');
+  await fireEvent.press(a.getByTestId('fail'));
+  await a.unmount();
+  const b = await render(<Box thread="coach:client-1" />);
+  expect([value(b), b.getByTestId('key').props.children]).toEqual(['see you at 6', 'key-1']);
+  await fireEvent.changeText(b.getByLabelText('box'), 'see you at 7');
+  expect(b.getByTestId('key').props.children).toBe('none');
+  await fireEvent.changeText(b.getByLabelText('box'), '');
+  await fireEvent.changeText(b.getByLabelText('box'), 'see you at 6');
+  expect(b.getByTestId('key').props.children).toBe('none');
 });
 
 it('a passed draft wins over kept text; a sign-out removes every kept text from memory and the device', async () => {
-  const a = await renderHook(() => useChatDraft('coach:client-1'));
-  await act(async () => { a.result.current[1]('old reply'); });
-  a.unmount();
-  expect((await renderHook(() => useChatDraft('coach:client-1', 'How did the week go?'))).result.current[0]).toBe('How did the week go?');
-  await act(async () => { authEvents.emit('logout'); });
-  await flush();
-  expect([...mockDisk.keys()]).toEqual([]);
-  const after = await renderHook(() => useChatDraft('coach:client-1'));
-  await flush();
-  expect(after.result.current[0]).toBe('');
+  const a = await render(<Box thread="coach:client-1" />);
+  await fireEvent.changeText(a.getByLabelText('box'), 'old reply');
+  await a.unmount();
+  const b = await render(<Box thread="coach:client-1" initial="How did the week go?" />);
+  expect(value(b)).toBe('How did the week go?');
+  await b.unmount();
+  await waitFor(() => expect(diskKeys()).toHaveLength(1));
+  authEvents.emit('logout');
+  await waitFor(() => expect(diskKeys()).toEqual([]));
+  expect(value(await render(<Box thread="coach:client-1" />))).toBe('');
 });
 
 it('without a chat (null) the box keeps nothing', async () => {
-  const a = await renderHook(() => useChatDraft(null));
-  await act(async () => { a.result.current[1]('a comment'); });
-  expect(a.result.current[0]).toBe('a comment');
-  a.unmount();
-  expect((await renderHook(() => useChatDraft(null))).result.current[0]).toBe('');
-  expect([...mockDisk.keys()]).toEqual([]);
+  const a = await render(<Box thread={null} />);
+  await fireEvent.changeText(a.getByLabelText('box'), 'a comment');
+  expect(value(a)).toBe('a comment');
+  await a.unmount();
+  expect(value(await render(<Box thread={null} />))).toBe('');
+  expect(diskKeys()).toEqual([]);
 });

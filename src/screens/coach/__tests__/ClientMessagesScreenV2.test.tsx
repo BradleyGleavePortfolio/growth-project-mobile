@@ -98,7 +98,6 @@ beforeEach(() => {
   mockLegacySend.mockImplementation(async (_id: string, body: string) => ({
     data: { id: 'legacy-new', sender_id: 'coach-1', body, created_at: new Date().toISOString() },
   }));
-  require('../../../utils/authEvents').authEvents.emit('logout'); // no kept chat text carries between tests
 });
 
 const sentRow = (body: Record<string, unknown>) => ({
@@ -259,17 +258,19 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
     await fireEvent.changeText(opened.getByLabelText('Message text'), 'see you at 6');
     await fireEvent.press(opened.getByLabelText('Send message'));
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Message not sent', expect.stringContaining('connection')));
-    opened.unmount(); // Back
+    await opened.unmount(); // Back
 
     const again = await render(<ClientMessagesScreen />); // the chat opens again
     await again.findByLabelText(/Message: from the client/);
     expect(again.getByLabelText('Message text').props.value).toBe('see you at 6');
     await fireEvent.press(again.getByLabelText('Send message'));
+    await waitFor(() => expect(postMock.mock.calls.filter(([u]) => u === BASE)).toHaveLength(2));
+    expect(alertSpy).toHaveBeenCalledTimes(1);
     await again.findByLabelText(/Message: see you at 6/);
     const keys = postMock.mock.calls.filter(([u]) => u === BASE).map(([, b]) => (b as { client_message_id: string }).client_message_id);
     expect([keys.length, new Set(keys).size, accepted.size]).toEqual([2, 1, 1]); // one message on the server
     expect(again.getByLabelText('Message text').props.value).toBe('');
-    again.unmount();
+    await again.unmount();
     const after = await render(<ClientMessagesScreen />); // sent: nothing is kept
     await after.findByLabelText(/Message: from the client/);
     expect(after.getByLabelText('Message text').props.value).toBe('');
@@ -292,6 +293,7 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
     await waitFor(() => expect(postMock.mock.calls.filter(([url]) => url === BASE)).toHaveLength(2));
     const keys = postMock.mock.calls.filter(([url]) => url === BASE).map(([, b]) => (b as { client_message_id: string }).client_message_id);
     expect(new Set(keys).size).toBe(2);
+    await fireEvent.changeText(u.getByLabelText('Message text'), ''); // nothing kept for the next test
     alertSpy.mockRestore();
   });
 
