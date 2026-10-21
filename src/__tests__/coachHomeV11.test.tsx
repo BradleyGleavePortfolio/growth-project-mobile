@@ -8,12 +8,14 @@ import * as path from 'path';
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
-  parseHomeDay, ringSpecs, ringsCaption, winLine, winWindow, winsHeadline, type HomeWin,
+  parseHomeDay, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin,
 } from '../screens/coach/home-v11/homeDay';
 import { needsAndSteady } from '../screens/coach/home-v11/useCoachHomeV11';
 
 const [mockNavigate, mockGet, mockPost, mockUnreadCounts, mockApprove, mockReject, mockUnread, mockDrafts] = Array.from({ length: 8 }, () => jest.fn());
 const mockFocus = { current: true };
+const mockWindow = { width: 390, height: 844, scale: 3, fontScale: 1 };
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => mockWindow }));
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({ navigate: mockNavigate }),
@@ -104,6 +106,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   Object.assign(mockFlags, { coachHomeV11: true, coachTabsV2: true, romanChat: true });
   mockFocus.current = true;
+  mockWindow.fontScale = 1;
   mockUnread.mockResolvedValue(2);
   mockGet.mockResolvedValue({ data: { ...overview(30), home: home([win(1), win(2), win(3), win(4)], 12) } });
   Object.assign(mockStore, { filterStatus: 'active', loadError: null });
@@ -139,12 +142,12 @@ const label = (v: View, id: string) => v.getByTestId(id).props.accessibilityLabe
 const press = (v: View, ...ids: string[]) => ids.reduce((p, id) => p.then(() => fireEvent.press(v.getByTestId(id))), Promise.resolve());
 
 describe('coach Home, flag on, with home (b#1123)', () => {
-  it('asks for include=home and draws the wins hero, three wins, tiles, alerts and rings', async () => {
+  it('asks for include=home and draws the wins hero with one win, tiles, alerts and rings', async () => {
     const v = await renderHome();
     expect(mockGet).toHaveBeenCalledWith('/coach/command-center/overview', { params: { include: 'home' } });
     expect(v.getByText('12')).toBeTruthy();
     expect(v.getByText('wins this week')).toBeTruthy();
-    expect(['w1', 'w2', 'w3', 'w4'].map((w) => !!v.queryByTestId(`home-win-${w}`))).toEqual([true, true, true, false]);
+    expect(['w1', 'w2', 'w3', 'w4'].map((w) => !!v.queryByTestId(`home-win-${w}`))).toEqual([true, false, false, false]);
     expect(Object.fromEntries(['home-tile-active', 'home-tile-checkins', 'home-tile-stayed', 'home-alerts', 'home-ring-check_ins', 'home-ring-replies', 'home-ring-reach_outs', 'home-wins-all'].map((id) => [id, label(v, id)]))).toEqual({
       'home-tile-active': '21 of 30 active today', 'home-tile-checkins': '82% check-ins · last 7 days', 'home-tile-stayed': '95% stayed · this month',
       'home-alerts': 'Open alerts, 3', 'home-ring-check_ins': 'Check-ins, 5 of 9', 'home-ring-replies': 'Replies, 1 of 1',
@@ -175,6 +178,11 @@ describe('coach Home, flag on, with home (b#1123)', () => {
     await press(v, id);
     expect(mockNavigate).toHaveBeenCalledWith(stack, params);
   });
+  it('drops the win line at large text and puts Approve over the kinds, on the first screen (LS B2)', async () => {
+    mockWindow.fontScale = 1.3;
+    const tree = JSON.stringify((await renderHome()).toJSON());
+    expect([tree.includes('home-win-w1'), tree.indexOf('home-drafts') < tree.indexOf('Workouts'), tree.includes('12 wins this week. See all')]).toEqual([false, true, true]);
+  });
   it("opens alerts in Actions with the tab row back, and labels Roman's drafts", async () => {
     const v = await renderHome();
     expect(label(v, 'home-drafts')).toBe("Approve Roman's drafts, 3");
@@ -187,7 +195,7 @@ describe('coach Home, flag on, with home (b#1123)', () => {
     let answer: (v: unknown) => void = () => undefined;
     mockPost.mockReturnValueOnce(new Promise((r) => { answer = r; }));
     const v = await renderHome();
-    await press(v, 'home-win-w1');
+    await press(v, 'home-wins-all', 'home-list-w1');
     expect(v.getByText('Ask Roman to write to Client1?')).toBeTruthy();
     expect(mockPost).not.toHaveBeenCalled();
     await press(v, 'home-draft-ask');
@@ -205,7 +213,7 @@ describe('coach Home, flag on, with home (b#1123)', () => {
   });
   it('turns a written draft down on Not now, so nothing waits to be sent', async () => {
     const v = await renderHome();
-    await press(v, 'home-win-w2', 'home-draft-ask');
+    await press(v, 'home-wins-all', 'home-list-w2', 'home-draft-ask');
     await waitFor(() => expect(v.getByTestId('home-draft-text')).toBeTruthy());
     await press(v, 'home-draft-close');
     expect(mockReject).toHaveBeenCalledWith('dr-1');
@@ -215,19 +223,21 @@ describe('coach Home, flag on, with home (b#1123)', () => {
   it('says nothing was sent when Roman is off, and offers no Send', async () => {
     mockPost.mockResolvedValue({ data: { enabled: false, provider: 'stub', reply: '', approval: { required: false, draft_id: null } } });
     const v = await renderHome();
-    await press(v, 'home-win-w1', 'home-draft-ask');
+    await press(v, 'home-wins-all', 'home-list-w1', 'home-draft-ask');
     expect(v.getByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy();
     expect(v.queryByTestId('home-draft-send')).toBeNull();
   });
-  it('opens the wins list from the headline with every win, each ask-first (B3)', async () => {
+  it("opens the wins list from the headline, and a win's ask-first draft in that same sheet, back to the list (B3, LO B1)", async () => {
     const v = await renderHome();
     await press(v, 'home-wins-all');
     expect(v.getByText('Wins this week')).toBeTruthy();
     expect(['w1', 'w2', 'w3', 'w4'].map((w) => label(v, `home-list-${w}`))).toEqual([1, 2, 3, 4].map((n) => `Client${n} hit a 7-day check-in streak. Ask Roman to congratulate Client${n}`));
     await press(v, 'home-list-w4');
+    expect([!!v.getByText('Ask Roman to write to Client4?'), v.getAllByLabelText('Close').length, mockPost.mock.calls.length]).toEqual([true, 1, 0]);
+    await press(v, 'home-draft-close');
+    expect([!!v.queryByTestId('home-draft-sheet'), !!v.queryByTestId('home-list-w4')]).toEqual([false, true]);
+    await press(v, 'home-list-close');
     expect(v.queryByTestId('home-list-sheet')).toBeNull();
-    expect(v.getByText('Ask Roman to write to Client4?')).toBeTruthy();
-    expect(mockPost).not.toHaveBeenCalled();
   });
   it('lists the at-risk clients the Reach-outs ring counts, with the server reason, ask-first (B1)', async () => {
     const v = await renderHome();
@@ -239,6 +249,7 @@ describe('coach Home, flag on, with home (b#1123)', () => {
     expect(v.getByText('Ask Roman to write to Jordan?')).toBeTruthy();
     await press(v, 'home-draft-ask');
     expect(mockPost).toHaveBeenCalledWith('/ai/gateway/invoke', expect.objectContaining({ capability: 'draft.coach_message', subject_user_id: 'r1' }));
+    expect(mockPost.mock.calls[0][1].message).toMatch(/For you only, never say it to them: No check-in for 5 days\./); // LO C4
   });
   it.each([
     ['the ring has no goal', () => mockGet.mockResolvedValue({ data: { ...overview(30), home: home([win(1)], 1, 0) } })],
@@ -259,7 +270,7 @@ describe('coach Home, flag on, with home (b#1123)', () => {
     await act(async () => v.rerender(<CommandCenterScreen />));
     await waitFor(() => expect(overviewReads()).toBe(2));
     expect(mockSources.atRisk).toHaveBeenCalledTimes(2);
-    expect(mockStore.loadClients).toHaveBeenCalledTimes(3); // mount, the coach id, the return
+    expect(mockStore.loadClients).toHaveBeenCalledTimes(2); // mount and the return, not twice on mount (LO C1)
   });
 });
 
@@ -313,6 +324,19 @@ describe('coach Home at zero clients, at 1,000 and on failures', () => {
     const v = await renderHome();
     expect(['home-needs-error', 'home-drafts-error', 'home-month'].map((id) => !!v.queryByTestId(id))).toEqual([true, true, true]);
   });
+  it('says Needs you did not load when the unread counts fail, never "Nobody needs you", and keeps a good read (LS B1)', async () => {
+    mockStore.clients = [client('c3', 'Ben', 'Cole', { lastActiveOn: day(0), checkInsToReview: 0 })];
+    mockUnreadCounts.mockRejectedValueOnce(new Error('down'));
+    const v = await renderHome();
+    expect([!!v.queryByTestId('home-needs-error'), !!v.queryByText('Nobody needs you right now.'), !!v.queryByTestId('home-row-steady')]).toEqual([true, false, false]);
+    mockUnreadCounts.mockResolvedValue({ data: { total: 1, by_client: { c3: 1 } } });
+    await press(v, 'home-needs-error-retry');
+    await waitFor(() => expect(label(v, 'home-needs')).toMatch(/^Needs you, 1\. Ben Cole/));
+    mockUnreadCounts.mockRejectedValueOnce(new Error('down'));
+    for (const f of [false, true]) { mockFocus.current = f; await act(async () => v.rerender(<CommandCenterScreen />)); } // away and back
+    await waitFor(() => expect(mockUnreadCounts).toHaveBeenCalledTimes(3));
+    expect(label(v, 'home-needs')).toMatch(/^Needs you, 1\. Ben Cole/); // the failed refresh keeps the verified answer
+  });
   it('draws no Needs you count while the Clients list is on Archived', async () => {
     mockStore.filterStatus = 'archived';
     const v = await renderHome();
@@ -346,11 +370,8 @@ describe('homeDay, pure', () => {
     expect([parseHomeDay(undefined), parseHomeDay({ wins: { count: -1, items: [] } })]).toEqual([null, null]);
     expect(parseHomeDay({ wins: { count: 2, items: [] }, rings: { check_ins: { reviewed: 1 } } })?.rings).toBeNull();
   });
-  it('words the hero, moves the three-win window and captions the rings', () => {
+  it('words the hero and captions the rings', () => {
     expect(winsHeadline(1)).toEqual({ value: '1', unit: 'win this week' });
-    const ws = [win(1), win(2), win(3), win(4)];
-    expect([0, 2].map((t) => winWindow(ws, t).map((w) => w.id))).toEqual([['w1', 'w2', 'w3'], ['w3', 'w4', 'w1']]);
-    expect(winWindow(ws.slice(0, 2), 5)).toHaveLength(2);
     const zero = { reviewed: 0, submitted: 0 };
     expect([
       ringsCaption(ringSpecs({ check_ins: { reviewed: 2, submitted: 2 }, replies: { answered: 0, received: 0 }, reach_outs: { contacted: 5, goal: 5 } }), 10),

@@ -99,7 +99,8 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
       .catch((err) => { if (mine === seq.current) setMonth({ kind: isSubCoachBillingBlocked(err) ? 'blocked' : 'error' }); });
   }, [sources]);
 
-  // The roster is the shared one the Clients list reads; a failed refresh keeps what it already verified.
+  // The roster is the shared one the Clients list reads; a failed refresh keeps what it already verified. Needs you
+  // counts unread messages, so a failed unread read is a failed read too (LS B1), never "Nobody needs you".
   const loadRoster = useCallback(async (mine: number) => {
     if (!coachId) return;
     const store = useCoachStore.getState();
@@ -107,7 +108,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     const [, u] = await Promise.allSettled([store.loadClients(coachId, 'active', { silent: true }), coachApi.getUnreadCounts()]);
     if (mine !== seq.current) return;
     if (u.status === 'fulfilled') setUnread(((u.value?.data as { by_client?: UnreadByClient } | undefined)?.by_client) ?? {});
-    const failed = useCoachStore.getState().loadError !== null;
+    const failed = u.status === 'rejected' || useCoachStore.getState().loadError !== null;
     setRosterState((s) => (failed ? (s === 'ok' ? 'ok' : 'error') : 'ok'));
   }, [coachId]);
 
@@ -145,7 +146,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     mounted.current = true;
     void first.current(false);
   }, [isFocused]);
-  const rosterOnce = useRef(false);
+  const rosterOnce = useRef(!!coachId); // a coach id there at mount is in the first load (LO C1)
   useEffect(() => {
     if (!coachId || rosterOnce.current) return;
     rosterOnce.current = true;

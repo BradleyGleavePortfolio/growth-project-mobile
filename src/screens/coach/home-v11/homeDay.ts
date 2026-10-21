@@ -115,13 +115,6 @@ export function winLine(w: HomeWin): string {
   }
 }
 
-/** The three wins shown under the hero; with more than three, the window moves on by one each turn. */
-export function winWindow(items: HomeWin[], turn: number): HomeWin[] {
-  if (items.length <= 3) return items;
-  const start = ((turn % items.length) + items.length) % items.length;
-  return [0, 1, 2].map((i) => items[(start + i) % items.length]);
-}
-
 export interface RingSpec { key: 'check_ins' | 'replies' | 'reach_outs'; label: string; done: number; of: number }
 
 export function ringSpecs(r: HomeRings): RingSpec[] {

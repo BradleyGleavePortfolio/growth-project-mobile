@@ -1,11 +1,11 @@
 /**
  * The coach Home (spec #688 6295886580, Style A of planning/MOCKUP3/HOME3), behind featureFlags.coachHomeV11. Hero:
- * date, bell, gear, setup checklist until done, "{n} wins this week" (opens the wins list) with three wins, tiles,
+ * date, bell, gear, setup checklist until done, "{n} wins this week" with one win in turn (opens the wins list), tiles,
  * Open alerts, the day's rings. Page: push ask and brief, Roman, one Needs you tile, Business, Clients rows. Only real
  * numbers: a server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
  */
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
@@ -19,8 +19,8 @@ import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
 import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './HomeParts';
-import { ListSheet, RomanDraftSheet, reachOutAsk, type DraftAsk, type ListRow } from './DraftSheets';
-import { firstWord, pct, ringSpecs, ringsCaption, winLine, winWindow, winsHeadline, type HomeWin } from './homeDay';
+import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
+import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
@@ -41,7 +41,7 @@ interface Props {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Three wins at a time; with more, the window moves on every few seconds unless motion or a screen reader is off-limits. */
+/** One win at a time (LS B2); with more, the next every few seconds unless motion or a screen reader is off-limits. */
 function useWinTurn(n: number) {
   const [turn, setTurn] = useState(0);
   const [still, setStill] = useState(true);
@@ -53,7 +53,7 @@ function useWinTurn(n: number) {
     return () => { live = false; };
   }, []);
   useEffect(() => {
-    if (still || n <= 3) return undefined;
+    if (still || n <= 1) return undefined;
     const t = setInterval(() => setTurn((x) => x + 1), WIN_TURN_MS);
     return () => clearInterval(t);
   }, [still, n]);
@@ -64,6 +64,7 @@ export default function CoachHomeV11(p: Props) {
   const { colors, semanticColors: sc } = useTheme();
   const cs = useCardStyles();
   const { top, bottom } = useScreenInsets();
+  const bigText = useWindowDimensions().fontScale > 1.15; // no win line, Approve over the kinds: on the first screen (LS B2)
   const { data, reload, retryMonth, retryRoster, retryDrafts } = useCoachHomeV11(p.sources);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [list, setList] = useState<'wins' | 'reach' | null>(null);
@@ -73,7 +74,7 @@ export default function CoachHomeV11(p: Props) {
   const rosterN = formatCount(roster);
   const items = home?.wins.items ?? [];
   const turn = useWinTurn(items.length);
-  const wins = winWindow(items, turn);
+  const win = items.length > 0 ? items[turn % items.length] : undefined;
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
@@ -83,11 +84,10 @@ export default function CoachHomeV11(p: Props) {
   const askWin = (w: HomeWin) => setAsk({ clientName: w.client_name, about: `A congratulations for ${firstWord(w.client_name)}: ${winLine(w)}.`, request: w.draft });
   const winLabel = (w: HomeWin) => `${winLine(w)}. Ask Roman to congratulate ${firstWord(w.client_name)}`;
   const reach = (data.reachOuts ?? []).slice(0, REACH_ROWS);
-  const pick = (go: () => void) => () => { setList(null); go(); };
-  const rows: ListRow[] | null = list === 'wins'
-    ? items.map((w) => ({ id: w.id, title: winLine(w), label: winLabel(w), onPick: pick(() => askWin(w)) }))
+  const sheetList: SheetList | null = list === 'wins'
+    ? { title: 'Wins this week', rows: items.map((w) => ({ id: w.id, title: winLine(w), label: winLabel(w), onPick: () => askWin(w) })) }
     : list === 'reach'
-      ? reach.map((r) => ({ id: r.user_id, title: `Reach out to ${r.display_name}?`, line: r.top_factor, label: `Reach out to ${r.display_name}?`, onPick: pick(() => setAsk(reachOutAsk(r))) }))
+      ? { title: 'Reach-outs', rows: reach.map((r) => ({ id: r.user_id, title: `Reach out to ${r.display_name}?`, line: r.top_factor, label: `Reach out to ${r.display_name}?`, onPick: () => setAsk(reachOutAsk(r)) })) }
       : null;
   const tap = (go: () => void) => () => { void HapticService.softImpact(); go(); };
 
@@ -114,24 +114,18 @@ export default function CoachHomeV11(p: Props) {
     if (home) {
       const h = winsHeadline(home.wins.count);
       return (
-        <View style={s.heroBlock} testID="home-hero-wins">
-          <Pressable
-            style={({ pressed }) => [s.heroLine, pressed && s.pressed]} disabled={items.length === 0} onPress={tap(() => setList('wins'))}
-            accessibilityRole={items.length > 0 ? 'button' : 'header'} accessibilityLabel={`${h.value} ${h.unit}${items.length > 0 ? '. See all' : ''}`} testID="home-wins-all"
-          >
-            <Text style={s.heroValue}>{h.value}</Text><Text style={s.heroUnit}>{h.unit}</Text>
-            {items.length > 0 ? <Ionicons name="chevron-forward" size={22} color={forestPop.onDeepMuted} /> : null}
-          </Pressable>
-          {wins.length === 0 ? (
-            <Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>
-          ) : wins.map((w) => (
-            <Pressable key={w.id} style={({ pressed }) => [s.win, pressed && s.pressed]} onPress={() => askWin(w)} accessibilityRole="button" accessibilityLabel={winLabel(w)} testID={`home-win-${w.id}`}>
-              <View style={s.winDot} />
-              <Text style={s.winText} numberOfLines={2}>{winLine(w)}</Text>
-              <Ionicons name="chevron-forward" size={18} color={forestPop.onDeepMuted} />
-            </Pressable>
-          ))}
-        </View>
+        <Pressable
+          style={({ pressed }) => [s.heroBlock, pressed && s.pressed]} disabled={!win} onPress={tap(() => setList('wins'))} testID="home-wins-all"
+          accessibilityRole={win ? 'button' : 'header'} accessibilityLabel={`${h.value} ${h.unit}${win ? '. See all' : ''}`}
+        >
+          <View style={s.heroLine} testID="home-hero-wins">
+            <Text style={s.heroValue} maxFontSizeMultiplier={1.15}>{h.value}</Text><Text style={s.heroUnit}>{h.unit}</Text>
+            {win ? <Ionicons name="chevron-forward" size={22} color={forestPop.onDeepMuted} /> : null}
+          </View>
+          {win && bigText ? null : win ? (
+            <View style={s.win}><View style={s.winDot} /><Text style={s.winText} numberOfLines={2} testID={`home-win-${win.id}`}>{winLine(win)}</Text></View>
+          ) : <Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>}
+        </Pressable>
       );
     }
     // No `home` from this server: the overview's own figure, as the Home drew it before (no new number).
@@ -162,10 +156,10 @@ export default function CoachHomeV11(p: Props) {
         {value === null ? <Ionicons name="people-outline" size={30} color={forestPop.leaf} /> : <Text style={s.needsNum} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>}
       </View>
     );
-    if (data.rosterState === 'error' && n === 0) {
+    if (data.rosterState === 'error') {
       return <View style={cs.card}><QuietError layout="inline" message="Who needs you could not load." onRetry={retryRoster} testID="home-needs-error" /></View>;
     }
-    if (data.rosterState === 'loading' && n === 0) {
+    if (data.rosterState === 'loading') {
       return <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>;
     }
     if (o && roster === 0) {
@@ -201,6 +195,16 @@ export default function CoachHomeV11(p: Props) {
     const k = data.draftKinds;
     const chips = ([[k.workouts, 'Workout', 'Workouts'], [k.mealPlans, 'Meal plan', 'Meal plans'], [k.nudges, 'Nudge', 'Nudges']] as const)
       .filter(([c]) => c > 0).map(([c, one, many]) => [c, c === 1 ? one : many] as const);
+    const approve = n > 0 ? (
+      <Pressable
+        onPress={() => { void HapticService.mediumImpact(); p.onOpenDrafts(); }} accessibilityRole="button"
+        accessibilityLabel={`Approve Roman's drafts, ${n}`} testID="home-drafts"
+        style={({ pressed }) => [s.approve, { backgroundColor: sc.accent }, pressed && s.pressed]}
+      >
+        <Text style={[s.approveText, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>{"Approve Roman's drafts\u00a0→"}</Text>
+        <View style={s.approveBadge}><Text style={s.approveBadgeText} maxFontSizeMultiplier={1.2}>{n}</Text></View>
+      </Pressable>
+    ) : null;
     return (
       <View style={cs.card} testID="home-roman">
         <View style={s.romanHead}>
@@ -216,6 +220,7 @@ export default function CoachHomeV11(p: Props) {
         {data.draftsState === 'error' ? (
           <QuietError layout="inline" message={loadFailureMessage(data.draftsError, "Roman's drafts")} onRetry={retryDrafts} retrying={data.draftsRetrying} testID="home-drafts-error" />
         ) : null}
+        {bigText ? approve : null}
         {chips.length > 0 ? (
           <View style={s.chips}>
             {chips.map(([c, label]) => (
@@ -223,16 +228,7 @@ export default function CoachHomeV11(p: Props) {
             ))}
           </View>
         ) : null}
-        {n > 0 ? (
-          <Pressable
-            onPress={() => { void HapticService.mediumImpact(); p.onOpenDrafts(); }} accessibilityRole="button"
-            accessibilityLabel={`Approve Roman's drafts, ${n}`} testID="home-drafts"
-            style={({ pressed }) => [s.approve, { backgroundColor: sc.accent }, pressed && s.pressed]}
-          >
-            <Text style={[s.approveText, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>{"Approve Roman's drafts\u00a0→"}</Text>
-            <View style={s.approveBadge}><Text style={s.approveBadgeText} maxFontSizeMultiplier={1.2}>{n}</Text></View>
-          </Pressable>
-        ) : null}
+        {bigText ? null : approve}
         {p.onAskRoman ? (
           <Pressable style={s.askRoman} onPress={tap(p.onAskRoman)} accessibilityRole="button" accessibilityLabel="Ask Roman" testID="home-ask-roman">
             <Text style={[cs.strong, { color: sc.accentText }]}>Ask Roman</Text>
@@ -290,7 +286,7 @@ export default function CoachHomeV11(p: Props) {
         style={s.fill} contentContainerStyle={{ paddingBottom: 32 + bottom }} testID="coach-home-v11"
         refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => void reload(true)} tintColor={sc.accent} />}
       >
-        <View style={[s.hero, { paddingTop: top + 12 }]} testID="home-hero">
+        <View style={[s.hero, { paddingTop: top + 4 }]} testID="home-hero">
           <View style={s.topRow}>
             <Text style={s.date} maxFontSizeMultiplier={1.3}>{dateOverline(data.now).toUpperCase()}</Text>
             <Pressable
@@ -330,28 +326,27 @@ export default function CoachHomeV11(p: Props) {
           {clientsCard}
         </View>
       </ScrollView>
-      <ListSheet title={list === 'wins' ? 'Wins this week' : 'Reach-outs'} rows={rows} onClose={() => setList(null)} />
-      <RomanDraftSheet ask={ask} onClose={() => setAsk(null)} onSent={() => void reload(false)} />
+      <HomeSheet list={sheetList} ask={ask} onCloseList={() => setList(null)} onCloseAsk={() => setAsk(null)} onSent={() => void reload(false)} />
     </View>
   );
 }
 
 const s = StyleSheet.create({
   fill: { flex: 1 },
-  hero: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 24, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, gap: 14 },
+  hero: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 12, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, gap: 8 },
   topRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 },
   date: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, flex: 1 },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   bellBadge: { position: 'absolute', top: -2, right: -10, minWidth: 22, height: 22, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
   bellBadgeText: { ...typography.caption, fontSize: 12, lineHeight: 15, letterSpacing: 0, fontFamily: SEMI, color: forestPop.deep },
-  heroBlock: { gap: 6 },
+  heroBlock: { gap: 0 },
   heroLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  heroValue: { fontFamily: SEMI, fontSize: 56, lineHeight: 64, letterSpacing: -1, color: forestPop.onDeep },
+  heroValue: { fontFamily: SEMI, fontSize: 48, lineHeight: 56, letterSpacing: -1, color: forestPop.onDeep },
   heroUnit: { ...typography.body, fontSize: 20, lineHeight: 26, color: forestPop.onDeep, flexShrink: 1 },
   heroRight: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, marginLeft: 'auto' },
   bar: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.forest, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.leaf },
-  win: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  win: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   winDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: forestPop.leaf },
   winText: { ...typography.body, color: forestPop.onDeep, flex: 1 },
   onDeep: { ...typography.body, color: forestPop.onDeep },
@@ -359,22 +354,22 @@ const s = StyleSheet.create({
   retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: forestPop.brand400 },
   retryText: { ...typography.bodyMd, color: forestPop.onDeep },
   tiles: { flexDirection: 'row', gap: 10 },
-  dayLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.gold, marginBottom: 8 },
-  rings: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
-  page: { paddingHorizontal: layout.gutter, paddingTop: 16, gap: 14 },
+  dayLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.gold, marginBottom: 2 },
+  rings: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 2 },
+  page: { paddingHorizontal: layout.gutter, paddingTop: 12, gap: 12 },
   grow: { flex: 1, minWidth: 0 },
   bold: { fontFamily: SEMI },
   needs: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   needsBox: { width: 72, height: 72, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   needsNum: { fontFamily: SEMI, fontSize: 30, lineHeight: 36, color: forestPop.leaf },
   romanHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  chip: { minHeight: 40, borderRadius: radius.button, paddingHorizontal: 12, justifyContent: 'center' },
-  approve: { minHeight: 56, marginTop: 14, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  approveText: { ...typography.bodyMd, fontSize: 18, lineHeight: 24, flexShrink: 1, textAlign: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  chip: { minHeight: 36, borderRadius: radius.button, paddingHorizontal: 12, justifyContent: 'center' },
+  approve: { minHeight: 52, marginTop: 12, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  approveText: { ...typography.bodyMd, fontSize: 17, lineHeight: 22, flexShrink: 1, textAlign: 'center' },
   approveBadge: { minWidth: 28, height: 28, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
   approveBadgeText: { ...typography.bodyMd, fontSize: 15, lineHeight: 18, color: forestPop.deep },
-  askRoman: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', marginTop: 6 },
+  askRoman: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', marginTop: 2 },
   biz: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   bizMark: { width: 52, height: 52, borderRadius: radius.button, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
   bizSign: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
