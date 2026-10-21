@@ -33,6 +33,7 @@ import { layout, radius, typography } from '../../theme/tokens';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PackageSelectionSheet from '../../components/PackageSelectionSheet';
 import { shouldOfferPackagePrompt } from '../../lib/packagePromptGate';
+import { recordRenewalShown } from '../../lib/planRenewal';
 import { prefsStorage } from '../../storage/mmkv';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -90,6 +91,11 @@ export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenPro
   // Every card is basic self logging, open to every client with or without a
   // coach or a package, so no entitlement is read here.
   const availableCards = WIN_CARDS;
+  // RENEWAL-M: on iPhone this is the one first offer, so a later start does not offer it again.
+  const sheetUserId = currentUser?.id;
+  const onSheetShown = Platform.OS === 'ios' && sheetUserId
+    ? () => void recordRenewalShown(sheetUserId, undefined)
+    : undefined;
 
   const [selectedWin, setSelectedWin] = useState<WinType | null>(savedWin ?? null);
   const [loading, setLoading] = useState(!!savedWin);
@@ -221,6 +227,7 @@ export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenPro
         <PackageSelectionSheet
           visible={showPackageSheet}
           recordShown={Platform.OS === 'ios'}
+          onShown={onSheetShown}
           onDismiss={() => { setShowPackageSheet(false); onComplete(undefined); }}
           onPaymentSuccess={() => { setShowPackageSheet(false); onComplete(undefined); }}
         />
@@ -261,6 +268,7 @@ export default function Day1WinScreen({ onComplete, savedWin }: Day1WinScreenPro
       <PackageSelectionSheet
         visible={showPackageSheet}
         recordShown={Platform.OS === 'ios'}
+        onShown={onSheetShown}
         onDismiss={() => { setShowPackageSheet(false); onComplete(undefined); }}
         onPaymentSuccess={() => { setShowPackageSheet(false); onComplete(undefined); }}
       />

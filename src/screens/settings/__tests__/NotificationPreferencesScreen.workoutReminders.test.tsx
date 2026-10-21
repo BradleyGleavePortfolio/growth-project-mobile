@@ -431,3 +431,37 @@ describe('B-312-1: every failure notice carries a working next action', () => {
     expect(queryByTestId('notif-pref-save-error-support')).toBeNull();
   });
 });
+
+// RENEWAL-M (backend #1127): Settings > Notifications > Plan renewal reminders (plan_renewal_push, default on).
+describe('RENEWAL-M: plan renewal reminders', () => {
+  it('hidden until the server returns the setting (an older server would refuse the field)', async () => {
+    mockGet.mockResolvedValue({ data: { workout_reminder_push: true } });
+    const { findByLabelText, queryByLabelText } = await render(
+      <NotificationPreferencesScreen navigation={navigation} role={() => 'student'} />,
+    );
+    expect(await findByLabelText('Workout reminders')).toBeTruthy();
+    expect(queryByLabelText('Plan renewal reminders')).toBeNull();
+  });
+
+  it('a client sees the server value and turning it off patches only plan_renewal_push', async () => {
+    mockGet.mockResolvedValue({ data: { plan_renewal_push: true } });
+    mockUpdate.mockResolvedValue({ data: {} });
+    const { findByLabelText } = await render(
+      <NotificationPreferencesScreen navigation={navigation} role={() => 'student'} />,
+    );
+    const toggle = await findByLabelText('Plan renewal reminders');
+    expect(toggle.props.value).toBe(true);
+    await fireEvent(toggle, 'valueChange', false);
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith({ plan_renewal_push: false }));
+  });
+
+  it('a coach never sees it, even when the server returns the field', async () => {
+    expect(categoriesForRole('coach').map((c) => c.id)).not.toContain('plan_renewal');
+    mockGet.mockResolvedValue({ data: { plan_renewal_push: true } });
+    const { findByLabelText, queryByLabelText } = await render(
+      <NotificationPreferencesScreen navigation={navigation} role={() => 'coach'} />,
+    );
+    expect(await findByLabelText('Coach Messages')).toBeTruthy();
+    expect(queryByLabelText('Plan renewal reminders')).toBeNull();
+  });
+});

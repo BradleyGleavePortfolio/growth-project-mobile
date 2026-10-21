@@ -10,6 +10,8 @@ jest.mock('../../entitlements/dunning/dunningApi', () => {
   const { normalizeDunningStatus } = jest.requireActual('../../entitlements/dunning/dunningApi');
   return { dunningApi: { getStatus: async () => normalizeDunningStatus(await mockDunning()) } };
 });
+const mockPost = jest.fn(async (..._a: unknown[]) => ({ data: {} }));
+jest.mock('../../services/api', () => ({ __esModule: true, default: { post: (...a: unknown[]) => mockPost(...a) } }));
 const mockOnboardingState = jest.fn();
 jest.mock('../../api/consultationApi', () => ({ consultationApi: { getState: () => mockOnboardingState() } }));
 let mockTourFlags = { clientTutorial: true, consultationOnboarding: true };
@@ -25,13 +27,15 @@ jest.mock('../../config/featureFlags', () => {
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { packagePromptDueAtStart, shouldOfferPackagePrompt } from '../packagePromptGate';
+import { packagePromptDueAtStart, renewalTapDue, shouldOfferPackagePrompt, takeStartOffer } from '../packagePromptGate';
+import { readRenewal, recordRenewalShown } from '../planRenewal';
 import { __resetTutorialStoreForTests, hydrateTutorial, startClientTutorial } from '../../tutorial/tutorialStore';
 import { tutorialStorageKey } from '../../tutorial/tutorialStorage';
 import { initialTutorialState } from '../../tutorial/tutorialMachine';
 
 const NO_PLAN = { ok: true, data: { active: false, entitlement_active: false } };
 const KEY = 'prefs:onboarding.package_prompt_dismissed_at:client-1';
+const LOOK = 'prefs:onboarding.package_prompt_looked_at:client-1';
 const NOW = Date.parse('2026-10-20T18:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
 const realOS = Platform.OS;
@@ -145,7 +149,8 @@ describe('packagePromptDueAtStart (once per 24 h, #161-5 op 1)', () => {
     setOS('ios');
     mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
     expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
-    expect(await AsyncStorage.getItem(KEY)).toBe(new Date(NOW).toISOString());
+    expect(await AsyncStorage.getItem(LOOK)).toBe(new Date(NOW).toISOString());
+    expect(await AsyncStorage.getItem(KEY)).toBeNull();
     expect(await packagePromptDueAtStart('client-1', NOW + 23 * HOUR)).toBe(false);
     expect(mockGetEntitlement).toHaveBeenCalledTimes(1);
     expect(await packagePromptDueAtStart('client-1', NOW + 25 * HOUR)).toBe(false);
@@ -166,18 +171,19 @@ describe('packagePromptDueAtStart (once per 24 h, #161-5 op 1)', () => {
     expect(mockGetEntitlement).not.toHaveBeenCalled();
   });
 
-  it.each(['ios', 'android'])('%s, skipped over 24 h ago, no plan: offered again', async (os) => {
+  it.each(['ios', 'android'])('%s, skipped over 24 h ago, no plan: offered (its one start offer)', async (os) => {
     setOS(os);
     await skippedAgo(25 * HOUR);
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     expect(await packagePromptDueAtStart('client-1', NOW)).toBe(true);
   });
 
-  it('Android, no skip yet: unchanged (Day 1 screen only), no read and no write', async () => {
+  it('Android, no skip yet: not offered (Day 1 screen only); one read a day for a renewal block, skip time untouched', async () => {
     setOS('android');
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
-    expect(mockGetEntitlement).not.toHaveBeenCalled();
+    expect(await packagePromptDueAtStart('client-1', NOW + 23 * HOUR)).toBe(false);
+    expect(mockGetEntitlement).toHaveBeenCalledTimes(1);
     expect(await AsyncStorage.getItem(KEY)).toBeNull();
   });
 
@@ -256,5 +262,119 @@ describe('packagePromptDueAtStart (once per 24 h, #161-5 op 1)', () => {
     await AsyncStorage.setItem('prefs:onboarding.package_prompt_dismissed_at:client-OTHER', new Date(NOW - 48 * HOUR).toISOString());
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
+  });
+});
+
+// RENEWAL-M (backend #1127 contract): the entitlement's `renewal` block drives the sheet at start.
+describe('RENEWAL-M: the plan sheet follows the renewal block', () => {
+  const ENDED_AT = '2026-10-20T10:00:00.000Z';
+  const ended = (step: number, popup: number | null) => ({ ok: true, data: { active: false, entitlement_active: false,
+    renewal: { state: 'ended', ended_at: ENDED_AT, step, popup_due: popup !== null, popup_step: popup } } });
+  const withRenewal = (renewal: unknown, active = false) => ({ ok: true, data: { active, entitlement_active: active, renewal } });
+  const ACK = '/v1/checkout/renewal/popup-ack';
+  const show = async () => recordRenewalShown('client-1', takeStartOffer('client-1')?.renewal);
+
+  it.each([
+    ['no key (older server, switch off)', {}, undefined],
+    ['none', { renewal: { state: 'none', step: null } }, { state: 'none' }],
+    ['an unknown state', { renewal: { state: 'paused' } }, { state: 'none' }],
+    ['revoked', { renewal: { state: 'revoked' } }, { state: 'revoked' }],
+    ['ended, Day 3 due', ended(3, 3).data, { state: 'ended', endedAt: ENDED_AT, popupStep: 3, running: true }],
+    ['ended, Day 1 (no pop-up)', ended(1, null).data, { state: 'ended', endedAt: ENDED_AT, popupStep: null, running: true }],
+    ['ended, Day 7 seen', ended(7, null).data, { state: 'ended', endedAt: ENDED_AT, popupStep: null, running: false }],
+    ['ended, a step the phone does not know', ended(3, 5).data, { state: 'ended', endedAt: ENDED_AT, popupStep: null, running: true }],
+  ])('readRenewal: %s', (_label, data, want) => {
+    expect(readRenewal(data)).toEqual(want);
+  });
+
+  it.each(['ios', 'android'])('%s, Day 0 due with no skip: offered; once shown it is acknowledged and not shown again', async (os) => {
+    setOS(os);
+    mockGetEntitlement.mockResolvedValue(ended(0, 0));
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(true);
+    await show();
+    expect(mockPost).toHaveBeenCalledWith(ACK, { step: 0 });
+    // the ack was lost: the server still says Day 0 is due; not shown again, the ack is retried
+    expect(await packagePromptDueAtStart('client-1', NOW + 25 * HOUR)).toBe(false);
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    mockGetEntitlement.mockResolvedValue(ended(3, 3));
+    expect(await packagePromptDueAtStart('client-1', NOW + 50 * HOUR)).toBe(true);
+  });
+
+  it('ended, Day 1 (no pop-up): not offered and no look saved, so the Day 3 pop-up is read at the next start', async () => {
+    setOS('android');
+    mockGetEntitlement.mockResolvedValue(ended(1, null));
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
+    expect(await AsyncStorage.getItem(LOOK)).toBeNull();
+    mockGetEntitlement.mockResolvedValue(ended(3, 3));
+    expect(await packagePromptDueAtStart('client-1', NOW + HOUR)).toBe(true);
+  });
+
+  it('Day 7 seen (sequence over): not offered, and the look is saved', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue(ended(7, null));
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
+    expect(await AsyncStorage.getItem(LOOK)).toBe(new Date(NOW).toISOString());
+  });
+
+  it('revoked (refund or dispute): never, at start, on Day 1 or from a push tap', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue(withRenewal({ state: 'revoked' }));
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
+    expect(await renewalTapDue('client-1')).toBe(false);
+    expect(await shouldOfferPackagePrompt()).toBe(false);
+  });
+
+  it('never bought (none): shown once, never daily; an active plan clears the mark for a plan that ends later', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue(withRenewal({ state: 'none' }));
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(true);
+    await show();
+    expect(await packagePromptDueAtStart('client-1', NOW + 25 * HOUR)).toBe(false);
+    expect(await packagePromptDueAtStart('client-1', NOW + 50 * HOUR)).toBe(false);
+    mockGetEntitlement.mockResolvedValue(withRenewal({ state: 'none' }, true));
+    expect(await packagePromptDueAtStart('client-1', NOW + 75 * HOUR)).toBe(false);
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: false, entitlement_active: false } });
+    expect(await packagePromptDueAtStart('client-1', NOW + 100 * HOUR)).toBe(true);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('operator decision: a look within 24 h while the plan was active delays the Day 0 pop-up to the next look', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
+    expect(await packagePromptDueAtStart('client-1', NOW)).toBe(false);
+    mockGetEntitlement.mockResolvedValue(ended(0, 0));
+    expect(await packagePromptDueAtStart('client-1', NOW + 5 * HOUR)).toBe(false);
+    expect(mockGetEntitlement).toHaveBeenCalledTimes(1);
+    expect(await packagePromptDueAtStart('client-1', NOW + 25 * HOUR)).toBe(true);
+  });
+
+  it('push tap: due while the plan is ended, even inside the 24 h wait; the opened sheet acknowledges a due pop-up', async () => {
+    setOS('android');
+    await AsyncStorage.setItem(KEY, new Date(Date.now() - HOUR).toISOString());
+    mockGetEntitlement.mockResolvedValue(ended(1, null));
+    expect(await renewalTapDue('client-1')).toBe(true);
+    await show();
+    expect(mockPost).not.toHaveBeenCalled();
+    mockGetEntitlement.mockResolvedValue(ended(3, 3));
+    expect(await renewalTapDue('client-1')).toBe(true);
+    await show();
+    expect(mockPost).toHaveBeenCalledWith(ACK, { step: 3 });
+  });
+
+  it.each([
+    ['never bought', withRenewal({ state: 'none' })],
+    ['an active plan', { ok: true, data: { active: true } }],
+    ['an older server (no block)', { ok: true, data: { active: false, entitlement_active: false } }],
+  ])('push tap with %s: not due', async (_label, ent) => {
+    mockGetEntitlement.mockResolvedValue(ent);
+    expect(await renewalTapDue('client-1')).toBe(false);
+  });
+
+  it('push tap: coachless or a failing payment is never due', async () => {
+    mockGetEntitlement.mockResolvedValue(ended(0, 0));
+    mockDunning.mockResolvedValue({ enabled: true, state: 'past_due', kind: 'payment', reason: 'payment_failed', purchase_id: 'p1' });
+    expect(await renewalTapDue('client-1')).toBe(false);
+    mockUser = { id: 'client-1' };
+    expect(await renewalTapDue('client-1')).toBe(false);
   });
 });

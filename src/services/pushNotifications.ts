@@ -124,7 +124,7 @@ export function installForegroundHandler(): () => void {
       notificationId: notification.request.identifier,
       // actionScreen / actionParams come from the data payload if the backend
       // includes them. Fall through to undefined if absent.
-      actionScreen: (notification.request.content.data?.actionScreen as string) ?? undefined,
+      actionScreen: pushScreenOf(data),
       actionParams: (notification.request.content.data?.actionParams as Record<string, string>) ?? undefined,
       ...(typeof deepLink === 'string' ? { deepLink } : {}),
     });
@@ -163,6 +163,12 @@ export function fallbackScreenForKind(kind: unknown): string | undefined {
   return 'NotificationCenter';
 }
 
+/** RENEWAL-M: a plan_renewal push opens the plan sheet over Home (pushTapRouter PlanRenewal), not the inbox. */
+function pushScreenOf(data: Record<string, unknown> | undefined): string | undefined {
+  if (data?.kind === 'plan_renewal') return 'PlanRenewal';
+  return typeof data?.actionScreen === 'string' ? data.actionScreen : undefined;
+}
+
 function dispatchResponse(
   response: Notifications.NotificationResponse | null | undefined,
   onResponse: NotificationResponseCallback,
@@ -170,8 +176,7 @@ function dispatchResponse(
   if (!response) return;
   const request = response.notification?.request;
   const data = request?.content?.data;
-  const actionScreen =
-    typeof data?.actionScreen === 'string' ? data.actionScreen : fallbackScreenForKind(data?.kind);
+  const actionScreen = pushScreenOf(data) ?? fallbackScreenForKind(data?.kind);
   // Untrusted payload: decode to a bounded string map (audit #304 Sol C2).
   const actionParams = decodePushParams(data?.actionParams);
   const deepLink = data?.deepLink ?? data?.deep_link;

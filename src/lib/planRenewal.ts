@@ -8,7 +8,8 @@
  *    shows at most once (#836's first offer: iPhone first Home, Android after a Day 1 skip), never daily. The mark
  *    clears when the phone next sees an active plan, so a plan that ends later gets its one showing.
  *  - A pop-up this phone already showed is not shown again while its ack is still on the way (retried each start).
- *  - A plan_renewal push tap (pushTapRouter PlanRenewal) asks RootNavigator to open the sheet (requestRenewalSheet).
+ *  - A plan_renewal push tap opens the sheet over Home while the plan is still ended (pushTapRouter PlanRenewal,
+ *    RootNavigator, packagePromptGate renewalTapDue).
  */
 import api from '../services/api';
 import { prefsStorage } from '../storage/mmkv';
@@ -31,7 +32,7 @@ export function readRenewal(data: unknown): Renewal | undefined {
 
 const seenKey = (userId: string) => `plan_renewal.seen:${userId}`;
 const onceKey = (userId: string) => `plan_renewal.shown_once:${userId}`;
-const seenMark = (r: { endedAt: string | null; popupStep: PopupStep }) => `${r.endedAt ?? ''}|${r.popupStep}`;
+const seenMark = (endedAt: string | null, step: PopupStep) => `${endedAt ?? ''}|${step}`;
 const ack = (step: PopupStep) => api.post('/v1/checkout/renewal/popup-ack', { step }).then(() => undefined, () => undefined);
 
 /**
@@ -41,7 +42,7 @@ const ack = (step: PopupStep) => api.post('/v1/checkout/renewal/popup-ack', { st
 export async function renewalSheetDue(userId: string, renewal: Renewal | undefined, legacyAllowed: boolean): Promise<boolean> {
   if (!renewal || renewal.state === 'none') return legacyAllowed && !(await prefsStorage.getStringAsync(onceKey(userId)));
   if (renewal.state !== 'ended' || renewal.popupStep === null) return false;
-  if ((await prefsStorage.getStringAsync(seenKey(userId))) !== seenMark({ ...renewal, popupStep: renewal.popupStep })) return true;
+  if ((await prefsStorage.getStringAsync(seenKey(userId))) !== seenMark(renewal.endedAt, renewal.popupStep)) return true;
   await ack(renewal.popupStep); // shown before, ack still on the way
   return false;
 }
@@ -51,7 +52,7 @@ export async function recordRenewalShown(userId: string, renewal: Renewal | unde
   try {
     if (!renewal || renewal.state === 'none') await prefsStorage.set(onceKey(userId), new Date().toISOString());
     else if (renewal.state === 'ended' && renewal.popupStep !== null) {
-      await prefsStorage.set(seenKey(userId), seenMark({ ...renewal, popupStep: renewal.popupStep }));
+      await prefsStorage.set(seenKey(userId), seenMark(renewal.endedAt, renewal.popupStep));
       await ack(renewal.popupStep);
     }
   } catch {
@@ -62,24 +63,4 @@ export async function recordRenewalShown(userId: string, renewal: Renewal | unde
 /** The phone saw an active plan: a plan that ends later gets its one showing (the `none` / older server rule). */
 export async function clearRenewalShownOnce(userId: string): Promise<void> {
   await prefsStorage.delete(onceKey(userId)).catch(() => undefined);
-}
-
-let renewalSheetListener: (() => void) | null = null;
-let renewalSheetHeld = false;
-
-/** A plan_renewal push was tapped (pushTapRouter). Held until RootNavigator listens. */
-export function requestRenewalSheet(): void {
-  if (renewalSheetListener) renewalSheetListener();
-  else renewalSheetHeld = true;
-}
-
-export function subscribeRenewalSheet(listener: () => void): () => void {
-  renewalSheetListener = listener;
-  if (renewalSheetHeld) {
-    renewalSheetHeld = false;
-    listener();
-  }
-  return () => {
-    if (renewalSheetListener === listener) renewalSheetListener = null;
-  };
 }

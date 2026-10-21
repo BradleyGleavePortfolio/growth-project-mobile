@@ -26,6 +26,7 @@ import {
   decodePushParams,
   flushPendingPushTap,
   MAX_SEEN_IDS,
+  onPlanRenewalTap,
   pushSessionFor,
   routeInAppNotification,
   routePushTap,
@@ -97,6 +98,34 @@ describe('pushTapRouter', () => {
       setPushSession(STUDENT_A);
       routePushTap('Timeline');
       expect(nav.navigate).toHaveBeenCalledWith('MoreTab', { screen: 'Timeline', params: undefined });
+    });
+
+    it('RENEWAL-M: PlanRenewal opens Home, then asks for the plan sheet, only once the tap is delivered', () => {
+      const listener = jest.fn();
+      const stop = onPlanRenewalTap(listener);
+      const nav = makeNav(LEAN_ROOT);
+      attachPushNavigator(nav);
+      setPushSession(pushSessionFor('onboarding', 'user-A'));
+      routePushTap('PlanRenewal', undefined, 'n-renew', 'tgp://home');
+      expect(listener).not.toHaveBeenCalled();
+      nav.routeNames = CLIENT_TABS;
+      setPushSession(STUDENT_A);
+      expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'HomeMain', params: undefined, pop: true });
+      expect(listener).toHaveBeenCalledTimes(1);
+      stop();
+      routePushTap('PlanRenewal', undefined, 'n-renew-2');
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('RENEWAL-M: a coach account never gets the plan sheet from PlanRenewal', () => {
+      const listener = jest.fn();
+      const stop = onPlanRenewalTap(listener);
+      const nav = makeNav(COACH_TABS);
+      attachPushNavigator(nav);
+      setPushSession(COACH_A);
+      routePushTap('PlanRenewal');
+      expect(listener).not.toHaveBeenCalled();
+      stop();
     });
 
     it('Style C Timeline (flag on) opens over Progress, its door, with You beneath (#TIMELINE-DOOR op 1)', () => {

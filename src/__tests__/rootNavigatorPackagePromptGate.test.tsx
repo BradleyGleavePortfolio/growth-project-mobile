@@ -111,12 +111,24 @@ jest.mock('../navigation/OnboardingNavigator', () => () => null);
 jest.mock('../navigation/CoachWizardNavigator', () => () => null);
 jest.mock('../navigation/Day1OnboardingNavigator', () => () => null);
 jest.mock('../components/OfflineBanner', () => () => null);
+type MockSheetProps = { recordShown?: boolean; skipSnoozeCheck?: boolean; onShown?: () => void; onDismiss: () => void };
 jest.mock('../components/PackageSelectionSheet', () => {
   const React = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
-  return ({ recordShown }: { recordShown?: boolean }) =>
-    React.createElement(Text, { testID: 'package-prompt', recordShown }, 'prompt');
+  return ({ recordShown, skipSnoozeCheck, onShown, onDismiss }: MockSheetProps) => {
+    React.useEffect(() => onShown?.(), []); // the real sheet reports each opening once
+    return React.createElement(Text, { testID: 'package-prompt', recordShown, skipSnoozeCheck, onPress: onDismiss }, 'prompt');
+  };
 });
+// RENEWAL-M: the push router's plan_renewal hook (its delivery is covered in pushTapRouter.test.ts).
+let mockRenewalTap: (() => void) | null = null;
+jest.mock('../services/pushTapRouter', () => ({
+  ...jest.requireActual('../services/pushTapRouter'),
+  onPlanRenewalTap: (listener: () => void) => {
+    mockRenewalTap = listener;
+    return () => undefined;
+  },
+}));
 const mockGetEntitlement = jest.fn();
 jest.mock('../api/clientPaymentsApi', () => ({
   clientPaymentsApi: { getEntitlement: () => mockGetEntitlement() },
@@ -160,7 +172,7 @@ jest.mock('../config/featureFlags', () => {
   };
 });
 import React from 'react';
-import { render, cleanup, act, waitFor } from '@testing-library/react-native';
+import { render, cleanup, act, waitFor, fireEvent } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -179,6 +191,8 @@ const STUDENT = {
   profile: { onboarding_completed: true, day_one_completed: true },
 };
 const PROMPT_KEY = 'prefs:onboarding.package_prompt_dismissed_at:client-S';
+const LOOK_KEY = 'prefs:onboarding.package_prompt_looked_at:client-S';
+const ONCE_KEY = 'prefs:plan_renewal.shown_once:client-S';
 const NO_PLAN = { ok: true, data: { active: false, entitlement_active: false } };
 const realOS = Platform.OS;
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
@@ -231,11 +245,12 @@ describe('RootNavigator 24h package prompt is fail closed', () => {
     expect(mockGetEntitlement).toHaveBeenCalled();
   });
 
-  it.each(['ios', 'android'])('%s, coached, no plan, skipped over 24 h ago: the prompt re-surfaces', async (os) => {
+  it.each(['ios', 'android'])('%s, coached, no plan, skipped over 24 h ago: its one start offer opens, marked shown', async (os) => {
     setOS(os);
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     const r = await mount();
     await r.findByTestId('package-prompt');
+    await waitFor(async () => expect(await AsyncStorage.getItem(ONCE_KEY)).not.toBeNull());
   });
 });
 
@@ -260,7 +275,7 @@ describe('RootNavigator package prompt on first Home (#161-5 op 1)', () => {
     const r = await mount();
     await r.findByTestId('nav-client');
     expect(r.queryByTestId('package-prompt')).toBeNull();
-    const lookedAt = Date.parse(String(await AsyncStorage.getItem(PROMPT_KEY)));
+    const lookedAt = Date.parse(String(await AsyncStorage.getItem(LOOK_KEY)));
     expect(Date.now() - lookedAt).toBeLessThan(60_000);
   });
 
@@ -292,14 +307,67 @@ describe('RootNavigator package prompt on first Home (#161-5 op 1)', () => {
     expect(mockGetEntitlement).not.toHaveBeenCalled();
   });
 
-  it('Android, no skip yet: unchanged, no sheet and no entitlement read', async () => {
+  it('Android, no skip yet: no sheet; one read for a renewal block, then the look is saved', async () => {
     setOS('android');
     mockGetEntitlement.mockResolvedValue(NO_PLAN);
     const r = await mount();
     await r.findByTestId('nav-client');
     expect(r.queryByTestId('package-prompt')).toBeNull();
-    expect(mockGetEntitlement).not.toHaveBeenCalled();
+    expect(mockGetEntitlement).toHaveBeenCalled();
     expect(await AsyncStorage.getItem(PROMPT_KEY)).toBeNull();
+    expect(await AsyncStorage.getItem(LOOK_KEY)).not.toBeNull();
+  });
+});
+
+// RENEWAL-M (backend #1127): the renewal pop-up at start and the plan_renewal push tap, real gate and storage.
+describe('RootNavigator plan renewal sheet (RENEWAL-M)', () => {
+  const api = jest.requireMock('../services/api').default;
+  const ended = (step: number, popup: number | null) => ({ ok: true, data: { active: false, entitlement_active: false,
+    renewal: { state: 'ended', ended_at: '2026-10-20T10:00:00.000Z', step, popup_due: popup !== null, popup_step: popup } } });
+  beforeEach(async () => {
+    await AsyncStorage.removeItem(PROMPT_KEY);
+    mockRenewalTap = null;
+  });
+
+  it('Android, Day 0 pop-up due with no skip: the sheet opens and the pop-up is acknowledged', async () => {
+    setOS('android');
+    mockGetEntitlement.mockResolvedValue(ended(0, 0));
+    const r = await mount();
+    await r.findByTestId('package-prompt');
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/checkout/renewal/popup-ack', { step: 0 }));
+  });
+
+  it('refund or dispute (revoked): the app, no sheet', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: false, entitlement_active: false, renewal: { state: 'revoked' } } });
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+  });
+
+  it('a plan_renewal push tap opens the sheet over the app inside the 24 h wait; Skip returns to the same app', async () => {
+    setOS('ios');
+    await AsyncStorage.setItem(PROMPT_KEY, new Date(Date.now() - 60 * 60 * 1000).toISOString());
+    mockGetEntitlement.mockResolvedValue(ended(1, null));
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+    await act(async () => mockRenewalTap?.());
+    const sheet = await r.findByTestId('package-prompt');
+    expect(sheet.props.skipSnoozeCheck).toBe(true);
+    fireEvent.press(sheet);
+    await waitFor(() => expect(r.queryByTestId('package-prompt')).toBeNull());
+    expect(mockClientMounted).toHaveBeenCalledTimes(1);
+    expect(mockClientUnmounted).not.toHaveBeenCalled();
+  });
+
+  it('a plan_renewal push tap after the client bought again: no sheet', async () => {
+    setOS('ios');
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true, entitlement_active: true } });
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    await act(async () => mockRenewalTap?.());
+    expect(r.queryByTestId('package-prompt')).toBeNull();
   });
 });
 

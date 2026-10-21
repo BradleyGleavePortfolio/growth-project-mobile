@@ -12,6 +12,9 @@
  *     backend is the source of truth (workout_reminder_push/_inapp); the
  *     server value is read on mount so the switch never shows a stale state.
  *     Hidden for coach and owner accounts (reminders go to clients only).
+ *   - Plan renewal reminders (plan_renewal) — RENEWAL-M: the Day 0, 1, 3 and 7
+ *     app notifications after a plan ends (plan_renewal_push, default on).
+ *     Clients only, and only once the server returns the field.
  *
  * A failed save rolls the switch back and shows an inline notice chosen by
  * status (notificationPreferenceErrors.ts), never a generic alert.
@@ -58,13 +61,14 @@ function usePreferenceColors() {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type NotifCategory = 'coach_direct' | 'workout_reminders' | 'milestones' | 'system';
+type NotifCategory = 'coach_direct' | 'workout_reminders' | 'plan_renewal' | 'milestones' | 'system';
 
 interface CategoryPrefs {
   coach_direct: boolean;
   // Legacy storage only: no sender consumes this choice and no row exposes it.
   client_bot: boolean;
   workout_reminders: boolean;
+  plan_renewal: boolean;
   milestones: boolean;
   system: boolean;
 }
@@ -73,6 +77,7 @@ const DEFAULT_PREFS: CategoryPrefs = {
   coach_direct: true,
   client_bot: true,
   workout_reminders: true,
+  plan_renewal: true,
   milestones: true,
   system: true,
 };
@@ -88,6 +93,8 @@ const BACKEND_FIELD_MAP: Record<NotifCategory, Record<string, boolean>> = {
   milestones: { milestone_push: true, milestone_inapp: true },
   system: { digest_email: true },
   workout_reminders: { workout_reminder_push: true, workout_reminder_inapp: true },
+  // RENEWAL-M (backend #1127): the plan renewal app notifications only; the pop-up and the coach's messages stay.
+  plan_renewal: { plan_renewal_push: true },
 };
 
 // Read the server value of the workout reminder toggle. Returns null when the
@@ -145,6 +152,13 @@ const CATEGORIES: CategoryMeta[] = [
     icon: 'barbell-outline',
   },
   {
+    id: 'plan_renewal',
+    noun: 'plan renewal reminder',
+    label: 'Plan renewal reminders',
+    description: 'A few reminders after your plan ends, so you can choose a new one.',
+    icon: 'refresh-circle-outline',
+  },
+  {
     id: 'milestones',
     noun: 'milestone',
     label: 'Milestones',
@@ -168,7 +182,7 @@ const CATEGORIES: CategoryMeta[] = [
  */
 export function categoriesForRole(role: string | null | undefined): CategoryMeta[] {
   if (typeof role === 'string' && role.length > 0 && role !== 'student') {
-    return CATEGORIES.filter((c) => c.id !== 'workout_reminders');
+    return CATEGORIES.filter((c) => c.id !== 'workout_reminders' && c.id !== 'plan_renewal');
   }
   return CATEGORIES;
 }
@@ -187,7 +201,12 @@ export default function NotificationPreferencesScreen({
 }) {
   const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const categories = useMemo(() => categoriesForRole(role()), [role]);
+  // RENEWAL-M: the plan renewal row only once the server carries its setting (older servers reject the field).
+  const [renewalOnServer, setRenewalOnServer] = useState(false);
+  const categories = useMemo(
+    () => categoriesForRole(role()).filter((c) => c.id !== 'plan_renewal' || renewalOnServer),
+    [role, renewalOnServer],
+  );
 
   const [prefs, setPrefs] = useState<CategoryPrefs>(DEFAULT_PREFS);
   // B-312-2: the latest preferences, so every write and rollback starts from
@@ -231,6 +250,7 @@ export default function NotificationPreferencesScreen({
           const server = serverValueOf(category.id, res?.data);
           if (server !== null) next = { ...next, [category.id]: server };
         }
+        setRenewalOnServer(serverValueOf('plan_renewal', res?.data) !== null);
       } catch {
         // Offline or older backend: keep the locally stored value.
       }
