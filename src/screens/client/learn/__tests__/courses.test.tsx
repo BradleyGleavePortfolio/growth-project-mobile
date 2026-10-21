@@ -185,7 +185,7 @@ describe('Course lesson', () => {
 
   it('the week\'s last lesson ends on the count with no Next; a done lesson opens on the c06 footer, without the button', async () => {
     get.mockImplementation(((url: string) => ok(url === '/v1/client/courses' ? [COURSE] : {
-      ...COURSE, modules: COURSE.modules.map((m) => (m.id === 'm3' ? { ...m, lessons: m.lessons.map((l) => ({ ...l, done: l.id !== 'l32' })) } : m)),
+      ...COURSE, modules: COURSE.modules.map((m) => (m.id === 'm3' ? { ...m, lessons: (m.lessons as { id: string }[]).map((l) => ({ ...l, done: l.id !== 'l32' })) } : m)),
     })) as never);
     const view = await show(CourseLessonScreen);
     await fireEvent.press(await screen.findByText('Mark as complete'));
