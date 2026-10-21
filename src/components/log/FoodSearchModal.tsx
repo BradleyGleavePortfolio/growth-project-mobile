@@ -16,11 +16,14 @@ import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import FoodSearchView from './FoodSearchView';
+import MealChoiceRow from './MealChoiceRow';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
 
 interface Props {
   visible: boolean;
   activeMealType: MealType;
+  /** UI-3d: when set (the Food tab's Extras "Add"), the meal choice shows and a tap files the next food under that meal. */
+  onMealChange?: (mealType: MealType) => void;
   onClose: () => void;
   addedFoodName?: string | null;
 
@@ -102,6 +105,11 @@ export default function FoodSearchModal(props: Props) {
             ) : <View style={styles.closeButton} />}
           </View>
 
+          {props.onMealChange ? (
+            <MealChoiceRow testID="food-search-meals" value={activeMealType} onChange={props.onMealChange} disabled={props.saving}
+              style={styles.mealRow} />
+          ) : null}
+
           {props.addedFoodName ? (
             <Text style={styles.addedMessage} accessibilityLiveRegion="polite">
               Added {props.addedFoodName}.
@@ -149,6 +157,7 @@ export default function FoodSearchModal(props: Props) {
 const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   addedMessage: { ...typography.bodySmall, color: sc.accentText, paddingHorizontal: layout.gutter, paddingTop: 12 },
   closeButton: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
+  mealRow: { marginHorizontal: layout.gutter, marginTop: 12 },
   modalContainer: {
     flex: 1,
   },
