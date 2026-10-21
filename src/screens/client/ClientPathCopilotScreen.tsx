@@ -35,7 +35,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import type { RomanApiError } from '../../api/romanApi';
 import { copilotApi, type CopilotSuggestion, type PastQuestion } from '../../api/copilotApi';
-import { COPILOT_COPY as C } from './copilot/pathChangeWords';
+import { COPILOT_COPY as C, shortDay } from './copilot/pathChangeWords';
 import { ASK_COPY as A, changedThisWeek, monthYear, timeOf } from './copilot/askWords';
 import { SuggestionStatusList } from './copilot/SuggestionStatusList';
 import { SuggestionCard } from './copilot/SuggestionCard';
@@ -160,11 +160,11 @@ function PathView() {
   );
 }
 
-function Asked({ question, at }: { question: string; at: Date }) {
+function Asked({ question, at, day }: { question: string; at: Date; day?: string }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={s.asked}>
-      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{A.youAsked(timeOf(at))}</Text>
+      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{A.youAsked(day ? `${day}, ${timeOf(at)}` : timeOf(at))}</Text>
       <Text style={[typography.h4, s.strong, { color: sc.textPrimary }]} accessibilityRole="header">{question}</Text>
     </View>
   );
@@ -264,7 +264,7 @@ function AnswerView({ item }: { item: PastQuestion }) {
       <Screen edges={['bottom']} testID="copilot-past-answer" contentStyle={s.page}>
         <Mast back={A.past} title={C.title} compact />
         <View style={[s.body, s.turn]}>
-          <Asked question={item.question ?? ''} at={new Date(item.askedAt)} />
+          <Asked question={item.question ?? ''} at={new Date(item.askedAt)} day={shortDay(item.askedAt)} />
           {q.isPending ? <QuietLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
           {q.error ? <QuietError message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
           {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} /> : null}

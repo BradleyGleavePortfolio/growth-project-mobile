@@ -86,6 +86,6 @@ test('one past answer reads back from its chat with the facts Roman used', async
   const s = await render(wrap(<ClientPathCopilotScreen />));
   expect(await s.findByText('Friday works.')).toBeTruthy();
   expect(s.getByText('Can I swap Thursday for Friday?')).toBeTruthy();
-  expect(s.getByText('You asked · 2:33 PM')).toBeTruthy();
+  expect(s.getByText('You asked · Thu 15 Oct, 2:33 PM')).toBeTruthy();
   expect(s.getByText('Workout log')).toBeTruthy();
 });
