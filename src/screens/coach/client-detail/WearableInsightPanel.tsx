@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
     minHeight: 96,
-    maxHeight: 160, // a long draft scrolls inside the field instead of pushing the sheet off screen
+    maxHeight: 120, // a long draft scrolls inside the field instead of pushing the sheet off screen
     textAlignVertical: 'top',
     marginTop: spacing.md,
   },

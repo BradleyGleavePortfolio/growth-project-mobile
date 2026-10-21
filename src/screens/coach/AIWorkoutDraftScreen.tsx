@@ -860,7 +860,7 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 14,
       color: colors.textPrimary,
       minHeight: 80,
-      maxHeight: 160, // a long reason scrolls inside the field; Reject / Cancel stay above the keyboard
+      maxHeight: 120, // a long reason scrolls inside the field; Reject / Cancel stay above the keyboard
       textAlignVertical: 'top',
       marginBottom: 12,
     },

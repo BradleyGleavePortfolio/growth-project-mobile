@@ -419,7 +419,7 @@ function makeStyles(colors: ThemeColors) {
       borderColor: colors.border,
       padding: 12,
       minHeight: 100,
-      maxHeight: 160, // long text scrolls inside the field, keeping the caret in view
+      maxHeight: 120, // long text scrolls inside the field, keeping the caret in view
     },
     promptCounter: {
       ...typography.bodySmall,

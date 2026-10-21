@@ -535,7 +535,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderWidth: 1,
       borderColor: colors.border,
     },
-    modalInputMultiline: { minHeight: 100, maxHeight: 160, textAlignVertical: 'top' }, // long text scrolls inside the field
+    modalInputMultiline: { minHeight: 100, maxHeight: 120, textAlignVertical: 'top' }, // long text scrolls inside the field
     modalSubmit: {
       backgroundColor: colors.primary,
       borderRadius: 2, // radius.md
