@@ -15,7 +15,7 @@ import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { lessonsApi } from '../../../services/api';
 import { LearnBack, LearnText, LessonMark } from './LearnParts';
-import { learnCopy, lessonMeta, useLearn } from './learnData';
+import { lessonMeta, useLearn } from './learnData';
 
 export default function LearnLessonScreen() {
   const { semanticColors: sc } = useTheme();
@@ -24,8 +24,7 @@ export default function LearnLessonScreen() {
   const { id } = (useRoute().params ?? {}) as { id?: string };
   const reduced = useReducedMotion();
   const learn = useLearn();
-  const copy = learnCopy(learn.name);
-  const { lessons } = learn;
+  const { lessons, copy } = learn;
   const total = lessons.length;
   const index = lessons.findIndex((l) => l.id === id);
   const lesson = index >= 0 ? lessons[index] : null;
