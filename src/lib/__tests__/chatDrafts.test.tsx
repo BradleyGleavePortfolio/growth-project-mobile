@@ -32,7 +32,7 @@ function Box({ thread, initial, failed }: { thread: string | null; initial?: str
     </>
   );
 }
-const value = (v: { getByLabelText: (l: string) => { props: { value: string } } }) => v.getByLabelText('box').props.value;
+const value = (v: Awaited<ReturnType<typeof render>>): string => v.getByLabelText('box').props.value;
 const diskKeys = () => [...mockDisk.keys()];
 
 beforeEach(async () => {
