@@ -1,12 +1,12 @@
 /**
- * VoiceNoteComposer — orchestration tests for the v3-3 record→review→send glue.
- * The recorder port is injected (deterministic capture) and the upload hook is
- * mocked (no network). Pins the honest states the audit cares about:
+ * VoiceNoteComposer — the Style B record sheet body. The recorder port is
+ * injected (deterministic capture) and the consent hook is mocked (no
+ * network). Pins the honest states the audit cares about:
  *   • unavailable build → calm notice, NO record button;
  *   • mic denied → a REAL recovery action (try again / open settings);
  *   • idle → privacy disclosure (real audience) + record button present;
- *   • recorded → preview + Send runs the upload pipeline with the recording;
- *   • a publish failure preserves the recording and offers a retry.
+ *   • recorded → listen back + Send hands the recording to the outbox;
+ *   • first use → the once-only card before any recording.
  */
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
@@ -21,12 +21,9 @@ jest.mock('../../../theme/useTheme', () => {
   };
 });
 
-// Mock the upload hook so the composer's send path is observable without a net.
-const mockMutate = jest.fn();
-let mockUploadState = { mutate: mockMutate, isPending: false, isError: false };
-jest.mock('../../../hooks/useVoiceUpload', () => ({
-  useVoiceUpload: () => mockUploadState,
-}));
+const mockRecordConsent = jest.fn();
+let mockConsent = { loading: false, studio: true, needsCard: false, record: mockRecordConsent };
+jest.mock('../../../hooks/useVoiceStudio', () => ({ useVoiceConsent: () => mockConsent }));
 
 import VoiceNoteComposer from '../VoiceNoteComposer';
 import type {
@@ -35,7 +32,9 @@ import type {
   MicPermissionStatus,
 } from '../../../hooks/voiceRecorderPort';
 
-const WS = '11111111-1111-4111-8111-111111111111';
+const mockSend = jest.fn();
+const mockClose = jest.fn();
+const props = { onSend: mockSend, onClose: mockClose };
 const RESULT: VoiceRecordingResult = {
   uri: 'file:///tmp/rec.m4a',
   durationMs: 4200,
@@ -65,15 +64,17 @@ function makePort(o: Partial<VoiceRecorderPort> = {}): VoiceRecorderPort {
 const target = { kind: 'cohort' as const, cohortName: 'Spring Block' };
 
 beforeEach(() => {
-  mockMutate.mockReset();
-  mockUploadState = { mutate: mockMutate, isPending: false, isError: false };
+  mockSend.mockReset();
+  mockClose.mockReset();
+  mockRecordConsent.mockReset();
+  mockConsent = { loading: false, studio: true, needsCard: false, record: mockRecordConsent };
 });
 
 describe('VoiceNoteComposer — honest states', () => {
   it('renders a calm notice and NO record button on an unavailable build', async () => {
     const port = makePort({ isAvailable: false });
     const { getByTestId, queryByTestId } = await render(
-      <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
+      <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
     expect(getByTestId('voice-composer-unavailable')).toBeTruthy();
     expect(queryByTestId('voice-record-button')).toBeNull();
@@ -82,7 +83,7 @@ describe('VoiceNoteComposer — honest states', () => {
   it('shows the privacy disclosure + record button when idle', async () => {
     const port = makePort();
     const { getByTestId } = await render(
-      <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
+      <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
     expect(getByTestId('voice-privacy-copy').props.accessibilityLabel).toBe(
       'Everyone in Spring Block can hear this voice note.',
@@ -101,7 +102,7 @@ describe('VoiceNoteComposer — mic denial recovery', () => {
       requestPermission: jest.fn().mockResolvedValue('denied'),
     });
     const { getByTestId } = await render(
-      <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
+      <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
 
     await act(async () => {
@@ -125,48 +126,33 @@ describe('VoiceNoteComposer — review + send', () => {
     });
   }
 
-  it('sends the recording through the upload pipeline', async () => {
+  it('Send hands the recording to the outbox with the server peaks flag', async () => {
     const port = makePort();
-    const { getByTestId } = await render(
-      <VoiceNoteComposer
-        workspaceId={WS}
-        target={target}
-        cohortId="co-1"
-        recorder={port}
-      />,
-    );
+    const { getByTestId } = await render(<VoiceNoteComposer {...props} target={target} recorder={port} />);
     await recordTo(getByTestId);
     await waitFor(() => expect(getByTestId('voice-composer-review')).toBeTruthy());
-
+    expect(getByTestId('voice-composer-preview-duration').props.children).toBe('0:04');
+    expect(getByTestId('voice-composer-listen')).toBeTruthy();
     fireEvent.press(getByTestId('voice-composer-send'));
-    expect(mockMutate).toHaveBeenCalledTimes(1);
-    const [input] = mockMutate.mock.calls[0];
-    expect(input).toMatchObject({
-      uri: 'file:///tmp/rec.m4a',
-      durationMs: 4200,
-      bytes: 50_000,
-      mimeType: 'audio/mp4',
-      cohortId: 'co-1',
-    });
+    expect(mockSend).toHaveBeenCalledWith(RESULT, true);
   });
+});
 
-  it('surfaces a calm retry while preserving the recording on a publish failure', async () => {
-    mockUploadState = { mutate: mockMutate, isPending: false, isError: true };
+describe('VoiceNoteComposer — Style B sheet', () => {
+  it('first use shows the once-only card; Record records consent and starts', async () => {
+    mockConsent = { ...mockConsent, needsCard: true };
     const port = makePort();
-    const { getByTestId } = await render(
-      <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
+    const { getByTestId, getByText } = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
-    await recordTo(getByTestId);
-    await waitFor(() => expect(getByTestId('voice-composer-review')).toBeTruthy());
-    // The recording is still present (preview duration shown) and a retry-labelled
-    // Send is offered — the user never loses the clip.
-    expect(getByTestId('voice-composer-send-error')).toBeTruthy();
-    expect(getByTestId('voice-composer-preview-duration').props.children).toBe(
-      '0:04',
-    );
-    expect(getByTestId('voice-composer-send').props.accessibilityLabel).toBe(
-      'Try sending the voice note again',
-    );
+    expect(getByText('Voice notes')).toBeTruthy();
+    expect(getByText('You can delete your voice note at any time.')).toBeTruthy();
+    expect(port.start).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-composer-consent-record'));
+    });
+    expect(mockRecordConsent).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(port.start).toHaveBeenCalledTimes(1));
   });
 });
 
@@ -174,7 +160,7 @@ describe('VoiceNoteComposer — recorder failure (B-314-7)', () => {
   it('a microphone that cannot start shows what happened, a Try again and a support reference', async () => {
     const port = makePort({ start: jest.fn().mockRejectedValue(new Error('session busy')) });
     const { getByTestId, findByTestId, getByText } = await render(
-      <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
+      <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
     fireEvent.press(getByTestId('voice-record-button'));
     const notice = await findByTestId('voice-composer-error');
@@ -191,7 +177,7 @@ describe('VoiceNoteComposer — recorder failure (B-314-7)', () => {
       getPermissionStatus: jest.fn().mockRejectedValue(new Error('perm read failed')),
     });
     const { getByTestId, findByText } = await render(
-      <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
+      <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
     fireEvent.press(getByTestId('voice-record-button'));
     expect(await findByText(/Microphone access could not be checked on this phone\./)).toBeTruthy();

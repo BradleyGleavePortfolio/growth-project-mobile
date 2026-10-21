@@ -24,9 +24,9 @@
  *       3. create(...) durably records the note, re-asserting the same limits
  *          and the `${userId}/` bucket binding. The client is NEVER trusted on
  *          the second hop either — the server re-derives the namespace.
- *     The waveform is a CLIENT-SIDE visualization only; the backend does not
- *     accept waveform peaks on create (it stores null and reports
- *     `has_waveform`), so this client intentionally does not send them.
+ *   - Voice notes Studio (backend #1122) adds six view keys and optional create
+ *     `waveform_peaks`. A server before #1122 sends none of the keys and rejects
+ *     unknown create keys: the keys are optional and peaks go only to Studio.
  *
  * Limits mirror the backend DTO constants exactly so the recorder/composer can
  * pre-validate before a round-trip; the server remains authoritative.
@@ -91,9 +91,17 @@ export const VoiceNoteViewSchema = z
     duration_ms: z.number().int(),
     bytes: z.number().int(),
     mime_type: z.string(),
-    /** Whether the server stored waveform peaks (currently always false). */
+    /** Whether the server stored waveform peaks. */
     has_waveform: z.boolean(),
     created_at: z.string(),
+    // Studio keys (backend #1122; OPERATOR RULING 6304777236). Optional so a
+    // server without them still parses and plays exactly as before.
+    author_name: z.string().optional(),
+    author_is_coach: z.boolean().optional(),
+    waveform_peaks: z.array(z.number()).nullable().optional(),
+    heard_at: z.string().nullable().optional(),
+    message_id: z.string().nullable().optional(),
+    parent_message_id: z.string().nullable().optional(),
   })
   .strict();
 export type VoiceNoteView = z.infer<typeof VoiceNoteViewSchema>;
@@ -113,6 +121,22 @@ export type VoiceNoteFeedPage = z.infer<typeof VoiceNoteFeedResponseSchema>;
 
 const VoiceDeleteResponseSchema = z.object({ deleted: z.literal(true) }).strict();
 export type VoiceDeleteResult = z.infer<typeof VoiceDeleteResponseSchema>;
+
+const VoiceConsentSchema = z
+  .object({ seen: z.boolean(), seen_at: z.string().nullable() })
+  .strict();
+export type VoiceConsent = z.infer<typeof VoiceConsentSchema>;
+
+/** The server's peak cap (backend #1122 = the recorder's MAX_PEAKS). */
+export const MAX_WAVEFORM_PEAKS = 64;
+
+/** Peaks the server accepts: 1..64 finite numbers in 0..1, else none. */
+export function wirePeaks(peaks: readonly number[] | undefined): number[] | undefined {
+  const out = (peaks ?? [])
+    .slice(0, MAX_WAVEFORM_PEAKS)
+    .map((v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0));
+  return out.length > 0 ? out : undefined;
+}
 
 // ─── Transport helper (mirrors communityClassroomApi.call) ───────────────────
 
@@ -188,6 +212,8 @@ export interface CreateVoiceNoteInput {
   cohortId?: string;
   /** Optional DM conversation target. */
   conversationId?: string;
+  /** Recorded peaks; sent only to a Studio server (omitted when none). */
+  waveformPeaks?: number[];
 }
 
 export interface VoiceFeedParams {
@@ -283,6 +309,8 @@ export const communityVoiceApi = {
     };
     if (input.cohortId) body.cohort_id = input.cohortId;
     if (input.conversationId) body.conversation_id = input.conversationId;
+    const peaks = wirePeaks(input.waveformPeaks);
+    if (peaks) body.waveform_peaks = peaks;
     return call(VoiceNoteResponseSchema, () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/voice-notes`,
@@ -333,6 +361,24 @@ export const communityVoiceApi = {
   remove(voiceNoteId: string): Promise<VoiceDeleteResult> {
     return call(VoiceDeleteResponseSchema, () =>
       api.delete<unknown>(`/community/voice-notes/${voiceNoteId}`, {
+        signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS),
+      }),
+    );
+  },
+
+  /** GET /community/voice-consent — was the first-use card shown to the caller. */
+  getConsent(): Promise<VoiceConsent> {
+    return call(VoiceConsentSchema, () =>
+      api.get<unknown>('/community/voice-consent', {
+        signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS),
+      }),
+    );
+  },
+
+  /** POST /community/voice-consent — record that the card was shown (idempotent). */
+  recordConsent(): Promise<VoiceConsent> {
+    return call(VoiceConsentSchema, () =>
+      api.post<unknown>('/community/voice-consent', undefined, {
         signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS),
       }),
     );
