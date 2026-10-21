@@ -163,7 +163,7 @@ export default function CommandCenterScreen({
               onOpenSettings={openSettings}
               onAskRoman={askRoman}
               setup={<CoachHomeCards part="setup" />}
-              belowHero={<CoachHomeCards part="below" />}
+              belowHero={(zero) => <CoachHomeCards part="below" brief={!zero} />}
             />
           );
         }

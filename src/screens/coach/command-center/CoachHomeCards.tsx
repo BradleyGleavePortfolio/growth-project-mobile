@@ -24,7 +24,7 @@ import type { CoachTabParamList } from "../../../navigation/CoachNavigator";
  */
 export type CoachHomeCardsPart = "all" | "setup" | "below";
 
-export default function CoachHomeCards({ part = "all" }: { part?: CoachHomeCardsPart } = {}) {
+export default function CoachHomeCards({ part = "all", brief = true }: { part?: CoachHomeCardsPart; brief?: boolean } = {}) {
   const navigation =
     useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
   // B-332-7 (Opus): `initial: false` keeps the Settings root under these
@@ -87,11 +87,12 @@ export default function CoachHomeCards({ part = "all" }: { part?: CoachHomeCards
   }
   if (part === "below") {
     const push = coachLandingTab() === "CommandCenter";
-    if (!push && !featureFlags.coachBrief) return null;
+    const showBrief = featureFlags.coachBrief && brief;
+    if (!push && !showBrief) return null;
     return (
       <View testID="coach-home-cards-below">
         {push ? <PushPermissionCard audience="coach" presentation="section" /> : null}
-        {featureFlags.coachBrief ? <BriefHomeCard onOpen={openBrief} /> : null}
+        {showBrief ? <BriefHomeCard onOpen={openBrief} /> : null}
       </View>
     );
   }

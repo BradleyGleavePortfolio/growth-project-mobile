@@ -41,8 +41,9 @@ interface Props {
   onAskRoman?: () => void;
   /** The setup checklist (CoachHomeCards part 'setup'): on the hero until setup is done. */
   setup?: React.ReactNode;
-  /** The push ask and today's brief (CoachHomeCards part 'below'), under the hero. */
-  belowHero?: React.ReactNode;
+  /** The push ask and today's brief (CoachHomeCards part 'below'), under the hero; `zero`: no clients yet, so no
+   *  Today's brief entry (OPERATOR RULING 6296068749, #161-16 op 1). */
+  belowHero?: (zero: boolean) => React.ReactNode;
   sources?: CoachHomeSources;
 }
 
@@ -317,7 +318,7 @@ export default function CoachHomeV11(p: Props) {
           ) : null}
         </View>
         <View style={s.page}>
-          {p.belowHero}
+          {p.belowHero?.(!!o && roster === 0)}
           {roman}
           {needsTile}
           {business}

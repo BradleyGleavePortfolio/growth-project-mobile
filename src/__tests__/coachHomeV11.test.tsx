@@ -68,7 +68,7 @@ jest.mock('../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../screens/coach/command-center/CoachHomeCards', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { __esModule: true, default: ({ part = 'all' }: { part?: string }) => R.createElement(Text, { testID: `cards-${part}` }, part) };
+  return { __esModule: true, default: ({ part = 'all', brief = true }: { part?: string; brief?: boolean }) => R.createElement(Text, { testID: `cards-${part}` }, brief ? 'brief' : 'no brief') };
 });
 const mockScreen = (testID: string) => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -211,6 +211,7 @@ describe('coach Home, flag on, with home (b#1123)', () => {
     expect(v.getByTestId('cards-setup')).toBeTruthy();
     expect(v.getByTestId('cards-below')).toBeTruthy();
     expect(v.queryByTestId('cards-all')).toBeNull();
+    expect(v.getByTestId('cards-below').props.children).toBe('brief');
   });
 
   it("asks first before Roman writes to a win's client, and sends only on Send", async () => {
@@ -293,6 +294,7 @@ describe('coach Home at zero clients and on failures', () => {
     expect(v.getByText('Clients who need you show here, most urgent first.')).toBeTruthy();
     expect(v.getByText('Roman drafts replies and workout changes for you once clients join.')).toBeTruthy();
     expect(v.getByText('Your day fills in when your first client joins.')).toBeTruthy();
+    expect(v.getByTestId('cards-below').props.children).toBe('no brief'); // OPERATOR RULING 6296068749
     expect(v.getByText('Nothing earned yet this month.')).toBeTruthy();
     expect(v.queryByTestId('home-clients')).toBeNull();
     expect(v.queryByTestId('home-ring-reach_outs')?.props.accessibilityRole).not.toBe('button');
