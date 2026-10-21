@@ -45,6 +45,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COACH_AI_CREDITS: process.env.EXPO_PUBLIC_FF_COACH_AI_CREDITS,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_BRIEF_GATE: process.env.EXPO_PUBLIC_FF_COACH_BRIEF_GATE,
+  EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP: process.env.EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
   EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT: process.env.EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT,
@@ -463,6 +464,13 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
   mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
+  // UI-4 (V1_1_UI_SPEC, owner 2026-10-09): the Clients tab becomes the client
+  // lookup (Needs you under 15 clients, Search first with A to Z at 15 or
+  // more). OFF (default, and in every eas.json profile): today's Clients list,
+  // unchanged. Switching it on is its own one-line PR.
+  //
+  // env: EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP
+  coachClientLookup: readFlag('EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP', false),
   // ─── UI-3 food logging (V1_1_UI_SPEC UI-3, owner 2026-10-09) ─────────────
   // ON: a coached client's Food tab opens on the day's plan as a checklist:
   // the coach's meals in order, "Ate it as planned" logs one in a tap. No plan
