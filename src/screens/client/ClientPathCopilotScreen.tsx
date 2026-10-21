@@ -102,8 +102,8 @@ function PathView() {
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ['copilot'] });
   const onAsk = (text: string, retryId?: string) => void ask(text, retryId).then((ok) => ok && refresh());
-  const starters = [week?.target && changedThisWeek(week.target.from) ? A.whyCalories : null, ROMAN_QUICK_STARTS[0], ROMAN_QUICK_STARTS[3]]
-    .filter((x): x is string => !!x);
+  const starters: string[] = [ROMAN_QUICK_STARTS[0], ROMAN_QUICK_STARTS[3]];
+  if (week?.target && changedThisWeek(week.target.from)) starters.unshift(A.whyCalories);
   const composer = (
     <RomanComposer value={draft} onChangeText={setDraft} sending={busy} footer={ROMAN_ROOM_FOOTER} testID="copilot-composer"
       onSend={() => { const t = draft; setDraft(''); onAsk(t); }} />
