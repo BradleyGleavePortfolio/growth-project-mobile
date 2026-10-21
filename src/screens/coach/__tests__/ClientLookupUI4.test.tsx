@@ -21,7 +21,8 @@ jest.mock('../../../storage/mmkv', () => ({
   cacheStorage: { getStringAsync: async (k: string) => mockCache.get(k), set: async (k: string, v: string) => void mockCache.set(k, v) },
 }));
 jest.mock('../../../ui/haptics/haptics.service', () => ({ get HapticService() { return mockHaptic; } }));
-jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
+let mockRole: string | undefined = 'coach';
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: mockRole }) }));
 jest.mock('../../../theme/ThemeProvider', () => {
   const anyColor = new Proxy({}, { get: () => '#000000' });
   return { useTheme: () => ({ colors: anyColor, semanticColors: anyColor }) };
@@ -71,7 +72,10 @@ const wire = (id: string, name: string, a: Act = {}, joined = day(-60)) => ({
 const navigate = jest.fn();
 let focused = true;
 let onFocus: (() => void) | undefined;
-const nav = { navigate, isFocused: () => focused, addListener: (_e: string, cb: () => void) => ((onFocus = cb), () => undefined), getParent: () => ({ navigate }) } as never;
+const setParams = jest.fn();
+let onTabBlur: (() => void) | undefined; // the Clients tab (the lookup's parent) losing focus
+const parent = { navigate, addListener: (_e: string, cb: () => void) => ((onTabBlur = cb), () => { onTabBlur = undefined; }) };
+const nav = { navigate, setParams, isFocused: () => focused, addListener: (_e: string, cb: () => void) => ((onFocus = cb), () => undefined), getParent: () => parent } as never;
 // Six tabs off, a chat opens over the lookup through openInboxChat (the six-tab placement: navigation/__tests__/coachTabsV2.test.tsx).
 const chatOverList = (clientId: string, clientName: string) => ['ClientsStack', { screen: 'ClientMessages', params: { clientId, clientName }, initial: false }];
 
@@ -87,7 +91,7 @@ const NAMES = ['Ana Lopez', 'Ava Price', 'Ben Carter', 'Bianca Shah', 'Chloe Dun
   'Grace Kim', 'Maya Brooks', 'Omar Haddad', 'Priya Nair', 'Sam Okafor', 'Theo Grant', 'Uma Reyes'];
 const MANY = NAMES.map((n, i) => wire(`m${i}`, n, n === 'Ben Carter' ? { last: day(-5) } : n === 'Ava Price' ? {} : { last: day(-1) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockCache.clear(); useCoachStore.getState().reset(); focused = true; });
+beforeEach(() => { jest.clearAllMocks(); mockCache.clear(); useCoachStore.getState().reset(); focused = true; mockRole = 'coach'; onTabBlur = undefined; });
 
 describe('UI-4 helpers', () => {
   it('reads typed filter words and writes the Needs you sentence with number words', () => {
@@ -167,9 +171,48 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     const rows = [...NAMES.slice(0, 14).map((n, i) => wire(`m${i}`, n, { last: day(-1) })), wire('n1', 'Nina Cole', { last: day(0), review: 1 })];
     await mount(rows, {}, undefined, { params: { view: 'needs' } });
     expect(screen.queryByTestId('lookup-search')).toBeNull();
-    expect(screen.getByText('One needs you today.')).toBeTruthy();
+    expect(screen.getByText('One needs you today. Fourteen are steady.')).toBeTruthy();
     expect(screen.getByTestId('lookup-act-n1')).toBeTruthy();
     expect(screen.queryByTestId('lookup-row-m0')).toBeNull(); // steady clients stay on the full list
+    // LO-690-695 C1: Everyone leaves the view without leaving the tab.
+    expect(screen.getByLabelText('Everyone, 15')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('lookup-everyone-link'));
+    expect(setParams).toHaveBeenLastCalledWith({ view: undefined });
+  });
+  it('view "needs" ends when Clients loses the tab, so the tab reopens on the full list; with no one waiting it reads the steady sentence (LO-690-695 C1)', async () => {
+    await mount([wire('s1', 'Ava Price', { last: day(0) }), wire('s2', 'Ben Carter', { last: day(-1) })], {}, undefined, { params: { view: 'needs' } });
+    expect(screen.getByText('Two are steady.')).toBeTruthy();
+    expect(screen.queryByTestId('lookup-act-s1')).toBeNull();
+    expect(screen.getByTestId('lookup-everyone-link')).toBeTruthy();
+    await act(async () => onTabBlur?.());
+    expect(setParams).toHaveBeenCalledWith({ view: undefined });
+  });
+  it('the full list never listens for the tab and shows no Everyone link', async () => {
+    await mount(UNDER_15);
+    expect(onTabBlur).toBeUndefined();
+    expect(screen.queryByTestId('lookup-everyone-link')).toBeNull();
+  });
+  it.each(['coach', 'owner'])('%s: the At risk pill opens the risk board, as on today\'s list (LO-690-695 C2)', async (role) => {
+    mockRole = role;
+    await mount(MANY);
+    expect(screen.getByText('Bianca Shah').props.numberOfLines).toBe(2); // the A to Z name wraps, never an ellipsis
+    await fireEvent.press(screen.getByTestId('lookup-risk'));
+    expect(navigate).toHaveBeenLastCalledWith('RiskBoard');
+  });
+  it.each(['sub_coach', 'student', undefined])('role %s: no At risk pill (the board answers 403)', async (role) => {
+    mockRole = role;
+    await mount(UNDER_15);
+    expect(screen.queryByTestId('lookup-risk')).toBeNull();
+  });
+  it('Invite, At risk and every Needs you control is a 44 pt target with no hitSlop; names wrap to two lines (LO-690-695 C3, C4)', async () => {
+    await mount(UNDER_15, {}, undefined, { params: { view: 'needs' } });
+    for (const id of ['lookup-invite', 'lookup-risk', 'lookup-act-c1', 'lookup-everyone-link', 'lookup-share-code', 'lookup-archived-link']) {
+      const el = screen.getByTestId(id);
+      expect(StyleSheet.flatten(el.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect(el.props.hitSlop ?? null).toBeNull();
+    }
+    expect(screen.getByText('Maya Brooks').props.numberOfLines).toBe(2);
+    expect(screen.getByText('2 check-ins to review').props.numberOfLines).toBe(3); // the reason beside an action button
   });
   it.each([[true, 0], [false, 1]])('mounted focused %s: the first focus reloads the roster and side counts %s times (Sol B2: Clients mounts unseen)', async (seen, reloads) => {
     focused = seen;

@@ -319,6 +319,8 @@ const makeStyles = (colors: ThemeColors) =>
       marginBottom: 16,
     },
     filterChip: {
+      minHeight: layout.touchMin, // 44 pt target (CLIENTS-POLISH)
+      justifyContent: 'center',
       paddingHorizontal: 14,
       paddingVertical: 8,
       borderRadius: radius.chip,

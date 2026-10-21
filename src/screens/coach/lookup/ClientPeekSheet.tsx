@@ -132,12 +132,12 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
               </View>
             ) : null}
             <View style={s.buttons}>
-              <View style={s.flex}>
+              <View style={s.slot}>
                 <HapticPressable intent="medium" style={s.primary} onPress={() => open({ screen: 'chat' })} accessibilityRole="button" accessibilityLabel={`Message ${first}`} testID="peek-message">
                   <Text style={s.primaryText} numberOfLines={2}>{`Message ${first}`}</Text>
                 </HapticPressable>
               </View>
-              <View style={s.flex}>
+              <View style={s.slot}>
                 <HapticPressable intent="light" style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
                   <Text style={s.outlineText} numberOfLines={2}>Send nudge</Text>
                 </HapticPressable>
@@ -181,8 +181,9 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     sliceText: { ...typography.bodySmall, fontSize: 15, lineHeight: 21, color: colors.textPrimary },
     review: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' },
     link: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: colors.primary },
-    buttons: { flexDirection: 'row', gap: 10, marginTop: 16 },
-    flex: { flex: 1 },
+    // Two equal buttons; when "Message {first}" needs more than half the row (large text, a long name), each takes a full row.
+    buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
+    slot: { flexGrow: 1, minWidth: '45%' },
     primary: { minHeight: 48, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
     primaryText: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, textAlign: 'center', color: sem.textOnAccent },
     outline: { minHeight: 48, borderRadius: radius.button, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },

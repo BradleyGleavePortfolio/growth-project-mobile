@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
 import { render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import type { RiskBoardEntry } from '../services/ptmApi';
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -198,6 +199,13 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
     await Promise.resolve();
     expect(mockGetMyRiskBoard).toHaveBeenCalled();
     expect(mockGetRiskBoard).not.toHaveBeenCalled();
+  });
+
+  it('every filter chip is a 44 pt target (CLIENTS-POLISH)', async () => {
+    const { getByTestId } = await render(<RiskBoardScreen />);
+    for (const f of ['all', 'red', 'amber', 'green']) {
+      expect(StyleSheet.flatten(getByTestId(`risk-filter-${f}`).props.style).minHeight).toBeGreaterThanOrEqual(44);
+    }
   });
 
   it('renders the empty state when the API returns an empty list', async () => {
