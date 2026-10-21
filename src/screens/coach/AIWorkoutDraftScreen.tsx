@@ -19,7 +19,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -492,7 +494,7 @@ export default function AIWorkoutDraftScreen() {
         animationType="fade"
         onRequestClose={() => setShowRejectModal(false)}
       >
-        <View style={styles.rejectOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.rejectOverlay}>
           <View style={styles.rejectCard}>
             <Text style={styles.rejectTitle}>Reject draft</Text>
             <Text style={styles.rejectDesc}>
@@ -526,7 +528,7 @@ export default function AIWorkoutDraftScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

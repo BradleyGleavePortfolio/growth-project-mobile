@@ -34,7 +34,9 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -170,7 +172,8 @@ export function AskAiActionSheet({
       transparent
       testID="ask-ai-action-sheet"
     >
-      <View style={styles.scrim}>
+      {/* The sheet rises above the keyboard; the form scrolls so Send to AI is never hidden (as LogPlannedMealButton). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.scrim} testID="ask-ai-keyboard-avoider">
         <Pressable style={styles.scrimPress} onPress={handleClose} />
         <View style={styles.sheet}>
           <View style={styles.headerRow}>
@@ -235,7 +238,12 @@ export function AskAiActionSheet({
             phase.kind === 'submitting' ||
             phase.kind === 'error' ||
             phase.kind === 'refused') && (
-            <View style={styles.promptBody}>
+            <ScrollView
+              style={styles.promptBody}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              testID="ask-ai-form"
+            >
               <View style={styles.promptHeaderRow}>
                 <Pressable
                   onPress={() => setPhase({ kind: 'pick' })}
@@ -323,10 +331,10 @@ export function AskAiActionSheet({
                   {phase.kind === 'submitting' ? 'Sending…' : 'Send to AI'}
                 </Text>
               </Pressable>
-            </View>
+            </ScrollView>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

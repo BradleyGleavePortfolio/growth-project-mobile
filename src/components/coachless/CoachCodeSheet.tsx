@@ -201,6 +201,7 @@ export default function CoachCodeSheet({
         style={{ flex: 1, backgroundColor: sc.bgPrimary }}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         testID="coach-code-sheet"
       >
         {welcome ? (

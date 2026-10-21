@@ -36,6 +36,7 @@
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   View,
   Text,
   StyleSheet,
@@ -437,7 +438,7 @@ function CreateEventModal({
       onRequestClose={onCancel}
       testID="coach-community-events-create-modal"
     >
-      <View
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[
           styles.scrim,
           { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
@@ -607,7 +608,7 @@ function CreateEventModal({
             </HapticPressable>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -697,7 +698,7 @@ function ManageEventModal({
       onRequestClose={onClose}
       testID="coach-community-events-manage-modal"
     >
-      <View
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[
           styles.scrim,
           { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
@@ -843,7 +844,7 @@ function ManageEventModal({
             </Text>
           </HapticPressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
 
       {/* F14: calm confirm sheet for the irreversible Reflect (close). Cancel is
           the default, prominent affordance; confirm is the secondary one. */}

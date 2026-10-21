@@ -30,7 +30,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -504,12 +506,14 @@ function MessageDraftReviewSheet({
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
-      <Pressable
-        style={styles.scrim}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss the review sheet"
-        onPress={onClose}
-      >
+      {/* The sheet rises above the keyboard so the draft and Approve stay in view (as LogPlannedMealButton). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.scrim} testID="coach-insight-keyboard-avoider">
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss the review sheet"
+          onPress={onClose}
+        />
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.grabber} accessibilityElementsHidden />
           <Text style={styles.sheetTitle} accessibilityRole="header">
@@ -602,7 +606,7 @@ function MessageDraftReviewSheet({
             <Text style={styles.ghostBtnText}>Dismiss</Text>
           </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
