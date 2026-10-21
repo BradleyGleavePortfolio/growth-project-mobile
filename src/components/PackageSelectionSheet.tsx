@@ -94,6 +94,10 @@ export interface PackageSelectionSheetProps {
   initialPackageId?: string | null;
   /** Unsolicited sheet (package_prompt, Day 1 on iPhone): save the 24h time when it opens, not only on Skip. */
   recordShown?: boolean;
+  /** RENEWAL-M: called once when the sheet opens (renewal pop-up seen + acknowledged). */
+  onShown?: () => void;
+  /** RENEWAL-M: opened from a plan_renewal push tap, so the 24h check does not apply. */
+  skipSnoozeCheck?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -125,6 +129,8 @@ export default function PackageSelectionSheet({
   recheckDelaysMs,
   initialPackageId,
   recordShown = false,
+  onShown,
+  skipSnoozeCheck = false,
 }: PackageSelectionSheetProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
@@ -148,9 +154,11 @@ export default function PackageSelectionSheet({
   // every render. Subscribing the effects below to `onDismiss` directly would
   // cause them to re-run (and re-fetch packages) on every parent re-render.
   const onDismissRef = useRef(onDismiss);
+  const onShownRef = useRef(onShown);
   useEffect(() => {
     onDismissRef.current = onDismiss;
-  }, [onDismiss]);
+    onShownRef.current = onShown;
+  }, [onDismiss, onShown]);
 
   const purchase = usePackagePurchase({
     surface: 'sheet',
@@ -174,7 +182,7 @@ export default function PackageSelectionSheet({
     let cancelled = false;
     (async () => {
       try {
-        const dismissedAt = await prefsStorage.getStringAsync(dismissedKey);
+        const dismissedAt = skipSnoozeCheck ? undefined : await prefsStorage.getStringAsync(dismissedKey);
         if (dismissedAt) {
           const elapsed = Date.now() - new Date(dismissedAt).getTime();
           if (elapsed < TWENTY_FOUR_HOURS) {
@@ -194,10 +202,12 @@ export default function PackageSelectionSheet({
           // best-effort; still show
         }
       }
-      if (!cancelled) setReady(true);
+      if (cancelled) return;
+      onShownRef.current?.();
+      setReady(true);
     })();
     return () => { cancelled = true; };
-  }, [visible, dismissedKey, recordShown]);
+  }, [visible, dismissedKey, recordShown, skipSnoozeCheck]);
 
   // ── Fetch packages when ready (and after a price / terms change) ──────────
   useEffect(() => {
