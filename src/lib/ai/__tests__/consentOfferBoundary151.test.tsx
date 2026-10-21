@@ -331,16 +331,16 @@ function ageGated() {
 const strings = (n: unknown): string[] =>
   typeof n === 'string' ? [n] : Array.isArray(n) ? n.flatMap(strings) : n && typeof n === 'object' ? strings((n as { children?: unknown }).children ?? null) : [];
 
-// P0: [no coach, server switch, memory on, P0 version, b#1041 / b#1046 screen pin].
+// P0: [no coach, server switch, memory on, P0 version, screen pin] (W-BRAND-AGREEMENT: b#1041 / b#1046 screens with TGP Fitness).
 const P0: Array<[boolean, boolean, boolean, string, string]> = [
-  [false, false, false, 'consult-consent-v7', '7711079209acecedfb50c31787787124af843f076154e9bfbd1e33550e861e09'],
-  [false, false, true, 'consult-consent-v8', 'b98e160e884aecdca059b90f7a88803ba84eeac79b692e83eba9f734f93274b2'],
-  [false, true, false, 'consult-consent-v9', '1daf2cde65d223686b4bd60f786b85866f93714176dcc8781ff94b4c9f0e30bf'],
-  [false, true, true, 'consult-consent-v10', '5f36acf2704699f1e7faa68d7c65b8b8ed1f1988d197774a61914b97f22ff512'],
-  [true, false, false, 'consult-consent-v8-coach-free', '5369ee9c57412dd2233850a7cae2043a32645431ee3b3484a14c19b8c503c633'],
-  [true, false, true, 'consult-consent-v9-coach-free', '4a1e19730f3fab3b8a6a8119f5425cd3c0f6ed2f502d229d25dbb7fe5df35771'],
-  [true, true, false, 'consult-consent-v10-coach-free', 'b79c1f039e2832560593390b7b66a91f61b2e7be5eb55ef3509ecd7a100d7c4c'],
-  [true, true, true, 'consult-consent-v11-coach-free', '3528b10d50d8e7bb67a3065b86ba2b5cf33f3891b8194be413c78f2519e3257f'],
+  [false, false, false, 'consult-consent-v11', '4b1686a8e835297d0e6bbd91dce988b4b5b9046eb9d70aebbda9e1d36c70f926'],
+  [false, false, true, 'consult-consent-v12', '8989ac25a1d87a5d6c2f355b74e1a260fb3b35231bf571a371440229d4c9f6a9'],
+  [false, true, false, 'consult-consent-v13', '2f22065286d2284cc70e38921da11fcafa8c11a03887025e8781347592a163d6'],
+  [false, true, true, 'consult-consent-v14', '82f3993ef5ce2262d15afe64a45b8d5ad63ca1fa42cd3e172e597d4fe761ba81'],
+  [true, false, false, 'consult-consent-v12-coach-free', 'a655bb7c794629a25fc27246dace79078a516a8ef45c357751bc2d2271ba0d64'],
+  [true, false, true, 'consult-consent-v13-coach-free', '336fcf0271843d9b9bfca35ce321480aba4925196f935b1e0ac51e260cba468b'],
+  [true, true, false, 'consult-consent-v14-coach-free', '5cb2ef1651f012bfb7a7c1569d06ecdfd43f1c33d00208d23bdf286353dfbf56'],
+  [true, true, true, 'consult-consent-v15-coach-free', 'b7eb74293aac4d20c6d19ea2b7a97bec035467f8f8897a5d8e393fd7140e6864'],
 ];
 
 describe('B-C: P0 through the real navigator asks crisis_alert, never the flag, and records the screen shown', () => {

@@ -285,7 +285,7 @@ describe('Settings > Tutorial', () => {
     expect(screen.getByLabelText('Take the tour')).toBeTruthy();
     expect(screen.queryByLabelText('Take the tour again')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Take the tour'));
-    expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'HomeMain' });
+    expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'HomeMain', pop: true });
     expect(useTutorialStore.getState().tutorial.status).toBe('active');
     expect(screen.getByLabelText('The tour is in progress')).toBeTruthy();
     await act(async () => {

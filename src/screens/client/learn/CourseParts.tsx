@@ -11,13 +11,13 @@ import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { LearnBack, LessonMark } from './LearnParts';
 
 /** The deep forest top of the course home and a week, under a forest status band. */
-export function CourseMasthead({ navigation, back, children }: { navigation: NavigationProp<ParamListBase>; back?: string; children: React.ReactNode }) {
+export function CourseMasthead({ navigation, back, onBack, children }: { navigation: NavigationProp<ParamListBase>; back?: string; onBack?: () => void; children: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   const insets = useScreenInsets();
   return (
     <View style={[styles.masthead, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + layout.statusBarGap }]}>
       <ForestStatusBar />
-      <LearnBack navigation={navigation} onDark label={back} />
+      <LearnBack navigation={navigation} onDark label={back} onPress={onBack} />
       {children}
     </View>
   );

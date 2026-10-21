@@ -16,7 +16,8 @@ import { courseNow, coursesFrom } from '../courseData';
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), getState: jest.fn() };
 let mockParams: Record<string, string> = {};
 let [mockOnline, mockToday, mockOpen] = [true, '2026-10-14', () => undefined as void]; // today: Wed of week 3
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useRoute: () => ({ params: mockParams }) }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useRoute: () => ({ params: mockParams }), useIsFocused: () => true }));
+jest.mock('expo-video', () => ({ useVideoPlayer: () => ({ addListener: () => ({ remove: () => undefined }) }), VideoView: () => null }));
 jest.mock('@expo-google-fonts/cormorant-garamond', () => ({ CormorantGaramond_400Regular_Italic: 1, useFonts: () => [true] }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me', coach_id: 'c1' }) }));
@@ -117,10 +118,8 @@ describe('Course home', () => {
     await fireEvent.press(screen.getByLabelText('Week 3 · Build the base, 1 of 3 done · finish by Sun Oct 18'));
     expect(mockNav.navigate).toHaveBeenLastCalledWith('CourseWeek', { id: 'k1', week: 'm3' });
     expect(HapticService.selection).toHaveBeenCalledTimes(1);
-    // A week not open yet says when it opens and is not a button (its sheet is plan PR 7).
-    const locked = screen.getByLabelText('Week 4 · Strength, Opens Mon Oct 19');
-    expect(locked.props.accessibilityRole).toBeUndefined();
-    await fireEvent.press(locked);
+    // A week not open yet says when it opens and is a button with no screen behind it: its sheet is c09 (CourseMoments.test.tsx).
+    await fireEvent.press(screen.getByLabelText('Week 4 · Strength, Opens Mon Oct 19'));
     expect(mockNav.navigate).toHaveBeenCalledTimes(2);
   });
 

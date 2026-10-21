@@ -5,7 +5,8 @@
  * coach on this phone (the key carries the coach id and period_start, so a
  * new month or another coach starts fresh). Head coaches only and only while
  * the home is focused (useCoachCredits). Buy opens the existing pack
- * checkout with that pack chosen; "Other amounts" opens it on the list.
+ * checkout with that pack chosen; "Other amounts" opens it with the amount
+ * field already open (#161-15 op 1).
  * Mounted only with featureFlags.coachAiCredits.
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -58,7 +59,7 @@ export default function CreditMomentsHost() {
 
   if (!open || !credits || !focused) return null;
   const close = () => setOpen(null);
-  const checkout = (preselect?: number) =>
+  const checkout = (preselect?: number | 'custom') =>
     navigation.navigate('SettingsStack', { screen: 'CreditPackCheckout', params: preselect ? { preselect } : undefined, initial: false });
   return (
     <CreditMomentSheet
@@ -71,7 +72,7 @@ export default function CreditMomentsHost() {
       }}
       onOtherAmounts={() => {
         close();
-        checkout();
+        checkout('custom');
       }}
     />
   );

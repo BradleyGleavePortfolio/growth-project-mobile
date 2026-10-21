@@ -6,7 +6,8 @@
  *   - a join link:           `https://app.trygrowthproject.com/join/GP-7K2Q`
  *   - a custom-scheme link:  `tgp://join/GP-7K2Q`, `tgp://join/LAUNCH2026`
  *   - a query-style link:    `.../join?code=GP-7K2Q` or `?invite_code=...`
- *   - a sentence that contains one of the above ("Use code GP-7K2Q to join")
+ *   - a sentence that contains one of the above ("Use code GP-7K2Q to join",
+ *     "My code is TGP-K7M2QX3")
  *
  * Returns the upper-cased code, or null if nothing plausible was found.
  *
@@ -85,7 +86,7 @@ export function extractInviteCode(input: unknown): string | null {
     return isUrlish(token) ? fromUrl(token) : normalise(token);
   }
 
-  // Prose: first a link anywhere, then a complete GP- token.
+  // Prose: first a link anywhere, then a TGP- or GP- token.
   for (const raw of tokens) {
     const token = stripToken(raw);
     if (isUrlish(token)) {
@@ -95,7 +96,8 @@ export function extractInviteCode(input: unknown): string | null {
   }
   for (const raw of tokens) {
     const token = stripToken(raw);
-    if (/^GP-/i.test(token)) {
+    // TGP- is today's generated format (owner 26); GP- the older one.
+    if (/^T?GP-/i.test(token)) {
       const code = normalise(token);
       if (code) return code;
     }

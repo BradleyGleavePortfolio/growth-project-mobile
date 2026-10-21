@@ -23,8 +23,10 @@
  * text needs a new version here AND on the backend.
  * v5 (owner C-6a, 2026-10-12): v3 without paragraph 3's referral-partner sentence.
  * v7 (owner 57c, 2026-10-12): v5 with the safety-reply exception in paragraph 4 (client-ai-v6).
+ * v11 (W-BRAND-AGREEMENT, owner op 1, 2026-10-19): v7 with TGP Fitness as the name in paragraphs 1
+ * and 3 and box 1 (W34-W36). Every screen below moved to its successor the same way.
  */
-export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v7' as const;
+export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v11' as const;
 
 // Title of the consent screen (P0). Lives here, a module with no imports, so
 // the screen definition (definitions.ts) and the hashed copy (copy.ts) share
@@ -62,18 +64,20 @@ export const AI_CONSENT_PRE57C_MEMORY_VERSION = 'client-ai-v5' as const;
  * server's client-ai-v5 paragraph (backend consult-consent-v6: the v5 screen with that paragraph 4;
  * consult-consent-v4 before owner C-6a, v6 before owner 57c).
  * Otherwise P0 stays CONSULT_CONSENT_COPY_VERSION with this build's base paragraph.
+ * W-BRAND-AGREEMENT: v12 is v8 with TGP Fitness.
  */
-export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v8' as const;
+export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v12' as const;
 
 /**
  * CRISIS-APP-COPY (owner op 1, backend b#1041): client-ai-v6 / v7 and P0 v7 / v8 with the approved crisis
  * sentence right after the exception. The app asks GET ?variant=crisis_alert exactly while the server's
  * `roman_crisis_alert` flag is on, and shows (and records) these only when the server answers with them.
+ * W-BRAND-AGREEMENT: P0 v13 / v14 are v9 / v10 with TGP Fitness.
  */
 export const AI_CONSENT_CRISIS_VERSION = 'client-ai-v8' as const;
 export const AI_CONSENT_CRISIS_MEMORY_VERSION = 'client-ai-v9' as const;
-export const CONSULT_CONSENT_CRISIS_COPY_VERSION = 'consult-consent-v9' as const;
-export const CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v10' as const;
+export const CONSULT_CONSENT_CRISIS_COPY_VERSION = 'consult-consent-v13' as const;
+export const CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v14' as const;
 
 /**
  * Owner 62 (Option 1, 2026-10-12): a client with no coach sees the coach-free P0 (the coached text
@@ -83,13 +87,33 @@ export const CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v10' 
  * screen (FIX684): consult-consent-v8-coach-free, or v9-coach-free when box 2 shows the server's memory
  * paragraph. A stored v7-coach-free record stays as it is (#CRISIS-OLD-CONSENT op 1: nobody is asked again).
  * The coach-free box 2 versions stay known so a grant recorded before is still read correctly.
+ * W-BRAND-AGREEMENT: v12 / v13-coach-free are v8 / v9-coach-free with TGP Fitness (W34, W37, W38).
  */
-export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v8-coach-free' as const;
-export const CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION = 'consult-consent-v9-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_COPY_VERSION = 'consult-consent-v12-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_MEMORY_COPY_VERSION = 'consult-consent-v13-coach-free' as const;
 export const CONSULT_CONSENT_COACH_FREE_PRE_ROMAN_COPY_VERSION = 'consult-consent-v7-coach-free' as const;
-/** FIXCONSENT (b#1046): v8 / v9-coach-free with paragraph 4 of consult-consent-v9 / v10 (the crisis copies answered). */
-export const CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION = 'consult-consent-v10-coach-free' as const;
-export const CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v11-coach-free' as const;
+/**
+ * FIXCONSENT (b#1046): v8 / v9-coach-free with paragraph 4 of consult-consent-v9 / v10 (the crisis copies
+ * answered). W-BRAND-AGREEMENT: v14 / v15-coach-free are v10 / v11-coach-free with TGP Fitness.
+ */
+export const CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION = 'consult-consent-v14-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v15-coach-free' as const;
+
+/**
+ * W-BRAND-AGREEMENT (owner op 1: people who already agreed keep their record): the eight screens before
+ * TGP Fitness. A stored agreement of one still counts in this build (nobody is asked again, as
+ * #CRISIS-OLD-CONSENT op 1), and the server keeps accepting them.
+ */
+export const CONSULT_CONSENT_PRE_BRAND_COPY_VERSIONS = [
+  'consult-consent-v7',
+  'consult-consent-v8',
+  'consult-consent-v9',
+  'consult-consent-v10',
+  'consult-consent-v8-coach-free',
+  'consult-consent-v9-coach-free',
+  'consult-consent-v10-coach-free',
+  'consult-consent-v11-coach-free',
+] as const;
 export const AI_CONSENT_COACH_FREE_VERSION = 'client-ai-v4-coach-free' as const;
 export const AI_CONSENT_COACH_FREE_MEMORY_VERSION = 'client-ai-v5-coach-free' as const;
 

@@ -19,8 +19,8 @@ export type RingHabit = ApiHabit & {
   week?: Count;
 };
 
-/** GET /habits/summary?from&to (HB3): the client's today and each day's planned and done. */
-export type HabitSummary = { today: string; days: (Count & { date: string })[] };
+/** GET /habits/summary?from&to (HB3): the client's today, each day's planned and done, and each habit's over the range. */
+export type HabitSummary = { today: string; days: (Count & { date: string })[]; habits?: (Count & { id: string })[] };
 
 export const RING_COPY = {
   habits: 'Habits', // HB-S-012
@@ -51,6 +51,10 @@ export const RING_COPY = {
   tileOn: (habit: string, day: string, done: boolean) => `${habit}, ${done ? 'done' : 'not done'} on ${day}`, // HB-B1b, new
   future: 'Cannot log future events', // #WORDING-HB3, approved as written
   nothingToday: 'Nothing planned today', // #HABITS-EMPTY-DAY op 1, approved as written
+  nothingOn: (weekday: string) => `Nothing planned on ${weekday}`, // HB-C1, approved (W-HABITS-2)
+  lastWeek: (n: number, m: number) => `${n} of ${m} last week`, // HB-C2, approved (W-HABITS-2)
+  previousWeek: 'Previous week', // HB-C3, spoken, approved (W-HABITS-2)
+  nextWeek: 'Next week', // HB-C3, spoken, approved (W-HABITS-2)
   ring: (n: number, m: number) => `Today, ${n} of ${m} habits done`, // HB-S-299
   day: (day: string, c: Count) => (c.planned ? `${day}, ${c.done} of ${c.planned} done` : day), // HB-S-300, HB-S-046
   loading: 'Loading habits', // today's QuietLoading label
@@ -100,14 +104,24 @@ export function weekCount(habits: RingHabit[], today: string, shown: (h: RingHab
   }, { planned: 0, done: 0 });
 }
 
+/** The first day a habit counts from, over all of them (HB3): its start date, or its first tick held here if that came earlier. */
+export function firstDay(habits: RingHabit[], today: string): string {
+  const days = habits.flatMap((h) => [h.starts_on?.slice(0, 10) ?? today, ...(h.logs ?? []).filter((l) => l.completed).map((l) => l.date.slice(0, 10))]);
+  return days.reduce((first, d) => (d < first ? d : first), today);
+}
+
+/** A week's planned and done over every habit, as the server counts it (GET /habits/summary `habits`). */
+export function weekTotal(summary: HabitSummary | undefined): Count | null {
+  return summary?.habits?.reduce<Count>((t, h) => ({ planned: t.planned + h.planned, done: t.done + h.done }), { planned: 0, done: 0 }) ?? null;
+}
+
 /** One ring segment per part: done first, then missed (past days) or planned. */
 export function segmentsOf(c: Count, past: boolean): SegmentState[] {
   return Array.from({ length: c.planned }, (_, i) => (i < c.done ? 'done' : past ? 'missed' : 'planned'));
 }
 
-/** Monday to Sunday around today. The days the screen holds (`own`) draw from its ring; the rest from the summary. */
-export function weekStrip(summary: HabitSummary, today: string, own: (date: string) => Count | null) {
-  const monday = mondayOf(today);
+/** Monday to Sunday from `monday`. The days the screen holds (`own`) draw from its ring; the rest from the summary. */
+export function weekStrip(summary: HabitSummary, monday: string, today: string, own: (date: string) => Count | null) {
   return Array.from({ length: 7 }, (_, i) => {
     const date = plusDays(monday, i);
     const count = own(date) ?? summary.days.find((d) => d.date === date) ?? { planned: 0, done: 0 };

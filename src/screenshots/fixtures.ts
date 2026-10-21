@@ -8,8 +8,7 @@
  *
  * TGP guardrails honored:
  *  - No diagnosis / treatment language, no medical claims.
- *  - No financial advice, no AI-generated coach text. The AI Guide screen is
- *    intentionally not in the screenshot target set.
+ *  - Invented chat history only; no live AI request or coach draft.
  *  - All copy is generic ("Steady week", "Cardio session") with no claim of
  *    outcomes attributable to the app.
  */
@@ -24,9 +23,9 @@ const DEMO_COACH_ID = 'demo-coach-screenshot';
 export const DEMO_USER: CurrentUser = {
   id: DEMO_USER_ID,
   email: 'demo@trygrowthproject.com',
-  name: 'Alex Morgan',
-  firstName: 'Alex',
-  lastName: 'Morgan',
+  name: 'Riley Hartwell',
+  firstName: 'Riley',
+  lastName: 'Hartwell',
   role: 'student',
   coach_id: DEMO_COACH_ID,
   createdAt: '2026-04-15T09:00:00Z',
@@ -336,12 +335,16 @@ export const DEMO_COMMUNITY_FEED = [
 export const DEMO_MESSAGES = [
   {
     id: 'msg-1',
+    sender_id: DEMO_COACH_ID,
+    sender_role: 'coach',
     body: 'Strong week — your protein is dialled. Let us hold the deficit one more week, then reassess.',
     direction: 'inbound' as const,
     created_at: '2026-05-01T14:30:00Z',
   },
   {
     id: 'msg-2',
+    sender_id: DEMO_USER_ID,
+    sender_role: 'client',
     body: 'Sounds good. Travelling Thursday — I will pre-log lunch.',
     direction: 'outbound' as const,
     created_at: '2026-05-01T14:32:00Z',
@@ -354,3 +357,21 @@ export const DEMO_AUTH_ME = {
   user: DEMO_USER,
   profile: DEMO_USER.profile,
 };
+
+export const DEMO_WORKOUT_PARAMS = {
+  routineName: 'Upper body',
+  exercises: JSON.stringify([
+    { exerciseId: 'bench', exerciseName: 'Bench press', sets: 3, reps: 8, weightLbs: 135, restSec: 90 },
+    { exerciseId: 'row', exerciseName: 'Seated row', sets: 3, reps: 10, weightLbs: 100, restSec: 90 },
+  ]),
+};
+
+export const DEMO_ROMAN_SESSION = {
+  id: 'demo-roman', surface: 'client', messageCount: 2,
+  startedAt: '2026-05-02T09:00:00Z', lastActivityAt: '2026-05-02T09:01:00Z',
+};
+
+export const DEMO_ROMAN_MESSAGES = [
+  { id: 'roman-2', role: 'roman', content: 'Your targets are at the top of your food log: 2,200 kcal and 165 g of protein.', interrupted: false, createdAt: '2026-05-02T09:01:00Z' },
+  { id: 'roman-1', role: 'user', content: 'Where can I see my food targets?', interrupted: false, createdAt: '2026-05-02T09:00:00Z' },
+];

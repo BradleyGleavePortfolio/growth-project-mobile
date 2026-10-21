@@ -7,7 +7,7 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { featureFlags } from '../../../config/featureFlags';
 
 export type LessonKind = 'page' | 'video' | 'both';
-export interface CourseLesson { id: string; n: string; title: string; kind: LessonKind; minutes: number | null; body: string; note: string; done: boolean }
+export interface CourseLesson { id: string; n: string; title: string; kind: LessonKind; minutes: number | null; body: string; note: string; done: boolean; positionSeconds: number }
 export interface CourseWeek { id: string; n: number; title: string; note: string; open: boolean; opensOn: string | null; finishBy: string | null; lessons: CourseLesson[] }
 export interface Course { id: string; title: string; coach: string | null; startsOn: string | null; weeks: CourseWeek[] }
 
@@ -29,7 +29,8 @@ export function courseFrom(r: Row): Course {
     lessons: rows(m.lessons).map((l, j) => {
       const body = str(l.body_markdown);
       const kind = KINDS.find((k) => k === l.kind) ?? 'page';
-      return { id: String(l.id), n: `${i + 1}.${j + 1}`, title: str(l.title) || 'Untitled lesson', kind, minutes: minutes(body, l.duration_sec), body, note: str(l.description), done: l.done === true };
+      return { id: String(l.id), n: `${i + 1}.${j + 1}`, title: str(l.title) || 'Untitled lesson', kind, minutes: minutes(body, l.duration_sec), body, note: str(l.description), done: l.done === true,
+        positionSeconds: Math.max(0, Math.floor(Number(l.position_seconds)) || 0) };
     }),
   }));
   return { id: String(r.id), title: str(r.title), coach: str(r.coach_name).split(/\s+/)[0] || null, startsOn: day(r.starts_on), weeks };
@@ -79,15 +80,17 @@ export function courseCopy(coach: string | null) {
     openUntil: (n: number, d: string | null) => `Week ${n} open until ${dayLabel(d)}`,
     weekOf: (n: number, total: number) => `Week ${n} of ${total}`,
     from: `From ${coach ?? 'your coach'}`,
+    paced: (start: string) => `${coach ?? 'Your coach'} set this course to open one week at a time, from your start on ${dayLabel(start, false)}.`,
     loading: `Loading ${whose} course`,
     failed: `${Whose} course did not load.`,
     noAnswer: 'Check the connection and try again.',
+    videoFailed: 'This video did not load.',
     offline: 'You’re offline. Pages in open weeks still read here. Videos and saving progress need a connection.',
   };
 }
 
-/** A 402 is never the plans sheet over a course (the reads never lock, #LEARN-LOCK op 1). */
-const quiet: AxiosRequestConfig & { quietPaywall: boolean } = { quietPaywall: true };
+/** A 402 is never the plans sheet over a course (the reads, the video address and the saved place never lock, #LEARN-LOCK op 1). */
+export const quiet: AxiosRequestConfig & { quietPaywall: boolean } = { quietPaywall: true };
 const [listKey, courseKey] = [(uid?: string) => ['learn-courses', uid], (uid?: string, id?: string) => ['learn-course', uid, id]];
 
 /** The courses the client owns; nothing is asked while the flag is off. */
@@ -110,10 +113,10 @@ export function useCourse(id?: string) {
     enabled: !!uid && !!id,
   });
   const known = query.data ?? qc.getQueryData<Course[]>(listKey(uid))?.find((c) => c.id === id) ?? null;
-  const markDone = (lessonId: string) => {
-    const mark = (c: Course): Course => ({ ...c, weeks: c.weeks.map((w) => ({ ...w, lessons: w.lessons.map((l) => (l.id === lessonId ? { ...l, done: true } : l)) })) });
+  const patch = (lessonId: string, p: Partial<CourseLesson>) => {
+    const mark = (c: Course): Course => ({ ...c, weeks: c.weeks.map((w) => ({ ...w, lessons: w.lessons.map((l) => (l.id === lessonId ? { ...l, ...p } : l)) })) });
     qc.setQueryData<Course>(courseKey(uid, id), (prev) => prev && mark(prev));
     qc.setQueryData<Course[]>(listKey(uid), (prev) => prev?.map((c) => (c.id === id ? mark(c) : c)));
   };
-  return { query, course: query.data ?? null, known, markDone };
+  return { query, course: query.data ?? null, known, markDone: (lessonId: string) => patch(lessonId, { done: true }), markPosition: (lessonId: string, positionSeconds: number) => patch(lessonId, { positionSeconds }) };
 }

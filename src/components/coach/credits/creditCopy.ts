@@ -78,6 +78,8 @@ export const CREDIT_MOMENT_COPY = {
   },
   newBalance: 'New balance',
   otherAmounts: 'Other amounts',
+  /** The pack screen's custom Buy while no valid amount is typed (#161-8 op 1). */
+  enterAmount: 'Enter an amount',
   notNow: 'Not now',
   gotIt: 'Got it',
 } as const;

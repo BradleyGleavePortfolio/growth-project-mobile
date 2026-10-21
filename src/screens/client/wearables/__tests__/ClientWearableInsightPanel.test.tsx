@@ -85,6 +85,18 @@ jest.mock('../../../../theme/useTheme', () => {
   };
 });
 
+// WEAR-AI: stand-in for the box-2 sheet so a test can grant without the ledger.
+jest.mock('../../../../components/ai/AiConsentSheet', () => {
+  const R = jest.requireActual('react');
+  const RN = jest.requireActual('react-native');
+  return {
+    ...jest.requireActual('../../../../components/ai/AiConsentSheet'),
+    __esModule: true,
+    default: ({ visible, onGranted }: { visible: boolean; onGranted: () => void }) =>
+      visible ? R.createElement(RN.Pressable, { testID: 'mock-consent-grant', onPress: onGranted }) : null,
+  };
+});
+
 import { makeAccessibilitySubscription } from '../testSupport/accessibilityMocks';
 import { ClientWearableInsightPanel } from '../ClientWearableInsightPanel';
 import { logger } from '../../../../utils/logger';
@@ -237,11 +249,11 @@ describe('loaded state', () => {
     expect(
       getByText('Your resting heart rate is trending down this week'),
     ).toBeTruthy();
-    expect(getByText('Norm comparison')).toBeTruthy();
+    expect(getByText('How this compares')).toBeTruthy();
     expect(
       getByText('That is below the typical range for your age group'),
     ).toBeTruthy();
-    expect(getByText('Intervention')).toBeTruthy();
+    expect(getByText('Try this')).toBeTruthy();
     expect(
       getByText('Keep your easy runs easy — your aerobic base is building'),
     ).toBeTruthy();
@@ -434,15 +446,27 @@ describe('source_metrics provenance', () => {
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-source-metrics')).toBeTruthy();
-    expect(getByText('Source metrics')).toBeTruthy();
+    expect(getByText('Based on')).toBeTruthy();
+    expect(getByText('Resting Heart Rate, Heart Rate')).toBeTruthy();
     expect(
-      getByText('RESTING_HEART_RATE_BPM, HEART_RATE_BPM'),
+      getByLabelText('Based on: Resting Heart Rate, Heart Rate'),
     ).toBeTruthy();
-    expect(
-      getByLabelText(
-        'Source metrics: RESTING_HEART_RATE_BPM, HEART_RATE_BPM',
-      ),
-    ).toBeTruthy();
+  });
+
+  // WEAR-AI-LABELS: a Sleep & Recovery card names every metric in plain words, never a code.
+  it('names Sleep & Recovery metrics in plain words', async () => {
+    mockUseClientInsight.mockReturnValue(
+      queryState({
+        data: fullInsight({
+          source_metrics: ['SLEEP_DURATION_MIN', 'RESTING_HEART_RATE_BPM', 'HRV_MS'],
+        }),
+      }),
+    );
+    const { getByText, queryByText } = await render(
+      <ClientWearableInsightPanel {...baseProps} />,
+    );
+    expect(getByText('Sleep Duration, Resting Heart Rate, HRV')).toBeTruthy();
+    expect(queryByText(/[A-Z]+_[A-Z]+/)).toBeNull();
   });
 
   it('shows the first three metrics + a "+N more" suffix when there are extras', async () => {
@@ -463,7 +487,7 @@ describe('source_metrics provenance', () => {
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(
-      getByText('STEPS, HEART_RATE_BPM, VO2_MAX +2 more'),
+      getByText('Steps, Heart Rate, VO₂ Max +2 more'),
     ).toBeTruthy();
   });
 });
@@ -732,5 +756,69 @@ describe('unsafe deep-link refusal is logged (P2)', () => {
     const [context, message] = warn.mock.calls[0];
     expect(context).toBe('ClientWearableInsightPanel');
     expect(String(message)).toMatch(/refused to open a non-tgp deep link/);
+  });
+});
+
+describe('WEAR-AI: no-coach, consent, egress and plain 403 states', () => {
+  const httpError = (status: number, data: Record<string, unknown>, headers: Record<string, string> = {}) =>
+    Object.assign(new Error(`Request failed with status code ${status}`), {
+      isAxiosError: true,
+      response: { status, data, headers },
+      config: { headers: {} },
+    });
+  const failed = (error: unknown, refetch = jest.fn()) =>
+    queryState({ isError: true, error, refetch });
+
+  it('403 ROMAN_REQUIRES_COACH: "Roman works with a coach", no Retry, no sign-in text', async () => {
+    mockUseClientInsight.mockReturnValue(
+      failed(httpError(403, { error: 'ROMAN_REQUIRES_COACH', action: 'JOIN_COACH' })),
+    );
+    const r = await render(<ClientWearableInsightPanel bucket="SLEEP_RECOVERY" />);
+    expect(r.getByTestId('client-insight-needs-coach')).toBeTruthy();
+    expect(r.getByText('Roman works with a coach')).toBeTruthy();
+    expect(r.queryByTestId('client-insight-retry')).toBeNull();
+    expect(r.queryByTestId('client-insight-error')).toBeNull();
+    expect(r.queryByText(/sign in again/i)).toBeNull();
+  });
+
+  it('the hook shows ROMAN_REQUIRES_COACH at once (no silent retries), like an AI refusal', () => {
+    const { retryUnlessAiRefused } = jest.requireActual('../../../../hooks/useWearableInsight');
+    expect(retryUnlessAiRefused(0, httpError(403, { error: 'ROMAN_REQUIRES_COACH' }))).toBe(false);
+    expect(retryUnlessAiRefused(0, httpError(403, { code: 'ai_consent_required' }))).toBe(false);
+    expect(retryUnlessAiRefused(0, httpError(500, {}))).toBe(true);
+  });
+
+  it('ai_consent_required: AI help is off + Allow AI help; Allow opens the sheet; a grant refetches and the insight shows', async () => {
+    const refetch = jest.fn();
+    mockUseClientInsight.mockReturnValue(failed(httpError(403, { code: 'ai_consent_required' }), refetch));
+    const r = await render(<ClientWearableInsightPanel {...baseProps} />);
+    expect(r.getByTestId('client-insight-ai-refusal-title').props.children).toBe('AI help is off');
+    expect(r.queryByTestId('mock-consent-grant')).toBeNull();
+    await fireEvent.press(r.getByTestId('client-insight-ai-refusal-allow'));
+    await fireEvent.press(r.getByTestId('mock-consent-grant'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    mockUseClientInsight.mockReturnValue(queryState({ data: fullInsight() }));
+    await r.rerender(<ClientWearableInsightPanel {...baseProps} />);
+    expect(r.getByTestId('client-insight-panel')).toBeTruthy();
+  });
+
+  it('503 ai_egress_blocked still shows the support reference', async () => {
+    mockUseClientInsight.mockReturnValue(
+      failed(httpError(503, { code: 'ai_egress_blocked', message: 'server message' }, { 'x-request-id': 'insight-ref-5678' })),
+    );
+    const r = await render(<ClientWearableInsightPanel {...baseProps} />);
+    expect(r.getByTestId('client-insight-ai-refusal-title').props.children).toBe('AI help is paused by a service problem');
+    expect(r.getByTestId('client-insight-ai-refusal-reference').props.children).toMatch(/^Reference: /);
+  });
+
+  it('a plain 403 says "No insight is available yet." with Retry, never "sign in again"; 401 keeps its line', async () => {
+    mockUseClientInsight.mockReturnValue(failed(httpError(403, { message: 'Forbidden' })));
+    const r = await render(<ClientWearableInsightPanel {...baseProps} />);
+    expect(r.getByText('No insight is available yet.')).toBeTruthy();
+    expect(r.getByTestId('client-insight-retry')).toBeTruthy();
+    expect(r.queryByText(/sign in again/i)).toBeNull();
+    mockUseClientInsight.mockReturnValue(failed(httpError(401, {})));
+    await r.rerender(<ClientWearableInsightPanel {...baseProps} />);
+    expect(r.getByText('Please sign in again to see your insights.')).toBeTruthy();
   });
 });
