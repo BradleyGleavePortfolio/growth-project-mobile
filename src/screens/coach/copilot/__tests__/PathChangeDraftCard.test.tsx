@@ -74,6 +74,7 @@ test('Edit on a calorie target sends the new kcal, and an invalid one cannot be 
   await act(async () => fireEvent.changeText(s.getByTestId('path-draft-kcal'), '90'));
   expect(s.getByTestId('path-draft-confirm').props.accessibilityState.disabled).toBe(true);
   await act(async () => fireEvent.changeText(s.getByTestId('path-draft-kcal'), '2,500'));
+  expect(s.getByText('2,500 kcal')).toBeTruthy();
   await act(async () => fireEvent.press(s.getByTestId('path-draft-confirm')));
   expect(decide).toHaveBeenCalledWith('d2', { decision: 'approved', payload: { to_kcal: 2500 } });
 });

@@ -65,7 +65,7 @@ export function when(at: string, now = new Date()): string {
   return isToday(at, now) ? `Today, ${formatTime(new Date(at), tz())}` : shortDay(at);
 }
 
-const kcalText = (n: number) => `${Math.round(n).toLocaleString('en-US')} kcal`;
+export const kcalText = (n: number) => `${Math.round(n).toLocaleString('en-US')} kcal`;
 
 /** Title, before and after of one change (CP-A-20; the calorie line as the board's queue row draws it). */
 export function describeChange(c: PathChange): { title: string; from: string; to: string; summary: string } {

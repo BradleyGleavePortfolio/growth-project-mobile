@@ -16,7 +16,7 @@ import AiRefusalNotice from '../../../components/ai/AiRefusalNotice';
 import { aiRefusalOf, type AiRefusal } from '../../../lib/ai/aiRefusal';
 import { copilotApi, copilotErrorOf, type DecideBody, type PathChangeDraft } from '../../../api/copilotApi';
 import { ChangeTiles } from '../../client/copilot/ChangeTiles';
-import { COPILOT_COPY as C, describeChange, shortDay, when } from '../../client/copilot/pathChangeWords';
+import { COPILOT_COPY as C, describeChange, kcalText, shortDay, when } from '../../client/copilot/pathChangeWords';
 
 const DAY = 86_400_000;
 const NOTE_MAX = 200;
@@ -81,7 +81,7 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
   const decline = () => void go({ decision: 'rejected', ...(note.trim() ? { note: note.trim() } : null) });
   const field = { color: sc.textPrimary, borderColor: sc.border, backgroundColor: sc.bgSurface };
 
-  const editTo = c.kind === 'move_session' ? shortDay(new Date(movedAt)) : `${kcal || '0'} kcal`;
+  const editTo = c.kind === 'move_session' ? shortDay(new Date(movedAt)) : kcalText(Number(kcal));
   const editor = c.kind === 'move_session' ? (
     <View style={s.actions}>
       <Step icon="chevron-back" label={C.earlier} disabled={!inWindow(movedAt - DAY, now())} onPress={() => setDays((n) => n - 1)} />
