@@ -10,8 +10,6 @@ import type { CopilotSuggestion, PathChange } from '../../../api/copilotApi';
 export const COPILOT_COPY = {
   title: 'Your path', // CP-A-01
   back: 'You',
-  emptyTitle: 'No suggestions yet', // main, scaffold
-  emptyBody: 'No suggestions are available.', // main, scaffold
   suggested: 'Suggested change', // CP-A-18
   notApplied: 'Not applied yet', // CP-A-19
   now: 'Now', // CP-A-20

@@ -19,6 +19,8 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: m
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
+jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, default: () => null, useClientNeedsCoach: () => false }));
+jest.mock('../../../../api/romanApi', () => ({ ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError: class extends Error {}, openOrResumeSession: jest.fn(), sendMessage: jest.fn() }));
 jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off') }));
 const mockText = (t: string) => <Text>{t}</Text>;
 jest.mock('../../../../theme/ThemeProvider', () => {
@@ -104,15 +106,15 @@ test('Your path lists sent suggestions with where each stands and the coach note
   expect(mockBack).toHaveBeenCalled();
 });
 
-test('a server without Copilot (404) shows the calm empty state; a failed read is not emptiness; flag off draws the old gate', async () => {
+test('a server without Copilot (404) still lets the client ask Roman, with no week block; a failed read says so; flag off draws the old gate', async () => {
   get.mockRejectedValueOnce(fail(404));
   const a = await render(wrap(<ClientPathCopilotScreen />));
-  expect(await a.findByText('No suggestions are available.')).toBeTruthy();
+  expect(await a.findByTestId('copilot-ask')).toBeTruthy();
+  expect(a.queryByTestId('copilot-week')).toBeNull();
   await a.unmount();
   get.mockRejectedValueOnce(fail(500));
   const b = await render(wrap(<ClientPathCopilotScreen />));
   expect(await b.findByTestId('copilot-error')).toBeTruthy();
-  expect(b.queryByText('No suggestions yet')).toBeNull();
   await b.unmount();
   mockFlags.clientPathCopilot = false;
   expect((await render(wrap(<ClientPathCopilotScreen />))).getByText('Path suggestions are not available on this account.')).toBeTruthy();

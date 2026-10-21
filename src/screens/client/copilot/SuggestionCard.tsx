@@ -17,6 +17,7 @@ import { aiRefusalOf, type AiRefusal } from '../../../lib/ai/aiRefusal';
 import { copilotApi, copilotErrorOf, type CopilotSuggestion } from '../../../api/copilotApi';
 import { COPILOT_COPY as C, describeChange, when } from './pathChangeWords';
 import { ChangeTiles } from './ChangeTiles';
+import { SourceTag } from './AnswerCard';
 
 export interface SuggestionCardProps {
   suggestion: CopilotSuggestion;
@@ -68,6 +69,7 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
   }
 
   const d = describeChange(suggestion.change);
+  const kinds = Array.from(new Set((suggestion.change.sources ?? []).map((x) => x.kind))); // CP-A-16, as frame 04 draws them
   return (
     <View style={[s.card, { borderColor: forestPop.moss, backgroundColor: sc.bgSurface }]} testID="copilot-suggestion">
       <View style={s.head}>
@@ -79,6 +81,7 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
       </View>
       <Text style={[typography.h4, { color: sc.textPrimary }]} accessibilityRole="header">{d.title}</Text>
       <ChangeTiles from={d.from} to={d.to} />
+      {kinds.length ? <View style={s.tags} testID="copilot-suggestion-tags">{kinds.map((k) => <SourceTag key={k} kind={k} />)}</View> : null}
       <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`${C.nothingYet(coach)} ${C.privacy(coach)}`}</Text>
       {refusal ? <AiRefusalNotice refusal={refusal} audience="client" surface="roman" onRetry={() => void onSend()} compact /> : null}
       {line ? <Text style={[typography.bodySmall, { color: forestPop.error }]} accessibilityRole="alert" testID="copilot-send-error">{line}</Text> : null}
@@ -93,6 +96,7 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
   eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   strong: { fontWeight: '600' },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { borderWidth: 1, borderRadius: radius.chip, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: radius.chip, paddingHorizontal: 14, paddingVertical: 10 },
 });
