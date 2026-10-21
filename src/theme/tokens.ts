@@ -534,15 +534,16 @@ export const forestPop = {
 export type ForestPopRole = keyof typeof forestPop;
 
 /**
- * Voice notes Style B shades (#VOICE-SHADES option 1; the owner pick is open,
- * so this one block is what a later round swaps). Card hairline, the leaf wash
- * behind the first-use icons, and the unplayed bars on the deep coach card
- * (3.23:1 on forestPop.deep, a non-text mark).
+ * Voice notes Style B shades: the six colours the B mockups draw that are not
+ * tokens above (owner 10-21 10:09, #VOICE-SHADES op 1, exact mockup shades).
  */
 export const voiceShades = {
-  hairline: '#E2E6E1',
-  leafWash: '#EEF4E2',
-  barOnDeep: '#6A7E71',
+  hairline: '#E2E6E1', // card and row hairlines, level dots, progress tracks
+  leafWash: '#EEF4E2', // icon circles on the consent and permission sheets
+  barOnDeep: '#6A7E71', // unplayed bars on the coach's deep card (3.23:1 on deep)
+  track: '#C9D0CA', // sheet handle, field borders, off controls
+  washEdge: '#D3E2B8', // edge of the leaf wash (icon circles, safety line box)
+  pillEdgeOnDeep: '#34503D', // edge of a pill on deep
 } as const;
 
 /** Dark-mode semantic tokens. */

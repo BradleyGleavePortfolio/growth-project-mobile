@@ -209,12 +209,13 @@ export default function VoiceNotePlayer({
   const deep = tone === 'coach';
   const ink = deep ? fp.onDeep : fp.ink;
   const discBg = disabled ? voiceShades.hairline : deep ? fp.onDeep : fp.deep;
-  const discFg = disabled ? fp.n700 : deep ? fp.deep : fp.leaf;
-  const time = disabled
-    ? '—:—'
-    : playing || positionMs > 0
-      ? `${formatDuration(positionMs)} / ${formatDuration(durationMs)}`
-      : formatDuration(durationMs);
+  const discFg = disabled ? voiceShades.track : deep ? fp.deep : fp.leaf;
+  const time =
+    url === null || !port.isAvailable
+      ? '—:—'
+      : playing || positionMs > 0
+        ? `${formatDuration(positionMs)} / ${formatDuration(durationMs)}`
+        : formatDuration(durationMs);
 
   return (
     <View

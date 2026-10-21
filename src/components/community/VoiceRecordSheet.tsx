@@ -6,7 +6,7 @@
 import React from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { forestPop as fp, lightTokens, radius, spacing } from '../../theme/tokens';
+import { forestPop as fp, lightTokens, radius, spacing, voiceShades } from '../../theme/tokens';
 import VoiceNoteComposer, { type VoiceNoteComposerProps } from './VoiceNoteComposer';
 
 export interface VoiceRecordSheetProps extends VoiceNoteComposerProps {
@@ -49,6 +49,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: radius.chip,
-    backgroundColor: fp.sageLine,
+    backgroundColor: voiceShades.track,
   },
 });

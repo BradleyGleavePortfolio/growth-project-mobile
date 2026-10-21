@@ -283,7 +283,7 @@ function OutboxRow({
                   accessibilityRole="button"
                   accessibilityLabel="Delete"
                   testID={`${testID}-delete`}
-                  style={styles.more}
+                  style={styles.del}
                 >
                   <Text style={[styles.recordLabel, { color: fp.n700 }]}>Delete</Text>
                 </HapticPressable>
@@ -334,4 +334,5 @@ const styles = StyleSheet.create({
   retry: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
     paddingHorizontal: spacing.lg, borderRadius: radius.button, backgroundColor: fp.forest },
   more: { minHeight: 44, justifyContent: 'center' },
+  del: { minHeight: 48, minWidth: 48, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
 });
