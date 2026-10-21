@@ -55,6 +55,8 @@ export interface TutorialNavTarget {
   tab: 'Home' | 'WorkoutTab' | 'Log' | 'MoreTab' | 'CommunityTab' | 'CalendarTab';
   screen?: string;
   params?: Record<string, unknown>;
+  /** true when `screen` is its stack's root: back to the open one, never a second copy. */
+  pop?: true;
 }
 
 export interface CopyContext {
