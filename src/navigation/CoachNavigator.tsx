@@ -844,6 +844,7 @@ export default function CoachNavigator() {
   // also places the push ask): nothing saves navigation state or the last tab,
   // and RootNavigator mounts this navigator afresh on cold start, sign-in and account switch.
   const tabsV2 = featureFlags.coachTabsV2;
+  const homeTabLabel = tabsV2 && featureFlags.coachHomeV11 ? 'Home' : 'Overview';
   const initialTab = coachLandingTab();
   const programsLabel = featureFlags.mwbPrograms || tabsV2 ? 'Programs' : 'Templates';
   const clientsTab = (
@@ -936,8 +937,9 @@ export default function CoachNavigator() {
         name="CommandCenter"
         component={CommandCenterScreen}
         options={{
-          title: 'Overview',
-          tabBarAccessibilityLabel: 'Overview',
+          // #161-11 (spec #688 6295886580): with the new coach Home the first tab is "Home".
+          title: homeTabLabel,
+          tabBarAccessibilityLabel: homeTabLabel,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid-outline" size={size} color={color} />
           ),

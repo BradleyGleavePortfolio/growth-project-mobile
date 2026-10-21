@@ -18,7 +18,13 @@ import CoachSetupChecklist, {
 } from "../../../components/coach/setup/CoachSetupChecklist";
 import type { CoachTabParamList } from "../../../navigation/CoachNavigator";
 
-export default function CoachHomeCards() {
+/**
+ * `part` (spec #688 6295886580, the new Home): 'setup' is the checklist alone, for the Home's hero; 'below'
+ * is the push ask and today's brief, under it (the Home's Business glance stands for the Money card).
+ */
+export type CoachHomeCardsPart = "all" | "setup" | "below";
+
+export default function CoachHomeCards({ part = "all" }: { part?: CoachHomeCardsPart } = {}) {
   const navigation =
     useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
   // B-332-7 (Opus): `initial: false` keeps the Settings root under these
@@ -76,6 +82,19 @@ export default function CoachHomeCards() {
       }),
     [navigation],
   );
+  if (part === "setup") {
+    return <CoachSetupChecklist onOpen={open} />;
+  }
+  if (part === "below") {
+    const push = coachLandingTab() === "CommandCenter";
+    if (!push && !featureFlags.coachBrief) return null;
+    return (
+      <View testID="coach-home-cards-below">
+        {push ? <PushPermissionCard audience="coach" presentation="section" /> : null}
+        {featureFlags.coachBrief ? <BriefHomeCard onOpen={openBrief} /> : null}
+      </View>
+    );
+  }
   return (
     <View testID="coach-home-cards">
       {/* C-S-PUSH-3 + COACHLAND: Overview is the landing (coachTabsV2 on), so
