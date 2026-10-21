@@ -1,150 +1,121 @@
 /**
- * UI-2 (V1_1_UI_SPEC, owner 10-09 "render 2"): the pieces of the coach Home, to the mockup in
- * tgp-agent-context planning/v1_1_ui/ui-2-coach-home. Theme colours, type and radius tokens only;
- * serif lineHeight >= 1.25 x fontSize.
+ * The coach Home's parts in Style A (planning/MOCKUP3/HOME3, A; spec #688 6295886580): on the deep hero, the
+ * small tiles, the Open alerts row and the day's rings; on the page, the white card and its link rows. Every
+ * colour is an existing token (forestPop, the theme); no part draws a number it was not given.
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors, radius, typography } from '../../../theme/tokens';
-import { QuietOverline } from '../../../ui';
-import { HapticService } from '../../../ui/haptics/haptics.service';
-import { FIGURES } from '../command-center/CoachHomeSections';
+import { forestPop, radius, typography } from '../../../theme/tokens';
+import type { RingSpec } from './homeDay';
 
-const SIZE = 92;
-const R = 40;
-const STROKE = 7;
-const CIRC = 2 * Math.PI * R;
+const RING = 56;
+/** Style A sets its figures and titles in Inter (the app loads Inter's 400, 500 and 600). */
+export const SEMI = 'Inter_600SemiBold';
+const STROKE = 6;
 
-export interface DialSpec { key: string; value: string; unit: string; label: string; sub?: string; progress: number }
-
-/** One ring: track in the hairline colour, forest fill with round caps from 12 o'clock, the number in its middle. */
-export function HomeDial({ value, unit, label, sub, progress, testID }: DialSpec & { testID: string }) {
-  const { semanticColors: sc } = useTheme();
-  const p = Math.max(0, Math.min(1, Number.isFinite(progress) ? progress : 0));
+/** A small figure on the hero: the value in leaf, its words under it. */
+export function MiniTile({ value, label, testID }: { value: string; label: string; testID?: string }) {
   return (
-    <View style={styles.dial} accessible accessibilityLabel={[`${label}: ${value} ${unit}`, sub].filter(Boolean).join('. ')} testID={testID}>
-      <View style={styles.ring}>
-        <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-          <Circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" stroke={sc.border} strokeWidth={STROKE} />
-          {p > 0 ? (
+    <View style={hs.mini} accessible accessibilityLabel={`${value} ${label}`} testID={testID}>
+      <Text style={hs.miniValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+      <Text style={hs.miniLabel} numberOfLines={3}>{label}</Text>
+    </View>
+  );
+}
+
+export function AlertsRow({ count, onPress }: { count: number | null; onPress: () => void }) {
+  const label = count === null ? 'Open alerts' : `Open alerts, ${count}`;
+  return (
+    <Pressable style={({ pressed }) => [hs.alerts, pressed && hs.pressed]} onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID="home-alerts">
+      <Ionicons name="shield-outline" size={22} color={forestPop.onDeep} />
+      <Text style={hs.alertsText}>Open alerts</Text>
+      {count !== null ? <Text style={hs.alertsCount}>{count}</Text> : null}
+      <Ionicons name="chevron-forward" size={20} color={forestPop.onDeepMuted} />
+    </Pressable>
+  );
+}
+
+/** One of the day's rings: gold arc over a quiet track, "done/of" inside. */
+export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => void }) {
+  const r = (RING - STROKE) / 2;
+  const c = 2 * Math.PI * r;
+  const share = ring.of > 0 ? Math.min(1, ring.done / ring.of) : 0;
+  const body = (
+    <>
+      <View style={hs.ringBox}>
+        <Svg width={RING} height={RING}>
+          <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={forestPop.forest} strokeWidth={STROKE} fill="none" />
+          {share > 0 ? (
             <Circle
-              cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" stroke={sc.accent} strokeWidth={STROKE} strokeLinecap="round"
-              strokeDasharray={`${CIRC * p} ${CIRC}`} rotation={-90} origin={`${SIZE / 2}, ${SIZE / 2}`} testID={`${testID}-fill`}
+              cx={RING / 2} cy={RING / 2} r={r} stroke={forestPop.gold} strokeWidth={STROKE} fill="none"
+              strokeDasharray={`${c * share} ${c}`} strokeLinecap="round" transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
             />
           ) : null}
         </Svg>
-        <View style={styles.ringCenter} pointerEvents="none">
-          <Text style={[styles.dialValue, { color: sc.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>{value}</Text>
-          <Text style={[styles.dialUnit, { color: sc.textMuted }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.1}>{unit}</Text>
-        </View>
+        <Text style={hs.ringValue} numberOfLines={1}>{ring.done}/{ring.of}</Text>
       </View>
-      <QuietOverline style={styles.dialLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.2}>{label}</QuietOverline>
-      {sub ? <Text style={[styles.dialSub, { color: sc.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{sub}</Text> : null}
-    </View>
+      <Text style={hs.ringLabel} numberOfLines={1} maxFontSizeMultiplier={1.15}>{ring.label.toUpperCase()}</Text>
+    </>
+  );
+  const label = `${ring.label}, ${ring.done} of ${ring.of}`;
+  return onPress ? (
+    <Pressable style={({ pressed }) => [hs.ring, pressed && hs.pressed]} onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID={`home-ring-${ring.key}`}>
+      {body}
+    </Pressable>
+  ) : (
+    <View style={hs.ring} accessible accessibilityLabel={label} testID={`home-ring-${ring.key}`}>{body}</View>
   );
 }
 
-/** The mockup's client mark: serif initials on cream; the camel hairline unless a ring sits around it. */
-export function Monogram({ name, size = 36, bordered = true }: { name: string; size?: number; bordered?: boolean }) {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const initials = words.length > 1 ? `${words[0][0]}${words[words.length - 1][0]}` : (words[0] ?? '?').slice(0, 1);
-  return (
-    <View style={[styles.mono, { width: size, height: size }, !bordered && styles.monoBare]}>
-      <Text style={styles.monoText} maxFontSizeMultiplier={1.2}>{initials.toUpperCase()}</Text>
-    </View>
-  );
+export function useCardStyles() {
+  const { colors, semanticColors: sem } = useTheme();
+  return React.useMemo(() => StyleSheet.create({
+    card: { backgroundColor: sem.bgSurface, borderRadius: radius.card + 2, borderWidth: StyleSheet.hairlineWidth, borderColor: sem.border, padding: 18 },
+    title: { fontFamily: SEMI, fontSize: 18, lineHeight: 24, color: colors.textPrimary },
+    body: { ...typography.body, color: colors.textPrimary },
+    muted: { ...typography.bodySmall, color: colors.textMuted },
+    strong: { ...typography.bodyMd, color: colors.textPrimary },
+    section: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.4, color: colors.textMuted, marginTop: 10, marginBottom: 2 },
+    row: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18, gap: 12 },
+    rowLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sem.border },
+    rowText: { flex: 1, minWidth: 0 },
+    rowCount: { fontFamily: SEMI, fontSize: 20, lineHeight: 26, color: colors.textPrimary },
+    pressed: { opacity: 0.7 },
+  }), [colors, sem]);
 }
 
-/** A client tile: monogram (and unread messages), name, a muted line, the reason in a cream pill. */
-export function ClientTile({ name, line, reason, unread = 0, width, onPress, testID }: {
-  name: string; line: string | null; reason: string; unread?: number; width: number; onPress: () => void; testID: string;
+/** A row in the Clients card: a title, an optional line under it, an optional count, and a chevron. */
+export function LinkRow({ title, line, count, first, onPress, testID }: {
+  title: string; line?: string | null; count?: number | null; first?: boolean; onPress: () => void; testID: string;
 }) {
-  const { semanticColors: sc } = useTheme();
-  const count = unread > 99 ? '99+' : String(unread);
+  const s = useCardStyles();
+  const { colors } = useTheme();
+  const label = [title, line, count != null ? String(count) : null].filter(Boolean).join(', ');
   return (
-    <Pressable
-      onPress={() => { void HapticService.softImpact(); onPress(); }}
-      accessibilityRole="button" accessibilityLabel={[name, line, reason, unread > 0 ? `${count} unread` : null].filter(Boolean).join('. ')} testID={testID}
-      style={({ pressed }) => [styles.tile, { width, backgroundColor: sc.bgSurface, borderColor: sc.border }, pressed && styles.pressed]}
-    >
-      <View style={styles.tileTop}>
-        <Monogram name={name} />
-        {unread > 0 ? (
-          <View style={[styles.unread, { backgroundColor: sc.accent }]} testID={`${testID}-unread`}>
-            <Text style={[styles.unreadText, { color: sc.textOnAccent }]} maxFontSizeMultiplier={1.2}>{count}</Text>
-          </View>
-        ) : null}
+    <Pressable style={({ pressed }) => [s.row, !first && s.rowLine, pressed && s.pressed]} onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID={testID}>
+      <View style={s.rowText}>
+        <Text style={s.strong} numberOfLines={1}>{title}</Text>
+        {line ? <Text style={s.muted} numberOfLines={1}>{line}</Text> : null}
       </View>
-      <Text style={[styles.tileName, { color: sc.textPrimary }]} numberOfLines={2}>{name}</Text>
-      {line ? <Text style={[styles.tileLine, { color: sc.textMuted }]} numberOfLines={2}>{line}</Text> : null}
-      <View style={styles.why}>
-        <Text style={[styles.pill, { color: colors.ink }]} numberOfLines={3} maxFontSizeMultiplier={1.2}>{reason}</Text>
-      </View>
+      {count != null ? <Text style={s.rowCount}>{count}</Text> : null}
+      <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
     </Pressable>
   );
 }
 
-/** The dashed last tile: the whole roster, opens Clients. */
-export function AllClientsTile({ count, width, onPress }: { count: number; width: number; onPress: () => void }) {
-  const { semanticColors: sc } = useTheme();
-  return (
-    <Pressable
-      onPress={() => { void HapticService.softImpact(); onPress(); }}
-      accessibilityRole="button" accessibilityLabel={`All ${count} clients. Open Clients`} testID="coach-home-v11-all-clients"
-      style={({ pressed }) => [styles.tile, styles.dashed, { width }, pressed && styles.pressed]}
-    >
-      <Text style={[styles.tileName, styles.flushTop, { color: sc.textPrimary }]} numberOfLines={2}>{`All ${count} clients`}</Text>
-      <Text style={[styles.link, { color: sc.accentText }]}>Open Clients</Text>
-    </Pressable>
-  );
-}
-
-/** A Business figure: small-caps label, serif number, muted line; opens Money. */
-export function BusinessTile({ label, value, sub, width, onPress, testID }: {
-  label: string; value: string; sub: string; width: number; onPress: () => void; testID: string;
-}) {
-  const { semanticColors: sc } = useTheme();
-  return (
-    <Pressable
-      onPress={() => { void HapticService.softImpact(); onPress(); }}
-      accessibilityRole="button" accessibilityLabel={`${label}: ${value}. ${sub}`} testID={testID}
-      style={({ pressed }) => [styles.tile, styles.business, { width, backgroundColor: sc.bgSurface, borderColor: sc.border }, pressed && styles.pressed]}
-    >
-      <QuietOverline style={styles.flat} numberOfLines={2}>{label}</QuietOverline>
-      <Text style={[styles.bizValue, { color: sc.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>{value}</Text>
-      <Text style={[styles.tileLine, styles.bottom, { color: sc.textMuted }]} numberOfLines={3}>{sub}</Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  dial: { flex: 1, alignItems: 'center' },
-  ring: { width: SIZE, height: SIZE },
-  ringCenter: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
-  dialValue: { ...typography.h2, fontSize: 25, lineHeight: 32, letterSpacing: 0.3, fontVariant: FIGURES },
-  dialUnit: { ...typography.caption, fontSize: 11, lineHeight: 13, letterSpacing: 0 },
-  dialLabel: { marginTop: 10, marginBottom: 0, textAlign: 'center' },
-  dialSub: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, marginTop: 4, textAlign: 'center' },
-  mono: { width: 36, height: 36, borderRadius: radius.chip, borderWidth: 1, borderColor: colors.camel, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center' },
-  monoBare: { borderWidth: 0 },
-  monoText: { fontFamily: typography.h2.fontFamily, fontSize: 15, lineHeight: 19, color: colors.ink },
-  tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  unread: { minWidth: 18, height: 18, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
-  unreadText: { ...typography.caption, fontSize: 11, lineHeight: 14, letterSpacing: 0, fontFamily: 'Inter_600SemiBold' },
-  tile: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: 14, minHeight: 132 },
-  dashed: { borderStyle: 'dashed', borderWidth: 1, borderColor: colors.stone, justifyContent: 'space-between' },
-  business: { minHeight: 118 },
-  tileName: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, marginTop: 10 },
-  flushTop: { marginTop: 0 },
-  tileLine: { ...typography.bodySmall, fontSize: 13, lineHeight: 18 },
-  why: { marginTop: 'auto', paddingTop: 10, alignItems: 'flex-start' },
-  // Server reasons run to three lines, so a soft tag (button radius) rather than a full pill.
-  pill: { ...typography.caption, letterSpacing: 0, lineHeight: 16, overflow: 'hidden', backgroundColor: colors.cream, borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 5 },
-  link: { ...typography.bodyMd, fontSize: 15, lineHeight: 22 },
-  flat: { marginBottom: 0 },
-  bizValue: { ...typography.h2, fontSize: 26, lineHeight: 33, letterSpacing: 0.3, marginTop: 8, fontVariant: FIGURES },
-  bottom: { marginTop: 'auto', paddingTop: 6 },
-  pressed: { opacity: 0.6 },
+const hs = StyleSheet.create({
+  mini: { flex: 1, minWidth: 0, backgroundColor: forestPop.forest, borderRadius: radius.button + 2, paddingVertical: 10, paddingHorizontal: 12 },
+  miniValue: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
+  miniLabel: { ...typography.bodySmall, color: forestPop.onDeepMuted },
+  alerts: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: forestPop.brand400, borderRadius: radius.button + 2, paddingHorizontal: 18 },
+  alertsText: { ...typography.bodyMd, fontSize: 18, color: forestPop.onDeep, flex: 1 },
+  alertsCount: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.onDeep },
+  ring: { flex: 1, alignItems: 'center', minHeight: 44, paddingVertical: 4 },
+  ringBox: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
+  ringValue: { ...typography.bodySmall, fontFamily: SEMI, color: forestPop.onDeep, position: 'absolute' },
+  ringLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 0.6, color: forestPop.gold, marginTop: 6 },
+  pressed: { opacity: 0.7 },
 });

@@ -1,269 +1,382 @@
 /**
- * UI-2 coach Home (V1_1_UI_SPEC UI-2, owner 10-09 "render 2"), behind featureFlags.coachHomeV11: the date and
- * bell, three dials, Roman with the one action "Approve Roman's drafts →", the clients who need the coach as
- * tiles, and Business. Only real numbers are drawn; a dial with no real base is left out. Zero clients: the
- * Clients and Earnings dials. The chips filter the roster section: Needs you (tiles, then the Steady wall, as in
- * the mockup), Steady (the wall) and Streaks (streak tiles). Every roster size: the existing setup cards (`header`:
- * setup checklist, today's brief, the Money card and, as Overview is the landing, the coach's push ask, C-S-PUSH-3),
- * below the roster section, then Business.
+ * The coach Home (spec #688 6295886580, Style A of planning/MOCKUP3/HOME3), behind featureFlags.coachHomeV11.
+ * On the deep hero: the date, bell and gear; the setup checklist while setup is not done; "{n} wins this week"
+ * with three wins under it; the small tiles (active today, check-ins, stayed); Open alerts; the day's rings
+ * (check-ins, replies, reach-outs). On the page: the push ask and today's brief, Roman, one Needs you tile,
+ * Business and the Clients rows. Not a nav hub: each block opens one place. Only real numbers are drawn: a
+ * server without b#1123's `home` gets the hero and tiles from the overview it already sends, and no rings.
  */
-import React, { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, typography } from '../../../theme/tokens';
-import { QuietOverline, TextLink } from '../../../ui';
+import { forestPop, layout, radius, typography } from '../../../theme/tokens';
+import { useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { HapticService } from '../../../ui/haptics/haptics.service';
+import { rosterDisplayName } from '../../../utils/coach/clientRoster';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
-import { dateOverline, heroAmount, lastActiveWords, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
+import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
-import { AllClientsTile, BusinessTile, ClientTile, HomeDial, type DialSpec } from './HomeParts';
-import { useCoachHomeV11, type CoachHomeData } from './useCoachHomeV11';
-import { FilterChips, SteadyWall } from './RosterParts';
-import { filterChips, loggedLine, steadyWall, streakLabel, type RosterFilter } from './rosterWall';
-import type { RosterSources } from './rosterSources';
-import { useRosterWall } from './useRosterWall';
+import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './HomeParts';
+import { ReachOutSheet, RomanDraftSheet, reachOutAsk, type DraftAsk } from './DraftSheets';
+import { firstWord, pct, ringSpecs, ringsCaption, winLine, winWindow, winsHeadline, type HomeWin } from './homeDay';
+import { useCoachHomeV11, type NeedsRow } from './useCoachHomeV11';
 
-const TILE_GAP = 12;
-/** Seven clients and the "All clients" tile fill four rows, as in the mockup. */
-const MAX_TILES = 7;
+/** Reach-outs: the ring's goal is at most five (b#1123), so the sheet offers the five most urgent. */
+const REACH_ROWS = 5;
+const WIN_TURN_MS = 6000;
 
 interface Props {
-  onSelectClient: (clientId: string, clientName: string) => void;
+  onOpenNeedsYou: () => void;
   onOpenClients: () => void;
+  onOpenStreaks: () => void;
+  onOpenAlerts: () => void;
   onOpenMoney: () => void;
   onOpenDrafts: () => void;
   onOpenNotifications: () => void;
+  onOpenSettings: () => void;
   /** Only when Roman's coach chat is on. */
   onAskRoman?: () => void;
-  /** The existing Home cards (CoachHomeCards), for every roster size. */
-  header?: React.ReactNode;
+  /** The setup checklist (CoachHomeCards part 'setup'): on the hero until setup is done. */
+  setup?: React.ReactNode;
+  /** The push ask and today's brief (CoachHomeCards part 'below'), under the hero; `zero`: no clients yet, so no
+   *  Today's brief entry (OPERATOR RULING 6296068749, #161-16 op 1). */
+  belowHero?: (zero: boolean) => React.ReactNode;
   sources?: CoachHomeSources;
-  rosterSources?: RosterSources;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-/** "$0", as in the mockup, rather than "$0.00". */
-function amount(cents: number, currency: string): string {
-  if (cents !== 0) return heroAmount(cents, currency);
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0, minimumFractionDigits: 0 }).format(0);
-  } catch {
-    return heroAmount(0, currency);
-  }
+const nameOf = (r: NeedsRow) => rosterDisplayName(r.client);
+
+/** Three wins at a time; with more, the window moves on every few seconds unless motion or a screen reader is off-limits. */
+function useWinTurn(n: number) {
+  const [turn, setTurn] = useState(0);
+  const [still, setStill] = useState(true);
+  useEffect(() => {
+    let live = true;
+    void Promise.all([AccessibilityInfo.isReduceMotionEnabled(), AccessibilityInfo.isScreenReaderEnabled()])
+      .then(([rm, sr]) => { if (live) setStill(rm || sr); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  useEffect(() => {
+    if (still || n <= 3) return undefined;
+    const t = setInterval(() => setTurn((x) => x + 1), WIN_TURN_MS);
+    return () => clearInterval(t);
+  }, [still, n]);
+  return turn;
 }
 
-export function homeDials(d: CoachHomeData): DialSpec[] {
-  const o = d.overview;
-  if (!o) return [];
-  if (o.roster_size === 0) {
-    const dials: DialSpec[] = [{ key: 'clients', value: '0', unit: 'clients', label: 'Clients', sub: 'None yet', progress: 0 }];
-    if (d.month.kind === 'ok') {
-      const { totals, currency } = d.month.summary;
-      dials.push({ key: 'earnings', value: amount(totals.netCents, currency), unit: 'this month', label: 'Earnings', sub: monthOverline(d.now), progress: 0 });
-    }
-    return dials;
-  }
-  const rate = Math.max(0, Math.min(1, o.check_in_rate_7day));
-  const dials: DialSpec[] = [
-    { key: 'today', value: String(o.active_today), unit: `of ${o.roster_size}`, label: 'Today', progress: o.active_today / o.roster_size },
-    { key: 'checkins', value: `${Math.round(rate * 100)}%`, unit: 'check-ins', label: 'Check-ins', sub: 'Last 7 days', progress: rate },
-  ];
-  const retention = retentionPct(d.ltv);
-  if (retention) dials.push({ key: 'retention', value: retention, unit: 'stayed', label: 'Retention', sub: 'This month', progress: parseInt(retention, 10) / 100 });
-  return dials;
-}
-
-export default function CoachHomeV11({ onSelectClient, onOpenClients, onOpenMoney, onOpenDrafts, onOpenNotifications, onAskRoman, header, sources, rosterSources }: Props) {
-  const { semanticColors: sc } = useTheme();
-  const { width } = useWindowDimensions();
-  const { data, reload, retryMonth, retryUrgent, retryDrafts } = useCoachHomeV11(sources);
-  const { roster: rw, reloadRoster } = useRosterWall(rosterSources);
-  const [picked, setPicked] = useState<RosterFilter | null>(null);
-  const contentWidth = Math.min(width, 600) - 2 * layout.gutter;
-  const tileWidth = (contentWidth - TILE_GAP) / 2;
+export default function CoachHomeV11(p: Props) {
+  const { colors, semanticColors: sc } = useTheme();
+  const cs = useCardStyles();
+  const { top, bottom } = useScreenInsets();
+  const { data, reload, retryMonth, retryRoster, retryDrafts } = useCoachHomeV11(p.sources);
+  const [ask, setAsk] = useState<DraftAsk | null>(null);
+  const [reachOpen, setReachOpen] = useState(false);
   const o = data.overview;
+  const home = data.home;
   const roster = o?.roster_size ?? 0;
-  const dials = homeDials(data);
-  const needsYou = roster > 0 && (o?.at_risk_count ?? 0) > 0;
-  const urgent = needsYou ? data.urgent.slice(0, MAX_TILES) : [];
+  const items = home?.wins.items ?? [];
+  const turn = useWinTurn(items.length);
+  const wins = winWindow(items, turn);
   const bell = data.unreadNotifications;
-  const byId = useMemo(() => new Map((rw.clients ?? []).map((c) => [c.id, c])), [rw.clients]);
-  // The wall and the chips wait for the needs-you list, so a client who needs the coach is never drawn as steady.
-  const urgentReady = !needsYou || (data.urgentState === 'ok' && data.urgent.length > 0);
-  const wallReady = rw.clients !== null && roster > 0 && urgentReady;
-  const wall = useMemo(
-    () => (wallReady && rw.clients ? steadyWall(rw.clients, new Set(data.urgent.map((e) => e.user_id)), data.now) : null),
-    [wallReady, rw.clients, data.urgent, data.now],
-  );
-  const streaks = rw.streaks.slice(0, MAX_TILES);
-  // The chips arrive together, once every read behind them has answered, so the section never jumps.
-  const chips = roster > 0 && rw.settled && urgentReady
-    ? filterChips(
-      urgent.length > 0 ? (o?.at_risk_count ?? 0) : 0,
-      wall ? wall.length : null,
-      streaks.length > 0 ? Math.max(o?.win_streak_count ?? 0, rw.streaks.length) : 0,
-    )
-    : [];
-  const filter: RosterFilter | null = chips.find((c) => c.key === picked)?.key ?? chips[0]?.key ?? null;
-  const showWall = wall !== null && wall.length > 0 && (filter === 'needs' || filter === 'steady');
-  // Business tiles need clients; the month error shows at any roster size. No tile and no error: no heading.
-  const month = roster > 0 && data.month.kind === 'ok' && hasMonthMoney(data.month.summary) ? data.month.summary : null;
-  const payout = roster > 0 ? data.payout : null;
-  const monthFailed = data.month.kind === 'error';
+  const rings = home?.rings ? ringSpecs(home.rings) : null;
+  const retention = retentionPct(data.ltv);
+  const checkIns = o ? pct(o.check_in_rate_7day) : null;
+  const monthOk = data.month.kind === 'ok' ? data.month.summary : null;
 
-  return (
-    <ScrollView
-      style={{ backgroundColor: sc.bgPrimary }} contentContainerStyle={styles.content} testID="coach-home-v11"
-      refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => { void reload(true); reloadRoster(); }} tintColor={sc.accent} />}
-    >
-      <View style={styles.topRow}>
-        <QuietOverline style={styles.flat} maxFontSizeMultiplier={1.3}>{dateOverline(data.now)}</QuietOverline>
-        <Pressable
-          onPress={() => { void HapticService.softImpact(); onOpenNotifications(); }} hitSlop={8}
-          accessibilityRole="button" accessibilityLabel={bell > 0 ? `Notifications, ${bell > 99 ? '99+' : bell} unread` : 'Notifications'}
-          style={styles.bell} testID="coach-home-v11-bell"
-        >
-          <Ionicons name="notifications-outline" size={24} color={sc.textPrimary} />
-          {bell > 0 ? (
-            <View style={[styles.badge, styles.bellBadge, { backgroundColor: sc.accent, borderColor: sc.bgPrimary }]}>
-              <Text style={[styles.badgeText, { color: sc.textOnAccent }]} maxFontSizeMultiplier={1.2}>{bell > 99 ? '99+' : bell}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-      </View>
+  const askWin = (w: HomeWin) => setAsk({ clientName: w.client_name, about: `A congratulations for ${firstWord(w.client_name)}: ${winLine(w)}.`, request: w.draft });
+  const pickReach = (r: NeedsRow) => { setReachOpen(false); setAsk(reachOutAsk(r, nameOf(r))); };
+  const tap = (go: () => void) => () => { void HapticService.softImpact(); go(); };
 
-      {o === null && data.overviewFailed ? (
-        <QuietError message="Roster numbers could not load." onRetry={() => void reload(false)} testID="coach-home-v11-error" />
-      ) : o === null ? (
-        <QuietLoading label="Loading" testID="coach-home-v11-loading" />
-      ) : (
-        <View style={styles.dials} testID="coach-home-v11-dials">
-          {dials.map(({ key, ...dial }) => <HomeDial key={key} {...dial} testID={`coach-home-v11-dial-${key}`} />)}
+  const hero = (() => {
+    if (!o && data.overviewFailed) {
+      return (
+        <View style={s.heroBlock}>
+          <Text style={s.onDeep}>Your numbers did not load.</Text>
+          <Pressable style={s.retry} onPress={() => void reload(false)} accessibilityRole="button" accessibilityLabel="Try again" testID="home-retry">
+            <Text style={s.retryText}>Try again</Text>
+          </Pressable>
         </View>
-      )}
+      );
+    }
+    if (!o) return <View style={s.heroBlock} accessible accessibilityLabel="Loading" testID="home-loading"><Text style={s.onDeepMuted}>Loading your day</Text></View>;
+    if (roster === 0) {
+      return (
+        <View style={s.heroBlock} testID="home-hero-zero">
+          <View style={s.heroLine}><Text style={s.heroValue}>0</Text><Text style={s.heroUnit}>clients · None yet</Text></View>
+          <View style={s.bar} />
+        </View>
+      );
+    }
+    if (home) {
+      const h = winsHeadline(home.wins.count);
+      return (
+        <View style={s.heroBlock} testID="home-hero-wins">
+          <View style={s.heroLine} accessible accessibilityRole="header" accessibilityLabel={`${h.value} ${h.unit}`}>
+            <Text style={s.heroValue}>{h.value}</Text><Text style={s.heroUnit}>{h.unit}</Text>
+          </View>
+          {wins.length === 0 ? (
+            <Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>
+          ) : wins.map((w) => (
+            <Pressable key={w.id} style={({ pressed }) => [s.win, pressed && s.pressed]} onPress={() => askWin(w)} accessibilityRole="button" accessibilityLabel={`${winLine(w)}. Ask Roman to congratulate ${firstWord(w.client_name)}`} testID={`home-win-${w.id}`}>
+              <View style={s.winDot} />
+              <Text style={s.winText} numberOfLines={2}>{winLine(w)}</Text>
+              <Ionicons name="chevron-forward" size={18} color={forestPop.onDeepMuted} />
+            </Pressable>
+          ))}
+        </View>
+      );
+    }
+    // No `home` from this server: the overview's own figure, as the Home drew it before (no new number).
+    const share = Math.min(1, o.active_today / roster);
+    return (
+      <View style={s.heroBlock} testID="home-hero-today">
+        <View style={s.heroLine}>
+          <Text style={s.heroValue}>{o.active_today}</Text><Text style={s.heroUnit}>of {roster}</Text>
+          <Text style={s.heroRight}>ACTIVE TODAY</Text>
+        </View>
+        <View style={s.bar}><View style={[s.barFill, { width: `${share * 100}%` }]} /></View>
+      </View>
+    );
+  })();
 
-      {data.draftsWaiting > 0 || onAskRoman || data.draftsState !== 'ok' ? (
-        <View style={[styles.roman, { borderColor: sc.border }]} testID="coach-home-v11-roman">
-          <View style={styles.romanMark}><RomanAvatar crop="monogram" size={28} /></View>
-          <View style={styles.grow}>
-            {data.draftsState === 'loading' ? (
-              <View style={styles.wide}><QuietLoading label="Loading pending drafts" rows={1} testID="coach-home-v11-drafts-loading" /></View>
-            ) : data.draftsState === 'error' ? (
-              <QuietError
-                layout="inline" message={loadFailureMessage(data.draftsError, 'Pending AI drafts')} onRetry={retryDrafts}
-                retrying={data.draftsRetrying} testID="coach-home-v11-drafts-error"
-              />
-            ) : data.draftsWaiting > 0 ? (
-              <Pressable
-                onPress={() => { void HapticService.mediumImpact(); onOpenDrafts(); }}
-                accessibilityRole="button" accessibilityLabel={`Approve Roman's drafts, ${data.draftsWaiting}`} testID="coach-home-v11-drafts"
-                style={({ pressed }) => [styles.drafts, { backgroundColor: sc.accent }, pressed && styles.pressed]}
-              >
-                <Text style={[styles.draftsLabel, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
-                  {/* A no-break space keeps the arrow beside "drafts" when large text wraps the label. */}
-                  {"Approve Roman's drafts\u00a0→"}
-                </Text>
-                <View style={[styles.badge, { backgroundColor: sc.textOnAccent }]}>
-                  <Text style={[styles.badgeText, { color: sc.accent }]} maxFontSizeMultiplier={1.2}>{data.draftsWaiting}</Text>
-                </View>
-              </Pressable>
-            ) : null}
-            {onAskRoman ? (
-              <TextLink label="Ask Roman" tone="accent" underline={false} align="start" size="small" testID="coach-home-v11-ask-roman"
-                onPress={() => { void HapticService.softImpact(); onAskRoman(); }} />
+  const tiles = o && roster > 0 ? (
+    <View style={s.tiles} testID="home-tiles">
+      {home ? <MiniTile value={`${o.active_today}`} label={`of ${roster} active today`} testID="home-tile-active" /> : null}
+      {checkIns ? <MiniTile value={checkIns} label="check-ins · last 7 days" testID="home-tile-checkins" /> : null}
+      {retention ? <MiniTile value={retention} label="stayed · this month" testID="home-tile-stayed" /> : null}
+    </View>
+  ) : null;
+
+  const needsTile = (() => {
+    const n = data.needs.length;
+    const box = (value: string | null) => (
+      <View style={s.needsBox}>
+        {value === null ? <Ionicons name="people-outline" size={30} color={forestPop.leaf} /> : <Text style={s.needsNum} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>}
+      </View>
+    );
+    if (data.rosterState === 'error' && n === 0) {
+      return <View style={cs.card}><QuietError layout="inline" message="Who needs you could not load." onRetry={retryRoster} testID="home-needs-error" /></View>;
+    }
+    if (data.rosterState === 'loading' && n === 0) {
+      return <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>;
+    }
+    if (o && roster === 0) {
+      return (
+        <View style={[cs.card, s.needs]} testID="home-needs">
+          {box('0')}
+          <View style={s.grow}><Text style={cs.title}>Needs you, 0</Text><Text style={cs.body}>Clients who need you show here, most urgent first.</Text></View>
+        </View>
+      );
+    }
+    const lead = data.needs[0];
+    const off = data.rosterState === 'off';
+    const label = off ? 'Needs you. Open the list' : n === 0 ? 'Needs you, 0. Nobody needs you right now' : `Needs you, ${n}. ${nameOf(lead)}, ${lead.reason.text}${n > 1 ? `, and ${n - 1} more` : ''}`;
+    return (
+      <Pressable style={({ pressed }) => [cs.card, s.needs, pressed && s.pressed]} onPress={tap(p.onOpenNeedsYou)} accessibilityRole="button" accessibilityLabel={label} testID="home-needs">
+        {box(off ? null : String(n))}
+        <View style={s.grow}>
+          <Text style={cs.title}>{off ? 'Needs you' : `Needs you, ${n}`}</Text>
+          {off ? <Text style={cs.body}>Open the list</Text> : n === 0 ? <Text style={cs.body}>Nobody needs you right now.</Text> : (
+            <Text style={cs.body}>
+              <Text style={s.bold}>{nameOf(lead)}</Text>{` · ${lead.reason.text}`}{n > 1 ? <Text style={s.bold}>{`  +${n - 1} more`}</Text> : null}
+            </Text>
+          )}
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+      </Pressable>
+    );
+  })();
+
+  const roman = (() => {
+    const n = data.draftsWaiting;
+    const k = data.draftKinds;
+    const chips = ([[k.workouts, 'Workout', 'Workouts'], [k.mealPlans, 'Meal plan', 'Meal plans'], [k.nudges, 'Nudge', 'Nudges']] as const)
+      .filter(([c]) => c > 0).map(([c, one, many]) => [c, c === 1 ? one : many] as const);
+    return (
+      <View style={cs.card} testID="home-roman">
+        <View style={s.romanHead}>
+          <RomanAvatar crop="monogram" size={48} />
+          <View style={s.grow}>
+            <Text style={cs.title}>{n > 0 ? `Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready` : 'Roman'}</Text>
+            {data.draftsState === 'ok' && n === 0 ? (
+              <Text style={cs.body}>{roster === 0 ? 'Roman drafts replies and workout changes for you once clients join.' : 'Nothing to approve right now.'}</Text>
             ) : null}
           </View>
         </View>
-      ) : null}
+        {data.draftsState === 'loading' ? <QuietLoading label="Loading Roman's drafts" rows={1} testID="home-drafts-loading" /> : null}
+        {data.draftsState === 'error' ? (
+          <QuietError layout="inline" message={loadFailureMessage(data.draftsError, "Roman's drafts")} onRetry={retryDrafts} retrying={data.draftsRetrying} testID="home-drafts-error" />
+        ) : null}
+        {chips.length > 0 ? (
+          <View style={s.chips}>
+            {chips.map(([c, label]) => (
+              <View key={label} style={[s.chip, { backgroundColor: sc.bgPrimary }]}><Text style={cs.strong}>{c} <Text style={cs.body}>{label}</Text></Text></View>
+            ))}
+          </View>
+        ) : null}
+        {n > 0 ? (
+          <Pressable
+            onPress={() => { void HapticService.mediumImpact(); p.onOpenDrafts(); }} accessibilityRole="button"
+            accessibilityLabel={`Approve Roman's drafts, ${n}`} testID="home-drafts"
+            style={({ pressed }) => [s.approve, { backgroundColor: sc.accent }, pressed && s.pressed]}
+          >
+            <Text style={[s.approveText, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>{"Approve Roman's drafts\u00a0→"}</Text>
+            <View style={s.approveBadge}><Text style={s.approveBadgeText} maxFontSizeMultiplier={1.2}>{n}</Text></View>
+          </Pressable>
+        ) : null}
+        {p.onAskRoman ? (
+          <Pressable style={s.askRoman} onPress={tap(p.onAskRoman)} accessibilityRole="button" accessibilityLabel="Ask Roman" testID="home-ask-roman">
+            <Text style={[cs.strong, { color: sc.accentText }]}>Ask Roman</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  })();
 
-      {o && roster > 0 ? (
-        <View style={styles.rosterSection} testID="coach-home-v11-roster">
-          {chips.length > 0 ? <FilterChips chips={chips} selected={filter} onSelect={setPicked} /> : null}
-          {needsYou && data.urgentState === 'loading' ? <QuietLoading label="Loading" rows={2} testID="coach-home-v11-urgent-loading" /> : null}
-          {needsYou && data.urgentState === 'error' ? (
-            <QuietError layout="inline" message="At-risk clients could not load." onRetry={retryUrgent} testID="coach-home-v11-urgent-error" />
-          ) : null}
-          {filter !== 'steady' ? (
-            <View style={styles.rosterTiles}>
-              {filter === 'streaks'
-                ? streaks.map((e) => (
-                  <ClientTile
-                    key={e.user_id} name={e.display_name} line={streakLabel(e)} reason={`${e.streak_days} days`} unread={rw.unread[e.user_id]}
-                    width={tileWidth} onPress={() => onSelectClient(e.user_id, e.display_name)} testID={`coach-home-v11-streak-${e.user_id}`}
-                  />
-                ))
-                : urgent.map((e) => (
-                  <ClientTile
-                    key={e.user_id} name={e.display_name} reason={e.top_factor} unread={rw.unread[e.user_id]}
-                    line={loggedLine(byId.get(e.user_id), data.now) ?? lastActiveWords(e.last_active_at, data.now)}
-                    width={tileWidth} onPress={() => onSelectClient(e.user_id, e.display_name)} testID={`coach-home-v11-client-${e.user_id}`}
-                  />
+  const business = (() => {
+    if (data.month.kind === 'blocked') return null;
+    const pace = monthOk && hasMonthMoney(monthOk) ? paceLine(monthOk.totals.netCents, monthOk.currency, data.now) : null;
+    return (
+      <View testID="home-business">
+        <Text style={cs.section} accessibilityRole="header">BUSINESS</Text>
+        {data.month.kind === 'error' ? (
+          <View style={cs.card}><QuietError layout="inline" message="This month's earnings could not load." onRetry={retryMonth} testID="home-month-error" /></View>
+        ) : data.month.kind === 'loading' ? (
+          <View style={cs.card}><QuietLoading label="Loading earnings" rows={1} testID="home-month-loading" /></View>
+        ) : monthOk ? (
+          <Pressable style={({ pressed }) => [cs.card, s.biz, pressed && s.pressed]} onPress={tap(p.onOpenMoney)} accessibilityRole="button" accessibilityLabel={`Earnings this month, ${heroAmount(monthOk.totals.netCents, monthOk.currency)}`} testID="home-month">
+            <View style={s.bizMark}><Text style={s.bizSign}>$</Text></View>
+            <View style={s.grow}>
+              <Text style={cs.body}>Earnings · this month</Text>
+              <Text style={s.bizAmount} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.15}>{heroAmount(monthOk.totals.netCents, monthOk.currency)}</Text>
+              <Text style={cs.body}>{pace ? `${monthOverline(data.now)} · ${pace}` : hasMonthMoney(monthOk) ? monthOverline(data.now) : 'Nothing earned yet this month.'}</Text>
+              {data.payout ? <Text style={cs.body}>{`Next payout ${heroAmount(data.payout.amountCents, data.payout.currency)} · ${cap(payoutWords(data.payout, data.now))}`}</Text> : null}
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  })();
+
+  const clientsCard = o && roster > 0 ? (
+    <View testID="home-clients">
+      <Text style={cs.section} accessibilityRole="header">CLIENTS</Text>
+      <View style={[cs.card, s.flush]}>
+        <LinkRow first title={`All ${roster} clients`} line="Open Clients" onPress={tap(p.onOpenClients)} testID="home-row-all" />
+        {data.rosterState === 'ok' ? (
+          <LinkRow
+            title={`Steady, ${data.steady.count}`} line={data.steady.loggedToday !== null ? `${data.steady.loggedToday} logged today` : null}
+            onPress={tap(p.onOpenClients)} testID="home-row-steady"
+          />
+        ) : null}
+        <LinkRow title="Streaks" count={o.win_streak_count} onPress={tap(p.onOpenStreaks)} testID="home-row-streaks" />
+      </View>
+    </View>
+  ) : null;
+
+  return (
+    <View style={[s.fill, { backgroundColor: sc.bgPrimary }]}>
+      <ScrollView
+        style={s.fill} contentContainerStyle={{ paddingBottom: 32 + bottom }} testID="coach-home-v11"
+        refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => void reload(true)} tintColor={sc.accent} />}
+      >
+        <View style={[s.hero, { paddingTop: top + 12 }]} testID="home-hero">
+          <View style={s.topRow}>
+            <Text style={s.date} maxFontSizeMultiplier={1.3}>{dateOverline(data.now).toUpperCase()}</Text>
+            <Pressable
+              onPress={tap(p.onOpenNotifications)} hitSlop={8} style={s.icon} testID="home-bell"
+              accessibilityRole="button" accessibilityLabel={bell > 0 ? `Notifications, ${bell > 99 ? '99+' : bell} unread` : 'Notifications'}
+            >
+              <Ionicons name="notifications-outline" size={26} color={forestPop.onDeep} />
+              {bell > 0 ? <View style={s.bellBadge}><Text style={s.bellBadgeText} maxFontSizeMultiplier={1.2}>{bell > 99 ? '99+' : bell}</Text></View> : null}
+            </Pressable>
+            <Pressable onPress={tap(p.onOpenSettings)} hitSlop={8} style={s.icon} accessibilityRole="button" accessibilityLabel="Settings" testID="home-gear">
+              <Ionicons name="settings-outline" size={26} color={forestPop.onDeep} />
+            </Pressable>
+          </View>
+          {/* The checklist hides itself once setup is done. */}
+          {p.setup}
+          {hero}
+          {tiles}
+          {o ? <AlertsRow count={o.open_alerts} onPress={tap(p.onOpenAlerts)} /> : null}
+          {o && rings ? (
+            <View testID="home-rings">
+              <Text style={s.dayLabel} accessibilityRole="header">YOUR DAY</Text>
+              <View style={s.rings}>
+                {rings.map((r) => (
+                  <DayRing key={r.key} ring={r} onPress={r.key === 'reach_outs' && roster > 0 ? tap(() => setReachOpen(true)) : undefined} />
                 ))}
-              <AllClientsTile count={roster} width={tileWidth} onPress={onOpenClients} />
-            </View>
-          ) : null}
-          {showWall && wall ? (
-            <SteadyWall
-              members={wall} width={contentWidth} total={roster} flushTop={filter === 'steady'}
-              onSelect={onSelectClient} onOpenClients={onOpenClients}
-            />
-          ) : null}
-        </View>
-      ) : null}
-
-      {o ? <View style={styles.section}>{header}</View> : null}
-
-      {o && (month || payout || monthFailed) ? (
-        <View style={styles.section} testID="coach-home-v11-business">
-          <QuietOverline accessibilityRole="header">Business</QuietOverline>
-          {monthFailed ? (
-            <QuietError message="This month's earnings could not load." onRetry={retryMonth} testID="coach-home-v11-month-error" />
-          ) : null}
-          {month || payout ? (
-            <View style={styles.tiles}>
-              {month ? (
-                <BusinessTile
-                  label={monthOverline(data.now)} value={heroAmount(month.totals.netCents, month.currency)}
-                  sub={paceLine(month.totals.netCents, month.currency, data.now)}
-                  width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-month"
-                />
-              ) : null}
-              {payout ? (
-                <BusinessTile
-                  label="Next payout" value={heroAmount(payout.amountCents, payout.currency)} sub={cap(payoutWords(payout, data.now))}
-                  width={tileWidth} onPress={onOpenMoney} testID="coach-home-v11-payout"
-                />
-              ) : null}
+              </View>
+              <Text style={s.onDeepMuted}>{ringsCaption(rings, roster)}</Text>
             </View>
           ) : null}
         </View>
-      ) : null}
-    </ScrollView>
+        <View style={s.page}>
+          {p.belowHero?.(!!o && roster === 0)}
+          {roman}
+          {needsTile}
+          {business}
+          {clientsCard}
+        </View>
+      </ScrollView>
+      <ReachOutSheet
+        visible={reachOpen} rows={data.needs.slice(0, REACH_ROWS)} nameOf={nameOf} onPick={pickReach}
+        onSeeAll={() => { setReachOpen(false); p.onOpenNeedsYou(); }} onClose={() => setReachOpen(false)}
+      />
+      <RomanDraftSheet ask={ask} onClose={() => setAsk(null)} />
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingHorizontal: layout.gutter, paddingTop: 16, paddingBottom: 40 },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
-  flat: { marginBottom: 0 },
-  bell: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
-  bellBadge: { position: 'absolute', top: 2, right: -8, borderWidth: 2 },
-  badge: { minWidth: 20, height: 20, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { ...typography.caption, fontSize: 11, lineHeight: 14, letterSpacing: 0, fontFamily: 'Inter_600SemiBold' },
-  dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
-  roman: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 20, paddingVertical: 16, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
-  // Centres Roman on the first 44 pt control beside him.
-  romanMark: { height: 44, justifyContent: 'center' },
-  grow: { flex: 1, alignItems: 'flex-start' },
-  wide: { alignSelf: 'stretch' },
-  drafts: { minHeight: 44, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },
-  draftsLabel: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, flexShrink: 1 },
-  section: { marginTop: 28 },
-  rosterSection: { marginTop: 18 },
-  rosterTiles: { flexDirection: 'row', flexWrap: 'wrap', gap: TILE_GAP, marginTop: 14 },
-  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: TILE_GAP, marginTop: 10 },
-  pressed: { opacity: 0.6 },
+const s = StyleSheet.create({
+  fill: { flex: 1 },
+  hero: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 24, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, gap: 14 },
+  topRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 },
+  date: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, flex: 1 },
+  icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  bellBadge: { position: 'absolute', top: 0, right: -2, minWidth: 22, height: 22, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
+  bellBadgeText: { ...typography.caption, fontSize: 12, lineHeight: 15, letterSpacing: 0, fontFamily: SEMI, color: forestPop.deep },
+  heroBlock: { gap: 6 },
+  heroLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
+  heroValue: { fontFamily: SEMI, fontSize: 56, lineHeight: 64, letterSpacing: -1, color: forestPop.onDeep },
+  heroUnit: { ...typography.body, fontSize: 20, lineHeight: 26, color: forestPop.onDeep, flexShrink: 1 },
+  heroRight: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, marginLeft: 'auto' },
+  bar: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.forest, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.leaf },
+  win: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  winDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: forestPop.leaf },
+  winText: { ...typography.body, color: forestPop.onDeep, flex: 1 },
+  onDeep: { ...typography.body, color: forestPop.onDeep },
+  onDeepMuted: { ...typography.bodySmall, color: forestPop.onDeepMuted },
+  retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: forestPop.brand400 },
+  retryText: { ...typography.bodyMd, color: forestPop.onDeep },
+  tiles: { flexDirection: 'row', gap: 10 },
+  dayLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.gold, marginBottom: 8 },
+  rings: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
+  page: { paddingHorizontal: layout.gutter, paddingTop: 16, gap: 14 },
+  grow: { flex: 1, minWidth: 0 },
+  bold: { fontFamily: SEMI },
+  needs: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  needsBox: { width: 72, height: 72, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  needsNum: { fontFamily: SEMI, fontSize: 30, lineHeight: 36, color: forestPop.leaf },
+  romanHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  chip: { minHeight: 40, borderRadius: radius.button, paddingHorizontal: 12, justifyContent: 'center' },
+  approve: { minHeight: 56, marginTop: 14, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  approveText: { ...typography.bodyMd, fontSize: 18, lineHeight: 24, flexShrink: 1, textAlign: 'center' },
+  approveBadge: { minWidth: 28, height: 28, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
+  approveBadgeText: { ...typography.bodyMd, fontSize: 15, lineHeight: 18, color: forestPop.deep },
+  askRoman: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', marginTop: 6 },
+  biz: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  bizMark: { width: 52, height: 52, borderRadius: radius.button, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
+  bizSign: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
+  bizAmount: { fontFamily: SEMI, fontSize: 30, lineHeight: 38, color: forestPop.ink },
+  flush: { padding: 0 },
+  pressed: { opacity: 0.7 },
 });
