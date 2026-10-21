@@ -77,7 +77,7 @@ export default function ClientMessagesScreen() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   // A reply typed and not sent stays with this client's chat (COACH-CHAT-KEEP); unsent text asks before a reset (Sol B1).
-  const [inputText, setInputText] = useUnsentReply(clientId, initialDraft);
+  const [inputText, setInputText, sendKey] = useUnsentReply(clientId, initialDraft);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
@@ -88,9 +88,10 @@ export default function ClientMessagesScreen() {
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<Message | null>(null);
   const [muteMenu, setMuteMenu] = useState(false);
-  // v2 idempotent send: a failed send keeps its device key for the same text,
-  // so tapping Send again replays it and can never post a duplicate.
-  const unsentRef = useRef<{ text: string; key: string } | null>(null);
+  // v2 idempotent send: a failed send keeps its device key with its text, kept
+  // with this client's chat on the device (Sol B1, m#841), so tapping Send
+  // again, even after the chat closed and opened again, replays it and can
+  // never post a duplicate.
 
   const blockStore = useBlockedUsersStore();
   const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
@@ -219,11 +220,10 @@ export default function ClientMessagesScreen() {
     setSending(true);
     Keyboard.dismiss();
     if (thread.enabled) {
-      const key = unsentRef.current?.text === text ? unsentRef.current.key : newClientMessageId();
+      const key = sendKey.keyFor(text) ?? newClientMessageId();
       try {
         const row = await messagingV2Api.sendMessage(scope, { body: text, clientMessageId: key, replyToId: replyTarget?.id ?? null });
-        unsentRef.current = null;
-        setInputText('');
+        setInputText(''); // also drops the failed send's key
         setReplyTarget(null);
         setMessages((prev) => mergeById(prev, [normalizeMessage(row, clientId)]));
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
@@ -232,12 +232,11 @@ export default function ClientMessagesScreen() {
         if (e.kind === 'contract') {
           // 2xx with a shape this build does not read: the server took the
           // message, so never offer a resend; refetch the thread instead.
-          unsentRef.current = null;
           setInputText('');
           setReplyTarget(null);
           void loadSinceNewest();
         } else {
-          if (e.kind === 'network' || e.status >= 500 || e.status === 429) unsentRef.current = { text, key };
+          if (e.kind === 'network' || e.status >= 500 || e.status === 429) sendKey.keepFailed(text, key);
           thread.report('Message not sent', err);
         }
       } finally {
@@ -481,6 +480,7 @@ export default function ClientMessagesScreen() {
           style={[styles.sendBtn, (!inputText.trim() || sending) && styles.sendBtnDisabled]}
           onPress={handleSend}
           disabled={!inputText.trim() || sending}
+          hitSlop={4} // 40 pt button, 48 pt touch target (Sol, m#841: owner's 44 pt floor)
           accessibilityRole="button"
           accessibilityLabel="Send message"
         >

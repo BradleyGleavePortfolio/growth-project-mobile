@@ -530,12 +530,12 @@ it.each(ENTRIES.slice(1))('flag on: an unsent broadcast left open in Messages as
   expect([stackOf('Messages'), ref.getCurrentRoute()?.params]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT]);
 });
 
-// Sol B1 (round 3): unsent text in a chat left open in Messages (this client's, another's, or another's under its
-// contact page) asks before a chat from outside closes it, in the broadcast composer's words. Keep editing: nothing
-// closes, and Messages opens where it was, the chat keeping its text. Discard: the new chat, fresh, on the same inbox.
+// CHAT-DISCARD (owner 10-21, op 1): a chat from outside opens straight away over a chat left open in Messages with
+// unsent text (this client's, another's, or another's under its contact page); nothing asks. The left chat keeps its
+// text, and the new chat shows only its own client's kept text.
 const DRAFTS = [[CHAT.clientName, CHAT, false], [OTHER.clientName, OTHER, false], [`${OTHER.clientName} under the contact page`, OTHER, true]] as const;
 it.each(ENTRIES.slice(1).flatMap(([probe, home]) => DRAFTS.map(([name, left, contact]) => [probe, name, left, contact, home] as const)))(
-  'flag on: unsent text in a chat left open in Messages asks before a chat from %s closes it (left open: %s)',
+  'flag on: a chat from %s opens without asking over a chat left open in Messages with unsent text (left open: %s), which keeps it',
   async (probe, _name, left, contact, [tab, screen]) => {
     const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const view = await mount();
@@ -546,25 +546,20 @@ it.each(ENTRIES.slice(1).flatMap(([probe, home]) => DRAFTS.map(([name, left, con
     const kept = messagesKeys();
     await act(async () => ref.navigate(tab, screen ? { screen, params: {}, initial: false } : undefined));
     await fireEvent.press(view.getByText(`../screens/coach/${probe}`));
-    expect(ask.mock.calls.map(([title, message, buttons]) => [title, message, buttons?.map((b) => [b.text, b.style])])).toEqual([[
-      'Discard this message?', 'Leaving removes the text from this message.', [['Keep editing', 'cancel'], ['Discard', 'destructive']],
-    ]]);
-    expect([focusedTab(), messagesKeys(), ref.getCurrentRoute()?.params]).toEqual(['Messages', kept, contact ? page : left]); // Keep editing
-    expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('See you at six');
-    await act(async () => ask.mock.calls[0][2]?.[1]?.onPress?.()); // Discard
+    expect(ask).not.toHaveBeenCalled();
     expect([stackOf('Messages'), messagesKeys()[0], kept.includes(messagesKeys()[1]), ref.getCurrentRoute()?.params])
       .toEqual([['MessagesInbox', 'ClientMessages'], kept[0], false, CHAT]);
-    expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('');
-    await act(async () => ref.goBack()); // Discard removed the text for good: the left chat reopens empty
+    expect(view.getByLabelText('Message text').props.value).toBe(left === CHAT ? 'See you at six' : '');
+    await act(async () => ref.goBack());
     await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: left, initial: false }));
-    expect(view.getByLabelText('Message text').props.value).toBe('');
+    expect(view.getByLabelText('Message text').props.value).toBe('See you at six'); // the left chat opens with it
     ask.mockRestore();
   },
 );
 
 // COACH-CHAT-KEEP (LO-W2M C1 on m#840): a reply typed and not sent stays with its own client's chat when the chat
 // closes without asking (Back, a message push or tgp://messages opening the inbox), and is back in the box when that
-// chat opens again. Never in another client's chat; sending, Discard or a sign-in or sign-out removes it.
+// chat opens again. Never in another client's chat; sending it or signing out removes it (CHAT-DISCARD: nothing asks).
 const box = (view: Awaited<ReturnType<typeof render>>) => view.getByLabelText('Message text').props.value;
 const openChat = (params: object) => act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params, initial: false }));
 const pushTap = () => {
@@ -646,19 +641,21 @@ it.each(['logout', 'login'])('a %s removes every kept reply', async (event) => {
   expect(box(view)).toBe('');
 });
 
-it('flag off: Back from a chat in Clients drops the text, as today', async () => {
+it('flag off: Back from a chat in Clients keeps the text too (CHAT-DISCARD: every chat)', async () => {
   mockFlags.coachTabsV2 = false;
   const view = await mount();
   await act(async () => ref.navigate('ClientsStack', { screen: 'ClientMessages', params: CHAT, initial: false }));
   await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
   await act(async () => ref.goBack());
   await act(async () => ref.navigate('ClientsStack', { screen: 'ClientMessages', params: CHAT, initial: false }));
-  expect(box(view)).toBe('');
+  expect(box(view)).toBe('See you at six');
 });
 
 it('the real chat keeps its reply box through the same hook, and every sent branch clears it', () => {
   const chat = SOURCES.find(([file]) => file === 'ClientMessagesScreen.tsx')?.[1] ?? '';
-  expect(chat).toMatch(/^ {2}const \[inputText, setInputText\] = useUnsentReply\(clientId, initialDraft\);$/m);
+  expect(chat).toMatch(/^ {2}const \[inputText, setInputText, sendKey\] = useUnsentReply\(clientId, initialDraft\);$/m);
+  expect(chat).toMatch(/sendKey\.keyFor\(text\) \?\? newClientMessageId\(\)/); // Sol B1: a failed send's key is kept with its text
+  expect(chat).not.toMatch(/unsentRef/);
   expect(chat).not.toMatch(/useState<string>\(initialDraft/);
   const send = chat.slice(chat.indexOf('const handleSend'), chat.indexOf('\n  };\n', chat.indexOf('const handleSend')));
   expect(send.match(/setInputText\(''\)/g)).toHaveLength(3); // v2 sent, v2 taken (2xx contract), legacy sent
@@ -684,20 +681,19 @@ it.each([true, false].flatMap((on) => [[on, 'Reply', REPLY], [on, 'the peek Mess
   expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(on ? ['Messages', 'MessagesInbox'] : ['ClientsStack', 'ClientsList']);
 });
 
-it.each([['Reply', REPLY], ['peek Message Sam', PEEK_MESSAGE]])("flag on: unsent text in another chat left open in Messages asks before the lookup's %s closes it", async (_path, taps) => {
+it.each([['Reply', REPLY], ['peek Message Sam', PEEK_MESSAGE]])("flag on: the lookup's %s opens the chat without asking over another chat left open with unsent text, which keeps it", async (_path, taps) => {
   const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   mockLookup = true;
   const view = await mount();
   await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: OTHER, initial: false }));
   await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
-  const kept = messagesKeys();
   await fireEvent.press(view.getByRole('tab', { name: /^Clients, tab/ }));
   for (const id of taps) await fireEvent.press(await view.findByTestId(id));
-  expect(ask.mock.calls.map(([title, , buttons]) => [title, buttons?.map((b) => b.text)])).toEqual([['Discard this message?', ['Keep editing', 'Discard']]]);
-  expect([focusedTab(), messagesKeys(), ref.getCurrentRoute()?.params]).toEqual(['Messages', kept, OTHER]); // Keep editing
-  expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('See you at six');
-  await act(async () => ask.mock.calls[0][2]?.[1]?.onPress?.()); // Discard
-  expect([stackOf('Messages'), ref.getCurrentRoute()?.params]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT]);
+  expect(ask).not.toHaveBeenCalled();
+  expect([stackOf('Messages'), ref.getCurrentRoute()?.params, box(view)]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT, '']);
+  await act(async () => ref.goBack());
+  await openChat(OTHER);
+  expect(box(view)).toBe('See you at six');
   ask.mockRestore();
 });
 
