@@ -56,7 +56,7 @@ import {
   conflictCodeOf,
   httpStatusOf,
 } from '../../api/consultationApi';
-import { aiConsentApi, type AiConsentUpgradeCopy } from '../../api/aiConsentApi';
+import { aiConsentApi, type AiConsentStatusResponse, type AiConsentUpgradeCopy } from '../../api/aiConsentApi';
 import {
   clearAiWithdrawalPending,
   isLiveRomanGrant,
@@ -172,6 +172,12 @@ export const AI_STATUS_WAIT_MS = 3000;
  * server refuses GET /me/feature-flags (403 AGE_CONFIRMATION_REQUIRED), so the flow never reads the flag itself.
  */
 const P0_ASK = { crisis: true } as const;
+/**
+ * CONSENT-M (owner #162-6, b#1117): P0 asks health_notes first and keeps that answer only when it names the
+ * Health-notes copies for a P0 screen this build has (a client with no coach: memory on only), or a live grant;
+ * otherwise (a server before b#1117, a client with no coach and memory off) it asks P0_ASK, as before.
+ */
+const P0_HEALTH_ASK = { healthNotes: true } as const;
 
 export interface ConsultationFlowProps {
   userId: string | null;
@@ -314,6 +320,9 @@ export default function ConsultationFlow({
   /** CRISIS-APP-COPY: the copies box 2 shows and grants, as the server answered P0_ASK (v8 / v9 while its switch is on). */
   const aiFamily = useRef(romanFamily(false));
   const [aiCrisis, setAiCrisis] = useState(false);
+  /** CONSENT-M: box 2 shows the Health-notes copies, and every ledger call asks P0_HEALTH_ASK. */
+  const [aiHealth, setAiHealth] = useState(false);
+  const aiAsk = useRef<typeof P0_ASK | typeof P0_HEALTH_ASK>(P0_ASK);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
   const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
   /** Each box 2 notice is shown once per load, however often a retry fails. */
@@ -717,12 +726,20 @@ export default function ConsultationFlow({
   async function refreshAiFromLedger(gen: number) {
     try {
       // W-CONSENT: a client with no coach reads (and box 2 grants) the coached copies too.
-      const out = await api.getRomanConsent(P0_ASK);
+      let out = await api.getRomanConsent(P0_HEALTH_ASK);
       if (!aiLive(gen)) return;
+      if (out.kind === 'ok' && out.status && !healthScreen(out.status) && !isLiveRomanGrant(out.status)) {
+        out = await api.getRomanConsent(P0_ASK);
+        if (!aiLive(gen)) return;
+      }
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        const crisisCopy = romanFamilyOf(out.status) === romanFamily(false, true);
-        aiFamily.current = romanFamily(false, crisisCopy);
+        const family = romanFamilyOf(out.status);
+        const crisisCopy = family === romanFamily(false, true) || family === romanFamily(false, true, true);
+        const health = healthScreen(out.status);
+        aiFamily.current = romanFamily(false, crisisCopy, health);
+        aiAsk.current = health ? P0_HEALTH_ASK : P0_ASK;
         setAiCrisis(crisisCopy);
+        setAiHealth(health);
         aiMemoryRef.current = romanBox2MemoryCopyOf(out.status, aiFamily.current);
         setAiMemory(aiMemoryRef.current);
         setAiConfirmed(isLiveRomanGrant(out.status, aiFamily.current), true);
@@ -733,6 +750,13 @@ export default function ConsultationFlow({
     } finally {
       if (gen === generation.current) markAiReady();
     }
+  }
+
+  /** CONSENT-M: the server answered the Health-notes copies, and this build has the P0 screen for them. */
+  function healthScreen(status: AiConsentStatusResponse): boolean {
+    const family = romanFamilyOf(status);
+    if (family !== romanFamily(false, false, true) && family !== romanFamily(false, true, true)) return false;
+    return !coachless || romanBox2MemoryCopyOf(status, family) !== null;
   }
 
   /**
@@ -775,7 +799,7 @@ export default function ConsultationFlow({
           // and yes still being the latest choice (B-310-5).
           const result = await runAiLedgerWrite(() =>
             grantRomanWithRetry(
-              (body) => api.grantRomanConsent(body, P0_ASK),
+              (body) => api.grantRomanConsent(body, aiAsk.current),
               () => aiLive(gen) && aiWant.current === true,
               () => romanGrantBody(aiMemoryRef.current, aiFamily.current),
             ),
@@ -821,7 +845,7 @@ export default function ConsultationFlow({
         aiWithdrawRetryDue.current = false;
         const result = await runAiLedgerWrite(() =>
           withdrawRomanWithRetry(
-            () => api.withdrawRomanConsent(P0_ASK),
+            () => api.withdrawRomanConsent(aiAsk.current),
             () => aiLive(gen) && aiWant.current === false,
           ),
         );
@@ -1287,7 +1311,7 @@ export default function ConsultationFlow({
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
         romanOverride={welcomeBackId === screen.id ? welcomeBackLine(screen.chapter) : null}
-        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, aiCrisis, coachSharing }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, aiCrisis, aiHealth, coachSharing }}
         escape={(stopped) => (stopped ? <EscapeRow {...exits} /> : null)}
       />
     );
