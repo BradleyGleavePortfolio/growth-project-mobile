@@ -31,12 +31,13 @@ export function NudgeModal({
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
-  // The card centres below the status bar, so a long message never pushes its title under the clock.
+  // A status-bar-high spacer above the card centres it below the status bar, so a long message never pushes its title under the clock.
   const topInset = useContext(SafeAreaInsetsContext)?.top ?? 0;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       {/* The form sits above the keyboard, so Send and Cancel stay reachable while typing (as LogPlannedMealButton). */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.nudgeModalOverlay, { paddingTop: topInset }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.nudgeModalOverlay}>
+        <View style={{ height: topInset }} />
         <View style={styles.nudgeModalContent}>
           <Text style={styles.nudgeModalTitle}>Send Nudge</Text>
           <Text style={styles.nudgeModalDesc}>
