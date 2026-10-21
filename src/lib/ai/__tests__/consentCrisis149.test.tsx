@@ -158,7 +158,7 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
         memoryVersion: on ? 'consult-consent-v14' : 'consult-consent-v12',
         memorySha256: on ? PIN.p0v14 : copy.CONSENT_MEMORY_COPY_SHA256,
       });
-      expect(source('screens/consultation/QuestionScreen.tsx')).toContain('consentScreenCopy(!!ctx?.coachless, !!state?.aiCrisis)');
+      expect(source('screens/consultation/QuestionScreen.tsx')).toContain('consentScreenCopy(!!ctx?.coachless, !!state?.aiCrisis, !!state?.aiHealth)'); // CONSENT-M adds the Health-notes screens
     },
   },
   {
