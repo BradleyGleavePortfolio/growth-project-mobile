@@ -74,10 +74,14 @@ test('Send hands the change to the coach and confirms it once', async () => {
 });
 
 test('Send refusals are told truthfully: lapsed, AI help off, and a failed connection', async () => {
-  const s = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);
+  const lapsed = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);
   post.mockRejectedValueOnce(fail(409, { code: 'COPILOT_SUGGESTION_EXPIRED', message: 'This suggestion is no longer available. Ask Roman again.' }));
-  await act(async () => fireEvent.press(s.getByText('Send to Alex')));
-  expect(s.getByText('This suggestion is no longer available. Ask Roman again.')).toBeTruthy();
+  await act(async () => fireEvent.press(lapsed.getByText('Send to Alex')));
+  expect(lapsed.getByText('This suggestion is no longer available. Ask Roman again.')).toBeTruthy();
+  expect(lapsed.queryByText('Send to Alex')).toBeNull();
+  expect(lapsed.getByText('Not now')).toBeTruthy();
+  await lapsed.unmount();
+  const s = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);
   post.mockRejectedValueOnce(fail(403, { code: 'ai_consent_required' }));
   await act(async () => fireEvent.press(s.getByText('Send to Alex')));
   expect(s.getByText('AI help is off')).toBeTruthy();

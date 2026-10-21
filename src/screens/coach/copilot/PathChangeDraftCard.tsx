@@ -83,7 +83,7 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
 
   const editTo = c.kind === 'move_session' ? shortDay(new Date(movedAt)) : kcalText(Number(kcal));
   const editor = c.kind === 'move_session' ? (
-    <View style={s.actions}>
+    <View style={s.steps}>
       <Step icon="chevron-back" label={C.earlier} disabled={!inWindow(movedAt - DAY, now())} onPress={() => setDays((n) => n - 1)} />
       <Step icon="chevron-forward" label={C.later} disabled={!inWindow(movedAt + DAY, now())} onPress={() => setDays((n) => n + 1)} />
     </View>
@@ -123,7 +123,8 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
       {line ? <Text style={[typography.bodySmall, { color: forestPop.error }]} accessibilityRole="alert" testID="path-draft-error">{line}</Text> : null}
       {mode === 'decline' ? (
         <TextInput value={note} onChangeText={(v) => setNote(v.replace(/[\r\n]+/g, ' '))} maxLength={NOTE_MAX} placeholder={C.notePlaceholder(first)}
-          placeholderTextColor={sc.textMuted} returnKeyType="done" accessibilityLabel={C.notePlaceholder(first)} style={[typography.body, s.input, field]} testID="path-draft-note" />
+          placeholderTextColor={sc.textMuted} returnKeyType="done" accessibilityLabel={C.notePlaceholder(first)} style={[typography.body, s.input, s.note, field]} testID="path-draft-note"
+          multiline submitBehavior="blurAndSubmit" />
       ) : null}
       {gone ? null : mode === 'view' ? (
         <>
@@ -169,8 +170,12 @@ const s = StyleSheet.create({
   panel: { borderRadius: radius.button, padding: 12, gap: 10 },
   mark: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // Stretch: Earlier day and Later day keep one height when a label wraps at large text.
+  steps: { flexDirection: 'row', alignItems: 'stretch', gap: 10 },
   outline: { minHeight: layout.buttonHeight, paddingHorizontal: 18, borderWidth: 1, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
   input: { minHeight: 44, borderWidth: 1, borderRadius: radius.button, paddingHorizontal: 12 },
+  // One line to the server (line breaks are dropped as typed), wrapped on screen so the whole note shows.
+  note: { paddingTop: 11, paddingBottom: 11, textAlignVertical: 'top' },
   step: { flexDirection: 'row', gap: 4, minHeight: 44, paddingHorizontal: 10 },
   off: { opacity: 0.35 },
 });

@@ -53,6 +53,7 @@ import {
 import { coachAiExecutionApi } from '../../api/coachAiExecutionApi';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 import { PATH_DRAFTS_KEY, PathChangeDrafts, usePathChangeDrafts } from './copilot/PathChangeDrafts';
+import { useScreenInsets } from '../../ui/layout/Screen';
 
 /** Roles allowed to see + decide AI drafts. Mirrors backend
  *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
@@ -64,6 +65,8 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
   const user = useCurrentUser();
+  // The stack draws no header here: the title clears the status bar itself.
+  const insets = useScreenInsets();
 
   // Defence-in-depth role guard. CoachNavigator is the primary gate; this
   // layer keeps an inert surface even if the screen is reached through a
@@ -130,7 +133,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   return (
     <ErrorBoundary>
       <View style={styles.root} testID="pending-ai-drafts-screen">
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: 16 + insets.top }]}>
           <Text style={styles.headerTitle}>Pending AI drafts</Text>
           <Text style={styles.headerSubtitle}>
             Review what the AI proposed before it reaches your clients.
