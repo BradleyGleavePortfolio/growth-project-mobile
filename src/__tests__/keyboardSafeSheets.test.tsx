@@ -5,8 +5,8 @@
  * 1. Behaviour: the coach insight review sheet and the Ask AI sheet put the
  *    field AND the send button inside a KeyboardAvoidingView, so on iOS the
  *    sheet rises with the keyboard (the app's pattern since NudgeModal and
- *    LogPlannedMealButton). Ask AI's form also scrolls, with taps passing
- *    through while the keyboard is up, so "Send to AI" can never sit off screen.
+ *    LogPlannedMealButton). Ask AI's two fields scroll and "Send to AI" is
+ *    pinned under them, so it can never sit off screen or under the keyboard.
  * 2. Class guard: every non-test file that opens a <Modal> holding a
  *    <TextInput> must be keyboard-safe (a padding KeyboardAvoidingView, a
  *    ScrollView with automaticallyAdjustKeyboardInsets, or the shared Screen,
@@ -93,7 +93,7 @@ describe('coach insight review sheet rides above the keyboard', () => {
 });
 
 describe('Ask AI sheet rides above the keyboard', () => {
-  it('both fields and Send to AI sit in a scrolling form inside the keyboard avoider; taps pass through with the keyboard up', async () => {
+  it('both fields scroll inside the keyboard avoider and Send to AI stays pinned under them, outside the scroll', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const r = await render(
       <QueryClientProvider client={qc}>
@@ -104,9 +104,12 @@ describe('Ask AI sheet rides above the keyboard', () => {
     const avoider = r.getByTestId('ask-ai-keyboard-avoider');
     const form = within(avoider).getByTestId('ask-ai-form');
     expect(form.props.keyboardShouldPersistTaps).toBe('handled');
-    for (const id of ['ask-ai-body-input', 'ask-ai-prompt-input', 'ask-ai-submit']) {
+    for (const id of ['ask-ai-body-input', 'ask-ai-prompt-input']) {
       expect(within(form).getByTestId(id)).toBeTruthy();
     }
+    // Pinned: never scrolled away under the keyboard.
+    expect(within(avoider).getByTestId('ask-ai-submit')).toBeTruthy();
+    expect(within(form).queryByTestId('ask-ai-submit')).toBeNull();
   });
 });
 

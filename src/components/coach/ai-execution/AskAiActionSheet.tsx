@@ -238,83 +238,85 @@ export function AskAiActionSheet({
             phase.kind === 'submitting' ||
             phase.kind === 'error' ||
             phase.kind === 'refused') && (
-            <ScrollView
-              style={styles.promptBody}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              testID="ask-ai-form"
-            >
-              <View style={styles.promptHeaderRow}>
-                <Pressable
-                  onPress={() => setPhase({ kind: 'pick' })}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to options"
-                  testID="ask-ai-back"
-                >
-                  <Text style={styles.backLink}>Back</Text>
-                </Pressable>
-                <Text style={styles.promptHeadingLabel}>Check-in nudge</Text>
-                <View style={styles.spacer16} />
-              </View>
+            <View style={styles.promptBody}>
+              {/* The fields scroll; Send to AI stays pinned under them, above the keyboard. */}
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                testID="ask-ai-form"
+              >
+                <View style={styles.promptHeaderRow}>
+                  <Pressable
+                    onPress={() => setPhase({ kind: 'pick' })}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to options"
+                    testID="ask-ai-back"
+                  >
+                    <Text style={styles.backLink}>Back</Text>
+                  </Pressable>
+                  <Text style={styles.promptHeadingLabel}>Check-in nudge</Text>
+                  <View style={styles.spacer16} />
+                </View>
 
-              <Text style={styles.promptLabel}>Notification body</Text>
-              <TextInput
-                value={body}
-                onChangeText={setBody}
-                multiline
-                editable={phase.kind !== 'submitting'}
-                maxLength={NOTIFICATION_BODY_MAX}
-                placeholder={`What ${clientName} will see in the push`}
-                placeholderTextColor={colors.textMuted}
-                style={styles.promptInput}
-                textAlignVertical="top"
-                testID="ask-ai-body-input"
-                accessibilityLabel="Notification body"
-              />
-              <Text style={styles.promptCounter}>
-                {body.length} / {NOTIFICATION_BODY_MAX}
-              </Text>
-
-              <Text style={[styles.promptLabel, styles.promptLabelGap]}>
-                Prompt to the AI
-              </Text>
-              <TextInput
-                value={prompt}
-                onChangeText={setPrompt}
-                multiline
-                editable={phase.kind !== 'submitting'}
-                maxLength={PROMPT_MAX}
-                placeholder="What prompted the check-in?"
-                placeholderTextColor={colors.textMuted}
-                style={styles.promptInput}
-                textAlignVertical="top"
-                testID="ask-ai-prompt-input"
-                accessibilityLabel="AI prompt"
-              />
-              <Text style={styles.promptCounter}>
-                {prompt.length} / {PROMPT_MAX}
-              </Text>
-
-              {phase.kind === 'error' && (
-                <Text
-                  style={styles.errorText}
-                  accessibilityLiveRegion="polite"
-                >
-                  {phase.message}
-                </Text>
-              )}
-
-              {phase.kind === 'refused' && (
-                <AiRefusalNotice
-                  refusal={phase.refusal}
-                  audience="coach"
-                  surface="draft"
-                  onRetry={() => void handleSubmit()}
-                  compact
-                  testID="ask-ai-refusal"
+                <Text style={styles.promptLabel}>Notification body</Text>
+                <TextInput
+                  value={body}
+                  onChangeText={setBody}
+                  multiline
+                  editable={phase.kind !== 'submitting'}
+                  maxLength={NOTIFICATION_BODY_MAX}
+                  placeholder={`What ${clientName} will see in the push`}
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.promptInput}
+                  textAlignVertical="top"
+                  testID="ask-ai-body-input"
+                  accessibilityLabel="Notification body"
                 />
-              )}
+                <Text style={styles.promptCounter}>
+                  {body.length} / {NOTIFICATION_BODY_MAX}
+                </Text>
+
+                <Text style={[styles.promptLabel, styles.promptLabelGap]}>
+                  Prompt to the AI
+                </Text>
+                <TextInput
+                  value={prompt}
+                  onChangeText={setPrompt}
+                  multiline
+                  editable={phase.kind !== 'submitting'}
+                  maxLength={PROMPT_MAX}
+                  placeholder="What prompted the check-in?"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.promptInput}
+                  textAlignVertical="top"
+                  testID="ask-ai-prompt-input"
+                  accessibilityLabel="AI prompt"
+                />
+                <Text style={styles.promptCounter}>
+                  {prompt.length} / {PROMPT_MAX}
+                </Text>
+
+                {phase.kind === 'error' && (
+                  <Text
+                    style={styles.errorText}
+                    accessibilityLiveRegion="polite"
+                  >
+                    {phase.message}
+                  </Text>
+                )}
+
+                {phase.kind === 'refused' && (
+                  <AiRefusalNotice
+                    refusal={phase.refusal}
+                    audience="coach"
+                    surface="draft"
+                    onRetry={() => void handleSubmit()}
+                    compact
+                    testID="ask-ai-refusal"
+                  />
+                )}
+              </ScrollView>
 
               <Pressable
                 style={[
@@ -331,7 +333,7 @@ export function AskAiActionSheet({
                   {phase.kind === 'submitting' ? 'Sending…' : 'Send to AI'}
                 </Text>
               </Pressable>
-            </ScrollView>
+            </View>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -392,7 +394,7 @@ function makeStyles(colors: ThemeColors) {
       color: colors.textMuted,
       marginTop: 2,
     },
-    promptBody: { paddingTop: 4 },
+    promptBody: { paddingTop: 4, flexShrink: 1 },
     promptHeaderRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
