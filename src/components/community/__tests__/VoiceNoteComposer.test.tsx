@@ -131,7 +131,7 @@ describe('VoiceNoteComposer — review + send', () => {
     const { getByTestId } = await render(<VoiceNoteComposer {...props} target={target} recorder={port} />);
     await recordTo(getByTestId);
     await waitFor(() => expect(getByTestId('voice-composer-review')).toBeTruthy());
-    expect(getByTestId('voice-composer-preview-duration').props.children).toBe('0:04');
+    expect(getByTestId('voice-composer-preview-duration', { includeHiddenElements: true }).props.children).toBe('0:04');
     expect(getByTestId('voice-composer-listen')).toBeTruthy();
     fireEvent.press(getByTestId('voice-composer-send'));
     expect(mockSend).toHaveBeenCalledWith(RESULT, true);

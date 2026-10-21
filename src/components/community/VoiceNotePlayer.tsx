@@ -59,7 +59,7 @@ export interface VoiceNotePlayerProps {
   offline?: boolean;
   /** Drawn at the end of the time row (the outbox row's waiting mark). */
   trailing?: React.ReactNode;
-  /** Drawn inside the card under the row (upload line, retry). */
+  /** Drawn inside the card under the row (the Not sent row). */
   footer?: React.ReactNode;
   testID?: string;
 }

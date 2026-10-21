@@ -41,7 +41,6 @@ describe('useVoiceOutbox', () => {
     expect(mockPublish).toHaveBeenCalledWith(
       'ws-1',
       expect.objectContaining({ uri: REC.uri, waveformPeaks: REC.peaks }),
-      expect.anything(),
     );
   });
 

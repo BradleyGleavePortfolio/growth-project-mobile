@@ -42,8 +42,8 @@ jest.mock('../VoiceNotePlayer', () => {
   const { View } = require('react-native');
   return {
     __esModule: true,
-    default: ({ testID, url }: { testID?: string; url: string }) =>
-      React.createElement(View, { testID, accessibilityHint: url }),
+    default: (p: { testID?: string; url: string; trailing?: unknown; footer?: unknown }) =>
+      React.createElement(View, { testID: p.testID, accessibilityHint: p.url }, p.trailing, p.footer),
   };
 });
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
