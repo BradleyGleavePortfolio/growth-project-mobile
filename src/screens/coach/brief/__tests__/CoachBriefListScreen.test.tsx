@@ -112,7 +112,7 @@ describe('CoachBriefListScreen', () => {
     const rows = (type: string) => s.queryAllByTestId(new RegExp(`^brief-list-row-${type}-`));
     expect(rows('checkin_review')).toHaveLength(10);
     expect(rows('checkin_missing')).toHaveLength(10);
-    expect(s.getByText('Name00 Lee')).toBeTruthy();
+    expect(s.getAllByText('Name00 Lee')).toHaveLength(2); // one client in each group
     expect(rows('checkin_review')[0].props.accessibilityLabel).toBe('Name00 Lee');
     await fireEvent.press(s.getByTestId('brief-list-more-Check-in needs review'));
     expect(rows('checkin_review')).toHaveLength(20);

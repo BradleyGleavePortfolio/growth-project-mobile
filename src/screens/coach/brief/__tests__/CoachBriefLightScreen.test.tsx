@@ -296,15 +296,16 @@ describe('CoachBriefLightScreen: folded rows', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('a single client keeps its direct row; no clients leaves only Thank you, Roman', async () => {
-    mockToday.mockResolvedValueOnce(extras([review(0)]));
+  it('a single client keeps its direct row', async () => {
+    mockToday.mockResolvedValue(extras([review(0)]));
     const s = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(s.getByTestId('brief-row-checkins')).toBeTruthy());
     expect(rowLabels(s)).toEqual(['Check on Rev0', 'Thank you, Roman']);
     expect(s.getByTestId('brief-row-checkins').props.accessibilityState?.expanded).toBeUndefined();
-    s.unmount();
+  });
 
-    mockToday.mockResolvedValueOnce(extras([]));
+  it('no clients leaves only Thank you, Roman', async () => {
+    mockToday.mockResolvedValue(extras([]));
     const z = await render(<CoachBriefLightScreen />);
     await waitFor(() => expect(z.getByText(BODY)).toBeTruthy());
     expect(rowLabels(z)).toEqual(['Thank you, Roman']);
