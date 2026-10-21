@@ -41,6 +41,9 @@
  * on, memory off) is made in the copies this screen asks for (client-ai-v6 / v7; v8 / v9 while the crisis flag
  * reads on), shown before it is sent
  * exactly as it is recorded, and each POST / DELETE sends the GET's ask, so its answer reads like the GET's.
+ * CONSENT-SETTINGS (owner #162-6, b#1117): it asks for the Health-notes copies first, as P0 does; while the
+ * server serves them every new choice is made in them (client-ai-v12 / v10; v13 / v11 while the flag reads on),
+ * otherwise in today's (readRomanConsent).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
@@ -52,6 +55,7 @@ import { layout, radius } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import {
   aiConsentApi as defaultApi,
+  AiConsentAsk,
   AiConsentOutcome,
   AiConsentStatusResponse,
   AiConsentUpgradeCopy,
@@ -62,6 +66,7 @@ import {
   grantAiChoiceAs,
   pinnedMemoryCopy,
   readAiWithdrawalPending,
+  readRomanConsent,
   romanBox2MemoryCopyOf,
   romanFamily,
   romanFamilyOf,
@@ -84,7 +89,7 @@ type View_ =
   | { phase: 'loading' }
   | { phase: 'unavailable' }
   | { phase: 'error'; offline: boolean; reference: string | null }
-  | { phase: 'ready'; status: AiConsentStatusResponse };
+  | { phase: 'ready'; status: AiConsentStatusResponse; ask: AiConsentAsk };
 
 export type RomanAiChoice = 'allowed' | 'not_allowed' | 'reconsent' | 'update_app';
 
@@ -222,8 +227,8 @@ export function headOf(status: AiConsentStatusResponse): string {
     : ROMAN_AI_COPY.notAllowedHead;
 }
 
-function toView(out: AiConsentOutcome): View_ {
-  if (out.kind === 'ok' && out.status) return { phase: 'ready', status: out.status };
+function toView(out: AiConsentOutcome, ask: AiConsentAsk): View_ {
+  if (out.kind === 'ok' && out.status) return { phase: 'ready', status: out.status, ask };
   if (out.kind === 'unavailable') return { phase: 'unavailable' };
   const status = out.kind === 'error' ? out.status : null;
   const requestId = out.kind === 'error' ? out.requestId ?? null : null;
@@ -265,10 +270,11 @@ export default function RomanAiConsentScreen({
   // CRISIS-APP-COPY: the crisis-sentence copies are asked for, and follow an added exception, exactly while on.
   const crisisAlert = useCrisisAlertNow();
   const crisisOn = crisisAlert();
-  // B-A: every new choice is made in the copies asked for (crisis while the flag reads on), and each write
-  // sends the same ask (b#1047).
-  const asked = romanFamily(false, crisisOn);
   const [view, setView] = useState<View_>({ phase: 'loading' });
+  // B-A: every new choice is made in the copies asked for (crisis while the flag reads on; Health-notes while
+  // the server serves them), and each write sends the ask whose answer is on screen (b#1047).
+  const shownAsk: AiConsentAsk = view.phase === 'ready' ? view.ask : { crisis: crisisOn };
+  const asked = romanFamily(false, crisisOn, !!shownAsk.healthNotes);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   /** An onboarding "no" that is still not confirmed after trying again here. */
@@ -293,7 +299,7 @@ export default function RomanAiConsentScreen({
       if (stale()) return;
       setPendingWithdraw(false);
     }
-    const out = await api.getStatus({ crisis: crisisAlert() });
+    const { out, ask } = await readRomanConsent(api.getStatus, { crisis: crisisAlert() }, stale);
     if (stale()) return;
     if (out.kind === 'ok' && out.status) {
       const c = out.status.copy;
@@ -306,7 +312,7 @@ export default function RomanAiConsentScreen({
           (!!c.box_label && c.box_label.text !== f.boxLabel));
       if (differs) logger.warn('RomanAiConsent', 'server AI copy differs from the app copy for this version');
     }
-    setView(toView(out));
+    setView(toView(out, ask));
   }, [api, crisisAlert, sessionUserId]);
 
   // The copies on screen: the server's answer, else (while loading) this build's.
@@ -335,9 +341,9 @@ export default function RomanAiConsentScreen({
         kind === 'allow'
           ? await grantAiChoiceAs(uid, sessionUserId, () =>
               // The offered copy: its version and the server's sha256 of exactly the text shown.
-              api.grantRoman(romanGrantBody(offer, base), { crisis: crisisOn }),
+              api.grantRoman(romanGrantBody(offer, base), shownAsk),
             )
-          : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman({ crisis: crisisOn }));
+          : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman(shownAsk));
       if (!mounted.current) return;
       if (out === AI_LEDGER_NOT_SENT) {
         setBusy(false);
@@ -353,7 +359,7 @@ export default function RomanAiConsentScreen({
       if (kind === 'allow' || out.kind === 'ok') setPendingWithdraw(false);
       if (out.kind === 'ok') {
         // B-A: the answer to a write that sent the GET's ask, read like the GET's (never one on file only).
-        if (out.status) setView(toView(out));
+        if (out.status) setView(toView(out, shownAsk));
         else await load();
         if (doneNotice && !stale()) setNotice(doneNotice);
         return;
@@ -373,7 +379,7 @@ export default function RomanAiConsentScreen({
       await load();
       if (!stale()) setNotice(notice);
     },
-    [api, busy, crisisOn, family, load, sessionUserId],
+    [api, busy, family, load, sessionUserId, shownAsk],
   );
 
   const confirmAllow = (offer: AiConsentUpgradeCopy | null) =>
