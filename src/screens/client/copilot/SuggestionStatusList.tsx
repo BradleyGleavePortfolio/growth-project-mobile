@@ -53,11 +53,11 @@ export function SuggestionStatusList({ items, coach, now }: { items: CopilotSugg
 
 const s = StyleSheet.create({
   wrap: { gap: 10 },
-  heading: { fontWeight: '700' },
+  heading: { fontWeight: '600' },
   card: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, padding: 16 },
-  tile: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  tile: { width: 32, height: 32, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1, gap: 3 },
-  title: { fontWeight: '700' },
+  title: { fontWeight: '600' },
   quote: { borderLeftWidth: 3, paddingLeft: 10, marginVertical: 4 },
 });

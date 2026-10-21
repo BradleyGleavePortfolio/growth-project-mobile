@@ -27,5 +27,5 @@ export function ChangeTiles({ from, to, inset = false }: { from: string; to: str
 const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tile: { flex: 1, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 10, gap: 2, minHeight: 56, justifyContent: 'center' },
-  value: { fontWeight: '700' },
+  value: { fontWeight: '600' },
 });

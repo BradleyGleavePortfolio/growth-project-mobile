@@ -160,9 +160,9 @@ function Step({ icon, label, disabled, onPress }: { icon: 'chevron-back' | 'chev
 const s = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: radius.card, padding: 16, gap: 12 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
-  value: { fontWeight: '700' },
+  value: { fontWeight: '600' },
   italic: { fontStyle: 'italic' },
   panel: { borderRadius: radius.button, padding: 12, gap: 10 },
   mark: { flexDirection: 'row', alignItems: 'center', gap: 6 },
