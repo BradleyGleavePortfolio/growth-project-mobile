@@ -37,6 +37,10 @@
  * no `onGranted` (so the surface never retries the old account's request),
  * no phase change and no Sentry report. A grant that may already have been
  * written is never relabelled "nothing changed".
+ *
+ * CONSENT-SETTINGS (owner #162-6, b#1117): a client with a coach is asked for
+ * the Health-notes copies first, as P0 does; the sheet shows and grants them
+ * only when the server serves them, today's copies otherwise (readRomanConsent).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -50,6 +54,7 @@ import {
 } from 'react-native';
 import defaultAiConsentApi, {
   isLiveGrant,
+  type AiConsentAsk,
   type AiConsentOutcome,
   type AiConsentStatusResponse,
   type AiConsentUpgradeCopy,
@@ -58,6 +63,8 @@ import {
   AI_LEDGER_NOT_SENT,
   grantAiChoiceAs,
   isAmbiguousWriteOutcome,
+  readRomanConsent,
+  ROMAN_HEALTH_ASK,
   romanBox2MemoryCopyOf,
   romanFamilyOf,
   romanGrantBody,
@@ -181,8 +188,10 @@ export default function AiConsentSheet({
   const coachless = Boolean(cachedUser?.id && !cachedUser.coach_id);
   // CRISIS-APP-COPY: ask for the crisis-sentence copies exactly while roman_crisis_alert is on.
   const crisisAlert = useCrisisAlertNow();
-  // The copies the sheet asks for; its grant sends the same ask (b#1047).
-  const ask = useCallback(() => (coachless ? { coachFree: true } : { crisis: crisisAlert() }), [coachless, crisisAlert]);
+  // Today's copies; the Health-notes ask goes first (readRomanConsent). The grant and the re-read send the ask
+  // whose answer is shown (b#1047).
+  const today = useCallback(() => (coachless ? { coachFree: true } : { crisis: crisisAlert() }), [coachless, crisisAlert]);
+  const askRef = useRef<AiConsentAsk>(ROMAN_HEALTH_ASK);
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   // Presentation (ROMAN-ROOM-133, operator 17:16): the sheet clears the
@@ -241,9 +250,10 @@ export default function AiConsentSheet({
     const uid = sessionRef.current();
     loadedFor.current = uid;
     setPhase({ kind: 'loading' });
-    const out = await api.getStatus(ask());
+    const { out, ask } = await readRomanConsent(api.getStatus, today(), () => !active.current || !isSession(uid));
     // Stale: the sheet closed, or the session that asked has ended.
     if (!active.current || !isSession(uid)) return;
+    askRef.current = ask;
     if (out.kind === 'unavailable') return setPhase({ kind: 'unavailable' });
     if (out.kind === 'version_mismatch') return setPhase({ kind: 'update_app' });
     if (out.kind === 'error' || !out.status) {
@@ -255,7 +265,7 @@ export default function AiConsentSheet({
     const status = out.status;
     if (isLiveGrant(status, status.current_version)) return setPhase({ kind: 'already_on' });
     setPhase(readyFrom(status));
-  }, [api, ask, isSession, readyFrom, reportUnknown]);
+  }, [api, isSession, readyFrom, reportUnknown, today]);
 
   useEffect(() => {
     if (visible) void load();
@@ -272,7 +282,7 @@ export default function AiConsentSheet({
       // Never read the ledger under another session, and never act on it.
       if (!active.current || !isSession(uid)) return;
       setPhase({ kind: 'checking' });
-      const check = await api.getStatus(ask());
+      const check = await api.getStatus(askRef.current);
       if (!active.current || !isSession(uid)) return;
       if (check.kind === 'ok' && check.status) {
         const st = check.status;
@@ -296,7 +306,7 @@ export default function AiConsentSheet({
       });
       setPhase({ kind: 'unconfirmed', reference });
     },
-    [api, ask, isSession, onGranted, readyFrom, reportUnknown],
+    [api, isSession, onGranted, readyFrom, reportUnknown],
   );
 
   const allow = useCallback(async () => {
@@ -317,7 +327,7 @@ export default function AiConsentSheet({
               ...(status.copy?.sha256 ? { copy_sha256: status.copy.sha256 } : {}),
               platform: platformTag(),
             },
-        ask(),
+        askRef.current,
       ),
     );
     if (!active.current) return;
@@ -340,7 +350,7 @@ export default function AiConsentSheet({
     // Possibly written: no reply, 408/409/5xx, or a success without a
     // readable live grant (null or other status).
     await reconcile(uid, version, out.kind === 'error' ? out.requestId : null);
-  }, [api, ask, isSession, onGranted, phase, reconcile, reportUnknown, sessionUserId]);
+  }, [api, isSession, onGranted, phase, reconcile, reportUnknown, sessionUserId]);
 
   /** "Already on" retries only for the account whose status was shown. */
   const retryAlreadyOn = useCallback(() => {
