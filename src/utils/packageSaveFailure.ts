@@ -43,6 +43,7 @@ export type PackageSaveFailureKind =
   | 'session'
   | 'subscription'
   | 'forbidden'
+  | 'leaving'
   | 'not_found'
   | 'price'
   | 'locked'
@@ -144,6 +145,25 @@ export function plainPackageInvalidMessage(
 
 function capitalise(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * SMALL-T2: while a coach's account deletion is scheduled the server refuses
+ * package create, publish and re-enable (backend coach-selling.ts) with a 403
+ * and the auth guard's fixed sentence, and no machine code. That sentence is
+ * the only signal, so this is the one check that reads the message. Shared
+ * with the setup wizard's describeError so every package path says the same.
+ * The way out names what the coach taps: the coach Settings row "Deletion
+ * scheduled" (settings/DangerZone.tsx), then "Keep account" (SettingsScreen).
+ */
+export const LEAVING_COACH_LINE =
+  'You cannot create or publish packages while your account is scheduled for deletion. To sell again, open Settings, tap Deletion scheduled, then Keep account.';
+
+export function isLeavingCoachRefusal(
+  status: number | null | undefined,
+  message: string | null | undefined,
+): boolean {
+  return status === 403 && /^Account is scheduled for deletion\b/.test(message ?? '');
 }
 
 /** Failure titles name the action the coach tried (C-321-4). */
@@ -282,6 +302,17 @@ export function describePackageSaveFailure(
       message: `Packages are not switched on for this server yet. ${savedWhat(mode)} Contact support to have them turned on.`,
       action: 'back_to_packages',
       support: true,
+      reference: null,
+    };
+  }
+
+  if (isLeavingCoachRefusal(status, detail.message)) {
+    return {
+      kind: 'leaving',
+      title: failedTitle(mode),
+      message: LEAVING_COACH_LINE,
+      action: 'back_to_packages',
+      support: false,
       reference: null,
     };
   }
