@@ -1,21 +1,25 @@
 /**
- * "Paste invite code" affordance.
+ * "Paste code" affordance.
  *
  * After a client installs from the App Store the deep link that carried the
- * invite code is lost (no deferred deep linking in v1). The partner poster and
- * the /join landing page tell them to copy the code; this button reads the
- * clipboard (expo-clipboard, already a dependency, no native permission) and
- * accepts either a bare `GP-XXXX` code or a `/join/<code>` URL.
+ * invite code is lost (no deferred deep linking in v1). The /join landing page
+ * offers "Copy code" (INVITE-COPY-CODE) and the partner poster tells them to
+ * copy it; this button reads the clipboard (expo-clipboard, already a
+ * dependency, no native permission) and accepts either a bare code or a
+ * `/join/<code>` URL.
  *
  * The clipboard is only read on an explicit tap (never on mount), so iOS
- * shows its paste banner only when the user asked for it.
+ * shows its paste prompt only when the user asked for it. The shared quiet
+ * text action gives the 44 pt target and the forest text; one haptic per tap
+ * (docs/HAPTICS.md): selection when the field fills, warning when nothing
+ * usable was there.
  */
-import React, { useCallback, useState } from 'react';
-import { Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useCallback, useRef } from 'react';
+import { StyleSheet } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { extractInviteCode } from '../../lib/inviteCodeInput';
-import { useTheme } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { QuietTextButton } from '../../ui/buttons/PrimaryButton';
+import { HapticService } from '../../ui/haptics/haptics.service';
 
 export const PASTE_EMPTY_MESSAGE =
   'No invite code was found on your clipboard. Copy the code from your coach, then tap Paste again.';
@@ -28,41 +32,43 @@ interface Props {
 }
 
 export default function PasteInviteCodeButton({ onCode, onNoCode, disabled, testID }: Props) {
-  const { colors } = useTheme();
-  const [busy, setBusy] = useState(false);
+  // A ref, not state: a second tap while iOS shows its paste prompt is
+  // ignored without greying the label on every tap.
+  const busy = useRef(false);
 
   const handlePress = useCallback(async () => {
-    if (busy) return;
-    setBusy(true);
+    if (busy.current) return;
+    busy.current = true;
+    let code: string | null = null;
     try {
-      const text = await Clipboard.getStringAsync();
-      const code = extractInviteCode(text);
-      if (code) onCode(code);
-      else onNoCode?.(PASTE_EMPTY_MESSAGE);
+      code = extractInviteCode(await Clipboard.getStringAsync());
     } catch {
-      onNoCode?.(PASTE_EMPTY_MESSAGE);
+      code = null;
     } finally {
-      setBusy(false);
+      busy.current = false;
     }
-  }, [busy, onCode, onNoCode]);
+    if (code) {
+      void HapticService.selection();
+      onCode(code);
+    } else {
+      void HapticService.warning();
+      onNoCode?.(PASTE_EMPTY_MESSAGE);
+    }
+  }, [onCode, onNoCode]);
 
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      disabled={disabled || busy}
-      style={styles.button}
-      accessibilityRole="button"
-      accessibilityLabel="Paste invite code"
+    <QuietTextButton
+      label="Paste code"
+      onPress={() => void handlePress()}
+      disabled={disabled}
       accessibilityHint="Pastes an invite code or join link you copied"
       testID={testID ?? 'paste-invite-code'}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-    >
-      <Text style={[styles.text, { color: colors.primary }]}>Paste invite code</Text>
-    </TouchableOpacity>
+      style={styles.button}
+    />
   );
 }
 
+// Text starts on the field's left edge (the shared link pads 4 pt each side).
 const styles = StyleSheet.create({
-  button: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
-  text: { ...typography.bodyMd },
+  button: { paddingHorizontal: 0 },
 });

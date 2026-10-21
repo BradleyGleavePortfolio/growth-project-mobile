@@ -142,6 +142,8 @@ describe('expanded state', () => {
     await fireEvent.press(getByTestId('coach-insight-panel'));
 
     expect(getByTestId('coach-insight-expanded')).toBeTruthy();
+    // WEAR-AI-LABELS: a plain label, never the internal field name "Hypothesis".
+    expect(getByText('Possible reason')).toBeTruthy();
     expect(getByText('Possibly light exposure or late caffeine')).toBeTruthy();
     expect(getByText('Ask about evening routine changes')).toBeTruthy();
     expect(getByText(/noticed your deep sleep dipped/)).toBeTruthy();

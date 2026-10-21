@@ -83,11 +83,17 @@ export default function FoodDayView(p: FoodDayViewProps) {
     staleTime: 5 * 60 * 1000,
     enabled: p.coached,
   });
+  // Every plan for the day, newest first as the server orders them; a plan assigned twice shows once.
+  const plans = useMemo(() => [...new Map((plan.data?.assignments ?? [])
+    .flatMap((a) => (a?.daily_meal_plan ? [[a.daily_meal_plan.id, a.daily_meal_plan] as const] : []))).values()]
+    .filter((x) => x.slots.length > 0), [plan.data]);
+  const usualDay = !p.coached || (plan.isSuccess && plans.length === 0);
   // The seven days before the shown day, read like the search sheet's Recent (useFoodBrowse). A day
   // that fails to read is left out; with none read there is no usual day and the classic log shows.
+  // UI-3b (owner 10-19): a coached client whose plan read comes back with no plan gets the same usual day.
   const past = useQuery({
     queryKey: ['food', 'usual-day', p.selectedDate],
-    enabled: !p.coached,
+    enabled: usualDay,
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<PastDay[]> => {
       const dates = Array.from({ length: 7 }, (_, i) => addDays(p.selectedDate, -(i + 1)));
@@ -95,21 +101,18 @@ export default function FoodDayView(p: FoodDayViewProps) {
       return read.flatMap((r, i) => (r.status === 'fulfilled' ? [{ date: dates[i], entries: r.value.data?.entries ?? [] }] : []));
     },
   });
-  // Every plan for the day, newest first as the server orders them; a plan assigned twice shows once.
-  const plans = useMemo(() => [...new Map((plan.data?.assignments ?? [])
-    .flatMap((a) => (a?.daily_meal_plan ? [[a.daily_meal_plan.id, a.daily_meal_plan] as const] : []))).values()]
-    .filter((x) => x.slots.length > 0), [plan.data]);
   const assigned = plans[0];
   const many = plans.length > 1;
   // Each food carries the plan or usual meal it was logged for (FOODLINK), so the day is rebuilt from the server's log.
   const day = useMemo(() => {
-    if (p.coached) return plans.length > 0 ? buildPlanDay(plans, p.foodLogs) : null;
+    if (plans.length > 0) return buildPlanDay(plans, p.foodLogs);
+    if (!usualDay) return null;
     const usual = past.data ? buildUsualDay(past.data, p.foodLogs) : null;
     return usual && usual.slots.length > 0 ? usual : null;
-  }, [p.coached, plans, past.data, p.foodLogs]);
+  }, [plans, usualDay, past.data, p.foodLogs]);
 
   // Until the day and the plan (or the past week) are read, the classic log stays open for logging.
-  if (!p.ready || (p.coached ? plan.isLoading : past.isLoading)) return <>{p.fallback}</>;
+  if (!p.ready || (p.coached && plan.isLoading) || (usualDay && past.isPending)) return <>{p.fallback}</>;
   if (p.coached && plan.isError) {
     // The plan did not load: say so, offer the retry, and keep the classic log open under it.
     return (
@@ -312,7 +315,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
           <Text style={s.body}>{`${n(restKcal)} kcal and ${n(restProtein)} g protein.${onTarget ? ' Both on target.' : ''}`}</Text>
         </View>
       ) : null}
-      {isPlan ? null : (
+      {isPlan || p.coached ? null : (
         <View style={s.quiet} testID="food-day-join">
           <Text style={s.eyebrow}>MEAL PLANS COME FROM A COACH</Text>
           <Text style={s.body}>A coach can build your day here, meal by meal. Your own logging stays open.</Text>

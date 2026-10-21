@@ -173,7 +173,7 @@ export default function TutorialOverlay({ tabs, onNavigate }: Props): React.Reac
 
   if (!mode) return null;
 
-  const land = () => onNavigate({ tab: 'Home', screen: 'HomeMain' });
+  const land = () => onNavigate({ tab: 'Home', screen: 'HomeMain', pop: true });
   const finish = async () => {
     if (busy.current) return;
     busy.current = true;

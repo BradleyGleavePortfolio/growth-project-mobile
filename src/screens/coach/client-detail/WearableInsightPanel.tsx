@@ -313,7 +313,7 @@ export function WearableInsightPanel({
 
         {expanded && (
           <Animated.View style={{ opacity: fade }} testID="coach-insight-expanded">
-            <Field label="Hypothesis" value={insight.hypothesis} />
+            <Field label="Possible reason" value={insight.hypothesis} />
             <Field label="Suggested action" value={insight.suggested_action} />
 
             <Text style={styles.fieldLabel}>Draft message</Text>

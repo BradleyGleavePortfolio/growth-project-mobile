@@ -15,7 +15,7 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar } from '../../ui';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase, StackActions } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { getAllExercises } from '../../db/workoutDb';
@@ -966,10 +966,9 @@ export default function ActiveWorkoutScreen() {
                 // `justCompletedId` set to the DURABLE server id of the workout
                 // just saved tells WorkoutScreen this is a REAL just-finished
                 // workout (not a historical session) so Roman's "Workout
-                // complete." line renders exactly once. The target is the same
-                // screen goBack() would land on (WorkoutMain is directly beneath
-                // ActiveWorkout in WorkoutStack), so this preserves the existing
-                // back behaviour while carrying the id. Keying on the concrete
+                // complete." line renders exactly once. popTo returns to the
+                // Train root already in the stack (navigate would push a second
+                // WorkoutMain over this screen, TRAIN-ROOT-RETURN). Keying on the concrete
                 // id (not a boolean) lets WorkoutScreen latch "already seen this
                 // workout" durably, so a re-delivered param cannot re-fire the
                 // celebration (P1-C-01). When the server did not return a usable
@@ -983,7 +982,7 @@ export default function ActiveWorkoutScreen() {
                 // no Roman signal is ever emitted, mirrored, latched, or
                 // cleared while the feature is disabled.
                 if (featureFlags.romanChat && serverId) {
-                  navigation.navigate('WorkoutMain', { justCompletedId: serverId });
+                  navigation.dispatch(StackActions.popTo('WorkoutMain', { justCompletedId: serverId }));
                 } else {
                   navigation.goBack();
                 }

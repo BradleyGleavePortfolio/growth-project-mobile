@@ -45,6 +45,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COACH_AI_CREDITS: process.env.EXPO_PUBLIC_FF_COACH_AI_CREDITS,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_BRIEF_GATE: process.env.EXPO_PUBLIC_FF_COACH_BRIEF_GATE,
+  EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP: process.env.EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COACH_HOME_V11: process.env.EXPO_PUBLIC_FF_COACH_HOME_V11,
   EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
@@ -469,6 +470,13 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
   mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
+  // UI-4 (V1_1_UI_SPEC, owner 2026-10-09): the Clients tab becomes the client
+  // lookup (Needs you under 15 clients, Search first with A to Z at 15 or
+  // more). OFF (default, and in every eas.json profile): today's Clients list,
+  // unchanged. Switching it on is its own one-line PR.
+  //
+  // env: EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP
+  coachClientLookup: readFlag('EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP', false),
   // ─── UI-3 food logging (V1_1_UI_SPEC UI-3, owner 2026-10-09) ─────────────
   // ON: a coached client's Food tab opens on the day's plan as a checklist:
   // the coach's meals in order, "Ate it as planned" logs one in a tap. No plan
@@ -671,11 +679,15 @@ export const featureFlags = {
   // ─── S14 — client AI wearable insight panel ──────────────────────────────
   /**
    * The client Health and Sleep views can show an AI-written insight panel
-   * (backend WearableInsightsService, drafted through the AI gateway). The
-   * panel has no per-client AI-processing consent check yet, and owner
-   * decision D2 makes AI processing opt-in (consent box 2). Until that check
-   * exists the panel stays OFF UNCONDITIONALLY (not `isDev`), and no EAS
-   * profile sets this. Off, the views show only the client's own data.
+   * (backend WearableInsightsService, drafted through the AI gateway). AI
+   * processing is opt-in (owner D2, consent box 2), and the server checks the
+   * client's live box-2 grant on both insight routes, before the cache and
+   * before any AI call. Without it the panel shows "AI help is off" with
+   * "Allow AI help" (the box-2 sheet); a client with no coach sees "Roman works
+   * with a coach" (403 ROMAN_REQUIRES_COACH). Live notes also need the server
+   * allow-list value with wearable_insight.* (WEAR-AI-BE); the ALL-ON PR flips
+   * this default. No EAS profile sets it. Off, the views show only the client's
+   * own data.
    *
    * env: EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS
    */

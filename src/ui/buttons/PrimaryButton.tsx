@@ -34,6 +34,8 @@ export interface PrimaryButtonProps {
   style?: StyleProp<ViewStyle>;
   /** 'cream': cream fill and forest label, only on a full-forest screen (C7 Style B Welcome). */
   tone?: 'forest' | 'cream';
+  /** A button that opens a section: screen readers hear whether it is open. */
+  expanded?: boolean;
 }
 
 export function PrimaryButton({
@@ -48,6 +50,7 @@ export function PrimaryButton({
   testID,
   style,
   tone = 'forest',
+  expanded,
 }: PrimaryButtonProps): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const inert = disabled || loading;
@@ -65,7 +68,7 @@ export function PrimaryButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: inert, busy: loading }}
+      accessibilityState={{ disabled: inert, busy: loading, ...(expanded === undefined ? null : { expanded }) }}
       testID={testID}
       style={[wrap ? [styles.primary, styles.primaryWrap] : styles.primary, { backgroundColor: disabled ? sc.disabledBg : cream ? sc.textOnAccent : sc.accent }, style]}
     >
