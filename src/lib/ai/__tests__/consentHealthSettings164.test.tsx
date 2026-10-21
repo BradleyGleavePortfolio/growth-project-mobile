@@ -128,13 +128,14 @@ function server(on: boolean, held: string | null, { old = false, memoryOn = true
   return { api, raw, recorded: () => row };
 }
 
-function flagClient(on: boolean) {
+/** The phone's roman_crisis_alert as last read; null: absent from the flags map (reads off). */
+function flagClient(on: boolean | null) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  qc.setQueryData(featureFlagsKeys.all, { flags: { roman_crisis_alert: on }, evaluated_at: '2026-10-15T00:00:00.000Z' });
+  qc.setQueryData(featureFlagsKeys.all, { flags: on === null ? {} : { roman_crisis_alert: on }, evaluated_at: '2026-10-15T00:00:00.000Z' });
   return qc;
 }
 const nav = { goBack: jest.fn(), navigate: jest.fn() } as never;
-const settings = (on: boolean, srv: ReturnType<typeof server>) =>
+const settings = (on: boolean | null, srv: ReturnType<typeof server>) =>
   render(
     <QueryClientProvider client={flagClient(on)}>
       <RomanAiConsentScreen navigation={nav} api={srv.api} sessionUserId={() => 'u1'} />
@@ -196,25 +197,48 @@ const SETTINGS: Array<[string, string | null, boolean, boolean, boolean]> = [
   ['skipped at sign-up, old server: today words', null, true, true, false],
   ['v12 at sign-up (memory off), new server: memory on offers v10 / v11', 'client-ai-v12', false, true, true],
   ['v6 before b#1117, new server: kept; memory on offers v10 / v11', 'client-ai-v6', false, true, true],
+  ['v8 before b#1117, new server: kept; memory on offers v10 / v11', 'client-ai-v8', false, true, true],
   ['v9 before b#1117, new server: kept; nothing new served, so today words', 'client-ai-v9', false, true, false],
   ['v8 before b#1117, old server: kept; today words', 'client-ai-v8', true, true, false],
 ];
 
+// FIX-850-R1 B1: [the server's crisis switch, the phone's flag (null: absent)]; the two can disagree, and the
+// copies follow the server's answer, never the flag.
+const SWITCHES: Array<[boolean, boolean | null]> = [
+  [false, false],
+  [true, true],
+  [true, null],
+  [true, false],
+  [false, true],
+];
+
 describe('CONSENT-SETTINGS: Settings > Roman and AI makes every choice in what the server served', () => {
-  it.each(SETTINGS.flatMap(([name, ...rest]) => [false, true].map((on) => [name, on, ...rest] as const)))(
-    '%s (switch %s)',
-    async (_name, on, held, old, memoryOn, health) => {
+  it.each(SETTINGS.flatMap(([name, ...rest]) => SWITCHES.map(([on, flag]) => [name, on, flag, ...rest] as const)))(
+    '%s (server switch %s, phone flag %s)',
+    async (_name, on, flag, held, old, memoryOn, health) => {
       const srv = server(on, held, { old, memoryOn });
-      const ask = health ? ROMAN_HEALTH_ASK : TODAY(on);
-      const asked = FAMILIES[health ? (on ? 'health_crisis' : 'health') : on ? 'crisis' : 'coached'];
-      const r = await settings(on, srv);
+      const today = TODAY(flag === true);
+      // The copies the server serves for each ask: Health-notes by its switch; today's crisis_alert as the server
+      // answers it (asked only while the flag reads on: its offer, else its copies), safety_exception v6 / v7.
+      const servedFamily = (h: boolean) => {
+        if (h) return FAMILIES[on ? 'health_crisis' : 'health'];
+        const answer = srv.raw(variantOf(today));
+        const answered = familyOf(answer.memory_copy?.version ?? answer.current_version); // its offer, else its copies
+        return FAMILIES[flag === true && (answered === 'crisis' || answered === 'coached') ? answered : 'coached'];
+      };
+      const servesNow = () => servesHealthNotes(parseStatus(srv.raw('health_notes')) as AiConsentStatusResponse);
+      let served = health;
+      let gets = served ? 1 : 2;
+      const r = await settings(flag, srv);
       await waitFor(() => r.getByTestId(held ? 'roman-ai-allowed' : 'roman-ai-not_allowed'));
       // P0's fallback: the Health-notes ask first; today's again only when the server did not serve them.
-      expect(srv.api.getStatus.mock.calls).toEqual(health ? [[ROMAN_HEALTH_ASK]] : [[ROMAN_HEALTH_ASK], [TODAY(on)]]);
+      expect(srv.api.getStatus.mock.calls).toEqual(health ? [[ROMAN_HEALTH_ASK]] : [[ROMAN_HEALTH_ASK], [today]]);
       // Nobody is asked again: a live grant shows its own words.
-      expect(paragraph(r)).toBe(TEXT[held ?? asked[memoryOn ? 1 : 0]]);
+      expect(paragraph(r)).toBe(TEXT[held ?? servedFamily(health)[memoryOn ? 1 : 0]]);
       const steps = held === null ? ['allow'] : isMemory(held) ? ['memory off', 'memory on'] : ['memory on', 'memory off'];
       for (const step of [...steps, 'withdraw', 'allow']) {
+        const ask = served ? ROMAN_HEALTH_ASK : today;
+        const family = servedFamily(served);
         const sent = srv.api.grantRoman.mock.calls.length;
         const before = paragraph(r);
         if (step === 'allow') await fireEvent.press(r.getByTestId('roman-ai-allow'));
@@ -224,23 +248,64 @@ describe('CONSENT-SETTINGS: Settings > Roman and AI makes every choice in what t
         if (step === 'withdraw') {
           await waitFor(() => r.getByTestId('roman-ai-not_allowed'));
           expect(srv.api.withdrawRoman).toHaveBeenLastCalledWith(ask);
-          continue;
+        } else {
+          await waitFor(() => expect(srv.api.grantRoman).toHaveBeenCalledTimes(sent + 1));
+          const [body, sentAsk] = srv.api.grantRoman.mock.calls[sent];
+          expect(sentAsk).toEqual(ask);
+          expect(body.version).toBe(family[step === 'memory off' || (step === 'allow' && !memoryOn) ? 0 : 1]);
+          expect(srv.recorded()).toEqual({ version: body.version, grant: true });
+          await waitFor(() => expect(paragraph(r)).toBe(TEXT[body.version]));
+          // Recorded against exactly the words shown before the tap.
+          const off = `${ROMAN_AI_COPY.confirmMemoryOffBody}\n\n`;
+          const shown = step === 'memory on' ? confirmation : step === 'allow' ? before : confirmation.slice(off.length);
+          expect(body.copy_sha256).toBe(sha(`${shown}\n\n${LABEL}`));
         }
-        await waitFor(() => expect(srv.api.grantRoman).toHaveBeenCalledTimes(sent + 1));
-        const [body, sentAsk] = srv.api.grantRoman.mock.calls[sent];
-        expect(sentAsk).toEqual(ask);
-        expect(body.version).toBe(asked[step === 'memory off' || (step === 'allow' && !memoryOn) ? 0 : 1]);
-        expect(srv.recorded()).toEqual({ version: body.version, grant: true });
-        await waitFor(() => expect(paragraph(r)).toBe(TEXT[body.version]));
-        // Recorded against exactly the words shown before the tap.
-        const off = `${ROMAN_AI_COPY.confirmMemoryOffBody}\n\n`;
-        const shown = step === 'memory on' ? confirmation : step === 'allow' ? before : confirmation.slice(off.length);
-        expect(body.copy_sha256).toBe(sha(`${shown}\n\n${LABEL}`));
+        // B2: a write in today's copies that leaves a new agreement to make asks for the Health-notes copies again.
+        if (!served && !(srv.recorded()?.grant && isMemory(srv.recorded()!.version))) {
+          gets += 1;
+          served = servesNow();
+          await waitFor(() => expect(srv.api.getStatus).toHaveBeenCalledTimes(gets));
+          expect(srv.api.getStatus).toHaveBeenLastCalledWith(ROMAN_HEALTH_ASK);
+        }
       }
-      // No GET after the first load: each write's answer is read like the GET's.
-      expect(srv.api.getStatus).toHaveBeenCalledTimes(health ? 1 : 2);
+      expect(srv.api.getStatus).toHaveBeenCalledTimes(gets);
     },
   );
+
+  it('B1: switch on, flag absent, skipped at sign-up: Allow records v11, the words the server served', async () => {
+    const srv = server(true, null);
+    const r = await settings(null, srv);
+    await waitFor(() => r.getByTestId('roman-ai-not_allowed'));
+    expect(paragraph(r)).toBe(TEXT['client-ai-v11']);
+    await fireEvent.press(r.getByTestId('roman-ai-allow'));
+    confirmLast();
+    await waitFor(() => expect(srv.recorded()).toEqual({ version: 'client-ai-v11', grant: true }));
+    expect(srv.api.grantRoman.mock.calls[0]).toEqual([expect.objectContaining({ copy_sha256: pinOf('client-ai-v11') }), ROMAN_HEALTH_ASK]);
+  });
+
+  it('B1: switch on, flag absent, v8 on file: memory on offers and records v11', async () => {
+    const srv = server(true, 'client-ai-v8');
+    const r = await settings(null, srv);
+    await waitFor(() => r.getByTestId('roman-ai-allowed'));
+    await fireEvent(r.getByTestId('roman-ai-memory-switch'), 'valueChange', true);
+    expect(confirmLast()).toBe(TEXT['client-ai-v11']);
+    await waitFor(() => expect(srv.recorded()).toEqual({ version: 'client-ai-v11', grant: true }));
+  });
+
+  it('B2: v9 on file, withdrawn, then allowed again: the new agreement is v11, not v9', async () => {
+    const srv = server(true, 'client-ai-v9');
+    const r = await settings(true, srv);
+    await waitFor(() => r.getByTestId('roman-ai-allowed'));
+    expect(srv.api.getStatus.mock.calls).toEqual([[ROMAN_HEALTH_ASK], [TODAY(true)]]);
+    await fireEvent.press(r.getByTestId('roman-ai-withdraw'));
+    confirmLast();
+    await waitFor(() => r.getByTestId('roman-ai-not_allowed'));
+    await waitFor(() => expect(paragraph(r)).toBe(TEXT['client-ai-v11']));
+    await fireEvent.press(r.getByTestId('roman-ai-allow'));
+    confirmLast();
+    await waitFor(() => expect(srv.recorded()).toEqual({ version: 'client-ai-v11', grant: true }));
+    expect(srv.api.grantRoman.mock.calls[0][1]).toEqual(ROMAN_HEALTH_ASK);
+  });
 });
 
 describe('CONSENT-SETTINGS: the AI help sheet shows and grants what the server served', () => {

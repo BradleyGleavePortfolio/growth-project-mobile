@@ -64,13 +64,16 @@ import {
   AI_LEDGER_NOT_SENT,
   drainAiWithdrawal,
   grantAiChoiceAs,
+  offeredFamilyOf,
   pinnedMemoryCopy,
   readAiWithdrawalPending,
   readRomanConsent,
+  ROMAN_HEALTH_ASK,
   romanBox2MemoryCopyOf,
   romanFamily,
   romanFamilyOf,
   romanGrantBody,
+  servesHealthNotes,
   withdrawAiChoiceAs,
   type RomanCopyFamily,
 } from '../../lib/consultation/aiConsent';
@@ -271,10 +274,11 @@ export default function RomanAiConsentScreen({
   const crisisAlert = useCrisisAlertNow();
   const crisisOn = crisisAlert();
   const [view, setView] = useState<View_>({ phase: 'loading' });
-  // B-A: every new choice is made in the copies asked for (crisis while the flag reads on; Health-notes while
-  // the server serves them), and each write sends the ask whose answer is on screen (b#1047).
+  // B-A: every new choice is made in the copies the server served for the ask on screen (Health-notes while it
+  // serves them; FIX-850-R1 B1: crisis or not as the server answered, never rebuilt from the flag), and each write
+  // sends the ask whose answer is on screen (b#1047).
   const shownAsk: AiConsentAsk = view.phase === 'ready' ? view.ask : { crisis: crisisOn };
-  const asked = romanFamily(false, crisisOn, !!shownAsk.healthNotes);
+  const asked = view.phase === 'ready' ? offeredFamilyOf(view.status, shownAsk) : romanFamily(false, crisisOn);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   /** An onboarding "no" that is still not confirmed after trying again here. */
@@ -355,11 +359,20 @@ export default function RomanAiConsentScreen({
       // nothing for the old account, and never re-read under the new one.
       const stale = () => !mounted.current || sessionUserId() !== uid;
       if (stale()) return;
+      // FIX-850-R1 B2: a write made in today's copies (the server served no Health-notes ones for the grant then on
+      // file) asks for them again before the next new agreement, as the first load does; shown only when served, so
+      // a live grant is still only read and an older server keeps today's copies.
+      const health =
+        out.kind === 'ok' && out.status && !shownAsk.healthNotes && !shownAsk.coachFree && !isMemoryAllowed(out.status)
+          ? await api.getStatus(ROMAN_HEALTH_ASK)
+          : null;
+      if (stale()) return;
       setBusy(false);
       if (kind === 'allow' || out.kind === 'ok') setPendingWithdraw(false);
       if (out.kind === 'ok') {
         // B-A: the answer to a write that sent the GET's ask, read like the GET's (never one on file only).
-        if (out.status) setView(toView(out, shownAsk));
+        if (health?.kind === 'ok' && servesHealthNotes(health.status)) setView(toView(health, ROMAN_HEALTH_ASK));
+        else if (out.status) setView(toView(out, shownAsk));
         else await load();
         if (doneNotice && !stale()) setNotice(doneNotice);
         return;

@@ -229,6 +229,20 @@ export async function readRomanConsent(
   return { out: await get(today), ask: today };
 }
 
+/**
+ * FIX-850-R1 B1: the copies a new agreement (Allow, memory on, memory off) is made in: the ones the server served for
+ * `ask` (its memory offer, else its current copies), within the copies that ask names (Health-notes v12 / v10 or
+ * v13 / v11; crisis_alert v8 / v9 or v6 / v7; else v6 / v7). Never rebuilt from the phone's crisis flag, which only
+ * picks when the answer names none of them.
+ */
+export function offeredFamilyOf(status: AiConsentStatusResponse | null | undefined, ask: AiConsentAsk): RomanCopyFamily {
+  const fallback = romanFamily(ask.coachFree, !!ask.crisis, !!ask.healthNotes);
+  if (!status || ask.coachFree) return fallback;
+  const named = ask.healthNotes ? [HEALTH_CRISIS_FAMILY, HEALTH_FAMILY] : ask.crisis ? [CRISIS_FAMILY, COACHED_FAMILY] : [COACHED_FAMILY];
+  const offer = (status.memory_copy ?? status.upgrade)?.version;
+  return named.find((f) => f.memoryVersion === offer) ?? named.find((f) => f === romanFamilyOf(status)) ?? fallback;
+}
+
 /** A well-formed memory copy of `family` with its pinned sha256 and this build's box 2 label, else null. */
 export function pinnedMemoryCopy(copy: unknown, family: RomanCopyFamily = COACHED_FAMILY): AiConsentUpgradeCopy | null {
   const c = parseUpgrade(copy);
