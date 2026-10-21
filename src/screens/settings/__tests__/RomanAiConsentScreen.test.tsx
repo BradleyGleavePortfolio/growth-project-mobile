@@ -177,7 +177,8 @@ describe('RomanAiConsentScreen', () => {
     expect(r.queryByTestId('roman-ai-withdraw')).toBeNull();
     // The account line is still there.
     expect(r.getByTestId('roman-ai-account-line').props.children).toMatch(/Settings > Account > Delete account/);
-    api.getStatus.mockResolvedValueOnce({ kind: 'ok', status: ALLOWED });
+    // CONSENT-SETTINGS: a read is the Health-notes GET, then today's (this fixture serves no Health-notes copies).
+    api.getStatus.mockResolvedValue({ kind: 'ok', status: ALLOWED });
     await fireEvent.press(r.getByTestId('roman-ai-retry'));
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
     expect(api.grantRoman).not.toHaveBeenCalled();
@@ -238,7 +239,8 @@ describe('RomanAiConsentScreen', () => {
     await waitFor(() => r.getByTestId('roman-ai-notice'));
     expect(r.getByTestId('roman-ai-notice').props.children).toBe(ROMAN_AI_COPY.actionServer(null));
     expect(r.getByTestId('roman-ai-allowed')).toBeTruthy();
-    expect(api.getStatus).toHaveBeenCalledTimes(2);
+    // Two reads (load, re-read), each the Health-notes GET then today's (the fixture serves no Health-notes copies).
+    expect(api.getStatus).toHaveBeenCalledTimes(4);
 
     api.withdrawRoman.mockResolvedValueOnce({ kind: 'unavailable' });
     await fireEvent.press(r.getByTestId('roman-ai-withdraw'));
@@ -256,8 +258,8 @@ describe('RomanAiConsentScreen', () => {
     await fireEvent.press(r.getByTestId('roman-ai-allow'));
     confirmLastAlert('Allow');
     await waitFor(() => expect(r.getByTestId('roman-ai-notice').props.children).toBe(ROMAN_AI_COPY.updateApp));
-    // #622: the 409 carries no version, so the screen re-reads the state.
-    expect(api.getStatus).toHaveBeenCalledTimes(2);
+    // #622: the 409 carries no version, so the screen re-reads the state (each read: Health-notes GET, then today's).
+    expect(api.getStatus).toHaveBeenCalledTimes(4);
   });
 
   it('a newer server version: no Allow from this build, but a live grant can still be withdrawn', async () => {
@@ -437,10 +439,11 @@ describe('RomanAiConsentScreen', () => {
       signedIn = 'user-b';
       h.resolve({ kind: 'ok', status: end });
       await settle();
-      // A's screen still shows A's starting choice, nothing for B; no GET under B.
+      // A's screen still shows A's starting choice, nothing for B; no GET under B (the load's two GETs only:
+      // Health-notes, then today's).
       expect(r.getByTestId(`roman-ai-${start === ALLOWED ? 'allowed' : 'not_allowed'}`)).toBeTruthy();
       expect(r.queryByTestId('roman-ai-notice')).toBeNull();
-      expect(api.getStatus).toHaveBeenCalledTimes(1);
+      expect(api.getStatus).toHaveBeenCalledTimes(2);
     });
 
     it('an ambiguous Allow error after sign-out: no re-read and no notice', async () => {
@@ -455,7 +458,8 @@ describe('RomanAiConsentScreen', () => {
       signedIn = null;
       h.resolve({ kind: 'error', status: 500, requestId: 'req-500' });
       await settle();
-      expect(api.getStatus).toHaveBeenCalledTimes(1);
+      // The load's two GETs only (Health-notes, then today's); no re-read.
+      expect(api.getStatus).toHaveBeenCalledTimes(2);
       expect(r.queryByTestId('roman-ai-notice')).toBeNull();
       expect(captureError).not.toHaveBeenCalled();
     });
