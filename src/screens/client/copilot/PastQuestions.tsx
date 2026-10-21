@@ -73,7 +73,7 @@ export function PastQuestionsList({ items, coach, onOpen, more, loadingMore, onM
                   <View style={s.grow}>
                     <Text style={[typography.body, { color: sc.textPrimary }]}>{q.question}</Text>
                     <View style={s.meta}>
-                      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{out ? `${day} ·` : day}</Text>
+                      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{day}</Text>
                       {out ? <Text style={[typography.caption, s.pill, { backgroundColor: out.bg, color: out.ink }]}>{out.text}</Text> : null}
                     </View>
                   </View>
