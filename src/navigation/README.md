@@ -49,7 +49,7 @@ MOBILE-DEEPLINK: `incomingLinks.ts` validates the complete URL before any routin
 
 `CoachMealTemplates` stays unregistered (MEAL-TEMPLATES-ROUTE-132). With `EXPO_PUBLIC_FF_MEAL_PLANS_V2` on (MEALBUILD), the Programs stack registers `MealEditor` (`CoachMealTemplatesScreen`, now the meal editor), `DayPlanBuilder`, `MealPicker` and `MealPlanAssign` and Programs shows Workouts, Meal plans and Meals; off, Programs is unchanged.
 
-`ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts'`. Omission opens Summary, and route updates also select the tab on an already-mounted screen.
+`ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts' | 'logs' | 'timeline'` (the UI-4 peek sheet opens Logs and Timeline). Omission opens Summary, and route updates also select the tab on an already-mounted screen.
 
 ```
 App.tsx mounts RootNavigator
@@ -137,6 +137,7 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 - The `MoreStack` registers `AIGuide` and `Membership` (sale-readiness, #67). Both are static targets of `MoreScreen` rows; neither is a deep-link target and neither requires backend changes (`Membership` reads only `usersApi.getFoundingNumber` and `aiApi.getStructuredContext`).
 - LEARN-A (flag `learnHub`, off): `Learn` renders `LearnScreen` instead of `EducationScreen`, and the `MoreStack` adds `LearnLesson` (`{ id: string }`, the lesson view; Next replaces it so Back returns to Learn) and `CoachGuidelines` (Read all on Learn). With the flag off neither route exists. With it on, `CoachGuidelines` in both the `WorkoutStack` (Train header) and the `MoreStack` renders `LearnGuidelinesScreen`.
 - LEARN-M5 (flag `learnCourses`, off): the `WorkoutStack` adds `Course` (`{ id }`, the course home opened from Train's banner), `CourseWeek` (`{ id, week }`) and `CourseLesson` (`{ id, lesson }`). With the flag off none of them exists.
+- LEARN-M7 (flag `learnCourses`, off): the `WorkoutStack` adds `CourseComplete` (`{ id }`, the record of a finished course, opened from the course home). With the flag off it does not exist.
 - `RecipeDetail` is a serialisable-only route. The list passes `{ recipeId }`, the detail screen reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById`. The shape is asserted in `src/navigation/__tests__/clientNavigator.test.ts`. Do not add screens that pass full domain objects through navigation params.
 - There is no global floating chat widget. The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind were deleted in #63. If a future feature wants a shared AI surface, it must be a real screen registered under the relevant navigator — the doctrine (`docs/QUIET_LUXURY_DOCTRINE.md` §6) forbids reintroducing a global FAB.
 - `ShareCard` (MoreStack) is registered only while `featureFlags.shareSheetV2` is off (SHARE-A). On, Share on Progress and on the Session summary opens `components/share/ShareSheet` over the screen instead, so no route or param shape is needed; see `docs/share-card.md`.

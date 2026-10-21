@@ -100,8 +100,12 @@ describe('definitions', () => {
     // Box 1 is not an AI consent: no processor named above or in it.
     expect(coaching + CONSENT_CHECKBOX_LABEL).not.toMatch(/Anthropic|Roman/);
     expect(CONSENT_CHECKBOX_LABEL).toBe(
-      'I agree to the training waiver, and to The Growth Project and my coach collecting and using my information to coach me.',
+      'I agree to the training waiver, and to TGP Fitness and my coach collecting and using my information to coach me.',
     );
+    // W-BRAND-AGREEMENT (owner op 1): the agreement names TGP Fitness (W34-W38).
+    expect(CONSENT_PARAGRAPHS[0].startsWith('TGP Fitness provides personal training and nutrition guidance only.')).toBe(true);
+    expect(CONSENT_PARAGRAPHS[2].startsWith('To coach you, TGP Fitness and your coach collect and use')).toBe(true);
+    expect(coaching + CONSENT_CHECKBOX_LABEL).not.toMatch(/The Growth Project/);
     expect(AI_CONSENT_PARAGRAPH).toMatch(/powered by Anthropic, a third-party AI provider/);
     expect(AI_CONSENT_PARAGRAPH).toMatch(/never your coach's private notes/);
     // client-ai-v4 (owner 2026-10-01 20:32, OR-110-1): no time limit; kept
@@ -139,11 +143,11 @@ describe('definitions', () => {
     }
   });
 
-  it('versions are bound: consult-consent-v7 with client-ai-v6 and pt-waiver-v1 (owner 57c)', () => {
-    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v7');
+  it('versions are bound: consult-consent-v11 with client-ai-v6 and pt-waiver-v1 (owner 57c, W-BRAND-AGREEMENT)', () => {
+    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v11');
     expect(AI_CONSENT_VERSION).toBe('client-ai-v6');
     expect(CONSENT_BINDING).toEqual({
-      copy_version: 'consult-consent-v7',
+      copy_version: 'consult-consent-v11',
       ai_consent_version: 'client-ai-v6',
       waiver_version: 'pt-waiver-v1',
     });
@@ -153,7 +157,7 @@ describe('definitions', () => {
     const sha = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
     expect(sha(consentCopyText())).toBe(CONSENT_COPY_SHA256);
     expect(sha(aiConsentCopyText())).toBe(AI_CONSENT_COPY_SHA256);
-    expect(consentCopyText().startsWith('Before we start\n\nThe Growth Project provides')).toBe(true);
+    expect(consentCopyText().startsWith('Before we start\n\nTGP Fitness provides')).toBe(true);
     expect(aiConsentCopyText()).toBe(`${AI_CONSENT_PARAGRAPH}\n\n${AI_CONSENT_CHECKBOX_LABEL}`);
     // Backend R2a (#622) pins the same text: paragraph 4, box 2 label and their join.
     expect(sha(AI_CONSENT_PARAGRAPH_PRE57C)).toBe('56d14fb96b9f7b6abdd43242f5ce9eaee419bc0d9fb4302bc283ecc1529d430b'); // backend #635 client-ai-v4 paragraph.sha256
@@ -161,8 +165,8 @@ describe('definitions', () => {
     expect(sha(AI_CONSENT_CHECKBOX_LABEL)).toBe('77da153df7f06a045e1abbbb83b771f8a33941d47268e276becc6b4ffe5e5eba');
     // If this fails, the copy changed: bump CONSULT_CONSENT_COPY_VERSION (and
     // AI_CONSENT_VERSION for paragraph 4 / box 2) and re-pin with the new text.
-    // Backend consult-consent-v7 and client-ai-v6 (owner 57c).
-    expect(CONSENT_COPY_SHA256).toBe('7711079209acecedfb50c31787787124af843f076154e9bfbd1e33550e861e09');
+    // Backend consult-consent-v11 (W-BRAND-AGREEMENT: v7 with TGP Fitness) and client-ai-v6 (owner 57c).
+    expect(CONSENT_COPY_SHA256).toBe('4b1686a8e835297d0e6bbd91dce988b4b5b9046eb9d70aebbda9e1d36c70f926');
     expect(AI_CONSENT_COPY_SHA256).toBe('52066998fbccac128c78a68dc19c45c4e067d169c4b3e5aaaa0d7821a7a1ee38');
   });
 
@@ -283,6 +287,26 @@ describe('validation', () => {
     for (const v of ['consult-consent-v8', 'consult-consent-v7-coach-free', 'consult-consent-v8-coach-free', 'consult-consent-v9-coach-free']) {
       expect(cur({ ...ok, copy_version: v })).toBe(true);
     }
+    // W-BRAND-AGREEMENT (owner op 1): the TGP Fitness screens, and every agreement before them stays as it is.
+    for (const v of [
+      'consult-consent-v7',
+      'consult-consent-v9',
+      'consult-consent-v10',
+      'consult-consent-v10-coach-free',
+      'consult-consent-v11-coach-free',
+      'consult-consent-v11',
+      'consult-consent-v12',
+      'consult-consent-v13',
+      'consult-consent-v14',
+      'consult-consent-v12-coach-free',
+      'consult-consent-v13-coach-free',
+      'consult-consent-v14-coach-free',
+      'consult-consent-v15-coach-free',
+    ]) {
+      expect(cur({ ...ok, copy_version: v })).toBe(true);
+    }
+    expect(cur({ ...ok, copy_version: 'consult-consent-v16' })).toBe(false);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v16-coach-free' })).toBe(false);
     for (const v of [
       'consult-consent-v3',
       'consult-consent-v4',

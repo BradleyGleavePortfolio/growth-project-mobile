@@ -2,7 +2,8 @@
  * CREDITBUILD-143: the coach home shows "Your AI credits are low." at 80 %
  * and "Your AI credits are used up." at 100 %, each once per pool period per
  * coach, only while the home is focused and only with a pool (head coaches);
- * Buy opens the existing pack checkout with that pack chosen.
+ * Buy opens the existing pack checkout with that pack chosen; Other amounts
+ * opens it with the amount field open (#161-15 op 1).
  */
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
@@ -102,22 +103,31 @@ describe('AI credit moments on the coach home', () => {
     expect(await AsyncStorage.getItem(LOW_KEY)).toBeNull();
   });
 
-  it('opens the pack checkout with the chosen pack, or on the list for other amounts', async () => {
-    const view = await render(<CreditMomentsHost />);
+  it('Buy opens the pack checkout with the chosen pack', async () => {
+    await render(<CreditMomentsHost />);
     await fireEvent.press(await screen.findByTestId('credit-moment-buy'));
     expect(mockNavigate).toHaveBeenLastCalledWith('SettingsStack', {
       screen: 'CreditPackCheckout',
       params: { preselect: preselectedPack(pool(80).budget) },
       initial: false,
     });
-    await view.unmount();
-    await AsyncStorage.clear();
+  });
+
+  // #161-15 op 1: Other amounts on both sheets opens the pack screen with the amount field open.
+  it.each([
+    [80, 'Your AI credits are low.'],
+    [100, 'Your AI credits are used up.'],
+  ])('Other amounts on the %s %% sheet opens the pack checkout with the amount field open', async (pct, title) => {
+    mockCredits = pool(pct);
     await render(<CreditMomentsHost />);
-    await fireEvent.press(await screen.findByText('Other amounts'));
+    await screen.findByText(title);
+    await fireEvent.press(screen.getByTestId('credit-moment-other'));
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenLastCalledWith('SettingsStack', {
       screen: 'CreditPackCheckout',
-      params: undefined,
+      params: { preselect: 'custom' },
       initial: false,
     });
+    expect(screen.queryByText(title)).toBeNull();
   });
 });

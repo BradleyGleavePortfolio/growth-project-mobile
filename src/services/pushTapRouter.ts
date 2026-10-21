@@ -31,7 +31,17 @@ import { incomingLinkPath, isPublicLinkPath, resolveAppLink } from '../navigatio
 export interface PushNavigator {
   isReady(): boolean;
   navigate(name: string, params?: object): void;
-  getRootState(): { routeNames?: readonly string[] } | undefined;
+  getRootState():
+    | { routeNames?: readonly string[]; routes?: readonly { name: string; state?: { routes?: readonly { name: string }[] } }[] }
+    | undefined;
+}
+
+/** Open work a root link never closes: its tab opens as the client left it (NAV-FIX C1). */
+const KEEP_OPEN = new Set(['ActiveWorkout', 'RoutineBuilder', 'WorkoutHistoryEdit']);
+
+function holdsOpenWork(nav: PushNavigator, root: string): boolean {
+  const tab = nav.getRootState()?.routes?.find((r) => r.name === root);
+  return !!tab?.state?.routes?.some((r) => KEEP_OPEN.has(r.name));
 }
 
 export type PushRole = 'student' | 'coach';
@@ -79,7 +89,7 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
     featureFlags.clientTimelineV2
       ? { root: 'MoreTab', screen: 'Timeline', beneath: ['MoreIndex', 'Progress'] }
       : { root: 'MoreTab', screen: 'Timeline' },
-  MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex' }),
+  MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex', pop: true }),
   // Legacy Guidance notifications open Roman when available, otherwise You.
   AIGuide: () => ({
     root: 'MoreTab', screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
@@ -87,7 +97,7 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Membership: () => ({ root: 'MoreTab', screen: 'Membership' }),
   Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
   UpdateCard: () => ({ root: 'MoreTab', screen: 'UpdateCard', initial: false }),
-  WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain' }),
+  WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain', pop: true }),
   Log: () => ({ root: 'Log' }),
   // S-SCHED destination for the existing actionScreen/actionParams format.
   // Backend booking delivery must supply this format before launch; registering
@@ -362,7 +372,9 @@ function deliver(
 
 function deliverTarget(nav: PushNavigator, target: Target, params?: Record<string, string>): boolean {
   try {
-    if (target.screen && target.beneath) {
+    if (target.pop && holdsOpenWork(nav, target.root)) {
+      nav.navigate(target.root);
+    } else if (target.screen && target.beneath) {
       nav.navigate(target.root, {
         state: { routes: [...target.beneath.map((name) => ({ name })), { name: target.screen, params }] },
       });

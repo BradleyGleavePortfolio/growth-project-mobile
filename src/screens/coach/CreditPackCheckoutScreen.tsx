@@ -35,9 +35,11 @@
  * EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK on takes the same path.
  *
  * Preselect (PACKS-BOTH-131): `route.params.preselect` comes from
- * AIBudgetMount. A pack amount tapped on the tutorial or hard-pause card
- * starts that pack's checkout once on open (no second tap on the list);
- * 'custom' opens with the custom-amount field focused.
+ * AIBudgetMount, CreditMomentsHost and CreditPoolEmptyLinks. A pack amount
+ * tapped on the tutorial or hard-pause card starts that pack's checkout once
+ * on open (no second tap on the list); 'custom' opens with the custom-amount
+ * field focused (also sent by the credit sheets' and Roman chat's "Other
+ * amounts", #161-15 op 1).
  *
  * Optimistic UI: NONE. Stripe Checkout is the source of truth for payment
  * success; the budget query is invalidated only after the webhook applies
@@ -49,13 +51,15 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   AppState,
+  Keyboard,
   Linking,
   View,
   Text,
   StyleSheet,
   TextInput,
-  SafeAreaView,
+  ScrollView,
   ActivityIndicator,
   Animated,
   Easing,
@@ -74,11 +78,14 @@ import {
 } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
 import { layout, motion, radius, typography } from '../../theme/tokens';
 import { PackOptionsRow } from '../../components/coach/ai-budget/PackOptionsRow';
+import CreditPackSelection, { type PackChoice } from '../../components/coach/credits/CreditPackSelection';
+import { featureFlags } from '../../config/featureFlags';
 import {
   coachAiBudgetApi,
   CUSTOM_PACK_MAX_CENTS,
@@ -169,7 +176,35 @@ export default function CreditPackCheckoutScreen({
 
   const [phase, setPhase] = useState<Phase>({ kind: 'select' });
   const [customInput, setCustomInput] = useState<string>('');
+  // The chosen tile lives beside the typed amount, so a cancelled or failed
+  // checkout comes back to the same choice.
+  const [packChoice, setPackChoice] = useState<PackChoice>({ cents: null, custom: route?.params?.preselect === 'custom' });
   const external = creditPackCheckoutMode() === 'external';
+  const concierge = featureFlags.coachAiCredits;
+  // Buy sits under the custom amount: once the number pad is up, scroll it
+  // into view (iOS insets come from automaticallyAdjustKeyboardInsets).
+  const selectScroll = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (!concierge) return undefined;
+    const sub = Keyboard.addListener('keyboardDidShow', () => selectScroll.current?.scrollToEnd({ animated: true }));
+    return () => sub.remove();
+  }, [concierge]);
+  // Other amounts only opens the field and then leaves (#161-8 op 1), so focus
+  // moves into the field: the cursor and number pad, and the screen reader.
+  // The sheets' and Roman chat's Other amounts arrive the same way (#161-15).
+  const customRef = useRef<TextInput>(null);
+  const focusCustom = useRef(concierge && route?.params?.preselect === 'custom');
+  const choosePack = useCallback((next: PackChoice) => {
+    focusCustom.current = next.custom;
+    setPackChoice(next);
+  }, []);
+  useEffect(() => {
+    const input = customRef.current;
+    if (!focusCustom.current || !input) return;
+    focusCustom.current = false;
+    input.focus();
+    if (Platform.OS !== 'web') AccessibilityInfo.sendAccessibilityEvent(input, 'focus');
+  }, [packChoice.custom]);
 
   const packOptions = useMemo(
     () => budget?.pack_options_cents ?? [1000, 2500, 9900],
@@ -179,6 +214,11 @@ export default function CreditPackCheckoutScreen({
     min: CUSTOM_PACK_MIN_CENTS,
     max: CUSTOM_PACK_MAX_CENTS,
   };
+  // The custom Buy stays disabled ("Enter an amount") until the typed amount is
+  // a valid pack (#161-8 op 1); handleSelect still checks it again.
+  const typedCents = parseDollarsToCents(customInput);
+  const validCustomCents =
+    typedCents !== null && typedCents >= bounds.min && typedCents <= bounds.max ? typedCents : null;
 
   const mintCheckout = useCallback(
     async (amountCents: number) => {
@@ -357,10 +397,38 @@ export default function CreditPackCheckoutScreen({
     [phase, handleSuccess, handleCancel],
   );
 
+  const customField = (
+    <View style={styles.customRow}>
+      <Text style={styles.customLabel}>Custom amount</Text>
+      <View style={styles.customInputWrap} testID="credit-pack-custom-field">
+        <Text style={styles.customInputPrefix}>$</Text>
+        <TextInput
+          ref={customRef}
+          value={customInput}
+          onChangeText={(text) => {
+            setCustomInput(text);
+            // A typed amount keeps the custom path open once the suggestion loads.
+            if (text) setPackChoice((c) => (c.custom ? c : { ...c, custom: true }));
+          }}
+          keyboardType="decimal-pad"
+          placeholder="25.00"
+          placeholderTextColor={colors.textMuted}
+          style={styles.customInput}
+          autoFocus={preselect === 'custom'}
+          testID="credit-pack-custom-input"
+          accessibilityLabel="Custom credit pack amount in dollars"
+        />
+      </View>
+      <Text style={styles.customBounds}>
+        Between {formatCents(bounds.min)} and {formatCents(bounds.max)}
+      </Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="light-content" />
-      <View style={styles.header}>
+      <StatusBar barStyle={concierge ? 'dark-content' : 'light-content'} />
+      <View style={[styles.header, concierge && styles.conciergeHeader]}>
         <HapticPressable
           intent="light"
           onPress={() => navigation.goBack()}
@@ -369,18 +437,25 @@ export default function CreditPackCheckoutScreen({
           style={styles.headerBtn}
           testID="credit-pack-back"
         >
-          <Ionicons name="chevron-back" size={24} color={colors.textOnPrimary} />
+          <Ionicons name="chevron-back" size={24} color={concierge ? colors.textPrimary : colors.textOnPrimary} />
         </HapticPressable>
-        <Text style={styles.headerTitle}>Buy AI Credits</Text>
+        <Text style={[styles.headerTitle, concierge && styles.conciergeHeaderTitle]}>Buy AI Credits</Text>
         <View style={styles.headerBtn} />
       </View>
 
       {phase.kind === 'select' && (
-        <View style={styles.body} testID="credit-pack-select">
-          <Text style={styles.heading}>Pick a pack</Text>
+        <ScrollView
+          ref={selectScroll}
+          contentContainerStyle={[styles.selectionBody, concierge && styles.conciergeBody]}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          testID="credit-pack-select"
+        >
+          <Text style={[styles.heading, concierge && styles.conciergeHeading]}>Pick a pack</Text>
           <Text style={styles.helper}>
-            You pay face value. {formatCents(1000)} of credit = {formatCents(1000)} of AI usage —
-            no multiplier math.
+            {concierge
+              ? 'You pay face value. $10 of credit is $10 of AI usage.'
+              : 'You pay face value. $10 of credit = $10 of AI usage — no multiplier math.'}
           </Text>
           {external ? (
             <Text style={styles.helper} testID="credit-pack-pays-tgp">
@@ -388,28 +463,22 @@ export default function CreditPackCheckoutScreen({
               browser.
             </Text>
           ) : null}
-          <PackOptionsRow options={packOptions} onSelect={handleSelect} />
-          <View style={styles.customRow}>
-            <Text style={styles.customLabel}>Custom amount</Text>
-            <View style={styles.customInputWrap} testID="credit-pack-custom-field">
-              <Text style={styles.customInputPrefix}>$</Text>
-              <TextInput
-                value={customInput}
-                onChangeText={setCustomInput}
-                keyboardType="decimal-pad"
-                placeholder="25.00"
-                placeholderTextColor={colors.textMuted}
-                style={styles.customInput}
-                autoFocus={preselect === 'custom'}
-                testID="credit-pack-custom-input"
-                accessibilityLabel="Custom credit pack amount in dollars"
-              />
-            </View>
-            <Text style={styles.customBounds}>
-              Between {formatCents(bounds.min)} and {formatCents(bounds.max)}
-            </Text>
-          </View>
-        </View>
+          {concierge ? (
+            <CreditPackSelection
+              options={packOptions}
+              onSelect={handleSelect}
+              customField={customField}
+              customCents={validCustomCents}
+              choice={packChoice}
+              onChoice={choosePack}
+            />
+          ) : (
+            <>
+              <PackOptionsRow options={packOptions} onSelect={handleSelect} />
+              {customField}
+            </>
+          )}
+        </ScrollView>
       )}
 
       {phase.kind === 'minting' && (
@@ -678,7 +747,12 @@ function makeStyles(colors: ThemeColors) {
       paddingVertical: 10,
       backgroundColor: colors.primaryDark,
     },
-    headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    headerBtn: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
+    conciergeHeader: { backgroundColor: colors.background, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+    conciergeHeaderTitle: { ...typography.bodyMd, color: colors.textPrimary },
+    conciergeHeading: { ...typography.h2 },
+    selectionBody: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 24, paddingBottom: layout.gutter, gap: 16 },
+    conciergeBody: { paddingHorizontal: layout.gutter },
     headerTitle: {
       flex: 1,
       color: colors.textOnPrimary,

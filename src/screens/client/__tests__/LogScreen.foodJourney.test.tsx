@@ -206,8 +206,8 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent.press(screen.getByLabelText(/Rolled oats.*Tap to edit/));
     await fireEvent.press(screen.getByRole('button', { name: 'Edit unit oz' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Edit unit g' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Lunch' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Breakfast' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Lunch' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Breakfast' }));
     await fireEvent.changeText(screen.getByLabelText('Edit quantity'), '80');
     await fireEvent.press(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(303.2));

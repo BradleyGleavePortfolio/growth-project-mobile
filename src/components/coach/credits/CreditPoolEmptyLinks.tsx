@@ -1,9 +1,10 @@
 /**
  * Under coach Roman's "used up" message (CREDITSTYLE group 10, S3): Roman's
  * usual-pace line and two quiet links, "Buy {amount} of credits" (opens the
- * existing pack checkout with that pack) and "Other amounts" (opens it on the
- * list). Head coaches on builds that sell packs only; everyone else sees the
- * message as today (F6). Mounted only with featureFlags.coachAiCredits.
+ * existing pack checkout with that pack) and "Other amounts" (opens it with
+ * the amount field already open, #161-15 op 1). Head coaches on builds that
+ * sell packs only; everyone else sees the message as today (F6). Mounted only
+ * with featureFlags.coachAiCredits.
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -40,7 +41,7 @@ export default function CreditPoolEmptyLinks({ inset = 0, now }: { inset?: numbe
       <TextLink
         label={CREDIT_MOMENT_COPY.otherAmounts}
         align="start"
-        onPress={() => navigation.navigate('CreditPackCheckout', undefined)}
+        onPress={() => navigation.navigate('CreditPackCheckout', { preselect: 'custom' })}
         testID="roman-pool-empty-other"
         style={styles.link}
       />

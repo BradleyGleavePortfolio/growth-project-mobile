@@ -44,6 +44,8 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import AiRefusalNotice from '../../../components/ai/AiRefusalNotice';
 import { aiRefusalOf } from '../../../lib/ai/aiRefusal';
+import { romanRequiresCoachOf } from '../../../lib/ai/romanRequiresCoach';
+import { ROMAN_LOCK_TITLE } from '../../../components/coachless/JoinCoachState';
 import { ZodError } from 'zod';
 
 import {
@@ -56,7 +58,7 @@ import {
 import { useTheme } from '../../../theme/useTheme';
 import { logger } from '../../../utils/logger';
 import { useReduceMotion } from './components/useReduceMotion';
-import { toneForBucket, toneTokens, type ToneTokens } from './wearablesTheme';
+import { metricMeta, toneForBucket, toneTokens, type ToneTokens } from './wearablesTheme';
 import {
   CONFIDENCE_LABEL,
   CONFIDENCE_PCT,
@@ -113,10 +115,9 @@ function sanitizeWearableError(error: unknown): string {
   }
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? 0;
-    if (status === 401 || status === 403) {
-      return 'Please sign in again to see your insights.';
-    }
-    if (status === 404) return 'No insight is available yet.';
+    if (status === 401) return 'Please sign in again to see your insights.';
+    // WEAR-AI-02: a 403 that is not an AI refusal is not a sign-in problem.
+    if (status === 403 || status === 404) return 'No insight is available yet.';
     if (status >= 500) return 'The server is temporarily unavailable.';
     if (status === 0) return 'Check your connection and try again.';
   }
@@ -201,6 +202,27 @@ export function ClientWearableInsightPanel({
         <SkeletonBar width="80%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
         <SkeletonBar width="86%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
         <SkeletonBar width="100%" height={44} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonCta} />
+      </View>
+    );
+  }
+
+  // ── WEAR-AI-01 (#GAPS3-F1): a client with no coach gets 403
+  //    ROMAN_REQUIRES_COACH. One calm line, no Retry (it would fail the same
+  //    way), no error styling; the tracker data around the card stays. ──
+  if (query.isError && romanRequiresCoachOf(query.error)) {
+    return (
+      <View
+        style={[styles.card, { borderColor: withAlpha(tone.accent, 0.3) }]}
+        accessibilityRole={CARD_REGION_ROLE}
+        accessibilityLabel={`AI insight, ${BUCKET_LABEL[bucket]}`}
+        testID="client-insight-needs-coach"
+      >
+        <View style={styles.row}>
+          <Ionicons name="sparkles-outline" size={16} color={tone.accent} />
+          <Text style={styles.primary} accessibilityRole="text">
+            {ROMAN_LOCK_TITLE}
+          </Text>
+        </View>
       </View>
     );
   }
@@ -430,7 +452,7 @@ function LoadedPanel({
       )}
       {showNorm && (
         <Section
-          label="Norm comparison"
+          label="How this compares"
           value={insight.norm_comparison}
           styles={styles}
           numberOfLines={expanded ? undefined : CLAMP_LINES}
@@ -458,7 +480,7 @@ function LoadedPanel({
 
       {showIntervention && (
         <Section
-          label="Intervention"
+          label="Try this"
           value={insight.intervention}
           styles={styles}
           emphasize
@@ -498,17 +520,18 @@ function LoadedPanel({
 /**
  * Provenance row (audit-brief required, contract `source_metrics: min(1)`).
  * Supporting (not primary) content: lighter muted typography. Joins the first
- * three metrics with `, ` and appends ` +N more` when there are extras. Omits
- * itself entirely when there are no metrics so we never render an empty row.
+ * three metrics' plain names (WEAR-AI-LABELS: never the raw code) with `, ` and
+ * appends ` +N more` when there are extras. Omits itself entirely when there are
+ * no metrics so we never render an empty row.
  */
 function ProvenanceRow({
   sourceMetrics,
   styles,
 }: {
-  sourceMetrics: readonly string[];
+  sourceMetrics: ClientInsight['source_metrics'];
   styles: PanelStyles;
 }) {
-  const metrics = sourceMetrics.filter((m) => m.trim().length > 0);
+  const metrics = sourceMetrics.map((m) => metricMeta(m).label);
   if (metrics.length === 0) return null;
 
   const shown = metrics.slice(0, 3).join(', ');
@@ -518,11 +541,11 @@ function ProvenanceRow({
   return (
     <View style={styles.section} testID="client-insight-source-metrics">
       <Text style={styles.sectionLabel} accessibilityRole="text">
-        Source metrics
+        Based on
       </Text>
       <Text
         style={styles.provenanceValue}
-        accessibilityLabel={`Source metrics: ${value}`}
+        accessibilityLabel={`Based on: ${value}`}
       >
         {value}
       </Text>

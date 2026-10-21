@@ -60,9 +60,12 @@ describe('metricMeta', () => {
     // HRV_MS is intentionally absent from METRIC_META (HK-3b owns S&R curation).
     expect(METRIC_META.HRV_MS).toBeUndefined();
     const meta = metricMeta('HRV_MS');
-    expect(meta.label).toBe('Hrv Ms');
+    // WEAR-AI-LABELS: an unmapped Sleep & Recovery code gets its plain name, never the raw code.
+    expect(meta.label).toBe('HRV');
     expect(meta.icon).toBe('stats-chart-outline');
     expect(meta.format(42, 'ms')).toBe('42 ms');
+    // A code with no plain name still gets a title-cased label.
+    expect(metricMeta('SOME_NEW_METRIC' as never).label).toBe('Some New Metric');
   });
 
   it('never throws on a non-finite value', () => {
