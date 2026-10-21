@@ -179,7 +179,7 @@ describe('coach Home, flag on, with home (b#1123)', () => {
     const v = await renderHome();
     // Maya: last logged 8 days ago (nudge); Ana: 2 check-ins to review. Ben and Dee are steady.
     expect(label(v, 'home-needs')).toMatch(/^Needs you, 2\. /);
-    fireEvent.press(v.getByTestId('home-needs'));
+    await fireEvent.press(v.getByTestId('home-needs'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList', params: { view: 'needs' }, pop: true });
     expect(label(v, 'home-row-steady')).toBe('Steady, 2, 1 logged today');
     expect(label(v, 'home-row-all')).toBe('All 30 clients, Open Clients');
@@ -189,18 +189,18 @@ describe('coach Home, flag on, with home (b#1123)', () => {
   it('opens Roman, the drafts, the bell, the gear, Money, alerts and streaks', async () => {
     const v = await renderHome();
     expect(label(v, 'home-drafts')).toBe("Approve Roman's drafts, 3");
-    fireEvent.press(v.getByTestId('home-drafts'));
+    await fireEvent.press(v.getByTestId('home-drafts'));
     expect(mockHaptics.mediumImpact).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'PendingAiDrafts', initial: false });
-    fireEvent.press(v.getByTestId('home-ask-roman'));
+    await fireEvent.press(v.getByTestId('home-ask-roman'));
     expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'RomanChat', initial: false });
-    fireEvent.press(v.getByTestId('home-bell'));
+    await fireEvent.press(v.getByTestId('home-bell'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', initial: false });
-    fireEvent.press(v.getByTestId('home-gear'));
+    await fireEvent.press(v.getByTestId('home-gear'));
     expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SettingsHome', pop: true });
-    fireEvent.press(v.getByTestId('home-month'));
+    await fireEvent.press(v.getByTestId('home-month'));
     expect(mockNavigate).toHaveBeenCalledWith('MoneyStack', { screen: 'CoachMoney', pop: true });
-    fireEvent.press(v.getByTestId('home-alerts'));
+    await fireEvent.press(v.getByTestId('home-alerts'));
     await waitFor(() => expect(v.getByTestId('action-queue')).toBeTruthy()); // Actions, with the tab row back
     expect(v.getByTestId('command-center-settings')).toBeTruthy();
     expect(v.getByText('Home')).toBeTruthy();
@@ -215,24 +215,24 @@ describe('coach Home, flag on, with home (b#1123)', () => {
 
   it("asks first before Roman writes to a win's client, and sends only on Send", async () => {
     const v = await renderHome();
-    fireEvent.press(v.getByTestId('home-win-w1'));
+    await fireEvent.press(v.getByTestId('home-win-w1'));
     expect(v.getByText('Ask Roman to write to Client1?')).toBeTruthy();
     expect(mockPost).not.toHaveBeenCalled();
-    await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
+    await fireEvent.press(v.getByTestId('home-draft-ask'));
     expect(mockPost).toHaveBeenCalledWith('/ai/gateway/invoke', draft('c1'));
     await waitFor(() => expect(v.getByTestId('home-draft-text')).toBeTruthy());
     expect(mockApprove).not.toHaveBeenCalled();
-    await act(async () => { fireEvent.press(v.getByTestId('home-draft-send')); });
+    await fireEvent.press(v.getByTestId('home-draft-send'));
     expect(mockApprove).toHaveBeenCalledWith('dr-1');
     expect(v.getByText('Sent to Client1')).toBeTruthy();
   });
 
   it('turns a written draft down on Not now, so nothing waits to be sent', async () => {
     const v = await renderHome();
-    fireEvent.press(v.getByTestId('home-win-w2'));
-    await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
+    await fireEvent.press(v.getByTestId('home-win-w2'));
+    await fireEvent.press(v.getByTestId('home-draft-ask'));
     await waitFor(() => expect(v.getByTestId('home-draft-text')).toBeTruthy());
-    await act(async () => { fireEvent.press(v.getByTestId('home-draft-close')); });
+    await fireEvent.press(v.getByTestId('home-draft-close'));
     expect(mockReject).toHaveBeenCalledWith('dr-1');
     expect(mockApprove).not.toHaveBeenCalled();
     expect(v.queryByTestId('home-draft-sheet')).toBeNull();
@@ -241,22 +241,22 @@ describe('coach Home, flag on, with home (b#1123)', () => {
   it('says nothing was sent when Roman is off, and offers Try again', async () => {
     mockPost.mockResolvedValue({ data: { enabled: false, provider: 'stub', reply: '', approval: { required: false, draft_id: null } } });
     const v = await renderHome();
-    fireEvent.press(v.getByTestId('home-win-w1'));
-    await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
+    await fireEvent.press(v.getByTestId('home-win-w1'));
+    await fireEvent.press(v.getByTestId('home-draft-ask'));
     expect(v.getByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy();
     expect(v.queryByTestId('home-draft-send')).toBeNull();
   });
 
   it('lists one "Reach out to {name}?" per client who needs the coach from the Reach-outs ring, ask-first', async () => {
     const v = await renderHome();
-    fireEvent.press(v.getByTestId('home-ring-reach_outs'));
+    await fireEvent.press(v.getByTestId('home-ring-reach_outs'));
     expect(label(v, 'home-reach-c1')).toBe('Reach out to Maya Ortiz?');
     expect(label(v, 'home-reach-c2')).toBe('Reach out to Ana Ruiz?');
     expect(v.queryByTestId('home-reach-c3')).toBeNull();
-    fireEvent.press(v.getByTestId('home-reach-c1'));
+    await fireEvent.press(v.getByTestId('home-reach-c1'));
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
     expect(mockPost).not.toHaveBeenCalled();
-    await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
+    await fireEvent.press(v.getByTestId('home-draft-ask'));
     expect(mockPost).toHaveBeenCalledWith('/ai/gateway/invoke', expect.objectContaining({ capability: 'draft.coach_message', subject_user_id: 'c1' }));
   });
 });
@@ -303,7 +303,7 @@ describe('coach Home at zero clients and on failures', () => {
     const v = await render(<CommandCenterScreen />);
     await waitFor(() => expect(v.getByTestId('home-retry')).toBeTruthy());
     mockGet.mockResolvedValue({ data: { ...overview(30), home: home([win(1)]) } });
-    await act(async () => { fireEvent.press(v.getByTestId('home-retry')); });
+    await fireEvent.press(v.getByTestId('home-retry'));
     await waitFor(() => expect(v.getByTestId('home-hero-wins')).toBeTruthy());
   });
 

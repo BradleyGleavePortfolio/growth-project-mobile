@@ -19,7 +19,7 @@ import { rosterDisplayName } from '../../../utils/coach/clientRoster';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
-import { AlertsRow, DayRing, LinkRow, MiniTile, useCardStyles } from './HomeParts';
+import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './HomeParts';
 import { ReachOutSheet, RomanDraftSheet, reachOutAsk, type DraftAsk } from './DraftSheets';
 import { firstWord, pct, ringSpecs, ringsCaption, winLine, winWindow, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11, type NeedsRow } from './useCoachHomeV11';
@@ -181,7 +181,7 @@ export default function CoachHomeV11(p: Props) {
         <View style={s.grow}>
           <Text style={cs.title}>{off ? 'Needs you' : `Needs you, ${n}`}</Text>
           {off ? <Text style={cs.body}>Open the list</Text> : n === 0 ? <Text style={cs.body}>Nobody needs you right now.</Text> : (
-            <Text style={cs.body} numberOfLines={2}>
+            <Text style={cs.body}>
               <Text style={s.bold}>{nameOf(lead)}</Text>{` · ${lead.reason.text}`}{n > 1 ? <Text style={s.bold}>{`  +${n - 1} more`}</Text> : null}
             </Text>
           )}
@@ -194,7 +194,8 @@ export default function CoachHomeV11(p: Props) {
   const roman = (() => {
     const n = data.draftsWaiting;
     const k = data.draftKinds;
-    const chips = ([[k.workouts, 'Workouts'], [k.mealPlans, 'Meal plans'], [k.nudges, 'Nudges']] as const).filter(([c]) => c > 0);
+    const chips = ([[k.workouts, 'Workout', 'Workouts'], [k.mealPlans, 'Meal plan', 'Meal plans'], [k.nudges, 'Nudge', 'Nudges']] as const)
+      .filter(([c]) => c > 0).map(([c, one, many]) => [c, c === 1 ? one : many] as const);
     return (
       <View style={cs.card} testID="home-roman">
         <View style={s.romanHead}>
@@ -251,7 +252,7 @@ export default function CoachHomeV11(p: Props) {
             <View style={s.bizMark}><Text style={s.bizSign}>$</Text></View>
             <View style={s.grow}>
               <Text style={cs.body}>Earnings · this month</Text>
-              <Text style={s.bizAmount} numberOfLines={1} adjustsFontSizeToFit>{heroAmount(monthOk.totals.netCents, monthOk.currency)}</Text>
+              <Text style={s.bizAmount} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.15}>{heroAmount(monthOk.totals.netCents, monthOk.currency)}</Text>
               <Text style={cs.body}>{pace ? `${monthOverline(data.now)} · ${pace}` : hasMonthMoney(monthOk) ? monthOverline(data.now) : 'Nothing earned yet this month.'}</Text>
               {data.payout ? <Text style={cs.body}>{`Next payout ${heroAmount(data.payout.amountCents, data.payout.currency)} · ${cap(payoutWords(data.payout, data.now))}`}</Text> : null}
             </View>
@@ -336,15 +337,15 @@ const s = StyleSheet.create({
   fill: { flex: 1 },
   hero: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 24, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, gap: 14 },
   topRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 },
-  date: { ...typography.caption, fontWeight: '600', letterSpacing: 1.6, color: forestPop.onDeepMuted, flex: 1 },
+  date: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, flex: 1 },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   bellBadge: { position: 'absolute', top: 0, right: -2, minWidth: 22, height: 22, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
-  bellBadgeText: { ...typography.caption, fontSize: 12, lineHeight: 15, letterSpacing: 0, fontFamily: 'Inter_600SemiBold', color: forestPop.deep },
+  bellBadgeText: { ...typography.caption, fontSize: 12, lineHeight: 15, letterSpacing: 0, fontFamily: SEMI, color: forestPop.deep },
   heroBlock: { gap: 6 },
   heroLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  heroValue: { ...typography.display, fontSize: 56, lineHeight: 62, color: forestPop.onDeep },
-  heroUnit: { ...typography.h3, fontWeight: '400', color: forestPop.onDeep, flexShrink: 1 },
-  heroRight: { ...typography.caption, fontWeight: '600', letterSpacing: 1.6, color: forestPop.onDeepMuted, marginLeft: 'auto' },
+  heroValue: { fontFamily: SEMI, fontSize: 56, lineHeight: 64, letterSpacing: -1, color: forestPop.onDeep },
+  heroUnit: { ...typography.body, fontSize: 20, lineHeight: 26, color: forestPop.onDeep, flexShrink: 1 },
+  heroRight: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, marginLeft: 'auto' },
   bar: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.forest, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.leaf },
   win: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -355,14 +356,14 @@ const s = StyleSheet.create({
   retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: forestPop.brand400 },
   retryText: { ...typography.bodyMd, color: forestPop.onDeep },
   tiles: { flexDirection: 'row', gap: 10 },
-  dayLabel: { ...typography.caption, fontWeight: '700', letterSpacing: 1.6, color: forestPop.gold, marginBottom: 8 },
+  dayLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.gold, marginBottom: 8 },
   rings: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
   page: { paddingHorizontal: layout.gutter, paddingTop: 16, gap: 14 },
   grow: { flex: 1, minWidth: 0 },
-  bold: { fontFamily: 'Inter_600SemiBold' },
+  bold: { fontFamily: SEMI },
   needs: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   needsBox: { width: 72, height: 72, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  needsNum: { ...typography.h1, color: forestPop.leaf },
+  needsNum: { fontFamily: SEMI, fontSize: 30, lineHeight: 36, color: forestPop.leaf },
   romanHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
   chip: { minHeight: 40, borderRadius: radius.button, paddingHorizontal: 12, justifyContent: 'center' },
@@ -373,8 +374,8 @@ const s = StyleSheet.create({
   askRoman: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', marginTop: 6 },
   biz: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   bizMark: { width: 52, height: 52, borderRadius: radius.button, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
-  bizSign: { ...typography.h2, color: forestPop.leaf },
-  bizAmount: { ...typography.display, fontSize: 36, lineHeight: 42, color: forestPop.ink },
+  bizSign: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
+  bizAmount: { fontFamily: SEMI, fontSize: 30, lineHeight: 38, color: forestPop.ink },
   flush: { padding: 0 },
   pressed: { opacity: 0.7 },
 });

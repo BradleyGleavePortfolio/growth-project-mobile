@@ -12,6 +12,8 @@ import { forestPop, radius, typography } from '../../../theme/tokens';
 import type { RingSpec } from './homeDay';
 
 const RING = 56;
+/** Style A sets its figures and titles in Inter (the app loads Inter's 400, 500 and 600). */
+export const SEMI = 'Inter_600SemiBold';
 const STROKE = 6;
 
 /** A small figure on the hero: the value in leaf, its words under it. */
@@ -19,7 +21,7 @@ export function MiniTile({ value, label, testID }: { value: string; label: strin
   return (
     <View style={hs.mini} accessible accessibilityLabel={`${value} ${label}`} testID={testID}>
       <Text style={hs.miniValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-      <Text style={hs.miniLabel} numberOfLines={2}>{label}</Text>
+      <Text style={hs.miniLabel} numberOfLines={3}>{label}</Text>
     </View>
   );
 }
@@ -55,7 +57,7 @@ export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => voi
         </Svg>
         <Text style={hs.ringValue} numberOfLines={1}>{ring.done}/{ring.of}</Text>
       </View>
-      <Text style={hs.ringLabel} numberOfLines={1}>{ring.label.toUpperCase()}</Text>
+      <Text style={hs.ringLabel} numberOfLines={1} maxFontSizeMultiplier={1.15}>{ring.label.toUpperCase()}</Text>
     </>
   );
   const label = `${ring.label}, ${ring.done} of ${ring.of}`;
@@ -72,15 +74,15 @@ export function useCardStyles() {
   const { colors, semanticColors: sem } = useTheme();
   return React.useMemo(() => StyleSheet.create({
     card: { backgroundColor: sem.bgSurface, borderRadius: radius.card + 2, borderWidth: StyleSheet.hairlineWidth, borderColor: sem.border, padding: 18 },
-    title: { ...typography.h3, color: colors.textPrimary },
+    title: { fontFamily: SEMI, fontSize: 18, lineHeight: 24, color: colors.textPrimary },
     body: { ...typography.body, color: colors.textPrimary },
     muted: { ...typography.bodySmall, color: colors.textMuted },
     strong: { ...typography.bodyMd, color: colors.textPrimary },
-    section: { ...typography.caption, fontWeight: '600', letterSpacing: 1.4, color: colors.textMuted, marginTop: 10, marginBottom: 2 },
+    section: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.4, color: colors.textMuted, marginTop: 10, marginBottom: 2 },
     row: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18, gap: 12 },
     rowLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sem.border },
     rowText: { flex: 1, minWidth: 0 },
-    rowCount: { ...typography.h3, color: colors.textPrimary },
+    rowCount: { fontFamily: SEMI, fontSize: 20, lineHeight: 26, color: colors.textPrimary },
     pressed: { opacity: 0.7 },
   }), [colors, sem]);
 }
@@ -106,14 +108,14 @@ export function LinkRow({ title, line, count, first, onPress, testID }: {
 
 const hs = StyleSheet.create({
   mini: { flex: 1, minWidth: 0, backgroundColor: forestPop.forest, borderRadius: radius.button + 2, paddingVertical: 10, paddingHorizontal: 12 },
-  miniValue: { ...typography.h2, color: forestPop.leaf },
+  miniValue: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
   miniLabel: { ...typography.bodySmall, color: forestPop.onDeepMuted },
   alerts: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: forestPop.brand400, borderRadius: radius.button + 2, paddingHorizontal: 18 },
   alertsText: { ...typography.bodyMd, fontSize: 18, color: forestPop.onDeep, flex: 1 },
-  alertsCount: { ...typography.h2, color: forestPop.onDeep },
+  alertsCount: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.onDeep },
   ring: { flex: 1, alignItems: 'center', minHeight: 44, paddingVertical: 4 },
   ringBox: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
-  ringValue: { ...typography.bodySmall, fontWeight: '700', color: forestPop.onDeep, position: 'absolute' },
-  ringLabel: { ...typography.caption, fontWeight: '700', letterSpacing: 1, color: forestPop.gold, marginTop: 6 },
+  ringValue: { ...typography.bodySmall, fontFamily: SEMI, color: forestPop.onDeep, position: 'absolute' },
+  ringLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 0.6, color: forestPop.gold, marginTop: 6 },
   pressed: { opacity: 0.7 },
 });

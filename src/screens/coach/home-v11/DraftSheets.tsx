@@ -176,7 +176,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: sem.overlay },
     sheet: { maxHeight: '85%', paddingTop: 8, paddingHorizontal: layout.gutter, backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
     grab: { width: 40, height: 5, borderRadius: radius.chip, backgroundColor: sem.border, alignSelf: 'center', marginBottom: 12 },
-    title: { ...typography.h3, color: colors.textPrimary, marginBottom: 8 },
+    title: { fontFamily: 'Inter_600SemiBold', fontSize: 20, lineHeight: 26, color: colors.textPrimary, marginBottom: 8 },
     body: { ...typography.body, color: colors.textPrimary },
     muted: { ...typography.bodySmall, color: colors.textMuted, marginTop: 6 },
     error: { ...typography.bodySmall, color: colors.error, marginTop: 10 },
