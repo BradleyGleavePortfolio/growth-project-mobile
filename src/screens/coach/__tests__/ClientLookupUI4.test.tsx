@@ -98,6 +98,14 @@ describe('UI-4 helpers', () => {
     expect(parseLookupQuery(' Review  messages ')).toEqual({ filters: ['review', 'messages'], text: '' });
     expect([needsYouSentence(2, 1), needsYouSentence(1, 0), needsYouSentence(0, 3)]).toEqual(['Two need you today. One is steady.', 'One needs you today.', 'Three are steady.']);
   });
+  it('the sentence never prints a numeral: counts past Nineteen are spelled, and past 14 steady clients Everyone holds the number (LO-847 B1)', () => {
+    expect([needsYouSentence(6, 94), needsYouSentence(0, 100), needsYouSentence(23, 77), needsYouSentence(5, 14), needsYouSentence(0, 15)]).toEqual([
+      'Six need you today. Everyone else is steady.', 'Everyone is steady.', 'Twenty-three need you today. Everyone else is steady.',
+      'Five need you today. Fourteen are steady.', 'Everyone is steady.',
+    ]);
+    expect([needsYouSentence(40, 0), needsYouSentence(106, 0), needsYouSentence(100, 0)]).toEqual(['Forty need you today.', 'One hundred and six need you today.', 'One hundred need you today.']);
+    for (let n = 1; n < 1000; n += 1) expect(needsYouSentence(n, n)).not.toMatch(/\d/);
+  });
   it('never shows an empty value: nothing logged says so', () => {
     const c = (a: Act) => ({ id: 'x', firstName: 'Ava', lastName: 'Price', email: '', createdAt: day(-30), activity: { lastActiveOn: a.last ?? null, checkInsToReview: 0 } }) as unknown as RosterClient;
     expect(lastLoggedWord(c({}))).toBe('Nothing logged yet');
@@ -178,6 +186,12 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     expect(screen.getByLabelText('Everyone, 15')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('lookup-everyone-link'));
     expect(setParams).toHaveBeenLastCalledWith({ view: undefined });
+  });
+  it('view "needs" at 60 clients: the top sentence spells the count and leaves the steady number to Everyone (LO-847 B1)', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => wire(`p${i}`, `Pat ${String.fromCharCode(65 + (i % 26))}${i}`, i < 17 ? { last: day(0), review: 1 } : { last: day(-1) }));
+    await mount(rows, {}, undefined, { params: { view: 'needs' } });
+    expect(screen.getByTestId('lookup-sentence').props.children).toBe('Seventeen need you today. Everyone else is steady.');
+    expect(screen.getByLabelText('Everyone, 60')).toBeTruthy();
   });
   it('view "needs" ends when Clients loses the tab, so the tab reopens on the full list; with no one waiting it reads the steady sentence (LO-690-695 C1)', async () => {
     await mount([wire('s1', 'Ava Price', { last: day(0) }), wire('s2', 'Ben Carter', { last: day(-1) })], {}, undefined, { params: { view: 'needs' } });
