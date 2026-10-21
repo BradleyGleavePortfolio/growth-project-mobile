@@ -52,6 +52,7 @@ import {
 } from '../../api/types/coachAiExecution';
 import { coachAiExecutionApi } from '../../api/coachAiExecutionApi';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
+import { PATH_DRAFTS_KEY, PathChangeDrafts, usePathChangeDrafts } from './copilot/PathChangeDrafts';
 
 /** Roles allowed to see + decide AI drafts. Mirrors backend
  *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
@@ -73,6 +74,8 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   // hits the gateway list endpoint (which would 403 anyway, but no point
   // burning a roundtrip).
   const query = usePendingAiDrafts({ enabled: allowed && isFocused });
+  // COPILOT-M1: the client_path_change rows (flag off: never fetched, never drawn).
+  const hasPath = (usePathChangeDrafts(allowed && isFocused).data?.length ?? 0) > 0;
 
   const approveMutation = useMutation({
     mutationFn: (draftId: string) => coachAiExecutionApi.approveDraft(draftId),
@@ -149,17 +152,21 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
             />
           )}
           contentContainerStyle={
-            renderable.length === 0 && !query.isLoading
+            renderable.length === 0 && !query.isLoading && !hasPath
               ? styles.emptyContainer
               : styles.listContainer
           }
           refreshControl={
             <RefreshControl
               refreshing={query.isFetching}
-              onRefresh={() => query.refetch()}
+              onRefresh={() => {
+                void query.refetch();
+                void queryClient.invalidateQueries({ queryKey: PATH_DRAFTS_KEY });
+              }}
               tintColor={colors.primary}
             />
           }
+          ListHeaderComponent={<PathChangeDrafts enabled={allowed && isFocused} />}
           ListEmptyComponent={
             // QA-COACH-STATES-131: the shared skeleton and the calm error.
             query.isLoading ? (
@@ -171,7 +178,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
                 retrying={query.isFetching}
                 testID="pending-ai-drafts-error"
               />
-            ) : (
+            ) : hasPath ? null : (
               <EmptyState
                 styles={styles}
                 colors={colors}

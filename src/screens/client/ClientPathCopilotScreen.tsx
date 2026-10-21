@@ -1,245 +1,89 @@
 /**
- * ClientPathCopilotScreen — Wave 11.
+ * ClientPathCopilotScreen: "Your path" (Path Copilot style A, owner #162-1, board planning/MOCKUP3/COPILOT frames 04-05).
  *
- * Route shell for the Client Path Copilot.
- *
- * Status: STUB. Backend endpoint is not live. The screen reads through a
- * mock-safe adapter (`fetchClientPathCopilot`) that returns an empty,
- * `isStale: true` payload until the live endpoint ships. The UI honestly
- * renders that as an empty state — we do not fabricate suggestions.
- *
- * Doctrine encoded in this screen:
- *   - Every AI block is wrapped in <AINote/> with the canonical disclaimer.
- *   - Verified-progress submissions are listed with the lifecycle chip;
- *     "approved" treatments require a human signoff actor.
- *   - The screen is gated by `featureFlags.clientPathCopilot`.
+ * PR-1 surfaces: the client's sent suggestions with where each stands (GET /client/copilot, backend #1120). The
+ * suggestion card with "Send to {coach}" is ./copilot/SuggestionCard (COPILOT-M2 mounts it under Roman's answer, with
+ * the week block, the sources and past questions). Behind `featureFlags.clientPathCopilot` (off) and the server
+ * switch: a server without Copilot (404) shows the calm empty state, nothing new (truthful fallback).
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ScrollView,
-  View,
-  Text,
-  StyleSheet,
-  RefreshControl,
-} from 'react-native';
-import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
+import React from 'react';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { typography, spacing, type SemanticTokens } from '../../theme/tokens';
+import { useNavigation } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
+import { typography, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
-import { fetchClientPathCopilot } from '../../services/wave11Adapters';
-import type { ClientPathCopilotPayload, CopilotSuggestion } from '../../types/wave11';
-import AINote from '../../components/trust/AINote';
-import VerifiedProgressRow from '../../components/trust/VerifiedProgressRow';
 import EmptyState from '../../components/EmptyState';
+import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
+import { ForestStatusBar } from '../../components/StatusBarBand';
+import { Screen, useScreenInsets } from '../../ui';
+import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
+import { aiRefusalOf } from '../../lib/ai/aiRefusal';
 import { featureFlags } from '../../config/featureFlags';
+import { useMyCoaches } from '../../hooks/useCalendar';
+import { copilotApi } from '../../api/copilotApi';
+import { COPILOT_COPY as C } from './copilot/pathChangeWords';
+import { SuggestionStatusList } from './copilot/SuggestionStatusList';
+
+export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
+
+/** The coach's first name for "Send to {coach}" and the status lines, or "your coach" when it is not known yet. */
+export function useCoachFirstName(): string {
+  const { data } = useMyCoaches();
+  return data?.[0]?.name?.trim().split(/\s+/)[0] || C.yourCoach;
+}
 
 export default function ClientPathCopilotScreen() {
-  const { semanticColors: sc } = useTheme();
-  const styles = makeStyles(sc);
-  const [error, setError] = useState(false);
-  const [payload, setPayload] = useState<ClientPathCopilotPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      setError(false);
-      const next = await fetchClientPathCopilot();
-      setPayload(next);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    load();
-  };
-
   if (!featureFlags.clientPathCopilot) {
     return (
-      <View
-        style={styles.flagOff}
-        accessibilityLabel="Path suggestions unavailable"
-        accessibilityRole="none"
-      >
-        <EmptyState
-          icon="lock-closed-outline"
-          title="Your path"
-          subtitle="Path suggestions are not available on this account."
-        />
+      <View style={s.flagOff} accessibilityLabel="Path suggestions unavailable" accessibilityRole="none">
+        <EmptyState icon="lock-closed-outline" title="Your path" subtitle="Path suggestions are not available on this account." />
       </View>
     );
   }
-
-  if (loading && !payload) {
-    return <SkeletonScreen count={5} />;
-  }
-
-  const empty = !payload || payload.suggestions.length === 0;
-
-  return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      accessibilityLabel="Client Path Copilot screen"
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          accessibilityLabel="Pull to refresh your path data"
-        />
-      }
-    >
-      <Text style={styles.title} accessibilityRole="header">Your path</Text>
-      <Text style={styles.subtitle}>
-        Suggestions and submitted progress.
-      </Text>
-
-      {payload?.isStale ? (
-        <View
-          style={styles.stale}
-          accessibilityLabel="Latest path data unavailable"
-          accessibilityRole="none"
-        >
-          <Ionicons name="time-outline" size={14} color={sc.textMuted} />
-          <Text style={styles.staleText}>
-            Latest path data is unavailable. Pull down to refresh.
-          </Text>
-        </View>
-      ) : null}
-      {error ? <Text style={styles.subtitle} accessibilityRole="alert">Path data did not load. Check your connection and pull down to try again.</Text> : null}
-
-      {!error || payload ? <><View style={styles.section}>
-        <Text style={styles.sectionTitle} accessibilityRole="header">Suggestions</Text>
-        {empty ? (
-          <EmptyState
-            icon="sparkles-outline"
-            title="No suggestions yet"
-            subtitle="No suggestions are available."
-          />
-        ) : (
-          payload!.suggestions.map((s) => <SuggestionCard key={s.id} suggestion={s} />)
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle} accessibilityRole="header">Verified progress</Text>
-        {payload && payload.pendingVerifiedProgress.length > 0 ? (
-          <View style={styles.list}>
-            {payload.pendingVerifiedProgress.map((item) => (
-              <VerifiedProgressRow key={item.id} item={item} />
-            ))}
-          </View>
-        ) : (
-          <EmptyState
-            icon="ribbon-outline"
-            title="No pending submissions"
-            subtitle="No progress submissions are waiting for review."
-          />
-        )}
-      </View></> : null}
-    </ScrollView>
-  );
+  return <PathCopilot />;
 }
 
-function SuggestionCard({ suggestion }: { suggestion: CopilotSuggestion }) {
+function PathCopilot() {
   const { semanticColors: sc } = useTheme();
-  const styles = makeStyles(sc);
+  const insets = useScreenInsets();
+  const navigation = useNavigation();
+  const coach = useCoachFirstName();
+  const q = useQuery({ queryKey: COPILOT_RECENT_KEY, queryFn: () => copilotApi.recent() });
+  const refusal = q.error ? aiRefusalOf(q.error) : null;
+  const items = q.data ?? [];
+  const light = { color: sc.textOnAccent };
+
   return (
-    <View
-      style={styles.card}
-      accessibilityRole="none"
-      accessibilityLabel={`Suggestion: ${suggestion.headline}`}
-    >
-      <Text style={styles.cardHeadline}>{suggestion.headline}</Text>
-      <AINote
-        variant="summary"
-        disclaimer={suggestion.topic === 'finance' ? 'finance' : 'general'}
-      >
-        {suggestion.body}
-      </AINote>
-      {suggestion.requiresCoachApproval ? (
-        <View
-          style={styles.statusRow}
-          accessibilityLabel={
-            suggestion.coachApproval
-              ? 'Approved by your coach'
-              : 'Awaiting coach approval'
-          }
-          accessibilityRole="none"
-        >
-          {suggestion.coachApproval ? (
-            <Text style={[styles.statusText, styles.approved]}>
-              <Ionicons name="checkmark-circle-outline" size={14} color={sc.accentText} />{' '}
-              Approved by your coach
-            </Text>
-          ) : (
-            <Text style={styles.statusText}>
-              <Ionicons name="time-outline" size={14} color={sc.textMuted} /> Awaiting
-              coach approval
-            </Text>
-          )}
+    <>
+      <ForestStatusBar />
+      <Screen edges={[]} testID="copilot-screen" contentStyle={s.page}
+        refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} tintColor={sc.textMuted} />}>
+        <View style={[s.mast, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + 12 }]}>
+          <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel={`Back to ${C.back}`} style={s.back} testID="copilot-back">
+            <Ionicons name="chevron-back" size={22} color={sc.textOnAccent} />
+            <Text style={[typography.bodyMd, light]}>{C.back}</Text>
+          </Pressable>
+          <Text style={[typography.h1, light]} accessibilityRole="header">{C.title}</Text>
         </View>
-      ) : null}
-    </View>
+        <View style={s.body}>
+          {q.isPending ? <QuietLoading label="Loading your path" rows={3} testID="copilot-loading" /> : null}
+          {refusal ? <AiRefusalNotice refusal={refusal} audience="client" surface="roman" onRetry={() => void q.refetch()} /> : null}
+          {q.error && !refusal ? (
+            <QuietError message={loadFailureMessage(q.error, 'Your path')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-error" />
+          ) : null}
+          {q.isSuccess && items.length === 0 ? <EmptyState icon="sparkles-outline" title={C.emptyTitle} subtitle={C.emptyBody} /> : null}
+          {items.length > 0 ? <SuggestionStatusList items={items} coach={coach} /> : null}
+        </View>
+      </Screen>
+    </>
   );
 }
 
-const makeStyles = (sc: SemanticTokens) => {
-  const tokens = { bone: sc.bgPrimary, ink: sc.textPrimary, charcoal: sc.textMuted, cream: sc.bgPrimary, forest: sc.accentText };
-  return StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: tokens.bone },
-  content: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
-  flagOff: { flex: 1, backgroundColor: tokens.bone, justifyContent: 'center' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.bone },
-  title: {
-    ...typography.h1,
-    color: tokens.ink,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-    color: tokens.charcoal,
-    marginBottom: spacing.lg,
-  },
-  stale: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: spacing.md,
-  },
-  staleText: { ...typography.bodySmall, color: tokens.charcoal },
-  section: { marginTop: spacing.lg, gap: spacing.md },
-  sectionTitle: {
-    ...typography.eyebrow,
-    color: tokens.ink,
-    marginBottom: spacing.xs,
-  },
-  list: { gap: spacing.sm },
-  card: {
-    backgroundColor: tokens.cream,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: sc.border,
-    paddingVertical: spacing.lg,
-    gap: spacing.sm,
-  },
-  cardHeadline: {
-    ...typography.h4,
-    color: tokens.ink,
-  },
-  statusRow: { marginTop: spacing.xs },
-  statusText: {
-    ...typography.bodySmall,
-    color: tokens.charcoal,
-  },
-  approved: { color: tokens.forest, fontWeight: '600' },
+const s = StyleSheet.create({
+  flagOff: { flex: 1, justifyContent: 'center' },
+  page: { paddingHorizontal: 0 },
+  mast: { paddingHorizontal: 20, paddingBottom: 24, gap: 8, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
+  back: { minWidth: 44, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  body: { paddingHorizontal: 20, paddingTop: 24, gap: 16 },
 });
-};
