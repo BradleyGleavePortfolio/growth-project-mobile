@@ -88,9 +88,14 @@ beforeEach(() => { jest.clearAllMocks(); run += 1; });
 it.each([['Back to Train', 'course-complete-back', false], ['the Train back control, over a week page', 'learn-back', true]] as const)(
   '%s on the course record returns to the one Train root', async (_label, button, overWeek) => {
     await mount(course('done'), [home, ...(overWeek ? [week4()] : []), { name: 'CourseComplete', params: K1 }]);
-    await fireEvent.press(await screen.findByTestId(button));
-    expect(stackOf('WorkoutTab')).toEqual(['WorkoutMain']);
-    expect(here()).toEqual(['WorkoutTab', 'WorkoutMain']);
+    // The record's footer draws only once the course has loaded: press after it, so the press never lands on the loading
+    // masthead the loaded page can re-draw, then wait for the pop (CI saw the bare expect at :92 run before it).
+    await screen.findByTestId('course-complete-back');
+    await fireEvent.press(screen.getByTestId(button));
+    await waitFor(() => {
+      expect(stackOf('WorkoutTab')).toEqual(['WorkoutMain']);
+      expect(here()).toEqual(['WorkoutTab', 'WorkoutMain']);
+    });
   },
 );
 
@@ -115,8 +120,10 @@ it("Message {coach} on a locked week arrives in the coach's chat, with the sheet
   await mount(course('locked'), [home]);
   await fireEvent.press(await screen.findByTestId('course-week-4'));
   await fireEvent.press(screen.getByText('Message Sam'));
-  expect(here()).toEqual(['Home', 'Messages']);
-  expect(stackOf('Home')).toEqual(['HomeMain', 'Messages']);
+  await waitFor(() => {
+    expect(here()).toEqual(['Home', 'Messages']);
+    expect(stackOf('Home')).toEqual(['HomeMain', 'Messages']);
+  });
   await act(async () => ref.navigate('WorkoutTab'));
   expect(here()).toEqual(['WorkoutTab', 'Course']); // the course as the client left it, with no sheet over it
   expect(screen.queryByTestId('locked-week')).toBeNull();

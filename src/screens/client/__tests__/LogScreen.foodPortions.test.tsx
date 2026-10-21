@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react-native';
 import type { FoodLog } from '../../../types';
 import LogScreen from '../LogScreen';
 import { logApi } from '../../../services/api';
@@ -77,7 +77,12 @@ describe('food edit screen uses the retained portion metadata', () => {
 
   it('moves an entry to another meal without changing its nutrition', async () => {
     await openEdit();
-    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Dinner' })));
+    // MEAL-CHOICE-ROW: the edit sheet's Meal is the shared single choice, on the entry's own meal.
+    const meals = within(screen.getByTestId('log-edit-meals'));
+    expect(meals.getAllByRole('radio').map((m) => [m.props.accessibilityLabel, !!m.props.accessibilityState?.checked]))
+      .toEqual([['Breakfast', false], ['Lunch', true], ['Dinner', false], ['Snacks', false]]);
+    await act(async () => fireEvent.press(meals.getByRole('radio', { name: 'Dinner' })));
+    expect(meals.getByRole('radio', { name: 'Dinner' }).props.accessibilityState.checked).toBe(true);
     await act(async () => fireEvent.press(screen.getByLabelText('Save changes')));
     await waitFor(() => expect(logApi.updateEntry).toHaveBeenCalledWith('entry', expect.objectContaining({
       meal_type: 'dinner', quantity_multiplier: 0.28,
