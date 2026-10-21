@@ -305,8 +305,14 @@ describe('validation', () => {
     ]) {
       expect(cur({ ...ok, copy_version: v })).toBe(true);
     }
-    expect(cur({ ...ok, copy_version: 'consult-consent-v16' })).toBe(false);
-    expect(cur({ ...ok, copy_version: 'consult-consent-v16-coach-free' })).toBe(false);
+    // CONSENT-M (b#1117): the Health-notes screens count; the next numbers do not.
+    for (const v of ['consult-consent-v15', 'consult-consent-v16', 'consult-consent-v17', 'consult-consent-v18']) {
+      expect(cur({ ...ok, copy_version: v })).toBe(true);
+    }
+    expect(cur({ ...ok, copy_version: 'consult-consent-v16-coach-free' })).toBe(true);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v17-coach-free' })).toBe(true);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v19' })).toBe(false);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v18-coach-free' })).toBe(false);
     for (const v of [
       'consult-consent-v3',
       'consult-consent-v4',

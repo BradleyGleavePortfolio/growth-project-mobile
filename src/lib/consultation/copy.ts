@@ -33,6 +33,12 @@ import {
   CONSULT_CONSENT_CRISIS_COPY_VERSION,
   CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_HEALTH_CRISIS_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_HEALTH_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_HEALTH_COPY_VERSION,
+  CONSULT_CONSENT_HEALTH_CRISIS_COPY_VERSION,
+  CONSULT_CONSENT_HEALTH_CRISIS_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_HEALTH_MEMORY_COPY_VERSION,
 } from './consentVersion';
 
 export {
@@ -68,6 +74,17 @@ export const AI_CONSENT_PARAGRAPH = `${AI_CONSENT_PARAGRAPH_PRE57C} ${AI_CONSENT
 
 /** CRISIS-APP-COPY (client-ai-v8, b#1041): v6 with the crisis sentence; shown only when the server answers with it. */
 export const AI_CONSENT_PARAGRAPH_CRISIS = `${AI_CONSENT_PARAGRAPH} ${ROMAN_CRISIS_TOLD_SENTENCE}`;
+
+/** CONSENT-M (owner #162-6, WEAR-AI-05, b#1117): the one sentence the Health-notes copies add. */
+export const ROMAN_HEALTH_NOTES_SENTENCE =
+  'If you allow AI help, Roman also writes short notes about your health and sleep data on your Health pages, and your coach can ask for an AI note about it.';
+const PURPOSE_SENTENCE = 'and your coach can use AI drafts about your training.';
+/** b#1117 withHealthNotes: a paragraph 4 with the sentence right after its purpose sentence. */
+export const withHealthNotes = (paragraph: string): string =>
+  paragraph.replace(PURPOSE_SENTENCE, `${PURPOSE_SENTENCE} ${ROMAN_HEALTH_NOTES_SENTENCE}`);
+/** client-ai-v12 / v13: v6 / v8 with the sentence; shown only when the server answers with them. */
+export const AI_CONSENT_PARAGRAPH_HEALTH = withHealthNotes(AI_CONSENT_PARAGRAPH);
+export const AI_CONSENT_PARAGRAPH_HEALTH_CRISIS = withHealthNotes(AI_CONSENT_PARAGRAPH_CRISIS);
 
 /** Box 2 (optional, unticked by default). */
 export const AI_CONSENT_CHECKBOX_LABEL =
@@ -173,6 +190,22 @@ export const CONSENT_COACH_FREE_CRISIS_COPY_SHA256 = '5cb2ef1651f012bfb7a7c1569d
 export const CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_SHA256 = 'b7eb74293aac4d20c6d19ea2b7a97bec035467f8f8897a5d8e393fd7140e6864';
 
 /**
+ * CONSENT-M pins (backend b#1117 @ a29fa4f0): client-ai-v12 / v13 copy sha256 (box 2 with this build's
+ * Health-notes paragraph), client-ai-v10 / v11 (the server's memory paragraph; the app holds no memory text),
+ * and the P0 screens with them: consult-consent-v17 / v18, v15 / v16, v16 / v17-coach-free.
+ */
+export const AI_CONSENT_HEALTH_COPY_SHA256 = '8f29d9a5185e3fbe01c1e4b3de445d1057b5cbe1c44e10568c81a805e8b9aac0';
+export const AI_CONSENT_HEALTH_CRISIS_COPY_SHA256 = '495b3c623df2b09c74c7163388a8e56abfc90469896537d7a785bd4fc4fd434d';
+export const AI_CONSENT_HEALTH_MEMORY_COPY_SHA256 = '61ea52ec78fed32eae4df3ac74e696677cd78fcba0ab96266bbffae1f4e0be04';
+export const AI_CONSENT_HEALTH_CRISIS_MEMORY_COPY_SHA256 = 'fe3d8e294d1fc0d4868fb20969fdb9528c4f19a13a94a0339da87efc384b7b28';
+export const CONSENT_HEALTH_COPY_SHA256 = 'ea511e82574f9ec446105028cf3547b66a5916523bd2329f60e4d9f5ce996b99';
+export const CONSENT_HEALTH_CRISIS_COPY_SHA256 = '9ce19233f793ba3d4f82a5240481b4810da0a2f5dadf5b9c7a98936a14794e72';
+export const CONSENT_HEALTH_MEMORY_COPY_SHA256 = '2472c790626ed1ca2d6d7aaa87a39cf3dc0b51371bf94d6ad1679106f34cf0c3';
+export const CONSENT_HEALTH_CRISIS_MEMORY_COPY_SHA256 = '6c03faf6263e93a90f67eb56e748611a29c6cab7fc2af044f3922f61aff16d0c';
+export const CONSENT_COACH_FREE_HEALTH_MEMORY_COPY_SHA256 = '839832214a19353323a18f8e64443bba6db7172f3982c413a65281a72a441c54';
+export const CONSENT_COACH_FREE_HEALTH_CRISIS_MEMORY_COPY_SHA256 = '4030570aae763dd4b4ca578b0472298070e8ce0eea60cc18a123d952fc767ba1';
+
+/**
  * The P0 screen a client sees and what its record names: `version` / `sha256` with this build's
  * paragraph 4, `memoryVersion` / `memorySha256` when box 2 shows the server's memory paragraph.
  * W-CONSENT: a client with no coach sees the coached paragraph 4 and box 2 (client-ai-v6 / v7, so the
@@ -183,8 +216,30 @@ export const CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_SHA256 = 'b7eb74293aac4d20c6d
  * record is consult-consent-v9 / v10, or v10 / v11-coach-free for a client with no coach (FIXCONSENT: the
  * crisis sentence follows the exception wherever it is stated). W-BRAND-AGREEMENT: each of these screens
  * names TGP Fitness, so every version moved to its successor (v11 to v14, v12- to v15-coach-free).
+ * `health` (CONSENT-M): the server answered with the Health-notes copies (b#1117). Coached: paragraph 4 is
+ * client-ai-v12 / v13's and the record v17 / v18, or v15 / v16 with the memory paragraph. No coach: only the
+ * memory screen has a twin (v16 / v17-coach-free); memory off stays the screen above.
  */
-export function consentScreenCopy(coachFree: boolean, crisis = false) {
+export function consentScreenCopy(coachFree: boolean, crisis = false, health = false) {
+  const screen = consentScreenBase(coachFree, crisis);
+  if (!health) return screen;
+  return coachFree
+    ? {
+        ...screen,
+        memoryVersion: crisis ? CONSULT_CONSENT_COACH_FREE_HEALTH_CRISIS_MEMORY_COPY_VERSION : CONSULT_CONSENT_COACH_FREE_HEALTH_MEMORY_COPY_VERSION,
+        memorySha256: crisis ? CONSENT_COACH_FREE_HEALTH_CRISIS_MEMORY_COPY_SHA256 : CONSENT_COACH_FREE_HEALTH_MEMORY_COPY_SHA256,
+      }
+    : {
+        ...screen,
+        aiParagraph: crisis ? AI_CONSENT_PARAGRAPH_HEALTH_CRISIS : AI_CONSENT_PARAGRAPH_HEALTH,
+        version: crisis ? CONSULT_CONSENT_HEALTH_CRISIS_COPY_VERSION : CONSULT_CONSENT_HEALTH_COPY_VERSION,
+        sha256: crisis ? CONSENT_HEALTH_CRISIS_COPY_SHA256 : CONSENT_HEALTH_COPY_SHA256,
+        memoryVersion: crisis ? CONSULT_CONSENT_HEALTH_CRISIS_MEMORY_COPY_VERSION : CONSULT_CONSENT_HEALTH_MEMORY_COPY_VERSION,
+        memorySha256: crisis ? CONSENT_HEALTH_CRISIS_MEMORY_COPY_SHA256 : CONSENT_HEALTH_MEMORY_COPY_SHA256,
+      };
+}
+
+function consentScreenBase(coachFree: boolean, crisis: boolean) {
   return coachFree
     ? {
         paragraphs: CONSENT_PARAGRAPHS_COACH_FREE,
