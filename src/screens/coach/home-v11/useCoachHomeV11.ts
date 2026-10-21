@@ -2,11 +2,12 @@
  * The reads behind the coach Home (spec #688 6295886580), all on existing endpoints plus `include=home` on the
  * overview (b#1123). Each read settles on its own, so a slow one never holds the others back; only the newest
  * load writes, and nothing writes after unmount. Needs you is counted as the list it opens counts it
- * (ClientLookupScreen, view 'needs'): the active roster and the unread counts, through lookupReason.
+ * (ClientLookupScreen, view 'needs'): the active roster and the unread counts, through lookupReason. The
+ * Reach-outs sheet lists the at-risk set the ring counts (b#1123 `needsYou`), and each return to the Home re-reads.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
-import type { CommandCenterOverview } from '../../../services/commandCenterApi';
+import type { AtRiskEntry, CommandCenterOverview } from '../../../services/commandCenterApi';
 import { coachApi } from '../../../services/api';
 import { useClientUnreadCount } from '../../../hooks/useClientUnreadCount';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
@@ -34,8 +35,10 @@ export interface CoachHomeData {
   home: CoachHomeDay | null;
   overviewFailed: boolean;
   refreshing: boolean;
-  /** Who needs the coach, most urgent first, as the Needs you list orders them. */
+  /** Who needs the coach, as the Needs you list orders them. */
   needs: NeedsRow[];
+  /** The at-risk clients the Reach-outs ring counts, most urgent first (null: not read). */
+  reachOuts: AtRiskEntry[] | null;
   /** Active clients not in `needs`, and how many of them logged today (null: the server sent no log days). */
   steady: { count: number; loggedToday: number | null };
   /** 'off': the Clients list is on Archived, so the shared roster is not the active one: no count. */
@@ -85,6 +88,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
   const [ltv, setLtv] = useState<LtvMetrics | null>(null);
   const [month, setMonth] = useState<MonthState>({ kind: 'loading' });
   const [payout, setPayout] = useState<MoneyPayout | null>(null);
+  const [reachOuts, setReachOuts] = useState<AtRiskEntry[] | null>(null);
   const [now, setNow] = useState(() => new Date());
   const seq = useRef(0);
   useEffect(() => () => { seq.current += 1; }, []);
@@ -118,6 +122,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
       void Promise.resolve().then(get).catch(() => fallback).then((v) => { if (fresh()) write(v); });
     settle(sources.ltv, setLtv, null);
     settle(sources.nextPayout, setPayout, null);
+    settle(sources.atRisk, (v) => setReachOuts(v ?? null), null);
     void loadRoster(mine);
     try {
       const res = await readOverview();
@@ -130,10 +135,16 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     if (isRefresh) void drafts.refetch();
   }, [drafts, loadMonth, loadRoster, readOverview, sources]);
 
-  // The first load runs once, with the newest `load`; a coach id that arrives later loads the roster then.
+  // Loads on mount and again, without the spinner, on each return to the Home: it stays mounted under its tab
+  // (spec item 6, C3). A coach id that arrives later loads the roster then.
   const first = useRef(load);
   first.current = load;
-  useEffect(() => { void first.current(false); }, []);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (mounted.current && !isFocused) return;
+    mounted.current = true;
+    void first.current(false);
+  }, [isFocused]);
   const rosterOnce = useRef(false);
   useEffect(() => {
     if (!coachId || rosterOnce.current) return;
@@ -152,7 +163,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
   const draftsState: ReadState = drafts.data ? 'ok' : drafts.isError ? 'error' : 'loading';
   const data: CoachHomeData = {
     overview: read?.overview ?? null, home: read?.home ?? null, overviewFailed, refreshing,
-    needs, steady, rosterState, ltv, month, payout, unreadNotifications,
+    needs, reachOuts, steady, rosterState, ltv, month, payout, unreadNotifications,
     draftsWaiting: queue.length, draftKinds, draftsState, draftsError: drafts.error, draftsRetrying: !!drafts.isFetching, now,
   };
   return {

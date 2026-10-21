@@ -24,9 +24,6 @@ export interface HomeRings {
 }
 
 export interface CoachHomeDay {
-  date: string;
-  week_start: string;
-  time_zone: string;
   wins: { count: number; items: HomeWin[] };
   /** null when the server sent no readable rings: the Home then draws none. */
   rings: HomeRings | null;
@@ -84,13 +81,7 @@ function parseRings(v: unknown): HomeRings | null {
 export function parseHomeDay(v: unknown): CoachHomeDay | null {
   if (!isObj(v) || !isObj(v.wins) || !count(v.wins.count)) return null;
   const items = Array.isArray(v.wins.items) ? v.wins.items.map(parseWin).filter((w): w is HomeWin => w !== null) : [];
-  return {
-    date: typeof v.date === 'string' ? v.date : '',
-    week_start: typeof v.week_start === 'string' ? v.week_start : '',
-    time_zone: typeof v.time_zone === 'string' ? v.time_zone : '',
-    wins: { count: v.wins.count, items },
-    rings: parseRings(v.rings),
-  };
+  return { wins: { count: v.wins.count, items }, rings: parseRings(v.rings) };
 }
 
 /** One read: the overview the Home always had, plus `home` when the server knows it. */

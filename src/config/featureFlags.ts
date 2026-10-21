@@ -125,10 +125,7 @@ export const featureFlags = {
   romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
   /** Team management stays hidden for launch, including in development. */
   teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),
-  /**
-   * UI-2 (V1_1_UI_SPEC, owner "render 2"): the coach Home on Overview, drawn only with coachTabsV2 on too (owner
-   * PK-2a: never without its Money tab). Off by default with no eas.json line (the OTA switch). env: EXPO_PUBLIC_FF_COACH_HOME_V11
-   */
+  /** The coach Home (spec m#688), only with coachTabsV2 (PK-2a); off, no eas.json line. env: EXPO_PUBLIC_FF_COACH_HOME_V11 */
   coachHomeV11: readFlag('EXPO_PUBLIC_FF_COACH_HOME_V11', false),
 
   /**

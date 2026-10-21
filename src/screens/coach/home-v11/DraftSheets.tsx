@@ -1,8 +1,9 @@
 /**
  * Ask-first Roman drafts from the coach Home (spec #688 6295886580): a win's congratulations and a reach-out to
- * a client who needs the coach. Nothing is asked of Roman until the coach says so, and nothing reaches the client
- * until the coach taps Send: POST /ai/gateway/invoke (`draft.coach_message`) files a pending draft (approval
- * required), PATCH /ai/gateway/drafts/:id approves it; "Not now" on a written draft rejects it, so none waits.
+ * an at-risk client. Nothing is asked of Roman until the coach says so, and nothing reaches the client until the
+ * coach taps Send: POST /ai/gateway/invoke (`draft.coach_message`) files a pending draft (approval required),
+ * PATCH /ai/gateway/drafts/:id approves it; "Not now" on a written draft rejects it, so none waits. The sheet
+ * cannot be closed while Roman writes or the draft sends. ListSheet is the wins list and the Reach-outs list.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -13,8 +14,8 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietLoading } from '../../../ui/states/QuietStates';
+import type { AtRiskEntry } from '../../../services/commandCenterApi';
 import { firstWord, type HomeWinDraft } from './homeDay';
-import type { NeedsRow } from './useCoachHomeV11';
 
 export interface DraftAsk {
   clientName: string;
@@ -43,20 +44,21 @@ export async function askRomanToDraft(request: HomeWinDraft): Promise<{ draftId:
   return { draftId, reply: a.reply.trim() };
 }
 
-/** A reach-out request for one client who needs the coach (Roman's request, never shown). */
-export function reachOutAsk(row: NeedsRow, name: string): DraftAsk {
+/** A reach-out request for one at-risk client, with the server's reason (Roman's request, never shown). */
+export function reachOutAsk(r: AtRiskEntry): DraftAsk {
   return {
-    clientName: name,
-    about: `A short check-in for ${firstWord(name)}. ${row.reason.text}.`,
+    clientName: r.display_name,
+    about: `A short check-in for ${firstWord(r.display_name)}. ${r.top_factor}.`,
     request: {
       capability: 'draft.coach_message',
-      subject_user_id: row.client.id,
-      message: `Write a short, warm check-in from the coach to this client. Why now: ${row.reason.text}. Ask one easy question. No emojis.`,
+      subject_user_id: r.user_id,
+      message: `Write a short, warm check-in from the coach to this client. Why now: ${r.top_factor}. Ask one easy question. No emojis.`,
     },
   };
 }
 
-export function RomanDraftSheet({ ask, onClose }: { ask: DraftAsk | null; onClose: () => void }) {
+/** `onSent`: the client has the message, so the Home re-reads its rings. */
+export function RomanDraftSheet({ ask, onClose, onSent }: { ask: DraftAsk | null; onClose: () => void; onSent: () => void }) {
   const theme = useTheme();
   const s = useMemo(() => makeStyles(theme), [theme]);
   const { bottom } = useScreenInsets();
@@ -79,12 +81,14 @@ export function RomanDraftSheet({ ask, onClose }: { ask: DraftAsk | null; onClos
     try {
       await coachAiExecutionApi.approveDraft(draftId);
       setStep({ kind: 'sent' });
+      onSent();
     } catch {
       setStep({ kind: 'failed', words: `Not sent to ${first}. Try again.`, draft: { draftId, reply } });
     }
   };
   // A written draft the coach turns down is rejected, so nothing waits to be sent.
   const close = () => {
+    if (step.kind === 'writing' || step.kind === 'sending') return;
     const pending = step.kind === 'ready' ? step.draftId : step.kind === 'failed' ? step.draft?.draftId : undefined;
     if (pending) void coachAiExecutionApi.rejectDraft(pending).catch(() => undefined);
     onClose();
@@ -106,7 +110,6 @@ export function RomanDraftSheet({ ask, onClose }: { ask: DraftAsk | null; onClos
             {step.kind === 'writing' ? <QuietLoading label="Roman is writing" /> : null}
             {draft ? <View style={s.draft}><Text style={s.body} testID="home-draft-text">{draft.reply}</Text></View> : null}
             {step.kind === 'failed' ? <Text style={s.error} accessibilityLiveRegion="polite">{step.words}</Text> : null}
-            {step.kind === 'sent' ? <Text style={s.body}>{first} has your message.</Text> : null}
           </ScrollView>
           <View style={s.actions}>
             {step.kind === 'ask' || (step.kind === 'failed' && !step.draft) ? (
@@ -131,39 +134,34 @@ export function RomanDraftSheet({ ask, onClose }: { ask: DraftAsk | null; onClos
   );
 }
 
-/** The Reach-outs ring's rows: one "Reach out to {name}?" per client who needs the coach, most urgent first. */
-export function ReachOutSheet({ rows, nameOf, visible, onPick, onSeeAll, onClose }: {
-  rows: NeedsRow[]; nameOf: (r: NeedsRow) => string; visible: boolean;
-  onPick: (r: NeedsRow) => void; onSeeAll: () => void; onClose: () => void;
-}) {
+export interface ListRow { id: string; title: string; line?: string; label: string; onPick: () => void }
+
+/** A bottom sheet of rows that each open one ask-first draft: the wins list and the Reach-outs list. */
+export function ListSheet({ title, rows, onClose }: { title: string; rows: ListRow[] | null; onClose: () => void }) {
   const theme = useTheme();
   const s = useMemo(() => makeStyles(theme), [theme]);
   const { bottom } = useScreenInsets();
-  if (!visible) return null;
+  if (!rows) return null;
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.scrim}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
-        <View style={[s.sheet, { paddingBottom: bottom + 16 }]} testID="home-reach-sheet">
+        <View style={[s.sheet, { paddingBottom: bottom + 16 }]} testID="home-list-sheet">
           <View style={s.grab} />
-          <Text style={s.title} accessibilityRole="header">Reach-outs</Text>
-          {rows.length === 0 ? <Text style={s.body}>Nobody needs a reach-out right now.</Text> : null}
+          <Text style={s.title} accessibilityRole="header">{title}</Text>
           <ScrollView bounces={false}>
-            {rows.map((r) => {
-              const name = nameOf(r);
-              return (
-                <Pressable key={r.client.id} style={s.row} onPress={() => onPick(r)} accessibilityRole="button" accessibilityLabel={`Reach out to ${name}?`} testID={`home-reach-${r.client.id}`}>
-                  <View style={s.rowText}>
-                    <Text style={s.rowTitle}>Reach out to {name}?</Text>
-                    <Text style={s.muted} numberOfLines={2}>{r.reason.text}</Text>
-                  </View>
-                  <Text style={s.chev}>›</Text>
-                </Pressable>
-              );
-            })}
+            {rows.map((r) => (
+              <Pressable key={r.id} style={s.row} onPress={r.onPick} accessibilityRole="button" accessibilityLabel={r.label} testID={`home-list-${r.id}`}>
+                <View style={s.rowText}>
+                  <Text style={s.rowTitle}>{r.title}</Text>
+                  {r.line ? <Text style={s.muted} numberOfLines={2}>{r.line}</Text> : null}
+                </View>
+                <Text style={s.chev}>›</Text>
+              </Pressable>
+            ))}
           </ScrollView>
-          <Pressable style={s.secondary} onPress={onSeeAll} accessibilityRole="button" accessibilityLabel="See everyone who needs you" testID="home-reach-all">
-            <Text style={s.secondaryText}>See everyone who needs you</Text>
+          <Pressable style={s.secondary} onPress={onClose} accessibilityRole="button" accessibilityLabel="Done" testID="home-list-close">
+            <Text style={s.secondaryText}>Done</Text>
           </Pressable>
         </View>
       </View>

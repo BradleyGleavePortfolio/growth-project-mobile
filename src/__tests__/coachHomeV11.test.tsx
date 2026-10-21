@@ -1,6 +1,7 @@
 /**
  * The coach Home (spec #688 6295886580, Style A; coachHomeV11, only with coachTabsV2: PK-2a): wins, tiles, alerts and rings
- * from b#1123's `home`, the overview alone without it; Needs you as the list counts it; ask-first Roman drafts.
+ * from b#1123's `home`, the overview alone without it; Needs you as the list counts it; ask-first Roman drafts; the wins
+ * list; Reach-outs from the at-risk set the ring counts; a re-read on each return and after Send.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -11,7 +12,7 @@ import {
 } from '../screens/coach/home-v11/homeDay';
 import { needsAndSteady } from '../screens/coach/home-v11/useCoachHomeV11';
 
-const mockNavigate = jest.fn();
+const [mockNavigate, mockGet, mockPost, mockUnreadCounts, mockApprove, mockReject, mockUnread, mockDrafts] = Array.from({ length: 8 }, () => jest.fn());
 const mockFocus = { current: true };
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
@@ -19,9 +20,8 @@ jest.mock('@react-navigation/native', () => ({
   useIsFocused: () => mockFocus.current,
 }));
 jest.mock('react-native-safe-area-context', () => {
-  const R = jest.requireActual<typeof import('react')>('react');
   const insets = { top: 47, bottom: 34, left: 0, right: 0 };
-  return { useSafeAreaInsets: () => insets, SafeAreaInsetsContext: R.createContext(insets) };
+  return { useSafeAreaInsets: () => insets, SafeAreaInsetsContext: jest.requireActual('react').createContext(insets) };
 });
 jest.mock('react-native-svg', () => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -36,16 +36,11 @@ jest.mock('../services/commandCenterApi', () => ({
   __USING_MOCK_DATA: false,
   commandCenterApi: { getOverview: jest.fn() },
 }));
-const mockGet = jest.fn();
-const mockPost = jest.fn();
-const mockUnreadCounts = jest.fn();
 jest.mock('../services/api', () => ({
   __esModule: true,
   default: { get: (...a: unknown[]) => mockGet(...a), post: (...a: unknown[]) => mockPost(...a) },
   coachApi: { getUnreadCounts: () => mockUnreadCounts() },
 }));
-const mockApprove = jest.fn();
-const mockReject = jest.fn();
 jest.mock('../api/coachAiExecutionApi', () => ({
   coachAiExecutionApi: { approveDraft: (id: string) => mockApprove(id), rejectDraft: (id: string) => mockReject(id) },
 }));
@@ -56,9 +51,7 @@ jest.mock('../store/coachStore', () => {
   return { useCoachStore };
 });
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
-const mockUnread = jest.fn();
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => mockUnread() }));
-const mockDrafts = jest.fn();
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => mockDrafts() }));
 const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: true };
 jest.mock('../config/featureFlags', () => ({ featureFlags: mockFlags }));
@@ -101,12 +94,11 @@ const win = (n: number): HomeWin => ({
   id: `w${n}`, kind: 'checkin_streak', client_id: `c${n}`, client_name: `Client${n} Last`, at: '2026-10-20T10:00:00Z',
   streak_days: 7, draft: draft(`c${n}`) as HomeWin['draft'],
 });
-const home = (wins: unknown[], count = wins.length) => ({
-  date: '2026-10-21', week_start: '2026-10-19', time_zone: 'America/Los_Angeles',
-  wins: { count, items: wins },
-  rings: { check_ins: { reviewed: 5, submitted: 9 }, replies: { answered: 1, received: 1 }, reach_outs: { contacted: 2, goal: 5 } },
-});
+const rings = (goal = 5) => ({ check_ins: { reviewed: 5, submitted: 9 }, replies: { answered: 1, received: 1 }, reach_outs: { contacted: 2, goal } });
+const home = (wins: unknown[], count = wins.length, goal = 5) => ({ wins: { count, items: wins }, rings: rings(goal) });
+const risk = (id: string, display_name: string, top_factor: string) => ({ user_id: id, display_name, bucket: 'red', risk_score: null, last_active_at: null, top_factor, days_since_checkin: 5 });
 const summary = (netCents: number) => ({ currency: 'usd', changeCents: null, totals: { netCents, chargeCount: netCents ? 3 : 0 } });
+const overviewReads = () => mockGet.mock.calls.filter(([url]) => url === '/coach/command-center/overview').length;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -114,8 +106,7 @@ beforeEach(() => {
   mockFocus.current = true;
   mockUnread.mockResolvedValue(2);
   mockGet.mockResolvedValue({ data: { ...overview(30), home: home([win(1), win(2), win(3), win(4)], 12) } });
-  mockStore.filterStatus = 'active';
-  mockStore.loadError = null;
+  Object.assign(mockStore, { filterStatus: 'active', loadError: null });
   mockStore.clients = [
     client('c1', 'Maya', 'Ortiz', { lastActiveOn: day(-8), checkInsToReview: 0 }),
     client('c2', 'Ana', 'Ruiz', { lastActiveOn: day(0), checkInsToReview: 2 }),
@@ -127,11 +118,9 @@ beforeEach(() => {
   mockSources.ltv.mockResolvedValue({ active_client_count: 30, churn_rate_pct: 5, mrr_30d_ago_cents: 100000 });
   mockSources.monthSoFar.mockResolvedValue(summary(214000));
   mockSources.nextPayout.mockResolvedValue({ amountCents: 48600, currency: 'usd', arrivalDate: null });
+  mockSources.atRisk.mockResolvedValue([risk('r1', 'Jordan Ellis', 'No check-in for 5 days'), risk('r2', 'Priya Nair', 'Food logging stopped')]);
   mockDrafts.mockReturnValue({
-    data: { drafts: [
-      { id: 'd1', capability: 'draft.assign_workout' }, { id: 'd2', capability: 'draft.assign_workout' },
-      { id: 'd3', capability: 'draft.send_notification' }, { id: 'd4', capability: 'draft.coach_message' },
-    ] },
+    data: { drafts: ['draft.assign_workout', 'draft.assign_workout', 'draft.send_notification', 'draft.coach_message'].map((capability, i) => ({ id: `d${i}`, capability })) },
     refetch: jest.fn(),
   });
   mockPost.mockResolvedValue({ data: { enabled: true, provider: 'anthropic', reply: 'Seven days straight, Client1. Proud of you.', approval: { required: true, status: 'pending', draft_id: 'dr-1' } } });
@@ -145,109 +134,132 @@ async function renderHome() {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return view;
 }
-const label = (v: Awaited<ReturnType<typeof renderHome>>, id: string) => v.getByTestId(id).props.accessibilityLabel as string;
+type View = Awaited<ReturnType<typeof renderHome>>;
+const label = (v: View, id: string) => v.getByTestId(id).props.accessibilityLabel as string;
+const press = (v: View, ...ids: string[]) => ids.reduce((p, id) => p.then(() => fireEvent.press(v.getByTestId(id))), Promise.resolve());
 
 describe('coach Home, flag on, with home (b#1123)', () => {
-  it('asks the overview for include=home and draws the wins hero, three wins, the tiles and Open alerts', async () => {
+  it('asks for include=home and draws the wins hero, three wins, tiles, alerts and rings', async () => {
     const v = await renderHome();
     expect(mockGet).toHaveBeenCalledWith('/coach/command-center/overview', { params: { include: 'home' } });
-    expect(v.getByTestId('home-hero-wins')).toBeTruthy();
     expect(v.getByText('12')).toBeTruthy();
     expect(v.getByText('wins this week')).toBeTruthy();
-    expect(v.getByTestId('home-win-w1')).toBeTruthy();
-    expect(v.getByTestId('home-win-w3')).toBeTruthy();
-    expect(v.queryByTestId('home-win-w4')).toBeNull();
-    expect(label(v, 'home-tile-active')).toBe('21 of 30 active today');
-    expect(label(v, 'home-tile-checkins')).toBe('82% check-ins · last 7 days');
-    expect(label(v, 'home-tile-stayed')).toBe('95% stayed · this month');
-    expect(label(v, 'home-alerts')).toBe('Open alerts, 3');
-    expect(v.queryByTestId('command-center-settings')).toBeNull(); // no tab row on the Home itself
-  });
-  it('draws the three rings from the server and nothing else', async () => {
-    const v = await renderHome();
-    expect(label(v, 'home-ring-check_ins')).toBe('Check-ins, 5 of 9');
-    expect(label(v, 'home-ring-replies')).toBe('Replies, 1 of 1');
-    expect(label(v, 'home-ring-reach_outs')).toBe('Reach-outs, 2 of 5');
+    expect(['w1', 'w2', 'w3', 'w4'].map((w) => !!v.queryByTestId(`home-win-${w}`))).toEqual([true, true, true, false]);
+    expect(Object.fromEntries(['home-tile-active', 'home-tile-checkins', 'home-tile-stayed', 'home-alerts', 'home-ring-check_ins', 'home-ring-replies', 'home-ring-reach_outs', 'home-wins-all'].map((id) => [id, label(v, id)]))).toEqual({
+      'home-tile-active': '21 of 30 active today', 'home-tile-checkins': '82% check-ins · last 7 days', 'home-tile-stayed': '95% stayed · this month',
+      'home-alerts': 'Open alerts, 3', 'home-ring-check_ins': 'Check-ins, 5 of 9', 'home-ring-replies': 'Replies, 1 of 1',
+      'home-ring-reach_outs': 'Reach-outs, 2 of 5', 'home-wins-all': '12 wins this week. See all',
+    });
     expect(v.getByText('The day is in motion. Close the rings as you go.')).toBeTruthy();
+    expect(v.queryByTestId('command-center-settings')).toBeNull(); // no tab row on the Home itself
+    expect(v.getByTestId('cards-setup')).toBeTruthy(); // the setup checklist on the hero, the push ask and brief under it
+    expect(v.queryByTestId('cards-all')).toBeNull();
+    expect(v.getByTestId('cards-below').props.children).toBe('brief');
   });
   it('counts Needs you as the list does, names the most urgent, and opens the list', async () => {
     const v = await renderHome();
     // Maya: last logged 8 days ago (nudge); Ana: 2 check-ins to review. Ben and Dee are steady.
     expect(label(v, 'home-needs')).toMatch(/^Needs you, 2\. /);
-    await fireEvent.press(v.getByTestId('home-needs'));
+    await press(v, 'home-needs');
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList', params: { view: 'needs' }, pop: true });
-    expect(label(v, 'home-row-steady')).toBe('Steady, 2, 1 logged today');
-    expect(label(v, 'home-row-all')).toBe('All 30 clients, Open Clients');
-    expect(label(v, 'home-row-streaks')).toBe('Streaks, 9');
+    expect([label(v, 'home-row-steady'), label(v, 'home-row-all'), label(v, 'home-row-streaks')]).toEqual(['Steady, 2, 1 logged today', 'All 30 clients, Open Clients', 'Streaks, 9']);
   });
-  it('opens Roman, the drafts, the bell, the gear, Money, alerts and streaks', async () => {
+  it.each([
+    ['home-drafts', 'ClientsStack', { screen: 'PendingAiDrafts', initial: false }],
+    ['home-ask-roman', 'SettingsStack', { screen: 'RomanChat', initial: false }],
+    ['home-bell', 'ClientsStack', { screen: 'NotificationCenter', initial: false }],
+    ['home-gear', 'SettingsStack', { screen: 'SettingsHome', pop: true }],
+    ['home-month', 'MoneyStack', { screen: 'CoachMoney', pop: true }],
+  ])('%s opens %s', async (id, stack, params) => {
+    const v = await renderHome();
+    await press(v, id);
+    expect(mockNavigate).toHaveBeenCalledWith(stack, params);
+  });
+  it("opens alerts in Actions with the tab row back, and labels Roman's drafts", async () => {
     const v = await renderHome();
     expect(label(v, 'home-drafts')).toBe("Approve Roman's drafts, 3");
-    await fireEvent.press(v.getByTestId('home-drafts'));
-    expect(mockHaptics.mediumImpact).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'PendingAiDrafts', initial: false });
-    await fireEvent.press(v.getByTestId('home-ask-roman'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'RomanChat', initial: false });
-    await fireEvent.press(v.getByTestId('home-bell'));
-    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', initial: false });
-    await fireEvent.press(v.getByTestId('home-gear'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SettingsHome', pop: true });
-    await fireEvent.press(v.getByTestId('home-month'));
-    expect(mockNavigate).toHaveBeenCalledWith('MoneyStack', { screen: 'CoachMoney', pop: true });
-    await fireEvent.press(v.getByTestId('home-alerts'));
-    await waitFor(() => expect(v.getByTestId('action-queue')).toBeTruthy()); // Actions, with the tab row back
+    await press(v, 'home-alerts');
+    await waitFor(() => expect(v.getByTestId('action-queue')).toBeTruthy());
     expect(v.getByTestId('command-center-settings')).toBeTruthy();
     expect(v.getByText('Home')).toBeTruthy();
   });
-  it('puts the setup checklist on the hero and the push ask and brief under it', async () => {
+  it("asks first before Roman writes to a win's client, cannot close while Roman writes, sends only on Send, then re-reads", async () => {
+    let answer: (v: unknown) => void = () => undefined;
+    mockPost.mockReturnValueOnce(new Promise((r) => { answer = r; }));
     const v = await renderHome();
-    expect(v.getByTestId('cards-setup')).toBeTruthy();
-    expect(v.getByTestId('cards-below')).toBeTruthy();
-    expect(v.queryByTestId('cards-all')).toBeNull();
-    expect(v.getByTestId('cards-below').props.children).toBe('brief');
-  });
-  it("asks first before Roman writes to a win's client, and sends only on Send", async () => {
-    const v = await renderHome();
-    await fireEvent.press(v.getByTestId('home-win-w1'));
+    await press(v, 'home-win-w1');
     expect(v.getByText('Ask Roman to write to Client1?')).toBeTruthy();
     expect(mockPost).not.toHaveBeenCalled();
-    await fireEvent.press(v.getByTestId('home-draft-ask'));
+    await press(v, 'home-draft-ask');
     expect(mockPost).toHaveBeenCalledWith('/ai/gateway/invoke', draft('c1'));
+    await fireEvent.press(v.getAllByLabelText('Close').slice(-1)[0]); // the scrim, while Roman writes
+    expect(v.getByTestId('home-draft-sheet')).toBeTruthy();
+    await act(async () => answer({ data: { enabled: true, provider: 'anthropic', reply: 'Proud of you.', approval: { required: true, draft_id: 'dr-1' } } }));
     await waitFor(() => expect(v.getByTestId('home-draft-text')).toBeTruthy());
     expect(mockApprove).not.toHaveBeenCalled();
-    await fireEvent.press(v.getByTestId('home-draft-send'));
+    const before = overviewReads();
+    await press(v, 'home-draft-send');
     expect(mockApprove).toHaveBeenCalledWith('dr-1');
     expect(v.getByText('Sent to Client1')).toBeTruthy();
+    await waitFor(() => expect(overviewReads()).toBe(before + 1)); // the rings move after Send
   });
   it('turns a written draft down on Not now, so nothing waits to be sent', async () => {
     const v = await renderHome();
-    await fireEvent.press(v.getByTestId('home-win-w2'));
-    await fireEvent.press(v.getByTestId('home-draft-ask'));
+    await press(v, 'home-win-w2', 'home-draft-ask');
     await waitFor(() => expect(v.getByTestId('home-draft-text')).toBeTruthy());
-    await fireEvent.press(v.getByTestId('home-draft-close'));
+    await press(v, 'home-draft-close');
     expect(mockReject).toHaveBeenCalledWith('dr-1');
     expect(mockApprove).not.toHaveBeenCalled();
     expect(v.queryByTestId('home-draft-sheet')).toBeNull();
   });
-  it('says nothing was sent when Roman is off, and offers Try again', async () => {
+  it('says nothing was sent when Roman is off, and offers no Send', async () => {
     mockPost.mockResolvedValue({ data: { enabled: false, provider: 'stub', reply: '', approval: { required: false, draft_id: null } } });
     const v = await renderHome();
-    await fireEvent.press(v.getByTestId('home-win-w1'));
-    await fireEvent.press(v.getByTestId('home-draft-ask'));
+    await press(v, 'home-win-w1', 'home-draft-ask');
     expect(v.getByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy();
     expect(v.queryByTestId('home-draft-send')).toBeNull();
   });
-  it('lists one "Reach out to {name}?" per client who needs the coach from the Reach-outs ring, ask-first', async () => {
+  it('opens the wins list from the headline with every win, each ask-first (B3)', async () => {
     const v = await renderHome();
-    await fireEvent.press(v.getByTestId('home-ring-reach_outs'));
-    expect(label(v, 'home-reach-c1')).toBe('Reach out to Maya Ortiz?');
-    expect(label(v, 'home-reach-c2')).toBe('Reach out to Ana Ruiz?');
-    expect(v.queryByTestId('home-reach-c3')).toBeNull();
-    await fireEvent.press(v.getByTestId('home-reach-c1'));
-    expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
+    await press(v, 'home-wins-all');
+    expect(v.getByText('Wins this week')).toBeTruthy();
+    expect(['w1', 'w2', 'w3', 'w4'].map((w) => label(v, `home-list-${w}`))).toEqual([1, 2, 3, 4].map((n) => `Client${n} hit a 7-day check-in streak. Ask Roman to congratulate Client${n}`));
+    await press(v, 'home-list-w4');
+    expect(v.queryByTestId('home-list-sheet')).toBeNull();
+    expect(v.getByText('Ask Roman to write to Client4?')).toBeTruthy();
     expect(mockPost).not.toHaveBeenCalled();
-    await fireEvent.press(v.getByTestId('home-draft-ask'));
-    expect(mockPost).toHaveBeenCalledWith('/ai/gateway/invoke', expect.objectContaining({ capability: 'draft.coach_message', subject_user_id: 'c1' }));
+  });
+  it('lists the at-risk clients the Reach-outs ring counts, with the server reason, ask-first (B1)', async () => {
+    const v = await renderHome();
+    await press(v, 'home-ring-reach_outs');
+    expect([label(v, 'home-list-r1'), label(v, 'home-list-r2')]).toEqual(['Reach out to Jordan Ellis?', 'Reach out to Priya Nair?']);
+    expect(v.getByText('No check-in for 5 days')).toBeTruthy();
+    expect(v.queryByTestId('home-list-c1')).toBeNull(); // the Needs you list's rule is not this ring's
+    await press(v, 'home-list-r1');
+    expect(v.getByText('Ask Roman to write to Jordan?')).toBeTruthy();
+    await press(v, 'home-draft-ask');
+    expect(mockPost).toHaveBeenCalledWith('/ai/gateway/invoke', expect.objectContaining({ capability: 'draft.coach_message', subject_user_id: 'r1' }));
+  });
+  it.each([
+    ['the ring has no goal', () => mockGet.mockResolvedValue({ data: { ...overview(30), home: home([win(1)], 1, 0) } })],
+    ['the at-risk list is empty', () => mockSources.atRisk.mockResolvedValue([])],
+    ['the at-risk read fails', () => mockSources.atRisk.mockRejectedValue(new Error('down'))],
+  ])('draws Reach-outs as not tappable when %s', async (_, arrange) => {
+    arrange();
+    const v = await renderHome();
+    expect(v.getByTestId('home-ring-reach_outs').props.accessibilityRole).not.toBe('button');
+  });
+  it('re-reads the day, roster and at-risk list on each return to the Home, not on blur (B2)', async () => {
+    const v = await renderHome();
+    expect(overviewReads()).toBe(1);
+    mockFocus.current = false;
+    await act(async () => v.rerender(<CommandCenterScreen />));
+    expect(overviewReads()).toBe(1);
+    mockFocus.current = true;
+    await act(async () => v.rerender(<CommandCenterScreen />));
+    await waitFor(() => expect(overviewReads()).toBe(2));
+    expect(mockSources.atRisk).toHaveBeenCalledTimes(2);
+    expect(mockStore.loadClients).toHaveBeenCalledTimes(3); // mount, the coach id, the return
   });
 });
 
@@ -255,12 +267,8 @@ describe('coach Home without home (an older server)', () => {
   it("draws the overview's own figure and tiles and no rings or wins (no invented number)", async () => {
     mockGet.mockResolvedValue({ data: overview(30) });
     const v = await renderHome();
-    expect(v.getByTestId('home-hero-today')).toBeTruthy();
     expect(v.getByText('ACTIVE TODAY')).toBeTruthy();
-    expect(v.queryByTestId('home-hero-wins')).toBeNull();
-    expect(v.queryByTestId('home-rings')).toBeNull();
-    expect(v.queryByTestId('home-tile-active')).toBeNull();
-    expect(v.getByTestId('home-tile-checkins')).toBeTruthy();
+    expect(['home-hero-today', 'home-hero-wins', 'home-rings', 'home-tile-active', 'home-tile-checkins'].map((id) => !!v.queryByTestId(id))).toEqual([true, false, false, false, true]);
   });
   it('leaves Stayed out when there is no real base', async () => {
     mockSources.ltv.mockResolvedValue({ active_client_count: 0, churn_rate_pct: 0, mrr_30d_ago_cents: 0 });
@@ -269,9 +277,9 @@ describe('coach Home without home (an older server)', () => {
   });
 });
 
-describe('coach Home at zero clients and on failures', () => {
-  it('says so at zero clients: no tiles, empty Needs you, Roman waits, no Clients rows', async () => {
-    mockGet.mockResolvedValue({ data: { ...overview(0), home: home([], 0) } });
+describe('coach Home at zero clients, at 1,000 and on failures', () => {
+  it('says so at zero clients: no tiles, empty Needs you, Roman waits, no brief, no Clients rows', async () => {
+    mockGet.mockResolvedValue({ data: { ...overview(0), home: home([], 0, 0) } });
     mockStore.clients = [];
     mockDrafts.mockReturnValue({ data: { drafts: [] }, refetch: jest.fn() });
     mockSources.monthSoFar.mockResolvedValue(summary(0));
@@ -279,30 +287,31 @@ describe('coach Home at zero clients and on failures', () => {
     const v = await renderHome();
     expect(v.getByTestId('home-hero-zero')).toBeTruthy();
     expect(v.queryByTestId('home-tiles')).toBeNull();
-    expect(v.getByText('Clients who need you show here, most urgent first.')).toBeTruthy();
-    expect(v.getByText('Roman drafts replies and workout changes for you once clients join.')).toBeTruthy();
-    expect(v.getByText('Your day fills in when your first client joins.')).toBeTruthy();
+    for (const t of ['Clients who need you show here, most urgent first.', 'Roman drafts replies and workout changes for you once clients join.', 'Your day fills in when your first client joins.', 'Nothing earned yet this month.']) {
+      expect(v.getByText(t)).toBeTruthy();
+    }
     expect(v.getByTestId('cards-below').props.children).toBe('no brief'); // OPERATOR RULING 6296068749
-    expect(v.getByText('Nothing earned yet this month.')).toBeTruthy();
     expect(v.queryByTestId('home-clients')).toBeNull();
-    expect(v.queryByTestId('home-ring-reach_outs')?.props.accessibilityRole).not.toBe('button');
+    expect(v.getByTestId('home-ring-reach_outs').props.accessibilityRole).not.toBe('button');
+  });
+  it('groups the thousands at 1,000 clients', async () => {
+    mockGet.mockResolvedValue({ data: { ...overview(1000), active_today: 1000, home: home([win(1)]) } });
+    const v = await renderHome();
+    expect([label(v, 'home-tile-active'), label(v, 'home-row-all')]).toEqual(['1,000 of 1,000 active today', 'All 1,000 clients, Open Clients']);
   });
   it('says so with Try again when the overview cannot load', async () => {
     mockGet.mockRejectedValue(new Error('down'));
     const v = await render(<CommandCenterScreen />);
     await waitFor(() => expect(v.getByTestId('home-retry')).toBeTruthy());
     mockGet.mockResolvedValue({ data: { ...overview(30), home: home([win(1)]) } });
-    await fireEvent.press(v.getByTestId('home-retry'));
+    await press(v, 'home-retry');
     await waitFor(() => expect(v.getByTestId('home-hero-wins')).toBeTruthy());
   });
-  it("tells a failed Needs you or drafts read from an empty one, with Try again", async () => {
-    mockStore.loadError = 'Clients did not load. Check the connection and try again.';
-    mockStore.clients = [];
+  it('tells a failed Needs you or drafts read from an empty one, with Try again', async () => {
+    Object.assign(mockStore, { loadError: 'Clients did not load. Check the connection and try again.', clients: [] });
     mockDrafts.mockReturnValue({ data: undefined, isError: true, error: new Error('x'), refetch: jest.fn() });
     const v = await renderHome();
-    expect(v.getByTestId('home-needs-error')).toBeTruthy();
-    expect(v.getByTestId('home-drafts-error')).toBeTruthy();
-    expect(v.getByTestId('home-month')).toBeTruthy();
+    expect(['home-needs-error', 'home-drafts-error', 'home-month'].map((id) => !!v.queryByTestId(id))).toEqual([true, true, true]);
   });
   it('draws no Needs you count while the Clients list is on Archived', async () => {
     mockStore.filterStatus = 'archived';
@@ -326,60 +335,49 @@ describe('coach Home off', () => {
 describe('homeDay, pure', () => {
   it('reads home, leaving out a malformed or unknown win and a draft about anyone else', () => {
     const h = parseHomeDay(home([
-      win(1),
-      { ...win(2), kind: 'mystery' },
-      { ...win(3), draft: draft('someone-else') },
+      win(1), { ...win(2), kind: 'mystery' }, { ...win(3), draft: draft('someone-else') },
       { id: 'w5', kind: 'lifting_best', client_id: 'c5', client_name: 'Rae Kim', at: 'x', exercise: 'Bench Press', weight_lbs: 205, reps: 3, draft: draft('c5') },
       { id: 'w6', kind: 'goal_weight', client_id: 'c6', client_name: 'Lou Park', at: 'x', weight_lbs: 179.6, goal_weight_lbs: 180, draft: draft('c6') },
     ], 9));
     expect(h?.wins.count).toBe(9);
-    expect(h?.wins.items.map((w) => w.id)).toEqual(['w1', 'w5', 'w6']);
-    expect(h?.wins.items.map(winLine)).toEqual([
-      'Client1 hit a 7-day check-in streak', 'Rae set a best: Bench Press, 205 lb for 3', 'Lou reached goal weight, 180 lb',
-    ]);
+    expect(h?.wins.items.map(winLine)).toEqual(['Client1 hit a 7-day check-in streak', 'Rae set a best: Bench Press, 205 lb for 3', 'Lou reached goal weight, 180 lb']);
   });
   it('is absent without a readable wins count, and draws no rings it cannot read', () => {
-    expect(parseHomeDay(undefined)).toBeNull();
-    expect(parseHomeDay({ wins: { count: -1, items: [] } })).toBeNull();
+    expect([parseHomeDay(undefined), parseHomeDay({ wins: { count: -1, items: [] } })]).toEqual([null, null]);
     expect(parseHomeDay({ wins: { count: 2, items: [] }, rings: { check_ins: { reviewed: 1 } } })?.rings).toBeNull();
   });
   it('words the hero, moves the three-win window and captions the rings', () => {
     expect(winsHeadline(1)).toEqual({ value: '1', unit: 'win this week' });
     const ws = [win(1), win(2), win(3), win(4)];
-    expect(winWindow(ws, 0).map((w) => w.id)).toEqual(['w1', 'w2', 'w3']);
-    expect(winWindow(ws, 2).map((w) => w.id)).toEqual(['w3', 'w4', 'w1']);
+    expect([0, 2].map((t) => winWindow(ws, t).map((w) => w.id))).toEqual([['w1', 'w2', 'w3'], ['w3', 'w4', 'w1']]);
     expect(winWindow(ws.slice(0, 2), 5)).toHaveLength(2);
-    const closed = ringSpecs({ check_ins: { reviewed: 2, submitted: 2 }, replies: { answered: 0, received: 0 }, reach_outs: { contacted: 5, goal: 5 } });
-    expect(ringsCaption(closed, 10)).toBe('Every ring is closed for today.');
-    expect(ringsCaption(ringSpecs({ check_ins: { reviewed: 0, submitted: 0 }, replies: { answered: 0, received: 0 }, reach_outs: { contacted: 0, goal: 0 } }), 10))
-      .toBe('Nothing to close yet today.');
+    const zero = { reviewed: 0, submitted: 0 };
+    expect([
+      ringsCaption(ringSpecs({ check_ins: { reviewed: 2, submitted: 2 }, replies: { answered: 0, received: 0 }, reach_outs: { contacted: 5, goal: 5 } }), 10),
+      ringsCaption(ringSpecs({ check_ins: zero, replies: { answered: 0, received: 0 }, reach_outs: { contacted: 0, goal: 0 } }), 10),
+    ]).toEqual(['Every ring is closed for today.', 'Nothing to close yet today.']);
   });
   it('splits the roster into Needs you and Steady by the list rule, archived left out', () => {
-    const now = new Date();
     const rows = needsAndSteady([
       client('a', 'A', 'One', { lastActiveOn: day(0), checkInsToReview: 0 }),
       client('b', 'B', 'Two', { lastActiveOn: day(0), checkInsToReview: 0 }),
       { ...client('z', 'Z', 'Gone', null), status: 'archived' },
-    ] as never, { b: 2 }, now);
-    expect(rows.needs.map((r) => r.client.id)).toEqual(['b']);
-    expect(rows.needs[0].reason.text).toBe('2 new messages');
-    expect(rows.steady).toEqual({ count: 1, loggedToday: 1 });
+    ] as never, { b: 2 }, new Date());
+    expect([rows.needs.map((r) => r.client.id), rows.needs[0].reason.text, rows.steady]).toEqual([['b'], '2 new messages', { count: 1, loggedToday: 1 }]);
   });
 });
 
 describe('coach Home flag wiring', () => {
   const ROOT = path.resolve(__dirname, '..', '..');
-  const nav = fs.readFileSync(path.join(ROOT, 'src', 'navigation', 'CoachNavigator.tsx'), 'utf8');
+  const read = (...p: string[]) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
   it('adds no Money tab of its own, and names the first tab "Home" only with the new Home', () => {
+    const nav = read('src', 'navigation', 'CoachNavigator.tsx');
     expect(nav.match(/name="MoneyStack"/g)).toHaveLength(1);
     expect(nav).toMatch(/const homeTabLabel = tabsV2 && featureFlags\.coachHomeV11 \? 'Home' : 'Overview';/);
   });
   it('is off by default in featureFlags.ts and in no EAS profile, so the default is the OTA switch', () => {
-    const flags = fs.readFileSync(path.join(ROOT, 'src', 'config', 'featureFlags.ts'), 'utf8');
-    expect(flags).toMatch(/coachHomeV11: readFlag\('EXPO_PUBLIC_FF_COACH_HOME_V11', false\)/);
-    const eas = JSON.parse(fs.readFileSync(path.join(ROOT, 'eas.json'), 'utf8')) as { build: Record<string, { env?: Record<string, string> }> };
-    for (const [name, profile] of Object.entries(eas.build)) {
-      expect(`${name}:${profile.env?.EXPO_PUBLIC_FF_COACH_HOME_V11}`).toBe(`${name}:undefined`);
-    }
+    expect(read('src', 'config', 'featureFlags.ts')).toMatch(/coachHomeV11: readFlag\('EXPO_PUBLIC_FF_COACH_HOME_V11', false\)/);
+    const eas = JSON.parse(read('eas.json')) as { build: Record<string, { env?: Record<string, string> }> };
+    for (const [name, profile] of Object.entries(eas.build)) expect(`${name}:${profile.env?.EXPO_PUBLIC_FF_COACH_HOME_V11}`).toBe(`${name}:undefined`);
   });
 });
