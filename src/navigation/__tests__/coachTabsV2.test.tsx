@@ -10,7 +10,7 @@
 import React from 'react';
 import { Alert, Platform, Text, TextInput } from 'react-native';
 import {
-  NavigationContainer, createNavigationContainerRef, useNavigation, type NavigationProp, type ParamListBase,
+  NavigationContainer, createNavigationContainerRef, useNavigation, useRoute, type NavigationProp, type ParamListBase,
 } from '@react-navigation/native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import * as fs from 'fs';
@@ -94,18 +94,20 @@ for (const [name, go] of PROBES) {
 const FileProbe = probe('../screens/coach/ClientDetailScreen', (n) => n.navigate('ClientMessages', CHAT));
 const CardProbe = probe('safety card Message', chatTap);
 jest.doMock('../../screens/coach/ClientDetailScreen', () => ({ __esModule: true, default: () => <><FileProbe /><CardProbe /></> }));
-// The chat opens its contact page and keeps unsent text through the hook ClientMessagesScreen.tsx uses (Sol B1).
+// The chat opens its contact page and keeps unsent text through the hook ClientMessagesScreen.tsx uses (Sol B1,
+// COACH-CHAT-KEEP); "Sent" clears the box the way each sent branch of its handleSend does (setInputText('')).
 jest.doMock('../../screens/coach/ClientMessagesScreen', () => ({
   __esModule: true,
   default: function ChatProbe() {
     const navigation = useNavigation<NavigationProp<ParamListBase>>();
-    const [text, setText] = React.useState('');
-    require('../coachInbox').useKeepUnsentChat(text.trim() !== '');
+    const { clientId, initialDraft } = useRoute().params as { clientId: string; initialDraft?: string };
+    const [text, setText] = require('../coachInbox').useUnsentReply(clientId, initialDraft);
     const contact = () => navigation.navigate('ContactView', { contactId: CHAT.clientId, displayName: CHAT.clientName });
     return (
       <>
         <Text onPress={contact}>../screens/coach/ClientMessagesScreen</Text>
         <TextInput accessibilityLabel="Message text" value={text} onChangeText={setText} />
+        <Text onPress={() => setText('')}>Sent</Text>
       </>
     );
   },
@@ -146,6 +148,7 @@ beforeEach(() => {
   inboxTap = chatTap;
   mockUnsent = false;
   mockLookup = false;
+  require('../../utils/authEvents').authEvents.emit('logout'); // no kept reply carries from one test to the next
 });
 afterAll(() => Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS }));
 
@@ -552,23 +555,113 @@ it.each(ENTRIES.slice(1).flatMap(([probe, home]) => DRAFTS.map(([name, left, con
     expect([stackOf('Messages'), messagesKeys()[0], kept.includes(messagesKeys()[1]), ref.getCurrentRoute()?.params])
       .toEqual([['MessagesInbox', 'ClientMessages'], kept[0], false, CHAT]);
     expect(view.getByLabelText('Message text', { includeHiddenElements: true }).props.value).toBe('');
+    await act(async () => ref.goBack()); // Discard removed the text for good: the left chat reopens empty
+    await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: left, initial: false }));
+    expect(view.getByLabelText('Message text').props.value).toBe('');
     ask.mockRestore();
   },
 );
 
-it('flag on: Back from a chat with unsent text goes straight back, as today', async () => {
+// COACH-CHAT-KEEP (LO-W2M C1 on m#840): a reply typed and not sent stays with its own client's chat when the chat
+// closes without asking (Back, a message push or tgp://messages opening the inbox), and is back in the box when that
+// chat opens again. Never in another client's chat; sending, Discard or a sign-in or sign-out removes it.
+const box = (view: ReturnType<typeof render>) => view.getByLabelText('Message text').props.value;
+const openChat = (params: object) => act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params, initial: false }));
+const pushTap = () => {
+  attachPushNavigator(ref);
+  setPushSession({ kind: 'app', userId: 'coach-1', role: 'coach' });
+};
+
+it('flag on: Back from a chat with unsent text goes straight back; the text stays with that chat, never another', async () => {
   const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const view = await mount();
-  await act(async () => ref.navigate('Messages', { screen: 'ClientMessages', params: CHAT, initial: false }));
+  await openChat(CHAT);
   await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
   await act(async () => ref.goBack());
   expect([ask.mock.calls.length, focusedTab(), stackOf('Messages')]).toEqual([0, 'Messages', ['MessagesInbox']]);
+  await openChat(OTHER);
+  expect(box(view)).toBe('');
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'Ben, your plan is in');
+  await act(async () => ref.goBack());
+  await fireEvent.press(view.getByText('../screens/coach/MessagesScreen')); // the inbox row
+  expect([ref.getCurrentRoute()?.params, box(view)]).toEqual([CHAT, 'See you at six']);
+  await act(async () => ref.goBack());
+  await openChat(OTHER);
+  expect(box(view)).toBe('Ben, your plan is in');
   ask.mockRestore();
 });
 
-it('the real chat arms the same guard with its own unsent text', () => {
-  const chat = SOURCES.find(([file]) => file === 'ClientMessagesScreen.tsx')?.[1];
-  expect(chat).toMatch(/^ {2}useKeepUnsentChat\(inputText\.trim\(\) !== ''\);$/m);
+it.each([
+  ['a message push', () => routePushTap('Messages')],
+  ['a tgp://messages link', () => routePushTap('NotificationCenter', undefined, undefined, 'tgp://messages')],
+])('flag on: %s opens the inbox over a chat with unsent text; that chat opens again with it', async (_name, tap) => {
+  const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const view = await mount();
+  await openChat(CHAT);
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+  await act(async () => ref.navigate('CommandCenter'));
+  await act(async () => { pushTap(); tap(); });
+  expect([ask.mock.calls.length, focusedTab(), stackOf('Messages')]).toEqual([0, 'Messages', ['MessagesInbox']]);
+  await fireEvent.press(view.getByText('../screens/coach/MessagesScreen'));
+  expect(box(view)).toBe('See you at six');
+  ask.mockRestore();
+});
+
+it('flag on: a sent reply leaves the box empty, and the chat opens empty after it', async () => {
+  const view = await mount();
+  await openChat(CHAT);
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+  await fireEvent.press(view.getByText('Sent'));
+  expect(box(view)).toBe('');
+  await act(async () => ref.goBack());
+  await openChat(CHAT);
+  expect(box(view)).toBe('');
+});
+
+it("flag on: switching clients from outside Messages opens the new client's chat with only its own text", async () => {
+  mockCommandCenter.__USING_MOCK_DATA = false; // what ships: the coach lands on Overview
+  const view = await mount();
+  await openChat(OTHER);
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'Ben, your plan is in');
+  await act(async () => ref.goBack());
+  await act(async () => ref.navigate('CommandCenter'));
+  await fireEvent.press(view.getByText('../screens/coach/command-center/CommandCenterScreen')); // Sam's reply row
+  expect([stackOf('Messages'), ref.getCurrentRoute()?.params, box(view)]).toEqual([['MessagesInbox', 'ClientMessages'], CHAT, '']);
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+  await act(async () => ref.goBack());
+  await openChat(OTHER);
+  expect(box(view)).toBe('Ben, your plan is in');
+  await act(async () => ref.goBack());
+  await openChat(CHAT);
+  expect(box(view)).toBe('See you at six');
+});
+
+it.each(['logout', 'login'])('a %s removes every kept reply', async (event) => {
+  const view = await mount();
+  await openChat(CHAT);
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+  await act(async () => ref.goBack());
+  await act(async () => require('../../utils/authEvents').authEvents.emit(event));
+  await openChat(CHAT);
+  expect(box(view)).toBe('');
+});
+
+it('flag off: Back from a chat in Clients drops the text, as today', async () => {
+  mockFlags.coachTabsV2 = false;
+  const view = await mount();
+  await act(async () => ref.navigate('ClientsStack', { screen: 'ClientMessages', params: CHAT, initial: false }));
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'See you at six');
+  await act(async () => ref.goBack());
+  await act(async () => ref.navigate('ClientsStack', { screen: 'ClientMessages', params: CHAT, initial: false }));
+  expect(box(view)).toBe('');
+});
+
+it('the real chat keeps its reply box through the same hook, and every sent branch clears it', () => {
+  const chat = SOURCES.find(([file]) => file === 'ClientMessagesScreen.tsx')?.[1] ?? '';
+  expect(chat).toMatch(/^ {2}const \[inputText, setInputText\] = useUnsentReply\(clientId, initialDraft\);$/m);
+  expect(chat).not.toMatch(/useState<string>\(initialDraft/);
+  const send = chat.slice(chat.indexOf('const handleSend'), chat.indexOf('\n  };\n', chat.indexOf('const handleSend')));
+  expect(send.match(/setInputText\(''\)/g)).toHaveLength(3); // v2 sent, v2 taken (2xx contract), legacy sent
 });
 
 // UI-4 lookup (#CARD-MESSAGE-ALL, #CHATS-MESSAGES, #COACH-CHAT-BACK): the real lookup and peek sheet in Clients. Needs you

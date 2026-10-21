@@ -21,7 +21,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
 
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
-import { useKeepUnsentChat } from '../../navigation/coachInbox';
+import { useUnsentReply } from '../../navigation/coachInbox';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { layout, radius } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
@@ -76,7 +76,8 @@ export default function ClientMessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
-  const [inputText, setInputText] = useState<string>(initialDraft ?? '');
+  // A reply typed and not sent stays with this client's chat (COACH-CHAT-KEEP); unsent text asks before a reset (Sol B1).
+  const [inputText, setInputText] = useUnsentReply(clientId, initialDraft);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
@@ -90,8 +91,6 @@ export default function ClientMessagesScreen() {
   // v2 idempotent send: a failed send keeps its device key for the same text,
   // so tapping Send again replays it and can never post a duplicate.
   const unsentRef = useRef<{ text: string; key: string } | null>(null);
-  // A chat opened from outside Messages closes this one first; unsent text asks before it goes (Sol B1).
-  useKeepUnsentChat(inputText.trim() !== '');
 
   const blockStore = useBlockedUsersStore();
   const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
