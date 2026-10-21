@@ -34,6 +34,7 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: j
 jest.mock('@expo-google-fonts/cormorant-garamond', () => ({ CormorantGaramond_400Regular_Italic: 1, useFonts: () => [true] }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me', coach_id: 'c1' }) }));
 jest.mock('../../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
+jest.mock('../useMotionAnswer', () => ({ useMotionAnswer: () => true })); // the moments' own Reduce Motion read (CourseMomentsMotion.test covers it)
 jest.mock('../../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({ online: mockOnline }), isEffectivelyOnline: (n: { online: boolean }) => n.online }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), selection: jest.fn() } }));
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn(), put: jest.fn() }, lessonsApi: { complete: jest.fn() } }));

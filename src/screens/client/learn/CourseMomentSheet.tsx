@@ -1,5 +1,6 @@
 /** LEARN-M7, boards c06, c08, c09 (flag learnCourses; MOCK-LEARN2 option A, plan PR 7): the course's three moments.
  * c06 `LessonCompleteMoment`: the lesson screen's footer once a lesson saves (the screen mounts it; it owns the 300 ms fade, the caller owns the haptic).
+ * Each moment waits for the Reduce Motion answer (`useMotionAnswer`) before it moves: with it on, the footer shows still and the sheets open with none.
  * c08 `WeekCompleteSheet`: the deep peak page when the last lesson of a week is done. c09 `LockedWeekSheet`: when a week opens, why, what is in it
  * (titles only) and Message {coach}. `useWeekMoment` picks the week to celebrate: one that turns done while the course is open, once, on the screen in
  * front (Home or the week); the week that finishes the course opens the record (c10) instead. */
@@ -12,11 +13,11 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography, type SemanticTokens } from '../../../theme/tokens';
 import { PrimaryButton, QuietTextButton } from '../../../ui';
 import { HapticService } from '../../../ui/haptics/haptics.service';
-import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { LessonMark } from './LearnParts';
 import { learnCopy } from './learnData';
 import { courseCopy, dayLabel, doneIn, type Course, type CourseLesson, type CourseWeek } from './courseData';
+import { useMotionAnswer } from './useMotionAnswer';
 
 /** A week with no lessons has nothing left to do, so it counts as done (a finished course never reads "7 of 8 weeks"). */
 export const weekDone = (w: CourseWeek) => doneIn(w) === w.lessons.length;
@@ -25,11 +26,19 @@ export const weekDone = (w: CourseWeek) => doneIn(w) === w.lessons.length;
 export function LessonCompleteMoment({ lesson, done, total, next, onNext }: { lesson: CourseLesson; done: number; total: number; next?: CourseLesson | null; onNext?: (next: CourseLesson) => void }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
-  const reduced = useReducedMotion();
-  const fade = useRef(new Animated.Value(reduced ? 1 : 0)).current;
-  useEffect(() => { if (!reduced) Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }).start(); }, [fade, reduced]);
+  const reduced = useMotionAnswer();
+  const fade = useRef(new Animated.Value(0)).current;
+  // No fade starts before the OS answers. With Reduce Motion on (or turned on mid-fade) the fade is stopped and unbound, so the footer is still and
+  // at full opacity; it is left at 1, so turning Reduce Motion off later does not replay it.
+  useEffect(() => {
+    if (reduced === null) return undefined;
+    if (reduced) { fade.setValue(1); return undefined; }
+    const fadeIn = Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true });
+    fadeIn.start();
+    return () => fadeIn.stop();
+  }, [fade, reduced]);
   return (
-    <Animated.View style={[s.moment, { opacity: fade }]} testID="lesson-moment">
+    <Animated.View style={[s.moment, !reduced && { opacity: fade }]} testID="lesson-moment">
       <View style={s.momentHead} accessible accessibilityLiveRegion="polite">
         <LessonMark state="done" />
         <View style={s.fill}>
@@ -72,8 +81,9 @@ export function WeekCompleteSheet({ course, week, onClose }: { course: Course; w
   const insets = useSafeAreaInsets();
   const after = course.weeks[week.n];
   const weeksDone = course.weeks.filter(weekDone).length;
+  const reduced = useMotionAnswer(); // the page opens once the OS answers: with Reduce Motion on, without the fade
   return (
-    <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={reduced !== null} animationType={reduced ? 'none' : 'fade'} onRequestClose={onClose} statusBarTranslucent>
       <View style={[s.peak, { paddingTop: insets.top + 48, paddingBottom: Math.max(insets.bottom, layout.footerBottomMin) }]} testID="week-moment">
         <ScrollView contentContainerStyle={s.peakBody} bounces={false}>
           <View style={s.ring}><Ionicons name="checkmark" size={56} color={sc.data.leaf} /></View>
@@ -99,10 +109,11 @@ export function LockedWeekSheet({ course, week, onClose }: { course: Course; wee
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const hasCoach = !!useCurrentUser()?.coach_id;
+  const reduced = useMotionAnswer(); // the sheet opens once the OS answers: with Reduce Motion on, without the slide
   // The sheet closes first: the course stays mounted under the chat, so an open sheet would come back over it.
   const message = () => { onClose(); (navigation.getParent() ?? navigation).navigate('Home', { screen: 'Messages', initial: false }); };
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={reduced !== null} transparent animationType={reduced ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: sc.overlay }]} onPress={onClose} accessible={false} importantForAccessibility="no" testID="locked-week-scrim" />
       <View style={s.dock} pointerEvents="box-none">
         <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, layout.footerBottomMin) }]} accessibilityViewIsModal testID="locked-week">
