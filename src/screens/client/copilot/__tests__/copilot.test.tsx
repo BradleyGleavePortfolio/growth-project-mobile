@@ -19,6 +19,7 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: m
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
+jest.mock('../../../../api/romanApi', () => ({ ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError: class extends Error {}, RomanWireError: class extends Error {}, openOrResumeSession: jest.fn(), sendMessage: jest.fn() }));
 jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off') }));
 const mockText = (t: string) => <Text>{t}</Text>;
 let mockNeedsCoach = false;
@@ -59,7 +60,7 @@ test('the phone writes every line from the structured change (no server titles)'
   const edited = row({ status: 'approved', change: { ...move, to_at: '2026-10-24T17:00:00Z' }, decided_at: '2026-10-21T18:00:00Z' });
   expect(statusLine(edited, 'Alex', NOW)).toEqual({ line: 'Approved by your coach', meta: 'Wed 21 Oct', tone: 'approved' });
   expect(describeChange(edited.change).summary).toBe('Move Lower body B to Sat 24 Oct');
-  expect(statusLine(row({ status: 'rejected', decided_at: '2026-10-09T10:00:00Z' }), 'Alex', NOW)).toEqual({ line: 'Alex kept your plan as it is', meta: 'Fri 9 Oct', tone: 'still' });
+  expect(statusLine(row({ status: 'rejected', decided_at: '2026-10-09T10:00:00Z' }), 'Alex', NOW)).toEqual({ line: 'Your coach kept your plan as it is', meta: 'Fri 9 Oct', tone: 'still' });
   expect(statusLine(row({ status: 'rejected' }), 'your coach', NOW).line).toBe('Your coach kept your plan as it is');
   expect(statusLine(row({ status: 'expired' }), 'Alex', NOW)).toMatchObject({ line: 'This suggestion has expired.', tone: 'still' });
 });
@@ -107,21 +108,21 @@ test('Your path lists sent suggestions with where each stands and the coach note
   expect(get).toHaveBeenCalledWith('/client/copilot');
   expect(s.getByText('Awaiting coach approval')).toBeTruthy();
   expect(s.getByText('Calorie target 2,600 to 2,450 kcal')).toBeTruthy();
-  expect(s.getByText('Alex kept your plan as it is')).toBeTruthy();
+  expect(s.getByText('Your coach kept your plan as it is')).toBeTruthy();
   expect(s.getByText('\u201CKeep the run, just take it easy.\u201D')).toBeTruthy();
   await act(async () => fireEvent.press(s.getByTestId('copilot-back')));
   expect(mockBack).toHaveBeenCalled();
 });
 
-test('a server without Copilot (404) shows the calm empty state; a failed read is not emptiness; flag off draws the old gate', async () => {
+test('a server without Copilot (404) still lets the client ask Roman, with no week block; a failed read says so; flag off draws the old gate', async () => {
   get.mockRejectedValueOnce(fail(404));
   const a = await render(wrap(<ClientPathCopilotScreen />));
-  expect(await a.findByText('No suggestions are available.')).toBeTruthy();
+  expect(await a.findByTestId('copilot-ask')).toBeTruthy();
+  expect(a.queryByTestId('copilot-week')).toBeNull();
   await a.unmount();
   get.mockRejectedValueOnce(fail(500));
   const b = await render(wrap(<ClientPathCopilotScreen />));
   expect(await b.findByTestId('copilot-error')).toBeTruthy();
-  expect(b.queryByText('No suggestions yet')).toBeNull();
   await b.unmount();
   mockFlags.clientPathCopilot = false;
   expect((await render(wrap(<ClientPathCopilotScreen />))).getByText('Path suggestions are not available on this account.')).toBeTruthy();
