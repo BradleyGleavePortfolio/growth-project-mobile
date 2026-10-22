@@ -154,33 +154,63 @@ describe('M4a: iOS privacy manifest', () => {
   });
 
   // Collected type -> purposes, and the code that collects it (file must contain the anchor).
+  // `also`: more [file, anchor] pairs that must exist, one for each further collector or purpose.
+  // ProductPersonalization: Roman's answers are built from the client's saved data (backend
+  // roman-client-context.service.ts: first name, age, sex, goals, injuries, diet, weight, logs,
+  // workouts, check-in notes, wearables, consultation and safety answers, coach messages, posts).
+  const ROMAN_TURN = ['src/api/romanApi.ts', 'const url = `${env.API_URL}/roman/sessions/${encodeURIComponent(sessionId)}/messages`'];
   const COLLECTED = [
-    ['Health', ['AppFunctionality'], 'src/services/health/healthkit/healthKitClient.ts', 'AppleHealthKit.getHeartRateSamples'],
-    ['Fitness', ['AppFunctionality'], 'src/services/health/healthkit/healthKitClient.ts', 'AppleHealthKit.getDailyStepCountSamples'],
+    // Recipes hide the dishes that hold the client's saved allergens (backend loadViewerAllergens).
+    ['Health', ['AppFunctionality', 'ProductPersonalization'], 'src/services/health/healthkit/healthKitClient.ts', 'AppleHealthKit.getHeartRateSamples', { also: [ROMAN_TURN, ['src/screens/client/RecipesScreen.tsx', 'profileApi.update({ diet_restrictions: restrictions })']] }],
+    ['Fitness', ['AppFunctionality', 'ProductPersonalization'], 'src/services/health/healthkit/healthKitClient.ts', 'AppleHealthKit.getDailyStepCountSamples', { also: [ROMAN_TURN] }],
     ['EmailAddress', ['AppFunctionality'], 'src/services/api.ts', "data: { email: string; password: string; name: string"],
-    ['Name', ['AppFunctionality'], 'src/services/api.ts', "api.post<RegisterResponse>('/auth/register', body)"],
+    ['Name', ['AppFunctionality', 'ProductPersonalization'], 'src/services/api.ts', "api.post<RegisterResponse>('/auth/register', body)", { also: [ROMAN_TURN] }],
     ['PhoneNumber', ['AppFunctionality'], 'src/screens/auth/CreateAccountScreen.tsx', 'phone: phone || undefined'],
     ['UserID', ['AppFunctionality', 'Analytics'], 'src/services/sentry.ts', 'Sentry.setUser({ id: user.id })'],
-    ['EmailsOrTextMessages', ['AppFunctionality'], 'src/api/messagesApi.ts', "api.post('/messages', {"],
+    // The Expo push token (APNs device token + Expo install ID) is kept on the account until sign-out
+    // (PATCH /users/me/push-token). PostHog also keeps a device_id that survives sign-out and sends it
+    // with the account ID to its flags API, hence Analytics too.
+    ['DeviceID', ['AppFunctionality', 'Analytics'], 'src/services/pushNotifications.ts', 'Notifications.getExpoPushTokenAsync()'],
+    ['EmailsOrTextMessages', ['AppFunctionality', 'ProductPersonalization'], 'src/api/messagesApi.ts', "api.post('/messages', {", { also: [ROMAN_TURN] }],
     ['PhotosorVideos', ['AppFunctionality'], 'src/api/coachMediaApi.ts', 'uploadAsync(url, file.uri'],
-    ['OtherUserContent', ['AppFunctionality'], 'src/api/communityWinsApi.ts', "api.post<unknown>('/community/wins'"],
+    ['OtherUserContent', ['AppFunctionality', 'ProductPersonalization'], 'src/api/communityWinsApi.ts', "api.post<unknown>('/community/wins'", { also: [ROMAN_TURN] }],
+    // Voice notes (community and coach DMs) are stored for playback; declared whether or not the voice flag is on.
+    ['AudioData', ['AppFunctionality'], 'src/api/communityVoiceApi.ts', '/voice-notes/upload-url'],
     ['CustomerSupport', ['AppFunctionality'], 'src/services/support/crisp.service.ts', 'export function openSupportChat'],
     ['CrashData', ['AppFunctionality'], 'src/services/sentry.ts', 'enableNative: true'],
     ['PerformanceData', ['AppFunctionality'], 'src/services/sentry.ts', 'tracesSampleRate:'],
-    ['ProductInteraction', ['Analytics'], 'src/lib/analytics.ts', 'getClient()?.capture(event'],
+    // Sentry release-health sessions, device context and handled-error events (the Sentry Cocoa
+    // 8.58.0 pod declares this type too); linked through Sentry.setUser({ id }).
+    ['OtherDiagnosticData', ['AppFunctionality'], 'src/services/sentry.ts', 'enableAutoSessionTracking: true', { also: [['src/services/otaUpdateTags.ts', "sentry.captureMessage('OTA emergency launch"]] }],
+    // PostHog events (Analytics); lesson completions kept on the account, and the Stripe sheet's own
+    // interaction data for fraud checks (StripeCore / StripePaymentSheet 25.11 pods), App Functionality.
+    ['ProductInteraction', ['AppFunctionality', 'Analytics'], 'src/lib/analytics.ts', 'getClient()?.capture(event', { also: [['src/services/api.ts', 'api.post(`/lessons/${id}/complete`)'], ['src/hooks/usePackagePurchase.ts', 'sdk.initPaymentSheet({']] }],
+    // Food search words are kept as the server's 24 h cache key (food:search:v1:<words>) with no user ID,
+    // so collected but not linked. Exercise search (5 min cache) is the same class.
+    ['SearchHistory', ['AppFunctionality'], 'src/services/api.ts', '/foods/search?q=', { linked: false }],
+    // PostHog works out an approximate location from the IP of each event; no location permission.
+    ['CoarseLocation', ['Analytics'], 'src/lib/analytics.ts', '_client = new PostHog(key, {'],
     // Pregnancy or childbirth answer in the consultation (on in production, eas.json).
-    ['SensitiveInfo', ['AppFunctionality'], 'src/lib/consultation/definitions.ts', 'Are you currently pregnant, or have you given birth in the last 6 months?'],
+    ['SensitiveInfo', ['AppFunctionality', 'ProductPersonalization'], 'src/lib/consultation/definitions.ts', 'Are you currently pregnant, or have you given birth in the last 6 months?', { also: [ROMAN_TURN] }],
     ['PurchaseHistory', ['AppFunctionality'], 'src/lib/packagePayment.ts', 'export const PAYMENT_INTENT_PATH = "/v1/checkout/payment-intent"'],
+    // The card is typed into the in-app Stripe sheet and TGP keeps its brand, last four and expiry
+    // (coach payout accounts: bank name and last four), so the payment-service exemption does not apply.
+    ['PaymentInfo', ['AppFunctionality'], 'src/entitlements/dunning/updateCard.ts', 'setupIntentClientSecret: setup.setup_intent_client_secret'],
+    // A coach's payout amounts and status (their income) are kept and shown in Money.
+    ['OtherFinancialInfo', ['AppFunctionality'], 'src/api/coachMoneyApi.ts', 'api.get("/coach/connect/payouts"'],
+    // Date of birth (age gate, kept on the profile) and biological sex (calorie targets); Apple has
+    // no type for either. Roman uses both (age_years, sex).
+    ['OtherDataTypes', ['AppFunctionality', 'ProductPersonalization'], 'src/screens/consultation/AgeCheckScreen.tsx', 'profileApi.update({ date_of_birth: dob })', { also: [['src/screens/onboarding/OnboardingResults.tsx', 'sex: quizData.sex || null'], ROMAN_TURN] }],
   ];
 
-  test('collected data types match the code that collects them, linked to the account, never tracking', () => {
+  test('collected data types match the code that collects them, linked as declared, never tracking', () => {
     const byType = Object.fromEntries(
       manifest.NSPrivacyCollectedDataTypes.map((t) => [t.NSPrivacyCollectedDataType.replace('NSPrivacyCollectedDataType', ''), t]),
     );
     expect(Object.keys(byType).sort()).toEqual(COLLECTED.map(([type]) => type).sort());
-    for (const [type, purposes, file, anchor] of COLLECTED) {
-      expect(fs.readFileSync(path.join(ROOT, file), 'utf8')).toContain(anchor);
-      expect(byType[type].NSPrivacyCollectedDataTypeLinked).toBe(true);
+    for (const [type, purposes, file, anchor, { linked = true, also = [] } = {}] of COLLECTED) {
+      for (const [f, a] of [[file, anchor], ...also]) expect(fs.readFileSync(path.join(ROOT, f), 'utf8')).toContain(a);
+      expect(byType[type].NSPrivacyCollectedDataTypeLinked).toBe(linked);
       expect(byType[type].NSPrivacyCollectedDataTypeTracking).toBe(false);
       expect(byType[type].NSPrivacyCollectedDataTypePurposes).toEqual(
         purposes.map((p) => `NSPrivacyCollectedDataTypePurpose${p}`),

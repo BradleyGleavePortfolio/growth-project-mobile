@@ -100,6 +100,34 @@ export const CONSULT_CONSENT_COACH_FREE_CRISIS_COPY_VERSION = 'consult-consent-v
 export const CONSULT_CONSENT_COACH_FREE_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v15-coach-free' as const;
 
 /**
+ * CONSENT-M (owner #162-6, WEAR-AI-05, backend b#1117): the Health-notes copies, each the copy above with
+ * one sentence after the purpose sentence. P0 asks GET ?variant=health_notes and shows (and records) these
+ * only when the server answers with them. Box 2: client-ai-v12 / v13 (this build's v6 / v8 paragraph with the
+ * sentence), client-ai-v10 / v11 (the server's v7 / v9 memory paragraph with it). P0: v17 / v18 (v11 / v13),
+ * v15 / v16 (v12 / v14), v16 / v17-coach-free (v13 / v15-coach-free). No coach-free twin of v12 / v14-coach-free
+ * exists, so a client with no coach and memory off keeps those (and client-ai-v6 / v8).
+ */
+export const AI_CONSENT_HEALTH_VERSION = 'client-ai-v12' as const;
+export const AI_CONSENT_HEALTH_CRISIS_VERSION = 'client-ai-v13' as const;
+export const AI_CONSENT_HEALTH_MEMORY_VERSION = 'client-ai-v10' as const;
+export const AI_CONSENT_HEALTH_CRISIS_MEMORY_VERSION = 'client-ai-v11' as const;
+export const CONSULT_CONSENT_HEALTH_COPY_VERSION = 'consult-consent-v17' as const;
+export const CONSULT_CONSENT_HEALTH_CRISIS_COPY_VERSION = 'consult-consent-v18' as const;
+export const CONSULT_CONSENT_HEALTH_MEMORY_COPY_VERSION = 'consult-consent-v15' as const;
+export const CONSULT_CONSENT_HEALTH_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v16' as const;
+export const CONSULT_CONSENT_COACH_FREE_HEALTH_MEMORY_COPY_VERSION = 'consult-consent-v16-coach-free' as const;
+export const CONSULT_CONSENT_COACH_FREE_HEALTH_CRISIS_MEMORY_COPY_VERSION = 'consult-consent-v17-coach-free' as const;
+/** The six Health-notes P0 screens: a stored agreement of one counts in this build. */
+export const CONSULT_CONSENT_HEALTH_COPY_VERSIONS = [
+  CONSULT_CONSENT_HEALTH_COPY_VERSION,
+  CONSULT_CONSENT_HEALTH_CRISIS_COPY_VERSION,
+  CONSULT_CONSENT_HEALTH_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_HEALTH_CRISIS_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_HEALTH_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_COACH_FREE_HEALTH_CRISIS_MEMORY_COPY_VERSION,
+] as const;
+
+/**
  * W-BRAND-AGREEMENT (owner op 1: people who already agreed keep their record): the eight screens before
  * TGP Fitness. A stored agreement of one still counts in this build (nobody is asked again, as
  * #CRISIS-OLD-CONSENT op 1), and the server keeps accepting them.

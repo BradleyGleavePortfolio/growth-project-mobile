@@ -14,7 +14,7 @@ import * as Clipboard from 'expo-clipboard';
 import AiRefusalNotice from '../AiRefusalNotice';
 import { AI_CONSENT_SHEET_COPY, type AiConsentSheetApi } from '../AiConsentSheet';
 import { openSupportFrom, type SupportNav } from '../useOpenSupport';
-import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
+import type { AiConsentAsk, AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
 import {
   AI_CONSENT_CHECKBOX_LABEL,
   AI_CONSENT_COPY_SHA256,
@@ -65,7 +65,9 @@ function fakeApi(
 ) {
   const answers = Array.isArray(getStatus) ? [...getStatus] : [getStatus];
   const api = {
-    getStatus: jest.fn(async () => (answers.length > 1 ? answers.shift()! : answers[0])),
+    // CONSENT-SETTINGS: the sheet reads ?variant=health_notes first; this server answers it with the next answer
+    // (no Health-notes copies), so the sheet then reads today's ask, which takes that answer.
+    getStatus: jest.fn(async (ask?: AiConsentAsk) => (ask?.healthNotes || answers.length <= 1 ? answers[0] : answers.shift()!)),
     grantRoman: jest.fn(async () => grant),
   };
   return api as typeof api & AiConsentSheetApi;
@@ -179,7 +181,8 @@ describe('AiRefusalNotice — client consent_required', () => {
     });
     const { onRetry } = await openAndAllow(api);
     await waitFor(() => expect(onRetry).toHaveBeenCalledTimes(1));
-    expect(api.getStatus).toHaveBeenCalledTimes(2);
+    // The load (Health-notes GET, then today's) and one ledger re-read.
+    expect(api.getStatus).toHaveBeenCalledTimes(3);
   });
 
   it('no reply at all, ledger unreadable: "could not confirm", never "still off", with a reported reference', async () => {
@@ -209,7 +212,8 @@ describe('AiRefusalNotice — client consent_required', () => {
     const { r, onRetry } = await openAndAllow(api);
     await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.saveFailed)).toBeTruthy());
     expect(onRetry).not.toHaveBeenCalled();
-    expect(api.getStatus).toHaveBeenCalledTimes(2);
+    // The load (Health-notes GET, then today's) and one ledger re-read.
+    expect(api.getStatus).toHaveBeenCalledTimes(3);
   });
 
   it('a success whose status is not a live grant (withdrawn meanwhile) is checked, then reported off', async () => {
@@ -237,7 +241,8 @@ describe('AiRefusalNotice — client consent_required', () => {
     const { r, onRetry } = await openAndAllow(api);
     await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.saveFailed)).toBeTruthy());
     expect(r.getByTestId('n-consent-sheet-reference')).toBeTruthy();
-    expect(api.getStatus).toHaveBeenCalledTimes(1);
+    // The load only (Health-notes GET, then today's); no ledger re-read.
+    expect(api.getStatus).toHaveBeenCalledTimes(2);
     expect(onRetry).not.toHaveBeenCalled();
   });
 
