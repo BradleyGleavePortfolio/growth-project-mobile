@@ -177,11 +177,14 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
     todayCheckInQ.refetch();
   };
 
-  const checkInSaved = !!todayCheckInQ.data;
+  // A confirmed save for today stands on the POST reply alone, so a day re-read that fails or is still on its way
+  // cannot hide the saved state or the milestone (S-842-1).
+  const savedReply = saveCheckIn.isSuccess && saveCheckIn.variables?.date === today ? saveCheckIn.data : undefined;
+  const checkInSaved = !!todayCheckInQ.data || savedReply != null;
   // ROMAN-EXTRAS-M (#161-2 op 1): the server's check-in streak, from the save reply or today's row. On the day it
   // reaches 3, 7 or 30, Roman's line takes the place of "Check-in saved" (coached clients only).
   const milestone = romanStreakOn && checkInSaved
-    ? streakMilestone(saveCheckIn.data) ?? streakMilestone(todayCheckInQ.data)
+    ? streakMilestone(savedReply) ?? streakMilestone(todayCheckInQ.data)
     : null;
 
   const handleToggle = (habit: HabitView) => {

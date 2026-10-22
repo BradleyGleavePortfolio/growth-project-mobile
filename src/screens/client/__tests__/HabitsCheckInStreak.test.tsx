@@ -117,3 +117,21 @@ it('stays hidden until the server streak is live', async () => {
   expect(s.queryByTestId('checkin-streak')).toBeNull();
   expect(success).not.toHaveBeenCalled();
 });
+
+// S-842-1: the confirmed save reply alone carries the saved state and the milestone; the day re-read may fail or hang.
+it.each([
+  ['fails', () => mockGetCheckIns.mockRejectedValue(new Error('offline'))],
+  ['is still on its way', () => mockGetCheckIns.mockReturnValue(new Promise(() => undefined))],
+] as const)('coached, day 7: Roman\u2019s line shows from the save reply when the day re-read %s', async (_label, reread) => {
+  const success = jest.spyOn(HapticService, 'success').mockResolvedValue(undefined);
+  const s = await render(<QueryClientProvider client={client}><HabitsScreen initialTab="checkin" /></QueryClientProvider>);
+  await waitFor(() => expect(s.getByText('Save check-in')).toBeTruthy());
+  mockSaveCheckIn.mockResolvedValue({ data: row(7, 7) });
+  reread();
+  await fireEvent.press(s.getByText('Save check-in'));
+  await waitFor(() => expect(mockGetCheckIns.mock.calls.length).toBeGreaterThan(1));
+  await waitFor(() => expect(s.getByTestId('checkin-streak')).toBeTruthy());
+  expect(s.getByText(romanStreak({ tier: 7, firstName: 'Ava', mode: 'celebration' }))).toBeTruthy();
+  expect(s.getByText('Update check-in')).toBeTruthy();
+  expect(success).toHaveBeenCalledTimes(1);
+});
