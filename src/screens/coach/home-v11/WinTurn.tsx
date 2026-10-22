@@ -4,7 +4,7 @@
  * brings a new win or drops the one on screen, and the first win of the week over the empty line. The old fades out
  * while the new one fades in, together, so no frame is empty and nothing pops. Opacity only, on the native driver.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 import { forestPop, motion, typography } from '../../../theme/tokens';
 import type { HomeWin } from './homeDay';
@@ -36,26 +36,28 @@ export function useWinTurn(n: number) {
   return { turn, still: still === true };
 }
 
-interface Props {
-  /** The wins drawn in place, the ones not shown at no opacity, so the row is as tall as the tallest of them and nothing
-   * under the hero moves on a turn: the newest three while they turn, only the shown one when nothing turns. */
-  wins: HomeWin[];
-  /** null: no win to show, so the `empty` line instead. */
-  shown: HomeWin | null;
-  /** false while the Home is not in front: a change then lands at once, and a fade under way ends. */
-  live: boolean;
-  line: (w: HomeWin, testID?: string) => React.ReactNode;
-  empty: React.ReactNode;
-}
-
-/** `was` is what fades out, kept whole (a win, or null for the empty line), so it still draws when a re-read drops it. */
-type Turn = { now: HomeWin | null; was?: { w: HomeWin | null }; fade: Animated.Value };
+/** `was` is what fades out, kept whole (a win, or null for the empty line with the words it had), so it still draws
+ * when a re-read drops it. */
+type Turn = { now: HomeWin | null; was?: { w: HomeWin | null; e?: React.ReactNode }; fade: Animated.Value };
 type Role = 'now' | 'was' | null;
+export type WinFade = { t: Turn; shown: HomeWin | null; empty: React.ReactNode };
 
-export function WinTurn({ wins, shown, live, line, empty }: Props) {
+/**
+ * The fade's state, held by the screen rather than by the line, so it lives on when the hero above the line is drawn
+ * anew (on the web the hero's element changes from a heading to a button when the first win lands).
+ * `shown` null: no win to show, so the `empty` line instead. `live` false while the Home is not in front: a change then
+ * lands at once, and a fade under way ends.
+ */
+export function useWinFade(shown: HomeWin | null, live: boolean, empty: React.ReactNode): WinFade {
   const [t, setT] = useState<Turn>(() => ({ now: shown, fade: new Animated.Value(1) }));
+  const seen = useRef<React.ReactNode>(empty); // the empty line as last drawn: a leaving one keeps its words
+  let cur = t;
   // A change starts a fresh fade at 0 in this same render, so its first frame is the old line, never the new one at full.
-  if (t.now?.id !== shown?.id) setT({ now: shown, was: live ? { w: t.now } : undefined, fade: new Animated.Value(live ? 0 : 1) });
+  if (t.now?.id !== shown?.id) {
+    cur = { now: shown, was: live ? { w: t.now, e: t.now ? undefined : seen.current } : undefined, fade: new Animated.Value(live ? 0 : 1) };
+    setT(cur);
+  }
+  if (!shown) seen.current = empty;
   useEffect(() => {
     if (!t.was) return undefined;
     if (!live) { t.fade.setValue(1); setT((x) => ({ ...x, was: undefined })); return undefined; }
@@ -63,6 +65,18 @@ export function WinTurn({ wins, shown, live, line, empty }: Props) {
     run.start(({ finished }) => { if (finished) setT((x) => (x.fade === t.fade ? { ...x, was: undefined } : x)); });
     return () => run.stop();
   }, [t, live]);
+  return { t: cur, shown, empty };
+}
+
+interface Props {
+  /** The wins drawn in place, the ones not shown at no opacity, so the row is as tall as the tallest of them and nothing
+   * under the hero moves on a turn: the newest three while they turn, only the shown one when nothing turns. */
+  wins: HomeWin[];
+  fade: WinFade;
+  line: (w: HomeWin, testID?: string) => React.ReactNode;
+}
+
+export function WinTurn({ wins, fade: { t, shown, empty }, line }: Props) {
   const was = t.was;
   if (!shown && !was) return <>{empty}</>; // m#688's empty line, as it drew it
   const out = t.fade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
@@ -83,7 +97,7 @@ export function WinTurn({ wins, shown, live, line, empty }: Props) {
             <Animated.View style={[s.dot, { opacity: dot }]} />
             <Animated.View style={[s.text, { opacity: op }]}>{line(w, r ? `home-win-${w.id}` : undefined)}</Animated.View>
           </View>
-        ) : <Animated.View style={{ opacity: op }}>{empty}</Animated.View>}
+        ) : <Animated.View style={{ opacity: op }}>{r === 'was' ? was?.e : empty}</Animated.View>}
       </View>
     );
   };

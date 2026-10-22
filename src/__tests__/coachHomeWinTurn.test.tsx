@@ -6,9 +6,9 @@
  * reaches the hero.
  */
 import React from 'react';
-import { AccessibilityInfo, Animated, Pressable, StyleSheet, Text } from 'react-native';
+import { AccessibilityInfo, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { WIN_FADE_MS, WIN_TURN_MS, WinTurn, useWinTurn } from '../screens/coach/home-v11/WinTurn';
+import { WIN_FADE_MS, WIN_TURN_MS, WinTurn, useWinFade, useWinTurn } from '../screens/coach/home-v11/WinTurn';
 import type { HomeWin } from '../screens/coach/home-v11/homeDay';
 
 const w = (id: string): HomeWin => ({ id, kind: 'streak', client: { id: `c-${id}`, name: id }, value: 3, at: '2026-10-22T10:00:00Z' } as unknown as HomeWin);
@@ -17,6 +17,11 @@ const onPress = jest.fn();
 const line = (x: HomeWin, id?: string) => <Text testID={id}>{x.id}</Text>;
 const empty = <Text testID="home-win-none">none</Text>;
 
+/** The line on its own, with its fade's state held above it as the screen holds it. */
+function Line({ wins, shown, live = true, words = empty }: { wins: HomeWin[]; shown: HomeWin | null; live?: boolean; words?: React.ReactNode }) {
+  return <WinTurn wins={wins} fade={useWinFade(shown, live, words)} line={line} />;
+}
+
 /** The screen's wiring (CoachHomeV11.tsx), on its own. */
 function Hero({ wins, live = true }: { wins: HomeWin[]; live?: boolean }) {
   const { turn, still } = useWinTurn(live ? wins.length : 0);
@@ -24,7 +29,7 @@ function Hero({ wins, live = true }: { wins: HomeWin[]; live?: boolean }) {
   const shown = newest.length > 0 ? newest[turn % newest.length] : null;
   return (
     <Pressable onPress={onPress} testID="hero">
-      <WinTurn wins={still && shown ? [shown] : newest} shown={shown} live={live} line={line} empty={empty} />
+      <WinTurn wins={still && shown ? [shown] : newest} fade={useWinFade(shown, live, empty)} line={line} />
     </Pressable>
   );
 }
@@ -126,8 +131,8 @@ describe('the win turn cross-fades (#167-1)', () => {
   it('a refresh that pushes the settled third win out never leaves the line empty (LS B1)', async () => {
     const oldWins = [w('w1'), w('w2'), w('w3')];
     const nextWins = [w('w0'), oldWins[0], oldWins[1]];
-    const r = await render(<WinTurn wins={oldWins} shown={oldWins[2]} live line={line} empty={empty} />);
-    await act(async () => { await r.rerender(<WinTurn wins={nextWins} shown={nextWins[2]} live line={line} empty={empty} />); });
+    const r = await render(<Line wins={oldWins} shown={oldWins[2]} />);
+    await act(async () => { await r.rerender(<Line wins={nextWins} shown={nextWins[2]} />); });
     const drawn = r.getAllByText(/^w\d$/, { includeHiddenElements: true }).map((n) => `${String(n.props.children)}:${String(opacity(r, n))}`);
     expect(drawn.filter((d) => !d.endsWith(':0'))).toEqual(['w3:1']); // the leaving win, at full on the first frame
     expect(opacity(r, 'w2')).toBe(0);
@@ -149,6 +154,24 @@ describe('the win turn cross-fades (#167-1)', () => {
     await endFade();
     expect(r.queryByTestId('home-win-w1', { includeHiddenElements: true })).toBeNull();
     expect(r.getByTestId('home-win-none')).toBeTruthy();
+  });
+
+  it('the leaving empty line keeps its words, and the fade lives on when the hero is drawn anew (the web build)', async () => {
+    const before = <Text testID="home-win-none">before</Text>;
+    const r = await render(<Line wins={[]} shown={null} words={before} />);
+    await act(async () => { await r.rerender(<Line wins={[w('w1')]} shown={w('w1')} words={<Text testID="home-win-none">after</Text>} />); });
+    expect(r.getByText('before', { includeHiddenElements: true })).toBeTruthy();
+    expect(r.queryByText('after', { includeHiddenElements: true })).toBeNull();
+    function Anew({ wins }: { wins: HomeWin[] }) {
+      const fade = useWinFade(wins[0] ?? null, true, empty);
+      const turn = <WinTurn wins={wins} fade={fade} line={line} />;
+      return wins.length ? <Pressable key="button">{turn}</Pressable> : <View key="heading">{turn}</View>;
+    }
+    const a = await render(<Anew wins={[]} />);
+    await act(async () => { await a.rerender(<Anew wins={[w('w1')]} />); });
+    expect([opacity(a, 'none'), opacity(a, 'w1')]).toEqual([1, 0]);
+    await endFade();
+    expect(opacity(a, 'w1')).toBe(1);
   });
 
   it('sizes the row to the one win shown when nothing turns, and to the newest three when they do (LO C2)', async () => {

@@ -22,7 +22,7 @@ import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './Ho
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
 import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
-import { WinTurn, useWinTurn } from './WinTurn';
+import { WinTurn, useWinFade, useWinTurn } from './WinTurn';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
 const REACH_ROWS = 5;
@@ -57,6 +57,9 @@ export default function CoachHomeV11(p: Props) {
   const { turn, still } = useWinTurn(focused ? items.length : 0); // paused while another tab is in front (LO C2)
   const newest = items.slice(0, 3); // the newest three take turns (spec item 2), each a cross-fade (#167-1)
   const win = newest.length > 0 ? newest[turn % newest.length] : undefined;
+  const fade = useWinFade(win ?? null, focused, (
+    <Text style={s.onDeepMuted}>{(home?.wins.count ?? 0) === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>
+  ));
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
@@ -106,9 +109,8 @@ export default function CoachHomeV11(p: Props) {
           </View>
           {win && bigText ? null : (
             <WinTurn
-              wins={still && win ? [win] : newest} shown={win ?? null} live={focused} // nothing turns: the row fits the one win (LO C2)
+              wins={still && win ? [win] : newest} fade={fade} // nothing turns: the row fits the one win (LO C2)
               line={(w, id) => <Text style={s.winText} numberOfLines={2} testID={id}>{winLine(w)}</Text>}
-              empty={<Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>}
             />
           )}
         </Pressable>
