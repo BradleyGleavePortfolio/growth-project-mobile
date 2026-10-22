@@ -36,6 +36,7 @@
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   View,
   Text,
   StyleSheet,
@@ -43,9 +44,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
+  ScrollView,
   TextInput,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -398,6 +401,7 @@ function CreateEventModal({
   onSubmit,
 }: CreateEventModalProps): React.ReactElement {
   const { semanticColors } = useTheme();
+  const insets = useSafeAreaInsets();
   // F12: native date + time pickers replace the raw ISO text field. We keep a
   // single Date in the parent; the two pickers edit the date and the time of
   // that same instant. Android shows pickers as transient dialogs (open on
@@ -437,20 +441,28 @@ function CreateEventModal({
       onRequestClose={onCancel}
       testID="coach-community-events-create-modal"
     >
-      <View
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[
           styles.scrim,
-          { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
+          { paddingTop: insets.top + spacing.md, backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
         ]}
       >
+        {/* Below the status bar. The fields scroll when the open pickers or a large
+            text size outgrow the space above the keyboard; the error and the actions stay pinned at the foot. */}
         <View
           style={[
             styles.modalCard,
+            styles.modalCardShell,
             {
               backgroundColor: semanticColors.bgSurface,
               borderColor: semanticColors.border,
             },
           ]}
+        >
+        <ScrollView
+          style={styles.modalCardScroll}
+          contentContainerStyle={styles.modalCardBody}
+          keyboardShouldPersistTaps="handled"
         >
           <Text style={[styles.modalTitle, { color: semanticColors.textPrimary }]}>
             Schedule an event
@@ -469,32 +481,34 @@ function CreateEventModal({
             Starts at
           </Text>
           <View style={styles.pickerRow}>
-            <HapticPressable
-              intent="light"
-              onPress={() => setShowDate(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Pick start date and time"
-              testID="coach-community-events-date-trigger"
-              style={[
-                styles.pickerField,
-                {
-                  backgroundColor: semanticColors.bgPrimary,
-                  borderColor: semanticColors.border,
-                },
-              ]}
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={16}
-                color={semanticColors.textMuted}
-              />
-              <Text
-                style={[styles.pickerText, { color: semanticColors.textPrimary }]}
-                numberOfLines={1}
+            <View style={styles.pickerSlot}>
+              <HapticPressable
+                intent="light"
+                onPress={() => setShowDate(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Pick start date and time"
+                testID="coach-community-events-date-trigger"
+                style={[
+                  styles.pickerField,
+                  {
+                    backgroundColor: semanticColors.bgPrimary,
+                    borderColor: semanticColors.border,
+                  },
+                ]}
               >
-                {formatLocalDateTime(startsAt)}
-              </Text>
-            </HapticPressable>
+                <Ionicons
+                  name="calendar-outline"
+                  size={16}
+                  color={semanticColors.textMuted}
+                />
+                <Text
+                  style={[styles.pickerText, { color: semanticColors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  {formatLocalDateTime(startsAt)}
+                </Text>
+              </HapticPressable>
+            </View>
             <HapticPressable
               intent="light"
               onPress={() => setShowTime(true)}
@@ -547,6 +561,8 @@ function CreateEventModal({
             testID="coach-community-events-link-input"
             style={inputStyle(semanticColors)}
           />
+        </ScrollView>
+        <View style={styles.modalCardFooter}>
           {errorMessage ? (
             <Text
               style={[styles.modalError, { color: semantic.danger.fg }]}
@@ -607,7 +623,8 @@ function CreateEventModal({
             </HapticPressable>
           </View>
         </View>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -630,6 +647,7 @@ function ManageEventModal({
   onConfirm,
 }: ManageEventModalProps): React.ReactElement | null {
   const { semanticColors } = useTheme();
+  const insets = useSafeAreaInsets();
   const eventId = event?.id ?? '';
   const transition = useTransitionEvent(eventId, workspaceId);
   const attachReplay = useAttachReplay(eventId, workspaceId);
@@ -697,20 +715,28 @@ function ManageEventModal({
       onRequestClose={onClose}
       testID="coach-community-events-manage-modal"
     >
-      <View
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[
           styles.scrim,
-          { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
+          { paddingTop: insets.top + spacing.md, backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
         ]}
       >
+        {/* Below the status bar. The fields scroll when the open pickers or a large
+            text size outgrow the space above the keyboard; the error and the actions stay pinned at the foot. */}
         <View
           style={[
             styles.modalCard,
+            styles.modalCardShell,
             {
               backgroundColor: semanticColors.bgSurface,
               borderColor: semanticColors.border,
             },
           ]}
+        >
+        <ScrollView
+          style={styles.modalCardScroll}
+          contentContainerStyle={styles.modalCardBody}
+          keyboardShouldPersistTaps="handled"
         >
           <Text
             style={[styles.modalTitle, { color: semanticColors.textPrimary }]}
@@ -814,7 +840,8 @@ function ManageEventModal({
               This event is reflected and closed.
             </Text>
           )}
-
+        </ScrollView>
+        <View style={styles.modalCardFooter}>
           {manageError ? (
             <Text
               style={[styles.modalError, { color: semantic.danger.fg }]}
@@ -843,7 +870,8 @@ function ManageEventModal({
             </Text>
           </HapticPressable>
         </View>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
 
       {/* F14: calm confirm sheet for the irreversible Reflect (close). Cancel is
           the default, prominent affordance; confirm is the secondary one. */}
@@ -1011,6 +1039,10 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     gap: spacing.md,
   },
+  modalCardShell: { flexShrink: 1, padding: 0, gap: 0 },
+  modalCardScroll: { flexGrow: 0, flexShrink: 1 },
+  modalCardBody: { padding: spacing.xl, paddingBottom: spacing.md, gap: spacing.md },
+  modalCardFooter: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl, gap: spacing.md },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -1031,6 +1063,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
+  // HapticPressable wraps its button in an Animated.View, so the slot takes the row's room: the date
+  // gives way (it truncates) and the clock button keeps its 48 pt inside the card at large text.
+  pickerSlot: { flex: 1, minWidth: 0 },
   pickerField: {
     flex: 1,
     minHeight: 48,
@@ -1042,6 +1077,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   pickerTime: {
+    flexShrink: 0,
     minHeight: 48,
     minWidth: 48,
     alignItems: 'center',
