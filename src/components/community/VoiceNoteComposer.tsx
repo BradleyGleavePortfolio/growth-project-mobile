@@ -365,7 +365,7 @@ function SheetHeader({
           <Text style={styles.cancel}>Cancel</Text>
         )}
       </HapticPressable>
-      <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>{title}</Text>
+      <Text style={styles.title} accessibilityRole="header" numberOfLines={2}>{title}</Text>
       <View style={styles.headerAction} />
     </View>
   );

@@ -175,9 +175,6 @@ export default function VoiceNotesSection({
                 </Text>
                 {coach ? <Text style={styles.coach}>Coach</Text> : null}
                 {when ? <Text style={styles.when}>{when}</Text> : null}
-                {parent ? (
-                  <Text style={styles.when} numberOfLines={1}>{`Reply to ${parent.author_name ?? 'Member'}`}</Text>
-                ) : null}
                 <View style={styles.spacer} />
                 <SafetyMenu
                   targetType="voice_note"
@@ -200,6 +197,9 @@ export default function VoiceNotesSection({
                   testID={`${testID}-menu-${note.id}`}
                 />
               </View>
+              {parent ? (
+                <Text style={styles.replyTo} numberOfLines={2}>{`Reply to ${parent.author_name ?? 'Member'}`}</Text>
+              ) : null}
               <VoiceNotePlayer
                 url={note.url}
                 durationMs={note.duration_ms}
@@ -383,6 +383,7 @@ const styles = StyleSheet.create({
   coach: { overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.chip,
     backgroundColor: fp.deep, color: fp.gold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   when: { fontSize: 15, color: fp.n700 },
+  replyTo: { fontSize: 15, lineHeight: 20, color: fp.n700 },
   spacer: { flex: 1 },
   reply: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
   replyText: { fontSize: 13, fontWeight: '600', color: fp.forest },
