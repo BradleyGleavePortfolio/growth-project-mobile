@@ -99,7 +99,7 @@ export default function VoiceNotePlayer({
   onPlaybackErrorRef.current = onPlaybackError;
   // A point picked on the bars before the clip is loaded; Play starts there.
   const seekRef = useRef(0);
-  const [barsWidth, setBarsWidth] = useState(0);
+  const barsWidth = useRef(0);
 
   const disabled = url === null || !port.isAvailable || offline;
 
@@ -264,8 +264,10 @@ export default function VoiceNotePlayer({
       <View style={styles.middle}>
         <Pressable
           disabled={disabled}
-          onLayout={(e) => setBarsWidth(e.nativeEvent.layout.width)}
-          onPress={(e) => barsWidth > 0 && seekTo((e.nativeEvent.locationX / barsWidth) * durationMs)}
+          onLayout={(e) => { barsWidth.current = e.nativeEvent.layout.width; }}
+          onPress={(e) => {
+            if (barsWidth.current > 0) seekTo((e.nativeEvent.locationX / barsWidth.current) * durationMs);
+          }}
           accessible={!disabled}
           accessibilityRole="adjustable"
           accessibilityLabel="Voice note position"

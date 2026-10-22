@@ -7,6 +7,7 @@ import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resetVoiceOutbox, useVoiceOutbox } from '../useVoiceOutbox';
 import { authEvents } from '../../utils/authEvents';
 import type { VoiceRecordingResult } from '../voiceRecorderPort';
@@ -46,9 +47,10 @@ function setup(author = 'u-me') {
   return renderHook(() => useVoiceOutbox('ws-1', author), { wrapper });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   net.__reset();
   resetVoiceOutbox();
+  await AsyncStorage.clear();
   mockPublish.mockReset().mockResolvedValue({ id: 'vn-1' });
 });
 
@@ -86,6 +88,19 @@ describe('useVoiceOutbox', () => {
     expect(mockPublish).toHaveBeenCalledTimes(1);
   });
 
+  it('shows only the signed-in author’s notes and empties on sign-out', async () => {
+    net.__setState({ isConnected: false });
+    const mine = await setup('u-me');
+    await waitFor(() => expect(mine.result.current.online).toBe(false));
+    await act(async () => mine.result.current.send(REC));
+    await waitFor(() => expect(mine.result.current.items).toHaveLength(1));
+    const other = await setup('u-other');
+    expect(other.result.current.items).toHaveLength(0);
+    expect(mine.result.current.items).toHaveLength(1);
+    await act(async () => authEvents.emit('logout'));
+    expect(mine.result.current.items).toHaveLength(0);
+  });
+
   it('a waiting note survives a restart and sends when the signal is back', async () => {
     net.__setState({ isConnected: false });
     const before = await setup();
@@ -100,18 +115,6 @@ describe('useVoiceOutbox', () => {
     await waitFor(() => expect(mockPublish).toHaveBeenCalledTimes(1));
     expect(mockPublish).toHaveBeenCalledWith('ws-1', expect.objectContaining({ uri: 'file:///docs/voice-outbox/r.m4a' }));
     await waitFor(() => expect(after.result.current.items).toHaveLength(0));
-  });
-
-  it('shows only the signed-in author’s notes and empties on sign-out', async () => {
-    net.__setState({ isConnected: false });
-    const mine = await setup('u-me');
-    await waitFor(() => expect(mine.result.current.online).toBe(false));
-    await act(async () => mine.result.current.send(REC));
-    await waitFor(() => expect(mine.result.current.items).toHaveLength(1));
-    const other = await setup('u-other');
-    expect(other.result.current.items).toHaveLength(0);
-    expect(mine.result.current.items).toHaveLength(1);
-    await act(async () => authEvents.emit('logout'));
-    expect(mine.result.current.items).toHaveLength(0);
+    after.unmount();
   });
 });

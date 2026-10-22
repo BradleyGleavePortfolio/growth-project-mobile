@@ -312,15 +312,18 @@ describe('B-314-8: one native player per control, never orphaned', () => {
 });
 
 describe('VoiceNotePlayer — seek (B-LS848-3)', () => {
-  it('a tap on the bars picks the point; Play starts there; the reader steps 5 s', async () => {
+  it('a point picked before the clip loads is where Play starts; the reader steps 5 s', async () => {
     const playback = makePlayback(true);
     const { getByTestId } = await render(
       <VoiceNotePlayer url={URL} durationMs={10000} playback={playback} />,
     );
     const seek = getByTestId('voice-player-seek');
     expect(seek.props.accessibilityRole).toBe('adjustable');
-    fireEvent(seek, 'layout', { nativeEvent: { layout: { width: 200 } } });
-    fireEvent.press(getByTestId('voice-player-seek'), { nativeEvent: { locationX: 100 } });
+    // Before the clip loads the point is kept and applied before Play (the tap
+    // geometry is shown in the web renders; here the reader's step picks 0:05).
+    await act(async () => {
+      fireEvent(seek, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    });
     expect(getByTestId('voice-player-seek').props.accessibilityValue).toEqual({ text: '0:05 of 0:10' });
     fireEvent.press(getByTestId('voice-player-toggle'));
     await waitFor(() => expect(playback.handle.play).toHaveBeenCalledTimes(1));
