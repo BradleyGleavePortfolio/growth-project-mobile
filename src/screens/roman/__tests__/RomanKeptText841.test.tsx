@@ -11,6 +11,7 @@ import type { UseRomanChatResult } from '../useRomanChat';
 
 const mockDisk = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
+  ...jest.requireActual('../../../storage/mmkv'),
   cacheStorage: {
     getString: () => undefined, // the AsyncStorage fallback in release builds: no synchronous read
     getStringAsync: async (k: string) => mockDisk.get(k),
