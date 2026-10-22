@@ -57,7 +57,8 @@ async function readGuidelines(): Promise<LearnGuidelines> {
   }
 }
 
-/** One read set for Learn, the lesson view and the You row. Coach and guidelines need a coach; lessons only need the client, so lessons kept after the coach deleted their account still load. */
+/** One read set for Learn, the lesson view and the You row. Coach and guidelines need a coach; lessons only need the client, so lessons kept after the coach deleted their account still load.
+ * `copy` is every Learn sentence for this client, coachless lines included, so Learn and the lesson view never differ. */
 export function useLearn() {
   const current = useCurrentUser();
   const user = readUserCacheSync() ?? current;
@@ -74,10 +75,14 @@ export function useLearn() {
   const guidelines = useQuery({ queryKey: ['learn-guidelines', user?.id, coachId], queryFn: readGuidelines, enabled });
   const qc = useQueryClient();
   const known = lessons.data !== undefined && (!enabled || guidelines.data !== undefined);
+  const name = str(coach.data?.name).split(/\s+/)[0] || null;
+  // No coach: kept lessons, or not read yet (Learn opens only from the You row, which shows a coachless client only once a kept lesson is read).
+  const former = !coachId && (lessons.data === undefined || lessons.data.length > 0);
   return {
     user,
     coachId,
-    name: str(coach.data?.name).split(/\s+/)[0] || null,
+    name,
+    copy: learnCopy(name, former),
     lessons: lessons.data ?? [],
     guidelines: guidelines.data ?? null,
     guidelinesQuery: guidelines,
@@ -106,22 +111,23 @@ export function updatedOn(iso: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', ...year });
 }
 
-/** Every Learn sentence, with the coach's first name or "your coach". former: no coach now, but kept lessons (LK-01). */
+/** Every Learn sentence, with the coach's first name or "your coach". former: no coach now, but kept lessons (LK-01); its lines never say "your coach". */
 export function learnCopy(name: string | null, former = false) {
   const who = name ?? 'your coach';
   const whose = name ? `${name}'s` : "your coach's";
   const Whose = name ? whose : "Your coach's";
   return {
     from: former ? 'From your former coach' : `From ${who}`,
-    lede: `${Whose} guidelines and lessons for you.`,
-    loading: `Loading ${whose} guidelines and lessons`,
-    failed: `${Whose} guidelines and lessons did not load.`,
+    lede: former ? 'Lessons you completed with your former coach.' : `${Whose} guidelines and lessons for you.`,
+    loading: former ? 'Loading your lessons' : `Loading ${whose} guidelines and lessons`,
+    failed: former ? 'Your lessons did not load.' : `${Whose} guidelines and lessons did not load.`,
     noAnswer: 'Check the connection and try again.',
     offline: 'Guidelines and lessons load when you are back online.',
     emptyTitle: `Nothing from ${who} yet`,
     emptyBody: `When ${who} adds guidelines or a lesson, they show here.`,
-    lessonOf: (n: number, total: number) => `Lesson ${n} of ${total} · from ${who}`,
-    allDone: (total: number) => `All ${total} of ${whose} lessons are complete.`,
+    lessonOf: (n: number, total: number) => `Lesson ${n} of ${total} · from ${former ? 'your former coach' : who}`,
+    allDone: (total: number) => (!former ? `All ${total} of ${whose} lessons are complete.`
+      : total === 1 ? 'Your lesson is complete.' : `All ${total} of your lessons are complete.`),
     message: name ? `Message ${name}` : 'Message your coach',
   };
 }
