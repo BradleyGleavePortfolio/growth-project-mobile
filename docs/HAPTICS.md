@@ -109,6 +109,8 @@ When the toggle changes:
 | `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |
 | `purchase/PlanActiveMoment` (`clientBillingV2` on) | `success()` | Once, when the plan-is-active moment appears after a confirmed purchase |
 | `MoneyAIPool` (Money page) | `mediumImpact()` / `softImpact()` | "Buy more credits" pressed (filled button / quiet text while the Stripe setup card shows) |
+| `copilot/SuggestionCard` (Path Copilot) | `success()` / `error()` | The change reached the coach, or did not |
+| `coach/copilot/PathChangeDraftCard` | `success()` / `error()` / `selection()` | Approve, Edit or Decline saved, or refused; each day step in Edit |
 | `renewal/RenewalHome`, `HouseCoachScreen` (RENEWAL-M, `FEATURE_PLAN_RENEWAL`) | `mediumImpact()` / `lightImpact()` | "View Coach {N}'s packages" (the one filled choice) / "Join TGP's Top Rated Coach", "Skip for now", Back and a house package row |
 
 ## Architecture

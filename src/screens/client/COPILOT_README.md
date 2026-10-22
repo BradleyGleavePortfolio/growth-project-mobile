@@ -1,54 +1,32 @@
-# Client Path Copilot
+# Path Copilot (style A, owner #162-1)
 
-## Purpose
+Roman explains why a client's plan is set the way it is, and can suggest one plan change. Roman never applies a change:
+the client sends it to their coach, and the coach approves, edits or declines it. Design: context branch `op162/copilot-mockups`,
+`planning/MOCKUP3/COPILOT/index.md` (frames 04 to 06). Server contract: backend #1120, "Contract for the phone".
 
-The Client Path Copilot is a per-client AI coaching surface. It reads the client's logged data (check-ins, weight, meals, workouts) and surfaces an AI-drafted summary of patterns — presented as suggestions the client can read but not act on alone. Every suggestion that requires a response is gated behind explicit coach approval before it appears in the client's feed. The screen is a trust primitive: it makes AI's role transparent and keeps the coach as the decision-maker.
+## PR-1 surfaces (COPILOT-M1)
 
-All backend endpoints are **not yet live**. The screen reads from a mock-safe adapter that returns an empty, `isStale: true` payload. The empty state is intentional — the UI shows honest "no data yet" text rather than fabricated suggestions.
-
-## Screens + State Machine
-
-| Screen | File | State |
+| Surface | File | What it does |
 |---|---|---|
-| ClientPathCopilotScreen | `src/screens/client/ClientPathCopilotScreen.tsx` | `loading → flag-off empty / stale empty / suggestions list` |
+| Your path | `ClientPathCopilotScreen.tsx` | `GET /client/copilot`: the client's last three sent suggestions with their status lines. 404 (server switch off) shows the calm empty state, nothing new. |
+| Suggestion card | `copilot/SuggestionCard.tsx` | Now -> Suggested, "Nothing changes until {coach} says yes.", "Send to {coach}" (`POST /client/copilot/suggestions/:id/send`), the sent line. 409 lapsed, AI help off (the shared consent notice) and a dropped connection each say so. |
+| Status lines | `copilot/SuggestionStatusList.tsx`, `copilot/pathChangeWords.ts` | Waiting, approved (an edited change reads as approved with the day or kcal the coach applied), kept (with the coach's one-line note), expired. Every title and value is composed on the phone from the structured change. |
+| Coach row | `../coach/copilot/PathChangeDraftCard.tsx`, `../coach/copilot/PathChangeDrafts.tsx` | In the coach's drafts list (`PendingAiDraftsScreen.tsx`), oldest sent first (`GET /ai/gateway/drafts?order=oldest`, every page up to 1,000 rows; "No pending drafts" only once this read answered empty): Approve, Edit (one field; the server applies it on the live plan, so it still works after "the plan changed"; an older move starts inside the 2-days-back to 7-days-ahead window), Decline with an optional one-line note. A client with no coach sees the Roman lock page. |
 
-### State transitions
+Calls: `src/api/copilotApi.ts` (strict parsers; an older server's bare drafts array reads as no rows).
 
-```
-mount
-  └─ featureFlags.clientPathCopilot === false
-       └─ render: "Copilot is preview-only" [terminal until flag on]
-  └─ featureFlags.clientPathCopilot === true
-       └─ loading=true → fetch fetchClientPathCopilot()
-            └─ success → payload.isStale=true → render stale banner + empty suggestions
-            └─ success → payload.suggestions.length > 0 → render suggestion cards
-  └─ pull-to-refresh → re-fetch
-```
+## Seams for COPILOT-M2 (wave 2)
 
-## API Endpoints Consumed
+- Mount `SuggestionCard` under Roman's answer from the done frame's `copilot.suggestion` (status `suggested`).
+- The week block (CP-A-13) goes in the masthead under the title; the source tags (CP-A-16/17) go in the card and the coach row.
+- Past questions, the You row (CP-A-01/02) and the queue shell ("Roman's drafts", "{n} waiting", "Show all {n}") are not built here.
 
-| Endpoint | Status | Notes |
-|---|---|---|
-| `GET /client/copilot` | **MOCKED** | Adapter returns empty stub. Replace `fetchClientPathCopilot()` body when endpoint ships. |
-| `POST /coach/brief/approve` | **MOCKED** | Approval toggle is local-state only until this endpoint exists. |
+## Flags
 
-## Feature Flags
-
-| Flag | Env var | Default (prod) | Default (dev) | Meaning |
-|---|---|---|---|---|
-| `clientPathCopilot` | `EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT` | `false` | `true` | Enables the Client Path Copilot surface for this build |
-| `verifiedProgressSignoff` | `EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF` | `false` | `true` | Enables the signoff status chips and submission list |
+`featureFlags.clientPathCopilot` (`EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT`, off in production) gates the screen and the coach
+rows. Server: `FEATURE_CLIENT_PATH_COPILOT` (unset = 404).
 
 ## Tests
 
-| File | What it asserts |
-|---|---|
-| `src/__tests__/wave11Screens.test.tsx` | Flag-off renders preview-only empty state (RTL). Source guards: flag check present, AINote wrapper present, stale banner copy present, accessibility labels on root + headers + suggestion cards. |
-| `src/__tests__/wave11Doctrine.test.ts` | Adapter returns `isStale: true` + empty arrays without a live endpoint. |
-
-## Future Work / Known Limits
-
-- **No live backend.** `GET /client/copilot` does not exist yet. When it ships, replace the body of `fetchClientPathCopilot()` in `src/services/wave11Adapters.ts` with `api.get(...)`.
-- **Approval toggle is local state only.** The "Approve to send" Pressable in suggestion cards sets local `draftApproved` state. It must call `POST /coach/brief/approve` once that endpoint exists.
-- **Verified-progress proof URLs.** The `proofUrl` field in `VerifiedProgressItem` is typed as `string | null`. The backend contract for proof URLs (signed S3 or signed CDN) is not yet defined.
-- **Finance disclaimer domain.** Suggestions with `topic: 'finance'` use the finance-specific disclaimer. Ensure the backend's copilot suggestions populate `topic` correctly when the endpoint ships.
+`src/api/__tests__/copilotApi.test.ts`, `copilot/__tests__/copilot.test.tsx`, `../coach/copilot/__tests__/PathChangeDraftCard.test.tsx`,
+`src/__tests__/qaCoachStates131.test.tsx` (the drafts list states), plus the source guards in `src/__tests__/wave11Screens.test.tsx`.

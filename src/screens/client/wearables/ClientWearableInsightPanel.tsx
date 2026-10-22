@@ -536,7 +536,8 @@ function ProvenanceRow({
 
   const shown = metrics.slice(0, 3).join(', ');
   const rest = metrics.length - 3;
-  const value = rest > 0 ? `${shown} +${rest} more` : shown;
+  // A no-break space keeps "+N more" on one line (it wrapped at Android 360).
+  const value = rest > 0 ? `${shown} +${rest}\u00A0more` : shown;
 
   return (
     <View style={styles.section} testID="client-insight-source-metrics">

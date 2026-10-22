@@ -14,7 +14,7 @@ exports[`StatusBarBand (EW3-001 edge-to-edge bone band) paints the bone band at 
         "zIndex": 1000,
       },
       {
-        "backgroundColor": "#F5EFE4",
+        "backgroundColor": "#F7FAF7",
         "height": 47,
       },
     ]
