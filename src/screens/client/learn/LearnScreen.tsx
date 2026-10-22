@@ -17,7 +17,7 @@ import FadeInView from '../../../components/FadeInView';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { LearnBack, LessonMark } from './LearnParts';
-import { GUIDELINES_PLAN_BODY, GUIDELINES_PLAN_TITLE, learnCopy, lessonMeta, updatedOn, useLearn } from './learnData';
+import { GUIDELINES_PLAN_BODY, GUIDELINES_PLAN_TITLE, lessonMeta, updatedOn, useLearn } from './learnData';
 
 const excerpt = (text: string) => text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
   .map((l) => l.replace(/^(?:[-*•]|\d+\.)\s*/, '').replace(/\*\*/g, '')).join(' ');
@@ -30,8 +30,7 @@ export default function LearnScreen() {
   const online = isEffectivelyOnline(useNetworkStatus());
   const [italic] = useFonts({ CormorantGaramond_400Regular_Italic });
   const learn = useLearn();
-  const { lessons, guidelines: g, known, refetch } = learn;
-  const copy = learnCopy(learn.name, !learn.coachId && lessons.length > 0);
+  const { lessons, guidelines: g, known, refetch, copy } = learn;
 
   // Offline on first open: the page loads by itself once the phone is back online.
   const wasOnline = useRef(online);

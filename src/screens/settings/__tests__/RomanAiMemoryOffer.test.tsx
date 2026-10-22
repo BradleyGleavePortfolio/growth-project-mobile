@@ -264,7 +264,8 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     await fireEvent(memorySwitch(r), 'valueChange', true);
     confirmLastAlert(ROMAN_AI_COPY.memoryOn);
     await waitFor(() => expect(r.getByTestId('roman-ai-notice').props.children).toBe(ROMAN_AI_COPY.memoryChanged));
-    expect(api.getStatus).toHaveBeenCalledTimes(2);
+    // Load and re-read; each read is the Health-notes GET, then today's (this fixture serves no Health-notes copies).
+    expect(api.getStatus).toHaveBeenCalledTimes(4);
   });
 
   it.each([
