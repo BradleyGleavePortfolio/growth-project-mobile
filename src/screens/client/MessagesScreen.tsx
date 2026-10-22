@@ -22,6 +22,7 @@ import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { subscribeToMessages } from '../../services/realtime';
 import { cacheStorage } from '../../storage/mmkv';
+import { useChatDraft } from '../../lib/chatDrafts';
 import { useThreadColors, type ThreadColors } from '../../components/messaging/thread/useThreadColors';
 import { typography, radius, layout, colors as palette } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
@@ -101,7 +102,8 @@ export default function MessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState<boolean>(true);
-  const [inputText, setInputText] = useState('');
+  // CHAT-DISCARD (owner 10-21): half-typed text stays with this chat on the device (src/lib/chatDrafts.ts).
+  const [inputText, setInputText] = useChatDraft('client:coach');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [noCoach, setNoCoach] = useState(false);
