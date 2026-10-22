@@ -34,7 +34,7 @@ export interface SemanticTokens {
 
 | Token | Value | Name |
 |-------|-------|------|
-| `bgPrimary`   | `#F5EFE4` | bone |
+| `bgPrimary`   | `#F7FAF7` | bone |
 | `bgSurface`   | `#FFFDF8` | off-white |
 | `textPrimary` | `#1A1A18` | ink |
 | `textMuted`   | `#78736E` | warm grey |
@@ -125,7 +125,7 @@ const { semanticColors: colors } = useTheme();
 
 | Was | Use instead |
 |-----|-------------|
-| `#F5EFE4` (bone) | `colors.bgPrimary` |
+| `#F7FAF7` (bone) | `colors.bgPrimary` |
 | `#F1E8D5` (cream) | `colors.bgSurface` |
 | `#1A1A18` (ink) | `colors.textPrimary` |
 | `#B1A89F` (stone) | `colors.textMuted` |

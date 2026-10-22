@@ -97,14 +97,14 @@ jest.mock('../theme/ThemeProvider', () => {
   return {
     useTheme: () => ({
       colors: {
-        background: '#F5EFE4',
+        background: '#F7FAF7',
         surface: '#F1E8D5',
         primary: '#2C4A36',
         primaryTint: 'rgba(44,74,54,0.06)',
         textPrimary: '#1A1A18',
         textSecondary: '#3D3D3A',
         textMuted: '#6B675F',
-        textOnPrimary: '#F5EFE4',
+        textOnPrimary: '#F7FAF7',
         border: 'rgba(176,141,87,0.2)',
         divider: 'rgba(176,141,87,0.15)',
         success: '#2C4A36',

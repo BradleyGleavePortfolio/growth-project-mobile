@@ -87,7 +87,7 @@ navigation.navigate('LeaderboardSettings');
 
 ## Design Doctrine
 
-- Bone (`#F5EFE4`) background, ink (`#1A1A18`) text.
+- Bone (`#F7FAF7`) background, ink (`#1A1A18`) text.
 - Oxblood (`#4A0404`) for the self-row underline accent.
 - Cormorant SemiBold for headings, Inter for body and scores.
 - No emoji, no podiums, no medals, no confetti.
