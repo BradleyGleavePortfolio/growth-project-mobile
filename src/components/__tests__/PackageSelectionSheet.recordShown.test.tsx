@@ -121,7 +121,7 @@ it.each([false, true])('house coach (H3, clientBillingV2 %s): paid → the deep 
     const r = await render(<Sheet visible skipSnoozeCheck house={{ id: 'house-1', name: 'Bradley' }} onDismiss={jest.fn()} onPaymentSuccess={onPaymentSuccess} />);
     expect(await r.findByText('Bradley is now your coach.')).toBeTruthy();
     expect(r.getByText('Your plan is active')).toBeTruthy();
-    expect(r.getByTestId('house-joined-check')).toBeTruthy();
+    expect(r.getByTestId('house-joined-check', { includeHiddenElements: true })).toBeTruthy(); // decorative: hidden from screen readers
     expect(r.queryByTestId('coach-mark')).toBeNull(); // not the light purchase moment
     expect(r.queryByTestId('package-card-h-1')).toBeNull();
     fireEvent.press(r.getByTestId('payment-continue'));

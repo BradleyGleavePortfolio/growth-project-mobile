@@ -39,18 +39,20 @@ export function HouseJoined({ name, title, body, onContinue }: { name: string; t
   return (
     <View style={s.joined} testID="payment-success" accessibilityLiveRegion="polite">
       <View style={s.handle} />
-      <Animated.View style={[s.check, { opacity: grow, transform: [{ scale }] }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden testID="house-joined-check">
-        <Ionicons name="checkmark" size={30} color={fp.leaf} />
-      </Animated.View>
-      <Text style={s.title} accessibilityRole="header">{title}</Text>
-      <View style={s.row} testID="payment-new-coach">
-        <Monogram name={name} size={44} />
-        <Text style={s.text}>{`${name} is now your coach.`}</Text>
+      <View style={s.moment}>
+        <Animated.View style={[s.check, { opacity: grow, transform: [{ scale }] }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden testID="house-joined-check">
+          <Ionicons name="checkmark" size={30} color={fp.leaf} />
+        </Animated.View>
+        <Text style={s.title} accessibilityRole="header">{title}</Text>
+        <View style={s.row} testID="payment-new-coach">
+          <Monogram name={name} size={44} />
+          <Text style={s.text}>{`${name} is now your coach.`}</Text>
+        </View>
+        <Text style={s.body}>{body}</Text>
+        <HapticPressable intent="medium" style={s.cta} onPress={onContinue} accessibilityRole="button" testID="payment-continue">
+          <Text style={s.ctaText}>{PACKAGE_PAYMENT_COPY.continue}</Text>
+        </HapticPressable>
       </View>
-      <Text style={s.body}>{body}</Text>
-      <HapticPressable intent="medium" style={s.cta} onPress={onContinue} accessibilityRole="button" testID="payment-continue">
-        <Text style={s.ctaText}>{PACKAGE_PAYMENT_COPY.continue}</Text>
-      </HapticPressable>
     </View>
   );
 }
@@ -58,9 +60,10 @@ export function HouseJoined({ name, title, body, onContinue }: { name: string; t
 const s = StyleSheet.create({
   mono: { alignSelf: 'center', backgroundColor: fp.forest, borderWidth: 2, borderColor: fp.gold, alignItems: 'center', justifyContent: 'center' },
   monoText: { ...typography.h2, color: fp.gold },
-  joined: { flexGrow: 1, backgroundColor: fp.deep, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 32, alignItems: 'center' },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: fp.forest, marginBottom: 24 },
-  check: { width: 64, height: 64, borderRadius: 32, backgroundColor: fp.forest, alignItems: 'center', justifyContent: 'center' },
+  joined: { flexGrow: 1, backgroundColor: fp.deep, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 32 },
+  moment: { flexGrow: 1, justifyContent: 'center', paddingBottom: 48 },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: fp.forest },
+  check: { alignSelf: 'center', width: 64, height: 64, borderRadius: 32, backgroundColor: fp.forest, alignItems: 'center', justifyContent: 'center' },
   title: { ...typography.h1, color: fp.onDeep, textAlign: 'center', marginTop: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'stretch', backgroundColor: fp.forest, borderRadius: radius.card, padding: 14, marginTop: 20 },
   text: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', flex: 1, color: fp.onDeep },
