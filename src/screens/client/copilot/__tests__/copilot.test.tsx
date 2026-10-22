@@ -23,7 +23,8 @@ jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true
 const mockText = (t: string) => <Text>{t}</Text>;
 let mockNeedsCoach = false;
 jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, ROMAN_LOCK_TITLE: 'Roman works with a coach',
-  default: ({ title, testID }: { title: string; testID: string }) => <Text testID={testID}>{title}</Text>, useClientNeedsCoach: () => mockNeedsCoach }));
+  default: ({ title, testID }: { title: string; testID: string }) => mockLock(title, testID), useClientNeedsCoach: () => mockNeedsCoach }));
+const mockLock = (title: string, testID: string) => <Text testID={testID}>{title}</Text>;
 jest.mock('../../../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../../../theme/tokens');
   return { useTheme: () => ({ colors: t.colors, semanticColors: t.lightTokens }) };

@@ -5,7 +5,7 @@
  * suggestion card with "Send to {coach}" is ./copilot/SuggestionCard (COPILOT-M2 mounts it under Roman's answer, with
  * the week block, the sources and past questions). Behind `featureFlags.clientPathCopilot` (off) and the server
  * switch: a server without Copilot (404) shows the calm empty state, nothing new (truthful fallback). A client with no
- * coach gets the app's existing Roman lock page (board: Coachless row), checked before the read mounts.
+ * coach gets the app's existing Roman lock page (board: Coachless row) and the read never runs.
  */
 import React from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -36,11 +36,6 @@ export function useCoachFirstName(): string {
 }
 
 export default function ClientPathCopilotScreen() {
-  const needsCoach = useClientNeedsCoach();
-  const navigation = useNavigation();
-  if (featureFlags.clientPathCopilot && needsCoach) {
-    return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
-  }
   if (!featureFlags.clientPathCopilot) {
     return (
       <View style={s.flagOff} accessibilityLabel="Path suggestions unavailable" accessibilityRole="none">
@@ -56,10 +51,12 @@ function PathCopilot() {
   const insets = useScreenInsets();
   const navigation = useNavigation();
   const coach = useCoachFirstName();
-  const q = useQuery({ queryKey: COPILOT_RECENT_KEY, queryFn: () => copilotApi.recent() });
+  const needsCoach = useClientNeedsCoach();
+  const q = useQuery({ queryKey: COPILOT_RECENT_KEY, queryFn: () => copilotApi.recent(), enabled: !needsCoach });
   const refusal = q.error ? aiRefusalOf(q.error) : null;
   const items = q.data ?? [];
   const light = { color: sc.textOnAccent };
+  if (needsCoach) return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
 
   return (
     <>
