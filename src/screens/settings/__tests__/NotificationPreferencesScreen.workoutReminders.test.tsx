@@ -22,6 +22,9 @@ jest.mock('../../../services/api', () => ({
 
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => null }));
+// The plan read's `renewal` key: present only when the server's renewal flag is on (B1). Off unless a test sets it.
+let mockRenewal: { state: string } | undefined;
+jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ renewal: mockRenewal }) }));
 const mockReport = jest.fn();
 jest.mock('../../../lib/consultation/report', () => ({
   reportUnexpected: (...a: unknown[]) => mockReport(...a),
@@ -434,6 +437,9 @@ describe('B-312-1: every failure notice carries a working next action', () => {
 
 // RENEWAL-M (backend #1127): Settings > Notifications > Plan renewal reminders (plan_renewal_push, default on).
 describe('RENEWAL-M: plan renewal reminders', () => {
+  beforeEach(() => { mockRenewal = { state: 'none' }; });
+  afterEach(() => { mockRenewal = undefined; });
+
   it.each([['student', { workout_reminder_push: true }], ['coach', { plan_renewal_push: true }]])(
     '%s: hidden (clients only, and only once the server returns the setting)', async (role, data) => {
       mockGet.mockResolvedValue({ data });
@@ -442,7 +448,15 @@ describe('RENEWAL-M: plan renewal reminders', () => {
       expect(queryByLabelText('Plan renewal reminders')).toBeNull();
     });
 
-  it('a client sees the server value and turning it off patches only plan_renewal_push', async () => {
+  it('B1: renewal flag off (no `renewal` key on the plan read): hidden even though the server sends the setting', async () => {
+    mockRenewal = undefined;
+    mockGet.mockResolvedValue({ data: { plan_renewal_push: true, workout_reminder_push: true } });
+    const { findByLabelText, queryByLabelText } = await render(<NotificationPreferencesScreen navigation={navigation} role={() => 'student'} />);
+    expect(await findByLabelText('Workout reminders')).toBeTruthy();
+    expect(queryByLabelText('Plan renewal reminders')).toBeNull();
+  });
+
+  it('flag on: a client sees the server value and turning it off patches only plan_renewal_push', async () => {
     mockGet.mockResolvedValue({ data: { plan_renewal_push: true } });
     mockUpdate.mockResolvedValue({ data: {} });
     const { findByLabelText } = await render(<NotificationPreferencesScreen navigation={navigation} role={() => 'student'} />);
