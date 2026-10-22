@@ -3,7 +3,7 @@
  * thread screens: message and mute menus, edit sheet, pinned bar, mute bell.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
 import { typography, radius } from '../../theme/tokens';
@@ -156,7 +156,9 @@ function EditMessageSheet({ draft, busy, onSave, onCancel }: EditSheetProps): Re
   if (!draft) return null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.backdrop} onPress={onCancel} accessibilityRole="button" accessibilityLabel="Cancel editing">
+      {/* The sheet rises above the keyboard so Save stays in view (as LogPlannedMealButton). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityRole="button" accessibilityLabel="Cancel editing" />
         <Pressable style={styles.sheet} onPress={() => undefined}>
           <Text style={styles.sheetTitle}>Edit message</Text>
           <Text style={styles.sheetHint}>Both people see that the message was edited.</Text>
@@ -185,7 +187,7 @@ function EditMessageSheet({ draft, busy, onSave, onCancel }: EditSheetProps): Re
             </Pressable>
           </View>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
