@@ -4,13 +4,53 @@ jest.mock('../../services/sentry', () => ({
   captureError: (...a: unknown[]) => mockCaptureError(...a),
 }));
 
-import { describePackageSaveFailure } from '../packageSaveFailure';
+import * as fs from 'fs';
+import * as path from 'path';
+import { describePackageSaveFailure, LEAVING_COACH_LINE } from '../packageSaveFailure';
+import { describeError } from '../../lib/coachSetup/errors';
 
 const http = (status: number, data: unknown, headers?: Record<string, string>) => ({
   response: { status, data, headers },
 });
 
 beforeEach(() => mockCaptureError.mockClear());
+
+// The backend's exact 403 body for package create / publish / re-enable while the
+// coach's deletion is scheduled (coach-selling.ts assertCoachSelling).
+const LEAVING_REFUSAL = 'Account is scheduled for deletion; cancel the deletion to regain access';
+
+describe('SMALL-T2 leaving coach', () => {
+  it('every package path shows the one leaving-coach line, never the owner-only or generic copy', () => {
+    const err = http(403, { statusCode: 403, message: LEAVING_REFUSAL, error: 'Forbidden' });
+    for (const mode of ['create', 'publish', 'update'] as const) {
+      const f = describePackageSaveFailure(err, mode);
+      expect([f.kind, f.message, f.action]).toEqual(['leaving', LEAVING_COACH_LINE, 'back_to_packages']);
+    }
+    expect(describePackageSaveFailure(err, 'publish').title).toBe('Could not publish the package');
+    // The editor's create and the setup wizard (create, make live) go through describeError.
+    for (const action of ['create this package', 'create your package', 'make your package live']) {
+      const f = describeError(err, action);
+      expect([f.title, f.body, f.retryable]).toEqual([`TGP could not ${action}`, LEAVING_COACH_LINE, false]);
+    }
+    expect(mockCaptureError).not.toHaveBeenCalled();
+  });
+
+  it('names the Settings row and the button the coach really taps (Opus C2)', () => {
+    const coach = (file: string) =>
+      fs.readFileSync(path.join(__dirname, '..', '..', 'screens', 'coach', file), 'utf8');
+    expect(LEAVING_COACH_LINE).toMatch(/To sell again, open Settings, tap Deletion scheduled, then Keep account\.$/);
+    expect(LEAVING_COACH_LINE).not.toMatch(/Cancel the deletion/);
+    expect(coach(path.join('settings', 'DangerZone.tsx'))).toMatch(/>\s*Deletion scheduled\s*</);
+    expect(coach('SettingsScreen.tsx')).toContain("text: 'Keep account'");
+  });
+
+  it('any other 403 keeps its own copy', () => {
+    const other = http(403, { message: 'Coach or owner access required', error: 'Forbidden' });
+    expect(describePackageSaveFailure(other, 'publish').kind).toBe('forbidden');
+    expect(describeError(other, 'create your package').body).not.toBe(LEAVING_COACH_LINE);
+    expect(describePackageSaveFailure(http(400, { message: LEAVING_REFUSAL }), 'publish').kind).not.toBe('leaving');
+  });
+});
 
 describe('describePackageSaveFailure', () => {
   it('maps each status and machine code to a specific message and next action', () => {
@@ -21,6 +61,7 @@ describe('describePackageSaveFailure', () => {
       [http(403, { error: 'SUBSCRIPTION_INACTIVE', message: 'inactive' }), 'subscription', 'billing'],
       [http(403, { code: 'TIER_UPGRADE_REQUIRED', error: 'Forbidden', message: 'upgrade' }), 'subscription', 'billing'],
       [http(403, { message: 'Coach or owner access required', error: 'Forbidden' }), 'forbidden', 'back_to_packages'],
+      [http(403, { message: LEAVING_REFUSAL, error: 'Forbidden' }), 'leaving', 'back_to_packages'],
       [http(404, { code: 'PACKAGE_NOT_FOUND', message: 'No package with id x' }), 'not_found', 'back_to_packages'],
       [http(409, { code: 'PACKAGE_PRICING_LOCKED', message: 'locked' }), 'locked', 'new_package'],
       [http(409, { code: 'PACKAGE_ARCHIVED', message: 'archived' }), 'archived', 'back_to_packages'],

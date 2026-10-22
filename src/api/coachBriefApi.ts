@@ -30,6 +30,8 @@ const ActionItemSchema = z
     detail: z.string(),
     priority: z.number(),
     deep_link: z.string().optional(),
+    // When the item happened (ISO 8601); a missed check-in has none (ROMAN-EXTRAS-BE2).
+    occurred_at: z.string().nullish(),
   })
   .passthrough();
 
@@ -40,6 +42,9 @@ const SummarySchema = z
     narrative: z.string(),
     action_items: z.array(ActionItemSchema),
     generated_by: z.enum(['ai', 'fallback']),
+    // The day's counts; checkins_to_review is set by servers that send the
+    // check-in and new-client rows (b#1118). Older servers omit it.
+    brief_context: z.object({ checkins_to_review: z.number().optional() }).passthrough().nullish(),
   })
   .passthrough();
 
