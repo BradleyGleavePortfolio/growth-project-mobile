@@ -9,7 +9,7 @@ import { NavigationContainer, createNavigationContainerRef, type ParamListBase }
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query';
 import api from '../../../../services/api';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
 import CourseHomeScreen from '../CourseHomeScreen';
@@ -27,6 +27,11 @@ jest.mock('../../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () =>
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn(), softImpact: jest.fn(), success: jest.fn(), error: jest.fn() } }));
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn() } }));
 jest.mock('../courseData', () => ({ ...jest.requireActual('../courseData'), today: () => '2026-10-14' }));
+
+// FLAKE-FIX (agent 168): React Query tells its screens about new data on a 0 ms timer, which fired after the act() or waitFor that caused it,
+// so those renders landed outside act at a moment set by the runner's load (the act warnings, and the press racing a re-drawn page). Telling
+// them at once keeps each render inside the step that caused it.
+notifyManager.setScheduler((cb) => cb());
 
 let run = 0; // fresh week ids per test: a week is celebrated once per app session
 const lesson = (id: string, done: boolean) => ({ id, title: `Lesson ${id}`, kind: 'page', done });
