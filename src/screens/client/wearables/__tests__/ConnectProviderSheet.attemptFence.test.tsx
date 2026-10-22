@@ -17,7 +17,7 @@
 
 import React from 'react';
 import { Platform } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -167,22 +167,6 @@ async function release() {
   mockReleases.splice(0).forEach((r) => r());
 }
 
-/**
- * FLAKE-FIX (agent 168): run `step` (a release or a browser result) and the
- * attempt's remaining awaits inside act(), so React renders the attempt's last
- * state update before the checks. A bare setTimeout(0) outside act raced
- * React's own render task on a loaded CI runner (the sign-out line was not
- * drawn yet). The attempt after `step` only awaits promises, so one macrotask
- * inside act is enough.
- */
-async function settle(step: () => unknown, pressed: Promise<unknown>) {
-  await act(async () => {
-    await step();
-    await pressed;
-    await new Promise((r) => setTimeout(r, 0));
-  });
-}
-
 async function expectNoPromptOrWork() {
   expect(mockRequestPermission).not.toHaveBeenCalled();
   expect(mockRegister).not.toHaveBeenCalled();
@@ -218,14 +202,16 @@ describe('Sol B-317-9: cancelling during Health Connect setup opens no new permi
         stopOnDeviceHealthWork();
       }
 
-      await settle(release, pressed);
+      await release();
+      await pressed;
+      await new Promise((r) => setTimeout(r, 0));
 
       if (stage === 'status') expect(mockInitialize).not.toHaveBeenCalled();
       await expectNoPromptOrWork();
       expect(onClose).not.toHaveBeenCalled();
       if (how === 'sign-out') {
         // Still the same sheet: the stop is explained, not shown as a failure.
-        expect(await screen.findByText(/so nothing was brought in/)).toBeTruthy();
+        expect(screen.getByText(/so nothing was brought in/)).toBeTruthy();
         expect(screen.queryByText(/permission screen didn't open/)).toBeNull();
       }
     });
@@ -239,10 +225,9 @@ describe('Sol B-317-9: cancelling during Health Connect setup opens no new permi
     );
     await waitFor(() => expect(mockReleases.length).toBe(1));
     mockCurrentUser = null;
-    await settle(async () => {
-      authEvents.emit('logout');
-      await release();
-    }, pressed);
+    authEvents.emit('logout');
+    await release();
+    await pressed;
     await expectNoPromptOrWork();
   });
 
@@ -254,7 +239,8 @@ describe('Sol B-317-9: cancelling during Health Connect setup opens no new permi
       fireEvent.press(screen.getByLabelText('Continue connecting Health Connect')),
     );
     await waitFor(() => expect(mockReleases.length).toBe(1));
-    await settle(release, pressed);
+    await release();
+    await pressed;
     await waitFor(() => expect(mockHealthConnectSync).toHaveBeenCalledTimes(1));
     expect(mockRequestPermission).toHaveBeenCalledTimes(1);
     expect(mockRegister).toHaveBeenCalledTimes(1);
@@ -289,7 +275,9 @@ describe('Sol B-317-10: a stale cloud auth-session result does nothing visible',
         stopOnDeviceHealthWork();
       }
 
-      await settle(() => mockResolveBrowser({ type }), pressed);
+      mockResolveBrowser({ type });
+      await pressed;
+      await new Promise((r) => setTimeout(r, 0));
 
       expect(tutorialSignals).toEqual([]);
       expect(onConnected).not.toHaveBeenCalled();
@@ -316,7 +304,9 @@ describe('Sol B-317-10: a stale cloud auth-session result does nothing visible',
     await view.rerender(
       <ConnectProviderSheet provider="FITBIT" visible onClose={onClose} onConnected={onConnected} />,
     );
-    await settle(() => resolveFirst({ type: 'success' }), first);
+    resolveFirst({ type: 'success' });
+    await first;
+    await new Promise((r) => setTimeout(r, 0));
     expect(onConnected).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(tutorialSignals).toEqual([]);
@@ -333,7 +323,8 @@ describe('Sol B-317-10: a stale cloud auth-session result does nothing visible',
       );
       const pressed = Promise.resolve(fireEvent.press(screen.getByLabelText('Continue connecting Oura')));
       await waitFor(() => expect(mockOpenAuthSession).toHaveBeenCalledTimes(1));
-      await settle(() => mockResolveBrowser({ type }), pressed);
+      mockResolveBrowser({ type });
+      await pressed;
       await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
       expect(mockInvalidate).toHaveBeenCalledTimes(1);
       expect(onConnected).toHaveBeenCalledTimes(1);
