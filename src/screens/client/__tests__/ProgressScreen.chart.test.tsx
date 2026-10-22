@@ -67,8 +67,9 @@ jest.mock('../../../hooks/useMacroTargets', () => ({
   }),
 }));
 
+let mockUser: { id: string; role?: string; coach_id?: string } = { id: 'user-1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'user-1' }),
+  useCurrentUser: () => mockUser,
 }));
 
 jest.mock('../../../theme/ThemeProvider', () => {
@@ -112,6 +113,7 @@ import ProgressScreen from '../ProgressScreen';
 
 beforeEach(() => {
   chartProps = {};
+  mockUser = { id: 'user-1' };
   // Default the wiring tests to the flag-ON surface; the flag-off test sets
   // it false explicitly.
   mockFlags.romanFirstPaymentBodyweightPolish = true;
@@ -187,6 +189,15 @@ describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
     // ...and the false-empty copy is absent.
     expect(queryByText('Log your weight to see your chart')).toBeNull();
     expect(queryByText('Need at least 2 entries for a chart')).toBeNull();
+  });
+
+  it('a client with no coach gets the same error and retry without Roman\'s face (139-15)', async () => {
+    mockUser = { id: 'user-1', role: 'student' };
+    mockGetHistory.mockRejectedValueOnce(new Error('network down'));
+    const { getByTestId, queryByTestId } = await render(<ProgressScreen />);
+    await waitFor(() => expect(getByTestId('progress-weight-chart-error')).toBeTruthy());
+    expect(getByTestId('progress-weight-chart-error-retry')).toBeTruthy();
+    expect(queryByTestId('progress-weight-chart-error-avatar')).toBeNull();
   });
 
   it('clears the error and renders the chart when a retry succeeds', async () => {

@@ -34,6 +34,7 @@ import CoachIntroductionBanner from '../../components/home/CoachIntroductionBann
 // A1-COACHLESS: banner, code sheet and scripted Roman card for a client with
 // no coach. Renders nothing unless the server flag coachless_home is on.
 import CoachlessHomeSlot from '../../components/coachless/CoachlessHomeSlot';
+import { useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 // Client tutorial (C08/C09): pinned macro card, Message your coach row and the
 // passive re-offer line. Renders nothing unless featureFlags.clientTutorial.
 import TutorialHomeSlot from '../../components/tutorial/TutorialHomeSlot';
@@ -130,6 +131,8 @@ function NumberCell({ label, value, hint, onPress, accessibilityLabel }: NumberC
 export default function HomeScreen() {
   const { semanticColors: sc } = useTheme();
   const currentUser = useCurrentUser();
+  // Coachless clients have no Roman (139-15): no face on the load error.
+  const romanLocked = useClientNeedsCoach();
   const { settings, loaded: settingsLoaded } = useSettings();
   const {
     foodLogs,
@@ -397,6 +400,7 @@ export default function HomeScreen() {
             onRetry={() => void onRefresh()}
             retrying={isLoading || refreshing}
             testID="home-day-data-error"
+            roman={!romanLocked}
           />
         ) : null}
         {/* Hero */}
