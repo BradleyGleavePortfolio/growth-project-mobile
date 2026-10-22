@@ -99,7 +99,7 @@ When the toggle changes:
 | `LearnLessonScreen` (`learnHub` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
 | `CourseHomeScreen` / `CourseWeekScreen` rows (`learnCourses` on) | `selection()` | A week or a lesson opens (Open the course and Read lesson are `PrimaryButton`s: `softImpact()`) |
-| `CourseLessonScreen` (`learnCourses` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
+| `CourseLessonScreen` (`learnCourses` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button); the c06 footer's Next is a `PrimaryButton` (`softImpact()`) and adds none |
 | `CourseHomeScreen` / `CourseWeekScreen` week done (`useWeekMoment`, `learnCourses` on) | `success()` | A week turns done and its Week done page (c08) opens; when that week finishes the course, the course record (c10) opens with it instead |
 | `CourseHomeScreen` week not open yet (`learnCourses` on) | `selection()` | Its sheet (c09) opens: when it opens, why, its lesson titles, OK and Message {coach} (OK is a `PrimaryButton`: `softImpact()`; Message, a text action, adds none, as Learn's) |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |

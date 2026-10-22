@@ -43,6 +43,7 @@ const row = (id: string, title: string, done: boolean, extra: object = {}) =>
   ({ id, title, description: 'Short read.', video_url: null, article_url: null, completions: done ? [{ id: `x${id}` }] : [], ...extra });
 const LESSONS = [row('l1', 'How Sam builds your week', true), row('l2', 'Protein, simply', false), row('l3', 'Sleep and training', false, { description: null, video_url: 'https://v.example.test/3' })];
 const ok = <T,>(data: T) => Promise.resolve({ data });
+const seen = (texts: string[]) => texts.forEach((t) => expect(screen.getByText(t)).toBeTruthy());
 const lessons = jest.mocked(lessonsApi);
 const guidelines = jest.mocked(coachApi.getMyGuidelines);
 
@@ -161,7 +162,39 @@ describe('Learn', () => {
     expect(learnCopy('Sam').from).toBe('From Sam');
     expect(learnCopy(null).from).toBe('From your coach');
     expect(learnCopy(null, true).from).toBe('From your former coach');
-    expect(learnCopy(null, true).lede).toBe("Your coach's guidelines and lessons for you.");
+  });
+
+  it('LEARN-POLISH: a client with no coach gets its own lines; the coached lines are unchanged', () => {
+    const lines = (c: ReturnType<typeof learnCopy>) => [c.lede, c.loading, c.failed, c.lessonOf(1, 3), c.allDone(3), c.allDone(1)];
+    expect(lines(learnCopy(null, true))).toEqual(['Lessons you completed with your former coach.', 'Loading your lessons', 'Your lessons did not load.',
+      'Lesson 1 of 3 · from your former coach', 'All 3 of your lessons are complete.', 'Your lesson is complete.']);
+    expect(lines(learnCopy('Sam'))).toEqual(["Sam's guidelines and lessons for you.", "Loading Sam's guidelines and lessons", "Sam's guidelines and lessons did not load.",
+      'Lesson 1 of 3 · from Sam', "All 3 of Sam's lessons are complete.", "All 1 of Sam's lessons are complete."]);
+    expect(lines(learnCopy(null))).toEqual(["Your coach's guidelines and lessons for you.", "Loading your coach's guidelines and lessons",
+      "Your coach's guidelines and lessons did not load.", 'Lesson 1 of 3 · from your coach', "All 3 of your coach's lessons are complete.",
+      "All 1 of your coach's lessons are complete."]);
+  });
+
+  it('without a coach, Learn and its loading and failed states never say "your coach"', async () => {
+    mockUser = { id: 'me', coach_id: null };
+    lessons.getAll.mockImplementation(() => ok([LESSONS[0]]) as never);
+    const kept = await show(LearnScreen);
+    expect(await screen.findByText('1 of 1 done')).toBeTruthy();
+    seen(['From your former coach', 'Lessons you completed with your former coach.']);
+    expect(screen.queryByText(/your coach/i)).toBeNull();
+    await kept.unmount();
+    // Before the read is back (the You row opens Learn only once a kept lesson is read): the same masthead.
+    lessons.getAll.mockImplementation(() => new Promise(() => {}) as never);
+    const loading = await show(LearnScreen);
+    expect(await screen.findByLabelText('Loading your lessons')).toBeTruthy();
+    seen(['From your former coach', 'Lessons you completed with your former coach.']);
+    expect(screen.queryByText(/your coach/i)).toBeNull();
+    await loading.unmount();
+    lessons.getAll.mockImplementation(() => Promise.reject({ message: 'Network Error' }));
+    await show(LearnScreen);
+    expect(await screen.findByText('Your lessons did not load. Check the connection and try again.')).toBeTruthy();
+    expect(screen.queryByText(/your coach/i)).toBeNull();
+    expect(guidelines).not.toHaveBeenCalled();
   });
 
   it('a failed read is one calm sentence and Try again', async () => {
@@ -225,6 +258,32 @@ describe('Learn lesson view', () => {
     await show(LearnLessonScreen);
     expect(await screen.findByText('Lesson 1 of 2 complete.')).toBeTruthy();
     expect(screen.queryByText('Mark as complete')).toBeNull();
+  });
+
+  it('without a coach the kept lesson is from your former coach, and the closure says so in its own words', async () => {
+    mockUser = { id: 'me', coach_id: null };
+    lessons.getAll.mockImplementation(() => ok([LESSONS[0]]) as never);
+    mockParams = { id: 'l1' };
+    const one = await show(LearnLessonScreen);
+    expect(await screen.findByText('Lesson 1 of 1 · from your former coach')).toBeTruthy();
+    expect(screen.getByText('Your lesson is complete.')).toBeTruthy();
+    expect(screen.queryByText(/your coach/i)).toBeNull();
+    expect(screen.queryByText('Mark as complete')).toBeNull();
+    await one.unmount();
+    lessons.getAll.mockImplementation(() => ok([LESSONS[0], row('l2', 'Protein, simply', true)]) as never);
+    mockParams = { id: 'l2' };
+    const two = await show(LearnLessonScreen);
+    expect(await screen.findByText('Lesson 2 of 2 · from your former coach')).toBeTruthy();
+    expect(screen.getByText('All 2 of your lessons are complete.')).toBeTruthy();
+    expect(screen.queryByText(/^Next:/)).toBeNull();
+    await two.unmount();
+    lessons.getAll.mockImplementation(() => new Promise(() => {}) as never);
+    const loading = await show(LearnLessonScreen);
+    expect(await screen.findByLabelText('Loading your lessons')).toBeTruthy();
+    await loading.unmount();
+    lessons.getAll.mockImplementation(() => Promise.reject({ response: { status: 500 } }));
+    await show(LearnLessonScreen);
+    expect(await screen.findByText('Your lessons did not load.')).toBeTruthy();
   });
 
   it('a failed save keeps the sentence above the button, with one error haptic', async () => {
