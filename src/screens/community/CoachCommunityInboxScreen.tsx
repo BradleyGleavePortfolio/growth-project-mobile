@@ -1,7 +1,12 @@
 /**
  * CoachCommunityInboxScreen — aggregated unanswered items across the coach's
- * cohorts (v1-6). Consumes `GET /community/coach/inbox` (paged) and
+ * cohorts (v1-6). Consumes `GET /community/me/coach-inbox` (paged) and
  * `POST /community/coach/inbox/:id/ack`.
+ *
+ * VOICE-INBOX (#167-4): behind `communityVoiceNotes`, a client's voice note is
+ * a row too: a mic glyph, "Voice note · 0:42", the client's name and time.
+ * Tapping it opens the note (openInboxVoiceNote, the one place that decides
+ * where a note opens).
  *
  * Each row shows the client avatar (with a monogram badge fallback), a snippet,
  * a relative age, and an acknowledge button. Acks are optimistic with rollback
@@ -29,6 +34,8 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
@@ -56,6 +63,8 @@ import {
   isIllegalAckTransition,
 } from '../../hooks/useCoachAckActions';
 import { featureFlags } from '../../config/featureFlags';
+import { formatDuration } from '../../components/community/voiceFormat';
+import type { CoachCommunityNav } from './coachCommunityNavTypes';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
@@ -77,6 +86,38 @@ const ACKS_ENABLED = featureFlags.communityAcks;
 // stable for the lifetime of the build (the triage hook lives behind this gate
 // at the component level, never conditionally inside a render).
 const TRIAGE_ENABLED = featureFlags.communityAiTriage;
+
+// VOICE-INBOX kill switch (build-time, default off): when OFF no voice row
+// ever shows and the inbox is exactly today's typed-message list.
+const VOICE_ENABLED = featureFlags.communityVoiceNotes;
+
+/**
+ * The rows the coach sees. A voice row (`kind: 'voice'` with its note) shows
+ * only with the voice flag on, and reads "Voice note · 0:42". An older server
+ * sends no kind and no voice rows, so every row stays a typed row.
+ */
+export function visibleInboxItems(
+  items: CoachInboxItem[],
+  voiceOn: boolean = VOICE_ENABLED,
+): CoachInboxItem[] {
+  return items.flatMap((item) => {
+    if (item.kind !== 'voice') return [item];
+    if (!voiceOn || item.voice == null) return [];
+    const length = formatDuration(item.voice.duration_ms);
+    return [{ ...item, snippet: `Voice note · ${length}` }];
+  });
+}
+
+/**
+ * Where a voice row opens: the voice note detail today. When the space chat
+ * ships (#167-3), this one line points the row at the note in the chat.
+ */
+export function openInboxVoiceNote(
+  navigation: CoachCommunityNav,
+  noteId: string,
+): void {
+  navigation.navigate('CommunityVoiceNoteDetail', { voiceNoteId: noteId });
+}
 
 /**
  * AI triage summary banner, pinned above the inbox list. Owns the
@@ -173,7 +214,10 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   // Memoise the row list so its identity is stable across renders — otherwise
   // the `?? []` fallback allocates a fresh array each render and churns the
   // useCallback deps below (and the FlatList data prop).
-  const items = useMemo(() => inbox.data?.items ?? [], [inbox.data?.items]);
+  const items = useMemo(
+    () => visibleInboxItems(inbox.data?.items ?? []),
+    [inbox.data?.items],
+  );
 
   // v2-2: seed the per-message ack cache from any ack envelope the backend
   // attached to an inbox row (additive `ack` field, present only when
@@ -239,7 +283,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
 
   const renderItem = useCallback(
     ({ item }: { item: CoachInboxItem }) => (
-      <InboxRow
+      <InboxRowOrVoice
         item={item}
         selecting={selecting}
         checked={selected.has(item.id)}
@@ -408,6 +452,30 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   );
 }
 
+type InboxRowProps = React.ComponentProps<typeof InboxRow>;
+
+/**
+ * Picks the row. A voice row gets its own component so only voice rows read
+ * the navigator; a row's kind never changes, so the hooks stay stable.
+ */
+function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
+  return props.item.kind === 'voice' && props.item.voice != null ? (
+    <VoiceInboxRow {...props} noteId={props.item.voice.note_id} />
+  ) : (
+    <InboxRow {...props} />
+  );
+}
+
+function VoiceInboxRow({
+  noteId,
+  ...props
+}: InboxRowProps & { noteId: string }): React.ReactElement {
+  const navigation = useNavigation<CoachCommunityNav>();
+  return (
+    <InboxRow {...props} onOpen={() => openInboxVoiceNote(navigation, noteId)} />
+  );
+}
+
 function InboxRow({
   item,
   selecting,
@@ -422,6 +490,7 @@ function InboxRow({
   onMarkThreadRead,
   onToggleSelected,
   onAcknowledged,
+  onOpen,
 }: {
   item: CoachInboxItem;
   selecting: boolean;
@@ -436,6 +505,8 @@ function InboxRow({
   onMarkThreadRead: (item: CoachInboxItem) => void;
   onToggleSelected: (id: string) => void;
   onAcknowledged: () => void;
+  /** Voice rows only: opens the note (VoiceInboxRow passes it). */
+  onOpen?: () => void;
 }): React.ReactElement {
   // ACKS_ENABLED is a build-time constant, so the number/order of hooks is
   // stable for the entire lifetime of a build — a hook guarded by it never
@@ -449,7 +520,7 @@ function InboxRow({
   return (
     <HapticPressable
       intent="light"
-      onPress={selecting ? () => onToggleSelected(item.id) : undefined}
+      onPress={selecting ? () => onToggleSelected(item.id) : onOpen}
       onLongPress={selecting ? undefined : () => onMarkThreadRead(item)}
       accessibilityRole={selecting ? 'checkbox' : 'button'}
       accessibilityLabel={buildRowAccessibilityLabel(item, ackState)}
@@ -502,12 +573,29 @@ function InboxRow({
         >
           {item.cohort_name}
         </Text>
-        <Text
-          style={[styles.rowSnippet, { color: titleColor }]}
-          numberOfLines={2}
-        >
-          {item.snippet}
-        </Text>
+        {item.kind === 'voice' ? (
+          <View style={styles.voiceLine}>
+            <Ionicons
+              name="mic-outline"
+              size={16}
+              color={metaColor}
+              testID={`coach-community-inbox-voice-${item.id}`}
+            />
+            <Text
+              style={[styles.rowSnippet, styles.voiceText, { color: titleColor }]}
+              numberOfLines={2}
+            >
+              {item.snippet}
+            </Text>
+          </View>
+        ) : (
+          <Text
+            style={[styles.rowSnippet, { color: titleColor }]}
+            numberOfLines={2}
+          >
+            {item.snippet}
+          </Text>
+        )}
         {ACKS_ENABLED && !selecting ? (
           <CoachAckRow
             item={item}
@@ -701,6 +789,14 @@ const styles = StyleSheet.create({
   rowSnippet: {
     fontSize: 14,
     lineHeight: 19,
+  },
+  voiceLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  voiceText: {
+    flexShrink: 1,
   },
   ackButton: {
     minHeight: 44,

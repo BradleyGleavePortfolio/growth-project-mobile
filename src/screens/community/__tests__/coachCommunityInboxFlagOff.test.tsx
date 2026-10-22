@@ -27,7 +27,11 @@ jest.mock('../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../config/featureFlags');
   return {
     ...actual,
-    featureFlags: { ...actual.featureFlags, communityAcks: false },
+    featureFlags: {
+      ...actual.featureFlags,
+      communityAcks: false,
+      communityVoiceNotes: false,
+    },
   };
 });
 
@@ -143,6 +147,30 @@ describe('CoachCommunityInboxScreen — flag OFF invariance (Code F4)', () => {
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     await fireEvent.press(getByTestId(`coach-community-inbox-ack-${MID}`));
     expect(mockAckMutate).toHaveBeenCalledWith(MID);
+  });
+
+  it('never shows a voice row with communityVoiceNotes off (VOICE-INBOX)', async () => {
+    const VID = '22222222-2222-2222-2222-222222222222';
+    mockInbox = {
+      ...(mockInbox as object),
+      data: {
+        items: [
+          inboxItem(),
+          {
+            ...inboxItem(),
+            id: VID,
+            snippet: 'Voice note',
+            kind: 'voice',
+            voice: { note_id: VID, duration_ms: 42_000 },
+          },
+        ],
+        next_before: null,
+      },
+    };
+    const { queryByTestId, queryByText } = await render(<CoachCommunityInboxScreen />);
+    expect(queryByTestId(`coach-community-inbox-row-${MID}`)).toBeTruthy();
+    expect(queryByTestId(`coach-community-inbox-row-${VID}`)).toBeNull();
+    expect(queryByText(/Voice note/)).toBeNull();
   });
 
   it('the row accessibility label is the plain v1-6 base (no ack/SLA routine)', async () => {

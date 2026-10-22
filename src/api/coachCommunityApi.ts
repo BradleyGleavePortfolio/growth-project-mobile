@@ -109,11 +109,51 @@ export const CoachInboxItemSchema = z
     /** ISO timestamp of the unanswered item; the row renders a relative age. */
     created_at: z.string(),
     acknowledged: z.boolean(),
+    /**
+     * VOICE-INBOX (#167-4): 'voice' for a client's voice note, 'text' for a
+     * typed message. Older servers leave it out; the screen reads a missing
+     * kind as a typed row, so a voice row never shows from them.
+     */
+    kind: z.string().optional(),
+    /** Only on voice rows: the note to open and its length. */
+    voice: z
+      .object({
+        note_id: z.string().uuid(),
+        duration_ms: z.number().int().nonnegative(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type CoachInboxItem = z.infer<typeof CoachInboxItemSchema>;
 
-/** GET /community/coach/inbox — one keyset page of aggregated inbox items. */
+/**
+ * GET /community/me/coach-inbox — one row as the server sends it (backend
+ * src/community/inbox/community-coach-inbox.dto.ts InboxItemSchema). getInbox
+ * maps it onto the CoachInboxItem shape the screen reads.
+ */
+const ServerInboxItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    cohort_id: z.string().uuid(),
+    cohort_name: z.string(),
+    author_user_id: z.string().uuid(),
+    author_display_name: z.string(),
+    preview: z.string(),
+    created_at: z.string(),
+    kind: CoachInboxItemSchema.shape.kind,
+    voice: CoachInboxItemSchema.shape.voice,
+  })
+  .passthrough();
+
+const ServerInboxPageSchema = z
+  .object({
+    items: z.array(ServerInboxItemSchema),
+    next_cursor: z.string().nullable(),
+  })
+  .passthrough();
+
+/** One keyset page of aggregated inbox items, in the screen's shape. */
 export const CoachInboxPageSchema = z
   .object({
     items: z.array(CoachInboxItemSchema),
@@ -513,19 +553,32 @@ export const coachCommunityApi = {
   },
 
   /**
-   * GET /community/coach/inbox?before=&limit= — one keyset page of aggregated
-   * unanswered items across the coach's cohorts. `before` is the opaque cursor
-   * returned as `next_before`.
+   * GET /community/me/coach-inbox?cursor=&limit= — one keyset page of
+   * aggregated unanswered items across the coach's cohorts. `before` is the
+   * opaque cursor returned as `next_before` (the server's `next_cursor`).
+   * The server has no /community/coach/inbox read; this is its inbox route.
    */
   getInbox(
     opts: { before?: string; limit?: number } = {},
   ): Promise<CoachInboxPage> {
     const params: Record<string, string> = {};
-    if (opts.before) params.before = opts.before;
+    if (opts.before) params.cursor = opts.before;
     if (opts.limit != null) params.limit = String(opts.limit);
-    return call(CoachInboxPageSchema, () =>
-      api.get<unknown>('/community/coach/inbox', { params }),
-    );
+    return call(ServerInboxPageSchema, () =>
+      api.get<unknown>('/community/me/coach-inbox', { params }),
+    ).then((page) => ({
+      items: page.items.map(
+        ({ author_user_id, author_display_name, preview, ...rest }) => ({
+          ...rest,
+          client_user_id: author_user_id,
+          client_name: author_display_name,
+          avatar_url: null,
+          snippet: preview,
+          acknowledged: false,
+        }),
+      ),
+      next_before: page.next_cursor,
+    }));
   },
 
   /**

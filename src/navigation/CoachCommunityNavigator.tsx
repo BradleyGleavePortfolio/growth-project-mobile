@@ -36,6 +36,7 @@ import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityP
 import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
 import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
 import CommunityWearablePromptsScreen from '../screens/community/CommunityWearablePromptsScreen';
+import CommunityVoiceNoteDetail from '../screens/community/CommunityVoiceNoteDetail';
 import type { CoachCommunityStackParamList } from '../screens/community/coachCommunityNavTypes';
 
 const CoachCommunityStack =
@@ -123,6 +124,14 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
           name="CoachCommunityWearablePrompts"
           component={CommunityWearablePromptsScreen}
           options={{ headerShown: false }}
+        />
+      ) : null}
+      {/* VOICE-INBOX: a voice row in the inbox opens its note here. */}
+      {featureFlags.communityVoiceNotes ? (
+        <CoachCommunityStack.Screen
+          name="CommunityVoiceNoteDetail"
+          component={CommunityVoiceNoteDetail}
+          options={{ title: '' }}
         />
       ) : null}
     </CoachCommunityStack.Navigator>

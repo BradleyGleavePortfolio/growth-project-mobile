@@ -80,12 +80,62 @@ describe('coachCommunityApi — read endpoints', () => {
     expect(res.unread_inbox_count).toBe(3);
   });
 
-  it('getInbox forwards keyset params', async () => {
-    api.get.mockResolvedValueOnce({ data: { items: [], next_before: null } });
-    await coachCommunityApi.getInbox({ before: 'cursor-1', limit: 20 });
-    expect(api.get).toHaveBeenCalledWith('/community/coach/inbox', {
-      params: { before: 'cursor-1', limit: '20' },
+  it('getInbox reads the server inbox route with its keyset params', async () => {
+    api.get.mockResolvedValueOnce({ data: { items: [], next_cursor: null } });
+    const res = await coachCommunityApi.getInbox({ before: 'cursor-1', limit: 20 });
+    expect(api.get).toHaveBeenCalledWith('/community/me/coach-inbox', {
+      params: { cursor: 'cursor-1', limit: '20' },
     });
+    expect(res).toEqual({ items: [], next_before: null });
+  });
+
+  // VOICE-INBOX (#167-4): the server row maps onto the screen's row shape;
+  // a voice row keeps its kind and note, an older server's row has no kind.
+  it('getInbox maps server rows, keeping kind and voice', async () => {
+    const base = {
+      cohort_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      cohort_name: 'Spring',
+      author_user_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      author_display_name: 'Dana',
+      created_at: '2026-10-22T09:00:00.000Z',
+      type: 'message',
+      item_url_path: '/community/cohorts/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/messages/x',
+    };
+    const voiceId = '22222222-2222-2222-2222-222222222222';
+    api.get.mockResolvedValueOnce({
+      data: {
+        items: [
+          { ...base, id: '11111111-1111-1111-1111-111111111111', preview: 'Hi coach', kind: 'text' },
+          {
+            ...base,
+            id: voiceId,
+            preview: 'Voice note',
+            kind: 'voice',
+            voice: { note_id: voiceId, duration_ms: 42000 },
+          },
+          { ...base, id: '33333333-3333-3333-3333-333333333333', preview: 'Older server' },
+        ],
+        next_cursor: 'next-1',
+      },
+    });
+    const res = await coachCommunityApi.getInbox();
+    expect(api.get).toHaveBeenCalledWith('/community/me/coach-inbox', { params: {} });
+    expect(res.next_before).toBe('next-1');
+    expect(res.items[0]).toMatchObject({
+      client_user_id: base.author_user_id,
+      client_name: 'Dana',
+      snippet: 'Hi coach',
+      avatar_url: null,
+      acknowledged: false,
+      kind: 'text',
+    });
+    expect(res.items[0].voice).toBeUndefined();
+    expect(res.items[1]).toMatchObject({
+      kind: 'voice',
+      snippet: 'Voice note',
+      voice: { note_id: voiceId, duration_ms: 42000 },
+    });
+    expect(res.items[2].kind).toBeUndefined();
   });
 
   it('getCohorts unwraps the cohorts array', async () => {
