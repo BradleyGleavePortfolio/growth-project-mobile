@@ -52,9 +52,20 @@ export async function takeRenewalPopup(userId: string, r: Extract<Renewal, { sta
 /** HOUSE-JOIN-BE: the client package list for the house coach while his door is open for this client (else 404). */
 export const houseCoachPackagesPath = (coachId: string) => `/v1/clients/me/coach/packages?coach_id=${encodeURIComponent(coachId)}`;
 
+/**
+ * A house package as sold, plus the server's own description and, for a one-time plan, its weeks of access (backend
+ * computeAccessExpiry: purchase + duration_periods weeks; a renewing plan runs until canceled, so it has none).
+ */
+export type HousePackage = PurchasablePackage & { description: string | null; weeks: number | null };
+
 /** `{ packages }` or a bare array; rows that cannot be sold honestly are dropped. */
-export function readHousePackages(data: unknown): PurchasablePackage[] {
+export function readHousePackages(data: unknown): HousePackage[] {
   const d = data as { packages?: unknown } | null;
   const raw: unknown[] = Array.isArray(data) ? data : Array.isArray(d?.packages) ? d.packages : [];
-  return raw.map(purchasableFromCoachPackage).filter((p): p is PurchasablePackage => !!p);
+  return raw.flatMap((row) => {
+    const p = purchasableFromCoachPackage(row);
+    const { description: text, duration_periods: n } = (row ?? {}) as { description?: unknown; duration_periods?: unknown };
+    const weeks = p && !p.renewing && typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : null;
+    return p ? [{ ...p, description: typeof text === 'string' && text.trim() ? text.trim() : null, weeks }] : [];
+  });
 }
