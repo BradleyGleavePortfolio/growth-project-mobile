@@ -141,7 +141,7 @@ type View = Awaited<ReturnType<typeof renderHome>>;
 const label = (v: View, id: string) => v.getByTestId(id).props.accessibilityLabel as string;
 const press = (v: View, ...ids: string[]) => ids.reduce((p, id) => p.then(() => fireEvent.press(v.getByTestId(id))), Promise.resolve());
 
-describe('coach Home, flag on, with home (b#1123)', () => {
+describe('coach Home, flag on, with home (b#1123) and on an older server without it', () => {
   it('asks for include=home and draws the wins hero with one win, tiles, alerts and rings', async () => {
     const v = await renderHome();
     expect(mockGet).toHaveBeenCalledWith('/coach/command-center/overview', { params: { include: 'home' } });
@@ -178,11 +178,11 @@ describe('coach Home, flag on, with home (b#1123)', () => {
     await press(v, id);
     expect(mockNavigate).toHaveBeenCalledWith(stack, params);
   });
-  it('drops the win line at large text and puts Approve over the kinds, on the first screen (LS B2)', async () => {
-    mockWindow.fontScale = 1.3;
+  it.each([[1, 'Ask,Workouts,Approve', true], [1.3, 'Approve,Workouts,Ask', false]])('orders the Roman card for the first screen at %sx text, the win line only at 1x (LS B2)', async (scale, order, winLine) => {
+    mockWindow.fontScale = scale;
     const v = await renderHome();
-    const first = v.getAllByText(/^Approve Roman|Workouts$/)[0].props.children; // in screen order
-    expect([!!v.queryByTestId('home-win-w1'), /^Approve/.test(String(first)), label(v, 'home-wins-all')]).toEqual([false, true, '12 wins this week. See all']);
+    const seen = v.getAllByText(/^(Approve Roman|Ask Roman)|Workouts$/).map((n) => /^(Approve|Ask|Workouts)/.exec(String(n.props.children))?.[1]); // screen order
+    expect([[...new Set(seen.filter(Boolean))].join(), !!v.queryByTestId('home-win-w1'), label(v, 'home-wins-all')]).toEqual([order, winLine, '12 wins this week. See all']);
   });
   it("opens alerts in Actions with the tab row back, and labels Roman's drafts", async () => {
     const v = await renderHome();
@@ -273,9 +273,6 @@ describe('coach Home, flag on, with home (b#1123)', () => {
     expect(mockSources.atRisk).toHaveBeenCalledTimes(2);
     expect(mockStore.loadClients).toHaveBeenCalledTimes(2); // mount and the return, not twice on mount (LO C1)
   });
-});
-
-describe('coach Home without home (an older server)', () => {
   it("draws the overview's own figure and tiles and no rings or wins (no invented number)", async () => {
     mockGet.mockResolvedValue({ data: overview(30) });
     const v = await renderHome();
@@ -284,8 +281,7 @@ describe('coach Home without home (an older server)', () => {
   });
   it('leaves Stayed out when there is no real base', async () => {
     mockSources.ltv.mockResolvedValue({ active_client_count: 0, churn_rate_pct: 0, mrr_30d_ago_cents: 0 });
-    const v = await renderHome();
-    expect(v.queryByTestId('home-tile-stayed')).toBeNull();
+    expect((await renderHome()).queryByTestId('home-tile-stayed')).toBeNull();
   });
 });
 
