@@ -96,8 +96,8 @@ export default function CommunityVoiceComposerScreen(): React.ReactElement {
       <View style={styles.content}>
         <VoiceNoteComposer
           target={target}
-          onSend={(recording, studio) => {
-            outbox.send(recording, { cohortId, conversationId, sendPeaks: studio });
+          onSend={(recording) => {
+            outbox.send(recording, { cohortId, conversationId });
             navigation.goBack();
           }}
           onClose={() => navigation.goBack()}

@@ -11,7 +11,6 @@
  *   - denied      → a REAL mic-permission recovery state: a "try again" action,
  *     and when the OS will no longer prompt, an "Open Settings" deep-link
  *     instead of a no-op button (audit req — denial needs real recovery).
- *   - first use   → the once-only card (backend #1122; none on an older server).
  *   - idle        → the timer at 0:00 and the forest record disc.
  *   - recording   → serif timer, live level bars, a line filling to 5:00, stop;
  *     "{time} left" and one warning tap from 15 s left; stops at 5:00.
@@ -24,7 +23,7 @@
  *
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
@@ -32,20 +31,19 @@ import { useTheme } from '../../theme/useTheme';
 import { forestPop as fp, radius, spacing, typography, voiceShades } from '../../theme/tokens';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { LIVE_LEVEL_BARS, useVoiceRecorder } from '../../hooks/useVoiceRecorder';
-import { useVoiceConsent } from '../../hooks/useVoiceStudio';
 import type { VoiceRecorderPort, VoiceRecordingResult } from '../../hooks/voiceRecorderPort';
 import type { VoicePlaybackPort } from './voicePlaybackPort';
 import VoiceNoteRecordButton from './VoiceNoteRecordButton';
 import VoiceNotePlayer from './VoiceNotePlayer';
-import VoicePrivacyCopy, { describeVoiceAudience, type VoiceAudienceTarget } from './VoicePrivacyCopy';
+import VoicePrivacyCopy, { type VoiceAudienceTarget } from './VoicePrivacyCopy';
 import { formatDuration } from './voiceFormat';
 import { COMMUNITY_SUPPORT_EMAIL } from '../../api/communityErrors';
 
 export interface VoiceNoteComposerProps {
   /** The concrete send target → drives the audience disclosure. */
   target: VoiceAudienceTarget;
-  /** Send: `studio` is true when the server takes waveform peaks. */
-  onSend: (recording: VoiceRecordingResult, studio: boolean) => void;
+  /** Send hands the recording to the outbox. */
+  onSend: (recording: VoiceRecordingResult) => void;
   /** Cancel, Not now and Delete close the sheet. */
   onClose: () => void;
   /** Inject a recorder port for tests; defaults to the resolved adapter. */
@@ -68,10 +66,7 @@ export default function VoiceNoteComposer({
 }: VoiceNoteComposerProps): React.ReactElement {
   const { semanticColors } = useTheme();
   const rec = useVoiceRecorder(recorder ? { recorder } : {});
-  const consent = useVoiceConsent();
-  const [agreed, setAgreed] = useState(false);
   const warned = useRef(false);
-  const showCard = consent.needsCard && !agreed;
   const { start, status } = rec;
 
   const left = rec.maxDurationMs - rec.elapsedMs;
@@ -93,44 +88,6 @@ export default function VoiceNoteComposer({
     if (rec.status === 'stopping') return 'stopping';
     return 'idle';
   }, [rec.status]);
-
-  // ── First use: the once-only card ───────────────────────────────────────────
-  if (showCard) {
-    const lines: [React.ComponentProps<typeof Ionicons>['name'], string][] = [
-      ['lock-closed-outline', describeVoiceAudience(target)],
-      ['flag-outline', 'If someone reports a voice note, your coach and the TGP Fitness team can listen to it.'],
-      ['trash-outline', 'You can delete your voice note at any time.'],
-    ];
-    return (
-      <View style={styles.container} testID={`${testID ?? 'voice-composer'}-consent`}>
-        <Text style={styles.cardTitle} accessibilityRole="header">Voice notes</Text>
-        {lines.map(([icon, line]) => (
-          <View key={icon} style={styles.consentRow}>
-            <View style={styles.wash}>
-              <Ionicons name={icon} size={22} color={fp.forest} />
-            </View>
-            <Text style={styles.consentText}>{line}</Text>
-          </View>
-        ))}
-        <HapticPressable
-          intent="medium"
-          onPress={() => {
-            setAgreed(true);
-            consent.record();
-            void start();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Record"
-          testID="voice-composer-consent-record"
-          style={[styles.secondaryAction, { flexDirection: 'row', gap: spacing.sm }]}
-        >
-          <Ionicons name="mic-outline" size={20} color={fp.onDeep} />
-          <Text style={[styles.primaryLabel, { color: fp.onDeep }]}>Record</Text>
-        </HapticPressable>
-        <NotNow onPress={onClose} />
-      </View>
-    );
-  }
 
   // ── Unavailable build ───────────────────────────────────────────────────────
   if (rec.status === 'unavailable') {
@@ -270,7 +227,7 @@ export default function VoiceNoteComposer({
           <HapticPressable
             intent="light"
             onPress={() => {
-              onSend(recording, consent.studio);
+              onSend(recording);
               rec.reset();
             }}
             accessibilityRole="button"
@@ -321,7 +278,6 @@ export default function VoiceNoteComposer({
         status={recordStatus}
         elapsedMs={rec.elapsedMs}
         maxDurationMs={rec.maxDurationMs}
-        disabled={consent.loading}
         onStart={() => void start()}
         onStop={() => void rec.stop()}
       />
@@ -397,7 +353,6 @@ const styles = StyleSheet.create({
   headerAction: { minWidth: 72, minHeight: 44, justifyContent: 'center' },
   cancel: { fontSize: 17, fontWeight: '500', color: fp.forest },
   title: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
-  cardTitle: { fontSize: 24, lineHeight: 30, fontWeight: '600', color: fp.ink },
   timer: { fontFamily: typography.display.fontFamily, fontSize: 64, lineHeight: 80, color: fp.ink, textAlign: 'center' },
   hint: { fontSize: 16, lineHeight: 22, minHeight: 22, color: fp.n700, textAlign: 'center' },
   hintWarn: { color: fp.ink, fontWeight: '600' },
@@ -406,10 +361,8 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: voiceShades.hairline },
   track: { height: 4, borderRadius: 2, backgroundColor: voiceShades.hairline, overflow: 'hidden' },
   trackFill: { height: 4, backgroundColor: fp.forest },
-  consentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   wash: { width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
     backgroundColor: voiceShades.leafWash, borderWidth: 1, borderColor: voiceShades.washEdge },
-  consentText: { flex: 1, fontSize: 17, lineHeight: 24, color: fp.ink },
   reviewActions: {
     flexDirection: 'row',
     gap: spacing.md,

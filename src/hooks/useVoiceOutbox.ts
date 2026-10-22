@@ -24,7 +24,7 @@ export interface VoiceOutboxItem {
   authorId: string;
   workspaceId: string;
   input: VoiceUploadInput;
-  /** Peaks drawn on the row (sent only when the server takes them). */
+  /** Peaks drawn on the row. */
   peaks: number[];
   status: VoiceOutboxStatus;
 }
@@ -54,14 +54,11 @@ async function keepFile(uri: string): Promise<string> {
     return uri;
   }
 }
+/** Delete the files this outbox moved (one already gone is fine). */
 function dropFiles(gone: VoiceOutboxItem[]): void {
-  gone.forEach((i) => {
-    try {
-      if (i.input.uri.includes('/voice-outbox/')) new File(i.input.uri).delete();
-    } catch {
-      // Already gone.
-    }
-  });
+  for (const i of gone) {
+    try { if (i.input.uri.includes('/voice-outbox/')) new File(i.input.uri).delete(); } catch { /* gone */ }
+  }
 }
 function remove(id: string): void {
   dropFiles(items.filter((i) => i.id === id));
@@ -125,7 +122,7 @@ export interface VoiceOutbox {
   online: boolean;
   send: (
     recording: VoiceRecordingResult,
-    opts: { cohortId?: string; conversationId?: string; sendPeaks: boolean },
+    opts?: { cohortId?: string; conversationId?: string },
   ) => void;
   retry: (id: string) => void;
   discard: (id: string) => void;
@@ -154,9 +151,9 @@ export function useVoiceOutbox(workspaceId: string | null, authorId: string | nu
       const id = `local-${Date.now()}-${(seq += 1)}`;
       const { uri, durationMs, bytes, mimeType, peaks } = recording;
       const input: VoiceUploadInput = { uri, durationMs, bytes, mimeType };
-      if (opts.cohortId) input.cohortId = opts.cohortId;
-      if (opts.conversationId) input.conversationId = opts.conversationId;
-      if (opts.sendPeaks && peaks.length > 0) input.waveformPeaks = peaks;
+      if (opts?.cohortId) input.cohortId = opts.cohortId;
+      if (opts?.conversationId) input.conversationId = opts.conversationId;
+      if (peaks.length > 0) input.waveformPeaks = peaks;
       commit([...items, { id, authorId, workspaceId, input, peaks, status: 'sending' }]);
       void keepFile(uri).then((kept) => {
         patch(id, { input: { ...input, uri: kept }, status: 'waiting' });

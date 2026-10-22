@@ -40,8 +40,4 @@ export const voiceKeys = {
   ): readonly unknown[] {
     return ['community', 'voice', 'feed', workspaceId, scopeTag(scope), limit];
   },
-  /** The signed-in person's voice consent card state (backend #1122). */
-  consent(): readonly unknown[] {
-    return ['community', 'voice', 'consent'];
-  },
 };

@@ -1,8 +1,7 @@
 /**
  * useVoiceOutbox — the Style B outbox: Send closes the sheet and the note
  * waits here until the server has it (sending → gone, failed → retry,
- * offline → waiting → sends on reconnect, also after a restart). Peaks go
- * only to a Studio server.
+ * offline → waiting → sends on reconnect, also after a restart).
  */
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
@@ -56,7 +55,7 @@ beforeEach(() => {
 describe('useVoiceOutbox', () => {
   it('sends at once and drops the row when the server has the note', async () => {
     const { result } = await setup();
-    await act(async () => result.current.send(REC, { sendPeaks: true }));
+    await act(async () => result.current.send(REC));
     await waitFor(() => expect(result.current.items).toHaveLength(0));
     expect(mockPublish).toHaveBeenCalledWith(
       'ws-1',
@@ -68,11 +67,9 @@ describe('useVoiceOutbox', () => {
   it('a failed send online is Not sent, keeps the recording, and Try again sends it', async () => {
     mockPublish.mockRejectedValueOnce(new Error('500'));
     const { result } = await setup();
-    await act(async () => result.current.send(REC, { sendPeaks: false }));
+    await act(async () => result.current.send(REC));
     await waitFor(() => expect(result.current.items[0]?.status).toBe('failed'));
     expect(result.current.items[0].input.uri).toBe('file:///docs/voice-outbox/r.m4a');
-    // Old servers reject unknown create keys: no peaks unless the server takes them.
-    expect(result.current.items[0].input).not.toHaveProperty('waveformPeaks');
     await act(async () => result.current.retry(result.current.items[0].id));
     await waitFor(() => expect(result.current.items).toHaveLength(0));
   });
@@ -81,7 +78,7 @@ describe('useVoiceOutbox', () => {
     net.__setState({ isConnected: false });
     const { result } = await setup();
     await waitFor(() => expect(result.current.online).toBe(false));
-    await act(async () => result.current.send(REC, { sendPeaks: false }));
+    await act(async () => result.current.send(REC));
     await waitFor(() => expect(result.current.items[0]?.status).toBe('waiting'));
     expect(mockPublish).not.toHaveBeenCalled();
     await act(async () => net.__setState({ isConnected: true }));
@@ -93,7 +90,7 @@ describe('useVoiceOutbox', () => {
     net.__setState({ isConnected: false });
     const before = await setup();
     await waitFor(() => expect(before.result.current.online).toBe(false));
-    await act(async () => before.result.current.send(REC, { sendPeaks: false }));
+    await act(async () => before.result.current.send(REC));
     await waitFor(() => expect(before.result.current.items[0]?.status).toBe('waiting'));
     before.unmount();
     // A cold start: the memory is gone, only what the phone saved is left.
@@ -109,7 +106,7 @@ describe('useVoiceOutbox', () => {
     net.__setState({ isConnected: false });
     const mine = await setup('u-me');
     await waitFor(() => expect(mine.result.current.online).toBe(false));
-    await act(async () => mine.result.current.send(REC, { sendPeaks: false }));
+    await act(async () => mine.result.current.send(REC));
     await waitFor(() => expect(mine.result.current.items).toHaveLength(1));
     const other = await setup('u-other');
     expect(other.result.current.items).toHaveLength(0);

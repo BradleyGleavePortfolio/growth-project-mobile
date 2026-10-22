@@ -61,8 +61,6 @@ export interface VoiceNotePlayerProps {
   trailing?: React.ReactNode;
   /** Drawn inside the card under the row (the Not sent row). */
   footer?: React.ReactNode;
-  /** Playback reached the end (the feed marks the note heard). */
-  onFinished?: () => void;
   testID?: string;
 }
 
@@ -78,7 +76,6 @@ export default function VoiceNotePlayer({
   offline = false,
   trailing = null,
   footer = null,
-  onFinished,
   testID,
 }: VoiceNotePlayerProps): React.ReactElement {
   const port = playback ?? resolveVoicePlayback();
@@ -100,8 +97,6 @@ export default function VoiceNotePlayer({
   const loadingRef = useRef<number | null>(null);
   const onPlaybackErrorRef = useRef(onPlaybackError);
   onPlaybackErrorRef.current = onPlaybackError;
-  const onFinishedRef = useRef(onFinished);
-  onFinishedRef.current = onFinished;
   // A point picked on the bars before the clip is loaded; Play starts there.
   const seekRef = useRef(0);
   const [barsWidth, setBarsWidth] = useState(0);
@@ -158,7 +153,6 @@ export default function VoiceNotePlayer({
             if (generation !== generationRef.current) return;
             setState('paused');
             setPositionMs(0);
-            onFinishedRef.current?.();
           },
           onError: () => fail(generation),
         });
