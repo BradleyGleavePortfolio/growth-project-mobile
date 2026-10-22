@@ -1,8 +1,7 @@
 /**
  * CHAT-DISCARD (owner 10-21, op 1) in the Roman chat, at screen level (Opus C3, m#841): the real RomanChatScreen keeps
- * half-typed text on the device for the signed-in account. It is back after leaving and opening Roman again and after
- * the app closed (device copy, memory empty); a failed send keeps it; a sent message and a sign-out leave the box
- * empty. Roman keeps one text per account (Opus C5), on the client and the coach surface alike.
+ * half-typed text per signed-in account (client and coach surface) after leaving and opening Roman again and after a
+ * failed send; a sent message and a sign-out leave the box empty. (The device read after a restart: chatDrafts.test.)
  */
 import React from 'react';
 import { AccessibilityInfo } from 'react-native';
@@ -65,17 +64,6 @@ it.each(['client', 'coach'] as const)('%s: half-typed text is back after leaving
   await a.unmount();
   expect(boxOf(await open(surface))).toBe('What should I eat bef');
   await waitFor(() => expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}${mockUser.id}:roman`)).toContain('What should I eat bef'));
-});
-
-it('after the app closed (memory empty), the device copy fills the box; another account never sees it', async () => {
-  mockDisk.set(`${CHAT_DRAFT_KEY_PREFIX}client-1:roman`, JSON.stringify({ text: 'How much protein after a l' }));
-  const r = await open();
-  await waitFor(() => expect(boxOf(r)).toBe('How much protein after a l'));
-  await r.unmount();
-  mockUser = { id: 'client-2', firstName: 'Ben' };
-  const other = await open();
-  await act(async () => undefined);
-  expect(boxOf(other)).toBe('');
 });
 
 it('a failed send keeps the text, also after leaving; a sent message leaves the box empty', async () => {
