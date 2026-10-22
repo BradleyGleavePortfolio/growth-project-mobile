@@ -51,7 +51,9 @@ export function parsePlanEndedPage(v: unknown): (PlanEndedPage & { next_cursor: 
 
 /** Every page, newest end first; null when the list is off on this server (404) or the answer is not the list. */
 export async function readPlanEnded(): Promise<PlanEndedPage | null> {
-  let all: PlanEndedPage | null = null;
+  let head: PlanEndedPage | null = null;
+  const items: PlanEndedRow[] = [];
+  const seen = new Set<string>();
   let cursor: string | null = null;
   for (let i = 0; i < MAX_PAGES; i += 1) {
     let data: unknown;
@@ -62,12 +64,13 @@ export async function readPlanEnded(): Promise<PlanEndedPage | null> {
       throw err;
     }
     const page = parsePlanEndedPage(data);
-    if (!page) return all;
-    all = all ? { ...all, items: [...all.items, ...page.items.filter((r) => !all?.items.some((x) => x.client_id === r.client_id))] } : page;
-    if (!page.next_cursor) break;
+    if (!page) break;
+    head = head ?? page;
+    for (const r of page.items) if (!seen.has(r.client_id)) { seen.add(r.client_id); items.push(r); }
     cursor = page.next_cursor;
+    if (!cursor) break;
   }
-  return all ? { total: Math.max(all.total, all.items.length), time_zone: all.time_zone, items: all.items } : null;
+  return head ? { total: Math.max(head.total, items.length), time_zone: head.time_zone, items } : null;
 }
 
 export const planEndedTitle = (n: number) => `Plan ended last 7 days, ${n}`; // RN3-24, the owner's words

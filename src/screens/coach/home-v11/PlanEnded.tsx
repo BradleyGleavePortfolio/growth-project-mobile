@@ -106,7 +106,7 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk }
   }, []);
 
   const groups = groupPlanEnded(page.items);
-  const message = (r: PlanEndedRow) => { void HapticService.lightImpact(); openInboxChat(navigation, r.client_id, r.name); };
+  const message = (r: PlanEndedRow) => { void HapticService.softImpact(); openInboxChat(navigation, r.client_id, r.name); };
   const body = (
     <>
       {error ? <QuietError layout="inline" message={loadFailureMessage(error, 'This list')} onRetry={onReload} testID="plan-ended-error" /> : null}

@@ -26,7 +26,7 @@ jest.mock('react-native-svg', () => {
   const El = ({ children, testID }: { children?: React.ReactNode; testID?: string }) => R.createElement(View, { testID }, children);
   return { __esModule: true, default: El, Circle: El };
 });
-jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: { softImpact: jest.fn(), mediumImpact: jest.fn(), selection: jest.fn(), lightImpact: jest.fn() } }));
+jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: { softImpact: jest.fn(), mediumImpact: jest.fn(), selection: jest.fn() } }));
 jest.mock('../services/commandCenterApi', () => ({ ...jest.requireActual('../services/commandCenterApi'), __USING_MOCK_DATA: false, commandCenterApi: { getOverview: jest.fn() } }));
 jest.mock('../services/api', () => ({
   __esModule: true,
