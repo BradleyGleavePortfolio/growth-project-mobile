@@ -91,7 +91,7 @@ describe('orphan guard — every P3 surface stays imported into its host, flag-g
     // client-side recompute, not an authoritative backend milestone), so the
     // card stays hidden until the backend exposes a real milestone event.
     expect(PROGRESS).toMatch(
-      /featureFlags\.romanChat && featureFlags\.romanStreakBackendLive && streakTier !== null/,
+      /featureFlags\.romanChat && featureFlags\.romanStreakBackendLive && !romanLocked && streakTier !== null/,
     );
     expect(PROGRESS).toContain('testID="roman-streak-card"');
     expect(PROGRESS).toContain('Follow-up (roman-streak-backend)');

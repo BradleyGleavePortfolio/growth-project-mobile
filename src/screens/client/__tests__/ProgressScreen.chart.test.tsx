@@ -86,6 +86,7 @@ jest.mock('../../../theme/ThemeProvider', () => {
 });
 
 jest.mock('@react-navigation/native', () => ({
+  NavigationContext: require('react').createContext(undefined),
   useNavigation: () => ({ navigate: jest.fn() }),
 }));
 
