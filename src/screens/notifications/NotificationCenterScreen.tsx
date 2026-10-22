@@ -255,7 +255,7 @@ export default function NotificationCenterScreen() {
       <HapticPressable intent="light" onPress={() => handlePress(item)} style={styles.row}
         disabled={item.read && !item.actionScreen}
         accessibilityRole={item.read && !item.actionScreen ? 'text' : 'button'}
-        accessibilityLabel={`${item.read ? '' : 'Unread. '}${item.title}. ${item.body}`}
+        accessibilityLabel={`${item.read ? '' : 'Unread. '}${item.title}${item.body ? `. ${item.body}` : ''}`}
         accessibilityHint={item.actionScreen ? 'Open notification' : item.read ? undefined : 'Mark as read'}>
         <View style={styles.rowContent}>
           <View style={styles.rowTitleLine}>
@@ -263,7 +263,7 @@ export default function NotificationCenterScreen() {
             <Text style={[styles.rowTitle, !item.read && styles.rowTitleUnread]}>{item.title}</Text>
             <Text style={styles.rowTime}>{relativeTime(item.createdAt)}</Text>
           </View>
-          <Text style={styles.rowBody}>{item.body}</Text>
+          {item.body ? <Text style={styles.rowBody}>{item.body}</Text> : null}
         </View>
       </HapticPressable>
     ),
