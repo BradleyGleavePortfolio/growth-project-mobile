@@ -1,5 +1,5 @@
 import api from '../../services/api';
-import { COPILOT_PATHS, copilotApi, copilotErrorOf, parseChange, parseReply, parseSuggestion, parseWeek } from '../copilotApi';
+import { COPILOT_PATHS, PATH_DRAFTS_MAX_PAGES, copilotApi, copilotErrorOf, parseChange, parseReply, parseSuggestion, parseWeek } from '../copilotApi';
 import { sendMessage } from '../romanApi';
 
 jest.mock('../../services/api', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
@@ -46,9 +46,19 @@ test('the coach queue reads oldest first, keeps only waiting Copilot rows, and t
   const row = { id: 'd1', capability: 'client_path_change', status: 'pending', subject_user_id: 'c1', payload: KCAL, rationale: 'Steady loss.', created_at: VIEW.sent_at };
   get.mockResolvedValueOnce(ok({ items: [row, { ...row, id: 'd2', capability: 'program_draft' }, { ...row, id: 'd3', payload: {} }], total: 3, next_cursor: null }));
   expect(await copilotApi.pathChangeDrafts()).toEqual([{ id: 'd1', clientId: 'c1', change: parseChange(KCAL), reason: 'Steady loss.', sentAt: VIEW.sent_at }]);
-  expect(get).toHaveBeenCalledWith('/ai/gateway/drafts', { params: { order: 'oldest', limit: '50' } });
+  expect(get).toHaveBeenCalledWith('/ai/gateway/drafts', { params: { order: 'oldest', limit: '100' } });
   get.mockResolvedValueOnce(ok([row]));
   expect(await copilotApi.pathChangeDrafts()).toEqual([]);
+});
+
+test('a busy coach: the Copilot row on page 2, behind 100 older drafts of other kinds, still shows; paging stops at the cap', async () => {
+  const old = Array.from({ length: 100 }, (_, i) => ({ id: `w${i}`, capability: 'draft.create_workout_plan', status: 'pending' }));
+  const row = { id: 'd1', capability: 'client_path_change', status: 'pending', subject_user_id: 'c1', payload: MOVE, created_at: VIEW.sent_at };
+  get.mockResolvedValueOnce(ok({ items: old, next_cursor: 'w99' })).mockResolvedValueOnce(ok({ items: [row], next_cursor: null }));
+  expect((await copilotApi.pathChangeDrafts()).map((d) => d.id)).toEqual(['d1']);
+  expect(get).toHaveBeenLastCalledWith('/ai/gateway/drafts', { params: { order: 'oldest', limit: '100', after: 'w99' } });
+  get.mockReset().mockResolvedValue(ok({ items: old, next_cursor: 'w99' }));
+  expect([await copilotApi.pathChangeDrafts(), get.mock.calls.length]).toEqual([[], PATH_DRAFTS_MAX_PAGES]);
 });
 
 test('decide sends the body as given, and errors expose status, code and the server words', async () => {

@@ -22,6 +22,9 @@ const DAY = 86_400_000;
 const NOTE_MAX = 200;
 /** The client's own move window (backend #1120): 2 days back to 7 days ahead of now. */
 const inWindow = (t: number, now: number) => t > now - 2 * DAY && t < now + 7 * DAY;
+/** Whole days that bring Roman's day inside the window, so an older draft's Edit starts there (0 when already in). */
+const intoWindow = (t: number, now: number) =>
+  t <= now - 2 * DAY ? Math.floor((now - 2 * DAY - t) / DAY) + 1 : t >= now + 7 * DAY ? -Math.floor((t - now - 7 * DAY) / DAY) - 1 : 0;
 const kcalOk = (v: string) => /^\d{3,4}$/.test(v) && Number(v) >= 800 && Number(v) <= 7000;
 
 export interface PathChangeDraftCardProps {
@@ -43,7 +46,9 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
   const [refusal, setRefusal] = useState<AiRefusal | null>(null);
   const [planChanged, setPlanChanged] = useState(false);
   const [gone, setGone] = useState(false);
-  const [days, setDays] = useState(0);
+  const toAt = draft.change.kind === 'move_session' ? Date.parse(draft.change.to_at) : 0;
+  const [start] = useState(() => intoWindow(toAt, now()));
+  const [days, setDays] = useState(start);
   const [kcal, setKcal] = useState(draft.change.kind === 'set_calorie_target' ? String(Math.round(draft.change.to_kcal)) : '');
   const [note, setNote] = useState('');
 
@@ -52,7 +57,9 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
   const name = clientName?.trim() || C.yourClient;
   const first = clientName?.trim().split(/\s+/)[0] || C.yourClient.toLowerCase();
   const initials = (clientName ?? '').trim().split(/\s+/).map((w) => w.charAt(0)).join('').slice(0, 2).toUpperCase();
-  const movedAt = c.kind === 'move_session' ? Date.parse(c.to_at) + days * DAY : 0;
+  const movedAt = c.kind === 'move_session' ? toAt + days * DAY : 0;
+  /** Roman's day slipped out of the window: Approve as is would be refused; Edit (starting inside) and Decline stay. */
+  const outOfWindow = c.kind === 'move_session' && !inWindow(toAt, now());
 
   const go = async (body: DecideBody) => {
     setBusy(true);
@@ -67,10 +74,13 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
       void HapticService.error();
       const r = aiRefusalOf(err);
       const e = copilotErrorOf(err);
+      // Decided elsewhere or the client left (404, or a 403 that is not AI help off): gone, the list reloads.
+      const decidedElsewhere = !r && (e.status === 404 || e.status === 403);
       if (r) setRefusal(r);
-      else setLine(e.status && e.status < 500 && e.message ? e.message : C.failed);
+      else if (!decidedElsewhere) setLine((e.code?.startsWith('COPILOT_') || e.status === 400) && e.message ? e.message : C.failed);
       if (e.code === 'COPILOT_PLAN_CHANGED') setPlanChanged(true);
-      if (e.status === 404 || e.code === 'COPILOT_SUGGESTION_EXPIRED' || (e.status === 403 && !r)) setGone(true);
+      if (decidedElsewhere || e.code === 'COPILOT_SUGGESTION_EXPIRED') setGone(true);
+      if (decidedElsewhere) onDecided();
     } finally {
       setBusy(false);
     }
@@ -129,7 +139,7 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
       {gone ? null : mode === 'view' ? (
         <>
           <View style={s.actions}>
-            {planChanged ? null : <PrimaryButton label={C.approve} onPress={() => void go({ decision: 'approved' })} loading={busy} haptic={false} style={s.flex} testID="path-draft-approve" />}
+            {planChanged || outOfWindow ? null : <PrimaryButton label={C.approve} onPress={() => void go({ decision: 'approved' })} loading={busy} haptic={false} style={s.flex} testID="path-draft-approve" />}
             <Pressable onPress={() => setMode('edit')} disabled={busy} accessibilityRole="button" style={[s.outline, s.flex, { borderColor: sc.textPrimary }]} testID="path-draft-edit">
               <Text style={[typography.bodyMd, s.value, { color: sc.textPrimary }]}>{C.edit}</Text>
             </Pressable>
@@ -139,8 +149,8 @@ export function PathChangeDraftCard({ draft, clientName, onDecided, decide = cop
       ) : (
         <View style={s.actions}>
           <PrimaryButton label={mode === 'edit' ? C.approve : C.decline} onPress={mode === 'edit' ? approveEdit : decline} loading={busy} haptic={false}
-            disabled={mode === 'edit' && c.kind === 'set_calorie_target' && !kcalOk(kcal)} style={s.flex} testID="path-draft-confirm" />
-          <TextLink label={C.cancel} onPress={() => { setMode('view'); setDays(0); }} tone="muted" disabled={busy} testID="path-draft-cancel" />
+            disabled={mode === 'edit' && (c.kind === 'set_calorie_target' ? !kcalOk(kcal) : !inWindow(movedAt, now()))} style={s.flex} testID="path-draft-confirm" />
+          <TextLink label={C.cancel} onPress={() => { setMode('view'); setDays(start); }} tone="muted" disabled={busy} testID="path-draft-cancel" />
         </View>
       )}
     </View>

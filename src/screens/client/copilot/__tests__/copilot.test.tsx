@@ -19,10 +19,13 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: m
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
-jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, default: () => null, useClientNeedsCoach: () => false }));
-jest.mock('../../../../api/romanApi', () => ({ ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError: class extends Error {}, openOrResumeSession: jest.fn(), sendMessage: jest.fn() }));
+jest.mock('../../../../api/romanApi', () => ({ ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError: class extends Error {}, RomanWireError: class extends Error {}, openOrResumeSession: jest.fn(), sendMessage: jest.fn() }));
 jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off') }));
 const mockText = (t: string) => <Text>{t}</Text>;
+let mockNeedsCoach = false;
+jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, ROMAN_LOCK_TITLE: 'Roman works with a coach',
+  default: ({ title, testID }: { title: string; testID: string }) => mockLock(title, testID), useClientNeedsCoach: () => mockNeedsCoach }));
+const mockLock = (title: string, testID: string) => <Text testID={testID}>{title}</Text>;
 jest.mock('../../../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../../../theme/tokens');
   return { useTheme: () => ({ colors: t.colors, semanticColors: t.lightTokens }) };
@@ -44,6 +47,7 @@ const wrap = (ui: React.ReactElement) => (
 beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.clientPathCopilot = true;
+  mockNeedsCoach = false;
   mockCoaches = [{ name: 'Alex Rivera' }];
 });
 
@@ -56,7 +60,7 @@ test('the phone writes every line from the structured change (no server titles)'
   const edited = row({ status: 'approved', change: { ...move, to_at: '2026-10-24T17:00:00Z' }, decided_at: '2026-10-21T18:00:00Z' });
   expect(statusLine(edited, 'Alex', NOW)).toEqual({ line: 'Approved by your coach', meta: 'Wed 21 Oct', tone: 'approved' });
   expect(describeChange(edited.change).summary).toBe('Move Lower body B to Sat 24 Oct');
-  expect(statusLine(row({ status: 'rejected', decided_at: '2026-10-09T10:00:00Z' }), 'Alex', NOW)).toEqual({ line: 'Alex kept your plan as it is', meta: 'Fri 9 Oct', tone: 'still' });
+  expect(statusLine(row({ status: 'rejected', decided_at: '2026-10-09T10:00:00Z' }), 'Alex', NOW)).toEqual({ line: 'Your coach kept your plan as it is', meta: 'Fri 9 Oct', tone: 'still' });
   expect(statusLine(row({ status: 'rejected' }), 'your coach', NOW).line).toBe('Your coach kept your plan as it is');
   expect(statusLine(row({ status: 'expired' }), 'Alex', NOW)).toMatchObject({ line: 'This suggestion has expired.', tone: 'still' });
 });
@@ -104,7 +108,7 @@ test('Your path lists sent suggestions with where each stands and the coach note
   expect(get).toHaveBeenCalledWith('/client/copilot');
   expect(s.getByText('Awaiting coach approval')).toBeTruthy();
   expect(s.getByText('Calorie target 2,600 to 2,450 kcal')).toBeTruthy();
-  expect(s.getByText('Alex kept your plan as it is')).toBeTruthy();
+  expect(s.getByText('Your coach kept your plan as it is')).toBeTruthy();
   expect(s.getByText('\u201CKeep the run, just take it easy.\u201D')).toBeTruthy();
   await act(async () => fireEvent.press(s.getByTestId('copilot-back')));
   expect(mockBack).toHaveBeenCalled();
@@ -123,4 +127,18 @@ test('a server without Copilot (404) still lets the client ask Roman, with no we
   mockFlags.clientPathCopilot = false;
   expect((await render(wrap(<ClientPathCopilotScreen />))).getByText('Path suggestions are not available on this account.')).toBeTruthy();
   expect(get.mock.calls.filter(([url]) => url === '/client/copilot')).toHaveLength(2);
+});
+
+test('a client with no coach gets the existing Roman lock page and no read; Not now waits while Send is in flight', async () => {
+  mockNeedsCoach = true;
+  const a = await render(wrap(<ClientPathCopilotScreen />));
+  expect([a.getByTestId('copilot-coach-lock').props.children, get.mock.calls.length]).toEqual(['Roman works with a coach', 0]);
+  await a.unmount();
+  mockNeedsCoach = false;
+  get.mockRejectedValueOnce(Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403, data: { code: 'ROMAN_REQUIRES_COACH' } } }));
+  expect(await (await render(wrap(<ClientPathCopilotScreen />))).findByTestId('copilot-coach-lock')).toBeTruthy();
+  post.mockReturnValueOnce(new Promise(() => undefined) as never);
+  const s = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);
+  await act(async () => fireEvent.press(s.getByText('Send to Alex')));
+  expect(s.getByTestId('copilot-not-now').props.accessibilityState?.disabled).toBe(true);
 });

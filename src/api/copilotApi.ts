@@ -25,22 +25,11 @@ export type PathChange =
 export type SuggestionStatus = 'suggested' | 'pending' | 'approved' | 'rejected' | 'expired';
 
 export interface CopilotSuggestion {
-  id: string;
-  status: SuggestionStatus;
-  change: PathChange;
-  reason: string | null;
-  note: string | null;
-  sent_at: string | null;
-  decided_at: string | null;
+  id: string; status: SuggestionStatus; change: PathChange; reason: string | null; note: string | null;
+  sent_at: string | null; decided_at: string | null;
 }
 
-export interface PathChangeDraft {
-  id: string;
-  clientId: string;
-  change: PathChange;
-  reason: string | null;
-  sentAt: string;
-}
+export interface PathChangeDraft { id: string; clientId: string; change: PathChange; reason: string | null; sentAt: string }
 
 export type DecideBody =
   | { decision: 'approved'; payload?: { to_at: string } | { to_kcal: number } }
@@ -83,15 +72,8 @@ export function parseSuggestion(v: unknown): CopilotSuggestion | null {
   if (!rec(v) || !str(v.id) || !STATUSES.includes(v.status as SuggestionStatus)) return null;
   const change = parseChange(v.change);
   if (!change) return null;
-  return {
-    id: v.id,
-    status: v.status as SuggestionStatus,
-    change,
-    reason: optStr(v.reason),
-    note: optStr(v.note),
-    sent_at: iso(v.sent_at) ? v.sent_at : null,
-    decided_at: iso(v.decided_at) ? v.decided_at : null,
-  };
+  return { id: v.id, status: v.status as SuggestionStatus, change, reason: optStr(v.reason), note: optStr(v.note),
+    sent_at: iso(v.sent_at) ? v.sent_at : null, decided_at: iso(v.decided_at) ? v.decided_at : null };
 }
 
 /** The Copilot part of one Roman reply (done frame or message view). null: not a Copilot turn (an older server). */
@@ -132,11 +114,8 @@ export interface PastAnswer { text: string; reply: CopilotReply | null }
 export function copilotErrorOf(err: unknown): { status: number | null; code: string | null; message: string | null } {
   const res = rec(err) && rec(err.response) ? err.response : null;
   const body = res && rec(res.data) ? res.data : null;
-  return {
-    status: res && typeof res.status === 'number' ? res.status : null,
-    code: body && str(body.code) ? body.code : null,
-    message: body && str(body.message) ? body.message : null,
-  };
+  return { status: res && typeof res.status === 'number' ? res.status : null,
+    code: body && str(body.code) ? body.code : null, message: body && str(body.message) ? body.message : null };
 }
 
 export const COPILOT_PATHS = {
@@ -148,8 +127,9 @@ export const COPILOT_PATHS = {
   decide: (id: string) => `/ai/gateway/drafts/${encodeURIComponent(id)}`,
 } as const;
 
-/** One page is plenty for one coach (the queue is oldest first; paging is the queue screen's job). */
-export const PATH_DRAFTS_PAGE = 50;
+/** The queue mixes every pending draft kind, oldest first, and older kinds never lapse: read on to the newer pages. */
+export const PATH_DRAFTS_PAGE = 100;
+export const PATH_DRAFTS_MAX_PAGES = 10;
 
 export const copilotApi = {
   /** null: the server has no Copilot (switch off, 404). Rows the phone cannot draw are left out; no `week`: an older server. */
@@ -198,15 +178,23 @@ export const copilotApi = {
     return row;
   },
 
-  /** The coach's waiting Copilot changes. An older server answers the bare array (no paging): nothing new to show. */
+  /** The coach's waiting Copilot changes, from every page (up to 1,000 rows). An older server answers the bare array: none. */
   async pathChangeDrafts(): Promise<PathChangeDraft[]> {
-    const res = await api.get<unknown>(COPILOT_PATHS.drafts, { params: { order: 'oldest', limit: String(PATH_DRAFTS_PAGE) } });
-    if (!rec(res.data) || !Array.isArray(res.data.items)) return [];
-    return res.data.items.flatMap<PathChangeDraft>((d: unknown) => {
-      if (!rec(d) || d.capability !== 'client_path_change' || d.status !== 'pending' || !str(d.id) || !str(d.subject_user_id)) return [];
-      const change = parseChange(d.payload);
-      return change && iso(d.created_at) ? [{ id: d.id, clientId: d.subject_user_id, change, reason: optStr(d.rationale), sentAt: d.created_at }] : [];
-    });
+    const out: PathChangeDraft[] = [];
+    let after: string | null = null;
+    for (let page = 0; page < PATH_DRAFTS_MAX_PAGES; page += 1) {
+      const params: Record<string, string> = { order: 'oldest', limit: String(PATH_DRAFTS_PAGE), ...(after ? { after } : null) };
+      const res = await api.get<unknown>(COPILOT_PATHS.drafts, { params });
+      if (!rec(res.data) || !Array.isArray(res.data.items)) return out;
+      for (const d of res.data.items as unknown[]) {
+        if (!rec(d) || d.capability !== 'client_path_change' || d.status !== 'pending' || !str(d.id) || !str(d.subject_user_id)) continue;
+        const change = parseChange(d.payload);
+        if (change && iso(d.created_at)) out.push({ id: d.id, clientId: d.subject_user_id, change, reason: optStr(d.rationale), sentAt: d.created_at });
+      }
+      after = str(res.data.next_cursor) ? res.data.next_cursor : null;
+      if (!after) break;
+    }
+    return out;
   },
 
   async decide(id: string, body: DecideBody): Promise<void> {
