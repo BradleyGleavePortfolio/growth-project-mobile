@@ -23,6 +23,7 @@ import { useSpaceChat, type PendingRow } from '../../components/community/space-
 import { SPACE_MESSAGE_MAX, type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
 import { StyleBDayMark, dayB } from '../../components/messaging/StyleBThread';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { CommunityApiError } from '../../api/apiCall';
 import { useCommunityCohorts } from '../../hooks/useCommunity';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
@@ -135,8 +136,10 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   }, [chat, client, isCoachViewer, isOnline, myName]);
 
   const loading = chat.list.isLoading || cohorts.isLoading;
-  const failure = chat.list.isError && !chat.noAccess && items.length === 0
-    ? describeCommunityFailure(chat.list.error, 'load_space') : null;
+  // Offline with nothing kept: say so at once rather than spin through the retries.
+  const offlineEmpty = !isOnline && !chat.list.data;
+  const failure = (chat.list.isError || offlineEmpty) && !chat.noAccess && items.length === 0
+    ? describeCommunityFailure(isOnline ? chat.list.error : new CommunityApiError('network', 0, 'offline', { isAxiosError: true }), 'load_space') : null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
@@ -150,9 +153,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         </View>
       </View>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {chat.noAccess ? <View style={s.flex} /> : loading && items.length === 0 ? (
-          <View style={s.center}><ActivityIndicator color={fp.n700} /></View>
-        ) : failure ? (
+        {chat.noAccess ? <View style={s.flex} /> : failure ? (
           <View style={s.center} testID="space-chat-error">
             <Ionicons name={isOnline ? 'alert-circle-outline' : 'cloud-offline-outline'} size={28} color={fp.n700} />
             <Text style={s.muted}>{failure.message}</Text>
@@ -160,6 +161,8 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
               <Text style={s.retryLabel}>Try again</Text>
             </TouchableOpacity>
           </View>
+        ) : loading && items.length === 0 ? (
+          <View style={s.center}><ActivityIndicator color={fp.n700} /></View>
         ) : items.length === 0 ? (
           <View style={s.center} testID="space-chat-empty">
             {canPost ? <Text style={s.muted}>No messages yet. Say hello.</Text> : null}
