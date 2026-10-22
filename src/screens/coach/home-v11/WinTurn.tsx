@@ -78,7 +78,7 @@ export function WinTurn({ wins, shown, live, line }: Props) {
 
 // The layers sit on one spot: a row of full-width layers, each after the first pulled back over the first.
 const s = StyleSheet.create({
-  stack: { flexDirection: 'row' },
+  stack: { flex: 1, flexDirection: 'row' },
   layer: { width: '100%' },
   over: { marginLeft: '-100%' },
 });
