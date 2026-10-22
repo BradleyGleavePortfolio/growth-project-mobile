@@ -24,19 +24,19 @@ const mount = () => render(<Screen route={{ key: 'h', name: 'HouseCoach', params
 beforeEach(() => { jest.clearAllMocks(); mockRead = async () => ({ data: { packages: ROWS } }); });
 
 it('H1-H3: his name and packages; a package opens the sheet under his name; paid → coach saved, plan re-read, Home', async () => {
-  const s = mount();
-  fireEvent.press(await s.findByTestId('house-package-h-2'));
+  const s = await mount();
+  await fireEvent.press(await s.findByTestId('house-package-h-2'));
   expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach/packages?coach_id=house-1');
   expect(s.getByText("TGP's Top Rated Coach")).toBeTruthy();
   expect(s.getByText('1:1 coaching with Bradley')).toBeTruthy();
   expect(s.getByTestId('house-package-h-1')).toBeTruthy();
   expect(s.getByTestId('package-sheet').props.accessibilityLabel).toBe('house-1|Bradley|h-2|true');
-  fireEvent.press(s.getByTestId('package-sheet'));
+  await fireEvent.press(s.getByTestId('package-sheet'));
   expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'house-1' });
   expect(mockRefresh).toHaveBeenCalledTimes(1);
   expect(nav.popToTop).toHaveBeenCalledTimes(1);
   expect(s.queryByTestId('package-sheet')).toBeNull();
-  fireEvent.press(s.getByTestId('house-coach-back'));
+  await fireEvent.press(s.getByTestId('house-coach-back'));
   expect(nav.goBack).toHaveBeenCalledTimes(1);
 });
 
@@ -45,10 +45,10 @@ it.each([
   ['no package can be sold (a free one is not)', async () => ({ data: { packages: [{ id: 'f', name: 'Free' }] } })],
 ])('%s: a quiet error with Try again, then the list', async (_l, read) => {
   mockRead = read;
-  const s = mount();
+  const s = await mount();
   await s.findByTestId('house-coach-error');
   expect(s.getByText('Bradley')).toBeTruthy();
   mockRead = async () => ({ data: ROWS });
-  fireEvent.press(s.getByTestId('house-coach-error-retry'));
+  await fireEvent.press(s.getByTestId('house-coach-error-retry'));
   await s.findByTestId('house-package-h-1');
 });

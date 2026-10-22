@@ -51,9 +51,11 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
     <View style={s.page}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         <View style={[s.mast, { paddingTop: insets.top + 4 }]}>
-          <HapticPressable intent="light" style={s.back} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel={HOUSE_COACH_COPY.back} testID="house-coach-back">
-            <Ionicons name="chevron-back" size={26} color={fp.onDeep} />
-          </HapticPressable>
+          <View style={s.backWrap}>
+            <HapticPressable intent="light" style={s.back} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel={HOUSE_COACH_COPY.back} testID="house-coach-back">
+              <Ionicons name="chevron-back" size={26} color={fp.onDeep} />
+            </HapticPressable>
+          </View>
           <Monogram name={name} />
           <Text style={s.eyebrow}>{HOUSE_COACH_COPY.eyebrow}</Text>
           <Text style={s.name} accessibilityRole="header">{name}</Text>
@@ -89,7 +91,7 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: lightTokens.bgPrimary }, flex: { flex: 1 },
   mast: { backgroundColor: fp.deep, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, paddingHorizontal: 20, paddingBottom: 22, alignItems: 'center' },
-  back: { alignSelf: 'flex-start', width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
+  backWrap: { alignSelf: 'flex-start', marginLeft: -10 }, back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { ...typography.eyebrow, color: fp.gold, marginTop: 14, textAlign: 'center' },
   name: { ...typography.h1, color: fp.onDeep, marginTop: 4, textAlign: 'center' },
   body: { paddingHorizontal: 20, paddingTop: 24 },

@@ -114,7 +114,7 @@ export default function RenewalHome(): React.ReactElement | null {
           <Choices r={r} onOwn={own} onHouse={house} />
         </View>
       ) : null}
-      <Modal visible={!!popup} transparent animationType="fade" statusBarTranslucent onRequestClose={() => close()} onDismiss={runNext}>
+      <Modal visible={!!popup} transparent animationType="fade" statusBarTranslucent onRequestClose={() => close()} onDismiss={runNext} testID="renewal-modal">
         <View style={s.scrim}>
           {popup ? (
             <View style={s.card} accessibilityViewIsModal testID="renewal-popup">
