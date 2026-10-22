@@ -21,6 +21,12 @@ jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () =
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
 jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off') }));
 const mockText = (t: string) => <Text>{t}</Text>;
+let mockNeedsCoach = false;
+jest.mock('../../../../components/coachless/JoinCoachState', () => ({
+  __esModule: true, ROMAN_LOCK_TITLE: 'Roman works with a coach', ROMAN_LOCK_BODY: 'body',
+  default: ({ title, testID }: { title: string; testID: string }) => <Text testID={testID}>{title}</Text>,
+  useClientNeedsCoach: () => mockNeedsCoach,
+}));
 jest.mock('../../../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../../../theme/tokens');
   return { useTheme: () => ({ colors: t.colors, semanticColors: t.lightTokens }) };
@@ -42,6 +48,7 @@ const wrap = (ui: React.ReactElement) => (
 beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.clientPathCopilot = true;
+  mockNeedsCoach = false;
   mockCoaches = [{ name: 'Alex Rivera' }];
 });
 
@@ -121,4 +128,17 @@ test('a server without Copilot (404) shows the calm empty state; a failed read i
   mockFlags.clientPathCopilot = false;
   expect((await render(wrap(<ClientPathCopilotScreen />))).getByText('Path suggestions are not available on this account.')).toBeTruthy();
   expect(get).toHaveBeenCalledTimes(2);
+});
+
+test('a client with no coach gets the existing Roman lock page and no read; Not now waits while Send is in flight', async () => {
+  mockNeedsCoach = true;
+  const a = await render(wrap(<ClientPathCopilotScreen />));
+  expect(a.getByTestId('copilot-coach-lock')).toBeTruthy();
+  expect(a.getByText('Roman works with a coach')).toBeTruthy();
+  expect(get).not.toHaveBeenCalled();
+  await a.unmount();
+  post.mockReturnValueOnce(new Promise(() => undefined) as never);
+  const s = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);
+  await act(async () => fireEvent.press(s.getByText('Send to Alex')));
+  expect(s.getByTestId('copilot-not-now').props.accessibilityState?.disabled).toBe(true);
 });

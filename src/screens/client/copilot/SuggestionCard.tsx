@@ -87,7 +87,7 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
       {refusal ? <AiRefusalNotice refusal={refusal} audience="client" surface="roman" onRetry={() => void onSend()} compact /> : null}
       {line ? <Text style={[typography.bodySmall, { color: forestPop.error }]} accessibilityRole="alert" testID="copilot-send-error">{line}</Text> : null}
       {gone ? null : <PrimaryButton label={C.send(coach)} onPress={() => void onSend()} loading={busy} haptic={false} wrap testID="copilot-send" />}
-      {onDismiss ? <TextLink label={C.notNow} onPress={onDismiss} tone="muted" align="center" testID="copilot-not-now" /> : null}
+      {onDismiss ? <TextLink label={C.notNow} onPress={onDismiss} tone="muted" align="center" disabled={busy} testID="copilot-not-now" /> : null}
     </View>
   );
 }

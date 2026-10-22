@@ -39,6 +39,13 @@ jest.mock('../api/coachAiExecutionApi', () => ({
   coachAiExecutionApi: { approveDraft: jest.fn(), rejectDraft: jest.fn() },
 }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
+// COPILOT-M1: the Copilot rows are a second read on Pending AI drafts.
+jest.mock('../config/featureFlags', () => ({ featureFlags: { ...jest.requireActual('../config/featureFlags').featureFlags, clientPathCopilot: true } }));
+const mockPathDrafts = jest.fn(async (): Promise<unknown[]> => []);
+jest.mock('../api/copilotApi', () => {
+  const real = jest.requireActual('../api/copilotApi');
+  return { ...real, copilotApi: { ...real.copilotApi, pathChangeDrafts: () => mockPathDrafts() } };
+});
 
 import { schedulingApi } from '../api/schedulingApi';
 import { invitesApi } from '../api/invites';
@@ -205,6 +212,22 @@ describe('Pending AI drafts', () => {
     expect(within(state).getByText('Pending AI drafts could not load. Check your connection, then try again.')).toBeTruthy();
     await fireEvent.press(expectCalm(state));
     expect(refetch).toHaveBeenCalled();
+  });
+
+  it('never claims "No pending drafts" while the Copilot read waits or failed; its Try again reads it again', async () => {
+    mockDrafts.mockReturnValue({ ...base, data: { drafts: [] } });
+    mockPathDrafts.mockReturnValueOnce(new Promise(() => undefined));
+    const r = await withQuery(<PendingAiDraftsScreen />);
+    expect(r.getByTestId('pending-ai-drafts-loading')).toBeTruthy();
+    expect(r.queryByText('No pending drafts')).toBeNull();
+    await r.unmount();
+    mockPathDrafts.mockRejectedValueOnce(offline).mockResolvedValueOnce([]);
+    const t = await withQuery(<PendingAiDraftsScreen />);
+    const state = await t.findByTestId('path-drafts-error');
+    expect(within(state).getByText('Pending AI drafts could not load. Check your connection, then try again.')).toBeTruthy();
+    expect(t.queryByText('No pending drafts')).toBeNull();
+    await fireEvent.press(expectCalm(state));
+    expect(await t.findByText('No pending drafts')).toBeTruthy();
   });
 });
 

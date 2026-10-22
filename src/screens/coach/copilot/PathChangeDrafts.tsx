@@ -2,6 +2,7 @@
  * The client_path_change rows of the coach's Roman drafts list, oldest sent first (backend #1120 paged queue).
  * Behind `featureFlags.clientPathCopilot`. A server without the paged queue answers the old array: no rows (nothing new).
  * Names come from the coach's own roster (the draft carries only the client id; the server keeps it to his clients).
+ * The screen owns the read (`usePathChangeDrafts`): a waiting or failed read is never drawn as "No pending drafts".
  */
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -11,6 +12,7 @@ import { programKeys } from '../../../hooks/usePrograms';
 import { programsApi } from '../../../api/programsApi';
 import { copilotApi } from '../../../api/copilotApi';
 import { COACH_AI_PENDING_DRAFTS_REFETCH_MS } from '../../../hooks/usePendingAiDrafts';
+import { QuietError, loadFailureMessage } from '../../../ui/states/QuietStates';
 import { PathChangeDraftCard } from './PathChangeDraftCard';
 
 export const PATH_DRAFTS_KEY = ['copilot', 'path-change-drafts'] as const;
@@ -25,10 +27,19 @@ export function usePathChangeDrafts(enabled: boolean) {
   });
 }
 
-export function PathChangeDrafts({ enabled }: { enabled: boolean }) {
+export type PathChangeDraftsQuery = ReturnType<typeof usePathChangeDrafts>;
+
+/** `showError`: false while the screen's own error already says the list did not load (one calm line, not two). */
+export function PathChangeDrafts({ query, showError = true }: { query: PathChangeDraftsQuery; showError?: boolean }) {
   const qc = useQueryClient();
-  const drafts = usePathChangeDrafts(enabled).data ?? [];
+  const drafts = query.data ?? [];
   const roster = useQuery({ queryKey: programKeys.clients, queryFn: () => programsApi.assignableClients(), enabled: drafts.length > 0 });
+  if (query.isError && !query.data) {
+    return showError ? (
+      <QuietError message={loadFailureMessage(query.error, 'Pending AI drafts')} onRetry={() => void query.refetch()}
+        retrying={query.isFetching} layout="inline" testID="path-drafts-error" />
+    ) : null;
+  }
   if (drafts.length === 0) return null;
   const names = new Map((roster.data ?? []).map((c) => [c.id, c.name]));
   return (

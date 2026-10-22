@@ -77,8 +77,15 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   // hits the gateway list endpoint (which would 403 anyway, but no point
   // burning a roundtrip).
   const query = usePendingAiDrafts({ enabled: allowed && isFocused });
-  // COPILOT-M1: the client_path_change rows (flag off: never fetched, never drawn).
-  const hasPath = (usePathChangeDrafts(allowed && isFocused).data?.length ?? 0) > 0;
+  // COPILOT-M1: the client_path_change rows (flag off: never fetched, never drawn). "No pending drafts" only once
+  // both reads have answered empty; a waiting or failed Copilot read shows loading or the calm error instead.
+  const path = usePathChangeDrafts(allowed && isFocused);
+  const hasPath = (path.data?.length ?? 0) > 0;
+  const pathFailed = path.isError && !path.data;
+  const retryAll = () => {
+    void query.refetch();
+    if (pathFailed) void path.refetch();
+  };
 
   const approveMutation = useMutation({
     mutationFn: (draftId: string) => coachAiExecutionApi.approveDraft(draftId),
@@ -142,6 +149,11 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
 
         <FlatList
           data={renderable}
+          // The day and kcal editors: the iOS number pad has no Done key, so the list lifts its content over the
+          // keyboard, a tap on Approve lands the first time, and a drag puts the keyboard away.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           keyExtractor={(d) => d.id}
           renderItem={({ item }) => (
             <DraftCard
@@ -155,7 +167,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
             />
           )}
           contentContainerStyle={
-            renderable.length === 0 && !query.isLoading && !hasPath
+            renderable.length === 0 && !query.isLoading && !path.isLoading && !hasPath && !pathFailed
               ? styles.emptyContainer
               : styles.listContainer
           }
@@ -169,19 +181,19 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
               tintColor={colors.primary}
             />
           }
-          ListHeaderComponent={<PathChangeDrafts enabled={allowed && isFocused} />}
+          ListHeaderComponent={<PathChangeDrafts query={path} showError={!query.isError} />}
           ListEmptyComponent={
             // QA-COACH-STATES-131: the shared skeleton and the calm error.
-            query.isLoading ? (
-              <QuietLoading label="Loading pending drafts" testID="pending-ai-drafts-loading" />
-            ) : query.isError ? (
+            query.isError ? (
               <QuietError
                 message={loadFailureMessage(query.error, 'Pending AI drafts')}
-                onRetry={() => void query.refetch()}
-                retrying={query.isFetching}
+                onRetry={retryAll}
+                retrying={query.isFetching || path.isFetching}
                 testID="pending-ai-drafts-error"
               />
-            ) : hasPath ? null : (
+            ) : query.isLoading || path.isLoading ? (
+              <QuietLoading label="Loading pending drafts" testID="pending-ai-drafts-loading" />
+            ) : hasPath || pathFailed ? null : (
               <EmptyState
                 styles={styles}
                 colors={colors}
