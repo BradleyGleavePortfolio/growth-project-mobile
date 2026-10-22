@@ -23,7 +23,7 @@ import { aiRefusalOf } from '../../lib/ai/aiRefusal';
 import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
-import { copilotApi } from '../../api/copilotApi';
+import { copilotApi, copilotErrorOf } from '../../api/copilotApi';
 import { COPILOT_COPY as C } from './copilot/pathChangeWords';
 import { SuggestionStatusList } from './copilot/SuggestionStatusList';
 
@@ -56,7 +56,8 @@ function PathCopilot() {
   const refusal = q.error ? aiRefusalOf(q.error) : null;
   const items = q.data ?? [];
   const light = { color: sc.textOnAccent };
-  if (needsCoach) return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
+  // The server says the same (b#1129: 403 ROMAN_REQUIRES_COACH) when the phone has not heard the coach left yet.
+  if (needsCoach || copilotErrorOf(q.error).code === 'ROMAN_REQUIRES_COACH') return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
 
   return (
     <>

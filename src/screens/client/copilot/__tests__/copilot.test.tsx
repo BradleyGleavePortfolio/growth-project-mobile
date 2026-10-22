@@ -133,6 +133,9 @@ test('a client with no coach gets the existing Roman lock page and no read; Not 
   const a = await render(wrap(<ClientPathCopilotScreen />));
   expect([a.getByTestId('copilot-coach-lock').props.children, get.mock.calls.length]).toEqual(['Roman works with a coach', 0]);
   await a.unmount();
+  mockNeedsCoach = false;
+  get.mockRejectedValueOnce(Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403, data: { code: 'ROMAN_REQUIRES_COACH' } } }));
+  expect(await (await render(wrap(<ClientPathCopilotScreen />))).findByTestId('copilot-coach-lock')).toBeTruthy();
   post.mockReturnValueOnce(new Promise(() => undefined) as never);
   const s = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);
   await act(async () => fireEvent.press(s.getByText('Send to Alex')));
