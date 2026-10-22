@@ -180,7 +180,7 @@ export default function CoachHomeV11(p: Props) {
         <View style={s.grow}>
           <Text style={cs.title}>{off ? 'Needs you' : `Needs you, ${n}`}</Text>
           {off ? <Text style={cs.body}>Open the list</Text> : n === 0 ? <Text style={cs.body}>Nobody needs you right now.</Text> : (
-            <Text style={cs.body}>
+            <Text style={[cs.body, s.small]}>
               <Text style={s.bold}>{leadName}</Text>{` · ${lead.reason.text}`}{n > 1 ? <Text style={s.bold}>{`  +${n - 1} more`}</Text> : null}
             </Text>
           )}
@@ -205,6 +205,12 @@ export default function CoachHomeV11(p: Props) {
         <View style={s.approveBadge}><Text style={s.approveBadgeText} maxFontSizeMultiplier={1.2}>{n}</Text></View>
       </Pressable>
     ) : null;
+    const ask = p.onAskRoman ? ( // beside the title while drafts wait (first-screen fold, LS B2); last row otherwise
+      <Pressable style={s.askRoman} onPress={tap(p.onAskRoman)} accessibilityRole="button" accessibilityLabel="Ask Roman" testID="home-ask-roman">
+        <Text style={[cs.strong, s.small, { color: sc.accentText }]}>Ask Roman</Text>
+      </Pressable>
+    ) : null;
+    const askUp = n > 0 && !bigText;
     return (
       <View style={cs.card} testID="home-roman">
         <View style={s.romanHead}>
@@ -215,6 +221,7 @@ export default function CoachHomeV11(p: Props) {
               <Text style={cs.body}>{roster === 0 ? 'Roman drafts replies and workout changes for you once clients join.' : 'Nothing to approve right now.'}</Text>
             ) : null}
           </View>
+          {askUp ? ask : null}
         </View>
         {data.draftsState === 'loading' ? <QuietLoading label="Loading Roman's drafts" rows={1} testID="home-drafts-loading" /> : null}
         {data.draftsState === 'error' ? (
@@ -224,16 +231,12 @@ export default function CoachHomeV11(p: Props) {
         {chips.length > 0 ? (
           <View style={s.chips}>
             {chips.map(([c, label]) => (
-              <View key={label} style={[s.chip, { backgroundColor: sc.bgPrimary }]}><Text style={cs.strong}>{c} <Text style={cs.body}>{label}</Text></Text></View>
+              <View key={label} style={[s.chip, { backgroundColor: sc.bgPrimary }]}><Text style={[cs.strong, s.small]}>{c} <Text style={[cs.body, s.small]}>{label}</Text></Text></View>
             ))}
           </View>
         ) : null}
         {bigText ? null : approve}
-        {p.onAskRoman ? (
-          <Pressable style={s.askRoman} onPress={tap(p.onAskRoman)} accessibilityRole="button" accessibilityLabel="Ask Roman" testID="home-ask-roman">
-            <Text style={[cs.strong, { color: sc.accentText }]}>Ask Roman</Text>
-          </Pressable>
-        ) : null}
+        {askUp ? null : ask}
       </View>
     );
   })();
@@ -333,7 +336,7 @@ export default function CoachHomeV11(p: Props) {
 
 const s = StyleSheet.create({
   fill: { flex: 1 },
-  hero: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 12, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, gap: 8 },
+  hero: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 12, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, gap: 6 },
   topRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 },
   date: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, flex: 1 },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
@@ -356,20 +359,21 @@ const s = StyleSheet.create({
   tiles: { flexDirection: 'row', gap: 10 },
   dayLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.gold, marginBottom: 2 },
   rings: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 2 },
-  page: { paddingHorizontal: layout.gutter, paddingTop: 12, gap: 12 },
+  page: { paddingHorizontal: layout.gutter, paddingTop: 10, gap: 10 },
   grow: { flex: 1, minWidth: 0 },
   bold: { fontFamily: SEMI },
+  small: { fontSize: 14, lineHeight: 20 }, // the kinds and the Needs you line, on one and two rows (Style A A-2)
   needs: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   needsBox: { width: 72, height: 72, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   needsNum: { fontFamily: SEMI, fontSize: 30, lineHeight: 36, color: forestPop.leaf },
   romanHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  chip: { minHeight: 36, borderRadius: radius.button, paddingHorizontal: 12, justifyContent: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  chip: { minHeight: 32, borderRadius: radius.button, paddingHorizontal: 10, justifyContent: 'center' },
   approve: { minHeight: 52, marginTop: 12, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   approveText: { ...typography.bodyMd, fontSize: 17, lineHeight: 22, flexShrink: 1, textAlign: 'center' },
   approveBadge: { minWidth: 28, height: 28, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
   approveBadgeText: { ...typography.bodyMd, fontSize: 15, lineHeight: 18, color: forestPop.deep },
-  askRoman: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', marginTop: 2 },
+  askRoman: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', paddingLeft: 4 },
   biz: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   bizMark: { width: 52, height: 52, borderRadius: radius.button, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
   bizSign: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
