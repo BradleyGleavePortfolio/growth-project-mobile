@@ -32,7 +32,7 @@ jest.mock('../theme/useTheme', () => ({
   useTheme: () => ({
     colors: {
       primary: '#2C4A36',
-      background: '#F5EFE4',
+      background: '#F7FAF7',
       surface: '#F1E8D5',
       border: '#E0D8C8',
       textPrimary: '#1A1A18',

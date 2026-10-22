@@ -67,7 +67,7 @@ jest.mock('../theme/useTheme', () => {
   return {
     useTheme: () => ({
       colorScheme: 'light', semanticColors: lightTokens,
-      colors: { background: '#F5EFE4', textPrimary: '#1A1A18', textSecondary: '#6B6B6B' },
+      colors: { background: '#F7FAF7', textPrimary: '#1A1A18', textSecondary: '#6B6B6B' },
       tokens: { typography: { h2: { fontSize: 24 }, body: { fontSize: 16 } } },
     }),
   };

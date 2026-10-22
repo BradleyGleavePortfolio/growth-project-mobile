@@ -14,12 +14,12 @@
  *
  * Pair                                          Hex pair              Ratio    AA body  AA large
  * ─────────────────────────────────────────────────────────────────────────────────────────────
- * ink (#1A1A18) on bone (#F5EFE4)               ~16.5:1              PASS     PASS
+ * ink (#1A1A18) on bone (#F7FAF7)               ~16.6:1              PASS     PASS
  * ink (#1A1A18) on cream (#F1E8D5)              ~15.2:1              PASS     PASS
- * charcoal (#3D3D3A) on bone (#F5EFE4)          ~ 8.0:1              PASS     PASS
- * forest (#2C4A36) on bone (#F5EFE4)            ~ 7.4:1              PASS     PASS
- * stone (#B1A89F) on bone (#F5EFE4)             ~ 2.3:1              FAIL     PASS (caption/meta only >= 18pt)
- * mutedGold (#C5A253) on bone (#F5EFE4)         ~ 2.9:1              FAIL     PASS (badge label >= 14pt bold only)
+ * charcoal (#3D3D3A) on bone (#F7FAF7)          ~10.4:1              PASS     PASS
+ * forest (#2C4A36) on bone (#F7FAF7)            ~ 9.3:1              PASS     PASS
+ * stone (#B1A89F) on bone (#F7FAF7)             ~ 2.2:1              FAIL     FAIL (decorative/disabled only)
+ * mutedGold (#C5A253) on bone (#F7FAF7)         ~ 2.3:1              FAIL     FAIL (fills/borders only)
  *
  * Dark mode additions:
  * textPrimary (#EBE6DE) on bgPrimary (#121110)  ~14.2:1              PASS     PASS
@@ -32,7 +32,7 @@
 
 // ─── Universal old-money palette ──────────────────────────────────────────────
 export const colors = {
-  bone:        '#F5EFE4',  // primary background
+  bone:        '#F7FAF7',  // primary background (owner #166-2)
   cream:       '#F1E8D5',  // card surface, warm
   ink:         '#1A1A18',  // primary text, dark sections (NEVER #000)
   charcoal:    '#3D3D3A',  // secondary text on light
@@ -406,7 +406,7 @@ export interface SemanticTokens {
    * dark backgrounds (WCAG 2.1, verified in theme/__tests__/contrastTokens.test):
    *   dark:  #E07373 on #121110 ~ 6.17:1  PASS  |  on #1C1A18 ~ 5.68:1  PASS
    * Light mode uses the existing forest #2C4A36, which clears AA as text on
-   * bone #F5EFE4 (~8.57:1) and surface #FFFDF8 (~9.65:1).
+   * bone #F7FAF7 (~9.33:1) and surface #FFFDF8 (~9.65:1).
    * Use `accent` for FILLS (CTA backgrounds, progress fills, borders) and
    * `accentText` for accent-colored FOREGROUND text/icons on a bg/surface.
    */
@@ -474,12 +474,12 @@ const chartLeaf = '#A3C46A';
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
 export const lightTokens: SemanticTokens = {
-  bgPrimary:   '#F5EFE4',  // bone / cream
+  bgPrimary:   '#F7FAF7',  // bone (owner #166-2)
   bgSurface:   '#FFFDF8',
   textPrimary: '#1A1A18',  // ink (~15.23:1 on cream)
   // Warm taupe muted. Darkened from #78736E (only 4.10:1 on cream, AA FAIL
   // for body-sized 12-13px meta text) to #6B675F so it clears AA on BOTH
-  // light backgrounds: ~4.92:1 on cream #F5EFE4, ~5.54:1 on surface #FFFDF8.
+  // light backgrounds: ~5.35:1 on bone #F7FAF7, ~5.54:1 on surface #FFFDF8.
   textMuted:   '#6B675F',
   accent:      colors.forest,
   // One forest accent for both CTA fills and foreground text/icons. Clears
