@@ -49,13 +49,12 @@ export async function takeRenewalPopup(userId: string, r: Extract<Renewal, { sta
   return !seen;
 }
 
-/** HOUSE-JOIN-BE: the house coach's own packages, readable by a client whose plan ended (screens/client/HouseCoach). */
-export const HOUSE_COACH_PACKAGES_PATH = '/v1/checkout/renewal/house-coach/packages';
+/** HOUSE-JOIN-BE: the client package list for the house coach while his door is open for this client (else 404). */
+export const houseCoachPackagesPath = (coachId: string) => `/v1/clients/me/coach/packages?coach_id=${encodeURIComponent(coachId)}`;
 
-/** `{ coach: { name }, packages }` or a bare array; rows that cannot be sold honestly are dropped. */
-export function readHousePackages(data: unknown): { name?: string; packages: PurchasablePackage[] } {
-  const d = data as { coach?: { name?: unknown }; packages?: unknown } | null;
+/** `{ packages }` or a bare array; rows that cannot be sold honestly are dropped. */
+export function readHousePackages(data: unknown): PurchasablePackage[] {
+  const d = data as { packages?: unknown } | null;
   const raw: unknown[] = Array.isArray(data) ? data : Array.isArray(d?.packages) ? d.packages : [];
-  const name = typeof d?.coach?.name === 'string' && d.coach.name.trim() ? d.coach.name : undefined;
-  return { name, packages: raw.map(purchasableFromCoachPackage).filter((p): p is PurchasablePackage => !!p) };
+  return raw.map(purchasableFromCoachPackage).filter((p): p is PurchasablePackage => !!p);
 }

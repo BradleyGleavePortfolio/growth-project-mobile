@@ -10,9 +10,9 @@ jest.mock('../../../lib/userCache', () => ({ patchUserCache: (...a: unknown[]) =
 let mockRead: () => Promise<unknown>;
 const mockGet = jest.fn((..._a: unknown[]) => mockRead());
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (...a: unknown[]) => mockGet(...a) } }));
-jest.mock('../../../components/PackageSelectionSheet', () => (p: { house?: { name: string }; initialPackageId?: string; skipSnoozeCheck?: boolean; onPaymentSuccess: () => void }) =>
+jest.mock('../../../components/PackageSelectionSheet', () => (p: { house?: { id: string; name: string }; initialPackageId?: string; skipSnoozeCheck?: boolean; onPaymentSuccess: () => void }) =>
   jest.requireActual('react').createElement(jest.requireActual('react-native').Pressable,
-    { testID: 'package-sheet', accessibilityLabel: `${p.house?.name}|${p.initialPackageId}|${p.skipSnoozeCheck}`, onPress: p.onPaymentSuccess }));
+    { testID: 'package-sheet', accessibilityLabel: `${p.house?.id}|${p.house?.name}|${p.initialPackageId}|${p.skipSnoozeCheck}`, onPress: p.onPaymentSuccess }));
 
 const Screen: typeof import('../HouseCoachScreen').default = require('../HouseCoachScreen').default;
 const ROWS = [{ id: 'h-1', name: '12-week strength block', price_cents: 29900, currency: 'usd', billing_type: 'one_time' },
@@ -21,16 +21,16 @@ const nav = { goBack: jest.fn(), popToTop: jest.fn() };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mount = () => render(<Screen route={{ key: 'h', name: 'HouseCoach', params: { coach: { id: 'house-1', firstName: 'Bradley' } } } as any} navigation={nav as any} />);
 
-beforeEach(() => { jest.clearAllMocks(); mockRead = async () => ({ data: { coach: { name: 'Bradley Gleave' }, packages: ROWS } }); });
+beforeEach(() => { jest.clearAllMocks(); mockRead = async () => ({ data: { packages: ROWS } }); });
 
 it('H1-H3: his name and packages; a package opens the sheet under his name; paid → coach saved, plan re-read, Home', async () => {
   const s = mount();
   fireEvent.press(await s.findByTestId('house-package-h-2'));
-  expect(mockGet).toHaveBeenCalledWith('/v1/checkout/renewal/house-coach/packages');
+  expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach/packages?coach_id=house-1');
   expect(s.getByText("TGP's Top Rated Coach")).toBeTruthy();
-  expect(s.getByText('1:1 coaching with Bradley Gleave')).toBeTruthy();
+  expect(s.getByText('1:1 coaching with Bradley')).toBeTruthy();
   expect(s.getByTestId('house-package-h-1')).toBeTruthy();
-  expect(s.getByTestId('package-sheet').props.accessibilityLabel).toBe('Bradley Gleave|h-2|true');
+  expect(s.getByTestId('package-sheet').props.accessibilityLabel).toBe('house-1|Bradley|h-2|true');
   fireEvent.press(s.getByTestId('package-sheet'));
   expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'house-1' });
   expect(mockRefresh).toHaveBeenCalledTimes(1);
@@ -42,12 +42,12 @@ it('H1-H3: his name and packages; a package opens the sheet under his name; paid
 
 it.each([
   ['the read fails', async () => { throw new Error('offline'); }],
-  ['no package can be sold', async () => ({ data: { packages: [] } })],
+  ['no package can be sold (a free one is not)', async () => ({ data: { packages: [{ id: 'f', name: 'Free' }] } })],
 ])('%s: a quiet error with Try again, then the list', async (_l, read) => {
   mockRead = read;
   const s = mount();
   await s.findByTestId('house-coach-error');
-  expect(s.getByText('Bradley')).toBeTruthy(); // the first name the server sent, until his packages load
+  expect(s.getByText('Bradley')).toBeTruthy();
   mockRead = async () => ({ data: ROWS });
   fireEvent.press(s.getByTestId('house-coach-error-retry'));
   await s.findByTestId('house-package-h-1');

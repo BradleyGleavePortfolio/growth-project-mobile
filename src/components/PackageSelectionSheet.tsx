@@ -48,7 +48,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../theme/tokens';
 import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
-import { HOUSE_COACH_PACKAGES_PATH, markShownOnce } from '../lib/planRenewal';
+import { houseCoachPackagesPath, markShownOnce } from '../lib/planRenewal';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useEntitlement } from '../entitlements/EntitlementProvider';
 import { usePackagePurchase } from '../hooks/usePackagePurchase';
@@ -98,7 +98,7 @@ export interface PackageSelectionSheetProps {
   /** RENEWAL-M: the client opened it (renewal pop-up, Home banner, house coach page), so the 24h check does not apply. */
   skipSnoozeCheck?: boolean;
   /** RENEWAL-M H2-H3: the house coach's packages (lib/planRenewal), labelled with his name; payment makes him the coach. */
-  house?: { name: string };
+  house?: { id: string; name: string };
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ export default function PackageSelectionSheet({
   skipSnoozeCheck = false,
   house,
 }: PackageSelectionSheetProps) {
-  const houseName = house?.name;
+  const [houseId, houseName] = [house?.id, house?.name];
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const currentUser = useCurrentUser();
@@ -224,7 +224,7 @@ export default function PackageSelectionSheet({
           ? (async () => (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name)().catch(() => null)
           : null);
         const res = await api.get<{ packages: unknown[] } | unknown[]>(
-          houseName ? HOUSE_COACH_PACKAGES_PATH : '/v1/clients/me/coach/packages',
+          houseId ? houseCoachPackagesPath(houseId) : '/v1/clients/me/coach/packages',
         );
         // Backend may return { packages: [...] } or a bare array
         const data = res.data;
@@ -261,7 +261,7 @@ export default function PackageSelectionSheet({
       }
     })();
     return () => { cancelled = true; };
-  }, [ready, reloadTick, initialPackageId, houseName]);
+  }, [ready, reloadTick, initialPackageId, houseId, houseName]);
 
   const selected = packages.find((p) => p.id === selectedId) ?? null;
 

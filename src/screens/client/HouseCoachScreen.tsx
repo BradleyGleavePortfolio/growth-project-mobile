@@ -14,7 +14,7 @@ import { Monogram } from '../../components/renewal/CoachMonogram';
 import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import type { HomeStackParamList } from '../../navigation/ClientNavigator';
-import { HOUSE_COACH_PACKAGES_PATH, readHousePackages } from '../../lib/planRenewal';
+import { houseCoachPackagesPath, readHousePackages } from '../../lib/planRenewal';
 import { priceLabel, type PurchasablePackage } from '../../lib/planTerms';
 import { patchUserCache } from '../../lib/userCache';
 import api from '../../services/api';
@@ -29,21 +29,22 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
   const { coach } = route.params;
   const insets = useSafeAreaInsets();
   const { refreshEntitlement } = useEntitlement();
-  const [list, setList] = useState<{ name: string; packages: PurchasablePackage[] } | null>(null);
+  const [list, setList] = useState<PurchasablePackage[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [picked, setPicked] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setError(null);
-    api.get<unknown>(HOUSE_COACH_PACKAGES_PATH).then((res) => {
-      const read = readHousePackages(res?.data);
-      if (read.packages.length) setList({ name: read.name ?? coach.firstName, packages: read.packages });
+    api.get<unknown>(houseCoachPackagesPath(coach.id)).then((res) => {
+      const rows = readHousePackages(res?.data);
+      if (rows.length) setList(rows);
       else setError(new Error('empty'));
     }, setError);
-  }, [coach.firstName]);
+  }, [coach.id]);
   useEffect(load, [load]);
 
-  const name = list?.name ?? coach.firstName;
+  // The renewal block names him by first name only (CONTRACT 6328688356); see the PR's Found, not fixed.
+  const name = coach.firstName;
   const joined = () => { setPicked(null); void patchUserCache({ coach_id: coach.id }); void refreshEntitlement(); navigation.popToTop(); };
 
   return (
@@ -61,7 +62,7 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
           {list ? (
             <>
               <Text style={s.overline}>{oneToOneCoachingLabel(name)}</Text>
-              {list.packages.map((p) => (
+              {list.map((p) => (
                 <HapticPressable key={p.id} intent="light" style={s.row} onPress={() => setPicked(p.id)} accessibilityRole="button" accessibilityLabel={`${p.name}, ${priceLabel(p)}`} testID={`house-package-${p.id}`}>
                   <View style={s.flex}>
                     <Text style={s.pkg}>{p.name}</Text>
@@ -79,7 +80,7 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
         </View>
       </ScrollView>
       {picked ? (
-        <PackageSelectionSheet visible skipSnoozeCheck house={{ name }} initialPackageId={picked} onDismiss={() => setPicked(null)} onPaymentSuccess={joined} />
+        <PackageSelectionSheet visible skipSnoozeCheck house={{ id: coach.id, name }} initialPackageId={picked} onDismiss={() => setPicked(null)} onPaymentSuccess={joined} />
       ) : null}
     </View>
   );

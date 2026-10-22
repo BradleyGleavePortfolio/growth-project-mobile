@@ -24,7 +24,7 @@ jest.mock('../../services/api', () => ({
     get: async (url: string) => {
       if (url === '/v1/clients/me/coach/packages') return { data: { packages: mockPackages } };
       if (url === '/v1/clients/me/coach') return { data: { id: 'coach-1', name: 'Avery Stone' } };
-      if (url === '/v1/checkout/renewal/house-coach/packages') return { data: { packages: [{ ...mockPackages[0] as object, id: 'h-1' }] } };
+      if (url === '/v1/clients/me/coach/packages?coach_id=house-1') return { data: { packages: [{ ...mockPackages[0] as object, id: 'h-1' }] } };
       throw new Error(`unexpected read ${url}`);
     },
     post: async () => ({ data: {} }),
@@ -52,7 +52,7 @@ const HOUR = 60 * 60 * 1000;
 const PACKAGES = [{ id: 'p-1', name: 'Monthly coaching', amount_cents: 4900, currency: 'usd', billing_type: 'recurring', interval: 'month' }];
 const realOS = Platform.OS;
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
-const mount = (onDismiss: () => void, recordShown?: boolean, extra?: { skipSnoozeCheck?: boolean; house?: { name: string } }) =>
+const mount = (onDismiss: () => void, recordShown?: boolean, extra?: { skipSnoozeCheck?: boolean; house?: { id: string; name: string } }) =>
   render(<Sheet visible recordShown={recordShown} onDismiss={onDismiss} onPaymentSuccess={jest.fn()} {...extra} />);
 
 beforeEach(async () => {
@@ -102,10 +102,10 @@ it('opened by the client (skipSnoozeCheck): opens inside the 24 h wait', async (
 
 it('house coach (H2): his packages under his name, on Android too, with no read of the old coach', async () => {
   setOS('android');
-  const r = await mount(jest.fn(), false, { skipSnoozeCheck: true, house: { name: 'Bradley Gleave' } });
+  const r = await mount(jest.fn(), false, { skipSnoozeCheck: true, house: { id: 'house-1', name: 'Bradley' } });
   await r.findByTestId('package-card-h-1');
   expect(r.queryByTestId('package-card-p-1')).toBeNull();
-  expect(r.getByTestId('package-sheet-one-to-one')).toHaveTextContent('1:1 coaching with Bradley Gleave');
+  expect(r.getByTestId('package-sheet-one-to-one')).toHaveTextContent('1:1 coaching with Bradley');
 });
 
 it('empty list on first load: closes itself and still counts as shown (#836 C2)', async () => {
