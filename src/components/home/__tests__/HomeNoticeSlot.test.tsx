@@ -14,7 +14,7 @@ jest.mock('../../../services/pushNotifications', () => ({ registerForPushNotific
 jest.mock('../../../services/api', () => ({ usersApi: { updatePushToken: jest.fn() } }));
 const mockPrefs = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
-  prefsStorage: { getStringAsync: async (k: string) => mockPrefs.get(k), set: async (k: string, v: string) => void mockPrefs.set(k, v) },
+  prefsStorage: { getString: (k: string) => mockPrefs.get(k), getStringAsync: async (k: string) => mockPrefs.get(k), set: async (k: string, v: string) => void mockPrefs.set(k, v) },
 }));
 const mockUser: { id: string; coach_id: string; profile: Record<string, unknown> } = { id: 'u1', coach_id: '', profile: {} };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));

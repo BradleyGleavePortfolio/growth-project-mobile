@@ -40,6 +40,8 @@ jest.mock('@react-navigation/native', () => ({
   useFocusEffect: () => undefined,
 }));
 jest.mock('../../../services/api', () => ({
+  __esModule: true,
+  default: { get: () => Promise.resolve({ data: {} }) }, // the coach row's name read (coached client)
   workoutApi: { getAll: () => Promise.resolve({ data: [] }) },
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
