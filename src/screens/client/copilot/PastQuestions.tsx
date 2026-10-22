@@ -22,6 +22,8 @@ export function usePastQuestions() {
     queryFn: ({ pageParam }) => copilotApi.questions(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last?.nextCursor ?? undefined,
+    // Chat words: never saved to the phone, and dropped when the chat is erased (copilotErasure.ts).
+    meta: { persist: false },
   });
 }
 
@@ -38,16 +40,20 @@ export function PastQuestionsRow({ total, onPress }: { total: number; onPress: (
   );
 }
 
-function outcomeOf(q: PastQuestion, coach: string): { text: string; bg: string; ink: string } | null {
+/**
+ * A declined change says "Your coach", never today's coach by name: the server does not say who declined,
+ * and a question asked under an earlier coach was decided by them (#852 round 1, C1).
+ */
+function outcomeOf(q: PastQuestion): { text: string; bg: string; ink: string } | null {
   if (q.outcome === 'approved') return { text: C.approved, bg: pathTint.leaf, ink: forestPop.forest };
-  if (q.outcome === 'rejected') return { text: C.declined(coach), bg: pathTint.still, ink: forestPop.n700 };
+  if (q.outcome === 'rejected') return { text: C.declined(C.yourCoach), bg: pathTint.still, ink: forestPop.n700 };
   if (q.outcome === 'pending') return { text: C.waiting, bg: pathTint.gold, ink: forestPop.goldInk };
   return null;
 }
 
 /** The month groups of the loaded pages (a question removed with its message has no words to show). */
-export function PastQuestionsList({ items, coach, onOpen, more, loadingMore, onMore }: {
-  items: PastQuestion[]; coach: string; onOpen: (q: PastQuestion) => void; more: boolean; loadingMore: boolean; onMore: () => void;
+export function PastQuestionsList({ items, onOpen, more, loadingMore, onMore }: {
+  items: PastQuestion[]; onOpen: (q: PastQuestion) => void; more: boolean; loadingMore: boolean; onMore: () => void;
 }) {
   const { semanticColors: sc } = useTheme();
   const groups: Array<{ month: string; rows: PastQuestion[] }> = [];
@@ -64,7 +70,7 @@ export function PastQuestionsList({ items, coach, onOpen, more, loadingMore, onM
           <Text style={[typography.bodySmall, s.strong, { color: sc.textMuted }]} accessibilityRole="header">{g.month}</Text>
           <View style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
             {g.rows.map((q, i) => {
-              const out = outcomeOf(q, coach);
+              const out = outcomeOf(q);
               const day = shortDay(q.askedAt);
               return (
                 <Pressable key={q.messageId} onPress={() => onOpen(q)} accessibilityRole="button" testID={`copilot-past-${q.messageId}`}

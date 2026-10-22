@@ -9,10 +9,10 @@
  * Behind `featureFlags.clientPathCopilot` (off) and the server switch: a server without Copilot (404, or no
  * `copilot` on the reply) shows the plain Roman reply and no week block (truthful fallback). Coachless: Roman's lock.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, type ParamListBase, type RouteProp } from '@react-navigation/native';
+import { CommonActions, useNavigation, useRoute, type ParamListBase, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { forestPop, pathTint, typography, radius } from '../../theme/tokens';
@@ -34,7 +34,8 @@ import { aiRefusalOf } from '../../lib/ai/aiRefusal';
 import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import type { RomanApiError } from '../../api/romanApi';
-import { copilotApi, type CopilotSuggestion, type PastQuestion } from '../../api/copilotApi';
+import { copilotApi, copilotErrorOf, type CopilotSuggestion, type PastQuestion } from '../../api/copilotApi';
+import { romanChatsEvents } from '../settings/romanChatsEvents';
 import { COPILOT_COPY as C, shortDay } from './copilot/pathChangeWords';
 import { ASK_COPY as A, changedThisWeek, monthYear, timeOf } from './copilot/askWords';
 import { SuggestionStatusList } from './copilot/SuggestionStatusList';
@@ -42,6 +43,7 @@ import { SuggestionCard } from './copilot/SuggestionCard';
 import { AnswerCard } from './copilot/AnswerCard';
 import { WeekBlock } from './copilot/WeekBlock';
 import { PastQuestionsList, PastQuestionsRow, usePastQuestions } from './copilot/PastQuestions';
+import { copilotAnswerKey } from './copilot/copilotErasure';
 import { useCopilotAsk, type CopilotTurn } from './copilot/useCopilotAsk';
 
 export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
@@ -221,7 +223,6 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
 function QuestionsView() {
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<Nav>();
-  const coach = useCoachFirstName();
   const q = usePastQuestions();
   const first = q.data?.pages[0] ?? null;
   const items = (q.data?.pages ?? []).flatMap((pg) => pg?.items ?? []);
@@ -240,7 +241,7 @@ function QuestionsView() {
         <View style={s.body}>
           {q.isPending ? <QuietLoading label="Loading past questions" rows={4} testID="copilot-past-loading" /> : null}
           {q.error ? <QuietError message={loadFailureMessage(q.error, A.past)} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-past-error" /> : null}
-          <PastQuestionsList items={items} coach={coach} more={q.hasNextPage} loadingMore={q.isFetchingNextPage}
+          <PastQuestionsList items={items} more={q.hasNextPage} loadingMore={q.isFetchingNextPage}
             onMore={() => void q.fetchNextPage()} onOpen={(item) => navigation.push('Copilot', { view: 'answer', item })} />
         </View>
       </Screen>
@@ -248,16 +249,52 @@ function QuestionsView() {
   );
 }
 
+/**
+ * The answer route leaves the stack when its chat is erased (Delete or Delete all in Settings, or the
+ * transcript finds it gone), so its question cannot be read again with Back (#852 round 1, B1). Only this
+ * route is removed; the screen on top (Settings) stays where it is.
+ */
+function useLeaveWhenErased(sessionId: string) {
+  const navigation = useNavigation<Nav>();
+  const routeKey = useRoute().key;
+  useEffect(() => {
+    const leave = (id: string | null) => {
+      if (id !== null && id !== sessionId) return;
+      navigation.dispatch((state) => {
+        const at = state.routes.findIndex((r) => r.key === routeKey);
+        if (at < 0 || state.routes.length < 2) return CommonActions.goBack();
+        const routes = state.routes.filter((r) => r.key !== routeKey);
+        return CommonActions.reset({ ...state, routes, index: at <= state.index ? Math.max(0, state.index - 1) : state.index });
+      });
+    };
+    const offErased = romanChatsEvents.onErased((e) => leave(e.id));
+    const offGone = romanChatsEvents.onGone((e) => leave(e.id));
+    return () => {
+      offErased();
+      offGone();
+    };
+  }, [navigation, routeKey, sessionId]);
+}
+
 function AnswerView({ item }: { item: PastQuestion }) {
   const coach = useCoachFirstName();
+  useLeaveWhenErased(item.sessionId);
   const q = useQuery({
-    queryKey: ['copilot', 'answer', item.messageId],
+    queryKey: copilotAnswerKey(item.sessionId, item.messageId),
+    // null: the server no longer has it (chat deleted elsewhere, 404). It replaces any answer read before,
+    // so a deleted answer is never drawn from the cache.
     queryFn: async () => {
-      const found = await copilotApi.answer(item.sessionId, item.messageId);
-      if (!found) throw new Error('Copilot answer not found');
-      return found;
+      try {
+        return await copilotApi.answer(item.sessionId, item.messageId);
+      } catch (err) {
+        if (copilotErrorOf(err).status === 404) return null;
+        throw err;
+      }
     },
+    meta: { persist: false },
   });
+  const sug = q.data?.reply?.suggestion ?? null;
+  const missing = q.isSuccess && !q.data;
   return (
     <>
       <ForestStatusBar />
@@ -266,9 +303,10 @@ function AnswerView({ item }: { item: PastQuestion }) {
         <View style={[s.body, s.turn]}>
           <Asked question={item.question ?? ''} at={new Date(item.askedAt)} day={shortDay(item.askedAt)} />
           {q.isPending ? <QuietLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
-          {q.error ? <QuietError message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
+          {q.error || missing ? <QuietError message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
           {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} /> : null}
-          {q.data ? <SuggestionSlot suggestion={q.data.reply?.suggestion ?? null} coach={coach} /> : null}
+          {/* A decided change was decided by whoever coached then; only an unsent one goes to today's coach (C1). */}
+          {q.data ? <SuggestionSlot suggestion={sug} coach={sug?.status === 'suggested' ? coach : C.yourCoach} /> : null}
         </View>
       </Screen>
     </>
