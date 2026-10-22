@@ -533,6 +533,9 @@ export const forestPop = {
 } as const;
 export type ForestPopRole = keyof typeof forestPop;
 
+/** Path Copilot status tints (style A board, owner #162-1): leaf = sent / approved, gold = waiting, still = kept / expired. */
+export const pathTint = { leaf: '#EEF4E0', gold: gold[100], still: neutral[200] } as const;
+
 /** Dark-mode semantic tokens. */
 export const darkTokens: SemanticTokens = {
   bgPrimary:   '#121110',

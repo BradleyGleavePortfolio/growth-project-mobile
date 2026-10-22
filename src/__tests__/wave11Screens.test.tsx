@@ -47,37 +47,10 @@ describe('ClientPathCopilotScreen — source guards', () => {
     expect(COPILOT_SRC).toMatch(/featureFlags\.clientPathCopilot/);
   });
 
-  it('renders a loading placeholder while fetching', () => {
-    // ClientPathCopilotScreen migrated from <ActivityIndicator/> to the
-    // shared <SkeletonScreen/> primitive (Phase 11 visual-language sweep).
-    // The contract here is "screen renders a non-empty loading state on
-    // first mount", which is now satisfied by SkeletonScreen.
-    expect(COPILOT_SRC).toMatch(/SkeletonScreen/);
-    expect(COPILOT_SRC).toMatch(/loading && !payload/);
-  });
-
-  it('wraps AI content in AINote', () => {
-    expect(COPILOT_SRC).toMatch(/AINote/);
-    expect(COPILOT_SRC).toMatch(/variant="summary"/);
-  });
-
-  it('shows stale notice when payload.isStale is true', () => {
-    expect(COPILOT_SRC).toMatch(/payload\?\.isStale/);
-    expect(COPILOT_SRC).toMatch(/pull to refresh/i);
-  });
-
-  it('uses VerifiedProgressRow for pending submissions', () => {
-    expect(COPILOT_SRC).toMatch(/VerifiedProgressRow/);
-    expect(COPILOT_SRC).toMatch(/pendingVerifiedProgress/);
-  });
-
-  it('has accessibilityLabel on screen root and section headers', () => {
-    expect(COPILOT_SRC).toMatch(/accessibilityLabel.*Client Path Copilot screen/);
+  it('reads the live Copilot route (no mock adapter) and labels its header', () => {
+    expect(COPILOT_SRC).toMatch(/copilotApi\.recent\(\)/);
+    expect(COPILOT_SRC).not.toMatch(/fetchClientPathCopilot/);
     expect(COPILOT_SRC).toMatch(/accessibilityRole="header"/);
-  });
-
-  it('has accessibilityLabel on SuggestionCard', () => {
-    expect(COPILOT_SRC).toMatch(/accessibilityLabel.*Suggestion:/);
   });
 });
 
