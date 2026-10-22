@@ -1,6 +1,7 @@
 /**
  * The Home's "Plan ended last 7 days, {N}" row (RENEWAL3 P1, P1-0) and its list (K1, K2), Style A of m#688. The list
- * opens over the Home, so the Home tab stays as K1 draws it; Back and the chevron close it. A row opens in place to
+ * opens over the Home, so the Home tab stays as K1 draws it; Back and the chevron close it. Android back is the list's only
+ * while the Home is in front, and Message closes the list as it leaves for the chat (LO B1). A row opens in place to
  * "Ask Roman to write" (the Home's one draft sheet, ask-first: K3) and "Message" (the client's chat in Messages).
  * No message is sent from here, and none is sent on the coach's behalf (ruling v3 6328335815 items 5 and 6).
  */
@@ -72,10 +73,12 @@ interface ListProps {
   onReload: () => void;
   onClose: () => void;
   onAsk: (ask: DraftAsk) => void;
+  /** The K3 sheet is up over the list: it holds the screen reader then, not the list. */
+  covered?: boolean;
 }
 
 /** K1 and K2: Today, Yesterday, Earlier this week, each with its count; one row open at a time. */
-export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk }: ListProps) {
+export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk, covered = false }: ListProps) {
   const { colors, semanticColors: sc } = useTheme();
   const cs = useCardStyles();
   const { top, bottom } = useScreenInsets();
@@ -101,12 +104,21 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk }
     Animated.timing(x, { toValue: width, duration: SLIDE_MS, useNativeDriver: true }).start(() => onClose());
   };
   useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => { close.current(); return true; });
+    // Off the Home (another tab, a pushed screen) back belongs to that screen: the app's pattern, ConsultationFlow.tsx.
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigation.isFocused?.() === false) return false;
+      close.current();
+      return true;
+    });
     return () => sub.remove();
-  }, []);
+  }, [navigation]);
 
   const groups = groupPlanEnded(page.items);
-  const message = (r: PlanEndedRow) => { void HapticService.softImpact(); openInboxChat(navigation, r.client_id, r.name); };
+  const message = (r: PlanEndedRow) => {
+    void HapticService.softImpact();
+    openInboxChat(navigation, r.client_id, r.name);
+    onClose(); // the chat is in Messages; nothing stays open behind it
+  };
   const body = (
     <>
       {error ? <QuietError layout="inline" message={loadFailureMessage(error, 'This list')} onRetry={onReload} testID="plan-ended-error" /> : null}
@@ -169,7 +181,10 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk }
   );
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: sc.bgPrimary, transform: [{ translateX: x }] }]} testID="plan-ended-list">
+    <Animated.View
+      style={[StyleSheet.absoluteFill, { backgroundColor: sc.bgPrimary, transform: [{ translateX: x }] }]} testID="plan-ended-list"
+      accessibilityViewIsModal={!covered} // VoiceOver stays in the list; on Android the Home under it hides its content (LO C1)
+    >
       <View style={[ls.head, { paddingTop: top + 4 }]}>
         <View style={ls.headRow}>
           <Pressable onPress={() => close.current()} hitSlop={8} style={ls.back} accessibilityRole="button" accessibilityLabel="Back" testID="plan-ended-back">
