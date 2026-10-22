@@ -174,8 +174,11 @@ function PathCopilot() {
 function useReveal(turns: CopilotTurn[]) {
   const ref = useRef<ScrollView>(null);
   const m = useRef({ body: 0, view: 0, content: 0, y: null as number | null, seen: 1 });
-  // The erased chat's turns went: the next first question sits under the folded masthead again.
-  if (turns.length === 0) Object.assign(m.current, { y: null, seen: 1 });
+  // The erased chat's turns went: back to the top of the board, and the next first question sits under the folded
+  // masthead again.
+  const had = useRef(0);
+  if (turns.length === 0 && had.current > 0) Object.assign(m.current, { y: 0, seen: 1 });
+  had.current = turns.length;
   const last = turns[turns.length - 1];
   const waiting = !!last && !last.answer && !last.error;
   const follow = () => {
