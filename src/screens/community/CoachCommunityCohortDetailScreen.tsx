@@ -1,8 +1,8 @@
 /**
  * CoachCommunityCohortDetailScreen — a single cohort's header, member list,
  * invite-by-email flow, and remove-member flow (v1-6). Consumes
- * `GET /community/coach/cohorts/:id`, `POST /community/coach/cohorts/:id/members`,
- * and `DELETE /community/coach/cohorts/:id/members/:userId`.
+ * `GET /community/cohorts/:id`, `GET`/`POST /community/cohorts/:id/members`,
+ * and `DELETE /community/cohorts/:id/members/:userId`.
  *
  * Features:
  *   - Cohort header (name + member count).

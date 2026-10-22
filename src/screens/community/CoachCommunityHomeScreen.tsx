@@ -1,7 +1,7 @@
 /**
  * CoachCommunityHomeScreen — the top-level coach community landing (v1-6).
  *
- * Composes the dashboard envelope (`GET /community/coach/dashboard`) into three
+ * Composes the dashboard counts (built in coachCommunityApi.getDashboard) into three
  * at-a-glance cards: unread inbox count, active cohort count, and today's
  * flagged moderation items. Each card routes into the matching surface.
  *

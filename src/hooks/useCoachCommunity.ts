@@ -3,8 +3,8 @@
  *
  * Read hooks (useQuery) fetch through coachCommunityApi (which Zod-validates the
  * wire shape). Mutation hooks (useMutation) apply OPTIMISTIC updates with
- * rollback on failure per the hard gate: acknowledge inbox item, create cohort,
- * invite member, remove member, hide post, and hide message all reflect
+ * rollback on failure per the hard gate: create cohort, invite member,
+ * remove member, hide post, and hide message all reflect
  * instantly, then reconcile with the server response or roll back.
  *
  * The acting coach is always derived from the JWT inside coachCommunityApi; no
@@ -244,55 +244,6 @@ export function useCoachPostDetail(
 }
 
 // ─── Mutation hooks (optimistic + rollback) ──────────────────────────────────
-
-/**
- * Acknowledge a single inbox item. Optimistically removes it from the cached
- * page and decrements the dashboard unread count; rolls both back on failure.
- */
-export function useAckInboxItem(): UseMutationResult<void, unknown, string> {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (itemId: string) => coachCommunityApi.ackInboxItem(itemId),
-    onMutate: async (itemId) => {
-      await qc.cancelQueries({ queryKey: coachCommunityKeys.inbox() });
-      await qc.cancelQueries({ queryKey: coachCommunityKeys.dashboard() });
-      const prevInbox = qc.getQueryData<CoachInboxPage>(
-        coachCommunityKeys.inbox(),
-      );
-      const prevDash = qc.getQueryData<CoachDashboard>(
-        coachCommunityKeys.dashboard(),
-      );
-      if (prevInbox) {
-        qc.setQueryData<CoachInboxPage>(coachCommunityKeys.inbox(), {
-          ...prevInbox,
-          items: prevInbox.items.filter((i) => i.id !== itemId),
-        });
-      }
-      if (prevDash) {
-        qc.setQueryData<CoachDashboard>(coachCommunityKeys.dashboard(), {
-          ...prevDash,
-          unread_inbox_count: Math.max(0, prevDash.unread_inbox_count - 1),
-        });
-      }
-      return { prevInbox, prevDash };
-    },
-    onError: (_err, _itemId, ctx) => {
-      const c = ctx as
-        | { prevInbox?: CoachInboxPage; prevDash?: CoachDashboard }
-        | undefined;
-      if (c?.prevInbox) {
-        qc.setQueryData(coachCommunityKeys.inbox(), c.prevInbox);
-      }
-      if (c?.prevDash) {
-        qc.setQueryData(coachCommunityKeys.dashboard(), c.prevDash);
-      }
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: coachCommunityKeys.inbox() });
-      qc.invalidateQueries({ queryKey: coachCommunityKeys.dashboard() });
-    },
-  });
-}
 
 /**
  * Create a cohort. Optimistically inserts a provisional row at the top of the

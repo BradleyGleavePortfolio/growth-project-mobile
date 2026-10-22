@@ -88,13 +88,12 @@ const mockState: {
   postDetail: QueryStub;
 } = {
   dashboard: { data: undefined, isLoading: false, isError: false },
-  inbox: { data: { items: [], next_before: null }, isLoading: false, isError: false },
+  inbox: { data: { items: [], next_cursor: null }, isLoading: false, isError: false },
   cohorts: { data: [], isLoading: false, isError: false },
   cohortDetail: { data: undefined, isLoading: false, isError: false },
   flagged: { data: [], isLoading: false, isError: false },
   postDetail: { data: undefined, isLoading: false, isError: false },
 };
-const mockAckMutate = jest.fn();
 const mockCreateMutate = jest.fn();
 const mockInviteMutate = jest.fn();
 const mockRemoveMutate = jest.fn();
@@ -181,7 +180,6 @@ jest.mock('../../../hooks/useCoachCommunity', () => {
         status: 'ready',
         payload: SYNTHETIC_EMPTY[surfaceKey],
       },
-    useAckInboxItem: () => ({ mutate: mockAckMutate, isPending: false }),
     useCreateCohort: () => ({ mutate: mockCreateMutate, isPending: false }),
     useInviteMember: () => ({ mutate: mockInviteMutate, isPending: false }),
     useRemoveMember: () => ({ mutate: mockRemoveMutate, isPending: false }),
@@ -322,7 +320,6 @@ const comment = (over: Partial<Record<string, unknown>> = {}) => ({
 beforeEach(() => {
   mockNavigate.mockReset();
   mockRouteParams.current = {};
-  mockAckMutate.mockReset();
   mockCreateMutate.mockReset();
   mockInviteMutate.mockReset();
   mockRemoveMutate.mockReset();
@@ -334,7 +331,7 @@ beforeEach(() => {
   mockAckStateByMessage.current = {};
   // Reset to default quiet/empty state per suite.
   mockState.dashboard = { data: undefined, isLoading: false, isError: false };
-  mockState.inbox = { data: { items: [], next_before: null }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
+  mockState.inbox = { data: { items: [], next_cursor: null }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
   mockState.cohorts = { data: [], isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
   mockState.cohortDetail = { data: undefined, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
   mockState.flagged = { data: [], isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
@@ -366,7 +363,7 @@ describe('Coach Community screens — render with flag ON, mocked API', () => {
             client_name: 'Ravi Patel',
           }),
         ],
-        next_before: null,
+        next_cursor: null,
       },
       isLoading: false,
       isError: false,
@@ -728,30 +725,26 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     expect(mockRemoveMutate).not.toHaveBeenCalled();
   });
 
-  it('dismisses an inbox item via long-press when the v2-2 flag is ON (no legacy Ack button)', async () => {
-    // UX F1: with the v2-2 flag ON there is exactly ONE visible ack action per
-    // row — the v2-2 "Acknowledge" quick-action (which STAMPS the signal,
-    // `mockMarkAckedMutate`). The legacy visible "Ack" button (which DISMISSES
-    // the row via `useAckInboxItem`) is removed; dismissal is demoted to the
-    // existing long-press, which marks the cohort thread read.
+  it('an inbox row has no dismiss action: the server has no route for one', async () => {
+    // An item leaves the inbox when the coach replies in that space; there is
+    // no Ack button, Select mode or long-press any more.
     mockState.inbox = {
-      data: { items: [inboxItem()], next_before: null },
+      data: { items: [inboxItem()], next_cursor: null },
       isLoading: false,
       isError: false,
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { queryByTestId, getByTestId } = await render(<CoachCommunityInboxScreen />);
-    // The legacy visible dismissal button is gone under the flag.
+    const { queryByTestId, getByTestId, queryByText } = await render(
+      <CoachCommunityInboxScreen />,
+    );
+    const row = getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111');
+    expect(row.props.onLongPress).toBeUndefined();
     expect(
       queryByTestId('coach-community-inbox-ack-11111111-1111-1111-1111-111111111111'),
     ).toBeNull();
-    // Long-press still dismisses (marks the cohort thread read).
-    await fireEvent(
-      getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
-      'longPress',
-    );
-    expect(mockAckMutate).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
+    expect(queryByTestId('coach-community-inbox-select-toggle')).toBeNull();
+    expect(queryByText('Ack')).toBeNull();
   });
 
   it('hides a flagged post only after confirmation', async () => {
@@ -994,73 +987,11 @@ describe('Home stat cards route into the matching surfaces', () => {
   });
 });
 
-describe('List states + interactions — loading, refresh, navigation, batch select', () => {
+describe('List states + interactions — loading, refresh, navigation', () => {
   it('Inbox shows a loading indicator while fetching', async () => {
     mockState.inbox = { data: undefined, isLoading: true, isError: false };
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId('coach-community-inbox-loading')).toBeTruthy();
-  });
-
-  it('Inbox Select mode reveals checkboxes and marks selected rows as read (UX P1.3)', async () => {
-    mockState.inbox = {
-      data: {
-        items: [
-          inboxItem({ id: '11111111-1111-1111-1111-111111111111' }),
-          inboxItem({ id: '99999999-9999-9999-9999-999999999999' }),
-        ],
-        next_before: null,
-      },
-      isLoading: false,
-      isError: false,
-      isRefetching: false,
-      refetch: jest.fn(),
-    };
-    const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
-    // The visible Select toggle is the discoverable, sighted-user batch entry.
-    await fireEvent.press(getByTestId('coach-community-inbox-select-toggle'));
-    // Rows now expose checkboxes.
-    expect(
-      getByTestId('coach-community-inbox-check-11111111-1111-1111-1111-111111111111'),
-    ).toBeTruthy();
-    // Select one row, then mark the selection as read.
-    await fireEvent.press(
-      getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
-    );
-    await fireEvent.press(getByTestId('coach-community-inbox-mark-selected'));
-    expect(mockAckMutate).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
-    expect(mockAckMutate).not.toHaveBeenCalledWith('99999999-9999-9999-9999-999999999999');
-    // Select mode exits after the batch action.
-    expect(queryByTestId('coach-community-inbox-mark-selected')).toBeNull();
-  });
-
-  it('Inbox long-press marks every item in the same cohort thread as read', async () => {
-    mockState.inbox = {
-      data: {
-        items: [
-          inboxItem({ id: '11111111-1111-1111-1111-111111111111' }),
-          inboxItem({ id: '99999999-9999-9999-9999-999999999999' }),
-          inboxItem({
-            id: '22222222-2222-2222-2222-222222222222',
-            cohort_id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
-            cohort_name: 'Autumn block',
-          }),
-        ],
-        next_before: null,
-      },
-      isLoading: false,
-      isError: false,
-      isRefetching: false,
-      refetch: jest.fn(),
-    };
-    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
-    await fireEvent(
-      getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
-      'longPress',
-    );
-    // Both Spring-block items acked; the Autumn-block item left untouched.
-    expect(mockAckMutate).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
-    expect(mockAckMutate).toHaveBeenCalledWith('99999999-9999-9999-9999-999999999999');
-    expect(mockAckMutate).not.toHaveBeenCalledWith('22222222-2222-2222-2222-222222222222');
   });
 
   it('Cohorts shows a loading indicator while fetching', async () => {
@@ -1129,7 +1060,7 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
 
   const seedInbox = () => {
     mockState.inbox = {
-      data: { items: [inboxItem()], next_before: null },
+      data: { items: [inboxItem()], next_cursor: null },
       isLoading: false,
       isError: false,
       isRefetching: false,

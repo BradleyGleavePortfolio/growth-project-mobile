@@ -20,7 +20,6 @@ import {
   AckStateSchema,
   CoachSlaSnapshotSchema,
   AckTransitionResponseSchema,
-  type CoachDashboard,
   type CoachEmptyStatesResponse,
 } from './coachCommunityApi';
 import { getCoachEmptyStateFallback } from '../components/community/coach/coachVoice';
@@ -56,75 +55,282 @@ beforeEach(() => {
   api.delete.mockReset();
 });
 
-function axiosError(status: number): Error {
+function axiosError(status: number, data?: unknown): Error {
   const err = new Error(`HTTP ${status}`) as Error & {
     isAxiosError: boolean;
-    response: { status: number };
+    response: { status: number; data?: unknown };
   };
   err.isAxiosError = true;
-  err.response = { status };
+  err.response = { status, data };
   return err;
 }
 
-const validDashboard: CoachDashboard = {
-  unread_inbox_count: 3,
-  active_cohort_count: 2,
-  flagged_today_count: 1,
+// ─── Server shapes, copied from growth-project-backend main 7359c3f9 ─────────
+
+const COHORT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const WORKSPACE_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const USER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const IDEM = { headers: { 'Idempotency-Key': 'test-idempotency-key' } };
+
+/** src/community/dto/community-cohort.dto.ts:16-28 (one row of :30-35). */
+const serverCohortSummary = {
+  id: COHORT_ID,
+  workspace_id: WORKSPACE_ID,
+  name: 'Spring',
+  is_default: false,
+  kind: 'chat',
+  posting_policy: 'all',
+  visibility: 'clients',
+  member_count: 4,
+  my_role: 'coach',
 };
 
-describe('coachCommunityApi — read endpoints', () => {
-  it('getDashboard hits the dashboard endpoint and parses the envelope', async () => {
-    api.get.mockResolvedValueOnce({ data: validDashboard });
-    const res = await coachCommunityApi.getDashboard();
-    expect(api.get).toHaveBeenCalledWith('/community/coach/dashboard');
-    expect(res.unread_inbox_count).toBe(3);
-  });
+/** src/community/inbox/community-coach-inbox.dto.ts:34-49. */
+function serverInboxRow(id: string, extra: Record<string, unknown> = {}) {
+  return {
+    id,
+    type: 'message',
+    cohort_id: COHORT_ID,
+    cohort_name: 'Spring',
+    author_user_id: USER_ID,
+    author_display_name: 'Dana Reyes',
+    preview: 'Can I swap Thursday for Friday?',
+    created_at: '2026-10-21T09:00:00.000Z',
+    item_url_path: `/community/cohorts/${COHORT_ID}/messages/${id}`,
+    ...extra,
+  };
+}
 
-  it('getInbox forwards keyset params', async () => {
-    api.get.mockResolvedValueOnce({ data: { items: [], next_before: null } });
-    await coachCommunityApi.getInbox({ before: 'cursor-1', limit: 20 });
-    expect(api.get).toHaveBeenCalledWith('/community/coach/inbox', {
-      params: { before: 'cursor-1', limit: '20' },
-    });
-  });
+/** src/community/cohorts/community-cohort-members.dto.ts:60-81. */
+function serverMember(extra: Record<string, unknown> = {}) {
+  return {
+    id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    user_id: USER_ID,
+    display_name: 'Dana Reyes',
+    role: 'student',
+    status: 'active',
+    email: 'dana@example.com',
+    joined_at: '2026-10-01T00:00:00.000Z',
+    access: { reason: 'client', package_id: null, until: null },
+    ...extra,
+  };
+}
 
-  it('getCohorts unwraps the cohorts array', async () => {
-    api.get.mockResolvedValueOnce({
-      data: {
-        cohorts: [
-          {
-            id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-            name: 'Spring',
-            member_count: 4,
-            unread_count: 0,
-            created_at: '2026-06-10T00:00:00.000Z',
-          },
-        ],
+/** A flagged-queue row (the shape getFlagged already parses). */
+function flagged(id: string, created_at: string) {
+  return {
+    id,
+    target_type: 'post',
+    target_id: id,
+    content: 'Buy followers here',
+    author_name: 'Dana Reyes',
+    cohort_name: 'Spring',
+    reason: 'spam',
+    created_at,
+  };
+}
+
+/** Answer api.get by URL, like the server would. */
+function serveGets(routes: Record<string, unknown>): void {
+  api.get.mockImplementation((url: string) =>
+    url in routes
+      ? routes[url] instanceof Error
+        ? Promise.reject(routes[url])
+        : Promise.resolve({ data: routes[url] })
+      : Promise.reject(axiosError(404)),
+  );
+}
+
+const ROW_1 = '11111111-1111-4111-8111-111111111111';
+const ROW_2 = '22222222-2222-4222-8222-222222222222';
+
+describe('coachCommunityApi — read endpoints on the server routes', () => {
+  it('getCohorts reads GET /community/cohorts (community.controller.ts:71)', async () => {
+    serveGets({
+      '/community/cohorts': {
+        feature_flag_state: 'enabled',
+        cohorts: [serverCohortSummary],
       },
     });
     const res = await coachCommunityApi.getCohorts();
-    expect(api.get).toHaveBeenCalledWith('/community/coach/cohorts');
+    expect(api.get).toHaveBeenCalledWith('/community/cohorts');
     expect(res).toHaveLength(1);
-    expect(res[0].name).toBe('Spring');
+    expect(res[0]).toMatchObject({
+      id: COHORT_ID,
+      name: 'Spring',
+      member_count: 4,
+      unread_count: 0,
+    });
   });
 
-  it('getCohortDetail hits the by-id endpoint', async () => {
-    api.get.mockResolvedValueOnce({
-      data: {
-        cohort: {
-          id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-          name: 'Spring',
-          member_count: 0,
-          unread_count: 0,
-          created_at: '2026-06-10T00:00:00.000Z',
-        },
-        members: [],
+  it('getCohorts with no spaces is an empty list', async () => {
+    serveGets({
+      '/community/cohorts': { feature_flag_state: 'enabled', cohorts: [] },
+    });
+    await expect(coachCommunityApi.getCohorts()).resolves.toEqual([]);
+  });
+
+  it('getInbox reads GET /community/me/coach-inbox and maps the row (community-coach-inbox.controller.ts:25)', async () => {
+    const ack = { state: 'seen', sla_state: 'within' };
+    serveGets({
+      '/community/me/coach-inbox': {
+        items: [serverInboxRow(ROW_1, { ack })],
+        next_cursor: 'cursor-2',
       },
     });
-    await coachCommunityApi.getCohortDetail('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
-    expect(api.get).toHaveBeenCalledWith(
-      '/community/coach/cohorts/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-    );
+    const res = await coachCommunityApi.getInbox({ cursor: 'cursor-1' });
+    expect(api.get).toHaveBeenCalledWith('/community/me/coach-inbox', {
+      params: { limit: '100', cursor: 'cursor-1' },
+    });
+    expect(res.next_cursor).toBe('cursor-2');
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0]).toMatchObject({
+      id: ROW_1,
+      cohort_id: COHORT_ID,
+      cohort_name: 'Spring',
+      client_user_id: USER_ID,
+      client_name: 'Dana Reyes',
+      avatar_url: null,
+      snippet: 'Can I swap Thursday for Friday?',
+      created_at: '2026-10-21T09:00:00.000Z',
+      acknowledged: false,
+      ack,
+    });
+  });
+
+  it('getInbox skips a row kind it does not know and never throws', async () => {
+    serveGets({
+      '/community/me/coach-inbox': {
+        items: [
+          serverInboxRow(ROW_1),
+          serverInboxRow(ROW_2, { kind: 'voice', voice: { duration_ms: 4000 } }),
+          { ...serverInboxRow(ROW_2), type: 'event' },
+          { nonsense: true },
+        ],
+        next_cursor: null,
+      },
+    });
+    const res = await coachCommunityApi.getInbox();
+    expect(res.items.map((i) => i.id)).toEqual([ROW_1]);
+  });
+
+  it('getInbox: an empty inbox, and a coach with no cohorts (403 community.inbox.not_coach), are both empty', async () => {
+    serveGets({ '/community/me/coach-inbox': { items: [], next_cursor: null } });
+    await expect(coachCommunityApi.getInbox()).resolves.toEqual({
+      items: [],
+      next_cursor: null,
+    });
+    // community-coach-inbox.service.ts:24-27 is the 403 body.
+    serveGets({
+      '/community/me/coach-inbox': axiosError(403, {
+        error: 'forbidden',
+        code: 'community.inbox.not_coach',
+      }),
+    });
+    await expect(coachCommunityApi.getInbox()).resolves.toEqual({
+      items: [],
+      next_cursor: null,
+    });
+  });
+
+  it('getInbox: any other failure is an error, not an empty inbox', async () => {
+    serveGets({ '/community/me/coach-inbox': axiosError(403) });
+    await expect(coachCommunityApi.getInbox()).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    serveGets({ '/community/me/coach-inbox': axiosError(500) });
+    await expect(coachCommunityApi.getInbox()).rejects.toMatchObject({
+      kind: 'server',
+    });
+  });
+
+  it('getDashboard is built from cohorts + inbox + flagged (no dashboard route)', async () => {
+    const today = new Date().toISOString();
+    serveGets({
+      '/community/cohorts': {
+        feature_flag_state: 'enabled',
+        cohorts: [serverCohortSummary, { ...serverCohortSummary, id: WORKSPACE_ID }],
+      },
+      '/community/me/coach-inbox': {
+        items: [serverInboxRow(ROW_1), serverInboxRow(ROW_2)],
+        next_cursor: null,
+      },
+      '/community/moderation/flagged': {
+        items: [flagged(ROW_1, today), flagged(ROW_2, '2020-01-01T12:00:00.000Z')],
+      },
+    });
+    const res = await coachCommunityApi.getDashboard();
+    expect(res).toEqual({
+      unread_inbox_count: 2,
+      active_cohort_count: 2,
+      flagged_today_count: 1,
+    });
+    const urls = api.get.mock.calls.map((c) => c[0]);
+    expect(urls.sort()).toEqual([
+      '/community/cohorts',
+      '/community/me/coach-inbox',
+      '/community/moderation/flagged',
+    ]);
+  });
+
+  it('getDashboard fails when one of its reads fails', async () => {
+    serveGets({
+      '/community/cohorts': axiosError(500),
+      '/community/me/coach-inbox': { items: [], next_cursor: null },
+      '/community/moderation/flagged': { items: [] },
+    });
+    await expect(coachCommunityApi.getDashboard()).rejects.toMatchObject({
+      kind: 'server',
+    });
+  });
+
+  it('getCohortDetail reads the space and its roster (community.controller.ts:79, community-cohort-members.controller.ts:40)', async () => {
+    serveGets({
+      // community-cohort.dto.ts:41-64 — flat, no envelope.
+      [`/community/cohorts/${COHORT_ID}`]: {
+        feature_flag_state: 'enabled',
+        ...serverCohortSummary,
+        package_ids: [],
+        created_at: '2026-10-01T00:00:00.000Z',
+        my_membership: null,
+        my_role: undefined,
+      },
+      // community-cohort-members.dto.ts:85-90.
+      [`/community/cohorts/${COHORT_ID}/members`]: {
+        members: [
+          serverMember({ role: 'coach', user_id: WORKSPACE_ID, display_name: 'Coach Sam' }),
+          serverMember(),
+          serverMember({ user_id: ROW_1, display_name: 'Gone', status: 'removed' }),
+        ],
+        next_cursor: null,
+      },
+    });
+    const res = await coachCommunityApi.getCohortDetail(COHORT_ID);
+    expect(api.get).toHaveBeenCalledWith(`/community/cohorts/${COHORT_ID}/members`, {
+      params: { limit: '100' },
+    });
+    expect(res.cohort).toMatchObject({ id: COHORT_ID, name: 'Spring', member_count: 4 });
+    expect(res.members.map((m) => [m.name, m.role])).toEqual([
+      ['Coach Sam', 'owner'],
+      ['Dana Reyes', 'client'],
+    ]);
+    expect(res.members[1]).toMatchObject({
+      user_id: USER_ID,
+      email: 'dana@example.com',
+      avatar_url: null,
+    });
+  });
+
+  it('getCohortDetail with an empty roster has no members', async () => {
+    serveGets({
+      [`/community/cohorts/${COHORT_ID}`]: {
+        ...serverCohortSummary,
+        created_at: '2026-10-01T00:00:00.000Z',
+      },
+      [`/community/cohorts/${COHORT_ID}/members`]: { members: [], next_cursor: null },
+    });
+    const res = await coachCommunityApi.getCohortDetail(COHORT_ID);
+    expect(res.members).toEqual([]);
   });
 
   it('getFlagged unwraps the items array', async () => {
@@ -133,71 +339,95 @@ describe('coachCommunityApi — read endpoints', () => {
     expect(api.get).toHaveBeenCalledWith('/community/moderation/flagged');
     expect(res).toEqual([]);
   });
+
+  it('no call uses the old /community/coach/{dashboard,inbox,cohorts} routes', async () => {
+    serveGets({});
+    await Promise.allSettled([
+      coachCommunityApi.getDashboard(),
+      coachCommunityApi.getInbox(),
+      coachCommunityApi.getCohorts(),
+      coachCommunityApi.getCohortDetail(COHORT_ID),
+    ]);
+    for (const [url] of api.get.mock.calls) {
+      expect(url).not.toMatch(/\/community\/coach\/(dashboard|inbox|cohorts)/);
+    }
+  });
 });
 
 describe('coachCommunityApi — mutations carry Idempotency-Key + no coachId', () => {
-  it('ackInboxItem posts to the ack endpoint with an idempotency header', async () => {
-    api.post.mockResolvedValueOnce({ data: {} });
-    await coachCommunityApi.ackInboxItem('11111111-1111-1111-1111-111111111111');
-    expect(api.post).toHaveBeenCalledWith(
-      '/community/coach/inbox/11111111-1111-1111-1111-111111111111/ack',
-      {},
-      { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
-    );
-  });
-
-  it('createCohort posts the name with an idempotency header (no coachId)', async () => {
+  it('createCohort posts to POST /community/workspaces/:id/cohorts (community-cohort-write.controller.ts:40)', async () => {
+    // community-me.dto.ts:27 — the coach's workspace id.
+    serveGets({ '/community/me': { workspace_id: WORKSPACE_ID } });
+    // community-cohort.dto.ts:124-143 inside { cohort } (:149-151).
     api.post.mockResolvedValueOnce({
       data: {
         cohort: {
-          id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          id: COHORT_ID,
+          workspace_id: WORKSPACE_ID,
           name: 'Winter',
-          member_count: 0,
-          unread_count: 0,
-          created_at: '2026-06-10T00:00:00.000Z',
+          description: null,
+          status: 'active',
+          capacity: null,
+          starts_at: null,
+          ends_at: null,
+          sort_order: 0,
+          kind: 'chat',
+          posting_policy: 'all',
+          visibility: 'clients',
+          package_ids: [],
+          created_at: '2026-10-22T00:00:00.000Z',
+          updated_at: '2026-10-22T00:00:00.000Z',
+          archived_at: null,
         },
       },
     });
-    await coachCommunityApi.createCohort({ name: 'Winter' });
-    const [url, body] = api.post.mock.calls[0];
-    expect(url).toBe('/community/coach/cohorts');
+    const res = await coachCommunityApi.createCohort({ name: 'Winter' });
+    const [url, body, config] = api.post.mock.calls[0];
+    expect(url).toBe(`/community/workspaces/${WORKSPACE_ID}/cohorts`);
     expect(body).toEqual({ name: 'Winter' });
+    expect(config).toEqual(IDEM);
     // The payload must NOT contain a coachId — the JWT is the only authority.
     expect(JSON.stringify(body)).not.toMatch(/coachId/i);
+    expect(res).toMatchObject({ id: COHORT_ID, name: 'Winter', member_count: 0, unread_count: 0 });
   });
 
-  it('inviteMember posts the email to the members endpoint', async () => {
-    api.post.mockResolvedValueOnce({
-      data: {
-        member: {
-          user_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-          name: 'Dana',
-          email: 'dana@example.com',
-          avatar_url: null,
-          role: 'client',
-          joined_at: '2026-06-10T00:00:00.000Z',
-        },
-      },
+  it('createCohort with no workspace fails without posting', async () => {
+    serveGets({ '/community/me': { workspace_id: null } });
+    await expect(coachCommunityApi.createCohort({ name: 'Winter' })).rejects.toMatchObject({
+      kind: 'contract',
     });
-    await coachCommunityApi.inviteMember('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', {
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('inviteMember posts email + role student (community-cohort-members.controller.ts:52, dto :34-35)', async () => {
+    // community-cohort-members.dto.ts:96-98.
+    api.post.mockResolvedValueOnce({
+      data: { member: serverMember({ status: 'invited', joined_at: null }) },
+    });
+    const res = await coachCommunityApi.inviteMember(COHORT_ID, {
       email: 'dana@example.com',
     });
     expect(api.post).toHaveBeenCalledWith(
-      '/community/coach/cohorts/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/members',
-      { email: 'dana@example.com' },
-      { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
+      `/community/cohorts/${COHORT_ID}/members`,
+      { email: 'dana@example.com', role: 'student' },
+      IDEM,
+    );
+    expect(res).toMatchObject({ name: 'Dana Reyes', role: 'client', joined_at: null });
+  });
+
+  it('removeMember deletes the member by userId (community-cohort-members.controller.ts:64)', async () => {
+    api.delete.mockResolvedValueOnce({ data: { member: serverMember({ status: 'removed' }) } });
+    await coachCommunityApi.removeMember(COHORT_ID, USER_ID);
+    expect(api.delete).toHaveBeenCalledWith(
+      `/community/cohorts/${COHORT_ID}/members/${USER_ID}`,
     );
   });
 
-  it('removeMember deletes the member by userId', async () => {
-    api.delete.mockResolvedValueOnce({ data: {} });
-    await coachCommunityApi.removeMember(
-      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-    );
-    expect(api.delete).toHaveBeenCalledWith(
-      '/community/coach/cohorts/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/members/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-    );
+  it('a failed invite is an error', async () => {
+    api.post.mockRejectedValueOnce(axiosError(403));
+    await expect(
+      coachCommunityApi.inviteMember(COHORT_ID, { email: 'dana@example.com' }),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
   });
 
   it.each(['hide', 'warn', 'ban', 'dismiss'] as const)(
@@ -462,7 +692,7 @@ describe('coachCommunityApi — post-detail composition', () => {
 describe('coachCommunityApi — error + contract mapping', () => {
   it('maps 401 to an unauthorized CoachCommunityApiError', async () => {
     api.get.mockRejectedValueOnce(axiosError(401));
-    await expect(coachCommunityApi.getDashboard()).rejects.toMatchObject({
+    await expect(coachCommunityApi.getCohorts()).rejects.toMatchObject({
       name: 'CoachCommunityApiError',
       kind: 'unauthorized',
       status: 401,
@@ -485,9 +715,9 @@ describe('coachCommunityApi — error + contract mapping', () => {
     });
   });
 
-  it('throws a contract error when the dashboard shape drifts', async () => {
-    api.get.mockResolvedValueOnce({ data: { unread_inbox_count: 'three' } });
-    const err = await coachCommunityApi.getDashboard().catch((e) => e);
+  it('throws a contract error when the cohorts shape drifts', async () => {
+    api.get.mockResolvedValueOnce({ data: { cohorts: [{ id: 'not-a-uuid' }] } });
+    const err = await coachCommunityApi.getCohorts().catch((e) => e);
     expect(err).toBeInstanceOf(CoachCommunityApiError);
     expect(err.kind).toBe('contract');
   });
