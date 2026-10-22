@@ -170,8 +170,8 @@ it('offline with nothing loaded: the offline line and Try again', async () => {
   expect(r.getByLabelText('Try again')).toBeTruthy();
 });
 
-it('no access (404: not a member or banned): no rows, no composer, the line where the composer was', async () => {
-  mockApi.get.mockImplementation(async () => { throw fail(404); });
+it.each([404, 403])('no access (%i: not a member or banned): no rows, no composer, the line where the composer was', async (status) => {
+  mockApi.get.mockImplementation(async () => { throw fail(status); });
   const r = await open();
   expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
   expect(r.queryByTestId('space-chat-composer-field')).toBeNull();

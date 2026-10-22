@@ -5,7 +5,7 @@
  *   - Rows: Studio rows (SpaceChatRow), day lines (StyleBDayMark + dayB), voice rows when communityVoiceNotes is on.
  *   - Composer: ComposerInput with this space's draft kept on the device (owner chat-discard op 1).
  *   - Announcements (a coach-posting space): members get no composer, only SC-W03; the coach posts as usual.
- *   - No access (the server answers 404: not a member, or banned): no space content and no composer (owner 10-22 ban
+ *   - No access (the server answers 404 or 403: not a member, or banned): no space content and no composer (owner 10-22 ban
  *     ruling, 6352485175), one line where the composer was.
  *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route.
  */

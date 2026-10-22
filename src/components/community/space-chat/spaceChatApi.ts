@@ -1,10 +1,10 @@
 /**
  * SC-M1 (agent 168): the space chat's server calls. Shapes from SC-BE1's CONTRACT (b#1135 @ 81ff66f3, comment
- * 6348434182) and SC-BE2's plan (read cursor). Paths have no /api prefix (services/api adds the base).
- *   GET  community/cohorts/:id/messages?before=&limit=  newest first, deleted and blocked (either way) left out; 404 = no access
+ * 6348434182) and SC-BE2's CONTRACT (b#1137, comment 6352782763: the read line). Paths have no /api prefix (services/api adds the base).
+ *   GET  community/cohorts/:id/messages?before=&limit=  newest first, deleted and blocked (either way) left out; 404/403 = no access
  *   POST community/cohorts/:id/messages { body }        Idempotency-Key reused on a retry, so a retry never posts twice
  *   DELETE community/messages/:id                       own text message
- *   GET/POST community/cohorts/:id/read                  SC-BE2; a 404 means the server has no read route yet
+ *   GET/POST community/cohorts/:id/read                  SC-BE2; any failure (404 before it ships) hides the line
  */
 import { z } from 'zod';
 import api from '../../../services/api';
@@ -87,7 +87,11 @@ export const spaceChatApi = {
   },
 };
 
-/** The server said this route or this space is not there for the viewer (no access, banned, or no read route). */
-export function isNotFound(err: unknown): boolean {
-  return !!err && typeof err === 'object' && (err as { status?: number }).status === 404;
+/**
+ * The server will not show this space (or this route) to the viewer: 404 (unknown space, or no read route yet) or 403
+ * (SC-BE2's CONTRACT 6352782763: a non-member, another workspace, or a ban is 403 `community.cohort.no_access`).
+ */
+export function isNoAccess(err: unknown): boolean {
+  const status = !!err && typeof err === 'object' ? (err as { status?: number }).status : undefined;
+  return status === 404 || status === 403;
 }

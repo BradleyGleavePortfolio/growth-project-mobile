@@ -11,7 +11,7 @@ import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@
 import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { authEvents } from '../../../utils/authEvents';
 import { useCommunityMe } from '../../../hooks/useCommunity';
-import { isNotFound, spaceChatApi, type SpaceMessage, type SpaceMessagePage } from './spaceChatApi';
+import { isNoAccess, spaceChatApi, type SpaceMessage, type SpaceMessagePage } from './spaceChatApi';
 
 export type PendingState = 'sending' | 'waiting' | 'failed' | 'sent';
 export interface PendingRow { localId: string; key: string; body: string; createdAt: string; state: PendingState; serverId?: string }
@@ -37,7 +37,7 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     queryFn: ({ pageParam }) => spaceChatApi.list(cohortId, pageParam),
     getNextPageParam: (last: SpaceMessagePage) => last.next_before ?? undefined,
     refetchInterval: 10_000,
-    retry: (n, err) => !isNotFound(err) && n < 2,
+    retry: (n, err) => !isNoAccess(err) && n < 2,
   });
   // SC-BE2 read cursor, read once when the space opens (the New messages line stays where it was while you read).
   const read = useQuery({
@@ -135,7 +135,7 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     list,
     messages,
     pending,
-    noAccess: list.isError && isNotFound(list.error),
+    noAccess: list.isError && isNoAccess(list.error),
     // Hidden whenever the server has no read route (404) or the read failed.
     readCursor: read.isSuccess ? read.data : null,
     send,
