@@ -366,6 +366,13 @@ export const communityVoiceApi = {
     );
   },
 
+  /** POST /community/voice-notes/:voiceNoteId/heard — once, when playback reaches the end (#1122). */
+  async markHeard(voiceNoteId: string): Promise<void> {
+    await api.post<unknown>(`/community/voice-notes/${voiceNoteId}/heard`, undefined, {
+      signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS),
+    });
+  },
+
   /** GET /community/voice-consent — was the first-use card shown to the caller. */
   getConsent(): Promise<VoiceConsent> {
     return call(VoiceConsentSchema, () =>

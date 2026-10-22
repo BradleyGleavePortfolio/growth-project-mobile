@@ -310,3 +310,44 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     expect(handles[0].play).not.toHaveBeenCalled();
   });
 });
+
+describe('VoiceNotePlayer — seek and played to the end (B-LS848-3)', () => {
+  it('a tap on the bars picks the point; Play starts there; the reader steps 5 s', async () => {
+    const playback = makePlayback(true);
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={10000} playback={playback} />,
+    );
+    const seek = getByTestId('voice-player-seek');
+    expect(seek.props.accessibilityRole).toBe('adjustable');
+    fireEvent(seek, 'layout', { nativeEvent: { layout: { width: 200 } } });
+    fireEvent.press(getByTestId('voice-player-seek'), { nativeEvent: { locationX: 100 } });
+    expect(getByTestId('voice-player-seek').props.accessibilityValue).toEqual({ text: '0:05 of 0:10' });
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(playback.handle.play).toHaveBeenCalledTimes(1));
+    expect(playback.handle.seek).toHaveBeenCalledWith(5000);
+    expect(playback.handle.seek.mock.invocationCallOrder[0]).toBeLessThan(
+      playback.handle.play.mock.invocationCallOrder[0],
+    );
+    await act(async () => {
+      fireEvent(getByTestId('voice-player-seek'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    });
+    expect(playback.handle.seek).toHaveBeenLastCalledWith(10000);
+  });
+
+  it('tells the feed once playback reaches the end', async () => {
+    let events: { onEnd?: () => void } = {};
+    const playback = makePlayback(true);
+    playback.load = jest.fn(async (_u: string, ev: { onEnd?: () => void }) => {
+      events = ev;
+      return playback.handle;
+    });
+    const onFinished = jest.fn();
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={4000} playback={playback} onFinished={onFinished} />,
+    );
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(playback.handle.play).toHaveBeenCalled());
+    await act(async () => events.onEnd?.());
+    expect(onFinished).toHaveBeenCalledTimes(1);
+  });
+});

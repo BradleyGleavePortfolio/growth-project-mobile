@@ -16,8 +16,8 @@
  *     and the next Play loads the new one; late loads are released.
  *
  * Accessibility: the play/pause control is a real button with a status-aware
- * label ("Play voice note, 0:12" / "Pause"). The waveform is decorative and
- * hidden from AT (the control carries the meaning).
+ * label ("Play voice note, 0:12" / "Pause"). The bars are the seek control:
+ * tap a point to jump there; a screen reader swipes it up or down 5 seconds.
  *
  * Style B (VOICE-M): a full-width card with a 64 pt play disc, the bars and
  * the time; `tone` picks the white member card, the deep coach card or no
@@ -26,7 +26,7 @@
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { forestPop as fp, radius, spacing, voiceShades } from '../../theme/tokens';
@@ -61,6 +61,8 @@ export interface VoiceNotePlayerProps {
   trailing?: React.ReactNode;
   /** Drawn inside the card under the row (the Not sent row). */
   footer?: React.ReactNode;
+  /** Playback reached the end (the feed marks the note heard). */
+  onFinished?: () => void;
   testID?: string;
 }
 
@@ -76,6 +78,7 @@ export default function VoiceNotePlayer({
   offline = false,
   trailing = null,
   footer = null,
+  onFinished,
   testID,
 }: VoiceNotePlayerProps): React.ReactElement {
   const port = playback ?? resolveVoicePlayback();
@@ -97,6 +100,11 @@ export default function VoiceNotePlayer({
   const loadingRef = useRef<number | null>(null);
   const onPlaybackErrorRef = useRef(onPlaybackError);
   onPlaybackErrorRef.current = onPlaybackError;
+  const onFinishedRef = useRef(onFinished);
+  onFinishedRef.current = onFinished;
+  // A point picked on the bars before the clip is loaded; Play starts there.
+  const seekRef = useRef(0);
+  const [barsWidth, setBarsWidth] = useState(0);
 
   const disabled = url === null || !port.isAvailable || offline;
 
@@ -113,6 +121,7 @@ export default function VoiceNotePlayer({
   useEffect(() => {
     setState('idle');
     setPositionMs(0);
+    seekRef.current = 0;
     return release;
   }, [url, release]);
 
@@ -149,6 +158,7 @@ export default function VoiceNotePlayer({
             if (generation !== generationRef.current) return;
             setState('paused');
             setPositionMs(0);
+            onFinishedRef.current?.();
           },
           onError: () => fail(generation),
         });
@@ -165,6 +175,8 @@ export default function VoiceNotePlayer({
           void previous.handle.unload().catch(reportVoiceAudioCleanup('player_replaced_unload'));
         }
       }
+      if (seekRef.current > 0) await loaded.handle.seek(seekRef.current);
+      seekRef.current = 0;
       await loaded.handle.play();
       if (generation === generationRef.current) setState('playing');
     } catch {
@@ -187,6 +199,21 @@ export default function VoiceNotePlayer({
       fail(generation);
     }
   }, [fail]);
+
+  const seekTo = useCallback(
+    (ms: number) => {
+      const to = Math.round(Math.min(durationMs, Math.max(0, ms)));
+      setPositionMs(to);
+      const loaded = loadedRef.current;
+      if (!loaded) {
+        seekRef.current = to;
+        return;
+      }
+      const generation = generationRef.current;
+      void loaded.handle.seek(to).catch(() => fail(generation));
+    },
+    [durationMs, fail],
+  );
 
   const onPress = useCallback(() => {
     if (state === 'playing') void pause();
@@ -241,7 +268,21 @@ export default function VoiceNotePlayer({
       </HapticPressable>
 
       <View style={styles.middle}>
-        <VoiceNoteWaveform peaks={peaks} progress={progress} height={40} tone={deep ? 'deep' : 'light'} />
+        <Pressable
+          disabled={disabled}
+          onLayout={(e) => setBarsWidth(e.nativeEvent.layout.width)}
+          onPress={(e) => barsWidth > 0 && seekTo((e.nativeEvent.locationX / barsWidth) * durationMs)}
+          accessible={!disabled}
+          accessibilityRole="adjustable"
+          accessibilityLabel="Voice note position"
+          accessibilityValue={{ text: `${formatDuration(positionMs)} of ${formatDuration(durationMs)}` }}
+          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+          onAccessibilityAction={(e) => seekTo(positionMs + (e.nativeEvent.actionName === 'increment' ? 5000 : -5000))}
+          style={styles.seek}
+          testID="voice-player-seek"
+        >
+          <VoiceNoteWaveform peaks={peaks} progress={progress} height={40} tone={deep ? 'deep' : 'light'} />
+        </Pressable>
         <View style={styles.meta}>
           <Text
             style={[styles.duration, { color: ink }]}
@@ -287,6 +328,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   middle: { flex: 1, gap: spacing.xs },
+  seek: { minHeight: 44, flexDirection: 'row', alignItems: 'center' },
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 },
   duration: { fontSize: 17, lineHeight: 22, fontWeight: '600', fontVariant: ['tabular-nums'] },
   retry: {

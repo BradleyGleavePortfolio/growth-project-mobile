@@ -37,13 +37,16 @@ jest.mock('../../HapticPressable', () => {
     }) => React.createElement(Pressable, { onPress, testID }, children),
   };
 });
+const mockPlayers: Record<string, { onFinished?: () => void }> = {};
 jest.mock('../VoiceNotePlayer', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
     __esModule: true,
-    default: (p: { testID?: string; url: string; trailing?: unknown; footer?: unknown }) =>
-      React.createElement(View, { testID: p.testID, accessibilityHint: p.url }, p.trailing, p.footer),
+    default: (p: { testID: string; url: string; trailing?: unknown; footer?: unknown; onFinished?: () => void }) => {
+      mockPlayers[p.testID] = p;
+      return React.createElement(View, { testID: p.testID, accessibilityHint: p.url }, p.trailing, p.footer);
+    },
   };
 });
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
@@ -60,6 +63,7 @@ jest.mock('../VoiceRecordSheet', () => {
 
 const mockListFeed = jest.fn();
 const mockRemove = jest.fn();
+const mockHeard = jest.fn();
 jest.mock('../../../api/communityVoiceApi', () => {
   const actual = jest.requireActual('../../../api/communityVoiceApi');
   return {
@@ -67,6 +71,7 @@ jest.mock('../../../api/communityVoiceApi', () => {
     communityVoiceApi: {
       listFeed: (...a: unknown[]) => mockListFeed(...a),
       remove: (...a: unknown[]) => mockRemove(...a),
+      markHeard: (...a: unknown[]) => mockHeard(...a),
     },
   };
 });
@@ -151,6 +156,22 @@ describe('VoiceNotesSection', () => {
     const { findByText, getByText } = await renderSection();
     expect(await findByText('Sam Ortiz')).toBeTruthy();
     expect(getByText('Coach')).toBeTruthy();
+  });
+
+  it('a note not yet heard says New; played to the end it says Played and the server is told', async () => {
+    mockListFeed.mockResolvedValue({
+      voice_notes: [{ ...note('vn-other', 'u-alice'), heard_at: null }, { ...note('vn-mine', 'u-me'), heard_at: null }],
+      next_cursor: null,
+    });
+    mockHeard.mockReset().mockResolvedValue(undefined);
+    const { findByTestId, queryByTestId } = await renderSection();
+    expect(await findByTestId('vn-new-vn-other')).toBeTruthy();
+    expect(queryByTestId('vn-new-vn-mine')).toBeNull();
+    expect(mockPlayers['vn-player-vn-mine'].onFinished).toBeUndefined();
+    await act(async () => mockPlayers['vn-player-vn-other'].onFinished?.());
+    expect(mockHeard).toHaveBeenCalledWith('vn-other');
+    expect(await findByTestId('vn-played-vn-other')).toBeTruthy();
+    expect(queryByTestId('vn-new-vn-other')).toBeNull();
   });
 
   it('a send that fails online says Not sent and offers Try again and Delete', async () => {
