@@ -54,7 +54,7 @@ import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
 import { COACH_AI_PENDING_DRAFTS_QUERY_KEY } from '../../../hooks/usePendingAiDrafts';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import AiRefusalNotice from '../../ai/AiRefusalNotice';
-import { aiRefusalOf, type AiRefusal } from '../../../lib/ai/aiRefusal';
+import { aiRefusalCopy, aiRefusalOf, type AiRefusal } from '../../../lib/ai/aiRefusal';
 
 const ALLOWED_ROLES = new Set(['coach', 'owner']);
 
@@ -108,11 +108,12 @@ export function AskAiActionSheet({
     setPrompt('');
   }, []);
 
-  // iOS has no live regions, so read a failed send out (Android uses accessibilityLiveRegion).
-  const errorMessage = phase.kind === 'error' ? phase.message : null;
+  // iOS has no live regions, so read a failed send or a refusal title out; Android's live region reads it once (ImportStatusFrame).
+  const spoken =
+    phase.kind === 'error' ? phase.message : phase.kind === 'refused' ? aiRefusalCopy(phase.refusal, 'coach', 'draft').title : null;
   useEffect(() => {
-    if (errorMessage) AccessibilityInfo.announceForAccessibility(errorMessage);
-  }, [errorMessage]);
+    if (spoken && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(spoken);
+  }, [spoken]);
   // A refusal (consent, egress) is the outcome to read, so the keyboard goes down and the form scrolls to it.
   const formRef = useRef<ScrollView>(null);
   const refused = phase.kind === 'refused';

@@ -21,7 +21,7 @@
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { AccessibilityInfo, Keyboard } from 'react-native';
+import { AccessibilityInfo, Keyboard, Platform } from 'react-native';
 import { fireEvent, render, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -143,8 +143,24 @@ describe('Ask AI sheet rides above the keyboard', () => {
     expect(announce).toHaveBeenCalledWith('Type the notification body to send.');
   });
 
+  it('Android leaves the failed send to the live region, so TalkBack reads it once (round 3, LO-845 C1)', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    announce.mockClear();
+    const os = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+    try {
+      const r = await openNotification();
+      await fireEvent.press(r.getByTestId('ask-ai-submit'));
+      expect(r.getByTestId('ask-ai-error')).toBeTruthy();
+      expect(announce).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+    }
+  });
+
   it('a refused send stays in view: the keyboard goes down and the form scrolls to the refusal (round 2, LO-845 B1)', async () => {
     const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
     const { coachAiExecutionApi } = jest.requireMock('../api/coachAiExecutionApi');
     coachAiExecutionApi.invokeSendNotification.mockRejectedValueOnce({
       response: { status: 403, data: { code: 'ai_consent_required', message: 'Client has not allowed AI.' } },
@@ -155,6 +171,7 @@ describe('Ask AI sheet rides above the keyboard', () => {
     await fireEvent.press(r.getByTestId('ask-ai-submit'));
     expect(await within(r.getByTestId('ask-ai-form')).findByTestId('ask-ai-refusal')).toBeTruthy();
     expect(dismiss).toHaveBeenCalled();
+    expect(announce).toHaveBeenCalledWith('AI help is off for this client');
   });
 });
 
