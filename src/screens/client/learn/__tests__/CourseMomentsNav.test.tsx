@@ -22,6 +22,7 @@ jest.mock('@expo-google-fonts/cormorant-garamond', () => ({ CormorantGaramond_40
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me', coach_id: 'c1' }) }));
 jest.mock('../../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
+jest.mock('../useMotionAnswer', () => ({ useMotionAnswer: () => true })); // the moments' own Reduce Motion read (CourseMomentsMotion.test covers it)
 jest.mock('../../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({ online: true }), isEffectivelyOnline: (n: { online: boolean }) => n.online }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn(), softImpact: jest.fn(), success: jest.fn(), error: jest.fn() } }));
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn() } }));
