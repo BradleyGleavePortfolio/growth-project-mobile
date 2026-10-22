@@ -54,7 +54,7 @@ export default function CoachHomeV11(p: Props) {
   const roster = o?.roster_size ?? 0;
   const rosterN = formatCount(roster);
   const items = home?.wins.items ?? [];
-  const turn = useWinTurn(focused ? items.length : 0); // paused while another tab is in front (LO C2)
+  const { turn, still } = useWinTurn(focused ? items.length : 0); // paused while another tab is in front (LO C2)
   const newest = items.slice(0, 3); // the newest three take turns (spec item 2), each a cross-fade (#167-1)
   const win = newest.length > 0 ? newest[turn % newest.length] : undefined;
   const bell = data.unreadNotifications;
@@ -104,12 +104,13 @@ export default function CoachHomeV11(p: Props) {
             <Text style={s.heroValue} maxFontSizeMultiplier={1.15}>{h.value}</Text><Text style={s.heroUnit}>{h.unit}</Text>
             {win ? <Ionicons name="chevron-forward" size={22} color={forestPop.onDeepMuted} /> : null}
           </View>
-          {win && bigText ? null : win ? (
-            <View style={s.win}>
-              <View style={s.winDot} />
-              <WinTurn wins={newest} shown={win} live={focused} line={(w, id) => <Text style={s.winText} numberOfLines={2} testID={id}>{winLine(w)}</Text>} />
-            </View>
-          ) : <Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>}
+          {win && bigText ? null : (
+            <WinTurn
+              wins={still && win ? [win] : newest} shown={win ?? null} live={focused} // nothing turns: the row fits the one win (LO C2)
+              line={(w, id) => <Text style={s.winText} numberOfLines={2} testID={id}>{winLine(w)}</Text>}
+              empty={<Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>}
+            />
+          )}
         </Pressable>
       );
     }
@@ -334,10 +335,7 @@ const s = StyleSheet.create({
   heroRight: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, marginLeft: 'auto' },
   bar: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.forest, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.leaf },
-  // One steady dot on the first line, outside the fade, so a turn between a two-line and a one-line win shows one dot (#167-1).
-  win: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  winDot: { width: 8, height: 8, borderRadius: 4, marginTop: (typography.body.lineHeight - 8) / 2, backgroundColor: forestPop.leaf },
-  winText: { ...typography.body, color: forestPop.onDeep, flex: 1 },
+  winText: { ...typography.body, color: forestPop.onDeep },
   onDeep: { ...typography.body, color: forestPop.onDeep },
   onDeepMuted: { ...typography.bodySmall, color: forestPop.onDeepMuted },
   retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: forestPop.brand400 },
