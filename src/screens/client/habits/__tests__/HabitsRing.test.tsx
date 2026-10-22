@@ -44,6 +44,7 @@ jest.mock('../../../../entitlements/EntitlementProvider', () => ({
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNav,
   useFocusEffect: jest.fn(),
+  NavigationContext: require('react').createContext(undefined), // HabitsScreen's Roman lock test (useClientNeedsCoach) reads it
 }));
 jest.mock('../../../../config/featureFlags', () => ({ featureFlags: { habitsRing: true, romanCompetencePill: false } }));
 jest.mock('../../../../utils/date', () => ({ ...jest.requireActual('../../../../utils/date'), getTodayString: () => mockToday }));

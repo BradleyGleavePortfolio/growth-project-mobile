@@ -28,7 +28,9 @@
  *   MMKV key 'onboarding.package_prompt_dismissed_at:<userId>' (ISO string).
  *   If set and < 24h ago → call onDismiss() immediately.
  *   If set and > 24h ago (or not set) → show sheet.
- *   Written on "Skip for now" tap.
+ *   Written on "Skip for now" tap, and (`recordShown`, the unsolicited
+ *   sheet) the moment it opens, so closing the app, going back or an empty
+ *   list never brings it back inside 24h (#836 Sol B1).
  */
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
@@ -40,6 +42,7 @@ import {
   Pressable,
   ScrollView,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../theme/tokens';
@@ -51,6 +54,8 @@ import { usePackagePurchase } from '../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from './purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from './purchase/PlanTermsBlock';
 import PurchaseFeedback from './purchase/PurchaseFeedback';
+import { QuietOverline as Overline } from '../ui/sections/QuietSection';
+import { oneToOneCoachingLabel } from '../config/purchaseSurfaces';
 import {
   planTerms,
   priceLabel,
@@ -87,6 +92,8 @@ export interface PackageSelectionSheetProps {
   recheckDelaysMs?: number[];
   /** Coachless Home hand-off: select this package once the list loads (when it is in the list). */
   initialPackageId?: string | null;
+  /** Unsolicited sheet (package_prompt, Day 1 on iPhone): save the 24h time when it opens, not only on Skip. */
+  recordShown?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -117,6 +124,7 @@ export default function PackageSelectionSheet({
   entitlementPollDelaysMs,
   recheckDelaysMs,
   initialPackageId,
+  recordShown = false,
 }: PackageSelectionSheetProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
@@ -134,6 +142,7 @@ export default function PackageSelectionSheet({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ready, setReady] = useState(false); // passed 24h suppression check
   const [reloadTick, setReloadTick] = useState(0);
+  const [coachName, setCoachName] = useState<string | null>(null);
 
   // Latest-ref pattern: callers may pass an inline onDismiss that re-creates
   // every render. Subscribing the effects below to `onDismiss` directly would
@@ -177,10 +186,18 @@ export default function PackageSelectionSheet({
       } catch {
         // best-effort; show if check fails
       }
+      if (cancelled) return;
+      if (recordShown) {
+        try {
+          await prefsStorage.set(dismissedKey, new Date().toISOString());
+        } catch {
+          // best-effort; still show
+        }
+      }
       if (!cancelled) setReady(true);
     })();
     return () => { cancelled = true; };
-  }, [visible, dismissedKey]);
+  }, [visible, dismissedKey, recordShown]);
 
   // ── Fetch packages when ready (and after a price / terms change) ──────────
   useEffect(() => {
@@ -193,6 +210,10 @@ export default function PackageSelectionSheet({
     }
     (async () => {
       try {
+        // #161-5: on iOS the list is labelled 1:1 coaching with the coach by name, as on ClientPackages.
+        const coachRead = Platform.OS === 'ios' && firstLoad
+          ? (async () => (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name)().catch(() => null)
+          : null;
         const res = await api.get<{ packages: unknown[] } | unknown[]>(
           '/v1/clients/me/coach/packages',
         );
@@ -215,6 +236,9 @@ export default function PackageSelectionSheet({
           if (firstLoad) onDismissRef.current();
           return;
         }
+        const name = await coachRead;
+        if (cancelled) return;
+        if (typeof name === 'string') setCoachName(name);
         setPackages(list);
         setDescriptions(desc);
         if (firstLoad && initialPackageId && list.some((p) => p.id === initialPackageId)) {
@@ -279,6 +303,10 @@ export default function PackageSelectionSheet({
 
           <Text style={styles.heading}>Choose your plan</Text>
           <Text style={styles.subtext}>Start with a plan that fits your goals.</Text>
+
+          {Platform.OS === 'ios' && !loading ? (
+            <Overline testID="package-sheet-one-to-one">{oneToOneCoachingLabel(coachName)}</Overline>
+          ) : null}
 
           {/* Package cards */}
           {loading ? (
