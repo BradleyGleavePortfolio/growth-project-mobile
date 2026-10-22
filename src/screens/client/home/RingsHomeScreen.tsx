@@ -124,7 +124,6 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
           <QuietError layout="inline" message={day.error} onRetry={() => void refresh()} retrying={day.retrying} testID="home-day-data-error" />
         ) : null}
         <Text testID="home-date" style={[typography.eyebrow, { color: sc.textMuted }]}>{homeDateLine(new Date())}</Text>
-        <RenewalHome />
         <View style={styles.dials} testID="home-dials">
           <HomeDial label="Food" view={food} testID="home-dial-food" accessibilityLabel={dialLabel('Food', food)}
             onPress={() => navigation.navigate('Log')} />
@@ -136,6 +135,8 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
         </View>
         {/* #RINGS-PAY-SLOT: the failed payment alone, up under the dials; every other notice waits in the slot. */}
         <DunningBanner surface="HomeScreen" presentation="section" style={styles.pay} />
+        {/* RENEWAL-M (C3): the ended plan's renewal banner sits with the payment banner, under the dials. */}
+        <RenewalHome />
         <CoachlessHomeSlot part="join" />
         {/* Once the user is known, so a coached client never sees Roman locked first. */}
         {currentUser ? <HomeRomanLine coached={!!currentUser.coach_id} /> : null}
