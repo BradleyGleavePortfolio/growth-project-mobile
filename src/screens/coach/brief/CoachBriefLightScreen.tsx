@@ -1,13 +1,17 @@
 /**
  * CoachBriefLightScreen: today's brief as Concept A, "Roman in the light" (BRIEFA, behind coachBriefGate): Roman's face,
- * the date, his words, at most two actions from selectBriefActions, then "Thank you, Roman". Every state has a way out;
+ * the date, his words, the actions from selectBriefActions, then "Thank you, Roman". Every state has a way out;
  * the brief is marked read once, when its words show. Reduce Motion and screen readers get everything at once.
+ * ROMAN-EXTRAS-M (Style A, folded rows): on a brief that carries the check-in and new-client rows, a list row shows its
+ * count and folds open in place (one at a time, 200 ms) to the newest three names and "See all {n}"; while one is
+ * open the rows scroll in their own area so Roman's greeting stays on screen. An older brief keeps today's rows.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
   Easing,
+  LayoutAnimation,
   Pressable,
   ScrollView,
   StatusBar,
@@ -18,19 +22,28 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
-import { coachBriefApi, CoachBriefApiError, type CoachBrief } from '../../../api/coachBriefApi';
+import { Ionicons } from '@expo/vector-icons';
+import { coachBriefApi, CoachBriefApiError, type CoachBrief, type CoachBriefActionItem } from '../../../api/coachBriefApi';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { coachLandingTab } from '../../../navigation/coachLanding';
 import { openTarget } from '../../../navigation/coachInbox';
-import { colors, motion, radius } from '../../../theme/tokens';
+import { brand, colors, motion, radius } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { logger } from '../../../utils/logger';
 import Svg, { Circle, Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import BriefField from './BriefField';
-import { selectBriefActions, type BriefAction, type BriefTarget } from './briefActions';
+import {
+  actionTarget,
+  briefFirstName,
+  briefHasExtras,
+  selectBriefActions,
+  type BriefAction,
+  type BriefKind,
+  type BriefTarget,
+} from './briefActions';
 
 export const BRIEF_LIGHT_POLL_MS = 5_000;
 export const BRIEF_LIGHT_POLL_TRIES = 12;
@@ -42,6 +55,11 @@ const CURVE = [0, 0.04, 0.1, 0.18, 0.3, 0.5, 1].map((x) => [x, Easing.bezier(...
 const OPENS = 'Opens the screen for this item';
 const OPENS_LIST = 'Opens the full list';
 const CLOSES = 'Closes today\u2019s brief.';
+const SHOWS = 'Shows the newest three';
+const DIM = 'rgba(251,247,240,0.7)';
+const LEAF = '#C9DC9F';
+const FOLD = LayoutAnimation.create(200, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
+const FADE = { duration: 200, create: FOLD.create, delete: FOLD.delete };
 
 type LoadState =
   | { kind: 'loading' }
@@ -58,7 +76,15 @@ type Nav = {
   getParent: () => Parameters<typeof openTarget>[0] | undefined;
 };
 
-type Row = { key: string; label: string; hint?: string; onPress: () => void };
+type Row = {
+  key: string;
+  label: string;
+  hint?: string;
+  onPress: () => void;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** A folding row: its clients (count = length) and whether it is the open one. */
+  fold?: { kind: BriefKind; items: CoachBriefActionItem[]; open: boolean };
+};
 
 function splitGreeting(narrative: string): [string | null, string] {
   const m = /^\s*(Good morning\b[^.?]*[.?])\s*([\s\S]*)$/.exec(narrative);
@@ -91,6 +117,11 @@ export default function CoachBriefLightScreen() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [revealed, setRevealed] = useState(false);
   const [fit, setFit] = useState({ view: 0, content: 0 });
+  const [openKind, setOpenKind] = useState<BriefKind | null>(null);
+  // While a fold is open the words keep Roman's greeting and the faded top of the next line; the rows scroll below.
+  const [keep, setKeep] = useState(0);
+  const rowsRef = useRef<ScrollView>(null);
+  const rowsView = useRef(0);
   const mounted = useRef(true);
   const markedRead = useRef<string | null>(null);
   const waited = useRef(false);
@@ -213,10 +244,20 @@ export default function CoachBriefLightScreen() {
     if (still) return close();
     Animated.timing(fade, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => close());
   };
+  const list = (kind: BriefKind, items: CoachBriefActionItem[]) => navigation.navigate('CoachBriefList', { kind, items });
   const open = (action: BriefAction) => {
     void HapticService.softImpact();
-    if (action.opens === 'list') navigation.navigate('CoachBriefList', { kind: action.kind, items: action.items });
+    if (action.opens === 'list') list(action.kind, action.items);
     else close(action.target);
+  };
+  const toggle = (kind: BriefKind) => {
+    void HapticService.selection();
+    LayoutAnimation.configureNext(still ? FADE : FOLD);
+    setOpenKind((k) => (k === kind ? null : kind));
+  };
+  const tap = (run: () => void) => () => {
+    void HapticService.softImpact();
+    run();
   };
 
   const first = (user?.firstName ?? '').trim();
@@ -231,9 +272,17 @@ export default function CoachBriefLightScreen() {
       const [said, rest] = splitGreeting(state.brief.summary?.narrative ?? '');
       greeting = said ?? greeting;
       words = rest;
-      actions = selectBriefActions(state.brief.summary?.action_items);
+      actions = selectBriefActions(state.brief.summary?.action_items, { extras: briefHasExtras(state.brief.summary) });
       rows = [
-        ...actions.map((a) => ({ key: a.kind, label: a.label, hint: a.opens === 'list' ? OPENS_LIST : OPENS, onPress: () => open(a) })),
+        ...actions.map((a): Row => {
+          const base = { key: a.kind, label: a.label };
+          if (a.opens !== 'list' || !a.fold) {
+            return { ...base, hint: a.opens === 'list' ? OPENS_LIST : OPENS, onPress: () => open(a), icon: 'chevron-forward' };
+          }
+          const shut = openKind !== a.kind;
+          const fold = { kind: a.kind, items: a.items, open: !shut };
+          return { ...base, hint: shut ? SHOWS : undefined, onPress: () => toggle(a.kind), icon: shut ? 'chevron-down' : 'chevron-up', fold };
+        }),
         way('Thank you, Roman'),
       ];
       break;
@@ -258,6 +307,7 @@ export default function CoachBriefLightScreen() {
       words = '';
       rows = [way('Continue')];
   }
+  const folded = rows.some((r) => r.fold?.open);
   const paras = [greeting, words, actions.length > 0 ? 'Where would you like to start?' : ''].filter(Boolean);
   const dots = state.kind === 'loading' || (state.kind === 'preparing' && state.polling);
   const rise = (start: number, dy: number, dur = 250) => {
@@ -283,7 +333,7 @@ export default function CoachBriefLightScreen() {
       <BriefField lit={t.interpolate({ inputRange: [0, 300], outputRange: [0, 1], extrapolate: 'clamp' })} still={still} />
       <Animated.View style={[styles.fill, { opacity: fade }]}>
         <ScrollView
-          style={styles.words}
+          style={[styles.words, folded && keep ? { height: Math.min(keep, fit.content || keep), flexShrink: 0 } : null]}
           contentContainerStyle={{ paddingTop: insets.top + (wide ? 60 : 40), paddingBottom: 8, paddingHorizontal: gutter }}
           showsVerticalScrollIndicator={false}
           onLayout={(e) => setFit((f) => ({ ...f, view: e.nativeEvent.layout.height }))}
@@ -315,7 +365,11 @@ export default function CoachBriefLightScreen() {
             </View>
           </Animated.View>
           {paras.map((p, i) => (
-            <Animated.View key={`${i}-${p.slice(0, 12)}`} style={[{ marginTop: i === 0 ? 24 : 14 }, rise(300 + i * step, 4)]}>
+            <Animated.View
+              key={`${i}-${p.slice(0, 12)}`}
+              style={[{ marginTop: i === 0 ? 24 : 14 }, rise(300 + i * step, 4)]}
+              onLayout={i === 0 ? (e) => setKeep(e.nativeEvent.layout.y + e.nativeEvent.layout.height + 40) : undefined}
+            >
               <Text
                 ref={i === 0 ? greetingRef : undefined}
                 style={styles.words24}
@@ -344,28 +398,103 @@ export default function CoachBriefLightScreen() {
           </Svg>
         ) : null}
         <Animated.View
-          style={[styles.rows, { paddingBottom: Math.max(insets.bottom, 16) + 16, paddingHorizontal: gutter }, rise(1000, 8, 300)]}
+          style={[styles.rows, folded ? styles.rowsOpen : null, rise(1000, 8, 300)]}
           pointerEvents={revealed ? 'auto' : 'none'}
         >
-          {rows.map((row, i) => (
-            <Pressable
-              key={row.key}
-              onPress={row.onPress}
-              accessibilityRole="button"
-              accessibilityLabel={row.label}
-              accessibilityHint={row.hint}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-              testID={`brief-row-${row.key}`}
-            >
-              <Text style={styles.badge} maxFontSizeMultiplier={1} accessibilityElementsHidden importantForAccessibility="no">
-                {i + 1}
-              </Text>
-              <Text style={styles.label}>{row.label}</Text>
-            </Pressable>
-          ))}
+          <ScrollView
+            ref={rowsRef}
+            style={styles.rowsScroll}
+            onLayout={(e) => (rowsView.current = e.nativeEvent.layout.height)}
+            contentContainerStyle={{ gap: 8, paddingBottom: Math.max(insets.bottom, 16) + 16, paddingHorizontal: gutter }}
+            showsVerticalScrollIndicator={false}
+          >
+            {rows.map((row, i) => {
+              const out = row.key === 'out';
+              const n = row.fold?.items.length;
+              const header = (
+                <Pressable
+                  key={row.key}
+                  onPress={row.onPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={n === undefined ? row.label : `${row.label}, ${n}`}
+                  accessibilityHint={row.hint}
+                  accessibilityState={row.fold ? { expanded: row.fold.open } : undefined}
+                  style={({ pressed }) => [styles.row, out && styles.out, row.fold?.open && styles.inFold, pressed && styles.pressed]}
+                  testID={`brief-row-${row.key}`}
+                >
+                  {out ? null : (
+                    <Text style={styles.badge} maxFontSizeMultiplier={1} accessibilityElementsHidden importantForAccessibility="no">
+                      {i + 1}
+                    </Text>
+                  )}
+                  <Text style={[styles.label, out && styles.center]}>{row.label}</Text>
+                  {n === undefined ? null : (
+                    <Text style={styles.pill} maxFontSizeMultiplier={1.3} accessibilityElementsHidden importantForAccessibility="no">
+                      {n}
+                    </Text>
+                  )}
+                  {row.icon ? <Ionicons name={row.icon} size={18} color={DIM} /> : null}
+                </Pressable>
+              );
+              if (!row.fold?.open) return header;
+              const { kind, items } = row.fold;
+              return (
+                <View
+                  key={row.key}
+                  style={styles.fold}
+                  onLayout={({ nativeEvent: { layout: l } }) => {
+                    // Bring the whole fold into view, its top first when it is taller than the rows area.
+                    const y = Math.max(0, Math.min(l.y, l.y + l.height + 8 - rowsView.current));
+                    rowsRef.current?.scrollTo({ y, animated: !still });
+                  }}
+                  testID={`brief-fold-${kind}`}
+                >
+                  {header}
+                  {items.slice(0, 3).flatMap((item) => {
+                    const target = actionTarget(item);
+                    const name = briefFirstName(item.client_name) ? (item.client_name ?? '').trim() : null;
+                    if (!target) return [];
+                    const id = `${item.type}-${item.client_id}`;
+                    const detail = name ? item.detail : undefined;
+                    const go = tap(() => close(target));
+                    return [<Sub key={id} label={name ?? item.detail} detail={detail} hint={OPENS} onPress={go} testID={`brief-fold-${id}`} />];
+                  })}
+                  <Sub
+                    label={`See all ${items.length}`}
+                    hint={OPENS_LIST}
+                    onPress={tap(() => list(kind, items))}
+                    all
+                    testID={`brief-all-${kind}`}
+                  />
+                </View>
+              );
+            })}
+          </ScrollView>
         </Animated.View>
       </Animated.View>
     </View>
+  );
+}
+
+type SubProps = { label: string; detail?: string; hint: string; onPress: () => void; all?: boolean; testID: string };
+
+/** One line inside an open fold: a client (name, detail) or "See all {n}". */
+function Sub({ label, detail, hint, onPress, all, testID }: SubProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={detail ? `${label}, ${detail}` : label}
+      accessibilityHint={hint}
+      style={({ pressed }) => [styles.sub, pressed && styles.pressed]}
+      testID={testID}
+    >
+      <View style={styles.subText}>
+        <Text style={[styles.subName, all && styles.all]}>{label}</Text>
+        {detail ? <Text style={styles.subDetail} numberOfLines={1}>{detail}</Text> : null}
+      </View>
+      <Ionicons name={all ? 'arrow-forward' : 'chevron-forward'} size={18} color={all ? LEAF : DIM} />
+    </Pressable>
   );
 }
 
@@ -390,27 +519,67 @@ const styles = StyleSheet.create({
   },
   dots: { flexDirection: 'row', gap: 6, marginTop: 18 },
   dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: 'rgba(251,247,240,0.7)' },
-  rows: { marginTop: 18, gap: 8 },
+  rows: { marginTop: 18 },
+  rowsOpen: { flexShrink: 1 },
+  rowsScroll: { flexGrow: 0, flexShrink: 1 },
   row: {
     minHeight: 54,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(26,26,24,0.94)',
+    backgroundColor: 'rgba(16,30,21,0.86)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(251,247,240,0.08)',
+    borderColor: 'rgba(251,247,240,0.09)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 15,
     paddingHorizontal: 14,
   },
-  pressed: { backgroundColor: 'rgba(12,12,11,0.98)' },
+  pressed: { backgroundColor: 'rgba(8,14,10,0.98)' },
+  out: { backgroundColor: 'rgba(16,30,21,0.6)', borderColor: 'rgba(251,247,240,0.16)' },
+  center: { textAlign: 'center' },
+  inFold: { backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0 },
+  fold: {
+    borderRadius: radius.card,
+    backgroundColor: 'rgba(16,30,21,0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,169,97,0.38)',
+    overflow: 'hidden',
+  },
+  sub: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+    paddingLeft: 48,
+    paddingRight: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(251,247,240,0.08)',
+  },
+  subText: { flex: 1, minWidth: 0 },
+  subName: { fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 20, color: BONE },
+  subDetail: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: brand[100] },
+  all: { fontFamily: 'Inter_600SemiBold', color: LEAF },
+  pill: {
+    minWidth: 32,
+    paddingHorizontal: 9,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(163,196,106,0.16)',
+    color: LEAF,
+    textAlign: 'center',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    lineHeight: 24,
+    fontVariant: ['tabular-nums'],
+  },
   badge: {
     width: 22,
     height: 22,
     borderRadius: radius.control,
     overflow: 'hidden',
-    backgroundColor: '#2C2C29',
-    color: colors.stone,
+    backgroundColor: '#2A3D30',
+    color: brand[100],
     textAlign: 'center',
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
