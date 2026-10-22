@@ -7,7 +7,8 @@
  *    sheet rises with the keyboard (the app's pattern since NudgeModal and
  *    LogPlannedMealButton). Ask AI's two fields scroll and "Send to AI" is
  *    pinned under them, so it can never sit off screen or under the keyboard;
- *    a failed or refused send is pinned with it, outside the scroll.
+ *    a failed send is pinned with it, outside the scroll; a refusal puts the
+ *    keyboard down so the whole sheet shows it.
  * 2. Class guard: every <TextInput> a <Modal> block draws (itself or through a
  *    child component, resolved from that child's own file) must sit INSIDE a
  *    keyboard-safe element (a padding KeyboardAvoidingView, a ScrollView with
@@ -20,7 +21,7 @@
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Keyboard } from 'react-native';
 import { fireEvent, render, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -142,7 +143,8 @@ describe('Ask AI sheet rides above the keyboard', () => {
     expect(announce).toHaveBeenCalledWith('Type the notification body to send.');
   });
 
-  it('a refused send stays in view: the refusal sits pinned with Send to AI, outside the scroll (round 2, LO-845 B1)', async () => {
+  it('a refused send stays in view: the keyboard goes down and the form scrolls to the refusal (round 2, LO-845 B1)', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
     const { coachAiExecutionApi } = jest.requireMock('../api/coachAiExecutionApi');
     coachAiExecutionApi.invokeSendNotification.mockRejectedValueOnce({
       response: { status: 403, data: { code: 'ai_consent_required', message: 'Client has not allowed AI.' } },
@@ -151,9 +153,8 @@ describe('Ask AI sheet rides above the keyboard', () => {
     await fireEvent.changeText(r.getByTestId('ask-ai-body-input'), 'Hydrate before your session.');
     await fireEvent.changeText(r.getByTestId('ask-ai-prompt-input'), 'Friendly reminder.');
     await fireEvent.press(r.getByTestId('ask-ai-submit'));
-    const avoider = r.getByTestId('ask-ai-keyboard-avoider');
-    expect(await within(avoider).findByTestId('ask-ai-refusal')).toBeTruthy();
-    expect(within(r.getByTestId('ask-ai-form')).queryByTestId('ask-ai-refusal')).toBeNull();
+    expect(await within(r.getByTestId('ask-ai-form')).findByTestId('ask-ai-refusal')).toBeTruthy();
+    expect(dismiss).toHaveBeenCalled();
   });
 });
 

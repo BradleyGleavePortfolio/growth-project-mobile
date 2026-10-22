@@ -32,9 +32,10 @@
  * bursts, no celebration overlays. Single forest accent on the submit CTA.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -112,6 +113,12 @@ export function AskAiActionSheet({
   useEffect(() => {
     if (errorMessage) AccessibilityInfo.announceForAccessibility(errorMessage);
   }, [errorMessage]);
+  // A refusal (consent, egress) is the outcome to read, so the keyboard goes down and the form scrolls to it.
+  const formRef = useRef<ScrollView>(null);
+  const refused = phase.kind === 'refused';
+  useEffect(() => {
+    if (refused) Keyboard.dismiss();
+  }, [refused]);
 
   const handleClose = useCallback(() => {
     reset();
@@ -246,8 +253,9 @@ export function AskAiActionSheet({
             phase.kind === 'error' ||
             phase.kind === 'refused') && (
             <View style={styles.promptBody}>
-              {/* The fields scroll; the error or refusal and Send to AI stay pinned under them, above the keyboard. */}
+              {/* The fields scroll; the error and Send to AI stay pinned under them, above the keyboard. */}
               <ScrollView
+                ref={formRef}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 testID="ask-ai-form"
@@ -304,9 +312,22 @@ export function AskAiActionSheet({
                   {prompt.length} / {PROMPT_MAX}
                 </Text>
 
+                {/* A refusal is read, not typed into: the keyboard goes down and the form scrolls to it. */}
+                {phase.kind === 'refused' && (
+                  <View onLayout={() => formRef.current?.scrollToEnd({ animated: false })}>
+                    <AiRefusalNotice
+                      refusal={phase.refusal}
+                      audience="coach"
+                      surface="draft"
+                      onRetry={() => void handleSubmit()}
+                      compact
+                      testID="ask-ai-refusal"
+                    />
+                  </View>
+                )}
               </ScrollView>
 
-              {/* Pinned under the fields like the insight sheet's error row, so a failed or refused send stays in view with the keyboard up. */}
+              {/* Pinned under the fields like the insight sheet's error row, so a failed send stays in view with the keyboard up. */}
               {phase.kind === 'error' && (
                 <Text
                   style={styles.errorText}
@@ -315,17 +336,6 @@ export function AskAiActionSheet({
                 >
                   {phase.message}
                 </Text>
-              )}
-
-              {phase.kind === 'refused' && (
-                <AiRefusalNotice
-                  refusal={phase.refusal}
-                  audience="coach"
-                  surface="draft"
-                  onRetry={() => void handleSubmit()}
-                  compact
-                  testID="ask-ai-refusal"
-                />
               )}
 
               <Pressable

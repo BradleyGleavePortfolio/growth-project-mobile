@@ -447,16 +447,20 @@ function CreateEventModal({
           { paddingTop: insets.top + spacing.md, backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
         ]}
       >
-        {/* Below the status bar; scrolls when a long error or the open pickers outgrow the space above the keyboard. */}
-        <ScrollView
+        {/* Below the status bar. The fields scroll when the open pickers or a large
+            text size outgrow the space above the keyboard; the error and the actions stay pinned at the foot. */}
+        <View
           style={[
             styles.modalCard,
-            styles.modalCardScroll,
+            styles.modalCardShell,
             {
               backgroundColor: semanticColors.bgSurface,
               borderColor: semanticColors.border,
             },
           ]}
+        >
+        <ScrollView
+          style={styles.modalCardScroll}
           contentContainerStyle={styles.modalCardBody}
           keyboardShouldPersistTaps="handled"
         >
@@ -555,6 +559,8 @@ function CreateEventModal({
             testID="coach-community-events-link-input"
             style={inputStyle(semanticColors)}
           />
+        </ScrollView>
+        <View style={styles.modalCardFooter}>
           {errorMessage ? (
             <Text
               style={[styles.modalError, { color: semantic.danger.fg }]}
@@ -614,7 +620,8 @@ function CreateEventModal({
               </Text>
             </HapticPressable>
           </View>
-        </ScrollView>
+        </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -712,16 +719,20 @@ function ManageEventModal({
           { paddingTop: insets.top + spacing.md, backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
         ]}
       >
-        {/* Below the status bar; scrolls when a long error or the open pickers outgrow the space above the keyboard. */}
-        <ScrollView
+        {/* Below the status bar. The fields scroll when the open pickers or a large
+            text size outgrow the space above the keyboard; the error and the actions stay pinned at the foot. */}
+        <View
           style={[
             styles.modalCard,
-            styles.modalCardScroll,
+            styles.modalCardShell,
             {
               backgroundColor: semanticColors.bgSurface,
               borderColor: semanticColors.border,
             },
           ]}
+        >
+        <ScrollView
+          style={styles.modalCardScroll}
           contentContainerStyle={styles.modalCardBody}
           keyboardShouldPersistTaps="handled"
         >
@@ -827,7 +838,8 @@ function ManageEventModal({
               This event is reflected and closed.
             </Text>
           )}
-
+        </ScrollView>
+        <View style={styles.modalCardFooter}>
           {manageError ? (
             <Text
               style={[styles.modalError, { color: semantic.danger.fg }]}
@@ -855,7 +867,8 @@ function ManageEventModal({
               Done
             </Text>
           </HapticPressable>
-        </ScrollView>
+        </View>
+        </View>
       </KeyboardAvoidingView>
 
       {/* F14: calm confirm sheet for the irreversible Reflect (close). Cancel is
@@ -1024,8 +1037,10 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     gap: spacing.md,
   },
-  modalCardScroll: { flexGrow: 0, padding: 0 },
-  modalCardBody: { padding: spacing.xl, gap: spacing.md },
+  modalCardShell: { flexShrink: 1, padding: 0, gap: 0, overflow: 'hidden' },
+  modalCardScroll: { flexGrow: 0, flexShrink: 1 },
+  modalCardBody: { padding: spacing.xl, paddingBottom: spacing.md, gap: spacing.md },
+  modalCardFooter: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl, gap: spacing.md },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
