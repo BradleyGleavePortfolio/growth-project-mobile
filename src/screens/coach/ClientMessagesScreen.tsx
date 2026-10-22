@@ -76,7 +76,7 @@ export default function ClientMessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
-  // A reply typed and not sent stays with this client's chat (COACH-CHAT-KEEP); unsent text asks before a reset (Sol B1).
+  // A reply typed and not sent stays with this client's chat on the device (COACH-CHAT-KEEP, CHAT-DISCARD).
   const [inputText, setInputText, sendKey] = useUnsentReply(clientId, initialDraft);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');

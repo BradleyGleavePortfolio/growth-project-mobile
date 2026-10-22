@@ -150,7 +150,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           maxLength={DM_MAX}
           sending={sendDm.isPending}
           onSubmit={onSend}
-          draftKey={recipientId ? `dm:${workspaceId}:${recipientId}` : undefined}
+          draftKey={recipientId && workspaceId ? `dm:${workspaceId}:${recipientId}` : undefined}
           testID="community-dmthread-composer"
         />
       </KeyboardAvoidingView>

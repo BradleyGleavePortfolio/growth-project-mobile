@@ -78,12 +78,26 @@ it('a failed send keeps its key with its text; an edit is a new send; an empty b
   expect(b.getByTestId('key').props.children).toBe('none');
 });
 
-it('a passed draft wins over kept text; a sign-out removes every kept text from memory and the device', async () => {
+it('a passed draft (Send check-in) goes under kept text, never over it (Opus C1); once is enough', async () => {
   const a = await render(<Box thread="coach:client-1" />);
   await fireEvent.changeText(a.getByLabelText('box'), 'old reply');
   await a.unmount();
   const b = await render(<Box thread="coach:client-1" initial="How did the week go?" />);
-  expect(value(b)).toBe('How did the week go?');
+  expect(value(b)).toBe('old reply\n\nHow did the week go?');
+  await b.unmount();
+  expect(value(await render(<Box thread="coach:client-1" initial="How did the week go?" />))).toBe('old reply\n\nHow did the week go?');
+  // After the app closed (memory empty, no synchronous read) the device copy still comes first.
+  mockDisk.set(`${CHAT_DRAFT_KEY_PREFIX}client-1:coach:client-9`, JSON.stringify({ text: 'Half a thou' }));
+  const c = await render(<Box thread="coach:client-9" initial="How did the week go?" />);
+  await waitFor(() => expect(value(c)).toBe('Half a thou\n\nHow did the week go?'));
+  await waitFor(() => expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:coach:client-9`)).toContain('How did the week go?'));
+  // No kept text: the passed draft alone.
+  expect(value(await render(<Box thread="coach:client-5" initial="How did the week go?" />))).toBe('How did the week go?');
+});
+
+it('a sign-out removes every kept text from memory and the device', async () => {
+  const b = await render(<Box thread="coach:client-1" />);
+  await fireEvent.changeText(b.getByLabelText('box'), 'old reply');
   await b.unmount();
   await waitFor(() => expect(diskKeys()).toHaveLength(1));
   authEvents.emit('logout');

@@ -62,8 +62,9 @@ export const openInboxChat = (navigation: TabJump, clientId: string, clientName:
  * COACH-CHAT-KEEP and CHAT-DISCARD (owner 10-21): nothing asks before a chat closes (the "Discard this message?" prompt
  * on a chat is gone). A reply typed in a client's chat and not sent stays with that client's chat on this device when the
  * chat closes (Back, a push or banner opening another chat, the tab press, the app closing) and is back in the box when
- * it opens again; a passed draft (Send check-in) wins. A send that failed keeps its key with its text (Sol B1, m#841).
- * Sending it, or any sign-in or sign-out, removes it (src/lib/chatDrafts.ts).
+ * it opens again; a passed draft (Send check-in) goes under it, never over it (Opus C1). A send that failed keeps its key
+ * with its text (Sol B1, m#841). Sending it or signing out removes it; kept text is filed under the signed-in account,
+ * so another account never sees it (src/lib/chatDrafts.ts).
  */
 export function useUnsentReply(clientId: string, initialDraft?: string): [string, SetChatText, ChatSendKey] {
   return useChatDraft(`coach:${clientId}`, initialDraft);

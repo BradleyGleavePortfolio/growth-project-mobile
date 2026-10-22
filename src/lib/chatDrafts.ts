@@ -93,6 +93,16 @@ function write(scope: string, draft: ChatDraft): void {
   quietly(() => cacheStorage.set(k, JSON.stringify(draft)));
 }
 
+/**
+ * A passed draft (Send check-in) never drops kept text (Opus C1, m#841): the kept text stays first, then a blank line,
+ * then the passed draft; a kept text that already holds the draft stays as it is.
+ */
+function withKept(kept: ChatDraft | undefined, passed: string): ChatDraft {
+  if (!kept) return { text: passed };
+  if (kept.text.includes(passed.trim())) return kept;
+  return kept.failed ? { text: `${kept.text}\n\n${passed}`, failed: kept.failed } : { text: `${kept.text}\n\n${passed}` };
+}
+
 export type SetChatText = (next: string | ((current: string) => string)) => void;
 export interface ChatSendKey {
   /** The failed send's key when `text` is the text it tried to send; otherwise undefined (a new send). */
@@ -103,35 +113,51 @@ export interface ChatSendKey {
 
 /**
  * A chat's text box, kept per signed-in user and per chat (`thread`, e.g. `coach:<clientId>`); `thread` null keeps it in
- * the component only. `initialText` (a passed draft, e.g. Send check-in) wins over kept text. Emptying the box (every
- * successful send) removes the kept text and any failed send's key with it.
+ * the component only. `initialText` (a passed draft, e.g. Send check-in) is added under kept text, never over it.
+ * Emptying the box (every successful send) removes the kept text and any failed send's key with it.
  */
 export function useChatDraft(thread: string | null, initialText?: string): [string, SetChatText, ChatSendKey] {
   const userId = useCurrentUser()?.id ?? null;
   const scope = thread && userId ? `${userId}:${thread}` : null;
   const [box, setBox] = useState<{ scope: string | null; draft: ChatDraft }>(() => ({ scope: null, draft: { text: initialText ?? '' } }));
   const passed = useRef(initialText !== undefined);
+  // A passed draft waiting for the device read (no synchronous read), so it joins the kept text instead of replacing it.
+  const merge = useRef(false);
   const live = useRef(box);
 
   let shown = box;
   if (box.scope !== scope) {
     // The user is known (the first render never has it) or the chat changed in place: show this chat's kept text. Text
-    // typed before the user was known, or a passed draft, is kept for this chat instead.
-    const carry = box.scope === null && (passed.current || box.draft.text !== '');
-    shown = { scope, draft: carry ? box.draft : (scope ? readNow(scope) : undefined) ?? { text: '' } };
-    if (carry && scope) write(scope, box.draft);
+    // typed before the user was known is kept for this chat instead; a passed draft goes under the kept text.
+    const first = box.scope === null;
+    const kept = scope ? readNow(scope) : undefined;
+    const withDraft = first && passed.current;
+    const carry = first && (withDraft || box.draft.text !== '');
+    const draft = withDraft ? withKept(kept, box.draft.text) : carry ? box.draft : kept ?? { text: '' };
+    shown = { scope, draft };
+    if (carry && scope) {
+      if (withDraft && !kept) merge.current = true;
+      else write(scope, draft);
+    }
     passed.current = false;
     setBox(shown);
   }
   live.current = shown;
 
   useEffect(() => {
-    if (!scope || live.current.draft.text !== '') return;
+    if (!scope || (live.current.draft.text !== '' && !merge.current)) return;
     let alive = true;
     void readLater(scope).then((d) => {
-      if (!alive || !d || live.current.scope !== scope || live.current.draft.text !== '') return;
-      memory.set(scope, d);
-      live.current = { scope, draft: d };
+      if (!alive || live.current.scope !== scope) return;
+      if (merge.current) {
+        merge.current = false;
+        live.current = { scope, draft: withKept(d, live.current.draft.text) };
+        write(scope, live.current.draft);
+      } else {
+        if (!d || live.current.draft.text !== '') return;
+        memory.set(scope, d);
+        live.current = { scope, draft: d };
+      }
       setBox(live.current);
     });
     return () => { alive = false; };
