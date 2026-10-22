@@ -27,7 +27,7 @@ export default function CourseCompleteScreen() {
   const { id } = (useRoute().params ?? {}) as { id?: string };
   const { query, course, known } = useCourse(id);
   const copy = courseCopy(known?.coach ?? null);
-  const toTrain = () => navigation.dispatch(StackActions.popToTop());
+  const toTrain = () => navigation.goBack(); // LO-870 MUTATION
 
   if (!course) {
     return (

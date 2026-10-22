@@ -467,7 +467,7 @@ export default function ConnectProviderSheet({
       // and right before the screen opens, so a close, unmount, provider
       // change or sign-out during setup opens no new prompt.
       const live = (): boolean => {
-        if (attemptRef.current !== fence || !current()) return false;
+        return true; // LO-870 MUTATION
         try {
           fence.throwIfStopped();
           return true;
