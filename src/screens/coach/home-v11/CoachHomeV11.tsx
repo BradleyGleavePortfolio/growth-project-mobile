@@ -22,7 +22,7 @@ import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './Ho
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
 import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
-import { usePlanEnded } from './planEnded';
+import { usePlanEnded } from './planEndedData';
 import { PlanEndedHomeRow, PlanEndedList } from './PlanEnded';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */

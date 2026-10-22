@@ -12,7 +12,6 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietError, loadFailureMessage } from '../../../ui/states/QuietStates';
-import HapticPressable from '../../../components/HapticPressable';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { openInboxChat } from '../../../navigation/coachInbox';
@@ -21,7 +20,7 @@ import { SEMI, useCardStyles } from './HomeParts';
 import {
   groupPlanEnded, homeLabel, homeLine, initialsOf, messagedLine, planEndedAsk, planEndedTitle, rowLine,
   type PlanEndedPage, type PlanEndedRow,
-} from './planEnded';
+} from './planEndedData';
 
 const SLIDE_MS = 240;
 
@@ -32,7 +31,7 @@ export function PlanEndedHomeRow({ page, onOpen }: { page: PlanEndedPage; onOpen
   if (!first || page.total === 0) {
     return (
       <View style={[hs.row, hs.rowQuiet]} accessible accessibilityLabel={label} testID="home-plan-ended-none">
-        <Ionicons name="refresh" size={22} color={forestPop.onDeepMuted} />
+        <Ionicons name="refresh" size={20} color={forestPop.onDeepMuted} />
         <View style={hs.grow}>
           <Text style={hs.title}>{planEndedTitle(0)}</Text>
           <Text style={hs.line}>Clients whose plan ended show here, newest first.</Text>
@@ -45,21 +44,21 @@ export function PlanEndedHomeRow({ page, onOpen }: { page: PlanEndedPage; onOpen
       style={({ pressed }) => [hs.row, pressed && hs.pressed]} onPress={() => { void HapticService.softImpact(); onOpen(); }}
       accessibilityRole="button" accessibilityLabel={label} testID="home-plan-ended"
     >
-      <Ionicons name="refresh" size={22} color={forestPop.leaf} />
+      <Ionicons name="refresh" size={20} color={forestPop.leaf} />
       <View style={hs.grow}>
         <Text style={hs.title}>{planEndedTitle(page.total)}</Text>
         <View style={hs.lineRow}>
           <Text style={[hs.line, hs.grow]} numberOfLines={2}>{homeLine(first)}</Text>
           <View style={hs.monos} importantForAccessibility="no-hide-descendants">
             {page.items.slice(0, 3).map((r, i) => (
-              <View key={r.client_id} style={[hs.mono, i > 0 && hs.monoOver]}>
+              <View key={r.client_id} style={[hs.mono, i > 0 && hs.monoOver, { zIndex: 3 - i }]}>
                 <Text style={hs.monoText} maxFontSizeMultiplier={1.2}>{initialsOf(r.name)}</Text>
               </View>
             ))}
           </View>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={forestPop.onDeepMuted} />
+      <Ionicons name="chevron-forward" size={18} color={forestPop.onDeepMuted} />
     </Pressable>
   );
 }
@@ -145,13 +144,13 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk }
                   </Pressable>
                   {open ? (
                     <View style={ls.actions}>
-                      <HapticPressable
-                        intent="light" style={[ls.button, ls.ask]} onPress={() => onAsk(planEndedAsk(r))}
+                      <Pressable
+                        style={({ pressed }) => [ls.button, ls.ask, pressed && ls.pressed]} onPress={() => { void HapticService.softImpact(); onAsk(planEndedAsk(r)); }}
                         accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${r.name}`} testID="plan-ended-ask"
                       >
-                        <RomanAvatar size={28} />
+                        <RomanAvatar size={26} />
                         <Text style={[ls.buttonText, { color: forestPop.onDeep }]}>Ask Roman to write</Text>
-                      </HapticPressable>
+                      </Pressable>
                       <Pressable
                         style={({ pressed }) => [ls.button, ls.message, { borderColor: colors.textPrimary }, pressed && ls.pressed]} onPress={() => message(r)}
                         accessibilityRole="button" accessibilityLabel={`Message ${r.name}`} testID="plan-ended-message"
@@ -181,7 +180,7 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk }
         <Text style={ls.title} accessibilityRole="header">{planEndedTitle(page.total)}</Text>
       </View>
       <ScrollView
-        contentContainerStyle={[ls.page, { paddingBottom: 32 + bottom }]}
+        testID="plan-ended-scroll" contentContainerStyle={[ls.page, { paddingBottom: 32 + bottom }]}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onReload} tintColor={sc.accent} />}
       >
         {body}
@@ -192,18 +191,18 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk }
 
 const hs = StyleSheet.create({
   row: {
-    minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, paddingVertical: 12, paddingLeft: 14, paddingRight: 12,
+    minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingVertical: 12, paddingLeft: 12, paddingRight: 8,
     borderRadius: radius.button + 2, borderLeftWidth: 4, borderLeftColor: forestPop.leaf, backgroundColor: forestPop.forest,
   },
   rowQuiet: { borderLeftColor: forestPop.brand400 },
   grow: { flex: 1, minWidth: 0 },
   title: { fontFamily: SEMI, fontSize: 18, lineHeight: 24, color: forestPop.onDeep },
-  lineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  lineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   line: { ...typography.bodySmall, color: forestPop.onDeepMuted },
   monos: { flexDirection: 'row' },
-  mono: { width: 34, height: 34, borderRadius: 17, backgroundColor: forestPop.leaf, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: forestPop.forest },
-  monoOver: { marginLeft: -10 },
-  monoText: { fontFamily: SEMI, fontSize: 13, lineHeight: 16, color: forestPop.deep },
+  mono: { width: 32, height: 32, borderRadius: 16, backgroundColor: forestPop.leaf, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: forestPop.forest },
+  monoOver: { marginLeft: -6 },
+  monoText: { fontFamily: SEMI, fontSize: 11, lineHeight: 14, color: forestPop.deep },
   pressed: { opacity: 0.7 },
 });
 
@@ -223,11 +222,11 @@ const ls = StyleSheet.create({
   monoText: { fontFamily: SEMI, fontSize: 17, lineHeight: 22, color: forestPop.leaf },
   messaged: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   messagedText: { fontFamily: SEMI },
-  flush: { padding: 0 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 18, paddingBottom: 16 },
-  button: { minHeight: 52, flexGrow: 1, borderRadius: radius.button, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  flush: { padding: 0, overflow: 'hidden' },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 14, paddingBottom: 16 },
+  button: { minHeight: 52, flexGrow: 1, borderRadius: radius.button, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   ask: { backgroundColor: forestPop.forest },
   message: { borderWidth: 1.5 },
-  buttonText: { fontFamily: SEMI, fontSize: 17, lineHeight: 22 },
+  buttonText: { fontFamily: SEMI, fontSize: 16, lineHeight: 21, flexShrink: 1 },
   pressed: { opacity: 0.7 },
 });

@@ -7,7 +7,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   groupPlanEnded, homeLabel, homeLine, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, type PlanEndedRow,
-} from '../screens/coach/home-v11/planEnded';
+} from '../screens/coach/home-v11/planEndedData';
 
 const [mockNavigate, mockGet, mockPost, mockApprove, mockReject] = Array.from({ length: 5 }, () => jest.fn());
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 }) }));
