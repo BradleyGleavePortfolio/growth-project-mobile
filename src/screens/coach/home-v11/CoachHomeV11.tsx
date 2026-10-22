@@ -22,6 +22,8 @@ import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './Ho
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
 import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
+import { usePlanEnded } from './planEnded';
+import { PlanEndedHomeRow, PlanEndedList } from './PlanEnded';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
 const REACH_ROWS = 5;
@@ -68,6 +70,8 @@ export default function CoachHomeV11(p: Props) {
   const { data, reload, retryMonth, retryRoster, retryDrafts } = useCoachHomeV11(p.sources);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [list, setList] = useState<'wins' | 'reach' | null>(null);
+  const planEnded = usePlanEnded();
+  const [ended, setEnded] = useState(false); // the plan-ended list, over the Home
   const o = data.overview;
   const home = data.home;
   const roster = o?.roster_size ?? 0;
@@ -284,7 +288,7 @@ export default function CoachHomeV11(p: Props) {
     <View style={[s.fill, { backgroundColor: sc.bgPrimary }]}>
       <ScrollView
         style={s.fill} contentContainerStyle={{ paddingBottom: 32 + bottom }} testID="coach-home-v11"
-        refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => void reload(true)} tintColor={sc.accent} />}
+        refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => { void reload(true); void planEnded.reload(); }} tintColor={sc.accent} />}
       >
         <View style={[s.hero, { paddingTop: top + 4 }]} testID="home-hero">
           <View style={s.topRow}>
@@ -317,6 +321,8 @@ export default function CoachHomeV11(p: Props) {
               <Text style={s.onDeepMuted}>{ringsCaption(rings, roster)}</Text>
             </View>
           ) : null}
+          {/* Only when the server returns the list: FEATURE_PLAN_RENEWAL off (404) or a failed read shows nothing. */}
+          {planEnded.page ? <PlanEndedHomeRow page={planEnded.page} onOpen={() => { setEnded(true); void planEnded.reload(); }} /> : null}
         </View>
         <View style={s.page}>
           {p.belowHero?.(!!o && roster === 0)}
@@ -326,7 +332,10 @@ export default function CoachHomeV11(p: Props) {
           {clientsCard}
         </View>
       </ScrollView>
-      <HomeSheet list={sheetList} ask={ask} onCloseList={() => setList(null)} onCloseAsk={() => setAsk(null)} onSent={() => void reload(false)} />
+      {ended && planEnded.page ? (
+        <PlanEndedList page={planEnded.page} loading={planEnded.loading} error={planEnded.error} onReload={() => void planEnded.reload()} onClose={() => setEnded(false)} onAsk={setAsk} />
+      ) : null}
+      <HomeSheet list={sheetList} ask={ask} onCloseList={() => setList(null)} onCloseAsk={() => setAsk(null)} onSent={() => { void reload(false); void planEnded.reload(); }} />
     </View>
   );
 }

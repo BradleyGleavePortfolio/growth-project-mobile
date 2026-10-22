@@ -22,6 +22,8 @@ export interface DraftAsk {
   /** What the draft is for, in the coach's words: shown on the ask step. */
   about: string;
   request: HomeWinDraft;
+  /** A server route that builds Roman's request itself (b#1130's plan-ended draft); the answer reads as invoke's. */
+  path?: string;
 }
 
 type Step =
@@ -35,8 +37,8 @@ type Step =
 interface InvokeAnswer { enabled?: boolean; provider?: string; reply?: string; approval?: { required?: boolean; draft_id?: string | null } }
 
 /** Roman's written draft, or null when Roman is off or filed nothing: then nothing can be sent. */
-export async function askRomanToDraft(request: HomeWinDraft): Promise<{ draftId: string; reply: string } | null> {
-  const res = await api.post<InvokeAnswer>('/ai/gateway/invoke', request);
+export async function askRomanToDraft(request: HomeWinDraft, path?: string): Promise<{ draftId: string; reply: string } | null> {
+  const res = await api.post<InvokeAnswer>(path ?? '/ai/gateway/invoke', path ? {} : request);
   const a = res.data ?? {};
   const draftId = a.approval?.draft_id;
   if (a.enabled === false || a.provider === 'stub' || a.approval?.required !== true || typeof draftId !== 'string' || !draftId) return null;
@@ -109,7 +111,7 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
   const write = async () => {
     setStep({ kind: 'writing' });
     try {
-      const d = await askRomanToDraft(ask.request);
+      const d = await askRomanToDraft(ask.request, ask.path);
       setStep(d ? { kind: 'ready', ...d } : { kind: 'failed', words: "Roman can't write this right now. Nothing was sent." });
     } catch {
       setStep({ kind: 'failed', words: "Roman couldn't write this. Nothing was sent. Try again in a moment." });
