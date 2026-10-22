@@ -1,6 +1,6 @@
 // EW3-001 — App status-bar bone band smoke test.
 //
-// SDK 56 enables Android edge-to-edge: the bone (#F5EFE4) status-bar band is
+// SDK 56 enables Android edge-to-edge: the bone (#F7FAF7) status-bar band is
 // painted by a top-inset <StatusBarBand> View instead of the deprecated
 // RNStatusBar.setBackgroundColor() call. This smoke test mounts that paint
 // view with a mocked safe-area inset and asserts it renders at the inset
@@ -37,7 +37,7 @@ describe('StatusBarBand (EW3-001 edge-to-edge bone band)', () => {
     const flat = flatten(band.props.style);
 
     expect(flat.height).toBe(47);
-    expect(flat.backgroundColor).toBe('#F5EFE4');
+    expect(flat.backgroundColor).toBe('#F7FAF7');
     // Absolute overlay so it never consumes layout space (no double inset).
     expect(flat.position).toBe('absolute');
     expect(toJSON()).toMatchSnapshot();

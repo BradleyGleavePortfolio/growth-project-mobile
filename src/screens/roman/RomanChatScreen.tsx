@@ -34,6 +34,7 @@
  */
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';
+import { useChatDraft } from '../../lib/chatDrafts';
 import {
   AccessibilityInfo,
   FlatList,
@@ -135,7 +136,8 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     send,
     clearSendError,
   } = useRomanChat(surface);
-  const [draft, setDraft] = useState('');
+  // CHAT-DISCARD (owner 10-21): half-typed text stays with this chat on the device (src/lib/chatDrafts.ts).
+  const [draft, setDraft] = useChatDraft('roman');
   // Shown after AI help is allowed for a message the server already stored.
   const [askAgainHint, setAskAgainHint] = useState(false);
   // The quick-start chip last sent (forest outline, prototype 70).

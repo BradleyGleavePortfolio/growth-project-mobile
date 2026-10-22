@@ -44,6 +44,7 @@ import type { ShareCardMilestone } from '../share/ShareCardScreen';
 import ShareSheet, { type ShareCardContent } from '../../components/share/ShareSheet';
 import { runCard } from '../../components/share/shareCards';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 
 import { radius, typography, type SemanticTokens } from '../../theme/tokens';
 import { WeightLog } from '../../types';
@@ -134,6 +135,8 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const userId = currentUser?.id ?? null;
+  // m#651: Roman needs a coach, so a coachless client never gets his streak card.
+  const romanLocked = useClientNeedsCoach();
 
   // Server-authoritative macro targets (AsyncStorage used only as cache).
   const macroTargets = useMacroTargets();
@@ -461,7 +464,7 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
             AI_BUTLER_ROMAN_IDENTITY_SPEC §2.7, drive `streakTier` from that
             event instead of the local count and flip
             romanStreakBackendLive on. Until then, the card is hidden. */}
-        {featureFlags.romanChat && featureFlags.romanStreakBackendLive && streakTier !== null && (
+        {featureFlags.romanChat && featureFlags.romanStreakBackendLive && !romanLocked && streakTier !== null && (
           <FadeInView>
             <View style={styles.romanStreakWrap}>
               <RomanStreakCard

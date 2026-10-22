@@ -88,10 +88,15 @@ export default function CoachHomeV11(p: Props) {
   const askWin = (w: HomeWin) => setAsk({ clientName: w.client_name, about: `A congratulations for ${firstWord(w.client_name)}: ${winLine(w)}.`, request: w.draft });
   const winLabel = (w: HomeWin) => `${winLine(w)}. Ask Roman to congratulate ${firstWord(w.client_name)}`;
   const reach = (data.reachOuts ?? []).slice(0, REACH_ROWS);
+  const reached = new Set(home?.rings?.reach_outs.contacted_ids ?? []); // REACHED-TODAY: an older server marks none
   const sheetList: SheetList | null = list === 'wins'
     ? { title: 'Wins this week', rows: items.map((w) => ({ id: w.id, title: winLine(w), label: winLabel(w), onPick: () => askWin(w) })) }
     : list === 'reach'
-      ? { title: 'Reach-outs', rows: reach.map((r) => ({ id: r.user_id, title: `Reach out to ${r.display_name}?`, line: r.top_factor, label: `Reach out to ${r.display_name}?`, onPick: () => setAsk(reachOutAsk(r)) })) }
+      ? { title: 'Reach-outs', rows: reach.map((r) => {
+        const mark = reached.has(r.user_id) ? 'Reached out today' : undefined;
+        const title = `Reach out to ${r.display_name}?`;
+        return { id: r.user_id, title, line: r.top_factor, mark, label: mark ? `${title} ${mark}` : title, onPick: () => setAsk(reachOutAsk(r)) };
+      }) }
       : null;
   const tap = (go: () => void) => () => { void HapticService.softImpact(); go(); };
 

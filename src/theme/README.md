@@ -174,7 +174,7 @@ and frame marks, in both schemes. The range band is decorative and repeated in w
 
 ## App-store / deep-link dependencies
 
-- Splash background and android adaptive icon background must match `bone` (`#F5EFE4`). Both are declared in `app.json` (`expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor`).
+- Splash background and android adaptive icon background must match `bone` (`#F7FAF7`). Both are declared in `app.json` (`expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor`).
 - Listing screenshots are taken on the active palette; if the palette changes, the screenshots in the Play / App Store listing have to be regenerated.
 
 ## Security and tenancy
