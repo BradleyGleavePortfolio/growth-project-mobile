@@ -24,19 +24,13 @@ jest.mock('../../../theme/ThemeProvider', () => {
   return { useTheme: () => ({ colors: anyColor, semanticColors: anyColor }) };
 });
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('react-native-svg', () => {
-  const R = jest.requireActual<typeof import('react')>('react');
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  const El = ({ children }: { children?: React.ReactNode }) => R.createElement(View, null, children);
-  return { __esModule: true, default: El, Circle: El, Path: El, G: El, Defs: El, LinearGradient: El, Stop: El, Text: El };
-});
 const mockText = (t: string) => React.createElement(jest.requireActual('react-native').Text, null, t);
 jest.mock('../../../ui', () => ({ Overline: jest.requireActual('react-native').Text, useScreenInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../../../ui/states/QuietStates', () => ({ QuietLoading: () => mockText('Loading'), QuietError: (p: { message: string }) => mockText(p.message) }));
 jest.mock('../../../ui/empty-states', () => ({
   EmptyStateNoResults: (p: { onClearSearch: () => void }) => {
     const { Pressable } = jest.requireActual('react-native');
-    return React.createElement(Pressable, { testID: 'stub-clear', onPress: p.onClearSearch }, mockText('No results'));
+    return jest.requireActual('react').createElement(Pressable, { testID: 'stub-clear', onPress: p.onClearSearch }, mockText('No results'));
   },
 }));
 jest.mock('../../../components/HapticPressable', () => jest.requireActual('react-native').Pressable);
