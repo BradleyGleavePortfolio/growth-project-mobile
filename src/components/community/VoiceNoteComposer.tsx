@@ -147,7 +147,7 @@ export default function VoiceNoteComposer({
         accessibilityRole="text"
         testID={testID ?? 'voice-composer-unavailable'}
       >
-        <SheetHeader onCancel={onClose} />
+        <SheetHeader title={title} onCancel={onClose} />
         <Ionicons
           name="mic-off-outline"
           size={22}
@@ -214,7 +214,7 @@ export default function VoiceNoteComposer({
         accessibilityRole="text"
         testID={testID ?? 'voice-composer-error'}
       >
-        <SheetHeader onCancel={onClose} />
+        <SheetHeader title={title} onCancel={onClose} />
         <Ionicons name="alert-circle-outline" size={22} color={semanticColors.accentText} />
         <Text style={[styles.noticeText, { color: semanticColors.textPrimary }]}>
           {what} Try again. If it keeps happening, close other apps that use the
@@ -243,6 +243,7 @@ export default function VoiceNoteComposer({
     return (
       <View style={styles.container} testID={testID ?? 'voice-composer-review'}>
         <SheetHeader
+          title={title}
           onCancel={() => {
             rec.reset();
             onClose();
