@@ -170,3 +170,10 @@ test('a follow-up scrolls its question to the top, keeps following its answer, a
   expect(scrollTo).toHaveBeenCalledTimes(calls);
   scrollTo.mockRestore();
 });
+
+test('the read itself refusing a client with no coach (403 ROMAN_REQUIRES_COACH) shows Roman\u2019s lock, not a load error', async () => {
+  get.mockRejectedValue({ response: { status: 403, data: { code: 'ROMAN_REQUIRES_COACH', message: 'Roman works with a coach.' } } });
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  expect(await s.findByText('Roman works with a coach')).toBeTruthy();
+  expect(s.queryByTestId('copilot-error')).toBeNull();
+});

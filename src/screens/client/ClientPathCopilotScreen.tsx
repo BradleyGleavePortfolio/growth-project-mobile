@@ -34,7 +34,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import type { RomanApiError } from '../../api/romanApi';
-import { copilotApi, type CopilotSuggestion } from '../../api/copilotApi';
+import { copilotApi, copilotErrorOf, type CopilotSuggestion } from '../../api/copilotApi';
 import { COPILOT_COPY as C } from './copilot/pathChangeWords';
 import { ASK_COPY as A, targetChangedOn, timeOf, withoutCites } from './copilot/askWords';
 import { SuggestionStatusList } from './copilot/SuggestionStatusList';
@@ -102,7 +102,8 @@ function PathCopilot() {
   const items = q.data?.suggestions ?? [];
   const asked = turns.length > 0;
   const reveal = useReveal(turns);
-  if (turns.some((t) => t.error?.kind === 'requiresCoach')) return <CoachLock />;
+  // A send or the read itself (b#1129 CONTRACT 6343434956 item 1) may say the client has no coach: Roman's lock, as everywhere.
+  if (turns.some((t) => t.error?.kind === 'requiresCoach') || copilotErrorOf(q.error).code === 'ROMAN_REQUIRES_COACH') return <CoachLock />;
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ['copilot'] });
   // A stored question with no answer goes back in an empty composer: asking again is the client's call (main's rule).
