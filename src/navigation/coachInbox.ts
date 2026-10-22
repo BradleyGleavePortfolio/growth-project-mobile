@@ -1,7 +1,7 @@
-import { Alert } from 'react-native';
-import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import type { NavigationAction, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { featureFlags } from '../config/featureFlags';
+import { useChatDraft } from '../lib/chatDrafts';
+import type { ChatSendKey, SetChatText } from '../lib/chatDrafts';
 
 /**
  * COACH-CHAT-BACK (owner op 1): where a client's chat opens from the inbox,
@@ -39,9 +39,9 @@ function messagesStack(navigation: TabJump) {
 
 /**
  * Opens a { tab, params } target (chatTarget, the brief's actionTarget). A chat into Messages from anywhere replaces
- * whatever is open there, so it sits right on the same inbox (Sol B1). One RESET through the router: a screen guarding
- * unsent text asks first (the broadcast composer's "Discard this message?"); kept, Messages opens on it, and Discard
- * re-runs the reset.
+ * whatever is open there, so it sits right on the same inbox (Sol B1). One RESET through the router: the broadcast
+ * composer still asks first ("Discard this message?"; kept, Messages opens on it, and Discard re-runs the reset); a chat
+ * never asks, its unsent text stays with that chat (useUnsentReply).
  */
 export function openTarget(navigation: TabJump, { tab, params }: { tab: string; params?: object }): void {
   const nested = params as { screen?: string; params?: object } | undefined;
@@ -59,22 +59,15 @@ export const openInboxChat = (navigation: TabJump, clientId: string, clientName:
   openTarget(navigation, chatTarget(clientId, clientName, initialDraft));
 
 /**
- * Sol B1 (round 3): a chat left open in Messages with unsent text asks before openTarget's reset closes it, with the
- * broadcast composer's prompt (BroadcastComposerScreen.tsx:88). Keep editing keeps the chat and its text, and Messages
- * opens on it; Discard runs the reset. Any other removal (Back, the tab press) goes straight through, as today.
+ * COACH-CHAT-KEEP and CHAT-DISCARD (owner 10-21): nothing asks before a chat closes (the "Discard this message?" prompt
+ * on a chat is gone). A reply typed in a client's chat and not sent stays with that client's chat on this device when the
+ * chat closes (Back, a push or banner opening another chat, the tab press, the app closing) and is back in the box when
+ * it opens again; a passed draft (Send check-in) goes under it, never over it (Opus C1). A send that failed keeps its key
+ * with its text (Sol B1, m#841). Sending it or signing out removes it; kept text is filed under the signed-in account,
+ * so another account never sees it (src/lib/chatDrafts.ts).
  */
-export function useKeepUnsentChat(unsent: boolean): void {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  usePreventRemove(featureFlags.coachTabsV2 === true && unsent, ({ data: { action } }) => {
-    if (action.type !== 'RESET' || action.target !== navigation.getState()?.key) {
-      navigation.dispatch(action);
-      return;
-    }
-    Alert.alert('Discard this message?', 'Leaving removes the text from this message.', [
-      { text: 'Keep editing', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(action) },
-    ]);
-  });
+export function useUnsentReply(clientId: string, initialDraft?: string): [string, SetChatText, ChatSendKey] {
+  return useChatDraft(`coach:${clientId}`, initialDraft);
 }
 
 /** The Messages header's Broadcasts and Community reports follow the same rule as a chat. */

@@ -52,6 +52,8 @@ import {
 } from '../../api/types/coachAiExecution';
 import { coachAiExecutionApi } from '../../api/coachAiExecutionApi';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
+import { PATH_DRAFTS_KEY, PathChangeDrafts, usePathChangeDrafts } from './copilot/PathChangeDrafts';
+import { useScreenInsets } from '../../ui/layout/Screen';
 
 /** Roles allowed to see + decide AI drafts. Mirrors backend
  *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
@@ -63,6 +65,8 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
   const user = useCurrentUser();
+  // The stack draws no header here: the title clears the status bar itself.
+  const insets = useScreenInsets();
 
   // Defence-in-depth role guard. CoachNavigator is the primary gate; this
   // layer keeps an inert surface even if the screen is reached through a
@@ -73,6 +77,10 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   // hits the gateway list endpoint (which would 403 anyway, but no point
   // burning a roundtrip).
   const query = usePendingAiDrafts({ enabled: allowed && isFocused });
+  // COPILOT-M1: the client_path_change rows (flag off: never fetched). "No pending drafts" only once both reads say so.
+  const path = usePathChangeDrafts(allowed && isFocused);
+  const hasPath = (path.data?.length ?? 0) > 0;
+  const pathFailed = path.isError && !path.data;
 
   const approveMutation = useMutation({
     mutationFn: (draftId: string) => coachAiExecutionApi.approveDraft(draftId),
@@ -127,7 +135,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   return (
     <ErrorBoundary>
       <View style={styles.root} testID="pending-ai-drafts-screen">
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: 16 + insets.top }]}>
           <Text style={styles.headerTitle}>Pending AI drafts</Text>
           <Text style={styles.headerSubtitle}>
             Review what the AI proposed before it reaches your clients.
@@ -136,6 +144,10 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
 
         <FlatList
           data={renderable}
+          // The Copilot editors' number pad has no Done key: lift content over it, first tap lands, drag dismisses.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           keyExtractor={(d) => d.id}
           renderItem={({ item }) => (
             <DraftCard
@@ -149,29 +161,33 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
             />
           )}
           contentContainerStyle={
-            renderable.length === 0 && !query.isLoading
+            renderable.length === 0 && !query.isLoading && !path.isLoading && !hasPath && !pathFailed
               ? styles.emptyContainer
               : styles.listContainer
           }
           refreshControl={
             <RefreshControl
               refreshing={query.isFetching}
-              onRefresh={() => query.refetch()}
+              onRefresh={() => {
+                void query.refetch();
+                void queryClient.invalidateQueries({ queryKey: PATH_DRAFTS_KEY });
+              }}
               tintColor={colors.primary}
             />
           }
+          ListHeaderComponent={<PathChangeDrafts query={path} showError={!query.isError} />}
           ListEmptyComponent={
             // QA-COACH-STATES-131: the shared skeleton and the calm error.
-            query.isLoading ? (
-              <QuietLoading label="Loading pending drafts" testID="pending-ai-drafts-loading" />
-            ) : query.isError ? (
+            query.isError ? (
               <QuietError
                 message={loadFailureMessage(query.error, 'Pending AI drafts')}
-                onRetry={() => void query.refetch()}
+                onRetry={() => void Promise.all([query.refetch(), pathFailed && path.refetch()])}
                 retrying={query.isFetching}
                 testID="pending-ai-drafts-error"
               />
-            ) : (
+            ) : query.isLoading || path.isLoading ? (
+              <QuietLoading label="Loading pending drafts" testID="pending-ai-drafts-loading" />
+            ) : hasPath || pathFailed ? null : (
               <EmptyState
                 styles={styles}
                 colors={colors}

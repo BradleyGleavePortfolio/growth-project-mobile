@@ -26,6 +26,8 @@
  */
 import React, { useCallback, useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   View,
   Text,
   StyleSheet,
@@ -235,7 +237,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         onRequestClose={() => setInviteOpen(false)}
         testID="coach-community-cohort-detail-invite-modal"
       >
-        <View
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={[
             styles.scrim,
             { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
@@ -321,7 +323,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
               </HapticPressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Overflow action sheet (UX P1.1 — Remove lives here, not on the row). */}

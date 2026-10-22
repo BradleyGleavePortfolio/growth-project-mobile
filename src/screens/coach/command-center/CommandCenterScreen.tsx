@@ -35,6 +35,7 @@ import CoachHomeCards from './CoachHomeCards';
 import { coachHomeSources } from './coachHomeSources';
 import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
 import { featureFlags } from '../../../config/featureFlags';
+import CoachHomeV11 from '../home-v11/CoachHomeV11';
 import { openInboxChat } from '../../../navigation/coachInbox';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import CreditMomentsHost from '../../../components/coach/credits/CreditMomentsHost';
@@ -75,6 +76,8 @@ export default function CommandCenterScreen({
   const [activeTab, setActiveTab] = React.useState<CommandCenterTab>(
     routeParams?.tab ?? initialTab,
   );
+  // PK-2a: the new Home never switches on without its Money tab (coachTabsV2), which also lands here.
+  const homeV11 = featureFlags.coachHomeV11 && featureFlags.coachTabsV2;
   // Each open of a safety alert push or inbox row switches to Actions, even
   // when Command Center is already mounted on another tab.
   React.useEffect(() => {
@@ -120,6 +123,15 @@ export default function CommandCenterScreen({
   ) : null;
   // LO-773 N4: back to the open list (`pop`), never a second copy over a client's file.
   const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList', pop: true });
+  // UI-2: the new Home's drafts, bell and Roman.
+  const openDrafts = () => navigation.navigate('ClientsStack', { screen: 'PendingAiDrafts', initial: false });
+  const openNotifications = () => navigation.navigate('ClientsStack', { screen: 'NotificationCenter', initial: false });
+  // Spec #688 6295886580: the Needs you tile opens the vertical Needs you list (ClientLookupScreen, view 'needs').
+  const openNeedsYou = () => navigation.navigate('ClientsStack', { screen: 'ClientsList', params: { view: 'needs' }, pop: true });
+  const openSettings = () => navigation.navigate('SettingsStack', { screen: 'SettingsHome', pop: true });
+  const askRoman = featureFlags.romanChat
+    ? () => navigation.navigate('SettingsStack', { screen: 'RomanChat', initial: false })
+    : undefined;
   const openSafetyAlert = (item: ActionQueueItem) => {
     if (!isSafetyAlert(item)) return;
     navigation.navigate('ClientsStack', {
@@ -138,6 +150,23 @@ export default function CommandCenterScreen({
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
+        if (homeV11) {
+          return (
+            <CoachHomeV11
+              onOpenNeedsYou={openNeedsYou}
+              onOpenClients={openClients}
+              onOpenStreaks={() => setActiveTab('win-streaks')}
+              onOpenAlerts={() => setActiveTab('action-queue')}
+              onOpenMoney={openMoney}
+              onOpenDrafts={openDrafts}
+              onOpenNotifications={openNotifications}
+              onOpenSettings={openSettings}
+              onAskRoman={askRoman}
+              setup={<CoachHomeCards part="setup" />}
+              belowHero={(zero) => <CoachHomeCards part="below" brief={!zero} />}
+            />
+          );
+        }
         return (
           <OverviewScreen
             onNavigateToAtRisk={() => setActiveTab('at-risk')}
@@ -163,6 +192,17 @@ export default function CommandCenterScreen({
     }
   };
 
+  // Spec #688 6295886580 (Style A): the Home is the whole screen, its deep hero under the status bar and no tab
+  // row; the views it opens (alerts, streaks) keep the row, whose first tab comes back to the Home.
+  if (homeV11 && activeTab === 'overview') {
+    return (
+      <Screen edges={[]} scroll={false} contentStyle={styles.content} testID="command-center-root">
+        {renderContent()}
+        {featureFlags.coachAiCredits ? <CreditMomentsHost /> : null}
+      </Screen>
+    );
+  }
+
   return (
     <Screen edges={['top']} scroll={false} contentStyle={styles.content} testID="command-center-root">
       {/* Top tab bar. AUDIT-13-125: no header above this tab; Screen keeps
@@ -174,7 +214,9 @@ export default function CommandCenterScreen({
           style={settingsGear && styles.tabScroll}
           contentContainerStyle={[styles.tabBar, settingsGear && styles.tabBarBeforeGear]}
         >
-          {TABS.map((tab) => {
+          {TABS.map((t) => {
+            // #161-11: with the new Home the first tab is "Home", as on the bottom bar.
+            const tab = homeV11 && t.key === 'overview' ? { ...t, label: 'Home' } : t;
             const isActive = activeTab === tab.key;
             return (
               <TouchableOpacity
