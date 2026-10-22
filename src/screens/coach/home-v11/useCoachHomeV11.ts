@@ -168,7 +168,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     draftsWaiting: queue.length, draftKinds, draftsState, draftsError: drafts.error, draftsRetrying: !!drafts.isFetching, now,
   };
   return {
-    data, reload: load, retryMonth: () => loadMonth(seq.current),
+    data, focused: isFocused, reload: load, retryMonth: () => loadMonth(seq.current),
     retryRoster: () => { setRosterState('loading'); void loadRoster(seq.current); },
     retryDrafts: () => void drafts.refetch(),
   };

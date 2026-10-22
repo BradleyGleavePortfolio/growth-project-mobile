@@ -38,7 +38,7 @@ export function AlertsRow({ count, onPress }: { count: number | null; onPress: (
   );
 }
 
-/** One of the day's rings: gold arc over a quiet track, "done/of" inside. */
+/** One of the day's rings: gold arc over a quiet track, "done/of" inside, shrunk to fit the ring and never scaled up. */
 export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => void }) {
   const r = (RING - STROKE) / 2;
   const c = 2 * Math.PI * r;
@@ -55,7 +55,7 @@ export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => voi
             />
           ) : null}
         </Svg>
-        <Text style={hs.ringValue} numberOfLines={1}>{ring.done}/{ring.of}</Text>
+        <Text style={hs.ringValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} maxFontSizeMultiplier={1}>{`${ring.done}/${ring.of}`}</Text>
       </View>
       <Text style={hs.ringLabel} numberOfLines={1} maxFontSizeMultiplier={1.15}>{ring.label.toUpperCase()}</Text>
     </>
@@ -115,7 +115,7 @@ const hs = StyleSheet.create({
   alertsCount: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.onDeep },
   ring: { flex: 1, alignItems: 'center', minHeight: 44, paddingVertical: 2 },
   ringBox: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
-  ringValue: { ...typography.bodySmall, fontFamily: SEMI, color: forestPop.onDeep, position: 'absolute' },
+  ringValue: { ...typography.bodySmall, fontFamily: SEMI, color: forestPop.onDeep, position: 'absolute', width: RING - 2 * STROKE, textAlign: 'center' }, // 112/140 shrinks to fit (LO B2)
   ringLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 0.6, color: forestPop.gold, marginTop: 2 },
   pressed: { opacity: 0.7 },
 });

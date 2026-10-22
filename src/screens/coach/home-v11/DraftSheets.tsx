@@ -151,7 +151,7 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
       </ScrollView>
       <View style={s.actions}>
         {step.kind === 'ask' || (step.kind === 'failed' && !step.draft) ? (
-          <HapticPressable intent="light" style={s.primary} onPress={write} accessibilityRole="button" accessibilityLabel="Ask Roman" testID="home-draft-ask">
+          <HapticPressable intent="light" style={s.primary} onPress={write} accessibilityRole="button" accessibilityLabel={step.kind === 'failed' ? 'Try again' : 'Ask Roman'} testID="home-draft-ask">
             <Text style={s.primaryText}>{step.kind === 'failed' ? 'Try again' : 'Ask Roman'}</Text>
           </HapticPressable>
         ) : null}
