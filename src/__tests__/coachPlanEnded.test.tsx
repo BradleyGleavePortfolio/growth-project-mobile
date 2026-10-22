@@ -4,16 +4,18 @@
  * (the Home's ask-first sheet, b#1130's draft route, nothing sent without Send) and "Message" (the chat in Messages).
  */
 import React from 'react';
+import { BackHandler, Platform } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   groupPlanEnded, homeLabel, homeLine, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, type PlanEndedRow,
 } from '../screens/coach/home-v11/planEndedData';
 
 const [mockNavigate, mockGet, mockPost, mockApprove, mockReject] = Array.from({ length: 5 }, () => jest.fn());
+const mockFocus = { home: true }; // whether the Home is the screen in front (false: another tab or a pushed screen)
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 }) }));
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({ navigate: mockNavigate }),
+  useNavigation: () => ({ navigate: mockNavigate, isFocused: () => mockFocus.home }),
   useIsFocused: () => true,
 }));
 jest.mock('react-native-safe-area-context', () => {
@@ -60,13 +62,16 @@ const row = (id: string, name: string, days: number, pkg = '12-week block', mess
 const ROWS = [row('c1', 'Maya Ortiz', 0), row('c2', 'Dev Patel', 0, 'Monthly coaching'), row('c3', 'Sam Okafor', 1, 'Monthly coaching', '2026-10-20T15:00:00Z'), row('c4', 'Lena Fischer', 3), row('c5', 'Omar Haddad', 6)];
 const page = (items: unknown[], extra: Record<string, unknown> = {}) => ({ time_zone: 'America/Los_Angeles', today: '2026-10-21', total: items.length, today_count: 0, items, next_cursor: null, ...extra });
 let churned: () => Promise<unknown>;
+let rosterSize = 30;
 const http404 = () => Promise.reject(Object.assign(new Error('404'), { response: { status: 404, data: { code: 'PLAN_RENEWAL_OFF' } } }));
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFocus.home = true;
+  rosterSize = 30;
   churned = () => Promise.resolve({ data: page(ROWS) });
   mockGet.mockImplementation((url: string) => (url === '/v1/coach/churned-clients' ? churned()
-    : Promise.resolve({ data: { roster_size: 30, active_today: 21, check_in_rate_7day: 0.82, open_alerts: 0, at_risk_count: 0, win_streak_count: 0, unread_messages: 0, pending_actions: 0 } })));
+    : Promise.resolve({ data: { roster_size: rosterSize, active_today: 21, check_in_rate_7day: 0.82, open_alerts: 0, at_risk_count: 0, win_streak_count: 0, unread_messages: 0, pending_actions: 0 } })));
   mockPost.mockResolvedValue({ data: { enabled: true, provider: 'anthropic', reply: 'Hi Maya, how did the block feel?', approval: { required: true, status: 'pending', draft_id: 'dr-9' }, reason: { kind: 'plan_ended' } } });
   mockApprove.mockResolvedValue({ ok: true });
   mockReject.mockResolvedValue({ ok: true });
@@ -131,6 +136,13 @@ describe('plan ended on the coach Home', () => {
     expect(v.getByTestId('home-plan-ended-none').props.accessibilityLabel).toBe('Plan ended last 7 days, 0. Clients whose plan ended show here, newest first.');
     expect(v.getByTestId('home-plan-ended-none').props.accessibilityRole).toBeUndefined();
   });
+  it('draws no P1-0 on a Home with no clients yet', async () => {
+    churned = () => Promise.resolve({ data: page([]) });
+    rosterSize = 0;
+    const v = await renderHome();
+    expect(v.getByTestId('home-hero-zero')).toBeTruthy();
+    expect([v.queryByTestId('home-plan-ended'), v.queryByTestId('home-plan-ended-none')]).toEqual([null, null]);
+  });
   it.each([['off on this server (404)', http404], ['not loaded', () => Promise.reject(new Error('Network Error'))]])('shows nothing when the list is %s', async (_, answer) => {
     churned = answer;
     const v = await renderHome();
@@ -175,5 +187,60 @@ describe('plan ended on the coach Home', () => {
     await press(v, 'home-draft-close');
     expect([mockApprove.mock.calls, mockReject.mock.calls, v.queryByTestId('home-draft-sheet')]).toEqual([[], [], null]);
     expect(v.getByTestId('plan-ended-list')).toBeTruthy(); // back on the list
+  });
+});
+
+describe('plan ended: Android back (LO B1)', () => {
+  // jest-expo runs as iOS, where BackHandler does nothing: run Android's dispatch here. Listeners run newest first and the
+  // first that returns true stops the press; React Navigation's own back (added when the app starts) is the oldest.
+  let listeners: (() => boolean | null | undefined)[] = [];
+  const navigatorBack = jest.fn(() => true);
+  const pressBack = () => act(() => { for (const h of [...listeners].reverse()) if (h()) return; });
+  beforeEach(() => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    listeners = [navigatorBack];
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_e, h) => {
+      listeners.push(h);
+      return { remove: () => void (listeners = listeners.filter((x) => x !== h)) };
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('closes the open list while the Home is in front', async () => {
+    const v = await renderHome();
+    await press(v, 'home-plan-ended');
+    await pressBack();
+    await waitFor(() => expect(v.queryByTestId('plan-ended-list')).toBeNull());
+    expect(navigatorBack).not.toHaveBeenCalled();
+  });
+  it('after Message, back in the chat is the chat\'s back: the list is closed and holds no listener', async () => {
+    const v = await renderHome();
+    await press(v, 'home-plan-ended', 'plan-ended-row-c2', 'plan-ended-message');
+    expect(mockNavigate).toHaveBeenCalledWith('Messages', expect.objectContaining({ screen: 'ClientMessages' }));
+    expect(v.queryByTestId('plan-ended-list')).toBeNull();
+    mockFocus.home = false; // Messages is in front
+    await pressBack();
+    expect(navigatorBack).toHaveBeenCalledTimes(1);
+  });
+  it('on another tab or a pushed screen, back passes through and the list stays for the return', async () => {
+    const v = await renderHome();
+    await press(v, 'home-plan-ended');
+    mockFocus.home = false;
+    await pressBack();
+    expect(navigatorBack).toHaveBeenCalledTimes(1);
+    expect(v.getByTestId('plan-ended-list')).toBeTruthy();
+  });
+});
+
+describe('plan ended: screen readers stay in the open list (LO C1)', () => {
+  it('marks the list modal and hides the Home under it from TalkBack', async () => {
+    const v = await renderHome();
+    const home = () => v.getByTestId('coach-home-v11', { includeHiddenElements: true }).props.importantForAccessibility;
+    expect(home()).toBe('auto');
+    await press(v, 'home-plan-ended');
+    expect([v.getByTestId('plan-ended-list').props.accessibilityViewIsModal, home()]).toEqual([true, 'no-hide-descendants']);
+    await press(v, 'plan-ended-row-c1', 'plan-ended-ask'); // K3's sheet takes the screen reader while it is up
+    expect(v.getByTestId('plan-ended-list', { includeHiddenElements: true }).props.accessibilityViewIsModal).toBe(false);
+    expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
   });
 });

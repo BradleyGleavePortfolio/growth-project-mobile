@@ -291,6 +291,7 @@ export default function CoachHomeV11(p: Props) {
     <View style={[s.fill, { backgroundColor: sc.bgPrimary }]}>
       <ScrollView
         style={s.fill} contentContainerStyle={{ paddingBottom: 32 + bottom }} testID="coach-home-v11"
+        importantForAccessibility={ended ? 'no-hide-descendants' : 'auto'} // TalkBack stays in the list over it (LO C1)
         refreshControl={<RefreshControl refreshing={data.refreshing} onRefresh={() => { void reload(true); void planEnded.reload(); }} tintColor={sc.accent} />}
       >
         <View style={[s.hero, { paddingTop: top + 4 }]} testID="home-hero">
@@ -324,8 +325,9 @@ export default function CoachHomeV11(p: Props) {
               <Text style={s.onDeepMuted}>{ringsCaption(rings, roster)}</Text>
             </View>
           ) : null}
-          {/* Only when the server returns the list: FEATURE_PLAN_RENEWAL off (404) or a failed read shows nothing. */}
-          {planEnded.page ? <PlanEndedHomeRow page={planEnded.page} onOpen={() => { setEnded(true); void planEnded.reload(); }} /> : null}
+          {/* Only when the server returns the list: FEATURE_PLAN_RENEWAL off (404) or a failed read shows nothing. The quiet
+              P1-0 row waits for a roster of one or more: a Home with no clients yet does not draw it (LO C2). */}
+          {planEnded.page && ((planEnded.page.total > 0 && planEnded.page.items.length > 0) || roster > 0) ? <PlanEndedHomeRow page={planEnded.page} onOpen={() => { setEnded(true); void planEnded.reload(); }} /> : null}
         </View>
         <View style={s.page}>
           {p.belowHero?.(!!o && roster === 0)}
@@ -336,7 +338,7 @@ export default function CoachHomeV11(p: Props) {
         </View>
       </ScrollView>
       {ended && planEnded.page ? (
-        <PlanEndedList page={planEnded.page} loading={planEnded.loading} error={planEnded.error} onReload={() => void planEnded.reload()} onClose={() => setEnded(false)} onAsk={setAsk} />
+        <PlanEndedList page={planEnded.page} loading={planEnded.loading} error={planEnded.error} onReload={() => void planEnded.reload()} onClose={() => setEnded(false)} onAsk={setAsk} covered={!!ask} />
       ) : null}
       <HomeSheet list={sheetList} ask={ask} onCloseList={() => setList(null)} onCloseAsk={() => setAsk(null)} onSent={() => { void reload(false); void planEnded.reload(); }} />
     </View>
