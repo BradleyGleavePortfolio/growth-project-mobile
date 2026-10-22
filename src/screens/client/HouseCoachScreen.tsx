@@ -17,6 +17,8 @@ import type { HomeStackParamList } from '../../navigation/ClientNavigator';
 import { houseCoachPackagesPath, readHousePackages } from '../../lib/planRenewal';
 import { priceLabel, type PurchasablePackage } from '../../lib/planTerms';
 import { patchUserCache } from '../../lib/userCache';
+import { authEvents } from '../../utils/authEvents';
+import { logger } from '../../utils/logger';
 import api from '../../services/api';
 import { forestPop as fp, lightTokens, radius, typography } from '../../theme/tokens';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
@@ -38,12 +40,27 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
     api.get<unknown>(houseCoachPackagesPath(coach.id)).then((res) => {
       const rows = readHousePackages(res?.data);
       return rows.length ? setList(rows) : setError(new Error('empty'));
-    }, setError);
-  }, [coach.id]);
+    }, (err: unknown) => {
+      setError(err);
+      // C1: a 404 is the server closing the house offer; re-read the plan so Home drops the stale choice.
+      if ((err as { response?: { status?: number } })?.response?.status === 404) void refreshEntitlement();
+    });
+  }, [coach.id, refreshEntitlement]);
   useEffect(load, [load]);
 
   const name = coach.firstName; // the renewal block names him by first name only (CONTRACT 6328688356)
-  const joined = () => { setPicked(null); void patchUserCache({ coach_id: coach.id }); void refreshEntitlement(); navigation.popToTop(); };
+  // B3: only a confirmed payment makes him the coach here; Home re-reads the account (authEvents 'login', as
+  // AddCoachCodeScreen does) after the cached coach changes. A slow or pending confirmation waits for the server.
+  const joined = (paid: boolean) => {
+    setPicked(null);
+    if (paid) {
+      void patchUserCache({ coach_id: coach.id })
+        .catch((err: unknown) => logger.warn('HouseCoach', 'user cache patch after joining failed', err))
+        .then(() => authEvents.emit('login'));
+    }
+    void refreshEntitlement();
+    navigation.popToTop();
+  };
 
   return (
     <View style={s.page}>
