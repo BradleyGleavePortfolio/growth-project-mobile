@@ -91,8 +91,7 @@ export default function RenewalHome(): React.ReactElement | null {
   const runNext = () => { const next = afterClose.current; afterClose.current = null; next?.(); };
   const close = (next?: () => void) => {
     if (!popup) return next?.();
-    afterClose.current = next ?? null;
-    setPopup(null);
+    afterClose.current = next ?? null; setPopup(null);
     if (Platform.OS !== 'ios') runNext();
   };
   const own = () => close(() => setSheet(true));

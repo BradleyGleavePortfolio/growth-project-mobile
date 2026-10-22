@@ -37,14 +37,12 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
     setError(null);
     api.get<unknown>(houseCoachPackagesPath(coach.id)).then((res) => {
       const rows = readHousePackages(res?.data);
-      if (rows.length) setList(rows);
-      else setError(new Error('empty'));
+      return rows.length ? setList(rows) : setError(new Error('empty'));
     }, setError);
   }, [coach.id]);
   useEffect(load, [load]);
 
-  // The renewal block names him by first name only (CONTRACT 6328688356); see the PR's Found, not fixed.
-  const name = coach.firstName;
+  const name = coach.firstName; // the renewal block names him by first name only (CONTRACT 6328688356)
   const joined = () => { setPicked(null); void patchUserCache({ coach_id: coach.id }); void refreshEntitlement(); navigation.popToTop(); };
 
   return (
