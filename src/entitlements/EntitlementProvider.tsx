@@ -6,6 +6,7 @@ import { entitlementEvents, EntitlementRequiredPayload } from './entitlementEven
 import { queryClient } from '../services/queryClient';
 import { logger } from '../utils/logger';
 import { PaywallSheet } from './PaywallSheet';
+import { readRenewal, type Renewal } from '../lib/planRenewal';
 import { dunningLockoutStore } from './dunning/dunningLockoutStore';
 import { useCoachlessClient } from '../hooks/useCoachlessClient';
 
@@ -36,6 +37,8 @@ export interface EntitlementContextValue {
   dismissPaywall: () => void;
   /** Open the in-app thread with the coach (closes the sheet first). */
   messageCoach: () => void;
+  /** RENEWAL-M: the entitlement's `renewal` block from the last read (lib/planRenewal). */
+  renewal?: Renewal;
 }
 
 const EntitlementContext = createContext<EntitlementContextValue>({
@@ -70,6 +73,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
   const user = useCurrentUser();
   const noCoach = useCoachlessClient();
   const [status, setStatus] = useState<EntitlementStatus>('unknown');
+  const [renewal, setRenewal] = useState<Renewal | undefined>();
   const [confirmedActive, setConfirmedActive] = useState(false);
   const [paywallVisible, setPaywallVisible] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
@@ -102,6 +106,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
       return false;
     }
     const active = result.data.active === true;
+    setRenewal(readRenewal(result.data));
     setStatus(active ? 'active' : 'inactive');
     setConfirmedActive(active);
     if (active) {
@@ -128,8 +133,9 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
 
   // Bootstrap on login
   useEffect(() => {
-    // A new identity never inherits the previous user's confirmation.
+    // A new identity never inherits the previous user's confirmation (or renewal).
     setConfirmedActive(false);
+    setRenewal(undefined);
     if (isStudent) {
       void refreshEntitlement();
     } else {
@@ -187,6 +193,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
         paywallMessage,
         dismissPaywall,
         messageCoach,
+        renewal,
       }}
     >
       {children}

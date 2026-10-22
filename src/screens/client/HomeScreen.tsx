@@ -29,6 +29,7 @@ import PendingInviteBanner from '../../components/PendingInviteBanner';
 import FinishJoining from '../../components/join/FinishJoining';
 import { DunningBanner } from '../../entitlements/dunning/DunningBanner';
 import HomeHeaderActions from '../../components/home/HomeHeaderActions';
+import RenewalHome from '../../components/renewal/RenewalHome';
 import PushPermissionCard from '../../components/home/PushPermissionCard';
 import CoachIntroductionBanner from '../../components/home/CoachIntroductionBanner';
 // A1-COACHLESS: banner, code sheet and scripted Roman card for a client with
@@ -408,6 +409,7 @@ export default function HomeScreen() {
             {progressLine}
           </Text>
         ) : null}
+        <RenewalHome />
 
         {/* Single CTA — conditional on whether workouts exist */}
         {workoutExists === 'loading' ? (
