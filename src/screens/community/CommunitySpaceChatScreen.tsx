@@ -2,7 +2,7 @@
  * SC-M1 (agent 168, owner #167-3 / #167-5 / #167-6 op 1): the space chat. One Slack / iMessage-style stream per space,
  * newest at the bottom, for members and the coach. Registered only behind `communitySpaceChat` (off by default); with
  * the flag off SpaceTree and the coach space list open today's screens.
- *   - Rows: Studio rows (SpaceChatRow), day lines (StyleBDayMark + dayB), voice rows when communityVoiceNotes is on.
+ *   - Rows: Studio rows (SpaceChatRow), day lines (Style B's day format), voice rows when communityVoiceNotes is on.
  *   - Composer: ComposerInput with this space's draft kept on the device (owner chat-discard op 1).
  *   - Announcements (a coach-posting space): members get no composer, only SC-W03; the coach posts as usual.
  *   - No access (the server answers 404 or 403: not a member, or banned): no space content and no composer (owner 10-22 ban
@@ -18,10 +18,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import ComposerInput from '../../components/community/ComposerInput';
-import SpaceChatRow, { NewMessagesLine } from '../../components/community/space-chat/SpaceChatRow';
+import SpaceChatRow, { DayLine, NewMessagesLine, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
 import { SPACE_MESSAGE_MAX, type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
-import { StyleBDayMark, dayB } from '../../components/messaging/StyleBThread';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { CommunityApiError } from '../../api/apiCall';
 import { useCommunityCohorts } from '../../hooks/useCommunity';
@@ -67,7 +66,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     let day = '';
     let newDrawn = false;
     for (const row of rows) {
-      const d = dayB(row.at);
+      const d = spaceDay(row.at);
       if (d !== day) { day = d; out.push({ type: 'day', key: `day-${row.at}`, label: d }); }
       if (lastRead && !newDrawn && !row.mine && row.item.type === 'msg' && row.at > lastRead) {
         newDrawn = true;
@@ -112,7 +111,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   }, []);
 
   const renderItem = useCallback(({ item }: { item: Item }) => {
-    if (item.type === 'day') return <StyleBDayMark label={item.label} />;
+    if (item.type === 'day') return <DayLine label={item.label} />;
     if (item.type === 'new') return <NewMessagesLine />;
     if (item.type === 'local') {
       const r = item.r;

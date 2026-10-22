@@ -11,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import SafetyMenu from '../SafetyMenu';
 import VoiceNotePlayer from '../VoiceNotePlayer';
-import { timeB } from '../../messaging/StyleBThread';
 import { communityVoiceApi } from '../../../api/communityVoiceApi';
 import { forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
@@ -56,7 +55,7 @@ function VoiceBody({ voice, coach, offline }: { voice: NonNullable<SpaceMessage[
 
 export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const local = !!p.state;
-  const time = timeB(p.createdAt);
+  const time = spaceTime(p.createdAt);
   const initial = p.name.trim().charAt(0).toUpperCase();
   const isOwn = !!p.viewerUserId && p.authorId === p.viewerUserId;
   const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
@@ -120,6 +119,23 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   );
 }
 
+/**
+ * Time and day marks in the formats of main's Style B thread ("6:03 pm", "Thu, Oct 22"). Kept here, not imported:
+ * MessagesScreenStyleB.test.tsx (coach side unchanged) allows no other file to read the Style B thread, and this page
+ * is on the coach side too.
+ */
+export function spaceTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s?(AM|PM)$/, (_m, x: string) => ` ${x.toLowerCase()}`);
+}
+export function spaceDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+export function DayLine({ label }: { label: string }): React.ReactElement {
+  return <Text style={s.day}>{label}</Text>;
+}
+
 /** "New messages" above the first unread row (SC-BE2's read cursor). */
 export function NewMessagesLine(): React.ReactElement {
   return (
@@ -145,6 +161,7 @@ const s = StyleSheet.create({
   status: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   retry: { minHeight: 44 },
   meta: { ...typography.bodySmall },
+  day: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', color: fp.ink, textAlign: 'center', marginTop: spacing.sm, marginBottom: spacing.lg },
   newLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   newText: { ...typography.caption, color: fp.goldInk },
   newRule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: fp.goldInk },
