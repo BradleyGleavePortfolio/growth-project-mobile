@@ -4,7 +4,7 @@
  * Open alerts, the day's rings. Page: push ask and brief, Roman, one Needs you tile, Business, Clients rows. Only real
  * numbers: a server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
