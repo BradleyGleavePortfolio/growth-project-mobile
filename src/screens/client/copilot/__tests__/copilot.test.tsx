@@ -19,13 +19,13 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: m
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
-jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, default: () => null, useClientNeedsCoach: () => false }));
 jest.mock('../../../../api/romanApi', () => ({ ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError: class extends Error {}, RomanWireError: class extends Error {}, openOrResumeSession: jest.fn(), sendMessage: jest.fn() }));
 jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off') }));
 const mockText = (t: string) => <Text>{t}</Text>;
 let mockNeedsCoach = false;
 jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, ROMAN_LOCK_TITLE: 'Roman works with a coach',
-  default: ({ title, testID }: { title: string; testID: string }) => <Text testID={testID}>{title}</Text>, useClientNeedsCoach: () => mockNeedsCoach }));
+  default: ({ title, testID }: { title: string; testID: string }) => mockLock(title, testID), useClientNeedsCoach: () => mockNeedsCoach }));
+const mockLock = (title: string, testID: string) => <Text testID={testID}>{title}</Text>;
 jest.mock('../../../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../../../theme/tokens');
   return { useTheme: () => ({ colors: t.colors, semanticColors: t.lightTokens }) };
@@ -134,6 +134,9 @@ test('a client with no coach gets the existing Roman lock page and no read; Not 
   const a = await render(wrap(<ClientPathCopilotScreen />));
   expect([a.getByTestId('copilot-coach-lock').props.children, get.mock.calls.length]).toEqual(['Roman works with a coach', 0]);
   await a.unmount();
+  mockNeedsCoach = false;
+  get.mockRejectedValueOnce(Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403, data: { code: 'ROMAN_REQUIRES_COACH' } } }));
+  expect(await (await render(wrap(<ClientPathCopilotScreen />))).findByTestId('copilot-coach-lock')).toBeTruthy();
   post.mockReturnValueOnce(new Promise(() => undefined) as never);
   const s = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);
   await act(async () => fireEvent.press(s.getByText('Send to Alex')));

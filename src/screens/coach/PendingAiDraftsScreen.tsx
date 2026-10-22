@@ -182,7 +182,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
               <QuietError
                 message={loadFailureMessage(query.error, 'Pending AI drafts')}
                 onRetry={() => void Promise.all([query.refetch(), pathFailed && path.refetch()])}
-                retrying={query.isFetching || path.isFetching}
+                retrying={query.isFetching}
                 testID="pending-ai-drafts-error"
               />
             ) : query.isLoading || path.isLoading ? (

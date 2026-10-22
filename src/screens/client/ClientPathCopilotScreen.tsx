@@ -52,11 +52,6 @@ export function useCoachFirstName(): string {
 }
 
 export default function ClientPathCopilotScreen() {
-  const needsCoach = useClientNeedsCoach();
-  const navigation = useNavigation();
-  if (featureFlags.clientPathCopilot && needsCoach) {
-    return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
-  }
   if (!featureFlags.clientPathCopilot) {
     return (
       <View style={s.flagOff} accessibilityLabel="Path suggestions unavailable" accessibilityRole="none">
@@ -94,7 +89,8 @@ function PathCopilot() {
   const { semanticColors: sc } = useTheme();
   const qc = useQueryClient();
   const coach = useCoachFirstName();
-  const q = useQuery({ queryKey: COPILOT_RECENT_KEY, queryFn: () => copilotApi.recent() });
+  const needsCoach = useClientNeedsCoach();
+  const q = useQuery({ queryKey: COPILOT_RECENT_KEY, queryFn: () => copilotApi.recent(), enabled: !needsCoach });
   const { turns, busy, ask } = useCopilotAsk();
   const [draft, setDraft] = useState('');
   const refusal = q.error ? aiRefusalOf(q.error) : null;
@@ -102,8 +98,8 @@ function PathCopilot() {
   const items = q.data?.suggestions ?? [];
   const asked = turns.length > 0;
   const reveal = useReveal(turns);
-  // A send or the read itself (b#1129 CONTRACT 6343434956 item 1) may say the client has no coach: Roman's lock, as everywhere.
-  if (turns.some((t) => t.error?.kind === 'requiresCoach') || copilotErrorOf(q.error).code === 'ROMAN_REQUIRES_COACH') return <CoachLock />;
+  // The server says the same (b#1129: 403 ROMAN_REQUIRES_COACH) when the phone has not heard the coach left yet; a send can too.
+  if (needsCoach || copilotErrorOf(q.error).code === 'ROMAN_REQUIRES_COACH' || turns.some((t) => t.error?.kind === 'requiresCoach')) return <CoachLock />;
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ['copilot'] });
   // A stored question with no answer goes back in an empty composer: asking again is the client's call (main's rule).
