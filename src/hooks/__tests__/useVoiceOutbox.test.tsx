@@ -1,7 +1,8 @@
 /**
  * useVoiceOutbox — the Style B outbox: Send closes the sheet and the note
  * waits here until the server has it (sending → gone, failed → retry,
- * offline → waiting → sends on reconnect). Peaks go only to a Studio server.
+ * offline → waiting → sends on reconnect, also after a restart). Peaks go
+ * only to a Studio server.
  */
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
@@ -15,6 +16,25 @@ const mockPublish = jest.fn();
 jest.mock('../useVoiceUpload', () => ({
   publishVoiceNote: (...a: unknown[]) => mockPublish(...a),
 }));
+const mockMove = jest.fn();
+jest.mock('expo-file-system', () => {
+  class File {
+    uri: string;
+    constructor(...p: (string | { uri: string })[]) {
+      this.uri = p.map((x) => (typeof x === 'string' ? x : x.uri)).join('/');
+    }
+    get name() {
+      return this.uri.split('/').pop();
+    }
+    exists = true;
+    move = (d: File) => mockMove(this.uri, d.uri);
+    delete = () => undefined;
+  }
+  class Directory extends File {
+    create = () => undefined;
+  }
+  return { File, Directory, Paths: { document: 'file:///docs' } };
+});
 const net = NetInfo as unknown as { __setState: (s: object) => void; __reset: () => void };
 
 const REC: VoiceRecordingResult = { uri: 'file:///r.m4a', durationMs: 3000, bytes: 10, mimeType: 'audio/mp4', peaks: [0.2, 0.8] };
@@ -40,8 +60,9 @@ describe('useVoiceOutbox', () => {
     await waitFor(() => expect(result.current.items).toHaveLength(0));
     expect(mockPublish).toHaveBeenCalledWith(
       'ws-1',
-      expect.objectContaining({ uri: REC.uri, waveformPeaks: REC.peaks }),
+      expect.objectContaining({ uri: 'file:///docs/voice-outbox/r.m4a', waveformPeaks: REC.peaks }),
     );
+    expect(mockMove).toHaveBeenCalledWith(REC.uri, 'file:///docs/voice-outbox/r.m4a');
   });
 
   it('a failed send online is Not sent, keeps the recording, and Try again sends it', async () => {
@@ -49,7 +70,7 @@ describe('useVoiceOutbox', () => {
     const { result } = await setup();
     await act(async () => result.current.send(REC, { sendPeaks: false }));
     await waitFor(() => expect(result.current.items[0]?.status).toBe('failed'));
-    expect(result.current.items[0].input.uri).toBe(REC.uri);
+    expect(result.current.items[0].input.uri).toBe('file:///docs/voice-outbox/r.m4a');
     // Old servers reject unknown create keys: no peaks unless the server takes them.
     expect(result.current.items[0].input).not.toHaveProperty('waveformPeaks');
     await act(async () => result.current.retry(result.current.items[0].id));
@@ -61,11 +82,27 @@ describe('useVoiceOutbox', () => {
     const { result } = await setup();
     await waitFor(() => expect(result.current.online).toBe(false));
     await act(async () => result.current.send(REC, { sendPeaks: false }));
-    expect(result.current.items[0].status).toBe('waiting');
+    await waitFor(() => expect(result.current.items[0]?.status).toBe('waiting'));
     expect(mockPublish).not.toHaveBeenCalled();
     await act(async () => net.__setState({ isConnected: true }));
     await waitFor(() => expect(result.current.items).toHaveLength(0));
     expect(mockPublish).toHaveBeenCalledTimes(1);
+  });
+
+  it('a waiting note survives a restart and sends when the signal is back', async () => {
+    net.__setState({ isConnected: false });
+    const before = await setup();
+    await waitFor(() => expect(before.result.current.online).toBe(false));
+    await act(async () => before.result.current.send(REC, { sendPeaks: false }));
+    await waitFor(() => expect(before.result.current.items[0]?.status).toBe('waiting'));
+    before.unmount();
+    // A cold start: the memory is gone, only what the phone saved is left.
+    resetVoiceOutbox(true);
+    await act(async () => net.__setState({ isConnected: true }));
+    const after = await setup();
+    await waitFor(() => expect(mockPublish).toHaveBeenCalledTimes(1));
+    expect(mockPublish).toHaveBeenCalledWith('ws-1', expect.objectContaining({ uri: 'file:///docs/voice-outbox/r.m4a' }));
+    await waitFor(() => expect(after.result.current.items).toHaveLength(0));
   });
 
   it('shows only the signed-in author’s notes and empties on sign-out', async () => {
@@ -73,6 +110,7 @@ describe('useVoiceOutbox', () => {
     const mine = await setup('u-me');
     await waitFor(() => expect(mine.result.current.online).toBe(false));
     await act(async () => mine.result.current.send(REC, { sendPeaks: false }));
+    await waitFor(() => expect(mine.result.current.items).toHaveLength(1));
     const other = await setup('u-other');
     expect(other.result.current.items).toHaveLength(0);
     expect(mine.result.current.items).toHaveLength(1);
