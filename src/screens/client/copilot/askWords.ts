@@ -56,8 +56,8 @@ export const timeOf = (at: Date) => formatTime(at, tz());
 
 /** Roman cites facts as [n]; the board draws plain prose with the facts listed under it, so the markers come out here. */
 export const withoutCites = (text: string) => text.replace(/\s?\[\d{1,2}\]/g, '').trim();
-/** Emphasis markers come out as in main's Roman chat (`romanBlocks`). */
-export const withoutEmphasis = (text: string) => text.replace(/\*\*|__/g, '');
+/** Emphasis markers come out and "- " / "* " list lines get main's bullet, as in main's Roman chat (`romanBlocks`). */
+export const withoutEmphasis = (text: string) => text.replace(/\*\*|__/g, '').replace(/^[ \t]*[-*][ \t]+/gm, '\u2022 ');
 
 /** The board's answer: the first sentence as the serif lead line, the rest under it. */
 export function leadAndRest(text: string): { lead: string; rest: string } {

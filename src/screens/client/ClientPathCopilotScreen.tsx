@@ -7,7 +7,8 @@
  * Roman's normal send path with the Copilot opt-in header (backend #1129), in the client's open Roman chat.
  * Behind `featureFlags.clientPathCopilot` (off) and the server switch: a server without Copilot (404, or no
  * `copilot` on the reply) shows the plain Roman reply and no week block (truthful fallback). Coachless: Roman's lock.
- * A follow-up question scrolls into view as it is asked and keeps its place while the answer arrives.
+ * A follow-up question scrolls into view as it is asked and keeps its place while the answer arrives. When Settings
+ * erases the chat the turns came from, they go (useCopilotAsk) and so does a question put back in the composer.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -91,8 +92,10 @@ function PathCopilot() {
   const coach = useCoachFirstName();
   const needsCoach = useClientNeedsCoach();
   const q = useQuery({ queryKey: COPILOT_RECENT_KEY, queryFn: () => copilotApi.recent(), enabled: !needsCoach });
-  const { turns, busy, ask } = useCopilotAsk();
+  const { turns, busy, ask, erased } = useCopilotAsk();
   const [draft, setDraft] = useState('');
+  const refilled = useRef('');
+  useEffect(() => { if (erased) setDraft((d) => (d === refilled.current ? '' : d)); }, [erased]);
   const refusal = q.error ? aiRefusalOf(q.error) : null;
   const week = q.data?.week ?? null;
   const items = q.data?.suggestions ?? [];
@@ -102,10 +105,11 @@ function PathCopilot() {
   if (needsCoach || copilotErrorOf(q.error).code === 'ROMAN_REQUIRES_COACH' || turns.some((t) => t.error?.kind === 'requiresCoach')) return <CoachLock />;
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ['copilot'] });
-  // A stored question with no answer goes back in an empty composer: asking again is the client's call (main's rule).
+  // A question with no Try again (stored, or wait / daily cap / credits out) goes back in an empty composer: asking
+  // again is the client's call (main's rule).
   const onAsk = (text: string, retryId?: string) => void ask(text, retryId).then((o) => {
     if (o === 'sent') refresh();
-    if (o === 'stored') setDraft((d) => (d.trim() === '' ? text : d));
+    if (o === 'stored' || o === 'held') setDraft((d) => (d.trim() === '' ? (refilled.current = text) : d));
   });
   const starters: string[] = [ROMAN_QUICK_STARTS[0], ROMAN_QUICK_STARTS[3]];
   if (targetChangedOn(week?.target ?? null)) starters.unshift(A.whyCalories);
@@ -170,6 +174,8 @@ function PathCopilot() {
 function useReveal(turns: CopilotTurn[]) {
   const ref = useRef<ScrollView>(null);
   const m = useRef({ body: 0, view: 0, content: 0, y: null as number | null, seen: 1 });
+  // The erased chat's turns went: the next first question sits under the folded masthead again.
+  if (turns.length === 0) Object.assign(m.current, { y: null, seen: 1 });
   const last = turns[turns.length - 1];
   const waiting = !!last && !last.answer && !last.error;
   const follow = () => {
@@ -251,7 +257,7 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
   const [title, body, retry]: [string, string, boolean] =
     error.kind === 'poolEmpty' ? [romanPoolEmpty('client'), '', false]
     : granted ? [ROMAN_AI_ON_ASK_AGAIN, '', false]
-    : error.kind === 'rateLimited' ? [romanRateLimited(error.retryAfterSeconds), '', !stored]
+    : error.kind === 'rateLimited' ? [romanRateLimited(error.retryAfterSeconds), '', false]
     : stored ? [ROMAN_STORED_NO_REPLY, '', false]
     : error.kind === 'offline' ? [ROMAN_OFFLINE_TITLE, ROMAN_OFFLINE_BODY, true]
     : [ROMAN_ERROR_TRANSIENT, '', true];

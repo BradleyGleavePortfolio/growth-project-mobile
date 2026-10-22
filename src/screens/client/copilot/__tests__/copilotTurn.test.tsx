@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
 import { openOrResumeSession, RomanApiError, RomanWireError, sendMessage } from '../../../../api/romanApi';
 import ClientPathCopilotScreen from '../../ClientPathCopilotScreen';
+import { romanChatsEvents } from '../../../settings/romanChatsEvents';
+import { ROMAN_AI_ON_ASK_AGAIN } from '../../../../components/roman/romanVoice';
 
 const mockText = (t: string) => <Text>{t}</Text>;
 let mockNeedsCoach = false;
@@ -21,7 +23,7 @@ jest.mock('../../../../api/romanApi', () => {
 jest.mock('../../../../config/featureFlags', () => ({ featureFlags: { clientPathCopilot: true } }));
 jest.mock('../../../../api/schedulingApi', () => ({ resolveClientTimezone: () => 'UTC' }));
 jest.mock('../../../../hooks/useCalendar', () => ({ useMyCoaches: () => ({ data: [{ name: 'Alex Rivera' }] }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }) }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }), NavigationContext: jest.requireActual('react').createContext(null) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
@@ -31,6 +33,7 @@ jest.mock('../../../../components/coachless/JoinCoachState', () => ({
   __esModule: true, default: ({ title }: { title: string }) => mockText(title), useClientNeedsCoach: () => mockNeedsCoach,
   ROMAN_LOCK_TITLE: 'Roman works with a coach', ROMAN_LOCK_BODY: 'lock body',
 }));
+jest.mock('../../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-1', role: 'student' }) }));
 jest.mock('../../../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../../../theme/tokens');
   return { useTheme: () => ({ colors: t.colors, semanticColors: t.lightTokens }) };
@@ -169,4 +172,73 @@ test('a follow-up scrolls its question to the top, keeps following its answer, a
   await act(async () => fireEvent(sv, 'contentSizeChange', 390, 2600));
   expect(scrollTo).toHaveBeenCalledTimes(calls);
   scrollTo.mockRestore();
+});
+
+const ANSWER = (text: string) => ({ text, messageId: text, interrupted: false, copilot: { sources: [], suggestion: null } }) as never;
+
+test.each([
+  ['Delete on its row', () => romanChatsEvents.emitErased({ id: 'sess-1' })],
+  ['Delete in its transcript', () => romanChatsEvents.emitGone({ ownerId: 'u1', epoch: 1, id: 'sess-1' })],
+  ['Delete all', () => romanChatsEvents.emitErased({ id: null })],
+])('%s erases the held chat from Your path; the next question opens a fresh chat (B-851-R2-S1)', async (_name, erase) => {
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [] } } as never);
+  open.mockResolvedValueOnce({ id: 'sess-1' } as never).mockResolvedValueOnce({ id: 'sess-2' } as never);
+  send.mockResolvedValueOnce(ANSWER('Your target is 2,150 kcal.'));
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await act(async () => fireEvent.press(await s.findByText('Explain my targets')));
+  send.mockRejectedValueOnce(new RomanApiError('generic', 'stream cut', undefined, undefined, true));
+  await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'Can I swap Friday?'));
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  expect(s.getByPlaceholderText('Ask Roman anything.').props.value).toBe('Can I swap Friday?');
+  await act(async () => romanChatsEvents.emitErased({ id: 'another-chat' }));
+  expect(s.getByText('Your target is 2,150 kcal.')).toBeTruthy();
+  await act(async () => erase());
+  expect(s.queryByText('Your target is 2,150 kcal.')).toBeNull();
+  expect(s.queryByText('Can I swap Friday?')).toBeNull();
+  expect(s.queryAllByTestId('copilot-turn')).toHaveLength(0);
+  expect(s.getByPlaceholderText('Ask Roman anything.').props.value).toBe('');
+  expect(s.getByTestId('copilot-ask')).toBeTruthy();
+  send.mockResolvedValueOnce(ANSWER('A fresh answer.'));
+  await act(async () => fireEvent.press(s.getByText('Explain my targets')));
+  expect(open).toHaveBeenCalledTimes(2);
+  expect(send).toHaveBeenLastCalledWith('sess-2', 'Explain my targets', { copilot: true });
+  expect(s.getByText('A fresh answer.')).toBeTruthy();
+  expect(s.getAllByTestId('copilot-turn')).toHaveLength(1);
+});
+
+test('a wait, a daily cap or used-up credits offer no Try again: the question goes back in the composer; list lines get bullets', async () => {
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [] } } as never);
+  send.mockRejectedValueOnce(Object.assign(new RomanApiError('rateLimited', '429'), { retryAfterSeconds: 30 }));
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await act(async () => fireEvent.press(await s.findByText('Explain my targets')));
+  expect(s.getByText('A moment, if you would. Send your next message in about 30 seconds.')).toBeTruthy();
+  expect(s.queryByText('Try again')).toBeNull();
+  expect(s.getByPlaceholderText('Ask Roman anything.').props.value).toBe('Explain my targets');
+  await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), ''));
+  send.mockRejectedValueOnce(new RomanApiError('dailyCap', 'cap'));
+  await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'And next week?'));
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  expect(s.getByPlaceholderText('Ask Roman anything.').props.value).toBe('And next week?');
+  send.mockResolvedValueOnce({ text: 'Two things.\n- Eat more protein.\n* Sleep by 11.', messageId: 'm9', interrupted: false } as never);
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  expect(s.getByText(/^Two things\.\s+\u2022 Eat more protein\.\s+\u2022 Sleep by 11\.$/)).toBeTruthy();
+  expect(send).toHaveBeenCalledTimes(3);
+});
+
+test('a stored question refused for AI help: the real Allow grant shows the ask-again line, sends nothing more, and keeps the question', async () => {
+  const copy = { version: 'v6', paragraph: { text: 'Consent words.', sha256: 'a'.repeat(64) }, box_label: { text: 'Allow AI help', sha256: 'b'.repeat(64) }, sha256: 'c'.repeat(64) };
+  const off = { granted: false, state: 'not_granted', version: null, granted_at: null, withdrawn_at: null, current_version: 'v6', needs_reconsent: false, copy };
+  get.mockImplementation(async (url: string) => ({ data: url === '/me/ai-consent' ? off : { week: WEEK, suggestions: [] } }) as never);
+  jest.mocked(api.post).mockResolvedValue({ data: { ...off, granted: true, state: 'granted', version: 'v6', granted_at: '2026-10-22T21:41:00Z' } } as never);
+  send.mockRejectedValueOnce(Object.assign(new RomanApiError('aiRefused', 'refused', undefined, undefined, true), { refusal: { kind: 'consent_required' } }));
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await act(async () => fireEvent.changeText(await s.findByPlaceholderText('Ask Roman anything.'), 'Can I swap Friday?'));
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  await act(async () => fireEvent.press(s.getByTestId('copilot-ai-refusal-allow')));
+  await act(async () => fireEvent.press(await s.findByTestId('copilot-ai-refusal-consent-sheet-allow')));
+  expect(jest.mocked(api.post)).toHaveBeenCalledWith('/me/ai-consent/roman', expect.anything(), expect.anything());
+  expect(await s.findByText(ROMAN_AI_ON_ASK_AGAIN)).toBeTruthy();
+  expect(s.queryByTestId('copilot-ai-refusal')).toBeNull();
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(s.getByPlaceholderText('Ask Roman anything.').props.value).toBe('Can I swap Friday?');
 });
