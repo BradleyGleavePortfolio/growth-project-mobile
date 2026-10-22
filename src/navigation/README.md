@@ -162,6 +162,7 @@ New screen names added to `HomeStackParamList`:
 | `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + the fixed quiet hours (read-only) |
 | `MessagesInbox` | `MessagesInboxScreen` | C3B-S2: the client's Messages list (coach and Roman), opened from Home while `c3StyleB` and Roman chat are on |
 | `Health`, `WearableMetricDetail`, `Connections` | `WearablesShell`, `MetricDetailScreen`, `ConnectionsScreen` | #HEALTH-PAGES: the same Health page and its two inner routes as You's, opened from the rings Home Sleep dial and Steps tile, so Back lands on Home and reads "Back" (over the You menu it reads "Back to You") |
+| `HouseCoachConfirm`, `HouseCoach`, `HousePackage` | `HouseCoachConfirmScreen`, `HouseCoachScreen`, `HousePackageScreen` | RENEWAL-M and SWITCH-CONFIRM-M (owner #166-5): "Join TGP's Top Rated Coach" on the renewal pop-up or banner opens the one-coach confirm page (`{ coach, from }`), then the house coach's packages (`{ coach }`), then one package (`{ coach, pkg }`), whose button opens `PackageSelectionSheet`; the server moves the client only after payment |
 
 The legacy `Notifications` screen name (pointing to the old `NotificationsScreen`) is preserved for backward-compat.
 

@@ -2,7 +2,8 @@
  * RENEWAL-M (RENEWAL3 style B; OPERATOR RULING v3 6328335815 on backend #1127): client Home after a plan ends, from
  * the server's `renewal` block. Pop-up (M1-M4) on Day 0, 1, 7: a centred card over the dimmed Home, only its choices
  * and "Skip for now" tappable; a plan_renewal tap re-reads the plan and opens it. Banner (B1-B2) while `banner_due`.
- * Own coach opens #836's package sheet; the house coach (only when named) opens HouseCoach (H1).
+ * Own coach opens #836's package sheet; the house coach (only when named) opens the one-coach confirm page first
+ * (SWITCH-CONFIRM-M, owner #166-5), then HouseCoach (H1).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, StyleSheet, Text, View } from 'react-native';
@@ -47,7 +48,7 @@ function useDetails(on: boolean): { name?: string; pkg?: string } {
   return d;
 }
 
-function Choices({ r, onOwn, onHouse }: { r: Ended; onOwn: () => void; onHouse: (c: RenewalCoach) => void }) {
+function Choices({ r, onOwn, onHouse }: { r: Ended; onOwn: () => void; onHouse: (c: RenewalCoach, from: RenewalCoach | null) => void }) {
   const house = r.houseCoach && r.houseCoach.id !== r.coach?.id ? r.houseCoach : null;
   return (<>
     {r.coach ? (
@@ -56,7 +57,7 @@ function Choices({ r, onOwn, onHouse }: { r: Ended; onOwn: () => void; onHouse: 
       </HapticPressable>
     ) : null}
     {house ? (
-      <HapticPressable intent="light" style={[s.btn, s.quiet]} onPress={() => onHouse(house)} accessibilityRole="button" testID="renewal-house-coach">
+      <HapticPressable intent="light" style={[s.btn, s.quiet]} onPress={() => onHouse(house, r.coach)} accessibilityRole="button" testID="renewal-house-coach">
         <Text style={[s.btnText, { color: fp.onDeep }]}>{RENEWAL_COPY.houseCoach}</Text>
       </HapticPressable>
     ) : null}
@@ -68,7 +69,7 @@ export default function RenewalHome(): React.ReactElement | null {
   const userId = useCurrentUser()?.id;
   const [focused, setFocused] = useState(false);
   useFocusEffect(useCallback(() => { setFocused(true); return () => setFocused(false); }, []));
-  const navigation = useNavigation<{ navigate: (route: 'HouseCoach', params: { coach: RenewalCoach }) => void }>();
+  const navigation = useNavigation<{ navigate: (route: 'HouseCoachConfirm', params: { coach: RenewalCoach; from: RenewalCoach | null }) => void }>();
   const [popup, setPopup] = useState<Ended | null>(null);
   const [sheet, setSheet] = useState(false);
   const [tapped, afterClose] = [useRef(false), useRef<(() => void) | null>(null)];
@@ -95,7 +96,7 @@ export default function RenewalHome(): React.ReactElement | null {
     if (Platform.OS !== 'ios') runNext();
   };
   const own = () => close(() => setSheet(true));
-  const house = (coach: RenewalCoach) => close(() => navigation.navigate('HouseCoach', { coach }));
+  const house = (coach: RenewalCoach, from: RenewalCoach | null) => close(() => navigation.navigate('HouseCoachConfirm', { coach, from }));
   const name = details.name ?? r.coach?.firstName ?? '';
   const ended = new Date(r.endedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 

@@ -1,7 +1,7 @@
 /**
- * RENEWAL-M H1 (RENEWAL3 style B): "Join TGP's Top Rated Coach" from the renewal pop-up or banner: the house coach's
- * name and packages (the account the server names). A package opens #836's sheet with it picked (H2); after payment
- * it says he is now the client's coach (H3), the server moves the client to him (HOUSE-JOIN-BE) and Home returns.
+ * RENEWAL-M H1 (RENEWAL3 style B): the house coach's name and packages (the account the server names), reached from
+ * SWITCH-CONFIRM-M's confirm page. A package opens its own page (HousePackage), whose button opens #836's sheet (H2);
+ * after payment the sheet says he is now the client's coach (H3), the server moves the client (HOUSE-JOIN-BE) and Home returns.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -9,14 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../../components/HapticPressable';
-import PackageSelectionSheet from '../../components/PackageSelectionSheet';
-import { Monogram } from '../../components/renewal/CoachMonogram';
+import { HouseMasthead } from '../../components/renewal/HouseMasthead';
 import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
-import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import type { HomeStackParamList } from '../../navigation/ClientNavigator';
-import { houseCoachPackagesPath, readHousePackages } from '../../lib/planRenewal';
-import { priceLabel, type PurchasablePackage } from '../../lib/planTerms';
-import { patchUserCache } from '../../lib/userCache';
+import { houseCoachPackagesPath, readHousePackages, type HousePackage } from '../../lib/planRenewal';
+import { priceLabel } from '../../lib/planTerms';
 import api from '../../services/api';
 import { forestPop as fp, lightTokens, radius, typography } from '../../theme/tokens';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
@@ -28,10 +25,8 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'HouseCoach'>;
 export default function HouseCoachScreen({ route, navigation }: Props): React.ReactElement {
   const { coach } = route.params;
   const insets = useSafeAreaInsets();
-  const { refreshEntitlement } = useEntitlement();
-  const [list, setList] = useState<PurchasablePackage[] | null>(null);
+  const [list, setList] = useState<HousePackage[] | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [picked, setPicked] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setError(null);
@@ -43,27 +38,17 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
   useEffect(load, [load]);
 
   const name = coach.firstName; // the renewal block names him by first name only (CONTRACT 6328688356)
-  const joined = () => { setPicked(null); void patchUserCache({ coach_id: coach.id }); void refreshEntitlement(); navigation.popToTop(); };
 
   return (
     <View style={s.page}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-        <View style={[s.mast, { paddingTop: insets.top + 4 }]}>
-          <View style={s.backWrap}>
-            <HapticPressable intent="light" style={s.back} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel={HOUSE_COACH_COPY.back} testID="house-coach-back">
-              <Ionicons name="chevron-back" size={26} color={fp.onDeep} />
-            </HapticPressable>
-          </View>
-          <Monogram name={name} />
-          <Text style={s.eyebrow}>{HOUSE_COACH_COPY.eyebrow}</Text>
-          <Text style={s.name} accessibilityRole="header">{name}</Text>
-        </View>
+        <HouseMasthead eyebrow={HOUSE_COACH_COPY.eyebrow} title={name} monogram={name} onBack={() => navigation.goBack()} />
         <View style={s.body}>
           {list ? (
             <>
               <Text style={s.overline}>{oneToOneCoachingLabel(name)}</Text>
               {list.map((p) => (
-                <HapticPressable key={p.id} intent="light" style={s.row} onPress={() => setPicked(p.id)} accessibilityRole="button" accessibilityLabel={`${p.name}, ${priceLabel(p)}`} testID={`house-package-${p.id}`}>
+                <HapticPressable key={p.id} intent="light" style={s.row} onPress={() => navigation.navigate('HousePackage', { coach, pkg: p })} accessibilityRole="button" accessibilityLabel={`${p.name}, ${priceLabel(p)}`} testID={`house-package-${p.id}`}>
                   <View style={s.flex}>
                     <Text style={s.pkg}>{p.name}</Text>
                     <Text style={s.price}>{priceLabel(p)}</Text>
@@ -79,19 +64,12 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
           )}
         </View>
       </ScrollView>
-      {picked ? (
-        <PackageSelectionSheet visible skipSnoozeCheck house={{ id: coach.id, name }} initialPackageId={picked} onDismiss={() => setPicked(null)} onPaymentSuccess={joined} />
-      ) : null}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: lightTokens.bgPrimary }, flex: { flex: 1 },
-  mast: { backgroundColor: fp.deep, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, paddingHorizontal: 20, paddingBottom: 22, alignItems: 'center' },
-  backWrap: { alignSelf: 'flex-start', marginLeft: -10 }, back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { ...typography.eyebrow, color: fp.gold, marginTop: 14, textAlign: 'center' },
-  name: { ...typography.h1, color: fp.onDeep, marginTop: 4, textAlign: 'center' },
   body: { paddingHorizontal: 20, paddingTop: 24 },
   overline: { ...typography.eyebrow, color: fp.n700, marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, backgroundColor: fp.surface, borderColor: fp.sageLine, borderWidth: 1, borderRadius: radius.card, paddingVertical: 14, paddingHorizontal: 18, marginTop: 10 },

@@ -68,6 +68,8 @@ it.each([['no house coach', null], ['the house coach is the coach', COACH]])('%s
   const s = await open(ended(0, { house_coach: house }));
   expect(s.queryByTestId('renewal-house-coach')).toBeNull();
   expect(s.getAllByTestId('renewal-own-coach')).toHaveLength(2);
+  await fireEvent.press(s.getAllByTestId('renewal-own-coach')[0]);
+  expect(mockNavigate).not.toHaveBeenCalled(); // nothing new without a house coach: own coach still opens the sheet
 });
 
 it('own coach (iOS): the sheet waits until the pop-up has closed', async () => {
@@ -80,11 +82,25 @@ it('own coach (iOS): the sheet waits until the pop-up has closed', async () => {
   expect(s.getByTestId('package-sheet-true')).toBeTruthy();
 });
 
-it('house coach (Android, at once): opens HouseCoach with the coach the server named', async () => {
+const HOUSE = { id: 'house-1', firstName: 'Bradley' };
+it('house coach (Android, at once): the one-coach confirm page first, never the packages, naming the current coach', async () => {
   const s = await open(ended(7));
   await fireEvent.press(s.getAllByTestId('renewal-house-coach')[0]);
   expect(s.queryByTestId('renewal-popup')).toBeNull();
-  expect(mockNavigate).toHaveBeenCalledWith('HouseCoach', { coach: { id: 'house-1', firstName: 'Bradley' } });
+  expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: HOUSE, from: { id: 'coach-1', firstName: 'Jordan' } }]]);
+});
+
+it('house coach from the banner: the same confirm page; with no current coach it names none', async () => {
+  mockRenewal = ended(null);
+  const s = await render(<RenewalHome />);
+  await fireEvent.press(await s.findByTestId('renewal-house-coach'));
+  expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: HOUSE, from: { id: 'coach-1', firstName: 'Jordan' } }]]);
+  await s.unmount();
+  mockNavigate.mockClear();
+  const none = await open(ended(0, { coach: null }));
+  expect(none.queryByTestId('renewal-own-coach')).toBeNull();
+  await fireEvent.press(none.getByTestId('renewal-house-coach'));
+  expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: HOUSE, from: null }]]);
 });
 
 it('banner day: "Renew now" with the last package and end date, no pop-up, no ack; own coach opens the sheet', async () => {

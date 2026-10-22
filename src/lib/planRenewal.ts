@@ -58,12 +58,16 @@ export const houseCoachPackagesPath = (coachId: string) => `/v1/clients/me/coach
  */
 export type HousePackage = PurchasablePackage & { description: string | null; weeks: number | null };
 
-/** `{ packages }` or a bare array; rows that cannot be sold honestly are dropped. */
+/**
+ * `{ packages }` or a bare array; rows that cannot be sold honestly are dropped, and so is any free-trial row: the house
+ * offers no free trials in v1 (owner #166-6; the server leaves them out too, HOUSE-SERVER).
+ */
 export function readHousePackages(data: unknown): HousePackage[] {
   const d = data as { packages?: unknown } | null;
   const raw: unknown[] = Array.isArray(data) ? data : Array.isArray(d?.packages) ? d.packages : [];
   return raw.flatMap((row) => {
-    const p = purchasableFromCoachPackage(row);
+    const sold = purchasableFromCoachPackage(row);
+    const p = sold && sold.trialDays === 0 ? sold : null;
     const { description: text, duration_periods: n } = (row ?? {}) as { description?: unknown; duration_periods?: unknown };
     const weeks = p && !p.renewing && typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : null;
     return p ? [{ ...p, description: typeof text === 'string' && text.trim() ? text.trim() : null, weeks }] : [];
