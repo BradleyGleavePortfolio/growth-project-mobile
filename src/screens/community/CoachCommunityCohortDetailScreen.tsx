@@ -54,11 +54,32 @@ import {
   useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
 import type { CoachCohortMember } from '../../api/coachCommunityApi';
+import VoiceNotesSection from '../../components/community/VoiceNotesSection';
+import { featureFlags } from '../../config/featureFlags';
+import { useCommunityMe } from '../../hooks/useCommunity';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import type { CoachCommunityRoute } from './coachCommunityNavTypes';
 
 /** Minimal, intentionally permissive email shape check (server is the gate). */
 function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+/** The space's voice notes, with Reply by voice on members' notes (flag off). */
+function SpaceVoiceNotes({ cohortId, cohortName }: { cohortId: string; cohortName: string }): React.ReactElement {
+  const me = useCommunityMe();
+  const coachId = useCurrentUser()?.id;
+  return (
+    <VoiceNotesSection
+      workspaceId={me.data?.workspace_id ?? null}
+      viewerUserId={coachId}
+      viewerCoachId={coachId}
+      cohortId={cohortId}
+      cohortName={cohortName}
+      coachView
+      testID="coach-community-cohort-detail-voice"
+    />
+  );
 }
 
 export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
@@ -210,6 +231,9 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           data={members}
           keyExtractor={(m) => m.user_id}
           renderItem={renderMember}
+          ListHeaderComponent={
+            featureFlags.communityVoiceNotes ? <SpaceVoiceNotes cohortId={cohortId} cohortName={cohortName} /> : null
+          }
           contentContainerStyle={styles.listContent}
         />
       )}

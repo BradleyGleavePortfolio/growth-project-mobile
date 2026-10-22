@@ -70,6 +70,8 @@ interface Props {
   prerequisiteError?: boolean;
   /** Refetches `/community/me`; wired to the error-state retry button. */
   onRetryPrerequisite?: () => void;
+  /** Opened as the CommunitySpace route: a space's id scopes its voice notes. */
+  route?: { params?: { cohortId?: string } };
 }
 
 export default function CommunitySpaceScreen({
@@ -79,6 +81,7 @@ export default function CommunitySpaceScreen({
   prerequisiteLoading: prerequisiteLoadingProp,
   prerequisiteError: prerequisiteErrorProp,
   onRetryPrerequisite,
+  route,
 }: Props): React.ReactElement {
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CommunityNav>();
@@ -114,14 +117,16 @@ export default function CommunitySpaceScreen({
 
   const compose = () => navigation.navigate('CommunityComposer', { mode: 'post' });
 
-  // Hall voice notes (behind featureFlags.communityVoiceNotes): Record entry
-  // point plus the feed, each note with Report / Block / author Delete.
-  const showVoice = space === 'hall' && featureFlags.communityVoiceNotes;
+  // Voice notes of the Hall or of the space opened (featureFlags.communityVoiceNotes):
+  // Record entry point plus the feed, each note with Report / Block / author Delete.
+  const cohortId = route?.params?.cohortId;
+  const showVoice = (space === 'hall' || !!cohortId) && featureFlags.communityVoiceNotes;
   const voiceSection = showVoice ? (
     <VoiceNotesSection
       workspaceId={workspaceId ?? null}
       viewerUserId={client?.id}
       viewerCoachId={client?.coach_id}
+      cohortId={cohortId}
       onRecord={() => navigation.navigate('CommunityVoiceComposer', { target: 'hall' })}
       testID="community-space-voice"
     />

@@ -44,10 +44,14 @@ import { COMMUNITY_SUPPORT_EMAIL } from '../../api/communityErrors';
 export interface VoiceNoteComposerProps {
   /** The concrete send target → drives the audience disclosure. */
   target: VoiceAudienceTarget;
-  /** Send: `studio` is true when the server takes waveform peaks. */
-  onSend: (recording: VoiceRecordingResult, studio: boolean) => void;
+  /** Send hands the recording to the outbox. */
+  onSend: (recording: VoiceRecordingResult) => void;
   /** Cancel, Not now and Delete close the sheet. */
   onClose: () => void;
+  /** Sheet title; a coach's voice reply reads "Reply to {name}". */
+  title?: string;
+  /** A coach has no coach: the first-use card leaves out the report line. */
+  coachView?: boolean;
   /** Inject a recorder port for tests; defaults to the resolved adapter. */
   recorder?: VoiceRecorderPort;
   /** Inject a playback port for the listen-back player in tests. */
@@ -62,6 +66,8 @@ export default function VoiceNoteComposer({
   target,
   onSend,
   onClose,
+  title = 'Voice note',
+  coachView = false,
   recorder,
   playback,
   testID,
@@ -101,6 +107,7 @@ export default function VoiceNoteComposer({
       ['flag-outline', 'If someone reports a voice note, your coach and the TGP Fitness team can listen to it.'],
       ['trash-outline', 'You can delete your voice note at any time.'],
     ];
+    if (coachView) lines.splice(1, 1);
     return (
       <View style={styles.container} testID={`${testID ?? 'voice-composer'}-consent`}>
         <Text style={styles.cardTitle} accessibilityRole="header">Voice notes</Text>
@@ -270,7 +277,7 @@ export default function VoiceNoteComposer({
           <HapticPressable
             intent="light"
             onPress={() => {
-              onSend(recording, consent.studio);
+              onSend(recording);
               rec.reset();
             }}
             accessibilityRole="button"
@@ -297,7 +304,7 @@ export default function VoiceNoteComposer({
   return (
     <View style={styles.container} testID={testID ?? 'voice-composer'}>
       {/* Closing unmounts the recorder hook, which releases the microphone. */}
-      <SheetHeader onCancel={onClose} cancelLabel={live ? 'Cancel recording' : 'Cancel'} />
+      <SheetHeader title={title} onCancel={onClose} cancelLabel={live ? 'Cancel recording' : 'Cancel'} />
       <Text style={styles.timer} accessibilityElementsHidden testID="voice-composer-timer">
         {formatDuration(rec.elapsedMs)}
       </Text>
@@ -332,10 +339,12 @@ export default function VoiceNoteComposer({
 
 function SheetHeader({
   onCancel,
+  title,
   cancelLabel = 'Cancel',
   discard = false,
 }: {
   onCancel: () => void;
+  title: string;
   cancelLabel?: string;
   discard?: boolean;
 }): React.ReactElement {
@@ -355,7 +364,7 @@ function SheetHeader({
           <Text style={styles.cancel}>Cancel</Text>
         )}
       </HapticPressable>
-      <Text style={styles.title} accessibilityRole="header">Voice note</Text>
+      <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>{title}</Text>
       <View style={styles.headerAction} />
     </View>
   );
@@ -396,7 +405,7 @@ const styles = StyleSheet.create({
   header: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerAction: { minWidth: 72, minHeight: 44, justifyContent: 'center' },
   cancel: { fontSize: 17, fontWeight: '500', color: fp.forest },
-  title: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
+  title: { flex: 1, textAlign: 'center', fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
   cardTitle: { fontSize: 24, lineHeight: 30, fontWeight: '600', color: fp.ink },
   timer: { fontFamily: typography.display.fontFamily, fontSize: 64, lineHeight: 80, color: fp.ink, textAlign: 'center' },
   hint: { fontSize: 16, lineHeight: 22, minHeight: 22, color: fp.n700, textAlign: 'center' },

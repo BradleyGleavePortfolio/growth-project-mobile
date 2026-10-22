@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import VoiceNotesSection from '../VoiceNotesSection';
 import { resetVoiceOutbox } from '../../../hooks/useVoiceOutbox';
+import * as upload from '../../../hooks/useVoiceUpload';
 
 jest.mock('../../../config/featureFlags', () => ({
   featureFlags: { communityVoiceNotes: true },
@@ -51,13 +52,16 @@ jest.mock('../VoiceNotePlayer', () => {
 });
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
 const mockRecording = { uri: 'file:///r.m4a', durationMs: 3000, bytes: 10, mimeType: 'audio/mp4', peaks: [0.5] };
+const mockSheet: { props?: Record<string, unknown> } = {};
 jest.mock('../VoiceRecordSheet', () => {
   const React = require('react');
   const { Pressable } = require('react-native');
   return {
     __esModule: true,
-    default: ({ visible, onSend }: { visible: boolean; onSend: (r: unknown, s: boolean) => void }) =>
-      visible ? React.createElement(Pressable, { testID: 'sheet-send', onPress: () => onSend(mockRecording, true) }) : null,
+    default: (p: { visible: boolean; onSend: (r: unknown) => void }) => {
+      mockSheet.props = p;
+      return p.visible ? React.createElement(Pressable, { testID: 'sheet-send', onPress: () => p.onSend(mockRecording) }) : null;
+    },
   };
 });
 
@@ -101,7 +105,7 @@ const note = (id: string, author: string) => ({
   created_at: new Date(Date.now() - 2 * 3_600_000).toISOString(),
 });
 
-async function renderSection() {
+async function renderSection(space: { cohortId?: string; cohortName?: string; coachView?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const utils = await render(
     <QueryClientProvider client={qc}>
@@ -109,6 +113,7 @@ async function renderSection() {
         workspaceId="ws-1"
         viewerUserId="u-me"
         viewerCoachId="u-coach"
+        {...space}
         testID="vn"
       />
     </QueryClientProvider>,
@@ -199,6 +204,39 @@ describe('VoiceNotesSection', () => {
       fireEvent.press(getByTestId('sheet-send'));
     });
     expect(await findByLabelText('Waiting to send')).toBeTruthy();
+  });
+
+  it('in a space, its coach replies by voice to a member’s note there (B-LS848-2)', async () => {
+    const inSpace = (id: string, author: string, extra = {}) => ({ ...note(id, author), cohort_id: 'c-1', message_id: id, ...extra });
+    mockListFeed.mockResolvedValue({
+      voice_notes: [
+        inSpace('vn-other', 'u-alice', { author_name: 'Alice Park' }),
+        inSpace('vn-mine', 'u-me'),
+        inSpace('vn-thread', 'u-bob', { author_name: 'Bob Lane', parent_message_id: 'vn-other' }),
+      ],
+      next_cursor: null,
+    });
+    const publish = jest.spyOn(upload, 'publishVoiceNote').mockRejectedValue(new Error('offline'));
+    const { findByTestId, getByTestId, getByText, queryByTestId } = await renderSection({
+      cohortId: 'c-1',
+      cohortName: 'Spring Block',
+      coachView: true,
+    });
+    await fireEvent.press(await findByTestId('vn-reply-vn-other'));
+    expect(mockListFeed.mock.calls[0][1]).toEqual(expect.objectContaining({ cohortId: 'c-1' }));
+    expect(queryByTestId('vn-reply-vn-mine')).toBeNull();
+    expect(getByText('Reply to Alice Park')).toBeTruthy();
+    expect(mockSheet.props).toMatchObject({
+      visible: true,
+      title: 'Reply to Alice Park',
+      coachView: true,
+      target: { kind: 'cohort', cohortName: 'Spring Block' },
+    });
+    await act(async () => fireEvent.press(getByTestId('sheet-send')));
+    await waitFor(() =>
+      expect(publish).toHaveBeenCalledWith('ws-1', expect.objectContaining({ cohortId: 'c-1', parentMessageId: 'vn-other' })),
+    );
+    publish.mockRestore();
   });
 
   it('reports another member’s note as a voice note', async () => {

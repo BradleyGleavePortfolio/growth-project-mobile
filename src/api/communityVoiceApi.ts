@@ -24,9 +24,8 @@
  *       3. create(...) durably records the note, re-asserting the same limits
  *          and the `${userId}/` bucket binding. The client is NEVER trusted on
  *          the second hop either — the server re-derives the namespace.
- *   - Voice notes Studio (backend #1122) adds six view keys and optional create
- *     `waveform_peaks`. A server before #1122 sends none of the keys and rejects
- *     unknown create keys: the keys are optional and peaks go only to Studio.
+ *   - Voice notes Studio (backend #1122, live) adds six view keys and optional
+ *     create `waveform_peaks`; the view keys stay optional so an older note parses.
  *
  * Limits mirror the backend DTO constants exactly so the recorder/composer can
  * pre-validate before a round-trip; the server remains authoritative.
@@ -212,8 +211,10 @@ export interface CreateVoiceNoteInput {
   cohortId?: string;
   /** Optional DM conversation target. */
   conversationId?: string;
-  /** Recorded peaks; sent only to a Studio server (omitted when none). */
+  /** Recorded peaks (omitted when none). */
   waveformPeaks?: number[];
+  /** A voice reply: the chat message it answers, in the same space (#1122). */
+  parentMessageId?: string;
 }
 
 export interface VoiceFeedParams {
@@ -309,6 +310,7 @@ export const communityVoiceApi = {
     };
     if (input.cohortId) body.cohort_id = input.cohortId;
     if (input.conversationId) body.conversation_id = input.conversationId;
+    if (input.parentMessageId) body.parent_message_id = input.parentMessageId;
     const peaks = wirePeaks(input.waveformPeaks);
     if (peaks) body.waveform_peaks = peaks;
     return call(VoiceNoteResponseSchema, () =>

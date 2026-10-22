@@ -45,6 +45,11 @@ export interface VoiceNotesSectionProps {
   viewerCoachId?: string | null;
   /** Not used: Style B records in a sheet over this feed (caller not VOICE-M's). */
   onRecord?: () => void;
+  /** A space: its notes only, and new notes go there (absent = the Hall). */
+  cohortId?: string;
+  cohortName?: string;
+  /** The space's coach: "Reply by voice" on members' notes (Style B 09). */
+  coachView?: boolean;
   testID?: string;
 }
 
@@ -52,13 +57,22 @@ export default function VoiceNotesSection({
   workspaceId,
   viewerUserId,
   viewerCoachId,
+  cohortId,
+  cohortName,
+  coachView = false,
   testID = 'voice-notes-section',
 }: VoiceNotesSectionProps): React.ReactElement | null {
   const { semanticColors } = useTheme();
   const qc = useQueryClient();
-  const feed = useVoiceFeed({ workspaceId });
+  const feed = useVoiceFeed({ workspaceId, cohortId });
   const outbox = useVoiceOutbox(workspaceId, viewerUserId ?? null);
+  const pending = outbox.items.filter((i) => i.input.cohortId === cohortId);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<VoiceNoteView | null>(null);
+  const closeSheet = () => {
+    setRecordOpen(false);
+    setReplyTo(null);
+  };
 
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
@@ -105,7 +119,7 @@ export default function VoiceNotesSection({
         </HapticPressable>
       </View>
 
-      {[...outbox.items].reverse().map((item) => (
+      {[...pending].reverse().map((item) => (
         <OutboxRow
           key={item.id}
           item={item}
@@ -137,7 +151,7 @@ export default function VoiceNotesSection({
             </Text>
           </HapticPressable>
         </View>
-      ) : notes.length === 0 && outbox.items.length === 0 ? (
+      ) : notes.length === 0 && pending.length === 0 ? (
         <Text
           style={[styles.muted, { color: semanticColors.textMuted }]}
           testID={`${testID}-empty`}
@@ -151,6 +165,8 @@ export default function VoiceNotesSection({
           const when = formatRelative(note.created_at);
           // heard_at is undefined on a server without it: then neither mark.
           const heard = mine || note.heard_at === undefined ? undefined : note.heard_at;
+          const parent = note.parent_message_id ? notes.find((n) => n.message_id === note.parent_message_id) : undefined;
+          const canReply = coachView && !mine && !!cohortId && !!note.message_id;
           return (
             <View key={note.id} style={styles.note} testID={`${testID}-note-${note.id}`}>
               <View style={styles.noteMeta}>
@@ -159,6 +175,9 @@ export default function VoiceNotesSection({
                 </Text>
                 {coach ? <Text style={styles.coach}>Coach</Text> : null}
                 {when ? <Text style={styles.when}>{when}</Text> : null}
+                {parent ? (
+                  <Text style={styles.when} numberOfLines={1}>{`Reply to ${parent.author_name ?? 'Member'}`}</Text>
+                ) : null}
                 <View style={styles.spacer} />
                 <SafetyMenu
                   targetType="voice_note"
@@ -190,7 +209,19 @@ export default function VoiceNotesSection({
                 onPlaybackError={() => void feed.refetch()}
                 onFinished={heard === null ? () => markHeard(note.id) : undefined}
                 trailing={
-                  heard === null ? (
+                  canReply ? (
+                    <HapticPressable
+                      intent="light"
+                      onPress={() => setReplyTo(note)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Reply by voice"
+                      testID={`${testID}-reply-${note.id}`}
+                      style={styles.reply}
+                    >
+                      <Ionicons name="mic-outline" size={18} color={coach ? fp.leaf : fp.forest} />
+                      <Text style={[styles.replyText, coach && { color: fp.leaf }]}>Reply by voice</Text>
+                    </HapticPressable>
+                  ) : heard === null ? (
                     <Text style={[styles.fresh, coach && { borderWidth: 0 }]} testID={`${testID}-new-${note.id}`}>New</Text>
                   ) : heard ? (
                     <View style={styles.played} testID={`${testID}-played-${note.id}`}>
@@ -223,12 +254,14 @@ export default function VoiceNotesSection({
       ) : null}
 
       <VoiceRecordSheet
-        visible={recordOpen}
-        target={{ kind: 'hall' }}
-        onClose={() => setRecordOpen(false)}
-        onSend={(recording, studio) => {
-          outbox.send(recording, { sendPeaks: studio });
-          setRecordOpen(false);
+        visible={recordOpen || replyTo !== null}
+        target={cohortId ? { kind: 'cohort', cohortName } : { kind: 'hall' }}
+        title={replyTo ? `Reply to ${replyTo.author_name ?? 'Member'}` : undefined}
+        coachView={coachView}
+        onClose={closeSheet}
+        onSend={(recording) => {
+          outbox.send(recording, { cohortId, parentMessageId: replyTo?.message_id ?? undefined });
+          closeSheet();
         }}
       />
     </View>
@@ -351,6 +384,8 @@ const styles = StyleSheet.create({
     backgroundColor: fp.deep, color: fp.gold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   when: { fontSize: 15, color: fp.n700 },
   spacer: { flex: 1 },
+  reply: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
+  replyText: { fontSize: 13, fontWeight: '600', color: fp.forest },
   fresh: { overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.chip, backgroundColor: fp.leaf,
     borderWidth: 1, borderColor: fp.moss, color: fp.ink, fontSize: 13, lineHeight: 16, fontWeight: '600' },
   played: { flexDirection: 'row', alignItems: 'center', gap: 4 },

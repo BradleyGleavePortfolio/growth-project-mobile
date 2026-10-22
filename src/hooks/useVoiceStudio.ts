@@ -1,6 +1,6 @@
 /**
- * Voice notes Studio (backend #1122): the once-only first-use card. A server
- * without the route (404 / 503) means today's behaviour: no card, no peaks.
+ * Voice notes (backend #1122): the once-only first-use card. If the server
+ * cannot say whether it was seen (offline, an error), the card shows.
  */
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,8 +9,6 @@ import { voiceKeys } from './voiceQueryKeys';
 
 export interface VoiceConsentState {
   loading: boolean;
-  /** The server has the Studio routes, so it also takes waveform peaks. */
-  studio: boolean;
   /** Show the first-use card before recording. */
   needsCard: boolean;
   /** The card was shown and the person chose Record. */
@@ -32,8 +30,7 @@ export function useVoiceConsent(): VoiceConsentState {
   }, [qc]);
   return {
     loading: q.isLoading,
-    studio: q.isSuccess,
-    needsCard: q.isSuccess && !q.data.seen,
+    needsCard: !q.isLoading && q.data?.seen !== true,
     record,
   };
 }

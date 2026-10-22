@@ -48,8 +48,10 @@ export interface VoiceUploadInput {
   cohortId?: string;
   /** Optional DM conversation target. */
   conversationId?: string;
-  /** Recorded peaks, set only when the server takes them (backend #1122). */
+  /** Recorded peaks (backend #1122). */
   waveformPeaks?: number[];
+  /** A voice reply's parent chat message (same space). */
+  parentMessageId?: string;
 }
 
 export interface UseVoiceUploadOptions {
@@ -118,6 +120,7 @@ export async function publishVoiceNote(
     ...(input.cohortId ? { cohortId: input.cohortId } : {}),
     ...(input.conversationId ? { conversationId: input.conversationId } : {}),
     ...(input.waveformPeaks ? { waveformPeaks: input.waveformPeaks } : {}),
+    ...(input.parentMessageId ? { parentMessageId: input.parentMessageId } : {}),
   });
 }
 

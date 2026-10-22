@@ -22,7 +22,7 @@ jest.mock('../../../theme/useTheme', () => {
 });
 
 const mockRecordConsent = jest.fn();
-let mockConsent = { loading: false, studio: true, needsCard: false, record: mockRecordConsent };
+let mockConsent = { loading: false, needsCard: false, record: mockRecordConsent };
 jest.mock('../../../hooks/useVoiceStudio', () => ({ useVoiceConsent: () => mockConsent }));
 
 import VoiceNoteComposer from '../VoiceNoteComposer';
@@ -67,7 +67,7 @@ beforeEach(() => {
   mockSend.mockReset();
   mockClose.mockReset();
   mockRecordConsent.mockReset();
-  mockConsent = { loading: false, studio: true, needsCard: false, record: mockRecordConsent };
+  mockConsent = { loading: false, needsCard: false, record: mockRecordConsent };
 });
 
 describe('VoiceNoteComposer — honest states', () => {
@@ -126,7 +126,7 @@ describe('VoiceNoteComposer — review + send', () => {
     });
   }
 
-  it('Send hands the recording to the outbox with the server peaks flag', async () => {
+  it('Send hands the recording to the outbox', async () => {
     const port = makePort();
     const { getByTestId } = await render(<VoiceNoteComposer {...props} target={target} recorder={port} />);
     await recordTo(getByTestId);
@@ -134,7 +134,7 @@ describe('VoiceNoteComposer — review + send', () => {
     expect(getByTestId('voice-composer-preview-duration', { includeHiddenElements: true }).props.children).toBe('0:04');
     expect(getByTestId('voice-composer-listen')).toBeTruthy();
     fireEvent.press(getByTestId('voice-composer-send'));
-    expect(mockSend).toHaveBeenCalledWith(RESULT, true);
+    expect(mockSend).toHaveBeenCalledWith(RESULT);
   });
 });
 
@@ -153,6 +153,21 @@ describe('VoiceNoteComposer — Style B sheet', () => {
     });
     expect(mockRecordConsent).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(port.start).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('VoiceNoteComposer — coach voice reply', () => {
+  it('titles the sheet with the reply and leaves the report line out of a coach’s card', async () => {
+    mockConsent = { ...mockConsent, needsCard: true };
+    const { getByTestId, getByText, findByText, queryByText } = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={makePort()} title="Reply to Riley Chen" coachView />,
+    );
+    expect(queryByText(/If someone reports a voice note/)).toBeNull();
+    expect(getByText('You can delete your voice note at any time.')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-composer-consent-record'));
+    });
+    expect(await findByText('Reply to Riley Chen')).toBeTruthy();
   });
 });
 
