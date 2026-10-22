@@ -22,11 +22,8 @@ jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { su
 jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off') }));
 const mockText = (t: string) => <Text>{t}</Text>;
 let mockNeedsCoach = false;
-jest.mock('../../../../components/coachless/JoinCoachState', () => ({
-  __esModule: true, ROMAN_LOCK_TITLE: 'Roman works with a coach', ROMAN_LOCK_BODY: 'body',
-  default: ({ title, testID }: { title: string; testID: string }) => <Text testID={testID}>{title}</Text>,
-  useClientNeedsCoach: () => mockNeedsCoach,
-}));
+jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, ROMAN_LOCK_TITLE: 'Roman works with a coach',
+  default: ({ title, testID }: { title: string; testID: string }) => <Text testID={testID}>{title}</Text>, useClientNeedsCoach: () => mockNeedsCoach }));
 jest.mock('../../../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../../../theme/tokens');
   return { useTheme: () => ({ colors: t.colors, semanticColors: t.lightTokens }) };
@@ -133,9 +130,7 @@ test('a server without Copilot (404) shows the calm empty state; a failed read i
 test('a client with no coach gets the existing Roman lock page and no read; Not now waits while Send is in flight', async () => {
   mockNeedsCoach = true;
   const a = await render(wrap(<ClientPathCopilotScreen />));
-  expect(a.getByTestId('copilot-coach-lock')).toBeTruthy();
-  expect(a.getByText('Roman works with a coach')).toBeTruthy();
-  expect(get).not.toHaveBeenCalled();
+  expect([a.getByTestId('copilot-coach-lock').props.children, get.mock.calls.length]).toEqual(['Roman works with a coach', 0]);
   await a.unmount();
   post.mockReturnValueOnce(new Promise(() => undefined) as never);
   const s = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);

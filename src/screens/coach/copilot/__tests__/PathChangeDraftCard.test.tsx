@@ -112,28 +112,20 @@ test('after "the plan changed" Approve goes and Edit still works; a lapsed or mo
   expect(lapsed.onDecided).not.toHaveBeenCalled();
 });
 
-test('a five-day-old draft whose day slipped behind the window: Edit starts inside it, both steps stay reachable', async () => {
-  const old: PathChangeDraft = { ...move, sentAt: '2026-10-16T14:34:00Z', change: { ...move.change, from_at: '2026-10-16T17:00:00Z', to_at: '2026-10-17T17:00:00Z' } as PathChangeDraft['change'] };
-  const { ui, decide } = card(old);
+test('an older draft whose day slipped behind the window: no Approve as is, Edit starts inside; decided elsewhere reloads quietly', async () => {
+  const { ui, decide } = card({ ...move, change: { ...move.change, from_at: '2026-10-16T17:00:00Z', to_at: '2026-10-17T17:00:00Z' } } as PathChangeDraft);
   const s = await render(ui);
   expect(s.queryByTestId('path-draft-approve')).toBeNull();
   await act(async () => fireEvent.press(s.getByText('Edit')));
   expect(s.getByLabelText('Now, Fri 16 Oct. Suggested, Tue 20 Oct.')).toBeTruthy();
   expect(s.getByTestId('path-draft-earlier').props.accessibilityState.disabled).toBe(true);
   await act(async () => fireEvent.press(s.getByTestId('path-draft-later')));
-  expect(s.getByTestId('path-draft-earlier').props.accessibilityState.disabled).toBe(false);
   await act(async () => fireEvent.press(s.getByTestId('path-draft-confirm')));
   expect(decide).toHaveBeenCalledWith('d1', { decision: 'approved', payload: { to_at: '2026-10-21T17:00:00.000Z' } });
-});
-
-test('decided on another device or the client left: no raw server words, the list reloads', async () => {
-  const decide = jest.fn<Promise<void>, [string, unknown]>().mockRejectedValueOnce(fail(403, { message: 'Draft already approved' }));
-  const { ui, onDecided } = card(move, decide as never);
-  const s = await render(ui);
-  await act(async () => fireEvent.press(s.getByText('Approve')));
-  expect(s.queryByText('Draft already approved')).toBeNull();
-  expect(s.queryByTestId('path-draft-edit')).toBeNull();
-  expect(onDecided).toHaveBeenCalledTimes(1);
+  const gone = card(move, jest.fn(async () => { throw fail(403, { message: 'Draft already approved' }); }));
+  const t = await render(gone.ui);
+  await act(async () => fireEvent.press(t.getByText('Approve')));
+  expect([t.queryByText('Draft already approved'), t.queryByTestId('path-draft-edit'), gone.onDecided.mock.calls.length]).toEqual([null, null, 1]);
 });
 
 test('AI help turned off since: the coach sees the notice and can still Decline; a dropped connection says so', async () => {

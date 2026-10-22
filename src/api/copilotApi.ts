@@ -18,22 +18,11 @@ export type PathChange =
 export type SuggestionStatus = 'suggested' | 'pending' | 'approved' | 'rejected' | 'expired';
 
 export interface CopilotSuggestion {
-  id: string;
-  status: SuggestionStatus;
-  change: PathChange;
-  reason: string | null;
-  note: string | null;
-  sent_at: string | null;
-  decided_at: string | null;
+  id: string; status: SuggestionStatus; change: PathChange; reason: string | null; note: string | null;
+  sent_at: string | null; decided_at: string | null;
 }
 
-export interface PathChangeDraft {
-  id: string;
-  clientId: string;
-  change: PathChange;
-  reason: string | null;
-  sentAt: string;
-}
+export interface PathChangeDraft { id: string; clientId: string; change: PathChange; reason: string | null; sentAt: string }
 
 export type DecideBody =
   | { decision: 'approved'; payload?: { to_at: string } | { to_kcal: number } }
@@ -62,26 +51,16 @@ export function parseSuggestion(v: unknown): CopilotSuggestion | null {
   if (!rec(v) || !str(v.id) || !STATUSES.includes(v.status as SuggestionStatus)) return null;
   const change = parseChange(v.change);
   if (!change) return null;
-  return {
-    id: v.id,
-    status: v.status as SuggestionStatus,
-    change,
-    reason: optStr(v.reason),
-    note: optStr(v.note),
-    sent_at: iso(v.sent_at) ? v.sent_at : null,
-    decided_at: iso(v.decided_at) ? v.decided_at : null,
-  };
+  return { id: v.id, status: v.status as SuggestionStatus, change, reason: optStr(v.reason), note: optStr(v.note),
+    sent_at: iso(v.sent_at) ? v.sent_at : null, decided_at: iso(v.decided_at) ? v.decided_at : null };
 }
 
 /** Status, machine code and server words of a failed call (axios shape), for the screens' own lines. */
 export function copilotErrorOf(err: unknown): { status: number | null; code: string | null; message: string | null } {
   const res = rec(err) && rec(err.response) ? err.response : null;
   const body = res && rec(res.data) ? res.data : null;
-  return {
-    status: res && typeof res.status === 'number' ? res.status : null,
-    code: body && str(body.code) ? body.code : null,
-    message: body && str(body.message) ? body.message : null,
-  };
+  return { status: res && typeof res.status === 'number' ? res.status : null,
+    code: body && str(body.code) ? body.code : null, message: body && str(body.message) ? body.message : null };
 }
 
 export const COPILOT_PATHS = {

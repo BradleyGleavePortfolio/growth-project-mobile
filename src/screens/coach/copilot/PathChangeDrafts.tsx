@@ -2,7 +2,6 @@
  * The client_path_change rows of the coach's Roman drafts list, oldest sent first (backend #1120 paged queue).
  * Behind `featureFlags.clientPathCopilot`. A server without the paged queue answers the old array: no rows (nothing new).
  * Names come from the coach's own roster (the draft carries only the client id; the server keeps it to his clients).
- * The screen owns the read (`usePathChangeDrafts`): a waiting or failed read is never drawn as "No pending drafts".
  */
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -27,19 +26,13 @@ export function usePathChangeDrafts(enabled: boolean) {
   });
 }
 
-export type PathChangeDraftsQuery = ReturnType<typeof usePathChangeDrafts>;
-
-/** `showError`: false while the screen's own error already says the list did not load (one calm line, not two). */
-export function PathChangeDrafts({ query, showError = true }: { query: PathChangeDraftsQuery; showError?: boolean }) {
+/** The screen owns the read; `showError` false while its own error already says the list did not load. */
+export function PathChangeDrafts({ query, showError = true }: { query: ReturnType<typeof usePathChangeDrafts>; showError?: boolean }) {
   const qc = useQueryClient();
   const drafts = query.data ?? [];
   const roster = useQuery({ queryKey: programKeys.clients, queryFn: () => programsApi.assignableClients(), enabled: drafts.length > 0 });
-  if (query.isError && !query.data) {
-    return showError ? (
-      <QuietError message={loadFailureMessage(query.error, 'Pending AI drafts')} onRetry={() => void query.refetch()}
-        retrying={query.isFetching} layout="inline" testID="path-drafts-error" />
-    ) : null;
-  }
+  if (query.isError && !query.data) return showError ? <QuietError message={loadFailureMessage(query.error, 'Pending AI drafts')}
+    onRetry={() => void query.refetch()} retrying={query.isFetching} layout="inline" testID="path-drafts-error" /> : null;
   if (drafts.length === 0) return null;
   const names = new Map((roster.data ?? []).map((c) => [c.id, c.name]));
   return (

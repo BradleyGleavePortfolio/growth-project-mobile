@@ -50,15 +50,13 @@ test('the coach queue reads oldest first, keeps only waiting Copilot rows, and t
 });
 
 test('a busy coach: the Copilot row on page 2, behind 100 older drafts of other kinds, still shows; paging stops at the cap', async () => {
-  const old = Array.from({ length: 100 }, (_, i) => ({ id: `w${i}`, capability: 'draft.create_workout_plan', status: 'pending', subject_user_id: 'c9', payload: {}, created_at: '2026-09-01T10:00:00Z' }));
-  const row = { id: 'd1', capability: 'client_path_change', status: 'pending', subject_user_id: 'c1', payload: MOVE, rationale: null, created_at: VIEW.sent_at };
-  get.mockResolvedValueOnce(ok({ items: old, total: 101, next_cursor: 'w99' })).mockResolvedValueOnce(ok({ items: [row], total: 101, next_cursor: null }));
+  const old = Array.from({ length: 100 }, (_, i) => ({ id: `w${i}`, capability: 'draft.create_workout_plan', status: 'pending' }));
+  const row = { id: 'd1', capability: 'client_path_change', status: 'pending', subject_user_id: 'c1', payload: MOVE, created_at: VIEW.sent_at };
+  get.mockResolvedValueOnce(ok({ items: old, next_cursor: 'w99' })).mockResolvedValueOnce(ok({ items: [row], next_cursor: null }));
   expect((await copilotApi.pathChangeDrafts()).map((d) => d.id)).toEqual(['d1']);
   expect(get).toHaveBeenLastCalledWith('/ai/gateway/drafts', { params: { order: 'oldest', limit: '100', after: 'w99' } });
-  get.mockReset();
-  get.mockResolvedValue(ok({ items: old, total: 5000, next_cursor: 'w99' }));
-  expect(await copilotApi.pathChangeDrafts()).toEqual([]);
-  expect(get).toHaveBeenCalledTimes(PATH_DRAFTS_MAX_PAGES);
+  get.mockReset().mockResolvedValue(ok({ items: old, next_cursor: 'w99' }));
+  expect([await copilotApi.pathChangeDrafts(), get.mock.calls.length]).toEqual([[], PATH_DRAFTS_MAX_PAGES]);
 });
 
 test('decide sends the body as given, and errors expose status, code and the server words', async () => {

@@ -77,15 +77,10 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   // hits the gateway list endpoint (which would 403 anyway, but no point
   // burning a roundtrip).
   const query = usePendingAiDrafts({ enabled: allowed && isFocused });
-  // COPILOT-M1: the client_path_change rows (flag off: never fetched, never drawn). "No pending drafts" only once
-  // both reads have answered empty; a waiting or failed Copilot read shows loading or the calm error instead.
+  // COPILOT-M1: the client_path_change rows (flag off: never fetched). "No pending drafts" only once both reads say so.
   const path = usePathChangeDrafts(allowed && isFocused);
   const hasPath = (path.data?.length ?? 0) > 0;
   const pathFailed = path.isError && !path.data;
-  const retryAll = () => {
-    void query.refetch();
-    if (pathFailed) void path.refetch();
-  };
 
   const approveMutation = useMutation({
     mutationFn: (draftId: string) => coachAiExecutionApi.approveDraft(draftId),
@@ -149,8 +144,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
 
         <FlatList
           data={renderable}
-          // The day and kcal editors: the iOS number pad has no Done key, so the list lifts its content over the
-          // keyboard, a tap on Approve lands the first time, and a drag puts the keyboard away.
+          // The Copilot editors' number pad has no Done key: lift content over it, first tap lands, drag dismisses.
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
@@ -187,7 +181,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
             query.isError ? (
               <QuietError
                 message={loadFailureMessage(query.error, 'Pending AI drafts')}
-                onRetry={retryAll}
+                onRetry={() => void Promise.all([query.refetch(), pathFailed && path.refetch()])}
                 retrying={query.isFetching || path.isFetching}
                 testID="pending-ai-drafts-error"
               />
