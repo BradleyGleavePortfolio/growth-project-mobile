@@ -32,6 +32,7 @@ import CommunityTabScreen from '../screens/community/CommunityTabScreen';
 import CommunityHomeScreen from '../screens/community/CommunityHomeScreen';
 import CommunityTodayScreen from '../screens/community/CommunityTodayScreen';
 import CommunitySpaceScreen from '../screens/community/CommunitySpaceScreen';
+import CommunitySpaceChatScreen from '../screens/community/CommunitySpaceChatScreen';
 import CommunityThreadScreen from '../screens/community/CommunityThreadScreen';
 import CommunityEventDetailScreen from '../screens/community/CommunityEventDetailScreen';
 import CommunityDmListScreen from '../screens/community/CommunityDmListScreen';
@@ -80,6 +81,7 @@ function CommunityNavigatorStack(): React.ReactElement {
       <CommunityStack.Screen name="CommunityTab" component={featureFlags.communityHomeV2 ? CommunityHomeScreen : CommunityTabScreen} />
       <CommunityStack.Screen name="CommunityToday" component={CommunityTodayScreen} />
       <CommunityStack.Screen name="CommunitySpace" component={CommunitySpaceScreen} />
+      {featureFlags.communitySpaceChat ? <CommunityStack.Screen name="CommunitySpaceChat" component={CommunitySpaceChatScreen} /> : null}
       <CommunityStack.Screen name="CommunityThread" component={CommunityThreadScreen} />
       {featureFlags.communityEvents && (
         <CommunityStack.Screen name="CommunityEventDetail" component={CommunityEventDetailScreen} />

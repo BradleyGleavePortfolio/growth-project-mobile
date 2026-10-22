@@ -227,6 +227,8 @@ export const featureFlags = {
    *  even in dev until the upload pipeline ships, to avoid suggesting the
    *  feature is available. */
   communityVoiceNotes: readFlag('EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES', false),
+  /** SC-M1: a space opens as one chat stream (CommunitySpaceChatScreen). OFF: today's space screens. */
+  communitySpaceChat: readFlag('EXPO_PUBLIC_FF_COMMUNITY_SPACE_CHAT', false),
   /** Verified-progress signoff surfaces. Coach + client see status chips
    *  and submission flow even before the backend signoff endpoints land. */
   verifiedProgressSignoff: readFlag(

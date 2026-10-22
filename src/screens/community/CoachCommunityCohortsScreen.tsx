@@ -33,6 +33,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, withAlpha } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
+import { featureFlags } from '../../config/featureFlags';
 import { CoachRomanEmptyState, CoachErrorState } from '../../components/community/coach';
 import CompletionToast, {
   useCompletionToast,
@@ -80,10 +81,12 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
       <HapticPressable
         intent="light"
         onPress={() =>
-          navigation.navigate('CoachCommunityCohortDetail', {
-            cohortId: item.id,
-            cohortName: item.name,
-          })
+          featureFlags.communitySpaceChat
+            ? navigation.navigate('CommunitySpaceChat', { cohortId: item.id })
+            : navigation.navigate('CoachCommunityCohortDetail', {
+                cohortId: item.id,
+                cohortName: item.name,
+              })
         }
         accessibilityRole="button"
         accessibilityLabel={`${item.name}, ${item.member_count} members`}

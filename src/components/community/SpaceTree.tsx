@@ -88,6 +88,8 @@ export function useOpenSpaceTarget(replaceSpace = false) {
   return (t: SpaceTarget) => {
     if (t.kind === 'coach') root.navigate('Home', { screen: 'Messages' });
     else if (t.kind === 'route') root.navigate(t.name);
+    else if (featureFlags.communitySpaceChat && replaceSpace) nav.replace('CommunitySpaceChat', { cohortId: t.id });
+    else if (featureFlags.communitySpaceChat) nav.navigate('CommunitySpaceChat', { cohortId: t.id });
     else if (replaceSpace) nav.replace('CommunitySpace', { space: 'cohort', cohortId: t.id });
     else nav.navigate('CommunitySpace', { space: 'cohort', cohortId: t.id });
   };
