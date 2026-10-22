@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   isLiveGrant,
   parseUpgrade,
+  type AiConsentAsk,
   type AiConsentOutcome,
   type AiConsentStatusResponse,
   type AiConsentUpgradeCopy,
@@ -26,10 +27,16 @@ import {
   AI_CONSENT_COPY_SHA256,
   AI_CONSENT_CRISIS_COPY_SHA256,
   AI_CONSENT_CRISIS_MEMORY_COPY_SHA256,
+  AI_CONSENT_HEALTH_COPY_SHA256,
+  AI_CONSENT_HEALTH_CRISIS_COPY_SHA256,
+  AI_CONSENT_HEALTH_CRISIS_MEMORY_COPY_SHA256,
+  AI_CONSENT_HEALTH_MEMORY_COPY_SHA256,
   AI_CONSENT_MEMORY_COPY_SHA256,
   AI_CONSENT_PARAGRAPH,
   AI_CONSENT_PARAGRAPH_COACH_FREE,
   AI_CONSENT_PARAGRAPH_CRISIS,
+  AI_CONSENT_PARAGRAPH_HEALTH,
+  AI_CONSENT_PARAGRAPH_HEALTH_CRISIS,
   AI_CONSENT_PARAGRAPH_PRE57C,
   AI_CONSENT_PRE57C_COPY_SHA256,
   AI_CONSENT_PRE57C_MEMORY_COPY_SHA256,
@@ -39,6 +46,10 @@ import {
   AI_CONSENT_COACH_FREE_VERSION,
   AI_CONSENT_CRISIS_MEMORY_VERSION,
   AI_CONSENT_CRISIS_VERSION,
+  AI_CONSENT_HEALTH_CRISIS_MEMORY_VERSION,
+  AI_CONSENT_HEALTH_CRISIS_VERSION,
+  AI_CONSENT_HEALTH_MEMORY_VERSION,
+  AI_CONSENT_HEALTH_VERSION,
   AI_CONSENT_MEMORY_VERSION,
   AI_CONSENT_PRE57C_MEMORY_VERSION,
   AI_CONSENT_PRE57C_VERSION,
@@ -82,6 +93,27 @@ const CRISIS_FAMILY: RomanCopyFamily = {
   boxLabel: AI_CONSENT_CHECKBOX_LABEL,
 };
 
+/** CONSENT-M (b#1117): the Health-notes copies, client-ai-v12 / v10 and, with the crisis sentence, v13 / v11. */
+const HEALTH_FAMILY: RomanCopyFamily = {
+  coachFree: false,
+  baseVersion: AI_CONSENT_HEALTH_VERSION,
+  baseSha256: AI_CONSENT_HEALTH_COPY_SHA256,
+  memoryVersion: AI_CONSENT_HEALTH_MEMORY_VERSION,
+  memorySha256: AI_CONSENT_HEALTH_MEMORY_COPY_SHA256,
+  paragraph: AI_CONSENT_PARAGRAPH_HEALTH,
+  boxLabel: AI_CONSENT_CHECKBOX_LABEL,
+};
+
+const HEALTH_CRISIS_FAMILY: RomanCopyFamily = {
+  coachFree: false,
+  baseVersion: AI_CONSENT_HEALTH_CRISIS_VERSION,
+  baseSha256: AI_CONSENT_HEALTH_CRISIS_COPY_SHA256,
+  memoryVersion: AI_CONSENT_HEALTH_CRISIS_MEMORY_VERSION,
+  memorySha256: AI_CONSENT_HEALTH_CRISIS_MEMORY_COPY_SHA256,
+  paragraph: AI_CONSENT_PARAGRAPH_HEALTH_CRISIS,
+  boxLabel: AI_CONSENT_CHECKBOX_LABEL,
+};
+
 const PRE57C_FAMILY: RomanCopyFamily = {
   coachFree: false,
   baseVersion: AI_CONSENT_PRE57C_VERSION,
@@ -102,15 +134,19 @@ const COACH_FREE_FAMILY: RomanCopyFamily = {
   boxLabel: AI_CONSENT_CHECKBOX_LABEL_COACH_FREE,
 };
 
-/** The copies for a client with (false) or without (true) a coach; coached with `crisis`: v8 / v9. */
-export function romanFamily(coachFree: boolean | null | undefined, crisis = false): RomanCopyFamily {
-  return coachFree ? COACH_FREE_FAMILY : crisis ? CRISIS_FAMILY : COACHED_FAMILY;
+/** The copies for a client with (false) or without (true) a coach; coached with `crisis`: v8 / v9; `health`: v12 / v10 (v13 / v11). */
+export function romanFamily(coachFree: boolean | null | undefined, crisis = false, health = false): RomanCopyFamily {
+  if (coachFree) return COACH_FREE_FAMILY;
+  if (health) return crisis ? HEALTH_CRISIS_FAMILY : HEALTH_FAMILY;
+  return crisis ? CRISIS_FAMILY : COACHED_FAMILY;
 }
 
 /** The copies the server answered with, by its current version (coached v6 / v7 unless it names another). */
 export function romanFamilyOf(status: AiConsentStatusResponse | null | undefined): RomanCopyFamily {
   const v = status?.current_version;
   if (v === AI_CONSENT_CRISIS_VERSION || v === AI_CONSENT_CRISIS_MEMORY_VERSION) return CRISIS_FAMILY;
+  if (v === AI_CONSENT_HEALTH_VERSION || v === AI_CONSENT_HEALTH_MEMORY_VERSION) return HEALTH_FAMILY;
+  if (v === AI_CONSENT_HEALTH_CRISIS_VERSION || v === AI_CONSENT_HEALTH_CRISIS_MEMORY_VERSION) return HEALTH_CRISIS_FAMILY;
   if (v === AI_CONSENT_PRE57C_VERSION || v === AI_CONSENT_PRE57C_MEMORY_VERSION) return PRE57C_FAMILY;
   return romanFamily(v === AI_CONSENT_COACH_FREE_VERSION || v === AI_CONSENT_COACH_FREE_MEMORY_VERSION);
 }
@@ -161,9 +197,52 @@ export function romanGrantBody(
  * copies count (box 2 on P0 shows that family's text); without it, any this build knows.
  */
 export function isLiveRomanGrant(status: AiConsentStatusResponse | null | undefined, family?: RomanCopyFamily): boolean {
-  return (family ? [family] : [COACHED_FAMILY, CRISIS_FAMILY, PRE57C_FAMILY, COACH_FREE_FAMILY]).some(
+  return (family ? [family] : [COACHED_FAMILY, CRISIS_FAMILY, HEALTH_FAMILY, HEALTH_CRISIS_FAMILY, PRE57C_FAMILY, COACH_FREE_FAMILY]).some(
     (f) => isLiveGrant(status, f.baseVersion) || isLiveGrant(status, f.memoryVersion),
   );
+}
+
+/** CONSENT-SETTINGS: the ask P0 sends first (owner #162-6, b#1117); Settings and the AI help sheet send it too. */
+export const ROMAN_HEALTH_ASK: AiConsentAsk = { healthNotes: true };
+
+/** The server served the Health-notes copies: client-ai-v10 to v13 is current, or its memory offer is v10 / v11. */
+export function servesHealthNotes(status: AiConsentStatusResponse | null | undefined): boolean {
+  const offer = status?.memory_copy ?? status?.upgrade;
+  return [HEALTH_FAMILY, HEALTH_CRISIS_FAMILY].some((f) => romanFamilyOf(status) === f || offer?.version === f.memoryVersion);
+}
+
+/**
+ * CONSENT-SETTINGS (P0's fallback, m#843): GET the Health-notes copies; when the server did not serve them (one
+ * before b#1117 answers with client-ai-v4; a live v4 to v9 grant with no v10 / v11 offer names none), GET `today`
+ * and keep today's words. Returns the answer and the ask each later POST / DELETE sends, so its answer reads like
+ * this GET's (b#1047). A client with no coach asks coach_free only: there is no coach-free Health-notes copy.
+ */
+export async function readRomanConsent(
+  get: (ask: AiConsentAsk) => Promise<AiConsentOutcome>,
+  today: AiConsentAsk,
+  stale: () => boolean,
+): Promise<{ out: AiConsentOutcome; ask: AiConsentAsk }> {
+  if (!today.coachFree) {
+    const out = await get(ROMAN_HEALTH_ASK);
+    if (stale() || out.kind !== 'ok' || !out.status || servesHealthNotes(out.status)) return { out, ask: ROMAN_HEALTH_ASK };
+  }
+  return { out: await get(today), ask: today };
+}
+
+/**
+ * FIX-850-R1 B1: the copies a new agreement (Allow, memory on, memory off) is made in: the ones the server served for
+ * `ask` (its memory offer, else its current copies), within the copies that ask names (Health-notes v12 / v10 or
+ * v13 / v11; crisis_alert v8 / v9 or v6 / v7; else v6 / v7). Never rebuilt from the phone's crisis flag, which only
+ * picks when the answer names none of them. A live grant's copies are its own (B-A, b#1047), so outside the
+ * Health-notes ask they name nothing new.
+ */
+export function offeredFamilyOf(status: AiConsentStatusResponse | null | undefined, ask: AiConsentAsk): RomanCopyFamily {
+  const fallback = romanFamily(ask.coachFree, !!ask.crisis, !!ask.healthNotes);
+  if (!status || ask.coachFree) return fallback;
+  const named = ask.healthNotes ? [HEALTH_CRISIS_FAMILY, HEALTH_FAMILY] : ask.crisis ? [CRISIS_FAMILY, COACHED_FAMILY] : [COACHED_FAMILY];
+  const offer = (status.memory_copy ?? status.upgrade)?.version;
+  const own = !status.granted || ask.healthNotes ? named.find((f) => f === romanFamilyOf(status)) : undefined;
+  return named.find((f) => f.memoryVersion === offer) ?? own ?? fallback;
 }
 
 /** A well-formed memory copy of `family` with its pinned sha256 and this build's box 2 label, else null. */

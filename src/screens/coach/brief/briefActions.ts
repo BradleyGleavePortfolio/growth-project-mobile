@@ -2,32 +2,42 @@
  * BRIEF-AGG: the one place the daily brief's action rows come from, and where
  * every brief item opens (actionTarget). No components, no screen imports.
  *
- * Client kinds count distinct clients: one named client gets a row for that
- * client ("Reply to Sarah"); two or more, or one with no usable first name, get
- * one row that opens the full list ("See weight logs"). Head coach items get one
- * row per place they open: Money, and Team only while Team Mode is on. Kinds go
- * in a fixed order (messages, weight, check-ins, Money, Team); the first two
- * with a row are kept. compareEntries picks the entry kept for a repeated
- * client and sorts every list, so any input order gives the same rows. Unknown
- * kinds (and the retired workout_approval), client items with no client_id and
- * items with nowhere to open give no row, never a dead button.
+ * Client kinds count distinct clients per item type: one named client gets a
+ * row for that client ("Reply to Sarah"); two or more, or one with no usable
+ * first name, get one row for the full list ("See weight logs"). Head coach
+ * items get one row per place they open: Money, and Team only while Team Mode
+ * is on. Kinds go in a fixed order (messages, weight, check-ins, new clients,
+ * Money, Team). A brief from a server that sends the check-in and new-client
+ * rows (brief_context.checkins_to_review, b#1118) keeps every kind and its list
+ * rows fold open in place (ROMAN-EXTRAS-M, Style A); an older brief keeps the
+ * first two kinds and its list rows open the list, as before. compareBrief
+ * picks the entry kept for a repeated client and sorts every list (reviews
+ * before missed check-ins, then newest first, then compareEntries), so any
+ * input order gives the same rows. Unknown kinds (and the retired
+ * workout_approval), client items with no client_id and items with nowhere to
+ * open give no row, never a dead button.
  */
 import type { CoachBriefActionItem } from '../../../api/coachBriefApi';
 import { featureFlags } from '../../../config/featureFlags';
 import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
 import { chatTarget } from '../../../navigation/coachInbox';
 
-export type BriefListKind = 'messages' | 'weight' | 'checkins';
+export type BriefListKind = 'messages' | 'weight' | 'checkins' | 'welcome';
 export type BriefKind = BriefListKind | 'money' | 'team';
 
 export type BriefTarget = { tab: keyof CoachTabParamList; params?: object };
 
 export type BriefAction =
   | { kind: BriefKind; label: string; opens: 'screen'; target: BriefTarget }
-  | { kind: BriefListKind; label: string; opens: 'list'; items: CoachBriefActionItem[] };
+  | { kind: BriefListKind; label: string; opens: 'list'; items: CoachBriefActionItem[]; fold?: true };
 
-/** At most two suggested actions; "Thank you, Roman" always follows them. */
+/** An older brief shows at most two suggested actions; "Thank you, Roman" always follows them. */
 export const MAX_BRIEF_ACTIONS = 2;
+
+/** True when the server sends the check-in and new-client rows (b#1118 sets this on every solo brief with clients). */
+export function briefHasExtras(summary: { brief_context?: { checkins_to_review?: number } | null } | null | undefined): boolean {
+  return typeof summary?.brief_context?.checkins_to_review === 'number';
+}
 
 /** Where an action item opens. null = informational row (no tap). */
 export function actionTarget(item: CoachBriefActionItem, teamMode: boolean = featureFlags.teamMode): BriefTarget | null {
@@ -35,6 +45,7 @@ export function actionTarget(item: CoachBriefActionItem, teamMode: boolean = fea
   const clientName = item.client_name ?? 'Client';
   switch (item.type) {
     case 'message_unread':
+    case 'client_joined':
       return clientId ? chatTarget(clientId, clientName) : null;
     // An older server may still send a workout item. Nothing in the app
     // approves a workout, so it opens the client's workout history
@@ -52,6 +63,7 @@ export function actionTarget(item: CoachBriefActionItem, teamMode: boolean = fea
         : null;
     case 'weight_flag':
     case 'checkin_missing':
+    case 'checkin_review':
       return clientId
         ? {
             tab: 'ClientsStack',
@@ -76,27 +88,30 @@ const KIND_OF: Record<string, BriefKind> = {
   message_unread: 'messages',
   weight_flag: 'weight',
   checkin_missing: 'checkins',
+  checkin_review: 'checkins',
+  client_joined: 'welcome',
   dunning_queue: 'money',
   team_revenue_review: 'money',
   sub_coach_operations: 'team',
   team_performance: 'team',
 };
 
-const ORDER: readonly BriefKind[] = ['messages', 'weight', 'checkins', 'money', 'team'];
+const ORDER: readonly BriefKind[] = ['messages', 'weight', 'checkins', 'welcome', 'money', 'team'];
 
-const isListKind = (kind: BriefKind): kind is BriefListKind =>
-  kind === 'messages' || kind === 'weight' || kind === 'checkins';
+const isListKind = (kind: BriefKind): kind is BriefListKind => kind !== 'money' && kind !== 'team';
 
 const ONE: Record<BriefListKind, (name: string) => string> = {
   messages: (name) => `Reply to ${name}`,
   weight: (name) => `Review ${name}\u2019s weight change`,
   checkins: (name) => `Check on ${name}`,
+  welcome: (name) => `Say hello to ${name}`,
 };
 
 const LABEL: Record<BriefKind, string> = {
   messages: 'See messages',
   weight: 'See weight logs',
   checkins: 'See check-ins',
+  welcome: 'See new clients',
   money: 'See payments',
   team: 'See your team',
 };
@@ -132,17 +147,50 @@ export function compareEntries(a: CoachBriefActionItem, b: CoachBriefActionItem)
   );
 }
 
-function clientRow(kind: BriefListKind, group: CoachBriefActionItem[], teamMode: boolean): BriefAction {
+const time = (item: CoachBriefActionItem): number | null => {
+  const t = Date.parse(item.occurred_at ?? '');
+  return Number.isNaN(t) ? null : t;
+};
+
+/** A kind's list order: reviews before missed check-ins, then newest first when both items have a time, then compareEntries. */
+export function compareBrief(a: CoachBriefActionItem, b: CoachBriefActionItem): number {
+  const [x, y] = [time(a), time(b)];
+  return (
+    Number(a.type === 'checkin_missing') - Number(b.type === 'checkin_missing') ||
+    Number(x === null) - Number(y === null) ||
+    (x !== null && y !== null ? y - x : 0) ||
+    compareEntries(a, b)
+  );
+}
+
+/** Items whose detail names a group ("Check-in needs review", "Joined today"); the list shows each group under it. */
+const GROUPED = new Set(['checkin_review', 'checkin_missing', 'client_joined']);
+
+/** A list's groups in first-seen order; title null = one ungrouped run (each row keeps its own detail). */
+export function briefSections(items: readonly CoachBriefActionItem[]): { title: string | null; items: CoachBriefActionItem[] }[] {
+  const groups = new Map<string, { title: string | null; items: CoachBriefActionItem[] }>();
+  for (const item of items) {
+    const title = GROUPED.has(item.type) ? item.detail : null;
+    const group = groups.get(title ?? '') ?? { title, items: [] };
+    group.items.push(item);
+    groups.set(title ?? '', group);
+  }
+  return [...groups.values()];
+}
+
+function clientRow(kind: BriefListKind, group: CoachBriefActionItem[], teamMode: boolean, fold: boolean): BriefAction {
   const name = group.length === 1 ? briefFirstName(group[0].client_name) : null;
   const target = name ? actionTarget(group[0], teamMode) : null;
   if (name && target) return { kind, label: ONE[kind](name), opens: 'screen', target };
-  return { kind, label: LABEL[kind], opens: 'list', items: group };
+  const list = { kind, label: LABEL[kind], opens: 'list' as const, items: group };
+  return fold ? { ...list, fold } : list;
 }
 
 export function selectBriefActions(
   items: readonly CoachBriefActionItem[] | null | undefined,
-  { teamMode = featureFlags.teamMode }: { teamMode?: boolean } = {},
+  { teamMode = featureFlags.teamMode, extras = false }: { teamMode?: boolean; extras?: boolean } = {},
 ): BriefAction[] {
+  // One entry per client and item type, so a client both waiting on a review and missing today counts in each.
   const clients = new Map<BriefListKind, Map<string, CoachBriefActionItem>>();
   // Every item of a business kind opens the same place, so one row per kind.
   const places = new Map<BriefKind, BriefTarget>();
@@ -157,16 +205,16 @@ export function selectBriefActions(
     const id = item.client_id?.trim();
     if (!id) continue;
     const group = clients.get(kind) ?? new Map<string, CoachBriefActionItem>();
-    const seen = group.get(id);
-    if (!seen || compareEntries(item, seen) < 0) group.set(id, item);
+    const seen = group.get(`${item.type}:${id}`);
+    if (!seen || compareBrief(item, seen) < 0) group.set(`${item.type}:${id}`, item);
     clients.set(kind, group);
   }
   const rows: BriefAction[] = [];
   for (const kind of ORDER) {
-    if (rows.length === MAX_BRIEF_ACTIONS) break;
+    if (!extras && rows.length === MAX_BRIEF_ACTIONS) break;
     const group = isListKind(kind) ? clients.get(kind) : undefined;
     const target = places.get(kind);
-    if (group && isListKind(kind)) rows.push(clientRow(kind, [...group.values()].sort(compareEntries), teamMode));
+    if (group && isListKind(kind)) rows.push(clientRow(kind, [...group.values()].sort(compareBrief), teamMode, extras));
     else if (target) rows.push({ kind, label: LABEL[kind], opens: 'screen', target });
   }
   return rows;

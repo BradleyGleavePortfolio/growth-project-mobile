@@ -34,7 +34,8 @@ import { useLookupNudge } from './useLookupNudge';
 import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
 
-// route.params.view 'needs' (for the coach Home's Needs you tile): the Needs you layout at any roster size, only clients with an action.
+// route.params.view 'needs' (for the coach Home's Needs you tile): the Needs you layout at any roster size, only clients with an
+// action, with Everyone to leave it. It lasts until Clients loses the tab, so the tab itself always reopens on the full list.
 type Props = { navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>; route?: RouteProp<ClientsStackParamList, 'ClientsList'> };
 const FILTERS = Object.keys(FILTER_LABELS) as LookupFilter[];
 const ACTION_LABEL: Record<LookupAction, string> = { review: 'Review', reply: 'Reply', nudge: 'Nudge', hello: 'Say hello' };
@@ -44,7 +45,10 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const s = useMemo(() => makeStyles(theme), [theme]);
   const { colors } = theme;
   const insets = useScreenInsets();
-  const coachId = useCurrentUser()?.id;
+  const me = useCurrentUser();
+  const coachId = me?.id;
+  // S-REACH, as on today's list: head coaches and the owner read the risk board; it answers 403 to other roles, so no pill.
+  const canSeeRiskBoard = me?.role === 'coach' || me?.role === 'owner';
   const { clients, isLoading, loadError, filterStatus, loadClients, setFilterStatus } = useCoachStore();
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState<LookupFilter | null>(null);
@@ -103,6 +107,11 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   // A failed refresh keeps the last count, but only for the list it counted (a failed switch to Archived shows none).
   const known = !isLoading && (!loadError || (roster.length > 0 && shownStatus.current === filterStatus));
   const needsView = route?.params?.view === 'needs';
+  useEffect(() => {
+    if (!needsView) return undefined;
+    // The parent is the Clients tab: its blur is a tab change, never a push inside this stack (Review and back keeps the view).
+    return navigation.getParent()?.addListener('blur', () => navigation.setParams({ view: undefined }));
+  }, [navigation, needsView]);
   const searchFirst = archived || (!needsView && (activeTotal.current ?? roster.length) >= SEARCH_FIRST_AT);
   const parsed = parseLookupQuery(query);
   const filters = chip && !parsed.filters.includes(chip) ? [...parsed.filters, chip] : parsed.filters;
@@ -126,6 +135,8 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const openMessages = (c: RosterClient) => openTarget(c, { screen: 'chat' });
   const runAction = (c: RosterClient, a: LookupAction) =>
     a === 'review' ? openTarget(c, { screen: 'ClientDetail', tab: 'timeline' }) : a === 'nudge' ? nudge.open(c) : openMessages(c);
+  // Everyone opens at the top (search and chips), not at the scroll depth of the shorter Needs you list.
+  const showEveryone = () => { scrollRef.current?.scrollTo({ y: 0, animated: false }); navigation.setParams({ view: undefined }); };
   const toggleArchived = () => { setChip(null); setFilterStatus(archived ? 'active' : 'archived'); };
   const jumpTo = (letter: string, animated: boolean) => {
     const present = LETTERS.slice(LETTERS.indexOf(letter)).find((l) => sectionY.current[l] != null);
@@ -153,10 +164,10 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
           <HapticPressable intent="light" style={s.rowMain} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`${name}, ${r.text}`} testID={`lookup-row-${c.id}`}>
             {avatar(c, 40)}
             <View style={s.mid}>
-              <Text style={s.name} numberOfLines={1}>{name}</Text>
+              <Text style={s.name} numberOfLines={2}>{name}</Text>
               <View style={s.reasonRow}>
                 {r.ok ? <View style={s.dot} /> : null}
-                <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={2}>{r.text}</Text>
+                <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>
               </View>
             </View>
             {trailing ? null : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
@@ -181,10 +192,18 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
       <Overline style={s.date}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Overline>
       <View style={s.titleRow}>
         <Text style={s.title} accessibilityRole="header">Clients</Text>
-        <HapticPressable intent="light" style={s.invite} onPress={() => navigation.navigate('InviteCodes')} accessibilityRole="button" accessibilityLabel="Invite" hitSlop={4} testID="lookup-invite">
-          <Ionicons name="person-add-outline" size={16} color={theme.semanticColors.textOnAccent} />
-          <Text style={s.inviteText}>Invite</Text>
-        </HapticPressable>
+        <View style={s.titleActions}>
+          {canSeeRiskBoard ? (
+            <HapticPressable intent="light" style={s.riskPill} onPress={() => navigation.navigate('RiskBoard')} accessibilityRole="button" accessibilityLabel="Clients at risk" accessibilityHint="Opens the clients who may need a check-in, sorted by risk" testID="lookup-risk">
+              <Ionicons name="pulse-outline" size={16} color={colors.primary} />
+              <Text style={[s.inviteText, s.riskText]}>At risk</Text>
+            </HapticPressable>
+          ) : null}
+          <HapticPressable intent="light" style={s.invite} onPress={() => navigation.navigate('InviteCodes')} accessibilityRole="button" accessibilityLabel="Invite" testID="lookup-invite">
+            <Ionicons name="person-add-outline" size={16} color={theme.semanticColors.textOnAccent} />
+            <Text style={s.inviteText}>Invite</Text>
+          </HapticPressable>
+        </View>
       </View>
       {known ? (
         <Text style={s.count} testID="lookup-count">{roster.length} {archived ? 'archived' : 'active'} {roster.length === 1 ? 'client' : 'clients'}</Text>
@@ -211,17 +230,27 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     body = <QuietError message={loadError} onRetry={() => coachId && loadClients(coachId, filterStatus)} testID="lookup-error" />;
   } else if (!searchFirst) {
     // Mockup 1's order: last logged first (sortRoster 'recent').
-    const rows = sortRoster(roster, 'recent').map((c) => ({ c, r: lookupReason(c, unread, 'needs') })).filter((x) => !needsView || x.r.action);
-    const needs = rows.filter((x) => x.r.action).length;
+    const all = sortRoster(roster, 'recent').map((c) => ({ c, r: lookupReason(c, unread, 'needs') }));
+    const rows = needsView ? all.filter((x) => x.r.action) : all;
+    const needs = all.filter((x) => x.r.action).length;
     body = (
       <>
         {stale}
-        {rows.length > 0 ? <Text style={s.sentence} testID="lookup-sentence">{needsYouSentence(needs, rows.length - needs)}</Text> : null}
+        {/* The sentence counts everyone, so the Needs you view with no one waiting still reads "Twelve are steady." */}
+        {all.length > 0 ? <Text style={s.sentence} testID="lookup-sentence">{needsYouSentence(needs, all.length - needs)}</Text> : null}
         {rows.map(({ c, r }) => clientRow(c, r, r.action ? (
           <HapticPressable intent="light" style={s.act} onPress={() => runAction(c, r.action as LookupAction)} accessibilityRole="button" accessibilityLabel={`${ACTION_LABEL[r.action]}, ${rosterDisplayName(c)}`} testID={`lookup-act-${c.id}`}>
             <Text style={s.actText}>{ACTION_LABEL[r.action]}</Text>
           </HapticPressable>
         ) : null))}
+        {needsView && all.length > 0 ? (
+          <HapticPressable intent="light" style={s.azRow} onPress={showEveryone} accessibilityRole="button" accessibilityLabel={`Everyone, ${all.length}`} testID="lookup-everyone-link">
+            <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
+            <Text style={s.azName}>Everyone</Text>
+            <Text style={s.azWhen}>{all.length}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </HapticPressable>
+        ) : null}
         <View style={s.card}>
           <Text style={s.cardTitle}>Add your next client</Text>
           <Text style={s.cardBody}>Share your code or link. New clients land here with a New tag for their first week.</Text>
@@ -285,7 +314,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
                     return (
                       <HapticPressable key={c.id} intent="light" style={s.azRow} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`${name}, ${when}`} testID={`lookup-az-${c.id}`}>
                         {avatar(c, 32)}
-                        <Text style={s.azName} numberOfLines={1}>{name}</Text>
+                        <Text style={s.azName} numberOfLines={2}>{name}</Text>
                         <Text style={s.azWhen} numberOfLines={2}>{when}</Text>
                       </HapticPressable>
                     );
@@ -340,10 +369,14 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     screen: { flex: 1, backgroundColor: colors.background },
     content: { paddingHorizontal: layout.gutter, paddingBottom: 104 },
     date: { color: colors.textMuted },
-    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
-    title: { ...typography.h1, flex: 1, color: colors.textPrimary },
-    invite: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: radius.chip, backgroundColor: colors.primary },
+    // The pills wrap under the title when large text leaves no room beside it.
+    titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 8, marginTop: 6 },
+    title: { ...typography.h1, flexGrow: 1, color: colors.textPrimary },
+    titleActions: { flexDirection: 'row', gap: 8 },
+    invite: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: layout.touchMin, paddingHorizontal: 14, borderRadius: radius.chip, backgroundColor: colors.primary },
     inviteText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: sem.textOnAccent },
+    riskPill: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: layout.touchMin, paddingHorizontal: 14, borderRadius: radius.chip, borderWidth: 1, borderColor: colors.primary },
+    riskText: { color: colors.primary },
     count: { ...typography.bodySmall, color: colors.textMuted, marginTop: 2 },
     sentence: { ...typography.bodySmall, color: colors.textPrimary, marginTop: 14, marginBottom: 8 },
     row: { flexDirection: 'row', alignItems: 'center', minHeight: 64, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
@@ -383,7 +416,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     eyebrowCount: { fontFamily: 'Inter_600SemiBold', color: colors.textPrimary },
     azList: { paddingRight: 20 },
     letter: { ...typography.bodyMd, color: colors.primary, marginTop: 12, paddingBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
-    azRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
+    azRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
     azName: { ...typography.h4, flex: 1, color: colors.textPrimary },
     azWhen: { ...typography.bodySmall, color: colors.textMuted, maxWidth: '45%', textAlign: 'right' },
     index: { position: 'absolute', right: 0, width: layout.touchMin, alignItems: 'flex-end', paddingRight: 4 }, // one 44 pt wide strip over the row's right padding

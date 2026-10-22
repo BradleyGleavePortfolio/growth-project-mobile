@@ -243,6 +243,60 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
     await waitFor(() => expect(postMock).toHaveBeenCalledWith(BASE, reply, expect.anything()));
   });
 
+  it('Sol B1 (m#841): a failed send keeps its key with the kept text; closing and opening the chat, then Send, replays it once', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const accepted = new Set<string>(); // the server takes the first send, but its reply is lost
+    postMock.mockImplementation(async (url: string, body: Record<string, unknown>) => {
+      if (url !== BASE) return { data: {} };
+      const first = accepted.size === 0;
+      accepted.add(body.client_message_id as string);
+      if (first) throw axiosErr({});
+      return sentRow(body);
+    });
+    const opened = await render(<ClientMessagesScreen />);
+    await opened.findByLabelText(/Message: from the client/);
+    await fireEvent.changeText(opened.getByLabelText('Message text'), 'see you at 6');
+    await fireEvent.press(opened.getByLabelText('Send message'));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Message not sent', expect.stringContaining('connection')));
+    await opened.unmount(); // Back
+
+    const again = await render(<ClientMessagesScreen />); // the chat opens again
+    await again.findByLabelText(/Message: from the client/);
+    expect(again.getByLabelText('Message text').props.value).toBe('see you at 6');
+    await fireEvent.press(again.getByLabelText('Send message'));
+    await waitFor(() => expect(postMock.mock.calls.filter(([u]) => u === BASE)).toHaveLength(2));
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    await again.findByLabelText(/Message: see you at 6/);
+    const keys = postMock.mock.calls.filter(([u]) => u === BASE).map(([, b]) => (b as { client_message_id: string }).client_message_id);
+    expect([keys.length, new Set(keys).size, accepted.size]).toEqual([2, 1, 1]); // one message on the server
+    expect(again.getByLabelText('Message text').props.value).toBe('');
+    await again.unmount();
+    const after = await render(<ClientMessagesScreen />); // sent: nothing is kept
+    await after.findByLabelText(/Message: from the client/);
+    expect(after.getByLabelText('Message text').props.value).toBe('');
+    alertSpy.mockRestore();
+  });
+
+  it('an edited failed reply is a new message with a new key', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    postMock.mockImplementation(async (url: string) => {
+      if (url === BASE) throw axiosErr({});
+      return { data: {} };
+    });
+    const u = await render(<ClientMessagesScreen />);
+    await u.findByLabelText(/Message: from the client/);
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'see you at 6');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'see you at 7');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    await waitFor(() => expect(postMock.mock.calls.filter(([url]) => url === BASE)).toHaveLength(2));
+    const keys = postMock.mock.calls.filter(([url]) => url === BASE).map(([, b]) => (b as { client_message_id: string }).client_message_id);
+    expect(new Set(keys).size).toBe(2);
+    await fireEvent.changeText(u.getByLabelText('Message text'), ''); // nothing kept for the next test
+    alertSpy.mockRestore();
+  });
+
   it('a 503 messaging.feature_disabled falls back to the legacy thread and keeps the text', async () => {
     postMock.mockImplementation(async (url: string) => {
       if (url === BASE) throw axiosErr({ response: { status: 503, data: { code: 'messaging.feature_disabled' } } });

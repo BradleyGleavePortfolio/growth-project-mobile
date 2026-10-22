@@ -54,13 +54,13 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
     colors: {
-      background: '#F5EFE4',
+      background: '#F7FAF7',
       surface: '#F1E8D5',
       surfaceElevated: '#E8DCC8',
       textPrimary: '#1A1A18',
       textSecondary: '#5C5C5A',
       textMuted: '#6B675F',
-      textOnPrimary: '#F5EFE4',
+      textOnPrimary: '#F7FAF7',
       primary: '#2C4A36',
       primaryDark: '#1E3326',
       border: '#D9CEBC',
@@ -82,6 +82,7 @@ import DeleteAccountScreen, {
   APPLE_FALLBACK_LATER,
   APPLE_FALLBACK_LATER_IF_APPLE,
   APPLE_REMOVAL_STEPS,
+  BILLING_NOTE,
   KEPT_RECORDS,
   PERMANENTLY_DELETED,
 } from '../DeleteAccountScreen';
@@ -559,6 +560,21 @@ describe('DeleteAccountScreen', () => {
       await waitFor(() => utils.getByTestId('deletion-date'));
       expect(utils.getByTestId('deletion-date').props.children).toBe(PURGE_DATE_TEXT);
       expect(utils.queryByTestId('confirm-input')).toBeNull();
+    });
+
+    // FIX-838-R1 (Sol B1, Opus C2): the backend never revives a plan whose paid term ended in the
+    // grace days, and the button the note names is the one on this screen.
+    it('billing note names Keep my account and never promises an ended plan comes back, on both views', async () => {
+      expect(BILLING_NOTE).toMatch(/If you tap Keep my account before the deletion date, your packages go back on sale and those plans renew again\. A plan whose paid time ran out before then has ended and does not restart\.$/);
+      expect(BILLING_NOTE).not.toMatch(/puts both back|Cancelling the deletion/);
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('keep-account-button'));
+      expect(utils.getByText(BILLING_NOTE)).toBeTruthy();
+      expect(utils.getByText('Keep my account')).toBeTruthy();
+      mockedDeletionApi.getDeletionStatus.mockResolvedValue(statusOf({ state: 'none', grace_days: 14 }));
+      const form = await renderScreen();
+      await waitFor(() => form.getByTestId('confirm-input'));
+      expect(form.getByText(BILLING_NOTE)).toBeTruthy();
     });
 
     it('cancels the deletion after confirmation and returns to the form', async () => {

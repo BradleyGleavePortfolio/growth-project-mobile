@@ -205,6 +205,7 @@ jest.mock('../theme/ThemeProvider', () => ({
 }));
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('@react-navigation/native', () => ({
+  NavigationContext: require('react').createContext(undefined),
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockBack, getParent: () => ({ navigate: mockNavigate }) }),
   useRoute: () => ({ params: {} }), useFocusEffect: jest.fn(),
 }));

@@ -59,6 +59,17 @@ Haptics: `softImpact` on every row; one `error` when a retry fails again. A "See
 `CoachBriefList` (`brief/CoachBriefListScreen.tsx`) lists exactly the items the row counted (passed as route params, never
 stored), each opening that client like the single-client row; Back returns to the brief.
 
+### Folded rows (ROMAN-EXTRAS-M, owner pick "RXM - Style A")
+
+When the brief carries `brief_context.checkins_to_review` (servers with b#1118), every kind gets a row (messages, weight,
+check-ins, then new clients: `client_joined` -> "Say hello to {first name}" / "See new clients", opening the chat) and a
+check-in waiting on review (`checkin_review`) joins the check-ins kind. A list row shows its count (the length of the list it
+opens) and folds open in place, one at a time (200 ms; Reduce Motion fades), to the newest three and "See all {n}". Lists
+sort by `occurred_at`, newest first, when the server sends it (reviews before missed check-ins), else by `compareEntries`;
+a client both waiting on a review and missing today counts in each. `CoachBriefList` shows check-ins and new clients under
+their detail ("Check-in needs review", "Joined today") with the group's count, ten rows a group, then "Show more". A brief
+without `brief_context` (an older server) keeps the rows above unchanged: two kinds, no counts, list rows open the list.
+
 ## API
 
 | Endpoint | Notes |

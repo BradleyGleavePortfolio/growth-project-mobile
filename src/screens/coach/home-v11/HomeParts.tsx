@@ -11,10 +11,10 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, radius, typography } from '../../../theme/tokens';
 import type { RingSpec } from './homeDay';
 
-const RING = 56;
+const RING = 44;
 /** Style A sets its figures and titles in Inter (the app loads Inter's 400, 500 and 600). */
 export const SEMI = 'Inter_600SemiBold';
-const STROKE = 6;
+const STROKE = 5;
 
 /** A small figure on the hero: the value in leaf, its words under it. */
 export function MiniTile({ value, label, testID }: { value: string; label: string; testID?: string }) {
@@ -38,7 +38,7 @@ export function AlertsRow({ count, onPress }: { count: number | null; onPress: (
   );
 }
 
-/** One of the day's rings: gold arc over a quiet track, "done/of" inside. */
+/** One of the day's rings: gold arc over a quiet track, "done/of" inside, shrunk to fit the ring and never scaled up. */
 export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => void }) {
   const r = (RING - STROKE) / 2;
   const c = 2 * Math.PI * r;
@@ -55,7 +55,7 @@ export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => voi
             />
           ) : null}
         </Svg>
-        <Text style={hs.ringValue} numberOfLines={1}>{ring.done}/{ring.of}</Text>
+        <Text style={hs.ringValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} maxFontSizeMultiplier={1}>{`${ring.done}/${ring.of}`}</Text>
       </View>
       <Text style={hs.ringLabel} numberOfLines={1} maxFontSizeMultiplier={1.15}>{ring.label.toUpperCase()}</Text>
     </>
@@ -107,15 +107,15 @@ export function LinkRow({ title, line, count, first, onPress, testID }: {
 }
 
 const hs = StyleSheet.create({
-  mini: { flex: 1, minWidth: 0, backgroundColor: forestPop.forest, borderRadius: radius.button + 2, paddingVertical: 10, paddingHorizontal: 12 },
-  miniValue: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
+  mini: { flex: 1, minWidth: 0, backgroundColor: forestPop.forest, borderRadius: radius.button + 2, paddingVertical: 8, paddingHorizontal: 12 },
+  miniValue: { fontFamily: SEMI, fontSize: 22, lineHeight: 28, color: forestPop.leaf },
   miniLabel: { ...typography.bodySmall, color: forestPop.onDeepMuted },
-  alerts: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: forestPop.brand400, borderRadius: radius.button + 2, paddingHorizontal: 18 },
+  alerts: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: forestPop.brand400, borderRadius: radius.button + 2, paddingHorizontal: 18 },
   alertsText: { ...typography.bodyMd, fontSize: 18, color: forestPop.onDeep, flex: 1 },
   alertsCount: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.onDeep },
-  ring: { flex: 1, alignItems: 'center', minHeight: 44, paddingVertical: 4 },
+  ring: { flex: 1, alignItems: 'center', minHeight: 44, paddingVertical: 2 },
   ringBox: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
-  ringValue: { ...typography.bodySmall, fontFamily: SEMI, color: forestPop.onDeep, position: 'absolute' },
-  ringLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 0.6, color: forestPop.gold, marginTop: 6 },
+  ringValue: { ...typography.bodySmall, fontFamily: SEMI, color: forestPop.onDeep, position: 'absolute', width: RING - 2 * STROKE, textAlign: 'center' }, // 112/140 shrinks to fit (LO B2)
+  ringLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 0.6, color: forestPop.gold, marginTop: 2 },
   pressed: { opacity: 0.7 },
 });

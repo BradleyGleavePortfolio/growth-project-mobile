@@ -27,7 +27,7 @@ jest.mock('../../../theme/ThemeProvider', () => {
   const tokens = require('../../../theme/tokens');
   return { useTheme: () => ({ colorScheme: 'light', colors: tokens.colors, semanticColors: tokens.lightTokens }) };
 });
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
+jest.mock('@react-navigation/native', () => ({ NavigationContext: require('react').createContext(undefined), useNavigation: () => ({ navigate: jest.fn() }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../config/featureFlags', () => ({
   __esModule: true,

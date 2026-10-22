@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   View,
   Text,
   StyleSheet,
@@ -466,7 +468,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
 
       {/* Password Modal */}
       <Modal visible={showPasswordModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Change password</Text>
@@ -515,7 +517,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <PrimaryButton label="Update password" onPress={() => { void handleChangePassword(); }}
               loading={passwordBusy} style={styles.saveBtn} />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

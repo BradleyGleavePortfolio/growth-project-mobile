@@ -20,13 +20,11 @@ export type HomeWin = HomeWinBase & (
 export interface HomeRings {
   check_ins: { reviewed: number; submitted: number };
   replies: { answered: number; received: number };
-  reach_outs: { contacted: number; goal: number };
+  /** contacted_ids (REACHED-TODAY, b#1133): the Needs-you clients the coach reached today; absent on an older server. */
+  reach_outs: { contacted: number; goal: number; contacted_ids?: string[] };
 }
 
 export interface CoachHomeDay {
-  date: string;
-  week_start: string;
-  time_zone: string;
   wins: { count: number; items: HomeWin[] };
   /** null when the server sent no readable rings: the Home then draws none. */
   rings: HomeRings | null;
@@ -76,7 +74,10 @@ function parseRings(v: unknown): HomeRings | null {
   return {
     check_ins: { reviewed: c.reviewed, submitted: c.submitted },
     replies: { answered: r.answered, received: r.received },
-    reach_outs: { contacted: o.contacted, goal: o.goal },
+    reach_outs: {
+      contacted: o.contacted, goal: o.goal,
+      ...(Array.isArray(o.contacted_ids) ? { contacted_ids: o.contacted_ids.filter(text) } : {}), // unreadable ids mark no row
+    },
   };
 }
 
@@ -84,13 +85,7 @@ function parseRings(v: unknown): HomeRings | null {
 export function parseHomeDay(v: unknown): CoachHomeDay | null {
   if (!isObj(v) || !isObj(v.wins) || !count(v.wins.count)) return null;
   const items = Array.isArray(v.wins.items) ? v.wins.items.map(parseWin).filter((w): w is HomeWin => w !== null) : [];
-  return {
-    date: typeof v.date === 'string' ? v.date : '',
-    week_start: typeof v.week_start === 'string' ? v.week_start : '',
-    time_zone: typeof v.time_zone === 'string' ? v.time_zone : '',
-    wins: { count: v.wins.count, items },
-    rings: parseRings(v.rings),
-  };
+  return { wins: { count: v.wins.count, items }, rings: parseRings(v.rings) };
 }
 
 /** One read: the overview the Home always had, plus `home` when the server knows it. */
@@ -122,13 +117,6 @@ export function winLine(w: HomeWin): string {
     case 'goal_weight':
       return `${who} reached goal weight, ${lb(w.goal_weight_lbs)}`;
   }
-}
-
-/** The three wins shown under the hero; with more than three, the window moves on by one each turn. */
-export function winWindow(items: HomeWin[], turn: number): HomeWin[] {
-  if (items.length <= 3) return items;
-  const start = ((turn % items.length) + items.length) % items.length;
-  return [0, 1, 2].map((i) => items[(start + i) % items.length]);
 }
 
 export interface RingSpec { key: 'check_ins' | 'replies' | 'reach_outs'; label: string; done: number; of: number }
