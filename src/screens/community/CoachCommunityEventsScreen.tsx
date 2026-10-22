@@ -44,9 +44,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
+  ScrollView,
   TextInput,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -399,6 +401,7 @@ function CreateEventModal({
   onSubmit,
 }: CreateEventModalProps): React.ReactElement {
   const { semanticColors } = useTheme();
+  const insets = useSafeAreaInsets();
   // F12: native date + time pickers replace the raw ISO text field. We keep a
   // single Date in the parent; the two pickers edit the date and the time of
   // that same instant. Android shows pickers as transient dialogs (open on
@@ -441,17 +444,21 @@ function CreateEventModal({
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[
           styles.scrim,
-          { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
+          { paddingTop: insets.top + spacing.md, backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
         ]}
       >
-        <View
+        {/* Below the status bar; scrolls when a long error or the open pickers outgrow the space above the keyboard. */}
+        <ScrollView
           style={[
             styles.modalCard,
+            styles.modalCardScroll,
             {
               backgroundColor: semanticColors.bgSurface,
               borderColor: semanticColors.border,
             },
           ]}
+          contentContainerStyle={styles.modalCardBody}
+          keyboardShouldPersistTaps="handled"
         >
           <Text style={[styles.modalTitle, { color: semanticColors.textPrimary }]}>
             Schedule an event
@@ -607,7 +614,7 @@ function CreateEventModal({
               </Text>
             </HapticPressable>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -631,6 +638,7 @@ function ManageEventModal({
   onConfirm,
 }: ManageEventModalProps): React.ReactElement | null {
   const { semanticColors } = useTheme();
+  const insets = useSafeAreaInsets();
   const eventId = event?.id ?? '';
   const transition = useTransitionEvent(eventId, workspaceId);
   const attachReplay = useAttachReplay(eventId, workspaceId);
@@ -701,17 +709,21 @@ function ManageEventModal({
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[
           styles.scrim,
-          { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
+          { paddingTop: insets.top + spacing.md, backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
         ]}
       >
-        <View
+        {/* Below the status bar; scrolls when a long error or the open pickers outgrow the space above the keyboard. */}
+        <ScrollView
           style={[
             styles.modalCard,
+            styles.modalCardScroll,
             {
               backgroundColor: semanticColors.bgSurface,
               borderColor: semanticColors.border,
             },
           ]}
+          contentContainerStyle={styles.modalCardBody}
+          keyboardShouldPersistTaps="handled"
         >
           <Text
             style={[styles.modalTitle, { color: semanticColors.textPrimary }]}
@@ -843,7 +855,7 @@ function ManageEventModal({
               Done
             </Text>
           </HapticPressable>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* F14: calm confirm sheet for the irreversible Reflect (close). Cancel is
@@ -1012,6 +1024,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     gap: spacing.md,
   },
+  modalCardScroll: { flexGrow: 0, padding: 0 },
+  modalCardBody: { padding: spacing.xl, gap: spacing.md },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',

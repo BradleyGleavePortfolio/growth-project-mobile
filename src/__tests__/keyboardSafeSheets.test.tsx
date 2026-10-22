@@ -6,14 +6,16 @@
  *    field AND the send button inside a KeyboardAvoidingView, so on iOS the
  *    sheet rises with the keyboard (the app's pattern since NudgeModal and
  *    LogPlannedMealButton). Ask AI's two fields scroll and "Send to AI" is
- *    pinned under them, so it can never sit off screen or under the keyboard.
- * 2. Class guard: every <Modal> block that draws a <TextInput> (itself or
- *    through a child component) must be keyboard-safe inside that Modal (a
- *    padding KeyboardAvoidingView, a ScrollView with
+ *    pinned under them, so it can never sit off screen or under the keyboard;
+ *    a failed or refused send is pinned with it, outside the scroll.
+ * 2. Class guard: every <TextInput> a <Modal> block draws (itself or through a
+ *    child component, resolved from that child's own file) must sit INSIDE a
+ *    keyboard-safe element (a padding KeyboardAvoidingView, a ScrollView with
  *    automaticallyAdjustKeyboardInsets, or the shared Screen, whose footer
  *    rises with the keyboard), and a growing multiline field there must sit in
  *    a ScrollView or cap its height. Exceptions are listed with their reason.
- *    A new sheet that forgets the keyboard fails here.
+ *    A new sheet that forgets the keyboard fails here. It checks fields, not
+ *    buttons: that the buttons stay in view is shown by the renders.
  */
 import fs from 'fs';
 import path from 'path';
@@ -118,13 +120,49 @@ describe('Ask AI sheet rides above the keyboard', () => {
     expect(within(avoider).getByTestId('ask-ai-submit')).toBeTruthy();
     expect(within(form).queryByTestId('ask-ai-submit')).toBeNull();
   });
+
+  async function openNotification() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const r = await render(
+      <QueryClientProvider client={qc}>
+        <AskAiActionSheet visible clientId="c1" clientName="Jane" onClose={jest.fn()} />
+      </QueryClientProvider>,
+    );
+    await fireEvent.press(r.getByTestId('ask-ai-option-draft.send_notification'));
+    return r;
+  }
+
+  it('a failed send stays in view: the error sits pinned with Send to AI, outside the scroll, and is read out (round 2, LO-845 B1)', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    const r = await openNotification();
+    await fireEvent.press(r.getByTestId('ask-ai-submit'));
+    const avoider = r.getByTestId('ask-ai-keyboard-avoider');
+    expect(within(avoider).getByTestId('ask-ai-error')).toBeTruthy();
+    expect(within(r.getByTestId('ask-ai-form')).queryByTestId('ask-ai-error')).toBeNull();
+    expect(announce).toHaveBeenCalledWith('Type the notification body to send.');
+  });
+
+  it('a refused send stays in view: the refusal sits pinned with Send to AI, outside the scroll (round 2, LO-845 B1)', async () => {
+    const { coachAiExecutionApi } = jest.requireMock('../api/coachAiExecutionApi');
+    coachAiExecutionApi.invokeSendNotification.mockRejectedValueOnce({
+      response: { status: 403, data: { code: 'ai_consent_required', message: 'Client has not allowed AI.' } },
+    });
+    const r = await openNotification();
+    await fireEvent.changeText(r.getByTestId('ask-ai-body-input'), 'Hydrate before your session.');
+    await fireEvent.changeText(r.getByTestId('ask-ai-prompt-input'), 'Friendly reminder.');
+    await fireEvent.press(r.getByTestId('ask-ai-submit'));
+    const avoider = r.getByTestId('ask-ai-keyboard-avoider');
+    expect(await within(avoider).findByTestId('ask-ai-refusal')).toBeTruthy();
+    expect(within(r.getByTestId('ask-ai-form')).queryByTestId('ask-ai-refusal')).toBeNull();
+  });
 });
 
 // ── Class guard ──────────────────────────────────────────────────────────────
 // Per Modal, not per file: a file-wide <Screen> or avoider must not pass a
-// different Modal by accident (LO-845 B2). Each <Modal>…</Modal> block is
-// checked together with the components it renders (same file or a relative
-// import, two levels deep), so a field drawn by a child form counts too.
+// different Modal by accident (LO-845 B2), and an avoider beside a field is
+// not one around it (round 2). Each <Modal>…</Modal> block is checked
+// together with the components it renders (same file or a relative import,
+// two levels deep), so a field drawn by a child form counts too.
 const SRC = path.join(__dirname, '..');
 const KEYBOARD_SAFE = [
   /<KeyboardAvoidingView[^>]*behavior=\{Platform\.OS === ['"]ios['"] \? ['"]padding['"]/,
@@ -147,6 +185,8 @@ const FIELD_OUTSIDE_MODAL: Record<string, string> = {
 
 type Code = { rel: string; code: string };
 type Lookup = (rel: string) => string | undefined;
+/** Where a chunk of code lives, so its own imports resolve from its own file (LS-845 C1). */
+type Ctx = { rel: string; file: string };
 
 /** Every outermost <Modal>…</Modal> block in a file, with its 1-based line. */
 function modalBlocks(code: string): { line: number; text: string }[] {
@@ -177,33 +217,34 @@ function definitionOf(code: string, name: string | null): string | undefined {
   return code.slice(m.index, end < 0 ? undefined : m.index + 1 + end);
 }
 
-/** Source of each component a chunk renders (same file or a relative import). */
-function childSources(rel: string, file: string, chunk: string, lookup: Lookup): string[] {
-  const out: string[] = [];
+/** Each component a chunk renders (same file or a relative import): where it is used, its source, and its own file. */
+function childUses(ctx: Ctx, chunk: string, lookup: Lookup): { at: number; code: string; ctx: Ctx }[] {
+  const out: { at: number; code: string; ctx: Ctx }[] = [];
   for (const tagName of new Set(Array.from(chunk.matchAll(/<([A-Z]\w*)/g), (m) => m[1]))) {
     if (tagName === 'Modal' || tagName === 'TextInput') continue;
-    const local = definitionOf(file, tagName);
-    if (local && !chunk.includes(local)) {
-      out.push(local);
-      continue;
-    }
-    for (const imp of file.matchAll(/import\s+(?:type\s+)?([^;]*?)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]/g)) {
+    const uses = Array.from(chunk.matchAll(new RegExp(`<${tagName}\\b`, 'g')), (m) => m.index ?? 0);
+    let found: { code: string; ctx: Ctx } | undefined;
+    const local = definitionOf(ctx.file, tagName);
+    if (local && !chunk.includes(local)) found = { code: local, ctx };
+    for (const imp of found ? [] : ctx.file.matchAll(/import\s+(?:type\s+)?([^;]*?)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]/g)) {
       const clause = imp[1];
       const isDefault = new RegExp(`^${tagName}\\b`).test(clause.trim());
       if (!isDefault && !new RegExp(`[{,\\s]${tagName}\\s*[,}]`).test(clause)) continue;
-      const base = path.posix.normalize(path.posix.join(path.posix.dirname(rel), imp[2]));
-      const target = [`${base}.tsx`, `${base}/index.tsx`].map(lookup).find((c) => c != null);
-      if (target) out.push(definitionOf(target, isDefault ? null : tagName) ?? target);
+      const base = path.posix.normalize(path.posix.join(path.posix.dirname(ctx.rel), imp[2]));
+      const rel = [`${base}.tsx`, `${base}/index.tsx`].find((r) => lookup(r) != null);
+      const target = rel ? lookup(rel) : undefined;
+      if (rel && target) found = { code: definitionOf(target, isDefault ? null : tagName) ?? target, ctx: { rel, file: target } };
     }
+    if (found) for (const at of uses) out.push({ at, ...found });
   }
   return out;
 }
 
-/** The styles a TextInput names, searched in the file and its relative .ts/.tsx imports. */
-function styleBodies(file: string, rel: string, input: string, lookup: Lookup): string[] {
-  const texts = [file];
-  for (const imp of file.matchAll(/from\s+['"](\.{1,2}\/[^'"]+)['"]/g)) {
-    const base = path.posix.normalize(path.posix.join(path.posix.dirname(rel), imp[1]));
+/** The styles a TextInput names, searched in its file and that file's relative .ts/.tsx imports. */
+function styleBodies(ctx: Ctx, input: string, lookup: Lookup): string[] {
+  const texts = [ctx.file];
+  for (const imp of ctx.file.matchAll(/from\s+['"](\.{1,2}\/[^'"]+)['"]/g)) {
+    const base = path.posix.normalize(path.posix.join(path.posix.dirname(ctx.rel), imp[1]));
     const t = [`${base}.ts`, `${base}.tsx`].map(lookup).find((c) => c != null);
     if (t) texts.push(t);
   }
@@ -217,28 +258,73 @@ function styleBodies(file: string, rel: string, input: string, lookup: Lookup): 
   return out;
 }
 
-/** Problems for one Modal block, or [] when it is keyboard-safe. */
-function modalProblems(rel: string, file: string, block: string, lookup: Lookup): string[] {
-  const kids = childSources(rel, file, block, lookup);
-  const grandKids = kids.flatMap((k) => childSources(rel, file, k, lookup));
-  const scope = [block, ...kids, ...grandKids].filter((c) => /<TextInput\b/.test(c));
-  if (scope.length === 0) return [];
-  const problems: string[] = [];
-  if (![block, ...kids, ...grandKids].some((c) => KEYBOARD_SAFE.some((re) => re.test(c)))) {
-    problems.push('no keyboard avoider, keyboard-inset ScrollView or Screen inside this Modal');
+/** End of the JSX opening tag that starts at `from` (skips braces and strings, so `=>` inside a prop is not the end). */
+function openTagEnd(code: string, from: number): number {
+  let depth = 0;
+  let quote = '';
+  for (let i = from + 1; i < code.length; i += 1) {
+    const c = code[i];
+    if (quote) {
+      if (c === quote) quote = '';
+    } else if (c === '"' || c === "'" || c === '`') quote = c;
+    else if (c === '{') depth += 1;
+    else if (c === '}') depth -= 1;
+    else if (c === '>' && depth === 0) return i;
   }
-  // A growing multiline field outside a ScrollView must cap its height, or a long text
-  // pushes the sheet's title and buttons off screen (LO-845 B1 / LS-845 B1).
-  for (const chunk of scope) {
-    for (const m of chunk.matchAll(/<TextInput\b[\s\S]*?\/>/g)) {
-      if (!/\bmultiline\b/.test(m[0])) continue;
-      const before = chunk.slice(0, m.index);
-      const inScroll = (before.match(/<ScrollView\b/g) ?? []).length > (before.match(/<\/ScrollView>/g) ?? []).length;
-      const capped = /\b(maxHeight|height)\s*:/.test(m[0]) || styleBodies(file, rel, m[0], lookup).some((b) => /\b(maxHeight|height)\s*:/.test(b));
-      if (!inScroll && !capped) problems.push(`multiline field without a height cap: ${m[0].slice(0, 60)}`);
+  return code.length;
+}
+
+/** True when position `at` sits INSIDE an open keyboard-safe element of `chunk` (containment, not presence). */
+function insideSafe(chunk: string, at: number): boolean {
+  const stack: boolean[] = [];
+  const tag = /<(\/?)(KeyboardAvoidingView|ScrollView|Screen)\b/g;
+  for (let m = tag.exec(chunk); m && m.index < at; m = tag.exec(chunk)) {
+    if (m[1]) {
+      stack.pop();
+      continue;
+    }
+    const end = openTagEnd(chunk, m.index);
+    if (chunk[end - 1] === '/') continue; // self-closing: wraps nothing
+    stack.push(KEYBOARD_SAFE.some((re) => re.test(chunk.slice(m!.index, end + 1))));
+  }
+  return stack.some(Boolean);
+}
+
+/**
+ * Problems for one chunk (a Modal block, then the components it renders, two levels deep): every
+ * TextInput must sit inside a keyboard-safe element, either in its own chunk or around the
+ * place a parent renders it; a growing multiline field outside a ScrollView must cap its height.
+ */
+function chunkProblems(ctx: Ctx, chunk: string, lookup: Lookup, guarded: boolean, depth: number): string[] {
+  const problems: string[] = [];
+  for (const m of chunk.matchAll(/<TextInput\b[\s\S]*?\/>/g)) {
+    const at = m.index ?? 0;
+    if (!guarded && !insideSafe(chunk, at)) {
+      problems.push(`${ctx.rel}: field outside a keyboard avoider, keyboard-inset ScrollView or Screen in this Modal: ${m[0].slice(0, 60)}`);
+    }
+    // A long text in a sheet that cannot scroll pushes the title and buttons off screen (LO-845 B1 / LS-845 B1).
+    if (!/\bmultiline\b/.test(m[0])) continue;
+    const before = chunk.slice(0, at);
+    const inScroll = (before.match(/<ScrollView\b/g) ?? []).length > (before.match(/<\/ScrollView>/g) ?? []).length;
+    const capped = /\b(maxHeight|height)\s*:/.test(m[0]) || styleBodies(ctx, m[0], lookup).some((b) => /\b(maxHeight|height)\s*:/.test(b));
+    if (!inScroll && !capped) problems.push(`${ctx.rel}: multiline field without a height cap: ${m[0].slice(0, 60)}`);
+  }
+  if (depth < 2) {
+    for (const use of childUses(ctx, chunk, lookup)) {
+      problems.push(...chunkProblems(use.ctx, use.code, lookup, guarded || insideSafe(chunk, use.at), depth + 1));
     }
   }
   return problems;
+}
+
+function drawsField(ctx: Ctx, chunk: string, lookup: Lookup, depth = 0): boolean {
+  if (/<TextInput\b/.test(chunk)) return true;
+  return depth < 2 && childUses(ctx, chunk, lookup).some((u) => drawsField(u.ctx, u.code, lookup, depth + 1));
+}
+
+/** Problems for one Modal block, or [] when it is keyboard-safe. */
+function modalProblems(rel: string, file: string, block: string, lookup: Lookup): string[] {
+  return Array.from(new Set(chunkProblems({ rel, file }, block, lookup, false, 0)));
 }
 
 /** Code without comments (kept line for line), so a Modal named in a comment is not a Modal. */
@@ -265,10 +351,7 @@ describe('every Modal with a text field is keyboard-safe', () => {
   const withModal = all.filter(({ rel, code }) => rel.endsWith('.tsx') && /<Modal\b/.test(code));
   const fieldModals = withModal.flatMap(({ rel, code }) =>
     modalBlocks(code)
-      .filter((b) => {
-        const kids = childSources(rel, code, b.text, lookup);
-        return [b.text, ...kids, ...kids.flatMap((k) => childSources(rel, code, k, lookup))].some((c) => /<TextInput\b/.test(c));
-      })
+      .filter((b) => drawsField({ rel, file: code }, b.text, lookup))
       .map((b) => ({ rel, code, ...b })),
   );
 
@@ -330,6 +413,25 @@ describe('the guard itself catches the holes the lenses found', () => {
   it('a field drawn by a child component in another file is checked', () => {
     const files: Record<string, string> = { 'a/Form.tsx': 'export function Form() { return <TextInput />; }' };
     const file = `import { Form } from './Form';\n<Modal><View><Form /></View></Modal>`;
+    expect(modalProblems('a/Sheet.tsx', file, modalBlocks(file)[0].text, (r) => files[r])).toHaveLength(1);
+  });
+  it('an avoider beside the field, not around it, does not pass (round 2, LS-845 C1)', () => {
+    const file = `<Modal>${avoid}<View /></KeyboardAvoidingView><TextInput /></Modal>`;
+    expect(modalProblems('x.tsx', file, modalBlocks(file)[0].text, none)).toHaveLength(1);
+    const around = `<Modal>${avoid}<TextInput /></KeyboardAvoidingView></Modal>`;
+    expect(modalProblems('x.tsx', around, modalBlocks(around)[0].text, none)).toEqual([]);
+  });
+  it('an avoider around the place a child form is drawn covers the child field', () => {
+    const files: Record<string, string> = { 'a/Form.tsx': 'export function Form() { return <TextInput />; }' };
+    const file = `import { Form } from './Form';\n<Modal>${avoid}<Form /></KeyboardAvoidingView></Modal>`;
+    expect(modalProblems('a/Sheet.tsx', file, modalBlocks(file)[0].text, (r) => files[r])).toEqual([]);
+  });
+  it("a grandchild is resolved from its parent's file, not the sheet's (round 2, LS-845 C1)", () => {
+    const files: Record<string, string> = {
+      'a/b/Form.tsx': "import { Field } from './Field';\nexport function Form() { return <View><Field /></View>; }",
+      'a/b/Field.tsx': 'export function Field() { return <TextInput />; }',
+    };
+    const file = `import { Form } from './b/Form';\n<Modal><View><Form /></View></Modal>`;
     expect(modalProblems('a/Sheet.tsx', file, modalBlocks(file)[0].text, (r) => files[r])).toHaveLength(1);
   });
 });

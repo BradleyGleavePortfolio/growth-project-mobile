@@ -32,8 +32,9 @@
  * bursts, no celebration overlays. Single forest accent on the submit CTA.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AccessibilityInfo,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -105,6 +106,12 @@ export function AskAiActionSheet({
     setBody('');
     setPrompt('');
   }, []);
+
+  // iOS has no live regions, so read a failed send out (Android uses accessibilityLiveRegion).
+  const errorMessage = phase.kind === 'error' ? phase.message : null;
+  useEffect(() => {
+    if (errorMessage) AccessibilityInfo.announceForAccessibility(errorMessage);
+  }, [errorMessage]);
 
   const handleClose = useCallback(() => {
     reset();
@@ -239,7 +246,7 @@ export function AskAiActionSheet({
             phase.kind === 'error' ||
             phase.kind === 'refused') && (
             <View style={styles.promptBody}>
-              {/* The fields scroll; Send to AI stays pinned under them, above the keyboard. */}
+              {/* The fields scroll; the error or refusal and Send to AI stay pinned under them, above the keyboard. */}
               <ScrollView
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
@@ -297,26 +304,29 @@ export function AskAiActionSheet({
                   {prompt.length} / {PROMPT_MAX}
                 </Text>
 
-                {phase.kind === 'error' && (
-                  <Text
-                    style={styles.errorText}
-                    accessibilityLiveRegion="polite"
-                  >
-                    {phase.message}
-                  </Text>
-                )}
-
-                {phase.kind === 'refused' && (
-                  <AiRefusalNotice
-                    refusal={phase.refusal}
-                    audience="coach"
-                    surface="draft"
-                    onRetry={() => void handleSubmit()}
-                    compact
-                    testID="ask-ai-refusal"
-                  />
-                )}
               </ScrollView>
+
+              {/* Pinned under the fields like the insight sheet's error row, so a failed or refused send stays in view with the keyboard up. */}
+              {phase.kind === 'error' && (
+                <Text
+                  style={styles.errorText}
+                  accessibilityLiveRegion="polite"
+                  testID="ask-ai-error"
+                >
+                  {phase.message}
+                </Text>
+              )}
+
+              {phase.kind === 'refused' && (
+                <AiRefusalNotice
+                  refusal={phase.refusal}
+                  audience="coach"
+                  surface="draft"
+                  onRetry={() => void handleSubmit()}
+                  compact
+                  testID="ask-ai-refusal"
+                />
+              )}
 
               <Pressable
                 style={[
