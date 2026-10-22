@@ -312,15 +312,11 @@ describe('B-314-8: one native player per control, never orphaned', () => {
 });
 
 describe('VoiceNotePlayer — seek (B-LS848-3)', () => {
-  it('a point picked before the clip loads is where Play starts; the reader steps 5 s', async () => {
+  it('a point picked before the clip loads is where Play starts; the reader steps 5 s; a tap on the bars seeks there', async () => {
     const playback = makePlayback(true);
-    const { getByTestId } = await render(
-      <VoiceNotePlayer url={URL} durationMs={10000} playback={playback} />,
-    );
+    const { getByTestId } = await render(<VoiceNotePlayer url={URL} durationMs={10000} playback={playback} />);
     const seek = getByTestId('voice-player-seek');
-    expect(seek.props.accessibilityRole).toBe('adjustable');
-    // Before the clip loads the point is kept and applied before Play (the tap
-    // geometry is shown in the web renders; here the reader's step picks 0:05).
+    expect(seek.props).toMatchObject({ accessibilityRole: 'adjustable', style: { pointerEvents: 'box-only' } }); // a bar never takes the tap
     await act(async () => {
       fireEvent(seek, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     });
@@ -328,12 +324,15 @@ describe('VoiceNotePlayer — seek (B-LS848-3)', () => {
     fireEvent.press(getByTestId('voice-player-toggle'));
     await waitFor(() => expect(playback.handle.play).toHaveBeenCalledTimes(1));
     expect(playback.handle.seek).toHaveBeenCalledWith(5000);
-    expect(playback.handle.seek.mock.invocationCallOrder[0]).toBeLessThan(
-      playback.handle.play.mock.invocationCallOrder[0],
-    );
+    expect(playback.handle.seek.mock.invocationCallOrder[0]).toBeLessThan(playback.handle.play.mock.invocationCallOrder[0]);
     await act(async () => {
       fireEvent(getByTestId('voice-player-seek'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     });
     expect(playback.handle.seek).toHaveBeenLastCalledWith(10000);
+    await fireEvent(seek, 'layout', { nativeEvent: { layout: { width: 200 } } });
+    for (const [x, ms] of [[80, 4000], [170, 8500]]) {
+      await fireEvent.press(getByTestId('voice-player-seek'), { nativeEvent: { locationX: x } });
+      expect(playback.handle.seek).toHaveBeenLastCalledWith(ms);
+    }
   });
 });

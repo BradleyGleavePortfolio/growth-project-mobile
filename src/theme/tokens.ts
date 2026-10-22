@@ -534,8 +534,8 @@ export const forestPop = {
 export type ForestPopRole = keyof typeof forestPop;
 
 /**
- * Voice notes Style B shades: the six colours the B mockups draw that are not
- * tokens above (owner 10-21 10:09, #VOICE-SHADES op 1, exact mockup shades).
+ * Voice notes Style B shades the B mockups draw that are not tokens above
+ * (owner 10-21 10:09, #VOICE-SHADES op 1, exact mockup shades).
  */
 export const voiceShades = {
   hairline: '#E2E6E1', // card and row hairlines, level dots, progress tracks
@@ -543,7 +543,7 @@ export const voiceShades = {
   barOnDeep: '#6A7E71', // unplayed bars on the coach's deep card (3.23:1 on deep)
   track: '#C9D0CA', // sheet handle, field borders, off controls
   washEdge: '#D3E2B8', // edge of the leaf wash (icon circles, safety line box)
-  pillEdgeOnDeep: '#34503D', // edge of a pill on deep
+  scrim: 'rgba(26, 26, 24, 0.45)', // the record sheet's scrim (mockup .scrim)
 } as const;
 
 /** Dark-mode semantic tokens. */

@@ -29,7 +29,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
-import { forestPop as fp, radius, spacing, voiceShades } from '../../theme/tokens';
+import { forestPop as fp, neutral, radius, spacing, voiceShades } from '../../theme/tokens';
 import { formatDuration } from './voiceFormat';
 import VoiceNoteWaveform from './VoiceNoteWaveform';
 import {
@@ -244,7 +244,7 @@ export default function VoiceNotePlayer({
         styles.row,
         tone === 'bare'
           ? styles.bare
-          : { backgroundColor: deep ? fp.deep : fp.surface, borderColor: deep ? fp.deep : voiceShades.hairline },
+          : { backgroundColor: deep ? fp.deep : neutral[0], borderColor: deep ? fp.deep : voiceShades.hairline },
       ]}
       testID={testID ?? 'voice-player'}
     >
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   middle: { flex: 1, gap: spacing.xs },
-  seek: { minHeight: 44, flexDirection: 'row', alignItems: 'center' },
+  seek: { minHeight: 44, flexDirection: 'row', alignItems: 'center', pointerEvents: 'box-only' },
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 },
   duration: { fontSize: 17, lineHeight: 22, fontWeight: '600', fontVariant: ['tabular-nums'] },
   retry: {
