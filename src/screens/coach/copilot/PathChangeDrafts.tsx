@@ -11,6 +11,7 @@ import { programKeys } from '../../../hooks/usePrograms';
 import { programsApi } from '../../../api/programsApi';
 import { copilotApi } from '../../../api/copilotApi';
 import { COACH_AI_PENDING_DRAFTS_REFETCH_MS } from '../../../hooks/usePendingAiDrafts';
+import { QuietError, loadFailureMessage } from '../../../ui/states/QuietStates';
 import { PathChangeDraftCard } from './PathChangeDraftCard';
 
 export const PATH_DRAFTS_KEY = ['copilot', 'path-change-drafts'] as const;
@@ -25,10 +26,13 @@ export function usePathChangeDrafts(enabled: boolean) {
   });
 }
 
-export function PathChangeDrafts({ enabled }: { enabled: boolean }) {
+/** The screen owns the read; `showError` false while its own error already says the list did not load. */
+export function PathChangeDrafts({ query, showError = true }: { query: ReturnType<typeof usePathChangeDrafts>; showError?: boolean }) {
   const qc = useQueryClient();
-  const drafts = usePathChangeDrafts(enabled).data ?? [];
+  const drafts = query.data ?? [];
   const roster = useQuery({ queryKey: programKeys.clients, queryFn: () => programsApi.assignableClients(), enabled: drafts.length > 0 });
+  if (query.isError && !query.data) return showError ? <QuietError message={loadFailureMessage(query.error, 'Pending AI drafts')}
+    onRetry={() => void query.refetch()} retrying={query.isFetching} layout="inline" testID="path-drafts-error" /> : null;
   if (drafts.length === 0) return null;
   const names = new Map((roster.data ?? []).map((c) => [c.id, c.name]));
   return (

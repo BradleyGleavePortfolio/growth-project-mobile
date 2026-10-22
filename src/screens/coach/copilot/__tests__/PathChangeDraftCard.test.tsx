@@ -4,7 +4,7 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
 import { PathChangeDraftCard } from '../PathChangeDraftCard';
-import { PathChangeDrafts } from '../PathChangeDrafts';
+import { PathChangeDrafts, usePathChangeDrafts } from '../PathChangeDrafts';
 import type { PathChangeDraft } from '../../../../api/copilotApi';
 
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn(), patch: jest.fn() } }));
@@ -31,6 +31,8 @@ const fail = (status: number, data: unknown = {}) => Object.assign(new Error('ht
 const card = (draft: PathChangeDraft, decide = jest.fn(async () => undefined), onDecided = jest.fn()) => ({
   decide, onDecided, ui: <PathChangeDraftCard draft={draft} clientName="Maya Okafor" decide={decide} onDecided={onDecided} now={() => NOW} />,
 });
+
+const List = () => <PathChangeDrafts query={usePathChangeDrafts(true)} />;
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -110,6 +112,22 @@ test('after "the plan changed" Approve goes and Edit still works; a lapsed or mo
   expect(lapsed.onDecided).not.toHaveBeenCalled();
 });
 
+test('an older draft whose day slipped behind the window: no Approve as is, Edit starts inside; decided elsewhere reloads quietly', async () => {
+  const { ui, decide } = card({ ...move, change: { ...move.change, from_at: '2026-10-16T17:00:00Z', to_at: '2026-10-17T17:00:00Z' } } as PathChangeDraft);
+  const s = await render(ui);
+  expect(s.queryByTestId('path-draft-approve')).toBeNull();
+  await act(async () => fireEvent.press(s.getByText('Edit')));
+  expect(s.getByLabelText('Now, Fri 16 Oct. Suggested, Tue 20 Oct.')).toBeTruthy();
+  expect(s.getByTestId('path-draft-earlier').props.accessibilityState.disabled).toBe(true);
+  await act(async () => fireEvent.press(s.getByTestId('path-draft-later')));
+  await act(async () => fireEvent.press(s.getByTestId('path-draft-confirm')));
+  expect(decide).toHaveBeenCalledWith('d1', { decision: 'approved', payload: { to_at: '2026-10-21T17:00:00.000Z' } });
+  const gone = card(move, jest.fn(async () => { throw fail(403, { message: 'Draft already approved' }); }));
+  const t = await render(gone.ui);
+  await act(async () => fireEvent.press(t.getByText('Approve')));
+  expect([t.queryByText('Draft already approved'), t.queryByTestId('path-draft-edit'), gone.onDecided.mock.calls.length]).toEqual([null, null, 1]);
+});
+
 test('AI help turned off since: the coach sees the notice and can still Decline; a dropped connection says so', async () => {
   const decide = jest.fn<Promise<void>, [string, unknown]>()
     .mockRejectedValueOnce(fail(403, { code: 'ai_consent_required' }))
@@ -126,12 +144,17 @@ test('the drafts list draws only Copilot rows, names them from the roster, and t
   const row = { id: 'd1', capability: 'client_path_change', status: 'pending', subject_user_id: 'c1', payload: move.change, rationale: 'r', created_at: move.sentAt };
   jest.mocked(api.get).mockResolvedValueOnce({ data: { items: [row, { ...row, id: 'x', capability: 'program_draft' }], total: 2, next_cursor: null } } as never);
   const qc = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const s = await render(<QueryClientProvider client={qc()}><PathChangeDrafts enabled /></QueryClientProvider>);
+  const s = await render(<QueryClientProvider client={qc()}><List /></QueryClientProvider>);
   expect(await s.findByText('Maya Okafor')).toBeTruthy();
   expect(s.queryByTestId('path-draft-x')).toBeNull();
   await s.unmount();
   jest.mocked(api.get).mockResolvedValueOnce({ data: [row] } as never);
-  const t = await render(<QueryClientProvider client={qc()}><PathChangeDrafts enabled /></QueryClientProvider>);
+  const t = await render(<QueryClientProvider client={qc()}><List /></QueryClientProvider>);
   await act(async () => undefined);
   expect(t.queryByTestId('path-change-drafts')).toBeNull();
+  await t.unmount();
+  jest.mocked(api.get).mockRejectedValueOnce(Object.assign(new Error('Network Error'), { isAxiosError: true }));
+  const u = await render(<QueryClientProvider client={qc()}><List /></QueryClientProvider>);
+  expect(await u.findByText('Pending AI drafts could not load. Check your connection, then try again.')).toBeTruthy();
+  expect(u.getByTestId('path-drafts-error-retry')).toBeTruthy();
 });

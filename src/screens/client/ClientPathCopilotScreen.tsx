@@ -19,7 +19,6 @@ import { useTheme } from '../../theme/ThemeProvider';
 import EmptyState from '../../components/EmptyState';
 import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
 import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
-import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import RomanComposer from '../../components/roman/RomanComposer';
 import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
@@ -33,6 +32,7 @@ import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/Qu
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
 import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
+import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import type { RomanApiError } from '../../api/romanApi';
 import { copilotApi, type CopilotSuggestion } from '../../api/copilotApi';
 import { COPILOT_COPY as C } from './copilot/pathChangeWords';
@@ -52,6 +52,11 @@ export function useCoachFirstName(): string {
 }
 
 export default function ClientPathCopilotScreen() {
+  const needsCoach = useClientNeedsCoach();
+  const navigation = useNavigation();
+  if (featureFlags.clientPathCopilot && needsCoach) {
+    return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
+  }
   if (!featureFlags.clientPathCopilot) {
     return (
       <View style={s.flagOff} accessibilityLabel="Path suggestions unavailable" accessibilityRole="none">
@@ -65,10 +70,6 @@ export default function ClientPathCopilotScreen() {
 function CoachLock() {
   const navigation = useNavigation();
   return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
-}
-
-function PathCopilot() {
-  return useClientNeedsCoach() ? <CoachLock /> : <PathView />;
 }
 
 /** The forest masthead: back, the serif title, then the week block. */
@@ -89,7 +90,7 @@ function Mast({ back, title, compact, children }: { back: string; title: string;
   );
 }
 
-function PathView() {
+function PathCopilot() {
   const { semanticColors: sc } = useTheme();
   const qc = useQueryClient();
   const coach = useCoachFirstName();
