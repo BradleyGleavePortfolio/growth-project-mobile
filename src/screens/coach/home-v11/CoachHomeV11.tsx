@@ -5,7 +5,7 @@
  * numbers: a server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
  */
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
@@ -22,10 +22,10 @@ import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './Ho
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
 import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
+import { WinTurn, useWinTurn } from './WinTurn';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
 const REACH_ROWS = 5;
-const WIN_TURN_MS = 6000;
 
 type Go = () => void;
 interface Props {
@@ -41,25 +41,6 @@ interface Props {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** One win at a time (LS B2); with more, the next every few seconds unless motion or a screen reader is off-limits or the Home is not in front. */
-function useWinTurn(n: number) {
-  const [turn, setTurn] = useState(0);
-  const [still, setStill] = useState(true);
-  useEffect(() => {
-    let live = true;
-    void Promise.all([AccessibilityInfo.isReduceMotionEnabled(), AccessibilityInfo.isScreenReaderEnabled()])
-      .then(([rm, sr]) => { if (live) setStill(rm || sr); })
-      .catch(() => undefined);
-    return () => { live = false; };
-  }, []);
-  useEffect(() => {
-    if (still || n <= 1) return undefined;
-    const t = setInterval(() => setTurn((x) => x + 1), WIN_TURN_MS);
-    return () => clearInterval(t);
-  }, [still, n]);
-  return turn;
-}
-
 export default function CoachHomeV11(p: Props) {
   const { colors, semanticColors: sc } = useTheme();
   const cs = useCardStyles();
@@ -74,7 +55,8 @@ export default function CoachHomeV11(p: Props) {
   const rosterN = formatCount(roster);
   const items = home?.wins.items ?? [];
   const turn = useWinTurn(focused ? items.length : 0); // paused while another tab is in front (LO C2)
-  const win = items.length > 0 ? items[turn % Math.min(3, items.length)] : undefined; // the newest three take turns (spec item 2)
+  const newest = items.slice(0, 3); // the newest three take turns (spec item 2), each a cross-fade (#167-1)
+  const win = newest.length > 0 ? newest[turn % newest.length] : undefined;
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
@@ -123,7 +105,10 @@ export default function CoachHomeV11(p: Props) {
             {win ? <Ionicons name="chevron-forward" size={22} color={forestPop.onDeepMuted} /> : null}
           </View>
           {win && bigText ? null : win ? (
-            <View style={s.win}><View style={s.winDot} /><Text style={s.winText} numberOfLines={2} testID={`home-win-${win.id}`}>{winLine(win)}</Text></View>
+            <WinTurn
+              wins={newest} shown={win} live={focused}
+              line={(w, id) => <View style={s.win}><View style={s.winDot} /><Text style={s.winText} numberOfLines={2} testID={id}>{winLine(w)}</Text></View>}
+            />
           ) : <Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>}
         </Pressable>
       );
