@@ -8,8 +8,9 @@ import { communityVoiceApi, VoiceNoteViewSchema, wirePeaks } from '../communityV
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
-  default: { post: jest.fn() },
+  default: { get: jest.fn(), post: jest.fn() },
 }));
+const get = jest.mocked(api.get);
 const post = jest.mocked(api.post);
 
 const today = {
@@ -22,6 +23,7 @@ const studio = {
 };
 
 beforeEach(() => {
+  get.mockReset();
   post.mockReset();
 });
 
@@ -37,7 +39,7 @@ describe('VoiceNoteViewSchema', () => {
   });
 });
 
-describe('create', () => {
+describe('create + consent', () => {
   it('sends clamped peaks (max 64) and omits them when there are none', async () => {
     post.mockResolvedValue({ data: { voice_note: studio } });
     const base = { storage_key: 'u-1/a', duration_ms: 4000, bytes: 10, mime_type: 'audio/mp4' as const };
@@ -46,5 +48,12 @@ describe('create', () => {
     await communityVoiceApi.create('ws-1', { ...base, waveformPeaks: [] });
     expect(post.mock.calls[1][1]).toEqual(base);
     expect(wirePeaks(Array.from({ length: 80 }, () => 0.5))).toHaveLength(64);
+  });
+  it('reads and records the first-use card', async () => {
+    get.mockResolvedValue({ data: { seen: false, seen_at: null } });
+    await expect(communityVoiceApi.getConsent()).resolves.toEqual({ seen: false, seen_at: null });
+    post.mockResolvedValue({ data: { seen: true, seen_at: '2026-10-21T10:00:00.000Z' } });
+    await expect(communityVoiceApi.recordConsent()).resolves.toMatchObject({ seen: true });
+    expect(post.mock.calls[0][0]).toBe('/community/voice-consent');
   });
 });

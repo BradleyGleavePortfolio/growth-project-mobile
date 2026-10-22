@@ -34,6 +34,8 @@ export interface VoiceNoteRecordButtonProps {
   maxDurationMs: number;
   onStart: () => void;
   onStop: () => void;
+  /** Off while the sheet is still checking the first-use card. */
+  disabled?: boolean;
   testID?: string;
 }
 
@@ -43,10 +45,12 @@ export default function VoiceNoteRecordButton({
   maxDurationMs,
   onStart,
   onStop,
+  disabled = false,
   testID,
 }: VoiceNoteRecordButtonProps): React.ReactElement {
   const recording = status === 'recording';
   const stopping = status === 'stopping';
+  const off = stopping || disabled;
 
   const label = stopping
     ? 'Finishing'
@@ -54,7 +58,7 @@ export default function VoiceNoteRecordButton({
       ? `Stop recording at ${formatDuration(elapsedMs)}`
       : 'Record a voice note';
   const handlePress = () => {
-    if (stopping) return;
+    if (off) return;
     if (recording) onStop();
     else onStart();
   };
@@ -64,17 +68,17 @@ export default function VoiceNoteRecordButton({
       <HapticPressable
         intent={recording ? 'warning' : 'medium'}
         onPress={handlePress}
-        disabled={stopping}
+        disabled={off}
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityState={{ busy: stopping, disabled: stopping }}
+        accessibilityState={{ busy: stopping, disabled: off }}
         accessibilityHint={
           recording
             ? 'Stops the recording and lets you review it before sending.'
             : `Records up to ${formatDuration(maxDurationMs)} of audio.`
         }
         testID={testID ?? 'voice-record-button'}
-        style={[styles.button, { opacity: stopping ? 0.6 : 1 }]}
+        style={[styles.button, { opacity: off ? 0.6 : 1 }]}
       >
         {recording || stopping ? (
           <View style={styles.square} />

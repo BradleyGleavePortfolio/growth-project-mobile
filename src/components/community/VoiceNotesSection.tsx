@@ -13,7 +13,8 @@
  *
  * Style B (VOICE-M): Record opens the record sheet over this feed. A note
  * shows the author's name (backend #1122; "Member" before it), a Coach mark
- * and the deep coach card, and the real waveform. Unsent notes wait on top:
+ * and the deep coach card, the real waveform, and New until this viewer has
+ * played it to the end (then Played; heard, backend #1122). Unsent notes wait on top:
  * Sending… with a spinner, Not sent with Try again and Delete, or offline a
  * spinner and a wifi-off mark ("Waiting to send" when spoken).
  *
@@ -23,7 +24,7 @@
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import HapticPressable from '../HapticPressable';
 import VoiceNotePlayer from './VoiceNotePlayer';
 import VoiceRecordSheet from './VoiceRecordSheet';
@@ -35,7 +36,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useVoiceFeed } from '../../hooks/useVoiceFeed';
 import { useVoiceOutbox, type VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
 import { voiceKeys } from '../../hooks/voiceQueryKeys';
-import { communityVoiceApi, type VoiceNoteView } from '../../api/communityVoiceApi';
+import { communityVoiceApi, type VoiceNoteFeedPage, type VoiceNoteView } from '../../api/communityVoiceApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
 
 export interface VoiceNotesSectionProps {
@@ -63,6 +64,19 @@ export default function VoiceNotesSection({
     if (!workspaceId) return;
     await qc.invalidateQueries({ queryKey: voiceKeys.feedRoot(workspaceId) });
   }, [qc, workspaceId]);
+
+  // Played to the end: Played at once here; the server keeps it for next time.
+  const markHeard = useCallback(
+    (id: string) => {
+      if (!workspaceId) return;
+      const at = new Date().toISOString();
+      qc.setQueriesData<InfiniteData<VoiceNoteFeedPage>>({ queryKey: voiceKeys.feedRoot(workspaceId) }, (d) =>
+        d && { ...d, pages: d.pages.map((p) => ({ ...p, voice_notes: p.voice_notes.map((n) => (n.id === id ? { ...n, heard_at: at } : n)) })) },
+      );
+      void communityVoiceApi.markHeard(id).catch(() => undefined);
+    },
+    [qc, workspaceId],
+  );
 
   if (!featureFlags.communityVoiceNotes || !workspaceId) return null;
 
@@ -135,6 +149,8 @@ export default function VoiceNotesSection({
           const mine = !!viewerUserId && note.author_id === viewerUserId;
           const coach = note.author_is_coach === true;
           const when = formatRelative(note.created_at);
+          // heard_at is undefined on a server without it: then neither mark.
+          const heard = mine || note.heard_at === undefined ? undefined : note.heard_at;
           return (
             <View key={note.id} style={styles.note} testID={`${testID}-note-${note.id}`}>
               <View style={styles.noteMeta}>
@@ -172,6 +188,17 @@ export default function VoiceNotesSection({
                 tone={coach ? 'coach' : 'light'}
                 offline={!outbox.online}
                 onPlaybackError={() => void feed.refetch()}
+                onFinished={heard === null ? () => markHeard(note.id) : undefined}
+                trailing={
+                  heard === null ? (
+                    <Text style={[styles.fresh, coach && { borderWidth: 0 }]} testID={`${testID}-new-${note.id}`}>New</Text>
+                  ) : heard ? (
+                    <View style={styles.played} testID={`${testID}-played-${note.id}`}>
+                      <Ionicons name="checkmark" size={16} color={coach ? fp.onDeepMuted : fp.n700} />
+                      <Text style={[styles.playedText, coach && { color: fp.onDeepMuted }]}>Played</Text>
+                    </View>
+                  ) : null
+                }
                 testID={`${testID}-player-${note.id}`}
               />
             </View>
@@ -199,8 +226,8 @@ export default function VoiceNotesSection({
         visible={recordOpen}
         target={{ kind: 'hall' }}
         onClose={() => setRecordOpen(false)}
-        onSend={(recording) => {
-          outbox.send(recording);
+        onSend={(recording, studio) => {
+          outbox.send(recording, { sendPeaks: studio });
           setRecordOpen(false);
         }}
       />
@@ -324,6 +351,10 @@ const styles = StyleSheet.create({
     backgroundColor: fp.deep, color: fp.gold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   when: { fontSize: 15, color: fp.n700 },
   spacer: { flex: 1 },
+  fresh: { overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.chip, backgroundColor: fp.leaf,
+    borderWidth: 1, borderColor: fp.moss, color: fp.ink, fontSize: 13, lineHeight: 16, fontWeight: '600' },
+  played: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  playedText: { fontSize: 14, fontWeight: '500', color: fp.n700 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 28 },
   wifiOff: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
   strike: { position: 'absolute', width: 22, height: 2, backgroundColor: fp.n700, transform: [{ rotate: '45deg' }] },

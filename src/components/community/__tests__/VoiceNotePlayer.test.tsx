@@ -311,7 +311,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
   });
 });
 
-describe('VoiceNotePlayer — seek (B-LS848-3)', () => {
+describe('VoiceNotePlayer — seek and played to the end (B-LS848-3)', () => {
   it('a tap on the bars picks the point; Play starts there; the reader steps 5 s', async () => {
     const playback = makePlayback(true);
     const { getByTestId } = await render(
@@ -332,5 +332,22 @@ describe('VoiceNotePlayer — seek (B-LS848-3)', () => {
       fireEvent(getByTestId('voice-player-seek'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     });
     expect(playback.handle.seek).toHaveBeenLastCalledWith(10000);
+  });
+
+  it('tells the feed once playback reaches the end', async () => {
+    let events: { onEnd?: () => void } = {};
+    const playback = makePlayback(true);
+    playback.load = jest.fn(async (_u: string, ev: { onEnd?: () => void }) => {
+      events = ev;
+      return playback.handle;
+    });
+    const onFinished = jest.fn();
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={4000} playback={playback} onFinished={onFinished} />,
+    );
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(playback.handle.play).toHaveBeenCalled());
+    await act(async () => events.onEnd?.());
+    expect(onFinished).toHaveBeenCalledTimes(1);
   });
 });

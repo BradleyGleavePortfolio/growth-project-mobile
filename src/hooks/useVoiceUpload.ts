@@ -48,7 +48,7 @@ export interface VoiceUploadInput {
   cohortId?: string;
   /** Optional DM conversation target. */
   conversationId?: string;
-  /** Recorded peaks (backend #1122). */
+  /** Recorded peaks, set only when the server takes them (backend #1122). */
   waveformPeaks?: number[];
 }
 

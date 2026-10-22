@@ -24,8 +24,9 @@
  *       3. create(...) durably records the note, re-asserting the same limits
  *          and the `${userId}/` bucket binding. The client is NEVER trusted on
  *          the second hop either — the server re-derives the namespace.
- *   - Voice notes Studio (backend #1122, live) adds six view keys and optional
- *     create `waveform_peaks`; the view keys stay optional so an older note parses.
+ *   - Voice notes Studio (backend #1122) adds six view keys and optional create
+ *     `waveform_peaks`. A server before #1122 sends none of the keys and rejects
+ *     unknown create keys: the keys are optional and peaks go only to Studio.
  *
  * Limits mirror the backend DTO constants exactly so the recorder/composer can
  * pre-validate before a round-trip; the server remains authoritative.
@@ -121,6 +122,11 @@ export type VoiceNoteFeedPage = z.infer<typeof VoiceNoteFeedResponseSchema>;
 const VoiceDeleteResponseSchema = z.object({ deleted: z.literal(true) }).strict();
 export type VoiceDeleteResult = z.infer<typeof VoiceDeleteResponseSchema>;
 
+const VoiceConsentSchema = z
+  .object({ seen: z.boolean(), seen_at: z.string().nullable() })
+  .strict();
+export type VoiceConsent = z.infer<typeof VoiceConsentSchema>;
+
 /** The server's peak cap (backend #1122 = the recorder's MAX_PEAKS). */
 export const MAX_WAVEFORM_PEAKS = 64;
 
@@ -206,7 +212,7 @@ export interface CreateVoiceNoteInput {
   cohortId?: string;
   /** Optional DM conversation target. */
   conversationId?: string;
-  /** Recorded peaks (omitted when none). */
+  /** Recorded peaks; sent only to a Studio server (omitted when none). */
   waveformPeaks?: number[];
 }
 
@@ -355,6 +361,31 @@ export const communityVoiceApi = {
   remove(voiceNoteId: string): Promise<VoiceDeleteResult> {
     return call(VoiceDeleteResponseSchema, () =>
       api.delete<unknown>(`/community/voice-notes/${voiceNoteId}`, {
+        signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS),
+      }),
+    );
+  },
+
+  /** POST /community/voice-notes/:voiceNoteId/heard — once, when playback reaches the end (#1122). */
+  async markHeard(voiceNoteId: string): Promise<void> {
+    await api.post<unknown>(`/community/voice-notes/${voiceNoteId}/heard`, undefined, {
+      signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS),
+    });
+  },
+
+  /** GET /community/voice-consent — was the first-use card shown to the caller. */
+  getConsent(): Promise<VoiceConsent> {
+    return call(VoiceConsentSchema, () =>
+      api.get<unknown>('/community/voice-consent', {
+        signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS),
+      }),
+    );
+  },
+
+  /** POST /community/voice-consent — record that the card was shown (idempotent). */
+  recordConsent(): Promise<VoiceConsent> {
+    return call(VoiceConsentSchema, () =>
+      api.post<unknown>('/community/voice-consent', undefined, {
         signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS),
       }),
     );

@@ -1,10 +1,12 @@
 /**
  * VoiceNoteComposer — the Style B record sheet body. The recorder port is
- * injected (deterministic capture). Pins the honest states the audit cares about:
+ * injected (deterministic capture) and the consent hook is mocked (no
+ * network). Pins the honest states the audit cares about:
  *   • unavailable build → calm notice, NO record button;
  *   • mic denied → a REAL recovery action (try again / open settings);
  *   • idle → privacy disclosure (real audience) + record button present;
- *   • recorded → listen back + Send hands the recording to the outbox.
+ *   • recorded → listen back + Send hands the recording to the outbox;
+ *   • first use → the once-only card before any recording.
  */
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
@@ -18,6 +20,10 @@ jest.mock('../../../theme/useTheme', () => {
     useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }),
   };
 });
+
+const mockRecordConsent = jest.fn();
+let mockConsent = { loading: false, studio: true, needsCard: false, record: mockRecordConsent };
+jest.mock('../../../hooks/useVoiceStudio', () => ({ useVoiceConsent: () => mockConsent }));
 
 import VoiceNoteComposer from '../VoiceNoteComposer';
 import type {
@@ -60,6 +66,8 @@ const target = { kind: 'cohort' as const, cohortName: 'Spring Block' };
 beforeEach(() => {
   mockSend.mockReset();
   mockClose.mockReset();
+  mockRecordConsent.mockReset();
+  mockConsent = { loading: false, studio: true, needsCard: false, record: mockRecordConsent };
 });
 
 describe('VoiceNoteComposer — honest states', () => {
@@ -118,7 +126,7 @@ describe('VoiceNoteComposer — review + send', () => {
     });
   }
 
-  it('Send hands the recording to the outbox', async () => {
+  it('Send hands the recording to the outbox with the server peaks flag', async () => {
     const port = makePort();
     const { getByTestId } = await render(<VoiceNoteComposer {...props} target={target} recorder={port} />);
     await recordTo(getByTestId);
@@ -126,7 +134,25 @@ describe('VoiceNoteComposer — review + send', () => {
     expect(getByTestId('voice-composer-preview-duration', { includeHiddenElements: true }).props.children).toBe('0:04');
     expect(getByTestId('voice-composer-listen')).toBeTruthy();
     fireEvent.press(getByTestId('voice-composer-send'));
-    expect(mockSend).toHaveBeenCalledWith(RESULT);
+    expect(mockSend).toHaveBeenCalledWith(RESULT, true);
+  });
+});
+
+describe('VoiceNoteComposer — Style B sheet', () => {
+  it('first use shows the once-only card; Record records consent and starts', async () => {
+    mockConsent = { ...mockConsent, needsCard: true };
+    const port = makePort();
+    const { getByTestId, getByText } = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={port} />,
+    );
+    expect(getByText('Voice notes')).toBeTruthy();
+    expect(getByText('You can delete your voice note at any time.')).toBeTruthy();
+    expect(port.start).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-composer-consent-record'));
+    });
+    expect(mockRecordConsent).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(port.start).toHaveBeenCalledTimes(1));
   });
 });
 
