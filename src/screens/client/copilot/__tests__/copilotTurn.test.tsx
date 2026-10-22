@@ -1,9 +1,9 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { ScrollView, Text } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
-import { openOrResumeSession, RomanApiError, sendMessage } from '../../../../api/romanApi';
+import { openOrResumeSession, RomanApiError, RomanWireError, sendMessage } from '../../../../api/romanApi';
 import ClientPathCopilotScreen from '../../ClientPathCopilotScreen';
 
 const mockText = (t: string) => <Text>{t}</Text>;
@@ -12,9 +12,11 @@ jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get:
 jest.mock('../../../../api/romanApi', () => {
   class RomanApiError extends Error {
     readonly kind: string;
-    constructor(mockKind: string, message: string) { super(message); this.kind = mockKind; }
+    readonly turnStored: boolean;
+    constructor(mockKind: string, message: string, _r?: number, _f?: unknown, stored = false) { super(message); this.kind = mockKind; this.turnStored = stored; }
   }
-  return { ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError, openOrResumeSession: jest.fn(), sendMessage: jest.fn() };
+  class RomanWireError extends Error {}
+  return { ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError, RomanWireError, openOrResumeSession: jest.fn(), sendMessage: jest.fn() };
 });
 jest.mock('../../../../config/featureFlags', () => ({ featureFlags: { clientPathCopilot: true } }));
 jest.mock('../../../../api/schedulingApi', () => ({ resolveClientTimezone: () => 'UTC' }));
@@ -121,4 +123,50 @@ test('a failed turn keeps the question and Try again asks it once more; no coach
   const c = await render(wrap(<ClientPathCopilotScreen />));
   expect(c.getByText('Roman works with a coach')).toBeTruthy();
   expect(open).toHaveBeenCalledTimes(1);
+});
+
+test('a question the server already stored is never re-sent: main\u2019s stored line, no Try again, the question back in the composer', async () => {
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [] } } as never);
+  send.mockRejectedValueOnce(new RomanApiError('generic', 'stream cut', undefined, undefined, true));
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await act(async () => fireEvent.changeText(await s.findByPlaceholderText('Ask Roman anything.'), 'Can I swap Friday?'));
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  expect(s.getByText('Your message is saved above, but I could not answer it. Tap Send again to ask once more.')).toBeTruthy();
+  expect(s.queryByText('Try again')).toBeNull();
+  expect(s.getByPlaceholderText('Ask Roman anything.').props.value).toBe('Can I swap Friday?');
+  expect(send).toHaveBeenCalledTimes(1);
+  send.mockRejectedValueOnce(new RomanWireError('bad frame'));
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  expect(s.getAllByText('Your message is saved above, but I could not answer it. Tap Send again to ask once more.')).toHaveLength(2);
+  expect(s.queryByText('Try again')).toBeNull();
+});
+
+test('a follow-up scrolls its question to the top, keeps following its answer, and a suggestion under an answer is not listed twice', async () => {
+  const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
+  const pending = { ...SUGGESTED, id: 's10', status: 'pending', sent_at: '2026-10-21T21:34:00Z' };
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [pending] } } as never);
+  send.mockResolvedValueOnce({ text: 'First.', messageId: 'm5', interrupted: false, copilot: { sources: [], suggestion: pending } } as never);
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  const sv = await s.findByTestId('copilot-scroll');
+  await act(async () => fireEvent(sv, 'layout', { nativeEvent: { layout: { height: 600 } } }));
+  await act(async () => fireEvent.press(await s.findByText('Explain my targets')));
+  expect(s.getAllByText('Awaiting coach approval')).toHaveLength(1);
+  let answer: (v: unknown) => void = () => undefined;
+  send.mockReturnValueOnce(new Promise((r) => { answer = r; }) as never);
+  await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'And next week?'));
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  const turns = s.getAllByTestId('copilot-turn');
+  expect(turns).toHaveLength(2);
+  await act(async () => fireEvent(sv, 'contentSizeChange', 390, 1400));
+  await act(async () => fireEvent(turns[1], 'layout', { nativeEvent: { layout: { y: 900 } } }));
+  expect(scrollTo).toHaveBeenLastCalledWith({ y: 800, animated: true });
+  await act(async () => fireEvent(sv, 'contentSizeChange', 390, 2000));
+  expect(scrollTo).toHaveBeenLastCalledWith({ y: 888, animated: true });
+  await act(async () => answer({ text: 'Next week.', messageId: 'm6', interrupted: false, copilot: { sources: [], suggestion: null } }));
+  await act(async () => fireEvent(sv, 'contentSizeChange', 390, 2400));
+  expect(scrollTo).toHaveBeenLastCalledWith({ y: 888, animated: true });
+  const calls = scrollTo.mock.calls.length;
+  await act(async () => fireEvent(sv, 'contentSizeChange', 390, 2600));
+  expect(scrollTo).toHaveBeenCalledTimes(calls);
+  scrollTo.mockRestore();
 });

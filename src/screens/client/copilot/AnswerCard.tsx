@@ -11,7 +11,7 @@ import RomanAvatar from '../../../components/roman/RomanAvatar';
 import RomanCrisisActions from '../../../components/roman/RomanCrisisActions';
 import type { RomanSafetyAction } from '../../../api/romanSafetyActions';
 import type { CopilotReply, SourceKind } from '../../../api/copilotApi';
-import { ASK_COPY as A, SOURCE_TAG, leadAndRest, withoutCites } from './askWords';
+import { ASK_COPY as A, SOURCE_TAG, leadAndRest, withoutCites, withoutEmphasis } from './askWords';
 
 const TAG: Record<SourceKind, { bg: string; ink: string }> = {
   plan: { bg: forestPop.forest, ink: forestPop.onDeep },
@@ -30,7 +30,8 @@ export function SourceTag({ kind }: { kind: SourceKind }) {
 
 export function AnswerCard({ text, reply, safety }: { text: string; reply: CopilotReply | null; safety?: readonly RomanSafetyAction[] }) {
   const { semanticColors: sc } = useTheme();
-  const { lead, rest } = reply ? leadAndRest(withoutCites(text)) : { lead: '', rest: text };
+  const plain = withoutEmphasis(text);
+  const { lead, rest } = reply ? leadAndRest(withoutCites(plain)) : { lead: '', rest: plain };
   return (
     <View style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="copilot-answer">
       <View style={s.pad}>

@@ -9,7 +9,7 @@ import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, radius, typography } from '../../../theme/tokens';
 import type { CopilotWeek } from '../../../api/copilotApi';
-import { ASK_COPY as A, changedThisWeek, dayMonth } from './askWords';
+import { ASK_COPY as A, dayMonth, targetChangedOn } from './askWords';
 
 export function WeekBlock({ week, compact, now }: { week: CopilotWeek; compact: boolean; now?: Date }) {
   const { semanticColors: sc } = useTheme();
@@ -33,7 +33,7 @@ export function WeekBlock({ week, compact, now }: { week: CopilotWeek; compact: 
     ) : null;
   }
 
-  const changed = week.target ? changedThisWeek(week.target.from, now) : null;
+  const changed = targetChangedOn(week.target, now);
   const tiles = [
     { key: 'target', value: kcal ?? A.none, label: A.target, chip: changed ? A.changed(changed) : null },
     { key: 'workouts', value: total > 0 ? A.of(done, total) : A.none, label: A.workouts, chip: null },

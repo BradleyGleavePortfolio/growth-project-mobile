@@ -4,7 +4,7 @@
  */
 import { calendarDateInZone, formatTime } from '../../../calendar/calendarTime';
 import { resolveClientTimezone } from '../../../api/schedulingApi';
-import type { SourceKind } from '../../../api/copilotApi';
+import type { CopilotWeek, SourceKind } from '../../../api/copilotApi';
 
 export const ASK_COPY = {
   week: (n: number, coach: string) => `Week ${n} with ${coach}`, // CP-A-03
@@ -44,6 +44,11 @@ export function changedThisWeek(from: string, now = new Date()): string | null {
   return d >= monday && d <= day(today) ? fmt({ weekday: 'short' }, new Date(from)) : null;
 }
 
+/** CP-A-05 and CP-A-09 only for a real change this week: a first target (no previous) or the same number is not one. */
+export function targetChangedOn(target: CopilotWeek['target'], now?: Date): string | null {
+  return target && target.previous != null && target.previous !== target.kcal ? changedThisWeek(target.from, now) : null;
+}
+
 /** "18 Oct" for a YYYY-MM-DD day (a calendar day, so no zone shift). */
 export const dayMonth = (ymd: string) => fmt({ day: 'numeric', month: 'short' }, new Date(`${ymd}T12:00:00Z`), 'UTC');
 /** "2:31 PM" in the client's zone (CP-A-14). */
@@ -51,6 +56,8 @@ export const timeOf = (at: Date) => formatTime(at, tz());
 
 /** Roman cites facts as [n]; the board draws plain prose with the facts listed under it, so the markers come out here. */
 export const withoutCites = (text: string) => text.replace(/\s?\[\d{1,2}\]/g, '').trim();
+/** Emphasis markers come out as in main's Roman chat (`romanBlocks`). */
+export const withoutEmphasis = (text: string) => text.replace(/\*\*|__/g, '');
 
 /** The board's answer: the first sentence as the serif lead line, the rest under it. */
 export function leadAndRest(text: string): { lead: string; rest: string } {
