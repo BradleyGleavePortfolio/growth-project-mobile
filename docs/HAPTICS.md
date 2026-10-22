@@ -110,7 +110,7 @@ When the toggle changes:
 | `purchase/PlanActiveMoment` (`clientBillingV2` on) | `success()` | Once, when the plan-is-active moment appears after a confirmed purchase |
 | `MoneyAIPool` (Money page) | `mediumImpact()` / `softImpact()` | "Buy more credits" pressed (filled button / quiet text while the Stripe setup card shows) |
 | `renewal/RenewalHome`, `HouseCoachScreen` (RENEWAL-M, `FEATURE_PLAN_RENEWAL`) | `mediumImpact()` / `lightImpact()` | "View Coach {N}'s packages" (the one filled choice) / "Join TGP's Top Rated Coach", "Skip for now", Back and a house package row |
-| `HouseCoachConfirmScreen`, `HousePackageScreen` (SWITCH-CONFIRM-M) | `mediumImpact()` / `lightImpact()` | "Continue" and "Select this plan" (each page's one filled action) / "Not now" and Back |
+| `HouseCoachConfirmScreen`, `HousePackageScreen` (SWITCH-CONFIRM-M) | `mediumImpact()` / `softImpact()` (HapticPressable `light`) | "Continue" and "Select this plan" (each page's one filled action) / "Not now" and Back |
 
 ## Architecture
 
