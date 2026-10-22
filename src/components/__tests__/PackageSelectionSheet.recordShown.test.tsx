@@ -2,9 +2,9 @@
  * #836 fix round 1 (Sol B1, Opus C2): the unsolicited sheet (`recordShown`)
  * saves its 24 h time the moment it opens, so the offer is limited by
  * presentations, not by Skip taps. Closing the app, Skip (Back runs the same
- * handler) or an empty list never brings it back inside 24 h; RENEWAL-M: with `onShown` wired as RootNavigator
- * wires it, a client who never bought is not offered it again (never daily). A deliberate open (no `recordShown`)
- * saves nothing; a plan_renewal push tap (`skipSnoozeCheck`) opens it inside the 24 h wait. Real sheet, real
+ * handler) or an empty list never brings it back inside 24 h; RENEWAL-M: nor later (the first offer opens once). A
+ * deliberate open (no `recordShown`) saves nothing; `skipSnoozeCheck` (renewal) opens inside the 24 h wait; `house`
+ * reads the house coach's packages under his name. Real sheet, real
  * start gate and real storage; only the network edges are mocked.
  */
 import React from 'react';
@@ -24,6 +24,7 @@ jest.mock('../../services/api', () => ({
     get: async (url: string) => {
       if (url === '/v1/clients/me/coach/packages') return { data: { packages: mockPackages } };
       if (url === '/v1/clients/me/coach') return { data: { id: 'coach-1', name: 'Avery Stone' } };
+      if (url === '/v1/checkout/renewal/house-coach/packages') return { data: { packages: [{ ...mockPackages[0] as object, id: 'h-1' }] } };
       throw new Error(`unexpected read ${url}`);
     },
     post: async () => ({ data: {} }),
@@ -43,8 +44,7 @@ jest.mock('../../tutorial/tutorialStore', () => ({
 }));
 
 const Sheet: typeof import('../PackageSelectionSheet').default = require('../PackageSelectionSheet').default;
-const { packagePromptDueAtStart, takeStartOffer } = require('../../lib/packagePromptGate') as typeof import('../../lib/packagePromptGate');
-const { recordRenewalShown } = require('../../lib/planRenewal') as typeof import('../../lib/planRenewal');
+const { packagePromptDueAtStart } = require('../../lib/packagePromptGate') as typeof import('../../lib/packagePromptGate');
 
 const KEY = 'prefs:onboarding.package_prompt_dismissed_at:client-1';
 const NOW = Date.parse('2026-10-20T18:00:00.000Z');
@@ -52,10 +52,8 @@ const HOUR = 60 * 60 * 1000;
 const PACKAGES = [{ id: 'p-1', name: 'Monthly coaching', amount_cents: 4900, currency: 'usd', billing_type: 'recurring', interval: 'month' }];
 const realOS = Platform.OS;
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
-const mount = (onDismiss: () => void, recordShown?: boolean, extra?: { onShown?: () => void; skipSnoozeCheck?: boolean }) =>
+const mount = (onDismiss: () => void, recordShown?: boolean, extra?: { skipSnoozeCheck?: boolean; house?: { name: string } }) =>
   render(<Sheet visible recordShown={recordShown} onDismiss={onDismiss} onPaymentSuccess={jest.fn()} {...extra} />);
-// RootNavigator's onShown: the start offer is recorded as shown (lib/planRenewal).
-const rootOnShown = () => void recordRenewalShown('client-1', takeStartOffer('client-1')?.renewal);
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -72,7 +70,7 @@ afterEach(() => {
 it.each(['closing the app', 'Skip'])('%s after it was shown: no second offer inside 24 h, and none after', async (how) => {
   expect(await packagePromptDueAtStart('client-1', NOW)).toBe(true);
   mockGetEntitlement.mockClear();
-  const first = await mount(jest.fn(), true, { onShown: rootOnShown });
+  const first = await mount(jest.fn(), true);
   await first.findByTestId('package-card-p-1');
   expect(await AsyncStorage.getItem(KEY)).toBe(new Date(NOW).toISOString());
   if (how === 'Skip') await fireEvent.press(first.getByTestId('skip-package-btn'));
@@ -94,12 +92,20 @@ it.each(['closing the app', 'Skip'])('%s after it was shown: no second offer ins
   expect(mockGetEntitlement).toHaveBeenCalledTimes(1);
 });
 
-it('a plan_renewal push tap (skipSnoozeCheck): opens inside the 24 h wait and reports it was shown once', async () => {
+it('opened by the client (skipSnoozeCheck): opens inside the 24 h wait', async () => {
   await AsyncStorage.setItem(KEY, new Date(NOW - HOUR).toISOString());
-  const onShown = jest.fn();
-  const r = await mount(jest.fn(), true, { onShown, skipSnoozeCheck: true });
+  const onDismiss = jest.fn();
+  const r = await mount(onDismiss, false, { skipSnoozeCheck: true });
   await r.findByTestId('package-card-p-1');
-  expect(onShown).toHaveBeenCalledTimes(1);
+  expect(onDismiss).not.toHaveBeenCalled();
+});
+
+it('house coach (H2): his packages under his name, on Android too, with no read of the old coach', async () => {
+  setOS('android');
+  const r = await mount(jest.fn(), false, { skipSnoozeCheck: true, house: { name: 'Bradley Gleave' } });
+  await r.findByTestId('package-card-h-1');
+  expect(r.queryByTestId('package-card-p-1')).toBeNull();
+  expect(r.getByTestId('package-sheet-one-to-one')).toHaveTextContent('1:1 coaching with Bradley Gleave');
 });
 
 it('empty list on first load: closes itself and still counts as shown (#836 C2)', async () => {

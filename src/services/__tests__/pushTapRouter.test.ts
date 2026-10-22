@@ -100,7 +100,7 @@ describe('pushTapRouter', () => {
       expect(nav.navigate).toHaveBeenCalledWith('MoreTab', { screen: 'Timeline', params: undefined });
     });
 
-    it('RENEWAL-M: PlanRenewal opens Home, then asks for the plan sheet, only once the tap is delivered', () => {
+    it('RENEWAL-M: PlanRenewal opens Home, then asks for the renewal pop-up, only once the tap is delivered', () => {
       const listener = jest.fn();
       const stop = onPlanRenewalTap(listener);
       const nav = makeNav(LEAN_ROOT);
@@ -117,14 +117,20 @@ describe('pushTapRouter', () => {
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
-    it('RENEWAL-M: a coach account never gets the plan sheet from PlanRenewal', () => {
-      const listener = jest.fn();
-      const stop = onPlanRenewalTap(listener);
-      const nav = makeNav(COACH_TABS);
-      attachPushNavigator(nav);
+    it('RENEWAL-M: a tap delivered before Home listens opens the pop-up once Home mounts, once', () => {
+      attachPushNavigator(makeNav(CLIENT_TABS));
+      setPushSession(STUDENT_A);
+      routePushTap('PlanRenewal', undefined, 'n-renew-cold');
+      const [first, later, coach] = [jest.fn(), jest.fn(), jest.fn()];
+      onPlanRenewalTap(first)();
+      onPlanRenewalTap(later)();
+      expect(first).toHaveBeenCalledTimes(1);
+      expect(later).not.toHaveBeenCalled();
+      const stop = onPlanRenewalTap(coach); // a coach account never gets the pop-up
+      attachPushNavigator(makeNav(COACH_TABS));
       setPushSession(COACH_A);
-      routePushTap('PlanRenewal');
-      expect(listener).not.toHaveBeenCalled();
+      routePushTap('PlanRenewal', undefined, 'n-renew-coach');
+      expect(coach).not.toHaveBeenCalled();
       stop();
     });
 

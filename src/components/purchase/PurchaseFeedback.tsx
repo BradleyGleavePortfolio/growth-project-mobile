@@ -19,6 +19,7 @@ import { money } from "../../lib/planTerms";
 import type { PackagePurchase } from "../../hooks/usePackagePurchase";
 import PlanTermsBlock from "./PlanTermsBlock";
 import PlanActiveMoment from "./PlanActiveMoment";
+import { NewCoachLine } from "../renewal/CoachMonogram";
 import { featureFlags } from "../../config/featureFlags";
 
 export interface PurchaseFeedbackProps {
@@ -31,6 +32,7 @@ export interface PurchaseFeedbackProps {
   openPlanLabel?: string;
   /** C5 Style C: open what the purchase unlocks (surfaces in the More stack). */
   onSeeUnlocks?: (purchaseId: string) => void;
+  newCoachName?: string; // RENEWAL-M H3: the client just joined this coach (the house coach), so success says so
 }
 
 export default function PurchaseFeedback({
@@ -39,6 +41,7 @@ export default function PurchaseFeedback({
   onOpenPlan,
   openPlanLabel = PACKAGE_PAYMENT_COPY.openPlan,
   onSeeUnlocks,
+  newCoachName,
 }: PurchaseFeedbackProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
@@ -81,6 +84,7 @@ export default function PurchaseFeedback({
           success={state.success}
           onContinue={onContinue}
           onSeeUnlocks={onSeeUnlocks}
+          newCoachName={newCoachName}
         />
       ) : state.phase === "success" && state.success ? (
         <View
@@ -91,6 +95,7 @@ export default function PurchaseFeedback({
           <Text style={styles.successTitle} accessibilityRole="header">
             {state.success.title}
           </Text>
+          <NewCoachLine name={newCoachName} />
           <Text style={styles.body}>{state.success.body}</Text>
           <Primary
             label={PACKAGE_PAYMENT_COPY.continue}

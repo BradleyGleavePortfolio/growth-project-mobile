@@ -34,6 +34,7 @@ import HomeTiles, { type HomeTilesProps } from '../../../components/home/rings/H
 import { HomeNoticeSlot } from '../../../components/home/HomeNoticeSlot';
 import { DunningBanner } from '../../../entitlements/dunning/DunningBanner';
 import PendingInviteBanner from '../../../components/PendingInviteBanner';
+import RenewalHome from '../../../components/renewal/RenewalHome';
 import FinishJoining from '../../../components/join/FinishJoining';
 import ProfileNudge from '../../../components/home/ProfileNudge';
 import PushPermissionCard from '../../../components/home/PushPermissionCard';
@@ -123,6 +124,7 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
           <QuietError layout="inline" message={day.error} onRetry={() => void refresh()} retrying={day.retrying} testID="home-day-data-error" />
         ) : null}
         <Text testID="home-date" style={[typography.eyebrow, { color: sc.textMuted }]}>{homeDateLine(new Date())}</Text>
+        <RenewalHome />
         <View style={styles.dials} testID="home-dials">
           <HomeDial label="Food" view={food} testID="home-dial-food" accessibilityLabel={dialLabel('Food', food)}
             onPress={() => navigation.navigate('Log')} />

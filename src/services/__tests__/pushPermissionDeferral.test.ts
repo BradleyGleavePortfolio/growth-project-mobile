@@ -145,7 +145,7 @@ describe('AUDIT-09-125: a push without actionScreen still opens a screen', () =>
     expect(onResponse).toHaveBeenLastCalledWith('Messages', undefined, 'm1');
     live?.(response('x1', {}));
     expect(onResponse).toHaveBeenLastCalledWith(undefined, undefined, 'x1');
-    // RENEWAL-M: backend #1127 sends the generic center + tgp://home; the tap opens the plan sheet over Home.
+    // RENEWAL-M: backend #1127 sends the generic center + tgp://home; the tap opens Home and its renewal pop-up.
     live?.(response('r1', { kind: 'plan_renewal', actionScreen: 'NotificationCenter', deepLink: 'tgp://home' }));
     expect(onResponse).toHaveBeenLastCalledWith('PlanRenewal', undefined, 'r1', 'tgp://home');
     cleanup();
@@ -169,12 +169,10 @@ describe('app wiring (source guards)', () => {
   });
 });
 
-it('RENEWAL-M: a plan_renewal banner in the foreground opens the plan sheet too', () => {
+it('RENEWAL-M: a plan_renewal banner in the foreground opens the renewal pop-up too', () => {
   const stop = installForegroundHandler();
   const listener = mockAddReceived.mock.calls[mockAddReceived.mock.calls.length - 1]?.[0] as (n: unknown) => void;
-  listener({ request: { identifier: 'renew', content: { title: 'Your plan', body: '',
-    data: { kind: 'plan_renewal', actionScreen: 'NotificationCenter', deepLink: 'tgp://home' },
-  } } });
+  listener({ request: { identifier: 'renew', content: { title: 'Your plan', body: '', data: { kind: 'plan_renewal', actionScreen: 'NotificationCenter' } } } });
   expect(foregroundBannerStore.getState().banner?.actionScreen).toBe('PlanRenewal');
   stop();
   foregroundBannerStore.getState().reset();

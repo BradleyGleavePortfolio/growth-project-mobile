@@ -54,7 +54,7 @@ import { useLeanOnboardingReconcile } from '../hooks/useLeanOnboardingReconcile'
 // navigator. On first cold start after onboarding the app checks
 // GET /me/first-win/status; if incomplete the Day1WinScreen is shown once.
 // 'coach_wizard' — shown when GET /coach/onboarding returns is_complete:false.
-// 'package_prompt' — PackageSelectionSheet: the start check (lib/packagePromptGate) or a plan_renewal push tap.
+// 'package_prompt' — PackageSelectionSheet, at most once per 24h (lib/packagePromptGate).
 type AuthState =
   | 'loading'
   | 'unauthenticated'
@@ -80,12 +80,10 @@ import { readUserCache, clearUserCache, patchUserCache } from '../lib/userCache'
 import { clientAgeConfirmed, onAgeConfirmationRequired } from '../lib/ageGate';
 import { AgeCheckNavigator } from '../screens/consultation/AgeCheckScreen';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
-import { packagePromptDueAtStart, renewalTapDue, takeStartOffer } from '../lib/packagePromptGate';
-import { recordRenewalShown } from '../lib/planRenewal';
+import { packagePromptDueAtStart } from '../lib/packagePromptGate';
 import {
   attachPushNavigator,
   flushPendingPushTap,
-  onPlanRenewalTap,
   pushSessionFor,
   routeAppLink,
   setPushSession,
@@ -404,26 +402,6 @@ export default function RootNavigator() {
     const t = setTimeout(() => flushPendingPushTap(), 0);
     return () => clearTimeout(t);
   }, [authState, sessionUserId]);
-  // RENEWAL-M: a delivered plan_renewal tap opens the plan sheet over Home while the server still has the plan
-  // ended (an open sheet stays the only one). The tap is the client's own ask, so the 24h wait is skipped.
-  const [renewalTap, setRenewalTap] = useState(false);
-  const renewalTapSession = useRef({ authState, sessionUserId });
-  useEffect(() => {
-    renewalTapSession.current = { authState, sessionUserId };
-  }, [authState, sessionUserId]);
-  useEffect(() => onPlanRenewalTap(() => {
-    const { authState: s, sessionUserId: uid } = renewalTapSession.current;
-    if (s !== 'student' || !uid) return;
-    void renewalTapDue(uid).then((due) => {
-      if (!due || renewalTapSession.current.sessionUserId !== uid) return;
-      setRenewalTap(true);
-      setAuthStateNow((cur) => (cur === 'student' ? 'package_prompt' : cur));
-    });
-  }), []);
-  const closePackagePrompt = () => {
-    setRenewalTap(false);
-    setAuthStateNow('student');
-  };
   // LEGAL-03 / PRIV-06: analytics start only for a committed signed-in
   // session (sign-in needs the Terms and Privacy Policy agreement). This
   // covers a cold start of a signed-in user; the sign-in screens identify on
@@ -938,10 +916,10 @@ export default function RootNavigator() {
           role: 'student',
         });
 
-        // PackageSelectionSheet: never inside 24 h of a showing; on iPhone first
-        // Home after the consultation (#161-5 op 1); after a plan ends, the
-        // renewal pop-ups (RENEWAL-M). Coached clients with no active plan only;
-        // the rule lives in lib/packagePromptGate.ts.
+        // PackageSelectionSheet, once per 24 h after it was last shown or
+        // skipped; on iPhone also on first Home after the consultation (#161-5
+        // op 1). Coached clients with no active plan only; the rule lives in
+        // lib/packagePromptGate.ts.
         try {
           if (user?.id && (await withStartupTimeout(packagePromptDueAtStart(user.id), 'package prompt'))) {
             setAuthState('package_prompt');
@@ -1092,7 +1070,7 @@ export default function RootNavigator() {
       ) : authState === 'coach' ? (
         <CoachNavigator />
       ) : authState === 'package_prompt' ? (
-        // The package sheet on top of the client app (lib/packagePromptGate: start check, plan_renewal tap).
+        // Re-surface the package sheet after 24h on top of the client app.
         // PackageSelectionSheet renders as a Modal so ClientNavigator underneath
         // is fully mounted and ready when the sheet is dismissed.
         <EntitlementProvider
@@ -1121,13 +1099,8 @@ export default function RootNavigator() {
           <PackageSelectionSheet
             visible
             recordShown
-            skipSnoozeCheck={renewalTap}
-            onShown={() => {
-              const offer = sessionUserId ? takeStartOffer(sessionUserId) : null;
-              if (offer && sessionUserId) void recordRenewalShown(sessionUserId, offer.renewal);
-            }}
-            onDismiss={closePackagePrompt}
-            onPaymentSuccess={closePackagePrompt}
+            onDismiss={() => setAuthStateNow('student')}
+            onPaymentSuccess={() => setAuthStateNow('student')}
           />
         </EntitlementProvider>
       ) : (

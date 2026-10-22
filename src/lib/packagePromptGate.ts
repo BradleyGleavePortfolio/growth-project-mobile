@@ -23,19 +23,19 @@
  *    dunning banner and lockout screens own that moment and a second plan
  *    must not start beside an unpaid one. Read only when the entitlement is
  *    already inactive; a failed read fails closed.
- *  - RENEWAL-M: never when the server says the coach revoked this client's
- *    access (`renewal.state` 'revoked'), on any path.
- *  - At start (packagePromptDueAtStart), never daily (owner #836-CAP: "a renewal
- *    dunning proccess"): an ended plan opens it only while the server's
- *    renewal block says `popup_due`; a client with no renewal (never bought, or
- *    an older server) gets it once (iPhone first Home, Android after a Day 1
- *    skip), see lib/planRenewal. The start read stays bounded (#836 Opus C3):
- *    once a day, at every start only while a renewal sequence still has a
- *    pop-up to come, and never within a day of the sheet opening (it saves that
- *    time the moment it opens, `recordShown`, #836 Sol B1). Never while Roman's
- *    tour is unfinished or about to start, also after a restart (tourAtStart,
- *    #836 Opus C4, Sol B2): the tour comes first, nothing is saved, and a later
- *    start offers the sheet.
+ *  - RENEWAL-M (lib/planRenewal): never when the server says the coach revoked this client's access, and
+ *    never at start for an ended plan (Home shows the renewal pop-up and banner instead). With no renewal
+ *    sequence (never bought, or an older server) it opens at start once, not daily (#836-CAP).
+ *  - Once per 24 h (packagePromptDueAtStart): a day after the sheet was last
+ *    shown or skipped. The unsolicited sheet saves the time in the same key
+ *    the moment it opens (PackageSelectionSheet `recordShown`, #836 Sol B1),
+ *    so closing the app, going back or an empty list never brings it back
+ *    sooner. iPhone also asks on first Home, because the consultation skips
+ *    the Day 1 sheet, and when it does not offer the sheet it saves the time,
+ *    so the entitlement read runs at most once a day. Android asks only after
+ *    a skip, as before. Never while Roman's tour is unfinished or about to
+ *    start, also after a restart (tourAtStart, #836 Opus C4, Sol B2): the
+ *    tour comes first, nothing is saved, and a later start offers the sheet.
  */
 import { Platform } from 'react-native';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
@@ -47,7 +47,7 @@ import { loadTutorial } from '../tutorial/tutorialStorage';
 import type { TutorialStatus } from '../tutorial/types';
 import { prefsStorage } from '../storage/mmkv';
 import { readUserCache } from './userCache';
-import { clearRenewalShownOnce, readRenewal, renewalSheetDue, type Renewal } from './planRenewal';
+import { readRenewal, shownOnce, type Renewal } from './planRenewal';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -65,69 +65,41 @@ async function tourAtStart(userId: string): Promise<TutorialStatus | 'starting' 
   return saved === 'not_started' && featureFlags.consultationOnboarding ? 'ask' : saved;
 }
 
-type PlanRead = { kind: 'active' } | { kind: 'no' } | { kind: 'offer'; renewal: Renewal | undefined };
-const NO: PlanRead = { kind: 'no' };
-
-async function readPlan(): Promise<PlanRead> {
-  if (!(await readUserCache())?.coach_id) return NO;
+async function readOffer(): Promise<{ renewal: Renewal | undefined } | null> {
+  if (!(await readUserCache())?.coach_id) return null;
   const res = await clientPaymentsApi.getEntitlement();
-  if (!res || !res.ok) return NO;
+  if (!res || !res.ok) return null;
   const data = res.data as { active?: unknown; entitlement_active?: unknown } | null | undefined;
-  if (!data || typeof data !== 'object') return NO;
-  if (data.entitlement_active === true || data.active === true) return { kind: 'active' };
-  if (data.active !== false) return NO;
+  if (!data || typeof data !== 'object') return null;
+  if (data.entitlement_active === true || data.active !== false) return null;
   const renewal = readRenewal(data);
-  if (renewal?.state === 'revoked') return NO;
-  return (await dunningApi.getStatus()).state === 'none' ? { kind: 'offer', renewal } : NO;
+  if (renewal?.state === 'revoked') return null;
+  return (await dunningApi.getStatus()).state === 'none' ? { renewal } : null;
 }
 
 export async function shouldOfferPackagePrompt(): Promise<boolean> {
   try {
-    return (await readPlan()).kind === 'offer';
+    return !!(await readOffer());
   } catch {
     return false;
   }
 }
 
-/** What the start check offered, for PackageSelectionSheet `onShown` (lib/planRenewal recordRenewalShown). */
-let startOffer: { userId: string; renewal: Renewal | undefined } | null = null;
-export function takeStartOffer(userId: string): { renewal: Renewal | undefined } | null {
-  const o = startOffer?.userId === userId ? startOffer : null;
-  startOffer = null;
-  return o;
-}
-
-/** R15: the keys are per user, so another account on this phone never inherits them. */
+/** R15: the key is per user, so another account on this phone never inherits it. */
 export async function packagePromptDueAtStart(userId: string, now: number = Date.now()): Promise<boolean> {
   try {
-    const shownAt = await prefsStorage.getStringAsync(`onboarding.package_prompt_dismissed_at:${userId}`);
-    const lookKey = `onboarding.package_prompt_looked_at:${userId}`;
-    const within = (at: string | undefined) => !!at && !(now - new Date(at).getTime() > DAY_MS);
-    if (within(shownAt) || within(await prefsStorage.getStringAsync(lookKey))) return false;
+    const key = `onboarding.package_prompt_dismissed_at:${userId}`;
+    const lastAt = await prefsStorage.getStringAsync(key);
+    const ios = Platform.OS === 'ios';
+    if (lastAt ? !(now - new Date(lastAt).getTime() > DAY_MS) : !ios) return false;
     const tour = await tourAtStart(userId);
     if (tour === 'starting' || tour === 'active') return false;
-    const plan = await readPlan();
-    if (plan.kind === 'offer' && (await renewalSheetDue(userId, plan.renewal, Platform.OS === 'ios' || !!shownAt))) {
-      if (tour === 'ask' && (await consultationApi.getState())?.completed === true) return false;
-      startOffer = { userId, renewal: plan.renewal };
-      return true;
+    const offer = await readOffer();
+    if (offer && offer.renewal?.state !== 'ended' && !(await shownOnce(userId))) {
+      return !(tour === 'ask' && (await consultationApi.getState())?.completed === true);
     }
-    if (plan.kind === 'active') await clearRenewalShownOnce(userId);
-    const running = plan.kind === 'offer' && plan.renewal?.state === 'ended' && plan.renewal.running;
-    if (!running) await prefsStorage.set(lookKey, new Date(now).toISOString());
+    if (ios) await prefsStorage.set(key, new Date(now).toISOString());
     return false;
-  } catch {
-    return false;
-  }
-}
-
-/** RENEWAL-M: a plan_renewal push was tapped. Open the sheet while the server still has this plan ended. */
-export async function renewalTapDue(userId: string): Promise<boolean> {
-  try {
-    const plan = await readPlan();
-    if (plan.kind !== 'offer' || plan.renewal?.state !== 'ended') return false;
-    startOffer = { userId, renewal: plan.renewal };
-    return true;
   } catch {
     return false;
   }

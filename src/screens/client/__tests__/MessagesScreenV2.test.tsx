@@ -179,17 +179,6 @@ describe('client MessagesScreen with messaging_core_v2 ON', () => {
     await waitFor(() => expect(postMock).toHaveBeenCalledWith('/messages', expect.objectContaining({ body: 'reply', reply_to_id: 'm1' }), expect.anything()));
   });
 
-  it('RENEWAL-M: the Day 0 renewal message (sent as the coach, backend #1127) reads as a normal coach message', async () => {
-    const body = 'Hi Sam, your plan with me has ended. If you want to keep going, you can pick a new plan in the app. Message me here with any questions.';
-    mockList.mockResolvedValue({ data: { messages: [row({ id: 'r0', sender_id: 'coach-9', body, automated_by: 'plan_renewal' })] } });
-    const u = await render(<MessagesScreen />);
-    await u.findByLabelText(/Message: Hi Sam, your plan with me has ended/);
-    expect(u.getByText(body)).toBeTruthy();
-    await fireEvent(u.getByLabelText(/Message: Hi Sam/), 'longPress');
-    expect(await waitFor(() => u.getByLabelText('Report Message'))).toBeTruthy();
-    expect(u.queryByLabelText('Edit')).toBeNull();
-  });
-
   it('load errors offer an honest retry, not a contradictory empty conversation', async () => {
     const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     mockList.mockRejectedValue(new Error('offline'));

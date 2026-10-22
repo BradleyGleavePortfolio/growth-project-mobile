@@ -163,7 +163,7 @@ export function fallbackScreenForKind(kind: unknown): string | undefined {
   return 'NotificationCenter';
 }
 
-/** RENEWAL-M: a plan_renewal push opens the plan sheet over Home (pushTapRouter PlanRenewal), not the inbox. */
+/** RENEWAL-M: a plan_renewal push (no action buttons) opens Home and its renewal pop-up (pushTapRouter PlanRenewal). */
 function pushScreenOf(data: Record<string, unknown> | undefined): string | undefined {
   if (data?.kind === 'plan_renewal') return 'PlanRenewal';
   return typeof data?.actionScreen === 'string' ? data.actionScreen : undefined;

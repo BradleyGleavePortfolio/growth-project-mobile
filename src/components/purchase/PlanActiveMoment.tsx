@@ -38,6 +38,7 @@ import {
   type SemanticTokens,
 } from "../../theme/tokens";
 import { PrimaryButton, TextLink } from "../../ui";
+import { NewCoachLine } from "../renewal/CoachMonogram";
 import { HapticService } from "../../ui/haptics/haptics.service";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -127,12 +128,14 @@ export interface PlanActiveMomentProps {
   onContinue: () => void;
   /** Open what the purchase unlocks (More stack only); omitted elsewhere. */
   onSeeUnlocks?: (purchaseId: string) => void;
+  newCoachName?: string; // RENEWAL-M H3: the client just joined this coach (the house coach)
 }
 
 export default function PlanActiveMoment({
   success,
   onContinue,
   onSeeUnlocks,
+  newCoachName,
 }: PlanActiveMomentProps) {
   const { semanticColors } = useTheme();
   const s = useMemo(() => makeStyles(semanticColors), [semanticColors]);
@@ -191,6 +194,7 @@ export default function PlanActiveMoment({
       <Text style={s.title} accessibilityRole="header">
         {success.title}
       </Text>
+      <NewCoachLine name={newCoachName} />
       <Text style={s.body}>{success.body}</Text>
       {lines.length > 0 ? (
         <View style={s.card} testID="payment-success-receipt">

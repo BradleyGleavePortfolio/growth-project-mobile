@@ -12,9 +12,7 @@
  *     backend is the source of truth (workout_reminder_push/_inapp); the
  *     server value is read on mount so the switch never shows a stale state.
  *     Hidden for coach and owner accounts (reminders go to clients only).
- *   - Plan renewal reminders (plan_renewal) — RENEWAL-M: the Day 0, 1, 3 and 7
- *     app notifications after a plan ends (plan_renewal_push, default on).
- *     Clients only, and only once the server returns the field.
+ *   - Plan renewal reminders (plan_renewal_push, RENEWAL-M): Day 0, 1, 7 after a plan ends; clients, once the server has it.
  *
  * A failed save rolls the switch back and shows an inline notice chosen by
  * status (notificationPreferenceErrors.ts), never a generic alert.
@@ -93,7 +91,7 @@ const BACKEND_FIELD_MAP: Record<NotifCategory, Record<string, boolean>> = {
   milestones: { milestone_push: true, milestone_inapp: true },
   system: { digest_email: true },
   workout_reminders: { workout_reminder_push: true, workout_reminder_inapp: true },
-  // RENEWAL-M (backend #1127): the plan renewal app notifications only; the pop-up and the coach's messages stay.
+  // RENEWAL-M (backend #1127): the plan renewal app notifications only; Home's pop-up and banner stay.
   plan_renewal: { plan_renewal_push: true },
 };
 

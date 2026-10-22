@@ -6,8 +6,7 @@
  * (active), coachless and every unknown/error lookup must skip the sheet.
  */
 import React from 'react';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), replace: jest.fn() }),
@@ -48,8 +47,8 @@ jest.mock('../entitlements/dunning/dunningApi', () => ({ dunningApi: { getStatus
 jest.mock('../components/PackageSelectionSheet', () => {
   const R = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
-  return ({ visible, recordShown, onShown }: { visible: boolean; recordShown?: boolean; onShown?: () => void }) =>
-    visible ? R.createElement(Text, { testID: 'package-sheet', recordShown, onShown }, 'sheet') : null;
+  return ({ visible, recordShown }: { visible: boolean; recordShown?: boolean }) =>
+    visible ? R.createElement(Text, { testID: 'package-sheet', recordShown }, 'sheet') : null;
 });
 let mockCoachId: string | undefined = 'coach-1';
 jest.mock('../lib/userCache', () => ({
@@ -104,9 +103,6 @@ describe('Day1WinScreen package prompt is fail closed', () => {
     await waitFor(() => expect(r.getByTestId('package-sheet')).toBeTruthy());
     expect(r.getByTestId('package-sheet').props.recordShown).toBe(true);
     expect(r.onComplete).not.toHaveBeenCalled();
-    // RENEWAL-M: this is the iPhone's one first offer, so a later start does not offer it again.
-    await act(async () => r.getByTestId('package-sheet').props.onShown());
-    await waitFor(async () => expect(await AsyncStorage.getItem('prefs:plan_renewal.shown_once:client-1')).not.toBeNull());
   });
 
   it('Android: the sheet keeps its skip-only 24 h time', async () => {
@@ -114,7 +110,6 @@ describe('Day1WinScreen package prompt is fail closed', () => {
     const r = await skipAndSettle(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
     await waitFor(() => expect(r.getByTestId('package-sheet')).toBeTruthy());
     expect(r.getByTestId('package-sheet').props.recordShown).toBe(false);
-    expect(r.getByTestId('package-sheet').props.onShown).toBeUndefined();
   });
 
   it('payment failing (dunning past_due): no sheet, straight into the app (#836 C1)', async () => {
