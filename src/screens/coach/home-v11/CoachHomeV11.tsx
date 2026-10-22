@@ -41,7 +41,7 @@ interface Props {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** One win at a time (LS B2); with more, the next every few seconds unless motion or a screen reader is off-limits. */
+/** One win at a time (LS B2); with more, the next every few seconds unless motion or a screen reader is off-limits or the Home is not in front. */
 function useWinTurn(n: number) {
   const [turn, setTurn] = useState(0);
   const [still, setStill] = useState(true);
@@ -65,7 +65,7 @@ export default function CoachHomeV11(p: Props) {
   const cs = useCardStyles();
   const { top, bottom } = useScreenInsets();
   const bigText = useWindowDimensions().fontScale > 1.15; // no win line, Approve over the kinds: on the first screen (LS B2)
-  const { data, reload, retryMonth, retryRoster, retryDrafts } = useCoachHomeV11(p.sources);
+  const { data, reload, retryMonth, retryRoster, retryDrafts, focused } = useCoachHomeV11(p.sources);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [list, setList] = useState<'wins' | 'reach' | null>(null);
   const o = data.overview;
@@ -73,7 +73,7 @@ export default function CoachHomeV11(p: Props) {
   const roster = o?.roster_size ?? 0;
   const rosterN = formatCount(roster);
   const items = home?.wins.items ?? [];
-  const turn = useWinTurn(items.length);
+  const turn = useWinTurn(focused ? items.length : 0); // paused while another tab is in front (LO C2)
   const win = items.length > 0 ? items[turn % Math.min(3, items.length)] : undefined; // the newest three take turns (spec item 2)
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;

@@ -153,7 +153,7 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
       'home-alerts': 'Open alerts, 3', 'home-ring-check_ins': 'Check-ins, 5 of 9', 'home-ring-replies': 'Replies, 1 of 1',
       'home-ring-reach_outs': 'Reach-outs, 2 of 5', 'home-wins-all': '12 wins this week. See all',
     });
-    expect(v.getByText('The day is in motion. Close the rings as you go.')).toBeTruthy();
+    expect([!!v.getByText('The day is in motion. Close the rings as you go.'), v.getByText('5/9').props]).toEqual([true, expect.objectContaining({ adjustsFontSizeToFit: true, minimumFontScale: 0.5, maxFontSizeMultiplier: 1 })]); // 112/140 fits (LO B2)
     expect(v.queryByTestId('command-center-settings')).toBeNull(); // no tab row on the Home itself
     expect(v.getByTestId('cards-setup')).toBeTruthy(); // the setup checklist on the hero, the push ask and brief under it
     expect(v.queryByTestId('cards-all')).toBeNull();
@@ -226,7 +226,7 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     const v = await renderHome();
     await press(v, 'home-wins-all', 'home-list-w1', 'home-draft-ask');
     expect(v.getByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy();
-    expect(v.queryByTestId('home-draft-send')).toBeNull();
+    expect([v.queryByTestId('home-draft-send'), label(v, 'home-draft-ask')]).toEqual([null, 'Try again']); // says what it shows (LO C1)
   });
   it("opens the wins list from the headline, and a win's ask-first draft in that same sheet, back to the list (B3, LO B1)", async () => {
     const v = await renderHome();
@@ -261,12 +261,12 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     const v = await renderHome();
     expect(v.getByTestId('home-ring-reach_outs').props.accessibilityRole).not.toBe('button');
   });
-  it('re-reads the day, roster and at-risk list on each return to the Home, not on blur (B2)', async () => {
-    const v = await renderHome();
-    expect(overviewReads()).toBe(1);
+  it('re-reads the day, roster and at-risk list on each return to the Home, not on blur (B2), and stops the win turn on blur (LO C2)', async () => {
+    const [run, stop, v] = [jest.spyOn(global, 'setInterval'), jest.spyOn(global, 'clearInterval'), await renderHome()]; const turns = () => run.mock.results.filter((r, i) => run.mock.calls[i][1] === 6000 && !stop.mock.calls.some(([id]) => id === r.value)).length;
+    expect([overviewReads(), turns()]).toEqual([1, 1]);
     mockFocus.current = false;
     await act(async () => v.rerender(<CommandCenterScreen />));
-    expect(overviewReads()).toBe(1);
+    expect([overviewReads(), turns()]).toEqual([1, 0]);
     mockFocus.current = true;
     await act(async () => v.rerender(<CommandCenterScreen />));
     await waitFor(() => expect(overviewReads()).toBe(2));
