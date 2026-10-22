@@ -100,12 +100,22 @@ export function lookupReason(
   return { text, action: null, ok: line.tone === 'ok' };
 }
 
-const WORDS = ['No one', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen'];
-const word = (n: number) => WORDS[n] ?? String(n);
+const WORDS = ['No one', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen',
+  'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+/** A sentence never starts with a numeral: "Twenty-three", "One hundred and six" (any roster under 1,000). */
+function word(n: number): string {
+  if (n < 20) return WORDS[n];
+  if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? `-${word(n % 10).toLowerCase()}` : '');
+  return n < 1000 ? `${WORDS[Math.floor(n / 100)]} hundred${n % 100 ? ` and ${word(n % 100).toLowerCase()}` : ''}` : String(n);
+}
+/** Steady clients are counted while the coach can read them all (under 15); past that, the Everyone row holds the number. */
+const STEADY_COUNTED_UP_TO = SEARCH_FIRST_AT - 1;
 
-/** "Two need you today. One is steady." */
+/** "Two need you today. One is steady." / "Twenty-three need you today. Everyone else is steady." */
 export function needsYouSentence(needs: number, steady: number): string {
-  const steadyPart = steady > 0 ? `${word(steady)} ${steady === 1 ? 'is' : 'are'} steady.` : '';
+  const steadyPart = steady > STEADY_COUNTED_UP_TO ? (needs > 0 ? 'Everyone else is steady.' : 'Everyone is steady.')
+    : steady > 0 ? `${word(steady)} ${steady === 1 ? 'is' : 'are'} steady.` : '';
   if (needs === 0) return steadyPart;
   const needsPart = `${word(needs)} ${needs === 1 ? 'needs' : 'need'} you today.`;
   return steadyPart ? `${needsPart} ${steadyPart}` : needsPart;

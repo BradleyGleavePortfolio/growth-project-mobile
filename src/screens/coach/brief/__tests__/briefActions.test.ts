@@ -17,6 +17,9 @@ jest.mock('../../../../config/featureFlags', () => ({
 import {
   actionTarget,
   briefFirstName,
+  briefHasExtras,
+  briefSections,
+  compareBrief,
   selectBriefActions,
   MAX_BRIEF_ACTIONS,
   type BriefAction,
@@ -304,5 +307,108 @@ describe('actionTarget', () => {
       { ...MONEY, target: { tab: 'MoneyStack', params: { screen: 'CoachMoney', pop: true } } },
     ]);
     on.restore();
+  });
+});
+
+// ROMAN-EXTRAS-M (Style A, folded rows): a brief from a server that sends the check-in and new-client rows.
+describe('selectBriefActions: folded rows (brief_context.checkins_to_review present)', () => {
+  const at = (mins: number) => new Date(Date.UTC(2026, 9, 21, 9, 0) - mins * 60_000).toISOString();
+  const one = (type: string, id: string, name: string, over: Partial<CoachBriefActionItem> = {}): CoachBriefActionItem => ({
+    type,
+    client_id: id,
+    client_name: name,
+    detail: type === 'checkin_review' ? 'Check-in needs review' : type === 'checkin_missing' ? 'Has not checked in today' : `${type} ${id}`,
+    priority: 1,
+    ...over,
+  });
+  const many = (type: string, n: number) =>
+    Array.from({ length: n }, (_, i) => one(type, `${type}-${i}`, `Client${String(i).padStart(3, '0')} Lee`, { occurred_at: at(i) }));
+  const extras = { extras: true };
+
+  it('briefHasExtras reads only brief_context.checkins_to_review', () => {
+    expect(briefHasExtras({ brief_context: { checkins_to_review: 0 } })).toBe(true);
+    expect(briefHasExtras({ brief_context: {} })).toBe(false);
+    expect(briefHasExtras({ brief_context: null })).toBe(false);
+    expect(briefHasExtras(null)).toBe(false);
+  });
+
+  it('100 clients: one folding row per kind with every client counted, new clients last', () => {
+    const items = [...many('client_joined', 20), ...many('checkin_missing', 23), ...many('checkin_review', 50), ...many('weight_flag', 6), ...many('message_unread', 14)];
+    const rows = selectBriefActions(items, extras);
+    expect(rows.map((r) => [r.label, r.opens === 'list' ? r.items.length : 1, r.opens === 'list' && r.fold])).toEqual([
+      ['See messages', 14, true],
+      ['See weight logs', 6, true],
+      ['See check-ins', 73, true],
+      ['See new clients', 20, true],
+    ]);
+    expect(selectBriefActions([...items].reverse(), extras)).toEqual(rows);
+  });
+
+  it('the same items on an older brief keep today\u2019s two rows that open the list', () => {
+    const rows = selectBriefActions([...many('message_unread', 14), ...many('weight_flag', 6), ...many('checkin_missing', 5)]);
+    expect(rows.map((r) => r.label)).toEqual(['See messages', 'See weight logs']);
+    expect(rows.length).toBe(MAX_BRIEF_ACTIONS);
+    expect(rows.every((r) => r.opens === 'list' && r.fold === undefined)).toBe(true);
+  });
+
+  it('10 clients: one message, three check-ins, one new client', () => {
+    const rows = selectBriefActions(
+      [
+        one('message_unread', 'm1', 'Maya Chen'),
+        one('checkin_review', 'c1', 'Dev Haddad', { occurred_at: at(5) }),
+        one('checkin_review', 'c2', 'Eli Wolfe', { occurred_at: at(9) }),
+        one('checkin_missing', 'c3', 'Iris Moreau'),
+        one('client_joined', 'j1', 'Lena Park', { detail: 'Joined yesterday' }),
+      ],
+      extras,
+    );
+    expect(rows.map((r) => r.label)).toEqual(['Reply to Maya', 'See check-ins', 'Say hello to Lena']);
+    expect(rows[2]).toEqual({
+      kind: 'welcome',
+      label: 'Say hello to Lena',
+      opens: 'screen',
+      target: actionTarget(one('message_unread', 'j1', 'Lena Park')),
+    });
+  });
+
+  it('a client both waiting on a review and missing today counts in each group', () => {
+    const [row] = selectBriefActions([one('checkin_review', 'c1', 'Dev Haddad', { occurred_at: at(1) }), one('checkin_missing', 'c1', 'Dev Haddad')], extras);
+    expect(row).toMatchObject({ label: 'See check-ins', opens: 'list' });
+    if (row.opens !== 'list') throw new Error('expected a list row');
+    expect(briefSections(row.items).map((s) => [s.title, s.items.length])).toEqual([
+      ['Check-in needs review', 1],
+      ['Has not checked in today', 1],
+    ]);
+  });
+
+  it('newest first by occurred_at, reviews before missed check-ins, A to Z when there is no time', () => {
+    const items = [
+      one('checkin_missing', 'x', 'Ann Zed'),
+      one('checkin_review', 'old', 'Bo Old', { occurred_at: at(300) }),
+      one('checkin_review', 'none', 'Al None'),
+      one('checkin_review', 'new', 'Cy New', { occurred_at: at(1) }),
+      one('checkin_missing', 'y', 'Abe Young'),
+    ];
+    const [row] = selectBriefActions(items, extras);
+    if (row.opens !== 'list') throw new Error('expected a list row');
+    expect(row.items.map((i) => i.client_id)).toEqual(['new', 'old', 'none', 'y', 'x']);
+    expect(compareBrief(items[1], items[3])).toBeGreaterThan(0);
+  });
+
+  it('every new item type opens a real place', () => {
+    expect(actionTarget(one('checkin_review', 'c1', 'Dev Haddad'))).toEqual({
+      tab: 'ClientsStack',
+      params: { screen: 'ClientDetail', params: { clientId: 'c1', clientName: 'Dev Haddad' }, initial: false },
+    });
+    expect(actionTarget(one('client_joined', 'j1', 'Lena Park'))).toEqual(actionTarget(one('message_unread', 'j1', 'Lena Park')));
+  });
+
+  it('briefSections: grouped types under their detail in first-seen order; others in one untitled run', () => {
+    const joined = [one('client_joined', 'a', 'Al A', { detail: 'Joined today' }), one('client_joined', 'b', 'Bo B', { detail: 'Joined yesterday' }), one('client_joined', 'c', 'Cy C', { detail: 'Joined today' })];
+    expect(briefSections(joined).map((s) => [s.title, s.items.map((i) => i.client_id)])).toEqual([
+      ['Joined today', ['a', 'c']],
+      ['Joined yesterday', ['b']],
+    ]);
+    expect(briefSections(many('weight_flag', 3)).map((s) => [s.title, s.items.length])).toEqual([[null, 3]]);
   });
 });

@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { View, Text, RefreshControl, Alert } from 'react-native';
+import { View, Text, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { addDays, getLocalWeekStart, getTodayString } from '../../utils/date';
@@ -39,6 +39,13 @@ import { MoodEnergyPicker } from './habits/MoodEnergyPicker';
 import { buildCheckInPayload } from './habits/checkInPayload';
 import { AddHabitSheet } from './habits/AddHabitSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
+import RomanAvatar from '../../components/roman/RomanAvatar';
+import FadeInView from '../../components/FadeInView';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { romanStreak, type RomanStreakTier } from '../../lib/roman/copy';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
+import { forestPop, radius } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { ProtectedScreen } from '../../entitlements/ProtectedScreen';
 import HabitsRing from './habits/ring/HabitsRing';
@@ -75,6 +82,10 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
   const createHabitInFlight = useRef(false);
   const deleteHabit = useDeleteHabit();
   const saveCheckIn = useSaveCheckIn();
+  const firstName = (useCurrentUser()?.firstName ?? '').trim() || 'there';
+  // Roman is locked for a client with no coach (the app's Roman lock test), so no streak line for them (OPERATOR RULING 6325497927).
+  const romanLocked = useClientNeedsCoach();
+  const romanStreakOn = featureFlags.romanChat && featureFlags.romanStreakBackendLive && !romanLocked;
 
   // Check-in form state — hydrated from server, edited locally before save.
   const [mood, setMood] = useState(3);
@@ -166,7 +177,15 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
     todayCheckInQ.refetch();
   };
 
-  const checkInSaved = !!todayCheckInQ.data;
+  // A confirmed save for today stands on the POST reply alone, so a day re-read that fails or is still on its way
+  // cannot hide the saved state or the milestone (S-842-1).
+  const savedReply = saveCheckIn.isSuccess && saveCheckIn.variables?.date === today ? saveCheckIn.data : undefined;
+  const checkInSaved = !!todayCheckInQ.data || savedReply != null;
+  // ROMAN-EXTRAS-M (#161-2 op 1): the server's check-in streak, from the save reply or today's row. On the day it
+  // reaches 3, 7 or 30, Roman's line takes the place of "Check-in saved" (coached clients only).
+  const milestone = romanStreakOn && checkInSaved
+    ? streakMilestone(savedReply) ?? streakMilestone(todayCheckInQ.data)
+    : null;
 
   const handleToggle = (habit: HabitView) => {
     const newCompleted = !habit.log?.completed;
@@ -242,8 +261,9 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
     saveCheckIn.mutate(
       buildCheckInPayload({ date: today, mood, energy, sleepHours, notes }),
       {
-        onSuccess: () => {
+        onSuccess: (reply) => {
           setLastCheckInDate(today);
+          if (romanStreakOn && streakMilestone(reply)) void HapticService.success();
           setCheckInToast(true);
           setTimeout(() => setCheckInToast(false), 2200);
         },
@@ -402,7 +422,16 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
               />
             ) : (
               <>
-                {checkInToast ? (
+                {milestone ? (
+                  <FadeInView duration={300} style={{ ...streakStyles.card, backgroundColor: sc.bgSurface }}>
+                    <View style={streakStyles.row} accessibilityLiveRegion="polite" testID="checkin-streak">
+                      <RomanAvatar crop={milestone === 3 ? 'neutral' : 'smile'} size={40} />
+                      <Text style={[streakStyles.line, { color: sc.textPrimary }]}>
+                        {romanStreak({ tier: milestone, firstName, mode: milestone === 3 ? 'default' : 'celebration' })}
+                      </Text>
+                    </View>
+                  </FadeInView>
+                ) : checkInToast ? (
                   <View style={styles.savedRow} accessibilityLiveRegion="polite">
                     <Ionicons name="checkmark-circle-outline" size={18} color={sc.accentText} />
                     <Text style={styles.savedText}>Check-in saved</Text>
@@ -464,3 +493,16 @@ export default function HabitsScreen({ onSaved, initialTab = 'habits' }: { onSav
     </Screen>
   );
 }
+
+/** The milestone on a check-in row or save reply (`streak: { days, milestone }`), or null. */
+function streakMilestone(row: unknown): RomanStreakTier | null {
+  const m = (row as { streak?: { milestone?: unknown } | null } | null | undefined)?.streak?.milestone;
+  return m === 3 || m === 7 || m === 30 ? m : null;
+}
+
+const streakStyles = StyleSheet.create({
+  // A leaf wash over the surface colour (the Style A boards' streak card), with a leaf edge.
+  card: { marginBottom: 16, borderRadius: radius.card, borderWidth: 1, borderColor: `${forestPop.leaf}66`, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: `${forestPop.leaf}24` },
+  line: { flex: 1, fontFamily: 'CormorantGaramond_400Regular', fontSize: 21, lineHeight: 27 },
+});

@@ -36,7 +36,6 @@ import { featureFlags } from '../config/featureFlags';
 import { firstWinApi, WinType } from '../services/firstWinApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 import PackageSelectionSheet from '../components/PackageSelectionSheet';
-import { prefsStorage } from '../storage/mmkv';
 import { signOut } from '../services/authActions';
 import { DunningLockoutProvider } from '../entitlements/dunning/DunningLockoutProvider';
 // S6-P1: identity boundary for the persisted React Query cache. Mounted
@@ -55,7 +54,7 @@ import { useLeanOnboardingReconcile } from '../hooks/useLeanOnboardingReconcile'
 // navigator. On first cold start after onboarding the app checks
 // GET /me/first-win/status; if incomplete the Day1WinScreen is shown once.
 // 'coach_wizard' — shown when GET /coach/onboarding returns is_complete:false.
-// 'package_prompt' — re-surfaces PackageSelectionSheet after 24h dismissal gap.
+// 'package_prompt' — PackageSelectionSheet, at most once per 24h (lib/packagePromptGate).
 type AuthState =
   | 'loading'
   | 'unauthenticated'
@@ -81,7 +80,7 @@ import { readUserCache, clearUserCache, patchUserCache } from '../lib/userCache'
 import { clientAgeConfirmed, onAgeConfirmationRequired } from '../lib/ageGate';
 import { AgeCheckNavigator } from '../screens/consultation/AgeCheckScreen';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
-import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
+import { packagePromptDueAtStart } from '../lib/packagePromptGate';
 import {
   attachPushNavigator,
   flushPendingPushTap,
@@ -917,27 +916,14 @@ export default function RootNavigator() {
           role: 'student',
         });
 
-        // Re-surface PackageSelectionSheet if dismissed > 24h ago.
-        // Only triggers on authenticated re-boots, not the first post-onboarding flow
-        // (that is handled inside Day1WinScreen itself).
-        // R15: the dismissed-at key is scoped to user.id so the gate is
-        // per-user and can't be inherited by a different signed-in user.
+        // PackageSelectionSheet, once per 24 h after it was last shown or
+        // skipped; on iPhone also on first Home after the consultation (#161-5
+        // op 1). Coached clients with no active plan only; the rule lives in
+        // lib/packagePromptGate.ts.
         try {
-          const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-          const dismissedAt = user?.id
-            ? await withStartupTimeout(
-                prefsStorage.getStringAsync(`onboarding.package_prompt_dismissed_at:${user.id}`),
-                'package prompt',
-              )
-            : null;
-          if (dismissedAt) {
-            const elapsed = Date.now() - new Date(dismissedAt).getTime();
-            if (elapsed > TWENTY_FOUR_HOURS && (await withStartupTimeout(shouldOfferPackagePrompt(), 'package prompt'))) {
-              // Suppressed for active (comp) entitlements and on iOS while
-              // client purchase surfaces are hidden (App Review 3.1).
-              setAuthState('package_prompt');
-              return;
-            }
+          if (user?.id && (await withStartupTimeout(packagePromptDueAtStart(user.id), 'package prompt'))) {
+            setAuthState('package_prompt');
+            return;
           }
         } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
 
@@ -1112,6 +1098,7 @@ export default function RootNavigator() {
           </DunningLockoutProvider>
           <PackageSelectionSheet
             visible
+            recordShown
             onDismiss={() => setAuthStateNow('student')}
             onPaymentSuccess={() => setAuthStateNow('student')}
           />
