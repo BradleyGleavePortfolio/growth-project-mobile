@@ -13,6 +13,8 @@ let mockTarget: { isSuccess: boolean; data: unknown } = { isSuccess: false, data
 jest.mock('../../../services/api', () => ({
   coachApi: { getClientSummary: (...a: unknown[]) => mockSummary(...a), getClientCheckIns: (...a: unknown[]) => mockCheckIns(...a) },
 }));
+let mockFontScale = 1;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => ({ width: 390, height: 844, scale: 3, fontScale: mockFontScale }) }));
 jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: mockFlags }) }));
 jest.mock('../../../hooks/useMacros', () => ({ useCurrentMacrosForClient: () => mockTarget }));
 jest.mock('../../../theme/ThemeProvider', () => {
@@ -64,6 +66,7 @@ async function mount(c = client()) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFlags = {};
+  mockFontScale = 1;
   mockTarget = { isSuccess: true, data: { calories_kcal: 1900, protein_g: 140, carbs_g: 200, fats_g: 60 } };
   mockSummary.mockResolvedValue(summary());
   mockCheckIns.mockResolvedValue({ data: [{ id: 'k1', date: `${day(0)}T00:00:00.000Z`, energy: 2, notes: 'knee tight' }] });
@@ -107,6 +110,23 @@ describe('UI-4 peek sheet', () => {
     await fireEvent.press(screen.getByTestId('peek-close'));
     await fireEvent.press(screen.getByTestId('peek-scrim', { includeHiddenElements: true })); // screen readers use Close (the sheet is the modal view)
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['default text', 1, 'Maya', 'row'],
+    ['130% text', 1.3, 'Maya', 'column'],
+    ['a long first name', 1, 'Maximiliana-Jo', 'column'],
+  ])('Message and Send nudge stay two equal buttons at %s (LO-847 B2)', async (_case, scale, first, direction) => {
+    mockFontScale = scale as number;
+    await mount({ ...client(), firstName: first } as RosterClient);
+    const row = StyleSheet.flatten(screen.getByTestId('peek-buttons').props.style);
+    expect(row.flexDirection).toBe(direction);
+    expect(row.flexWrap).toBeUndefined(); // never a content-sized wrap
+    // Side by side each slot is an equal half (flex 1, zero basis); stacked each button is the full width.
+    const slots = screen.getAllByTestId('peek-slot');
+    expect(slots).toHaveLength(2);
+    for (const slot of slots) expect(StyleSheet.flatten(slot.props.style)?.flex).toBe(direction === 'row' ? 1 : undefined);
+    expect(screen.getByText(`Message ${first}`)).toBeTruthy();
   });
 
   it('Payments shows only while coach_payment_actions is on, and opens ClientPayments', async () => {

@@ -6,7 +6,8 @@
 import React from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { forestPop as fp, lightTokens, radius, spacing, voiceShades } from '../../theme/tokens';
+import { neutral, radius, spacing, voiceShades } from '../../theme/tokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import VoiceNoteComposer, { type VoiceNoteComposerProps } from './VoiceNoteComposer';
 
 export interface VoiceRecordSheetProps extends VoiceNoteComposerProps {
@@ -20,7 +21,7 @@ export default function VoiceRecordSheet({
 }: VoiceRecordSheetProps): React.ReactElement {
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={useReducedMotion() ? 'none' : 'slide'} onRequestClose={onClose}>
       <View style={styles.scrim}>
         <View
           style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}
@@ -36,9 +37,9 @@ export default function VoiceRecordSheet({
 }
 
 const styles = StyleSheet.create({
-  scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: lightTokens.overlay },
+  scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: voiceShades.scrim },
   sheet: {
-    backgroundColor: fp.surface,
+    backgroundColor: neutral[0],
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingTop: spacing.sm,

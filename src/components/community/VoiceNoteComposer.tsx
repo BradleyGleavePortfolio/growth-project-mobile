@@ -28,7 +28,7 @@ import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
-import { forestPop as fp, radius, spacing, typography, voiceShades } from '../../theme/tokens';
+import { forestPop as fp, neutral, radius, spacing, typography, voiceShades } from '../../theme/tokens';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { LIVE_LEVEL_BARS, useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import type { VoiceRecorderPort, VoiceRecordingResult } from '../../hooks/voiceRecorderPort';
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filled: { backgroundColor: fp.forest },
-  outlined: { borderWidth: 1, borderColor: fp.forest, backgroundColor: fp.surface },
+  outlined: { borderWidth: 1, borderColor: fp.forest, backgroundColor: neutral[0] },
   primaryLabel: {
     fontSize: 17,
     fontWeight: '600',

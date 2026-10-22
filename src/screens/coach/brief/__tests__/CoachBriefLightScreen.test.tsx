@@ -233,3 +233,92 @@ describe('CoachBriefLightScreen: reveal', () => {
     expect(nativeDriverErrors).not.toHaveBeenCalled();
   });
 });
+
+// ROMAN-EXTRAS-M (Style A, folded rows): a brief from a server that sends the check-in and new-client rows.
+describe('CoachBriefLightScreen: folded rows', () => {
+  const at = (mins: number) => new Date(Date.UTC(2026, 9, 21, 9, 0) - mins * 60_000).toISOString();
+  const review = (n: number): CoachBriefActionItem => ({
+    type: 'checkin_review', client_id: `r-${n}`, client_name: `Rev${n} Lee`, detail: 'Check-in needs review', priority: 2, occurred_at: at(n * 10),
+  });
+  const reviews = (n: number) => Array.from({ length: n }, (_, i) => review(i)).reverse();
+  const extras = (items: CoachBriefActionItem[]): CoachBrief => {
+    const b = brief(items);
+    return { ...b, summary: b.summary && { ...b.summary, brief_context: { checkins_to_review: 5 } } };
+  };
+
+  it('every kind gets a row; a list row shows its count and folds open to the newest three and See all', async () => {
+    mockToday.mockResolvedValue(extras([...six('message_unread'), ...reviews(5), client('client_joined', 0, 'Lena Park')]));
+    const s = await render(<CoachBriefLightScreen />);
+    await waitFor(() => expect(s.getByTestId('brief-row-checkins')).toBeTruthy());
+    expect(rowLabels(s)).toEqual(['See messages, 6', 'See check-ins, 5', 'Say hello to Lena', 'Thank you, Roman']);
+    const row = () => s.getByTestId('brief-row-checkins');
+    expect(row().props.accessibilityHint).toBe('Shows the newest three');
+    expect(row().props.accessibilityState).toEqual({ expanded: false });
+    expect(s.queryByTestId('brief-fold-checkins')).toBeNull();
+
+    await fireEvent.press(row());
+    expect(HapticService.selection).toHaveBeenCalledTimes(1);
+    expect(row().props.accessibilityState).toEqual({ expanded: true });
+    expect(row().props.accessibilityHint).toBeUndefined();
+    expect(s.queryAllByTestId(/^brief-fold-checkin_review-/).map((r) => r.props.accessibilityLabel)).toEqual([
+      'Rev0 Lee, Check-in needs review',
+      'Rev1 Lee, Check-in needs review',
+      'Rev2 Lee, Check-in needs review',
+    ]);
+    const all = s.getByTestId('brief-all-checkins');
+    expect(all.props.accessibilityLabel).toBe('See all 5');
+    expect(all.props.accessibilityHint).toBe('Opens the full list');
+    await fireEvent.press(all);
+    expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'checkins', items: reviews(5).reverse() });
+
+    await fireEvent.press(s.getByTestId('brief-fold-checkin_review-r-1'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(mockTab).toHaveBeenCalledWith('ClientsStack', {
+      screen: 'ClientDetail',
+      params: { clientId: 'r-1', clientName: 'Rev1 Lee' },
+      initial: false,
+    });
+    expect(HapticService.softImpact).toHaveBeenCalledTimes(2);
+  });
+
+  it('one fold at a time; tapping the open row folds it again', async () => {
+    mockToday.mockResolvedValue(extras([...six('message_unread'), ...reviews(4)]));
+    const s = await render(<CoachBriefLightScreen />);
+    await waitFor(() => expect(s.getByTestId('brief-row-messages')).toBeTruthy());
+    await fireEvent.press(s.getByTestId('brief-row-checkins'));
+    expect(s.getByTestId('brief-fold-checkins')).toBeTruthy();
+    await fireEvent.press(s.getByTestId('brief-row-messages'));
+    expect(s.queryByTestId('brief-fold-checkins')).toBeNull();
+    expect(s.getByTestId('brief-all-messages').props.accessibilityLabel).toBe('See all 6');
+    await fireEvent.press(s.getByTestId('brief-row-messages'));
+    expect(s.queryByTestId('brief-fold-messages')).toBeNull();
+    expect(HapticService.selection).toHaveBeenCalledTimes(3);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('a single client keeps its direct row', async () => {
+    mockToday.mockResolvedValue(extras([review(0)]));
+    const s = await render(<CoachBriefLightScreen />);
+    await waitFor(() => expect(s.getByTestId('brief-row-checkins')).toBeTruthy());
+    expect(rowLabels(s)).toEqual(['Check on Rev0', 'Thank you, Roman']);
+    expect(s.getByTestId('brief-row-checkins').props.accessibilityState?.expanded).toBeUndefined();
+  });
+
+  it('no clients leaves only Thank you, Roman', async () => {
+    mockToday.mockResolvedValue(extras([]));
+    const z = await render(<CoachBriefLightScreen />);
+    await waitFor(() => expect(z.getByText(BODY)).toBeTruthy());
+    expect(rowLabels(z)).toEqual(['Thank you, Roman']);
+    expect(z.queryByText('Where would you like to start?')).toBeNull();
+  });
+
+  it('an older brief (no brief_context) keeps today\u2019s two rows, no counts, opening the list', async () => {
+    mockToday.mockResolvedValue(brief([...six('message_unread'), ...reviews(5), client('client_joined', 0, 'Lena Park')]));
+    const s = await render(<CoachBriefLightScreen />);
+    await waitFor(() => expect(s.getByTestId('brief-row-messages')).toBeTruthy());
+    expect(rowLabels(s)).toEqual(['See messages', 'See check-ins', 'Thank you, Roman']);
+    await fireEvent.press(s.getByTestId('brief-row-checkins'));
+    expect(s.queryByTestId('brief-fold-checkins')).toBeNull();
+    expect(mockNavigate).toHaveBeenCalledWith('CoachBriefList', { kind: 'checkins', items: reviews(5).reverse() });
+  });
+});
