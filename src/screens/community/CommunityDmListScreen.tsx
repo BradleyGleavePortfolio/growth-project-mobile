@@ -228,7 +228,7 @@ export default function CommunityDmListScreen({
               thread={item}
               participantLabel={closedName(item).participantLabel ?? 'Coach'}
               closed={item.closed === true}
-              isCoach
+              isCoach={item.closed !== true || item.other_user_id === client?.coach_id}
               onPress={openThread}
               testID={`dm-row-${item.thread_id}`}
             />

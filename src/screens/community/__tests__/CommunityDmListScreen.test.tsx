@@ -170,6 +170,7 @@ describe('CommunityDmListScreen embedded prerequisite', () => {
     await render(<CommunityDmListScreen embedded workspaceId="ws-1" prerequisiteLoading={false} prerequisiteError={false} />);
     const shut = screen.getByTestId('dm-row-t-2');
     expect(within(shut).getByText(/Jordan/)).toBeTruthy();
+    expect(within(shut).queryByText(/your coach/)).toBeNull(); // a fellow member, not the coach
     expect(within(shut).getByTestId('dm-row-closed')).toBeTruthy();
     expect(within(shut).queryByText(/Active|No messages yet/)).toBeNull();
     expect(within(screen.getByTestId('dm-row-t-1')).getByText(/Coach/)).toBeTruthy();
