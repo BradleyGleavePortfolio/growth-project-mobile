@@ -8,7 +8,7 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
         "flex": 1,
       },
       {
-        "backgroundColor": "#F5EFE4",
+        "backgroundColor": "#F7FAF7",
         "paddingLeft": 0,
         "paddingRight": 0,
         "paddingTop": 36,
@@ -977,7 +977,7 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
         "flex": 1,
       },
       {
-        "backgroundColor": "#F5EFE4",
+        "backgroundColor": "#F7FAF7",
         "paddingLeft": 0,
         "paddingRight": 0,
         "paddingTop": 36,
@@ -1576,7 +1576,7 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
         "flex": 1,
       },
       {
-        "backgroundColor": "#F5EFE4",
+        "backgroundColor": "#F7FAF7",
         "paddingLeft": 0,
         "paddingRight": 0,
         "paddingTop": 59,
@@ -2545,7 +2545,7 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
         "flex": 1,
       },
       {
-        "backgroundColor": "#F5EFE4",
+        "backgroundColor": "#F7FAF7",
         "paddingLeft": 0,
         "paddingRight": 0,
         "paddingTop": 59,

@@ -92,9 +92,12 @@ export default function RescheduleSheet({ session, onClose }: Props) {
 
   return (
     <Modal animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      {/* The reason field sits last: the sheet scrolls it above the keyboard, and a time can be tapped with the keyboard up. */}
       <ScrollView
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.container}
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.headerRow}>
           <Text style={[typography.h2, { color: colors.textPrimary }]}>

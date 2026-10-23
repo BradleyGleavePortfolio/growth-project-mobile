@@ -32,9 +32,13 @@
  * bursts, no celebration overlays. Single forest accent on the submit CTA.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -50,7 +54,7 @@ import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
 import { COACH_AI_PENDING_DRAFTS_QUERY_KEY } from '../../../hooks/usePendingAiDrafts';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import AiRefusalNotice from '../../ai/AiRefusalNotice';
-import { aiRefusalOf, type AiRefusal } from '../../../lib/ai/aiRefusal';
+import { aiRefusalCopy, aiRefusalOf, type AiRefusal } from '../../../lib/ai/aiRefusal';
 
 const ALLOWED_ROLES = new Set(['coach', 'owner']);
 
@@ -103,6 +107,19 @@ export function AskAiActionSheet({
     setBody('');
     setPrompt('');
   }, []);
+
+  // iOS has no live regions, so read a failed send or a refusal title out; Android's live region reads it once (ImportStatusFrame).
+  const spoken =
+    phase.kind === 'error' ? phase.message : phase.kind === 'refused' ? aiRefusalCopy(phase.refusal, 'coach', 'draft').title : null;
+  useEffect(() => {
+    if (spoken && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(spoken);
+  }, [spoken]);
+  // A refusal (consent, egress) is the outcome to read, so the keyboard goes down and the form scrolls to it.
+  const formRef = useRef<ScrollView>(null);
+  const refused = phase.kind === 'refused';
+  useEffect(() => {
+    if (refused) Keyboard.dismiss();
+  }, [refused]);
 
   const handleClose = useCallback(() => {
     reset();
@@ -170,7 +187,8 @@ export function AskAiActionSheet({
       transparent
       testID="ask-ai-action-sheet"
     >
-      <View style={styles.scrim}>
+      {/* The sheet rises above the keyboard; the form scrolls so Send to AI is never hidden (as LogPlannedMealButton). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.scrim} testID="ask-ai-keyboard-avoider">
         <Pressable style={styles.scrimPress} onPress={handleClose} />
         <View style={styles.sheet}>
           <View style={styles.headerRow}>
@@ -236,76 +254,89 @@ export function AskAiActionSheet({
             phase.kind === 'error' ||
             phase.kind === 'refused') && (
             <View style={styles.promptBody}>
-              <View style={styles.promptHeaderRow}>
-                <Pressable
-                  onPress={() => setPhase({ kind: 'pick' })}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to options"
-                  testID="ask-ai-back"
-                >
-                  <Text style={styles.backLink}>Back</Text>
-                </Pressable>
-                <Text style={styles.promptHeadingLabel}>Check-in nudge</Text>
-                <View style={styles.spacer16} />
-              </View>
+              {/* The fields scroll; the error and Send to AI stay pinned under them, above the keyboard. */}
+              <ScrollView
+                ref={formRef}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                testID="ask-ai-form"
+              >
+                <View style={styles.promptHeaderRow}>
+                  <Pressable
+                    onPress={() => setPhase({ kind: 'pick' })}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to options"
+                    testID="ask-ai-back"
+                  >
+                    <Text style={styles.backLink}>Back</Text>
+                  </Pressable>
+                  <Text style={styles.promptHeadingLabel}>Check-in nudge</Text>
+                  <View style={styles.spacer16} />
+                </View>
 
-              <Text style={styles.promptLabel}>Notification body</Text>
-              <TextInput
-                value={body}
-                onChangeText={setBody}
-                multiline
-                editable={phase.kind !== 'submitting'}
-                maxLength={NOTIFICATION_BODY_MAX}
-                placeholder={`What ${clientName} will see in the push`}
-                placeholderTextColor={colors.textMuted}
-                style={styles.promptInput}
-                textAlignVertical="top"
-                testID="ask-ai-body-input"
-                accessibilityLabel="Notification body"
-              />
-              <Text style={styles.promptCounter}>
-                {body.length} / {NOTIFICATION_BODY_MAX}
-              </Text>
+                <Text style={styles.promptLabel}>Notification body</Text>
+                <TextInput
+                  value={body}
+                  onChangeText={setBody}
+                  multiline
+                  editable={phase.kind !== 'submitting'}
+                  maxLength={NOTIFICATION_BODY_MAX}
+                  placeholder={`What ${clientName} will see in the push`}
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.promptInput}
+                  textAlignVertical="top"
+                  testID="ask-ai-body-input"
+                  accessibilityLabel="Notification body"
+                />
+                <Text style={styles.promptCounter}>
+                  {body.length} / {NOTIFICATION_BODY_MAX}
+                </Text>
 
-              <Text style={[styles.promptLabel, styles.promptLabelGap]}>
-                Prompt to the AI
-              </Text>
-              <TextInput
-                value={prompt}
-                onChangeText={setPrompt}
-                multiline
-                editable={phase.kind !== 'submitting'}
-                maxLength={PROMPT_MAX}
-                placeholder="What prompted the check-in?"
-                placeholderTextColor={colors.textMuted}
-                style={styles.promptInput}
-                textAlignVertical="top"
-                testID="ask-ai-prompt-input"
-                accessibilityLabel="AI prompt"
-              />
-              <Text style={styles.promptCounter}>
-                {prompt.length} / {PROMPT_MAX}
-              </Text>
+                <Text style={[styles.promptLabel, styles.promptLabelGap]}>
+                  Prompt to the AI
+                </Text>
+                <TextInput
+                  value={prompt}
+                  onChangeText={setPrompt}
+                  multiline
+                  editable={phase.kind !== 'submitting'}
+                  maxLength={PROMPT_MAX}
+                  placeholder="What prompted the check-in?"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.promptInput}
+                  textAlignVertical="top"
+                  testID="ask-ai-prompt-input"
+                  accessibilityLabel="AI prompt"
+                />
+                <Text style={styles.promptCounter}>
+                  {prompt.length} / {PROMPT_MAX}
+                </Text>
 
+                {/* A refusal is read, not typed into: the keyboard goes down and the form scrolls to it. */}
+                {phase.kind === 'refused' && (
+                  <View onLayout={() => formRef.current?.scrollToEnd({ animated: false })}>
+                    <AiRefusalNotice
+                      refusal={phase.refusal}
+                      audience="coach"
+                      surface="draft"
+                      onRetry={() => void handleSubmit()}
+                      compact
+                      testID="ask-ai-refusal"
+                    />
+                  </View>
+                )}
+              </ScrollView>
+
+              {/* Pinned under the fields like the insight sheet's error row, so a failed send stays in view with the keyboard up. */}
               {phase.kind === 'error' && (
                 <Text
                   style={styles.errorText}
                   accessibilityLiveRegion="polite"
+                  testID="ask-ai-error"
                 >
                   {phase.message}
                 </Text>
-              )}
-
-              {phase.kind === 'refused' && (
-                <AiRefusalNotice
-                  refusal={phase.refusal}
-                  audience="coach"
-                  surface="draft"
-                  onRetry={() => void handleSubmit()}
-                  compact
-                  testID="ask-ai-refusal"
-                />
               )}
 
               <Pressable
@@ -326,7 +357,7 @@ export function AskAiActionSheet({
             </View>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -384,7 +415,7 @@ function makeStyles(colors: ThemeColors) {
       color: colors.textMuted,
       marginTop: 2,
     },
-    promptBody: { paddingTop: 4 },
+    promptBody: { paddingTop: 4, flexShrink: 1 },
     promptHeaderRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -409,6 +440,7 @@ function makeStyles(colors: ThemeColors) {
       borderColor: colors.border,
       padding: 12,
       minHeight: 100,
+      maxHeight: 120, // long text scrolls inside the field, keeping the caret in view
     },
     promptCounter: {
       ...typography.bodySmall,

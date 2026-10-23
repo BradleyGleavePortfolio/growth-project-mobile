@@ -78,10 +78,7 @@ export default function VoiceNoteComposer({
     }
   }, [left, status]);
 
-  const restart = () => {
-    rec.reset();
-    void start();
-  };
+  const restart = () => { rec.reset(); void start(); };
 
   const recordStatus = useMemo<'idle' | 'recording' | 'stopping'>(() => {
     if (rec.status === 'recording') return 'recording';
@@ -145,7 +142,10 @@ export default function VoiceNoteComposer({
             {rec.mustOpenSettings ? 'Open Settings' : 'Try again'}
           </Text>
         </HapticPressable>
-        <NotNow onPress={onClose} />
+        <HapticPressable intent="light" onPress={onClose} accessibilityRole="button" accessibilityLabel="Not now"
+          testID="voice-composer-not-now" style={styles.quiet}>
+          <Text style={[styles.primaryLabel, { color: fp.forest }]}>Not now</Text>
+        </HapticPressable>
       </View>
     );
   }
@@ -192,13 +192,7 @@ export default function VoiceNoteComposer({
     const recording = rec.recording;
     return (
       <View style={styles.container} testID={testID ?? 'voice-composer-review'}>
-        <SheetHeader
-          onCancel={() => {
-            rec.reset();
-            onClose();
-          }}
-          discard
-        />
+        <SheetHeader onCancel={() => { rec.reset(); onClose(); }} discard />
         <Text style={styles.timer} accessibilityElementsHidden testID="voice-composer-preview-duration">
           {formatDuration(recording.durationMs)}
         </Text>
@@ -226,10 +220,7 @@ export default function VoiceNoteComposer({
           </HapticPressable>
           <HapticPressable
             intent="light"
-            onPress={() => {
-              onSend(recording);
-              rec.reset();
-            }}
+            onPress={() => { onSend(recording); rec.reset(); }}
             accessibilityRole="button"
             accessibilityLabel="Send voice note"
             testID="voice-composer-send"
@@ -286,14 +277,8 @@ export default function VoiceNoteComposer({
   );
 }
 
-function SheetHeader({
-  onCancel,
-  cancelLabel = 'Cancel',
-  discard = false,
-}: {
-  onCancel: () => void;
-  cancelLabel?: string;
-  discard?: boolean;
+function SheetHeader({ onCancel, cancelLabel = 'Cancel', discard = false }: {
+  onCancel: () => void; cancelLabel?: string; discard?: boolean;
 }): React.ReactElement {
   return (
     <View style={styles.header}>
@@ -306,7 +291,7 @@ function SheetHeader({
         style={styles.headerAction}
       >
         {discard ? (
-          <Ionicons name="trash-outline" size={24} color={fp.ink} />
+          <Ionicons name="trash-outline" size={24} color={fp.n700} />
         ) : (
           <Text style={styles.cancel}>Cancel</Text>
         )}
@@ -314,21 +299,6 @@ function SheetHeader({
       <Text style={styles.title} accessibilityRole="header">Voice note</Text>
       <View style={styles.headerAction} />
     </View>
-  );
-}
-
-function NotNow({ onPress }: { onPress: () => void }): React.ReactElement {
-  return (
-    <HapticPressable
-      intent="light"
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Not now"
-      testID="voice-composer-not-now"
-      style={styles.quiet}
-    >
-      <Text style={[styles.primaryLabel, { color: fp.forest }]}>Not now</Text>
-    </HapticPressable>
   );
 }
 

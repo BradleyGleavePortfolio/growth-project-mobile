@@ -146,6 +146,11 @@
       "default": "off",
       "reason": "C1-TRAIN-TAB: the Style C v2 top of the Train tab (week masthead, coach note, today's workout with Start under its name) stays off until the owner turns it on."
     },
+    "EXPO_PUBLIC_FF_COACH_HOME_V11": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "UI-2 coach Home (render 2), drawn only with COACH_TABS_V2 on too (owner PK-2a: never without its Money tab); off by default in featureFlags.ts with no eas.json line, so the OTA switch works, until the owner switches it on."
+    },
     "EXPO_PUBLIC_FF_COACH_LESSONS": {
       "kind": "flag",
       "default": "off",

@@ -21,13 +21,15 @@ jest.mock('../../../lib/userCache', () => ({
   readUserCacheSync: () => mockCached,
 }));
 
+let mockRouteParams: { justCompletedId?: string } = {};
 const mockNavigate = jest.fn();
 const mockNavigation = { navigate: mockNavigate, setParams: jest.fn(), getParent: () => ({ navigate: mockNavigate }) };
 jest.mock('@react-navigation/native', () => {
   const ReactLib = jest.requireActual('react');
   return {
+    NavigationContext: require('react').createContext(undefined),
     useNavigation: () => mockNavigation,
-    useRoute: () => ({ params: {} }),
+    useRoute: () => ({ params: mockRouteParams }),
     useFocusEffect: (cb: () => undefined | (() => void)) => {
       ReactLib.useEffect(() => {
         const cleanup = cb();
@@ -59,6 +61,9 @@ jest.mock('../../../components/tutorial/PlanExplanationCard', () => () => null);
 jest.mock('../../../components/FadeInView', () => ({ children }: { children: React.ReactNode }) => children);
 
 import WorkoutScreen from '../WorkoutScreen';
+import { workoutApi } from '../../../services/api';
+
+const mockFlags = jest.requireMock('../../../config/featureFlags').featureFlags as { romanChat: boolean };
 
 const SOLO: CurrentUser = { id: 'c1', email: 'c1@example.test', role: 'client' };
 const COACHED: CurrentUser = { ...SOLO, coach_id: 'coach-1' };
@@ -74,6 +79,8 @@ beforeEach(() => {
   jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }));
   mockUser = SOLO;
   mockCached = null;
+  mockRouteParams = {};
+  mockFlags.romanChat = false;
 });
 
 describe('Train header: Coach guidelines only with a coach (B22/B29)', () => {
@@ -106,5 +113,43 @@ describe('Train header: Coach guidelines only with a coach (B22/B29)', () => {
     mockCached = SOLO;
     const view = await mount();
     expect(view.queryByLabelText('Coach guidelines')).toBeNull();
+  });
+});
+
+describe('Roman stays locked for a client with no coach (139-15)', () => {
+  const STUDENT: CurrentUser = { ...SOLO, role: 'student' };
+  let completion = 0;
+  async function finishAndOpen() {
+    mockFlags.romanChat = true;
+    mockRouteParams = { justCompletedId: `w-${(completion += 1)}` };
+    const view = await mount();
+    await waitFor(() => expect(mockNavigation.setParams).toHaveBeenCalled());
+    return view;
+  }
+
+  it('a just-finished workout shows no Roman card', async () => {
+    mockUser = STUDENT;
+    const view = await finishAndOpen();
+    expect(view.queryByTestId('roman-workout-card')).toBeNull();
+  });
+
+  it('a coached client still gets the Roman card', async () => {
+    mockUser = { ...STUDENT, coach_id: 'coach-1' };
+    const view = await finishAndOpen();
+    expect(await view.findByTestId('roman-workout-card')).toBeTruthy();
+  });
+
+  it('a load failure keeps its words and retry, without Roman\'s face', async () => {
+    mockUser = STUDENT;
+    const getRoutines = workoutApi.getRoutines as jest.Mock;
+    getRoutines.mockRejectedValue(new Error('offline'));
+    try {
+      const view = await render(<WorkoutScreen />);
+      await waitFor(() => expect(view.getByTestId('workout-load-error')).toBeTruthy());
+      expect(view.getByText('Your routines and history did not load. Check the connection, then try again.')).toBeTruthy();
+      expect(view.queryByTestId('workout-load-error-avatar')).toBeNull();
+    } finally {
+      getRoutines.mockImplementation(async () => ({ data: [] }));
+    }
   });
 });

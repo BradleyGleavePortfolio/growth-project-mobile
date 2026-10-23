@@ -32,11 +32,11 @@ jest.mock('../theme/ThemeProvider', () => ({
       primaryPale:     '#D6E4DA',
       surface:         '#F1E8D5',
       surfaceElevated: '#F1E8D5',
-      background:      '#F5EFE4',
+      background:      '#F7FAF7',
       textPrimary:     '#1A1A18',
       textSecondary:   '#3D3D3A',
       textMuted:       '#6B675F',
-      textOnPrimary:   '#F5EFE4',
+      textOnPrimary:   '#F7FAF7',
       border:          '#B08D57',
       success:         '#2C4A36',
       warning:         '#C5A253',
@@ -137,7 +137,7 @@ import { CHART_FLARE as FLARE, STAGE_COLORS } from '../screens/client/wearables/
 
 // Quiet Luxury palette — what the rendered tooltip must use, regardless of
 // which token in src/constants/colors.ts resolves to each value.
-const BONE = '#F5EFE4';
+const BONE = '#F7FAF7';
 const INK = '#1A1A18';
 const OXBLOOD = '#4A0404';
 
