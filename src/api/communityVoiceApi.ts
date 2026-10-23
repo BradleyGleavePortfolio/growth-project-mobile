@@ -93,8 +93,7 @@ export const VoiceNoteViewSchema = z
     /** Whether the server stored waveform peaks. */
     has_waveform: z.boolean(),
     created_at: z.string(),
-    // Studio keys (backend #1122; OPERATOR RULING 6304777236). Optional so a
-    // server without them still parses and plays exactly as before.
+    // Studio keys (backend #1122; OPERATOR RULING 6304777236), optional so an older server still parses.
     author_name: z.string().optional(),
     author_is_coach: z.boolean().optional(),
     waveform_peaks: z.array(z.number()).nullable().optional(),

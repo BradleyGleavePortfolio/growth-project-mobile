@@ -11,11 +11,9 @@
  * route is registered behind the same flag). Notes are scoped to community
  * spaces; there are no voice notes in direct messages.
  *
- * Style B (VOICE-M): Record opens the record sheet over this feed. A note
- * shows the author's name (backend #1122; "Member" before it), a Coach mark
- * and the deep coach card, and the real waveform. Unsent notes wait on top:
- * Sending… with a spinner, Not sent with Try again and Delete, or offline a
- * spinner and a wifi-off mark ("Waiting to send" when spoken).
+ * Style B (VOICE-M): Record opens the record sheet over this feed; a note shows the author's name
+ * ("Member" before backend #1122), a Coach mark and deep card, and the real waveform. Unsent notes wait
+ * on top: Sending…, Not sent (Try again, Delete), or offline a spinner and wifi-off ("Waiting to send").
  *
  * Copy: plain words, no exclamation marks, no emojis. Failures say what
  * happened and what to do next (describeCommunityFailure).
@@ -199,26 +197,15 @@ export default function VoiceNotesSection({
         visible={recordOpen}
         target={{ kind: 'hall' }}
         onClose={() => setRecordOpen(false)}
-        onSend={(recording) => {
-          outbox.send(recording);
-          setRecordOpen(false);
-        }}
+        onSend={(recording) => { outbox.send(recording); setRecordOpen(false); }}
       />
     </View>
   );
 }
 
 /** An unsent note of the viewer's: sending, waiting for the signal, or not sent. */
-function OutboxRow({
-  item,
-  onRetry,
-  onDiscard,
-  testID,
-}: {
-  item: VoiceOutboxItem;
-  onRetry: () => void;
-  onDiscard: () => void;
-  testID: string;
+function OutboxRow({ item, onRetry, onDiscard, testID }: {
+  item: VoiceOutboxItem; onRetry: () => void; onDiscard: () => void; testID: string;
 }): React.ReactElement {
   const failed = item.status === 'failed';
   const waiting = item.status === 'waiting';

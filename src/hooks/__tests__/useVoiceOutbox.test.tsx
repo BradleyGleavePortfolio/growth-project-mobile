@@ -1,7 +1,7 @@
 /**
  * useVoiceOutbox — the Style B outbox: Send closes the sheet and the note
  * waits here until the server has it (sending → gone, failed → retry,
- * offline → waiting → sends on reconnect, also after a restart).
+ * offline → waiting → sends on reconnect, from any screen and after a restart).
  */
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
@@ -88,6 +88,17 @@ describe('useVoiceOutbox', () => {
     expect(mockPublish).toHaveBeenCalledTimes(1);
   });
 
+  it('a waiting note still sends when the signal is back after its screen has closed (B2)', async () => {
+    net.__setState({ isConnected: false });
+    const { result, unmount } = await setup();
+    await waitFor(() => expect(result.current.online).toBe(false));
+    await act(async () => result.current.send(REC));
+    await waitFor(() => expect(result.current.items[0]?.status).toBe('waiting'));
+    await unmount();
+    await act(async () => net.__setState({ isConnected: true }));
+    await waitFor(() => expect(mockPublish).toHaveBeenCalledTimes(1));
+  });
+
   it('shows only the signed-in author’s notes and empties on sign-out', async () => {
     net.__setState({ isConnected: false });
     const mine = await setup('u-me');
@@ -107,7 +118,7 @@ describe('useVoiceOutbox', () => {
     await waitFor(() => expect(before.result.current.online).toBe(false));
     await act(async () => before.result.current.send(REC));
     await waitFor(() => expect(before.result.current.items[0]?.status).toBe('waiting'));
-    before.unmount();
+    await before.unmount();
     // A cold start: the memory is gone, only what the phone saved is left.
     resetVoiceOutbox(true);
     await act(async () => net.__setState({ isConnected: true }));
@@ -115,6 +126,6 @@ describe('useVoiceOutbox', () => {
     await waitFor(() => expect(mockPublish).toHaveBeenCalledTimes(1));
     expect(mockPublish).toHaveBeenCalledWith('ws-1', expect.objectContaining({ uri: 'file:///docs/voice-outbox/r.m4a' }));
     await waitFor(() => expect(after.result.current.items).toHaveLength(0));
-    after.unmount();
+    await after.unmount();
   });
 });
