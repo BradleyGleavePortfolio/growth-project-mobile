@@ -1,0 +1,5 @@
+src/screens/coach/client-detail/__tests__/WearableInsightPanel.test.tsx
+src/hooks/__tests__/useWearableInsight.test.tsx
+src/screens/coach/money/__tests__
+src/screens/client/__tests__/profileRedesign133.test.tsx
+src/components/trust/__tests__
