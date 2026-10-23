@@ -1,0 +1,3 @@
+src/__tests__/coachPlanEnded.test.tsx
+src/__tests__/coachHomeV11.test.tsx
+src/navigation/__tests__/coachTabsV2.test.tsx
