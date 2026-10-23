@@ -603,6 +603,7 @@ describe('UX P0.2 — error branch is distinct from the empty state (no masquera
     expect(getByTestId('coach-community-cohort-detail-error')).toBeTruthy();
     expect(queryByTestId('coach-community-cohort-detail-empty')).toBeNull();
     expect(queryByText('TEST_EMPTY_MEMBERS_COPY')).toBeNull();
+    expect(queryByText(/ members$/)).toBeNull(); // no "0 members" while the count is unknown
   });
 
   it('Moderation load error renders CoachErrorState, NOT the celebratory empty copy', async () => {

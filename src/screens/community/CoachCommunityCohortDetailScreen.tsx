@@ -213,9 +213,11 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         <Text style={[styles.headerName, { color: semanticColors.textPrimary }]}>
           {cohortName}
         </Text>
-        <Text style={[styles.headerMeta, { color: semanticColors.textMuted }]}>
-          {memberCount} members
-        </Text>
+        {data ? (
+          <Text style={[styles.headerMeta, { color: semanticColors.textMuted }]}>
+            {memberCount} members
+          </Text>
+        ) : null}
       </View>
 
       {detail.isError ? (
