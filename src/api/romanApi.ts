@@ -195,6 +195,8 @@ export const RomanStreamChunkSchema = z
     messageId: z.string().min(1).max(64).optional(),
     interrupted: z.boolean().optional(),
     safety_actions: RomanSafetyActionsWireSchema,
+    /** COPILOT-M2: present only when the Path Copilot surface sent x-roman-copilot (parsed by copilotApi). */
+    copilot: z.unknown().optional(),
   })
   .strict();
 export type RomanStreamChunk = z.infer<typeof RomanStreamChunkSchema>;
@@ -429,6 +431,8 @@ export interface RomanAssistantReply {
   interrupted: boolean;
   /** CRISIS-BTN: the server marker on the `done` chunk of the fixed crisis reply. */
   safetyActions?: RomanSafetyAction[];
+  /** COPILOT-M2: the raw `copilot` field of the done frame (Path Copilot surface only). */
+  copilot?: unknown;
 }
 
 /**
@@ -501,6 +505,7 @@ export function parseSseChunks(
 export async function sendMessage(
   sessionId: string,
   content: string,
+  opts: { copilot?: boolean } = {},
 ): Promise<RomanAssistantReply> {
   const token = await secureStorage.getItem('supabase_token');
   const url = `${env.API_URL}/roman/sessions/${encodeURIComponent(sessionId)}/messages`;
@@ -518,6 +523,8 @@ export async function sendMessage(
         Accept: 'text/event-stream',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...safetyActionsHeaders(),
+        // COPILOT-M2: only the Path Copilot surface opts in (b#1129 contract).
+        ...(opts.copilot ? { 'x-roman-copilot': '1' } : {}),
       },
       body: JSON.stringify({ content }),
       signal: controller.signal,
@@ -637,6 +644,7 @@ export async function sendMessage(
       messageId: done.messageId,
       interrupted: done.interrupted === true,
       ...(safetyActions ? { safetyActions } : {}),
+      ...(done.copilot != null ? { copilot: done.copilot } : {}),
     };
   } catch (err) {
     if (err instanceof RomanApiError || err instanceof RomanWireError) throw err;

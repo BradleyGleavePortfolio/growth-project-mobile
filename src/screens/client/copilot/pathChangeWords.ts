@@ -10,8 +10,6 @@ import type { CopilotSuggestion, PathChange } from '../../../api/copilotApi';
 export const COPILOT_COPY = {
   title: 'Your path', // CP-A-01
   back: 'You',
-  emptyTitle: 'No suggestions yet', // main, scaffold
-  emptyBody: 'No suggestions are available.', // main, scaffold
   suggested: 'Suggested change', // CP-A-18
   notApplied: 'Not applied yet', // CP-A-19
   now: 'Now', // CP-A-20
@@ -84,12 +82,16 @@ export function describeChange(c: PathChange): { title: string; from: string; to
 
 export type StatusTone = 'waiting' | 'approved' | 'still';
 
-/** The status line of one sent suggestion. Edited ones read as approved, with the change the coach applied. */
-export function statusLine(s: CopilotSuggestion, coach: string, now = new Date()): { line: string; meta: string; tone: StatusTone } {
+/**
+ * The status line of one sent suggestion. Edited ones read as approved, with the change the coach applied. A decline
+ * names no coach: the server does not say who decided (#1120 SuggestionView), and after a move the current coach is
+ * not the one who declined, so it reads "Your coach kept your plan as it is" (CP-A-29, neutral form).
+ */
+export function statusLine(s: CopilotSuggestion, _coach: string, now = new Date()): { line: string; meta: string; tone: StatusTone } {
   const sent = s.sent_at ? (isToday(s.sent_at, now) ? COPILOT_COPY.sentToday(formatTime(new Date(s.sent_at), tz())) : COPILOT_COPY.sentOn(shortDay(s.sent_at))) : '';
   const decided = s.decided_at ? shortDay(s.decided_at) : sent;
   if (s.status === 'approved') return { line: COPILOT_COPY.approved, meta: decided, tone: 'approved' };
-  if (s.status === 'rejected') return { line: COPILOT_COPY.declined(coach), meta: decided, tone: 'still' };
+  if (s.status === 'rejected') return { line: COPILOT_COPY.declined(COPILOT_COPY.yourCoach), meta: decided, tone: 'still' };
   if (s.status === 'expired') return { line: COPILOT_COPY.expired, meta: sent, tone: 'still' };
   return { line: COPILOT_COPY.waiting, meta: sent, tone: 'waiting' };
 }

@@ -6,6 +6,9 @@ import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
+let mockUser: { id: string; role?: string; coach_id?: string } | null = null;
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+
 import FullMacrosIntroCard, { fullMacrosIntroLine } from '../FullMacrosIntroCard';
 import {
   __resetMacroDisplayStoreForTests,
@@ -17,6 +20,7 @@ import {
 beforeEach(async () => {
   await AsyncStorage.clear();
   __resetMacroDisplayStoreForTests();
+  mockUser = null;
 });
 
 describe('FullMacrosIntroCard', () => {
@@ -59,6 +63,18 @@ describe('FullMacrosIntroCard', () => {
     await hydrateMacroDisplay('u1');
     await rerender(<FullMacrosIntroCard carbsG={185} fatG={50} />);
     expect(screen.queryByTestId('full-macros-intro-card')).toBeNull();
+  });
+
+  it('never shows for a client with no coach (Roman is locked, 139-15); a coached client sees it', async () => {
+    mockUser = { id: 'u1', role: 'student' };
+    await hydrateMacroDisplay('u1');
+    reportMacroDisplay({ macro_display_mode: 'simple', simple_until: '2000-01-01' });
+    const { rerender } = await render(<FullMacrosIntroCard carbsG={185} fatG={50} />);
+    expect(screen.queryByTestId('full-macros-intro-card')).toBeNull();
+    expect(screen.queryByTestId('full-macros-intro-roman')).toBeNull();
+    mockUser = { id: 'u1', role: 'student', coach_id: 'coach-1' };
+    await rerender(<FullMacrosIntroCard carbsG={185} fatG={50} />);
+    expect(screen.getByTestId('full-macros-intro-roman')).toBeTruthy();
   });
 });
 

@@ -15,11 +15,17 @@ the client sends it to their coach, and the coach approves, edits or declines it
 
 Calls: `src/api/copilotApi.ts` (strict parsers; an older server's bare drafts array reads as no rows).
 
-## Seams for COPILOT-M2 (wave 2)
+## PR-2 surfaces (COPILOT-M2, backend #1129)
 
-- Mount `SuggestionCard` under Roman's answer from the done frame's `copilot.suggestion` (status `suggested`).
-- The week block (CP-A-13) goes in the masthead under the title; the source tags (CP-A-16/17) go in the card and the coach row.
-- Past questions, the You row (CP-A-01/02) and the queue shell ("Roman's drafts", "{n} waiting", "Show all {n}") are not built here.
+| Surface | File | What it does |
+|---|---|---|
+| Week block | `copilot/WeekBlock.tsx` | `GET /client/copilot` `week`: "Week {n} with {coach}", the daily target ("Changed {weekday}" when it changed this local week), workouts this week, the last check-in; "—" for no data. Folds to two chips once a question is asked. No `week` (older server): no block. |
+| Ask and answer | `ClientPathCopilotScreen.tsx`, `copilot/useCopilotAsk.ts`, `copilot/AnswerCard.tsx` | Starter questions and the composer send through Roman's normal path (`POST /roman/sessions/:id/messages` in the client's open chat) with `x-roman-copilot: 1`, the only place that header is sent (`sendMessage(..., { copilot: true })`). The answer: the first sentence as the serif lead, the rest, then "From your data" with one row per cited fact (tag + the server's label and detail). No `copilot` on the reply (older server): the plain reply. Crisis replies keep their buttons. |
+| Suggestion under the answer | `copilot/SuggestionCard.tsx` | Mounted from `copilot.suggestion` while it is `suggested`, with its source tags; once sent or decided it shows its status line. |
+| States | `ClientPathCopilotScreen.tsx` | Coachless: Roman's lock page. A failed turn keeps the question and says so in Roman's words: offline, error, rate limit, credits used up, AI help off (the shared notice), the daily cap pop-up. |
+
+Past questions (CP-A-44/45) come in the stacked PR after this one. Not built: the You row (CP-A-01/02), the queue
+shell, the coach row's source tags.
 
 ## Flags
 
@@ -28,5 +34,6 @@ rows. Server: `FEATURE_CLIENT_PATH_COPILOT` (unset = 404).
 
 ## Tests
 
-`src/api/__tests__/copilotApi.test.ts`, `copilot/__tests__/copilot.test.tsx`, `../coach/copilot/__tests__/PathChangeDraftCard.test.tsx`,
-`src/__tests__/qaCoachStates131.test.tsx` (the drafts list states), plus the source guards in `src/__tests__/wave11Screens.test.tsx`.
+`src/api/__tests__/copilotApi.test.ts`, `copilot/__tests__/copilot.test.tsx`, `copilot/__tests__/copilotTurn.test.tsx`,
+`../coach/copilot/__tests__/PathChangeDraftCard.test.tsx`, `src/__tests__/qaCoachStates131.test.tsx` (the drafts list states),
+plus the source guards in `src/__tests__/wave11Screens.test.tsx`.

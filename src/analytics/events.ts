@@ -156,7 +156,7 @@ export interface MilestoneReachedProps {
 }
 
 export interface NotificationPreferenceChangedProps {
-  category: 'coach_direct' | 'client_bot' | 'workout_reminders' | 'milestones' | 'system';
+  category: 'coach_direct' | 'client_bot' | 'workout_reminders' | 'plan_renewal' | 'milestones' | 'system';
   enabled: boolean;
 }
 

@@ -23,6 +23,7 @@ import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
+import { useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 
 import { workoutApi } from '../../services/api';
 import {
@@ -360,6 +361,8 @@ export default function WorkoutScreen() {
   // B22/B29: coach guidelines are package-only on the server, so a client
   // with no coach gets no button that only opens a coach gate.
   const coachless = useCoachlessClient();
+  // Coachless clients have no Roman (139-15): no workout-complete card, no face on the load error.
+  const romanLocked = useClientNeedsCoach();
   const navigation = useNavigation<NavigationProp<WorkoutStackParamList>>();
   const route = useRoute<RouteProp<WorkoutStackParamList, 'WorkoutMain'>>();
   const [routines, setRoutines] = useState<ApiRoutine[]>([]);
@@ -764,7 +767,7 @@ export default function WorkoutScreen() {
             is used: a per-session personal-best signal is not yet carried on
             the ApiSession shape, so no celebration is fabricated (documented in
             the report). */}
-        {featureFlags.romanChat && showWorkoutComplete ? (
+        {featureFlags.romanChat && showWorkoutComplete && !romanLocked ? (
           <FadeInView>
             <View style={styles.romanWorkoutWrap}>
               <RomanWorkoutCompleteCard mode="default" testID="roman-workout-card" />
@@ -818,6 +821,7 @@ export default function WorkoutScreen() {
             onRetry={() => void retryLoad()}
             retrying={retrying}
             testID="workout-load-error"
+            roman={!romanLocked}
           />
         ) : routines.length === 0 ? (
           <EmptyStateNoWorkouts onCreate={() => navigation.navigate('RoutineBuilder')} />

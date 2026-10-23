@@ -18,6 +18,7 @@ const mockNavigation = {
 };
 const mockUser = { id: 'client-entry-127', profile: {} };
 jest.mock('@react-navigation/native', () => ({
+  NavigationContext: require('react').createContext(undefined),
   useNavigation: () => mockNavigation,
   useRoute: () => ({ params: { assignmentId: 'assignment-127' } }),
   useFocusEffect: (callback: () => void) => {
