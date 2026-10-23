@@ -25,6 +25,8 @@ export interface DraftAsk {
   request: HomeWinDraft;
   /** A server route that builds Roman's request itself (b#1130's plan-ended draft); the answer reads as invoke's. */
   path?: string;
+  /** That route answered 404 (b#1141: the pair is blocked, or the plan is no longer ended): the list re-reads without it. */
+  onGone?: () => void;
 }
 
 type Step =
@@ -120,7 +122,12 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
     try {
       const d = await askRomanToDraft(ask.request, ask.path);
       setStep(d ? { kind: 'ready', ...d } : { kind: 'failed', words: "Roman can't write this right now. Nothing was sent." });
-    } catch {
+    } catch (err) {
+      if (ask.path && (err as { response?: { status?: number } })?.response?.status === 404) {
+        setStep({ kind: 'failed', words: "Roman can't write this right now. Nothing was sent." }); // not "try again": it won't work
+        ask.onGone?.();
+        return;
+      }
       setStep({ kind: 'failed', words: "Roman couldn't write this. Nothing was sent. Try again in a moment." });
     }
   };

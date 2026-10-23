@@ -7,8 +7,10 @@ import React from 'react';
 import { BackHandler, Platform } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
-  groupPlanEnded, homeLabel, homeLine, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, type PlanEndedRow,
+  groupPlanEnded, homeLabel, homeLine, homeParts, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, rowParts, withoutBlocked,
+  type PlanEndedRow,
 } from '../screens/coach/home-v11/planEndedData';
+import { useBlockedUsersStore } from '../store/blockedUsersStore';
 
 const [mockNavigate, mockGet, mockPost, mockApprove, mockReject] = Array.from({ length: 5 }, () => jest.fn());
 const mockFocus = { home: true }; // whether the Home is the screen in front (false: another tab or a pushed screen)
@@ -109,6 +111,11 @@ describe('plan ended: the read and its words', () => {
       'Plan ended today · 12-week block', 'Plan ended 1 day ago · Monthly coaching', 'Plan ended 3 days ago · 12-week block', 'Plan ended 2 days ago', 'Lena Fischer · ended 3 days ago',
     ]);
     expect(c6.name).toBe('Unnamed client');
+    // The tail the screen keeps whole: the same words, cut only at " · " (RENEWAL3's nowrap span).
+    expect([rowParts(maya), rowParts(c6), homeParts(lena)]).toEqual([
+      { lead: 'Plan ended today', tail: '12-week block' }, { lead: 'Plan ended 2 days ago', tail: '' }, { lead: 'Lena Fischer', tail: 'ended 3 days ago' },
+    ]);
+    expect([rowLine(maya), homeLine(lena)].join('').match(/[\u00a0\u2011\u2060]/)).toBeNull(); // the approved characters, no stand-ins
     expect(messagedLine('2026-10-20T15:00:00Z', 'America/Los_Angeles')).toBe('Messaged Oct 20');
     expect(homeLabel(p)).toBe('Plan ended last 7 days, 7. Maya Ortiz, plan ended today, and 6 more'); // the server's total stands
     expect(homeLabel({ ...p, total: 1, items: [maya] })).toBe('Plan ended last 7 days, 1. Maya Ortiz, plan ended today');
@@ -119,8 +126,12 @@ describe('plan ended on the coach Home', () => {
   it('shows P1 under the rings with the newest client and opens the grouped list', async () => {
     const v = await renderHome();
     expect(v.getByTestId('home-plan-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 5. Maya Ortiz, plan ended today, and 4 more');
-    expect(v.getByText('Maya Ortiz · ended today')).toBeTruthy();
+    const line = within(v.getByTestId('home-plan-ended-line'));
+    expect([line.getByText('Maya Ortiz ·'), line.getByText('ended today')].every(Boolean)).toBe(true); // "ended today" stays whole
     await press(v, 'home-plan-ended');
+    const k2 = within(v.getByTestId('plan-ended-line-c1'));
+    expect([k2.getByText('Plan ended today ·'), k2.getByText('12-week block')].every(Boolean)).toBe(true); // the package stays whole
+    expect(v.getByTestId('plan-ended-row-c1').props.accessibilityLabel).toBe('Maya Ortiz. Plan ended today · 12-week block');
     expect(v.getByTestId('plan-ended-list')).toBeTruthy();
     expect(v.getByText('NEWEST FIRST')).toBeTruthy();
     expect(['today', 'yesterday', 'week'].map((k) => v.getByTestId(`plan-ended-${k}`) && v.getByText(k === 'week' ? 'EARLIER THIS WEEK' : k.toUpperCase()).props.accessibilityLabel)).toEqual(['Today, 2', 'Yesterday, 1', 'Earlier this week, 2']);
@@ -187,6 +198,44 @@ describe('plan ended on the coach Home', () => {
     await press(v, 'home-draft-close');
     expect([mockApprove.mock.calls, mockReject.mock.calls, v.queryByTestId('home-draft-sheet')]).toEqual([[], [], null]);
     expect(v.getByTestId('plan-ended-list')).toBeTruthy(); // back on the list
+  });
+});
+
+describe('plan ended: blocked clients never show (b#1141; owner: hide all messaging)', () => {
+  afterEach(() => act(() => { useBlockedUsersStore.setState({ blocked: [] }); }));
+  const block = (id: string, displayName: string) => act(() => {
+    useBlockedUsersStore.setState({ blocked: [{ id, displayName, role: 'client', blockedAt: '2026-10-23T10:00:00Z' }] });
+  });
+  it('drops a client this coach blocked from P1, the list and the counts; the others stay (control)', async () => {
+    const v = await renderHome();
+    await block('c1', 'Maya Ortiz');
+    expect(v.getByTestId('home-plan-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 4. Dev Patel, plan ended today, and 3 more');
+    await press(v, 'home-plan-ended');
+    expect([v.queryByTestId('plan-ended-row-c1'), v.queryByText('Maya Ortiz')]).toEqual([null, null]);
+    expect(v.getByText('TODAY').props.accessibilityLabel).toBe('Today, 1');
+    expect(v.getByTestId('plan-ended-row-c2')).toBeTruthy(); // not blocked: Message and Ask Roman as before
+    await press(v, 'plan-ended-row-c2');
+    expect([v.getByTestId('plan-ended-message'), v.getByTestId('plan-ended-ask')].every(Boolean)).toBe(true);
+  });
+  it('keeps the page as the server sent it when nobody listed is blocked', () => {
+    const p = parsePlanEndedPage(page(ROWS))!;
+    expect(withoutBlocked(p, [])).toBe(p);
+    expect(withoutBlocked(p, ['someone-else'])).toBe(p);
+    expect(withoutBlocked(p, ['c3', 'c4'])).toEqual({ ...p, total: 3, items: p.items.filter((r) => r.client_id !== 'c3' && r.client_id !== 'c4') });
+    expect(withoutBlocked(null, ['c1'])).toBeNull();
+  });
+  it("re-reads the list when the draft route says the client is gone (404), and sends nothing", async () => {
+    const v = await renderHome();
+    await press(v, 'home-plan-ended', 'plan-ended-row-c1', 'plan-ended-ask');
+    mockPost.mockRejectedValueOnce(Object.assign(new Error('404'), { response: { status: 404, data: { code: 'CHURNED_CLIENT_NOT_FOUND' } } }));
+    churned = () => Promise.resolve({ data: page(ROWS.slice(1)) }); // the server now leaves Maya out
+    const before = churnReads();
+    await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
+    await waitFor(() => expect(v.getByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy());
+    await waitFor(() => expect(churnReads()).toBe(before + 1));
+    expect(mockApprove).not.toHaveBeenCalled();
+    await press(v, 'home-draft-close');
+    await waitFor(() => expect(v.queryByTestId('plan-ended-row-c1')).toBeNull());
   });
 });
 

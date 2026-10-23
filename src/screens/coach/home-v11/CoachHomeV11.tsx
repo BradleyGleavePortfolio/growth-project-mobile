@@ -343,7 +343,7 @@ export default function CoachHomeV11(p: Props) {
         </View>
       </ScrollView>
       {ended && planEnded.page ? (
-        <PlanEndedList page={planEnded.page} loading={planEnded.loading} error={planEnded.error} onReload={() => void planEnded.reload()} onClose={() => setEnded(false)} onAsk={setAsk} covered={!!ask} />
+        <PlanEndedList page={planEnded.page} loading={planEnded.loading} error={planEnded.error} onReload={() => void planEnded.reload()} onClose={() => setEnded(false)} onAsk={(a) => setAsk({ ...a, onGone: () => void planEnded.reload() })} covered={!!ask} />
       ) : null}
       <HomeSheet list={sheetList} ask={ask} onCloseList={() => setList(null)} onCloseAsk={() => setAsk(null)} onSent={() => { void reload(false); void planEnded.reload(); }} />
     </View>

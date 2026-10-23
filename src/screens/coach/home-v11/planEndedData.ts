@@ -5,9 +5,10 @@
  * the server's Monday-to-Sunday `group`). Shown only when the server answers with the list: a 404 (FEATURE_PLAN_RENEWAL
  * off) or any other answer hides it. Nothing here writes to a client: Roman only drafts, and only when asked.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import api from '../../../services/api';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import type { DraftAsk } from './DraftSheets';
 
 export interface PlanEndedRow {
@@ -75,10 +76,18 @@ export async function readPlanEnded(): Promise<PlanEndedPage | null> {
 
 export const planEndedTitle = (n: number) => `Plan ended last 7 days, ${n}`; // RN3-24, the owner's words
 const ended = (days: number) => (days <= 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`);
-/** RN3-30 */
-export const rowLine = (r: PlanEndedRow) => `Plan ended ${ended(r.days_since)}${r.package_name ? ` · ${r.package_name}` : ''}`;
-/** RN3-25 */
-export const homeLine = (r: PlanEndedRow) => `${r.name} · ended ${ended(r.days_since)}`;
+/**
+ * A line in two parts, "{lead} · {tail}": the screen keeps the tail whole on one line (RENEWAL3 r3.py's `nw` span), so the
+ * approved words show exactly, never split inside "12-week" or "ended today". Screen readers get the joined line.
+ */
+export interface LineParts { lead: string; tail: string }
+export const joinLine = ({ lead, tail }: LineParts) => (tail ? `${lead} · ${tail}` : lead);
+/** RN3-30: the package is the tail. */
+export const rowParts = (r: PlanEndedRow): LineParts => ({ lead: `Plan ended ${ended(r.days_since)}`, tail: r.package_name });
+export const rowLine = (r: PlanEndedRow) => joinLine(rowParts(r));
+/** RN3-25: "ended {when}" is the tail. */
+export const homeParts = (r: PlanEndedRow): LineParts => ({ lead: r.name, tail: `ended ${ended(r.days_since)}` });
+export const homeLine = (r: PlanEndedRow) => joinLine(homeParts(r));
 /** RN3-26 (P1) and RN3-27 (P1-0), for a screen reader. */
 export function homeLabel(p: PlanEndedPage): string {
   const first = p.items[0];
@@ -118,6 +127,18 @@ export const planEndedAsk = (r: PlanEndedRow): DraftAsk => ({
   path: `/v1/coach/churned-clients/${encodeURIComponent(r.client_id)}/draft`,
 });
 
+/**
+ * Without the clients this coach has blocked: b#1141's server drops blocked pairs (either side) from the list and its counts;
+ * the phone also drops the ones its own block list names, so a block made a moment ago never shows Message or Ask Roman.
+ */
+export function withoutBlocked(page: PlanEndedPage | null, blockedIds: ReadonlyArray<string>): PlanEndedPage | null {
+  if (!page || blockedIds.length === 0) return page;
+  const set = new Set(blockedIds);
+  const items = page.items.filter((r) => !set.has(r.client_id));
+  if (items.length === page.items.length) return page;
+  return { ...page, items, total: Math.max(items.length, page.total - (page.items.length - items.length)) };
+}
+
 /** The Home's read: on mount, on each return to the Home, and on `reload`. A failed re-read keeps the last list. */
 export function usePlanEnded() {
   const isFocused = useIsFocused();
@@ -143,5 +164,7 @@ export function usePlanEnded() {
     mounted.current = true;
     void reload();
   }, [isFocused, reload]);
-  return { page, loading: state.loading, error: state.error, reload };
+  const blocked = useBlockedUsersStore((s) => s.blocked);
+  const shown = useMemo(() => withoutBlocked(page, blocked.map((b) => b.id)), [page, blocked]);
+  return { page: shown, loading: state.loading, error: state.error, reload };
 }
