@@ -2,6 +2,8 @@
  * Roman's Copilot answer (style A frame 03): Roman's face and name, the first sentence as the serif lead, the rest,
  * then "From your data" with one row per fact Roman cited (CP-A-15/16; the label and detail are the server's words,
  * CP-A-17). An older server sends no facts: the plain reply shows as it came. A safety reply keeps its crisis buttons.
+ * `compact` (an answer that offers a change, frame 04, Sol B-851-G2): the answer as plain body text and no facts tray;
+ * the suggestion card under it carries the source tags, so its Send stays in the first screenful.
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -29,10 +31,15 @@ export function SourceTag({ kind }: { kind: SourceKind }) {
   );
 }
 
-export function AnswerCard({ text, reply, safety }: { text: string; reply: CopilotReply | null; safety?: readonly RomanSafetyAction[] }) {
+/** A compact answer reads as one paragraph; a list keeps its lines. */
+const oneParagraph = (x: string) => (/^\s*[-*\u2022]\s/m.test(x) ? x : x.replace(/\s*\n+\s*/g, ' ').trim());
+
+export function AnswerCard({ text, reply, safety, compact = false }: {
+  text: string; reply: CopilotReply | null; safety?: readonly RomanSafetyAction[]; compact?: boolean;
+}) {
   const { semanticColors: sc } = useTheme();
   const plain = withoutEmphasis(text);
-  const { lead, rest } = reply ? leadAndRest(withoutCites(plain)) : { lead: '', rest: plain };
+  const { lead, rest } = !reply ? { lead: '', rest: plain } : compact ? { lead: '', rest: oneParagraph(withoutCites(plain)) } : leadAndRest(withoutCites(plain));
   return (
     <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]} testID="copilot-answer">
       <View style={s.pad}>
@@ -44,7 +51,7 @@ export function AnswerCard({ text, reply, safety }: { text: string; reply: Copil
         {rest ? <Text style={[typography.body, { color: sc.textPrimary }]}>{rest}</Text> : null}
         {safety?.length ? <RomanCrisisActions actions={safety} testID="copilot-crisis" /> : null}
       </View>
-      {reply && reply.sources.length > 0 ? (
+      {reply && reply.sources.length > 0 && !compact ? (
         <View style={[s.facts, { borderColor: ledger.line }]} testID="copilot-facts">
           <Text style={[typography.bodySmall, s.name, { color: sc.textMuted }]} accessibilityRole="header">{A.fromData}</Text>
           {reply.sources.map((f, i) => (

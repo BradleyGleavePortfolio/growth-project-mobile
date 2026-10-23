@@ -20,10 +20,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { forestPop, layout, pathTint, typography, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import EmptyState from '../../components/EmptyState';
-import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
-import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
-import RomanAvatar from '../../components/roman/RomanAvatar';
-import RomanComposer from '../../components/roman/RomanComposer';
+import CopilotComposer from '../../components/copilot/CopilotComposer';
 import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
 import {
   ROMAN_AI_ON_ASK_AGAIN, ROMAN_ERROR_TRANSIENT, ROMAN_OFFLINE_BODY, ROMAN_OFFLINE_TITLE, ROMAN_QUICK_STARTS, ROMAN_ROOM_FOOTER,
@@ -33,6 +30,7 @@ import { ForestStatusBar } from '../../components/StatusBarBand';
 import { PrimaryButton, Screen, useScreenInsets } from '../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
+import { AI_DAILY_CAP_TITLE, aiDailyCapBody } from '../../lib/ai/aiDailyCap';
 import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
@@ -49,6 +47,7 @@ import { PastQuestionsList, PastQuestionsRow, usePastQuestions } from './copilot
 import { copilotAnswerKey } from './copilot/copilotErasure';
 import { useCopilotAsk, type CopilotTurn } from './copilot/useCopilotAsk';
 import { ledger } from './copilot/ledger';
+import { CopilotRefusal, RomanNotice } from './copilot/RomanNotice';
 
 export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
 type Params = { view?: 'questions' | 'answer'; item?: PastQuestion };
@@ -135,9 +134,14 @@ function PathView() {
   if (targetChangedOn(week?.target ?? null)) starters.unshift(A.whyCalories);
   // A suggestion already shown under an answer is not listed a second time below.
   const underAnswers = new Set(turns.map((t) => t.answer?.reply?.suggestion?.id));
+  // After an answer, the starters not asked yet stay as quick chips under the last turn (frame 03, Opus B-G1); none
+  // while Roman answers, and none while AI help is off, credits are out or the daily cap holds (frames 07, 08, 09).
+  const last = turns[turns.length - 1];
+  const held = ['poolEmpty', 'dailyCap', 'aiRefused'].includes(last?.error?.kind ?? '');
+  const more = asked && !busy && !held ? starters.filter((q) => !turns.some((t) => t.question === q)) : [];
   const listed = items.filter((i) => !underAnswers.has(i.id));
   const composer = (
-    <RomanComposer value={draft} onChangeText={setDraft} sending={busy} footer={ROMAN_ROOM_FOOTER} testID="copilot-composer"
+    <CopilotComposer value={draft} onChangeText={setDraft} sending={busy} testID="copilot-composer"
       onSend={() => { const t = draft; setDraft(''); onAsk(t); }} />
   );
 
@@ -153,7 +157,7 @@ function PathView() {
           <Mast back={C.back} title={C.title} compact={asked}>{week ? <WeekBlock week={week} compact={asked} /> : null}</Mast>
           <View style={s.body} onLayout={(e) => reveal.body(e.nativeEvent.layout.y)}>
             {q.isPending ? <QuietLoading label="Loading your path" rows={2} testID="copilot-loading" /> : null}
-            {refusal ? <AiRefusalNotice refusal={refusal} audience="client" surface="roman" onRetry={() => void q.refetch()} /> : null}
+            {refusal ? <CopilotRefusal refusal={refusal} onRetry={() => void q.refetch()} testID="copilot-load-refusal" /> : null}
             {q.error && !refusal ? (
               <QuietError message={loadFailureMessage(q.error, 'Your path')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-error" />
             ) : null}
@@ -179,8 +183,19 @@ function PathView() {
                 <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{A.hint(coach)}</Text>
               </View>
             )}
+            {more.length > 0 ? (
+              <View style={s.chips} testID="copilot-more">
+                {more.map((label, i) => (
+                  <Pressable key={label} onPress={() => onAsk(label)} accessibilityRole="button" accessibilityLabel={label} testID={`copilot-more-${i}`}
+                    style={({ pressed }) => [s.more, { backgroundColor: pressed ? pathTint.leaf : ledger.card, borderColor: ledger.chip }]}>
+                    <Text style={[typography.body, { color: forestPop.forest, flexShrink: 1 }]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             {listed.length > 0 ? <SuggestionStatusList items={listed} coach={coach} /> : null}
             {total > 0 ? <PastQuestionsRow total={total} onPress={() => navigation.push('Copilot', { view: 'questions' })} /> : null}
+            <Text style={[typography.bodySmall, s.footer, { color: sc.textMuted }]} testID="copilot-footer">{ROMAN_ROOM_FOOTER}</Text>
           </View>
         </ScrollView>
       </Screen>
@@ -252,7 +267,7 @@ function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: stri
   return (
     <View style={s.turn} testID="copilot-turn">
       <Asked question={turn.question} at={turn.askedAt} />
-      {a ? <AnswerCard text={a.text} reply={a.reply} safety={a.safety} /> : null}
+      {a ? <AnswerCard text={a.text} reply={a.reply} safety={a.safety} compact={!!a.reply?.suggestion} /> : null}
       {a && !dismissed ? (
         <SuggestionSlot suggestion={a.reply?.suggestion ?? null} coach={coach} onSent={onSent} onDismiss={() => setDismissed(true)} />
       ) : null}
@@ -268,32 +283,24 @@ function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: stri
  * grant main's "ask again" line (RomanChatScreen, Sol B-326-3). Sending again is the client's call, from the composer.
  */
 function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => void }) {
-  const { semanticColors: sc } = useTheme();
-  const [capOpen, setCapOpen] = useState(true);
   const [granted, setGranted] = useState(false);
   const stored = error.turnStored === true;
   if (error.kind === 'aiRefused' && error.refusal && !granted) {
-    return <AiRefusalNotice refusal={error.refusal} audience="client" surface="roman" onRetry={stored ? () => setGranted(true) : onRetry} testID="copilot-ai-refusal" />;
+    return <CopilotRefusal refusal={error.refusal} onRetry={stored ? () => setGranted(true) : onRetry} testID="copilot-ai-refusal" />;
   }
-  if (error.kind === 'dailyCap') {
-    return <AiDailyCapModal cap={capOpen ? (error.dailyCap ?? null) : null} audience="client" onClose={() => setCapOpen(false)} testID="copilot-daily-cap" />;
-  }
+  // Style A draws the daily cap inline with main's words (frame 09, CP-A-40), not main's pop-up (style B, CP-B-23).
   const [title, body, retry]: [string, string, boolean] =
-    error.kind === 'poolEmpty' ? [romanPoolEmpty('client'), '', false]
+    error.kind === 'dailyCap' ? [AI_DAILY_CAP_TITLE, error.dailyCap ? aiDailyCapBody(error.dailyCap, 'client') : '', false]
+    : error.kind === 'poolEmpty' ? ['', romanPoolEmpty('client'), false]
     : granted ? [ROMAN_AI_ON_ASK_AGAIN, '', false]
     : error.kind === 'rateLimited' ? [romanRateLimited(error.retryAfterSeconds), '', false]
     : stored ? [ROMAN_STORED_NO_REPLY, '', false]
     : error.kind === 'offline' ? [ROMAN_OFFLINE_TITLE, ROMAN_OFFLINE_BODY, true]
     : [ROMAN_ERROR_TRANSIENT, '', true];
   return (
-    <View style={[s.card, s.pad, { backgroundColor: ledger.card, borderColor: ledger.line }]} accessibilityRole="alert" testID={`copilot-turn-${error.kind}`}>
-      <View style={s.who}>
-        <RomanAvatar crop="neutral" size={28} />
-        <Text style={[typography.bodyMd, s.strong, s.grow, { color: sc.textPrimary }]}>{title}</Text>
-      </View>
-      {body ? <Text style={[typography.bodySmall, { color: sc.textPrimary }]}>{body}</Text> : null}
+    <RomanNotice title={title || undefined} body={body || undefined} testID={`copilot-turn-${error.kind}`}>
       {retry ? <PrimaryButton label="Try again" onPress={onRetry} testID="copilot-retry" /> : null}
-    </View>
+    </RomanNotice>
   );
 }
 
@@ -415,8 +422,9 @@ const s = StyleSheet.create({
   strong: { fontWeight: '600' },
   grow: { flex: 1 },
   card: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
-  pad: { padding: 16, gap: 12 },
-  who: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
   chip: { alignSelf: 'flex-start', borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 4 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  more: { maxWidth: '100%', minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: radius.button, paddingHorizontal: 14, paddingVertical: 8 },
+  footer: { textAlign: 'center', paddingTop: 8 },
 });

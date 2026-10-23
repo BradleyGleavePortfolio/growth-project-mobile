@@ -98,9 +98,25 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
   },
 ];
 
+/**
+ * Path Copilot (style A frame 01, CP-A-01/02): "Your path" leads Your plan wherever the Copilot screen is in the
+ * build (featureFlags.clientPathCopilot, the same flag that registers the route). A client without a coach gets
+ * Roman's lock there, as the Roman row does.
+ */
+export const COPILOT_MORE_ITEM: MoreItem = {
+  icon: 'sparkles-outline',
+  label: 'Your path',
+  description: 'Ask why your plan is set the way it is',
+  section: 'Your plan',
+  target: { type: 'stack', screen: 'Copilot' },
+  a11yHint: 'Opens Your path',
+};
+
 /** TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here (More and You). */
-export const planMoreItems = (): MoreItem[] =>
-  featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
+export const planMoreItems = (): MoreItem[] => [
+  ...(featureFlags.clientPathCopilot ? [COPILOT_MORE_ITEM] : []),
+  ...(featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS),
+];
 
 export const MORE_ITEMS: MoreItem[] = [
   {
