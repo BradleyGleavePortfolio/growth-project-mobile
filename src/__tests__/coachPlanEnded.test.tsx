@@ -172,7 +172,7 @@ describe('plan ended on the coach Home', () => {
     await press(v, 'home-plan-ended', 'plan-ended-row-c1', 'plan-ended-ask');
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
     expect(v.getByTestId('home-draft-context').props.accessibilityLabel).toBe('Plan ended today · 12-week block'); // the K3 context line
-    expect(textsIn(within(v.getByTestId('home-draft-context')))).toEqual(['Plan ended today · ', '12-week block']);
+    expect(textsIn(within(v.getByTestId('home-draft-context-line')))).toEqual(['Plan ended today · ', '12-week block']);
     expect(mockPost).not.toHaveBeenCalled();
     await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
     expect(mockPost).toHaveBeenCalledWith('/v1/coach/churned-clients/c1/draft', {});
@@ -281,16 +281,16 @@ describe('plan ended: the package stays whole, and Roman as K3 draws him (FX-CHU
 });
 
 describe('plan ended: a blocked pair (FX-CHURN; LS-859 B1, b#1141)', () => {
-  afterEach(() => { act(() => { useBlockedUsersStore.setState({ blocked: [] }); }); });
+  afterEach(() => { useBlockedUsersStore.setState({ blocked: [] }); });
   it('drops a client the coach blocked from the Home row and the list, and brings them back when the block lifts', async () => {
     const blocked = { id: 'c2', displayName: 'Dev Patel', role: 'client' as const, blockedAt: '2026-10-22T10:00:00Z' };
-    act(() => { useBlockedUsersStore.setState({ blocked: [blocked] }); });
+    useBlockedUsersStore.setState({ blocked: [blocked] });
     expect(withoutBlocked(parsePlanEndedPage(page(ROWS))!, ['c2'])!.items.map((r) => r.client_id)).toEqual(['c1', 'c3', 'c4', 'c5']);
     const v = await renderHome();
     expect(v.getByTestId('home-plan-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 4. Maya Ortiz, plan ended today, and 3 more');
     await press(v, 'home-plan-ended');
     expect([v.queryByTestId('plan-ended-row-c2'), v.queryByText('Dev Patel')]).toEqual([null, null]);
-    act(() => { useBlockedUsersStore.setState({ blocked: [] }); });
+    await act(async () => { useBlockedUsersStore.setState({ blocked: [] }); });
     expect(v.getByTestId('plan-ended-row-c2')).toBeTruthy();
   });
   it("sends nothing when the server answers the draft for a pair blocked either way with b#1141's 404", async () => {
