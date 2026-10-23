@@ -48,6 +48,8 @@ export interface VoiceUploadInput {
   cohortId?: string;
   /** Optional DM conversation target. */
   conversationId?: string;
+  /** Recorded peaks (backend #1122). */
+  waveformPeaks?: number[];
 }
 
 export interface UseVoiceUploadOptions {
@@ -87,44 +89,50 @@ async function defaultReadBytes(uri: string): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
+/** The three hops for one recording; throws the typed error of the failed hop. */
+export async function publishVoiceNote(
+  workspaceId: string,
+  input: VoiceUploadInput,
+  options: UseVoiceUploadOptions = {},
+): Promise<VoiceNoteView> {
+  assertVoicePublishable(input);
+  const readBytes = options.readBytes ?? defaultReadBytes;
+
+  // Hop 1 — mint the signed upload target (server validates limits).
+  const target = await communityVoiceApi.issueUploadUrl(workspaceId, {
+    duration_ms: input.durationMs,
+    bytes: input.bytes,
+    mime_type: input.mimeType,
+  });
+
+  // Hop 2 — PUT the raw audio bytes to storage.
+  const body = await readBytes(input.uri);
+  await communityVoiceApi.uploadBytes(target.upload_url, body, input.mimeType);
+
+  // Hop 3 — durably record the note (server re-asserts the bucket binding).
+  return communityVoiceApi.create(workspaceId, {
+    storage_key: target.storage_key,
+    duration_ms: input.durationMs,
+    bytes: input.bytes,
+    mime_type: input.mimeType,
+    ...(input.cohortId ? { cohortId: input.cohortId } : {}),
+    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+    ...(input.waveformPeaks ? { waveformPeaks: input.waveformPeaks } : {}),
+  });
+}
+
 export function useVoiceUpload(
   workspaceId: string | null,
   options: UseVoiceUploadOptions = {},
 ): VoiceUploadMutation {
   const qc = useQueryClient();
-  const readBytes = options.readBytes ?? defaultReadBytes;
 
   return useMutation<VoiceNoteView, Error, VoiceUploadInput>({
     mutationFn: async (input) => {
       if (!workspaceId) {
         throw new Error('workspaceId is required to publish a voice note');
       }
-      assertVoicePublishable(input);
-
-      // Hop 1 — mint the signed upload target (server validates limits).
-      const target = await communityVoiceApi.issueUploadUrl(workspaceId, {
-        duration_ms: input.durationMs,
-        bytes: input.bytes,
-        mime_type: input.mimeType,
-      });
-
-      // Hop 2 — PUT the raw audio bytes to storage.
-      const body = await readBytes(input.uri);
-      await communityVoiceApi.uploadBytes(
-        target.upload_url,
-        body,
-        input.mimeType,
-      );
-
-      // Hop 3 — durably record the note (server re-asserts the bucket binding).
-      return communityVoiceApi.create(workspaceId, {
-        storage_key: target.storage_key,
-        duration_ms: input.durationMs,
-        bytes: input.bytes,
-        mime_type: input.mimeType,
-        ...(input.cohortId ? { cohortId: input.cohortId } : {}),
-        ...(input.conversationId ? { conversationId: input.conversationId } : {}),
-      });
+      return publishVoiceNote(workspaceId, input, options);
     },
     onSuccess: () => {
       if (workspaceId) {

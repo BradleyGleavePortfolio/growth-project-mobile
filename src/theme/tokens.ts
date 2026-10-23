@@ -536,6 +536,19 @@ export type ForestPopRole = keyof typeof forestPop;
 /** Path Copilot status tints (style A board, owner #162-1): leaf = sent / approved, gold = waiting, still = kept / expired. */
 export const pathTint = { leaf: '#EEF4E0', gold: gold[100], still: neutral[200] } as const;
 
+/**
+ * Voice notes Style B shades the B mockups draw that are not tokens above
+ * (owner 10-21 10:09, #VOICE-SHADES op 1, exact mockup shades).
+ */
+export const voiceShades = {
+  hairline: '#E2E6E1', // card and row hairlines, level dots, progress tracks
+  leafWash: '#EEF4E2', // icon circles on the consent and permission sheets
+  barOnDeep: '#6A7E71', // unplayed bars on the coach's deep card (3.23:1 on deep)
+  track: '#C9D0CA', // sheet handle, field borders, off controls
+  washEdge: '#D3E2B8', // edge of the leaf wash (icon circles, safety line box)
+  scrim: 'rgba(26, 26, 24, 0.45)', // the record sheet's scrim (mockup .scrim)
+} as const;
+
 /** Dark-mode semantic tokens. */
 export const darkTokens: SemanticTokens = {
   bgPrimary:   '#121110',

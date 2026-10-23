@@ -1,9 +1,9 @@
 /**
  * VoiceNoteWaveform — a calm static bar visualization of a voice recording's
  * amplitude (v3-3). Used by the composer (preview of the just-recorded clip)
- * and the player (the published note). The waveform is purely a CLIENT-SIDE
- * cue derived from recorder metering; the backend does not store peaks, so an
- * empty/unknown waveform degrades to a flat baseline rather than an error.
+ * and the player (the published note). The peaks come from recorder metering;
+ * a note without stored peaks (older server or note) degrades to a flat
+ * baseline rather than an error.
  *
  * Posture:
  *   - A fixed bar count (downsampled from the raw peaks) so the strip is a
@@ -13,12 +13,21 @@
  *   - Decorative by default: the strip carries `accessibilityElementsHidden`
  *     so a screen reader announces the parent control's label (duration), not
  *     a meaningless list of bars (DESIGN_INTELLIGENCE — no noise to AT).
+ *   - Style B tones (VOICE-M): `light` (white card / sheet: leaf bars, moss edge, played forest)
+ *     and `deep` (the coach card: unplayed voiceShades.barOnDeep, played leaf).
  *   - Tokens only (no raw hex). No emoji, no heavy font weights.
  */
 import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useTheme } from '../../theme/useTheme';
+import { forestPop as fp, voiceShades } from '../../theme/tokens';
 import { downsamplePeaks } from './voiceFormat';
+
+export type VoiceWaveTone = 'light' | 'deep';
+
+const TONES: Record<VoiceWaveTone, { played: string; unplayed: string; edge?: string }> = {
+  light: { played: fp.forest, unplayed: fp.leaf, edge: fp.moss },
+  deep: { played: fp.leaf, unplayed: voiceShades.barOnDeep },
+};
 
 export interface VoiceNoteWaveformProps {
   /** Raw normalised amplitude samples in [0,1]; may be empty (flat baseline). */
@@ -29,6 +38,8 @@ export interface VoiceNoteWaveformProps {
   barCount?: number;
   /** Strip height in px. */
   height?: number;
+  /** Ground the strip sits on (Style B). */
+  tone?: VoiceWaveTone;
   testID?: string;
 }
 
@@ -41,9 +52,10 @@ export default function VoiceNoteWaveform({
   progress = 0,
   barCount = DEFAULT_BARS,
   height = DEFAULT_HEIGHT,
+  tone = 'light',
   testID,
 }: VoiceNoteWaveformProps): React.ReactElement {
-  const { semanticColors } = useTheme();
+  const t = TONES[tone];
   const bars = useMemo(
     () => downsamplePeaks(peaks, barCount),
     [peaks, barCount],
@@ -67,10 +79,9 @@ export default function VoiceNoteWaveform({
             style={[
               styles.bar,
               {
-                height: Math.max(2, Math.round(height * scale)),
-                backgroundColor: played
-                  ? semanticColors.accent
-                  : semanticColors.border,
+                height: Math.max(4, Math.round(height * scale)),
+                backgroundColor: played ? t.played : t.unplayed,
+                borderColor: !played && t.edge ? t.edge : 'transparent',
               },
             ]}
           />
@@ -86,10 +97,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   bar: {
     flex: 1,
-    borderRadius: 1,
+    maxWidth: 6,
+    borderRadius: 3,
+    borderWidth: 1,
   },
 });

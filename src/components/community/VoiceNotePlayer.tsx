@@ -16,17 +16,20 @@
  *     and the next Play loads the new one; late loads are released.
  *
  * Accessibility: the play/pause control is a real button with a status-aware
- * label ("Play voice note, 0:12" / "Pause"). The waveform is decorative and
- * hidden from AT (the control carries the meaning).
+ * label ("Play voice note, 0:12" / "Pause"). The bars are the seek control:
+ * tap a point to jump there; a screen reader swipes it up or down 5 seconds.
+ *
+ * Style B (VOICE-M): a full-width card with a 64 pt play disc, the bars and
+ * the time; `tone` picks the white member card, the deep coach card or no
+ * card (the review sheet).
  *
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
-import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { forestPop as fp, neutral, radius, spacing, voiceShades } from '../../theme/tokens';
 import { formatDuration } from './voiceFormat';
 import VoiceNoteWaveform from './VoiceNoteWaveform';
 import {
@@ -50,6 +53,14 @@ export interface VoiceNotePlayerProps {
    * signed URL (they expire). The new URL replaces the failed clip.
    */
   onPlaybackError?: () => void;
+  /** Card style: member card, coach card, or none (review sheet). */
+  tone?: 'light' | 'coach' | 'bare';
+  /** No connection: a remote note cannot load, so Play is off. */
+  offline?: boolean;
+  /** Drawn at the end of the time row (the outbox row's waiting mark). */
+  trailing?: React.ReactNode;
+  /** Drawn inside the card under the row (the Not sent row). */
+  footer?: React.ReactNode;
   testID?: string;
 }
 
@@ -61,9 +72,12 @@ export default function VoiceNotePlayer({
   peaks = [],
   playback,
   onPlaybackError,
+  tone = 'light',
+  offline = false,
+  trailing = null,
+  footer = null,
   testID,
 }: VoiceNotePlayerProps): React.ReactElement {
-  const { semanticColors } = useTheme();
   const port = playback ?? resolveVoicePlayback();
 
   const [state, setState] = useState<PlayState>('idle');
@@ -83,8 +97,11 @@ export default function VoiceNotePlayer({
   const loadingRef = useRef<number | null>(null);
   const onPlaybackErrorRef = useRef(onPlaybackError);
   onPlaybackErrorRef.current = onPlaybackError;
+  // A point picked on the bars before the clip is loaded; Play starts there.
+  const seekRef = useRef(0);
+  const barsWidth = useRef(0);
 
-  const disabled = url === null || !port.isAvailable;
+  const disabled = url === null || !port.isAvailable || offline;
 
   const release = useCallback(() => {
     generationRef.current += 1;
@@ -99,6 +116,7 @@ export default function VoiceNotePlayer({
   useEffect(() => {
     setState('idle');
     setPositionMs(0);
+    seekRef.current = 0;
     return release;
   }, [url, release]);
 
@@ -151,6 +169,8 @@ export default function VoiceNotePlayer({
           void previous.handle.unload().catch(reportVoiceAudioCleanup('player_replaced_unload'));
         }
       }
+      if (seekRef.current > 0) await loaded.handle.seek(seekRef.current);
+      seekRef.current = 0;
       await loaded.handle.play();
       if (generation === generationRef.current) setState('playing');
     } catch {
@@ -174,6 +194,21 @@ export default function VoiceNotePlayer({
     }
   }, [fail]);
 
+  const seekTo = useCallback(
+    (ms: number) => {
+      const to = Math.round(Math.min(durationMs, Math.max(0, ms)));
+      setPositionMs(to);
+      const loaded = loadedRef.current;
+      if (!loaded) {
+        seekRef.current = to;
+        return;
+      }
+      const generation = generationRef.current;
+      void loaded.handle.seek(to).catch(() => fail(generation));
+    },
+    [durationMs, fail],
+  );
+
   const onPress = useCallback(() => {
     if (state === 'playing') void pause();
     else void start();
@@ -192,21 +227,24 @@ export default function VoiceNotePlayer({
       ? 'Pause voice note'
       : `Play voice note, ${formatDuration(durationMs)}`;
 
-  const controlBg = disabled
-    ? semanticColors.disabledBg
-    : semanticColors.accent;
-  const controlFg = disabled
-    ? semanticColors.textOnDisabled
-    : semanticColors.textOnAccent;
+  const deep = tone === 'coach';
+  const ink = deep ? fp.onDeep : fp.ink;
+  const discBg = disabled ? voiceShades.hairline : deep ? fp.onDeep : fp.deep;
+  const discFg = disabled ? voiceShades.track : deep ? fp.deep : fp.leaf;
+  const time =
+    url === null || !port.isAvailable
+      ? '—:—'
+      : playing || positionMs > 0
+        ? `${formatDuration(positionMs)} / ${formatDuration(durationMs)}`
+        : formatDuration(durationMs);
 
   return (
     <View
       style={[
         styles.row,
-        {
-          backgroundColor: semanticColors.bgSurface,
-          borderColor: semanticColors.border,
-        },
+        tone === 'bare'
+          ? styles.bare
+          : { backgroundColor: deep ? fp.deep : neutral[0], borderColor: deep ? fp.deep : voiceShades.hairline },
       ]}
       testID={testID ?? 'voice-player'}
     >
@@ -218,32 +256,51 @@ export default function VoiceNotePlayer({
         accessibilityLabel={controlLabel}
         accessibilityState={{ disabled: disabled || state === 'loading', busy: state === 'loading' }}
         testID="voice-player-toggle"
-        style={[styles.control, { backgroundColor: controlBg }]}
+        style={[styles.control, { backgroundColor: discBg }]}
       >
-        <Ionicons name={iconName} size={18} color={controlFg} />
+        <Ionicons name={iconName} size={24} color={discFg} />
       </HapticPressable>
 
       <View style={styles.middle}>
-        <VoiceNoteWaveform peaks={peaks} progress={progress} height={28} />
+        <Pressable
+          disabled={disabled}
+          onLayout={(e) => { barsWidth.current = e.nativeEvent.layout.width; }}
+          onPress={(e) => {
+            if (barsWidth.current > 0) seekTo((e.nativeEvent.locationX / barsWidth.current) * durationMs);
+          }}
+          accessible={!disabled}
+          accessibilityRole="adjustable"
+          accessibilityLabel="Voice note position"
+          accessibilityValue={{ text: `${formatDuration(positionMs)} of ${formatDuration(durationMs)}` }}
+          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+          onAccessibilityAction={(e) => seekTo(positionMs + (e.nativeEvent.actionName === 'increment' ? 5000 : -5000))}
+          style={styles.seek}
+          testID="voice-player-seek"
+        >
+          <VoiceNoteWaveform peaks={peaks} progress={progress} height={40} tone={deep ? 'deep' : 'light'} />
+        </Pressable>
+        <View style={styles.meta}>
+          <Text
+            style={[styles.duration, { color: ink }]}
+            accessibilityElementsHidden
+            testID="voice-player-duration"
+          >
+            {time}
+          </Text>
+          {trailing}
+        </View>
       </View>
-
-      <Text
-        style={[styles.duration, { color: semanticColors.textMuted }]}
-        accessibilityElementsHidden
-        testID="voice-player-duration"
-      >
-        {disabled ? '—:—' : formatDuration(playing ? positionMs : durationMs)}
-      </Text>
 
       {state === 'error' ? (
         <Text
-          style={[styles.retry, { color: semanticColors.accentText }]}
+          style={[styles.retry, { color: deep ? fp.onDeep : fp.error }]}
           accessibilityRole="text"
           testID="voice-player-error"
         >
           Could not play this voice note. Tap play to try again.
         </Text>
       ) : null}
+      {footer ? <View style={styles.full}>{footer}</View> : null}
     </View>
   );
 }
@@ -251,29 +308,29 @@ export default function VoiceNotePlayer({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    padding: spacing.md,
+    borderRadius: radius.card,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  bare: { padding: 0, borderWidth: 0 },
   control: {
-    width: 36,
-    height: 36,
+    width: 64,
+    height: 64,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  middle: { flex: 1 },
-  duration: {
-    fontSize: 13,
-    fontWeight: '500',
-    minWidth: 40,
-    textAlign: 'right',
-  },
+  middle: { flex: 1, gap: spacing.xs },
+  seek: { minHeight: 44, flexDirection: 'row', alignItems: 'center', pointerEvents: 'box-only' },
+  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 },
+  duration: { fontSize: 17, lineHeight: 22, fontWeight: '600', fontVariant: ['tabular-nums'] },
   retry: {
-    fontSize: 13,
-    fontWeight: '500',
+    width: '100%',
+    fontSize: 15,
+    lineHeight: 20,
   },
+  full: { width: '100%' },
 });

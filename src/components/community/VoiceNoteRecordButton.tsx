@@ -5,25 +5,23 @@
  * in useVoiceRecorder).
  *
  * States:
- *   idle      → "Record" (mic icon), tap starts capture.
- *   recording → "Stop" (stop icon) + a live elapsed read-out, tap stops.
- *   stopping  → disabled "Finishing…" (no spinner-only dead state).
+ *   idle      → mic icon on the Style B forest disc, tap starts capture.
+ *   recording → a stop square, tap stops (the sheet shows the timer).
+ *   stopping  → disabled and busy, labelled "Finishing".
  *
  * Accessibility:
  *   - A real `accessibilityRole="button"` with a status-aware label and an
  *     `accessibilityState.busy` while finishing, so AT announces the action and
  *     the transient busy state rather than a silent icon swap.
- *   - The elapsed read-out is a sibling Text (not baked into the icon) so it is
- *     announced and re-announced as it changes via the label.
+ *   - The elapsed time is announced through the label.
  *
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
-import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { forestPop as fp, radius } from '../../theme/tokens';
 import { formatDuration } from './voiceFormat';
 
 export type RecordButtonStatus = 'idle' | 'recording' | 'stopping';
@@ -47,34 +45,19 @@ export default function VoiceNoteRecordButton({
   onStop,
   testID,
 }: VoiceNoteRecordButtonProps): React.ReactElement {
-  const { semanticColors } = useTheme();
   const recording = status === 'recording';
   const stopping = status === 'stopping';
 
-  const iconName = recording ? 'stop' : 'mic-outline';
   const label = stopping
     ? 'Finishing'
     : recording
       ? `Stop recording at ${formatDuration(elapsedMs)}`
       : 'Record a voice note';
-  const visibleText = stopping
-    ? 'Finishing…'
-    : recording
-      ? formatDuration(elapsedMs)
-      : 'Record';
-
   const handlePress = () => {
     if (stopping) return;
     if (recording) onStop();
     else onStart();
   };
-
-  const bg = stopping
-    ? semanticColors.disabledBg
-    : semanticColors.accent;
-  const fg = stopping
-    ? semanticColors.textOnDisabled
-    : semanticColors.textOnAccent;
 
   return (
     <View style={styles.wrap}>
@@ -91,10 +74,13 @@ export default function VoiceNoteRecordButton({
             : `Records up to ${formatDuration(maxDurationMs)} of audio.`
         }
         testID={testID ?? 'voice-record-button'}
-        style={[styles.button, { backgroundColor: bg }]}
+        style={[styles.button, { opacity: stopping ? 0.6 : 1 }]}
       >
-        <Ionicons name={iconName} size={22} color={fg} />
-        <Text style={[styles.label, { color: fg }]}>{visibleText}</Text>
+        {recording || stopping ? (
+          <View style={styles.square} />
+        ) : (
+          <Ionicons name="mic-outline" size={36} color={fp.onDeep} />
+        )}
       </HapticPressable>
     </View>
   );
@@ -103,17 +89,12 @@ export default function VoiceNoteRecordButton({
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center' },
   button: {
-    flexDirection: 'row',
+    width: 96,
+    height: 96,
+    borderRadius: radius.pill,
+    backgroundColor: fp.forest,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    minHeight: 56,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.md,
-    alignSelf: 'stretch',
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  square: { width: 24, height: 24, borderRadius: radius.control, backgroundColor: fp.onDeep },
 });
