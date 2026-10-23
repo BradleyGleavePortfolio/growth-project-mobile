@@ -37,7 +37,22 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { colors, spacing, typography, radius, shadows } from '../../theme/tokens';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { brand, colors, gold, lightTokens, spacing, typography, radius, shadows } from '../../theme/tokens';
+
+// #168-13 GREY-TEXT (owner: "use a nice dark grey like #2c2c2c"): small grey text on
+// light grounds (11.47:1 on cream, 13.28:1 on bone). Swap for the theme token once it lands.
+const GREY_TEXT = '#2C2C2C';
+
+// LTV RECORD badge (OWNER DECISION 6353457652 on tgp-agent-context#185: "op 2 - but with gold
+// buttons as well (shiny jewerly gold)", "LTV badge: deep forest"). Text on it is brand[800];
+// every stop keeps at least 4.5:1 with it: gold[300] 7.32, gold[200] 10.31, darkest gold[400] 5.79.
+export const JEWEL_GOLD_STOPS = [
+  { offset: 0, color: gold[300] },
+  { offset: 0.4, color: gold[200] },
+  { offset: 0.62, color: gold[300] },
+  { offset: 1, color: gold[400] },
+] as const;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -157,19 +172,22 @@ interface HeroNumberProps {
   sub?: string;
   badge?: React.ReactNode;
   testID?: string;
+  /** 'deep' = the deep forest band (the RPCM card, owner #185 option 2). */
+  tone?: 'light' | 'deep';
 }
 
-function HeroNumber({ label, value, sub, badge, testID }: HeroNumberProps) {
+function HeroNumber({ label, value, sub, badge, testID, tone = 'light' }: HeroNumberProps) {
+  const deep = tone === 'deep';
   return (
-    <View style={heroStyles.container} testID={testID}>
-      <Text style={heroStyles.label}>{label}</Text>
+    <View style={[heroStyles.container, deep && heroStyles.deepContainer]} testID={testID}>
+      <Text style={[heroStyles.label, deep && heroStyles.deepMuted]}>{label}</Text>
       <View style={heroStyles.valueRow}>
-        <Text style={heroStyles.value} numberOfLines={1} adjustsFontSizeToFit>
+        <Text style={[heroStyles.value, deep && heroStyles.deepValue]} numberOfLines={1} adjustsFontSizeToFit>
           {value}
         </Text>
         {badge ?? null}
       </View>
-      {sub ? <Text style={heroStyles.sub}>{sub}</Text> : null}
+      {sub ? <Text style={[heroStyles.sub, deep && heroStyles.deepMuted]}>{sub}</Text> : null}
     </View>
   );
 }
@@ -187,7 +205,7 @@ const heroStyles = StyleSheet.create({
   },
   label: {
     ...typography.eyebrow,
-    color: colors.stone,
+    color: GREY_TEXT,
     marginBottom: spacing.xs,
   },
   valueRow: {
@@ -204,9 +222,13 @@ const heroStyles = StyleSheet.create({
   },
   sub: {
     ...typography.caption,
-    color: colors.stone,
+    color: GREY_TEXT,
     marginTop: 2,
   },
+  // Deep forest band: label and sub 8.30:1, value 13.14:1.
+  deepContainer: { backgroundColor: brand[800] },
+  deepMuted: { color: brand[100] },
+  deepValue: { color: lightTokens.textOnAccent },
 });
 
 // ─── Streak Badge ─────────────────────────────────────────────────────────────
@@ -270,7 +292,22 @@ const badgeStyles = StyleSheet.create({
 
 function RecordBadge() {
   return (
-    <View style={recStyles.container}>
+    <View style={recStyles.container} testID="ltv-record-badge">
+      <View
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <Svg width="100%" height="100%">
+          <Defs>
+            <LinearGradient id="ltvJewelGold" x1="0" y1="0" x2="1" y2="1">
+              {JEWEL_GOLD_STOPS.map((s) => <Stop key={s.offset} offset={s.offset} stopColor={s.color} />)}
+            </LinearGradient>
+          </Defs>
+          <Rect width="100%" height="100%" fill="url(#ltvJewelGold)" />
+        </Svg>
+      </View>
       <Text style={recStyles.text}>RECORD</Text>
     </View>
   );
@@ -278,15 +315,15 @@ function RecordBadge() {
 
 const recStyles = StyleSheet.create({
   container: {
-    backgroundColor: colors.mutedGold,
     borderRadius: 6,
+    overflow: 'hidden',
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   text: {
     fontSize: 11,
     fontWeight: '600',
-    color: colors.bone,
+    color: brand[800],
     letterSpacing: 1.1,
   },
 });
@@ -346,7 +383,7 @@ const statRowStyles = StyleSheet.create({
   },
   hint: {
     ...typography.caption,
-    color: colors.stone,
+    color: GREY_TEXT,
     marginTop: 1,
   },
   value: {
@@ -583,6 +620,7 @@ function LtvContent({
           sub={`MRR: ${mrrFormatted}`}
           badge={metrics.is_new_rpcm_record ? <RecordBadge /> : undefined}
           testID="ltv-hero-rpcm"
+          tone="deep"
         />
         <View style={styles.heroSpacer} />
         <HeroNumber
@@ -721,7 +759,7 @@ const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     ...typography.caption,
-    color: colors.stone,
+    color: GREY_TEXT,
     marginBottom: spacing.md,
   },
 
@@ -751,7 +789,7 @@ const styles = StyleSheet.create({
   },
   peakLabel: {
     ...typography.caption,
-    color: colors.stone,
+    color: GREY_TEXT,
   },
   peakValue: {
     color: colors.ink,
@@ -768,7 +806,7 @@ const styles = StyleSheet.create({
   },
   statsTitle: {
     ...typography.eyebrow,
-    color: colors.stone,
+    color: GREY_TEXT,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
   },
