@@ -1,5 +1,6 @@
-import React from 'react';
-import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useContext } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 
@@ -30,9 +31,13 @@ export function NudgeModal({
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
+  // A status-bar-high spacer above the card centres it below the status bar, so a long message never pushes its title under the clock.
+  const topInset = useContext(SafeAreaInsetsContext)?.top ?? 0;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.nudgeModalOverlay}>
+      {/* The form sits above the keyboard, so Send and Cancel stay reachable while typing (as LogPlannedMealButton). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.nudgeModalOverlay}>
+        <View style={{ height: topInset }} />
         <View style={styles.nudgeModalContent}>
           <Text style={styles.nudgeModalTitle}>Send Nudge</Text>
           <Text style={styles.nudgeModalDesc}>
@@ -88,7 +93,7 @@ export function NudgeModal({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

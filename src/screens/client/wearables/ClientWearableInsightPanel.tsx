@@ -58,7 +58,7 @@ import {
 import { useTheme } from '../../../theme/useTheme';
 import { logger } from '../../../utils/logger';
 import { useReduceMotion } from './components/useReduceMotion';
-import { toneForBucket, toneTokens, type ToneTokens } from './wearablesTheme';
+import { metricMeta, toneForBucket, toneTokens, type ToneTokens } from './wearablesTheme';
 import {
   CONFIDENCE_LABEL,
   CONFIDENCE_PCT,
@@ -452,7 +452,7 @@ function LoadedPanel({
       )}
       {showNorm && (
         <Section
-          label="Norm comparison"
+          label="How this compares"
           value={insight.norm_comparison}
           styles={styles}
           numberOfLines={expanded ? undefined : CLAMP_LINES}
@@ -480,7 +480,7 @@ function LoadedPanel({
 
       {showIntervention && (
         <Section
-          label="Intervention"
+          label="Try this"
           value={insight.intervention}
           styles={styles}
           emphasize
@@ -520,31 +520,33 @@ function LoadedPanel({
 /**
  * Provenance row (audit-brief required, contract `source_metrics: min(1)`).
  * Supporting (not primary) content: lighter muted typography. Joins the first
- * three metrics with `, ` and appends ` +N more` when there are extras. Omits
- * itself entirely when there are no metrics so we never render an empty row.
+ * three metrics' plain names (WEAR-AI-LABELS: never the raw code) with `, ` and
+ * appends ` +N more` when there are extras. Omits itself entirely when there are
+ * no metrics so we never render an empty row.
  */
 function ProvenanceRow({
   sourceMetrics,
   styles,
 }: {
-  sourceMetrics: readonly string[];
+  sourceMetrics: ClientInsight['source_metrics'];
   styles: PanelStyles;
 }) {
-  const metrics = sourceMetrics.filter((m) => m.trim().length > 0);
+  const metrics = sourceMetrics.map((m) => metricMeta(m).label);
   if (metrics.length === 0) return null;
 
   const shown = metrics.slice(0, 3).join(', ');
   const rest = metrics.length - 3;
-  const value = rest > 0 ? `${shown} +${rest} more` : shown;
+  // A no-break space keeps "+N more" on one line (it wrapped at Android 360).
+  const value = rest > 0 ? `${shown} +${rest}\u00A0more` : shown;
 
   return (
     <View style={styles.section} testID="client-insight-source-metrics">
       <Text style={styles.sectionLabel} accessibilityRole="text">
-        Source metrics
+        Based on
       </Text>
       <Text
         style={styles.provenanceValue}
-        accessibilityLabel={`Source metrics: ${value}`}
+        accessibilityLabel={`Based on: ${value}`}
       >
         {value}
       </Text>

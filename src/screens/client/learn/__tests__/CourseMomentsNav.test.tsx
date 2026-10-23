@@ -9,7 +9,7 @@ import { NavigationContainer, createNavigationContainerRef, type ParamListBase }
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query';
 import api from '../../../../services/api';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
 import CourseHomeScreen from '../CourseHomeScreen';
@@ -22,10 +22,16 @@ jest.mock('@expo-google-fonts/cormorant-garamond', () => ({ CormorantGaramond_40
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me', coach_id: 'c1' }) }));
 jest.mock('../../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
+jest.mock('../useMotionAnswer', () => ({ useMotionAnswer: () => true })); // the moments' own Reduce Motion read (CourseMomentsMotion.test covers it)
 jest.mock('../../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({ online: true }), isEffectivelyOnline: (n: { online: boolean }) => n.online }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn(), softImpact: jest.fn(), success: jest.fn(), error: jest.fn() } }));
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn() } }));
 jest.mock('../courseData', () => ({ ...jest.requireActual('../courseData'), today: () => '2026-10-14' }));
+
+// FLAKE-FIX (agent 168): React Query tells its screens about new data on a 0 ms timer, which fired after the act() or waitFor that caused it,
+// so those renders landed outside act at a moment set by the runner's load (the act warnings, and the press racing a re-drawn page). Telling
+// them at once keeps each render inside the step that caused it.
+notifyManager.setScheduler((cb) => cb());
 
 let run = 0; // fresh week ids per test: a week is celebrated once per app session
 const lesson = (id: string, done: boolean) => ({ id, title: `Lesson ${id}`, kind: 'page', done });
@@ -88,9 +94,14 @@ beforeEach(() => { jest.clearAllMocks(); run += 1; });
 it.each([['Back to Train', 'course-complete-back', false], ['the Train back control, over a week page', 'learn-back', true]] as const)(
   '%s on the course record returns to the one Train root', async (_label, button, overWeek) => {
     await mount(course('done'), [home, ...(overWeek ? [week4()] : []), { name: 'CourseComplete', params: K1 }]);
-    await fireEvent.press(await screen.findByTestId(button));
-    expect(stackOf('WorkoutTab')).toEqual(['WorkoutMain']);
-    expect(here()).toEqual(['WorkoutTab', 'WorkoutMain']);
+    // The record's footer draws only once the course has loaded: press after it, so the press never lands on the loading
+    // masthead the loaded page can re-draw, then wait for the pop (CI saw the bare expect at :92 run before it).
+    await screen.findByTestId('course-complete-back');
+    await fireEvent.press(screen.getByTestId(button));
+    await waitFor(() => {
+      expect(stackOf('WorkoutTab')).toEqual(['WorkoutMain']);
+      expect(here()).toEqual(['WorkoutTab', 'WorkoutMain']);
+    });
   },
 );
 
@@ -115,8 +126,10 @@ it("Message {coach} on a locked week arrives in the coach's chat, with the sheet
   await mount(course('locked'), [home]);
   await fireEvent.press(await screen.findByTestId('course-week-4'));
   await fireEvent.press(screen.getByText('Message Sam'));
-  expect(here()).toEqual(['Home', 'Messages']);
-  expect(stackOf('Home')).toEqual(['HomeMain', 'Messages']);
+  await waitFor(() => {
+    expect(here()).toEqual(['Home', 'Messages']);
+    expect(stackOf('Home')).toEqual(['HomeMain', 'Messages']);
+  });
   await act(async () => ref.navigate('WorkoutTab'));
   expect(here()).toEqual(['WorkoutTab', 'Course']); // the course as the client left it, with no sheet over it
   expect(screen.queryByTestId('locked-week')).toBeNull();

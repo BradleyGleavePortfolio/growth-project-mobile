@@ -184,10 +184,10 @@ export const makeStyles = (colors: ThemeColors) =>
     fontSize: 15,
     color: colors.textPrimary,
   },
-  nudgeInputMulti: { minHeight: 90, textAlignVertical: 'top' },
+  nudgeInputMulti: { minHeight: 90, maxHeight: 120, textAlignVertical: 'top' }, // long text scrolls inside the field
   nudgeErrorText: { color: colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' },
   nudgeButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  nudgeCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.button, backgroundColor: colors.surfaceElevated, alignItems: 'center' },
+  nudgeCancelBtn: { flex: 1, minHeight: 44, justifyContent: 'center', paddingVertical: 12, borderRadius: radius.button, backgroundColor: colors.surfaceElevated, alignItems: 'center' },
   nudgeCancelText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
@@ -196,7 +196,7 @@ export const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
     color: colors.textSecondary,
   },
-  nudgeSendBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center' },
+  nudgeSendBtn: { flex: 1, minHeight: 44, justifyContent: 'center', paddingVertical: 12, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center' },
   nudgeSendText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,

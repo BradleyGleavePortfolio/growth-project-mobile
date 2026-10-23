@@ -87,7 +87,9 @@ export default function RenewalHome(): React.ReactElement | null {
     return () => { live = false; };
   }, [r, focused, userId]);
 
-  if (!r) return null;
+  // B2: a paid plan makes the block 'active' before Continue; the open sheet stays until it is closed.
+  const sheetEl = sheet ? <PackageSelectionSheet visible skipSnoozeCheck onDismiss={() => setSheet(false)} onPaymentSuccess={() => { setSheet(false); void refreshEntitlement(); }} /> : null;
+  if (!r) return sheetEl;
   // iOS shows no second modal while the pop-up is still closing, so its next step waits for onDismiss.
   const runNext = () => { const next = afterClose.current; afterClose.current = null; next?.(); };
   const close = (next?: () => void) => {
@@ -131,7 +133,7 @@ export default function RenewalHome(): React.ReactElement | null {
           ) : null}
         </View>
       </Modal>
-      {sheet ? <PackageSelectionSheet visible skipSnoozeCheck onDismiss={() => setSheet(false)} onPaymentSuccess={() => { setSheet(false); void refreshEntitlement(); }} /> : null}
+      {sheetEl}
     </>
   );
 }

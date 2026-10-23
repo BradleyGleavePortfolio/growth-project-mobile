@@ -48,7 +48,7 @@ Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133):
 | `OfflineBanner.tsx` | Hairline banner shown when `useNetworkStatus` reports offline. Mounted by `RootNavigator`. |
 | `OptionCard.tsx`, `MultiSelectChip.tsx` | Onboarding selection primitives. |
 | `OnboardingLayout.tsx` | Header + progress + continue button frame for the legacy 10-step flow. |
-| `AppSplash.tsx` | Branded splash, keyed to bone (`#F5EFE4`). Single mark + serif title fade — the duplicate `SplashScreen.tsx` was removed in #63. |
+| `AppSplash.tsx` | Branded splash, keyed to bone (`#F7FAF7`). Single mark + serif title fade — the duplicate `SplashScreen.tsx` was removed in #63. |
 
 ### Anticipation, community, trust
 
@@ -90,6 +90,7 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `log/DailySummaryBar.tsx` | Food log hero: the overline (Calories left / over target / eaten), one serif display number with lining tabular figures, then the quiet macro bars. |
 | `log/MealSectionCard.tsx` | Hairline meal section: serif meal title, tabular kcal, entry rows (tap = edit, long-press = delete) and a forest "Add food" text action. No meal icons, no fills. |
 | `log/FoodSearchModal.tsx`, `FoodSearchView.tsx` | Search-and-pick modal backed by `foodApi.search`. |
+| `log/MealChoiceRow.tsx` | The one meal choice (owner #UI-3d, the add-food board): a cream track with four equal 44 pt segments, Breakfast, Lunch, Dinner, Snacks, the chosen one on the surface with a hairline; two rows of two at 130% text or when the longest name does not fit, never three and one. Used by the search sheet (Extras "Add") and the food edit sheet. |
 | `log/FoodDayView.tsx` | UI-3 plan checklist (`featureFlags.foodPlanChecklist`, default off): day switch and bell, the coach's plan card with the segment bar, meals in day order (`utils/log/foodDay`), the up-next card ("Ate it as planned", "Something else"), extras, water and "If you eat the rest as planned". A client with no coach gets "Your usual day" (`buildUsualDay`: a meal with the same foods on two or more of the seven earlier days, "Repeat {day}'s {meal}") and the "Join a coach" card. A plan or usual meal's foods are the entries logged for it ("Ate it as planned", "Repeat", "Something else" and the plan screen's "Log this meal" store it on the entry: `plan_slot_id` or `fills_usual_meal`, FOODLINK, sent only with the flag on), so it survives a relaunch, an offline save, a sign-in and a cleared cache; every other food, including Extras "Add" (filed to the meal up next) and a food with the meal's own name, is an extra and never ticks a meal off. `FoodDayGate` renders the classic Food log instead with the flag off, no plan or usual meal for the day, or a failed plan read (shown with Try again). UI-3c (board W-UI3C): every plan the server returns for the day is in the one checklist in meal order, newest plan first on a tie (a plan sent twice shows once); with two or more, the card is "{coach}'s plans" with one line per plan, each with its own dot and its note under it, each meal and the up-next card carry a cream tag with the plan's dot and name, and a meal row reads aloud "From {plan}."; a meal logs to its own plan's slot. One plan looks as before. Tests: `log/__tests__/FoodDayView.test.tsx`, `utils/log/__tests__/foodDay.test.ts`. |
 | `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen (the coach meal picker passes its own confirm label, hint and limit notice). |
 | `log/ManualFoodEntryForm.tsx` | Free-form entry (name, macros, serving) for foods not in the catalogue. |
@@ -134,7 +135,7 @@ Components are mostly presentational. The one component that owns data is `Offli
 
 ## App-store / deep-link dependencies
 
-- The splash background colour (`#F5EFE4`) declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme. `AppSplash` uses the same value.
+- The splash background colour (`#F7FAF7`) declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme. `AppSplash` uses the same value.
 - `TrustCueRow` and `TrustExplainerSheet` provide the in-app surface that mirrors the privacy policy. Whatever copy lives in the explainer must match what the policy says — they are a sync pair.
 
 ## Security and tenancy
@@ -216,7 +217,7 @@ Components are mostly presentational. The one component that owns data is `Offli
 
 ## App-store / deep-link dependencies
 
-- The splash background colour (`#F5EFE4`) declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme. `AppSplash` uses the same value.
+- The splash background colour (`#F7FAF7`) declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme. `AppSplash` uses the same value.
 - `TrustCueRow` and `TrustExplainerSheet` provide the in-app surface that mirrors the privacy policy. Whatever copy lives in the explainer must match what the policy says — they are a sync pair.
 
 ## Security and tenancy

@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../../components/HapticPressable';
 import { HouseMasthead } from '../../components/renewal/HouseMasthead';
 import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import type { HomeStackParamList } from '../../navigation/ClientNavigator';
 import { houseCoachPackagesPath, readHousePackages, type HousePackage } from '../../lib/planRenewal';
 import { priceLabel } from '../../lib/planTerms';
@@ -25,6 +26,7 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'HouseCoach'>;
 export default function HouseCoachScreen({ route, navigation }: Props): React.ReactElement {
   const { coach } = route.params;
   const insets = useSafeAreaInsets();
+  const { refreshEntitlement } = useEntitlement();
   const [list, setList] = useState<HousePackage[] | null>(null);
   const [error, setError] = useState<unknown>(null);
 
@@ -33,8 +35,12 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
     api.get<unknown>(houseCoachPackagesPath(coach.id)).then((res) => {
       const rows = readHousePackages(res?.data);
       return rows.length ? setList(rows) : setError(new Error('empty'));
-    }, setError);
-  }, [coach.id]);
+    }, (err: unknown) => {
+      setError(err);
+      // C1: a 404 is the server closing the house offer; re-read the plan so Home drops the stale choice.
+      if ((err as { response?: { status?: number } })?.response?.status === 404) void refreshEntitlement();
+    });
+  }, [coach.id, refreshEntitlement]);
   useEffect(load, [load]);
 
   const name = coach.firstName; // the renewal block names him by first name only (CONTRACT 6328688356)

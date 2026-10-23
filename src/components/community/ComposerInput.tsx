@@ -10,12 +10,12 @@ import React, {
   forwardRef,
   useImperativeHandle,
   useRef,
-  useState,
 } from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
+import { useChatDraft } from '../../lib/chatDrafts';
 import { spacing, radius } from '../../theme/tokens';
 
 export interface ComposerInputProps {
@@ -32,6 +32,11 @@ export interface ComposerInputProps {
    * never clobbers a newer draft typed meanwhile.
    */
   onSubmit: (value: string) => void | Promise<void>;
+  /**
+   * CHAT-DISCARD (owner 10-21): the chat this box belongs to (e.g. `dm:<userId>`). Given, half-typed text stays with
+   * that chat on the device and is back when it opens again (src/lib/chatDrafts.ts); omitted, the box keeps nothing.
+   */
+  draftKey?: string;
   testID?: string;
 }
 
@@ -44,7 +49,7 @@ export interface ComposerInputHandle {
 
 const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
   function ComposerInput(
-    { placeholder, maxLength, sending = false, onSubmit, testID },
+    { placeholder, maxLength, sending = false, onSubmit, draftKey, testID },
     ref,
   ): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -52,7 +57,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
   useImperativeHandle(ref, () => ({
     focus: () => inputRef.current?.focus(),
   }));
-  const [value, setValue] = useState('');
+  const [value, setValue] = useChatDraft(draftKey ?? null);
   // Tracks the current field text without forcing the catch handler to re-run
   // when `value` changes (avoids a stale closure restoring over a newer draft).
   const valueRef = useRef('');

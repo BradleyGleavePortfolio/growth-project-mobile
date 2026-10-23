@@ -3,6 +3,8 @@ import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+const mockRefresh = jest.fn(async () => undefined);
+jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ refreshEntitlement: mockRefresh }) }));
 let mockRead: () => Promise<unknown>;
 const mockGet = jest.fn((..._a: unknown[]) => mockRead());
 const mockPost = jest.fn();
@@ -36,6 +38,14 @@ it('no free trial from the house (#166-6): a trial row is not listed', async () 
   await s.findByTestId('house-package-h-1');
   expect(s.queryByTestId('house-package-h-t')).toBeNull();
   expect(s.queryByText(/trial/i)).toBeNull();
+});
+
+it('C1: the server closed the house offer (404): the quiet error, and the plan is re-read so Home drops the choice', async () => {
+  mockRead = async () => { throw Object.assign(new Error('Not found'), { response: { status: 404 } }); };
+  const s = await mount();
+  await s.findByTestId('house-coach-error');
+  expect(s.getByText('Packages could not load. Try again in a moment.')).toBeTruthy();
+  expect(mockRefresh).toHaveBeenCalledTimes(1);
 });
 
 it.each([

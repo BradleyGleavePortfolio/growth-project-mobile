@@ -25,8 +25,8 @@ jest.mock('../../../api/clientPaymentsApi', () => ({ clientPaymentsApi: {
 } }));
 let mockTap: (() => void) | undefined;
 jest.mock('../../../services/pushTapRouter', () => ({ onPlanRenewalTap: (l: () => void) => { mockTap = l; return () => undefined; } }));
-jest.mock('../../PackageSelectionSheet', () => (p: { skipSnoozeCheck?: boolean }) =>
-  jest.requireActual('react').createElement(jest.requireActual('react-native').View, { testID: `package-sheet-${p.skipSnoozeCheck}` }));
+jest.mock('../../PackageSelectionSheet', () => (p: { skipSnoozeCheck?: boolean; onPaymentSuccess: () => void }) =>
+  jest.requireActual('react').createElement(jest.requireActual('react-native').Pressable, { testID: `package-sheet-${p.skipSnoozeCheck}`, onPress: p.onPaymentSuccess }));
 
 const RenewalHome: typeof import('../RenewalHome').default = require('../RenewalHome').default;
 const COACH = { id: 'coach-1', first_name: 'Jordan' };
@@ -113,6 +113,20 @@ it('banner day: "Renew now" with the last package and end date, no pop-up, no ac
   await fireEvent.press(s.getByTestId('renewal-own-coach'));
   expect(s.getByTestId('package-sheet-true')).toBeTruthy();
 });
+
+it.each([['active', { state: 'active' }], ['none', { state: 'none' }]])(
+  'B2: paid with the own coach, the plan re-reads as %s while the sheet is open; the sheet stays until Continue', async (_l, next) => {
+    mockRenewal = ended(null);
+    const s = await render(<RenewalHome />);
+    await fireEvent.press(await s.findByTestId('renewal-own-coach'));
+    mockRenewal = readRenewal({ renewal: next }); // the sheet's own re-read after payment
+    await s.rerender(<RenewalHome />);
+    expect(s.queryByTestId('renewal-banner')).toBeNull();
+    expect(s.getByTestId('package-sheet-true')).toBeTruthy();
+    await fireEvent.press(s.getByTestId('package-sheet-true')); // Continue
+    expect(s.queryByTestId('package-sheet-true')).toBeNull();
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
 
 it("Skip closes the pop-up and the banner stays; a plan_renewal tap re-reads the plan and opens it again", async () => {
   const s = await open(ended(1));

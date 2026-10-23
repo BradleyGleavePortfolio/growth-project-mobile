@@ -12,7 +12,8 @@
  *     backend is the source of truth (workout_reminder_push/_inapp); the
  *     server value is read on mount so the switch never shows a stale state.
  *     Hidden for coach and owner accounts (reminders go to clients only).
- *   - Plan renewal reminders (plan_renewal_push, RENEWAL-M): Day 0, 1, 7 after a plan ends; clients, once the server has it.
+ *   - Plan renewal reminders (plan_renewal_push, RENEWAL-M): Day 0, 1, 7 after a plan ends; clients, once the server
+ *     has it and the plan read carries `renewal` (the server flag is on).
  *
  * A failed save rolls the switch back and shows an inline notice chosen by
  * status (notificationPreferenceErrors.ts), never a generic alert.
@@ -45,6 +46,7 @@ import { AnalyticsEvents } from '../../analytics/events';
 import type { NotificationPreferenceChangedProps } from '../../analytics/events';
 import { mediumTap } from '../../utils/haptics';
 import { readUserCacheSync } from '../../lib/userCache';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { preferenceSaveFailureOf, PreferenceSaveFailure } from './notificationPreferenceErrors';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 
@@ -199,11 +201,13 @@ export default function NotificationPreferencesScreen({
 }) {
   const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  // RENEWAL-M: the plan renewal row only once the server carries its setting (older servers reject the field).
+  // RENEWAL-M: the plan renewal row only once the server carries its setting (older servers reject the field)
+  // and renewal is switched on: the plan read carries `renewal` only then (B1, the one phone rollout gate).
   const [renewalOnServer, setRenewalOnServer] = useState(false);
+  const renewalOn = useEntitlement().renewal !== undefined;
   const categories = useMemo(
-    () => categoriesForRole(role()).filter((c) => c.id !== 'plan_renewal' || renewalOnServer),
-    [role, renewalOnServer],
+    () => categoriesForRole(role()).filter((c) => c.id !== 'plan_renewal' || (renewalOn && renewalOnServer)),
+    [role, renewalOn, renewalOnServer],
   );
 
   const [prefs, setPrefs] = useState<CategoryPrefs>(DEFAULT_PREFS);

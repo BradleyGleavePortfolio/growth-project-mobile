@@ -18,6 +18,7 @@ jest.mock('../../theme/ThemeProvider', () => {
 });
 jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client-1', role: 'student' }) }));
 let mockPackages: unknown[] = [];
+let mockPurchaseState: Record<string, unknown> = { phase: 'idle' };
 jest.mock('../../services/api', () => ({
   __esModule: true,
   default: {
@@ -31,7 +32,7 @@ jest.mock('../../services/api', () => ({
   },
 }));
 jest.mock('../../hooks/usePackagePurchase', () => ({
-  usePackagePurchase: () => ({ busy: false, state: { phase: 'idle' }, clearNotice: jest.fn(), start: jest.fn() }),
+  usePackagePurchase: () => ({ busy: false, state: mockPurchaseState, clearNotice: jest.fn(), start: jest.fn(), checkAgain: jest.fn() }),
 }));
 const mockGetEntitlement = jest.fn(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
 jest.mock('../../api/clientPaymentsApi', () => ({ clientPaymentsApi: { getEntitlement: () => mockGetEntitlement() } }));
@@ -59,6 +60,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   jest.useFakeTimers({ now: NOW, doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask'] });
   mockPackages = PACKAGES;
+  mockPurchaseState = { phase: 'idle' };
   setOS('ios');
   await AsyncStorage.clear();
 });
@@ -106,6 +108,38 @@ it('house coach (H2): his packages under his name, on Android too, with no read 
   await r.findByTestId('package-card-h-1');
   expect(r.queryByTestId('package-card-p-1')).toBeNull();
   expect(r.getByTestId('package-sheet-one-to-one')).toHaveTextContent('1:1 coaching with Bradley');
+});
+
+it.each([false, true])('house coach (H3, clientBillingV2 %s): paid → the deep closing moment naming him; Continue reports a confirmed payment', async (v2) => {
+  const ff = (require('../../config/featureFlags') as { featureFlags: { clientBillingV2: boolean } }).featureFlags;
+  const was = ff.clientBillingV2;
+  ff.clientBillingV2 = v2;
+  try {
+    setOS('android');
+    mockPurchaseState = { phase: 'success', success: { kind: 'subscription', title: 'Your plan is active', body: 'Welcome.', packageId: 'h-1', purchaseId: null } };
+    const onPaymentSuccess = jest.fn();
+    const r = await render(<Sheet visible skipSnoozeCheck house={{ id: 'house-1', name: 'Bradley' }} onDismiss={jest.fn()} onPaymentSuccess={onPaymentSuccess} />);
+    expect(await r.findByText('Bradley is now your coach.')).toBeTruthy();
+    expect(r.getByText('Your plan is active')).toBeTruthy();
+    expect(r.getByTestId('house-joined-check', { includeHiddenElements: true })).toBeTruthy(); // decorative: hidden from screen readers
+    expect(r.queryByTestId('coach-mark')).toBeNull(); // not the light purchase moment
+    expect(r.queryByTestId('package-card-h-1')).toBeNull();
+    fireEvent.press(r.getByTestId('payment-continue'));
+    expect(onPaymentSuccess).toHaveBeenCalledWith(true);
+  } finally {
+    ff.clientBillingV2 = was;
+  }
+});
+
+it('house coach, confirmation slow: the usual sheet (no "now your coach" yet); Continue reports it unconfirmed', async () => {
+  setOS('android');
+  mockPurchaseState = { phase: 'confirm_slow' };
+  const onPaymentSuccess = jest.fn();
+  const r = await render(<Sheet visible skipSnoozeCheck house={{ id: 'house-1', name: 'Bradley' }} onDismiss={jest.fn()} onPaymentSuccess={onPaymentSuccess} />);
+  await r.findByTestId('payment-confirm-slow');
+  expect(r.queryByTestId('payment-new-coach')).toBeNull();
+  fireEvent.press(r.getByTestId('payment-continue'));
+  expect(onPaymentSuccess).toHaveBeenCalledWith(false);
 });
 
 it('empty list on first load: closes itself and still counts as shown (#836 C2)', async () => {

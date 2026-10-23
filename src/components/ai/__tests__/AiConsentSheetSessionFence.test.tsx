@@ -17,7 +17,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AiConsentSheet, { AI_CONSENT_SHEET_COPY, type AiConsentSheetApi } from '../AiConsentSheet';
 import AiRefusalNotice from '../AiRefusalNotice';
-import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
+import type { AiConsentAsk, AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
 import { resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
 import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
 import { AI_CONSENT_VERSION } from '../../../lib/consultation/consentVersion';
@@ -57,11 +57,15 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-/** getStatus: the first call loads the sheet; later calls come from `later` (held when deferred). */
+/**
+ * getStatus: the load is the Health-notes GET (answered without the Health-notes copies, CONSENT-SETTINGS) and then
+ * today's GET; later calls of today's ask come from `later` (held when deferred).
+ */
 function makeApi(grant: () => Promise<AiConsentOutcome>, later?: () => Promise<AiConsentOutcome>) {
   let calls = 0;
   const api = {
-    getStatus: jest.fn(async (): Promise<AiConsentOutcome> => {
+    getStatus: jest.fn(async (ask?: AiConsentAsk): Promise<AiConsentOutcome> => {
+      if (ask?.healthNotes) return { kind: 'ok', status: status() };
       calls += 1;
       if (calls === 1 || !later) return { kind: 'ok', status: status() };
       return later();
@@ -126,7 +130,7 @@ describe('AiConsentSheet session fence after the grant settles (Sol B-326-2 roun
     expectNoOutcomeShown(r);
     // Still the in-flight view of A's choice: never relabelled "nothing changed".
     expect(r.queryByText(AI_CONSENT_SHEET_COPY.notSent)).toBeNull();
-    expect(api.getStatus).toHaveBeenCalledTimes(1);
+    expect(api.getStatus).toHaveBeenCalledTimes(2); // the load only: Health-notes GET, then today's
     expect(captureError).not.toHaveBeenCalled();
   });
 
@@ -143,7 +147,7 @@ describe('AiConsentSheet session fence after the grant settles (Sol B-326-2 roun
     await settle();
 
     expect(onGranted).not.toHaveBeenCalled();
-    expect(api.getStatus).toHaveBeenCalledTimes(1); // the reconciliation GET never went out under no session
+    expect(api.getStatus).toHaveBeenCalledTimes(2); // the load only; the reconciliation GET never went out under no session
     expectNoOutcomeShown(r);
     expect(r.queryByTestId('s-checking')).toBeNull();
     expect(captureError).not.toHaveBeenCalled();
@@ -186,7 +190,7 @@ describe('AiConsentSheet session fence on the reconciliation GET (Sol B-326-2 ro
     const { r, onGranted } = await openSheet(api, () => current);
     await fireEvent.press(r.getByTestId('s-allow'));
     await waitFor(() => expect(r.getByTestId('s-checking')).toBeTruthy());
-    expect(api.getStatus).toHaveBeenCalledTimes(2);
+    expect(api.getStatus).toHaveBeenCalledTimes(3); // the load (Health-notes GET, then today's) and the reconciliation GET
 
     current = B;
     check.resolve({ kind: 'ok', status: LIVE });

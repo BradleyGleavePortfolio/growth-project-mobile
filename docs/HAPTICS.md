@@ -99,7 +99,7 @@ When the toggle changes:
 | `LearnLessonScreen` (`learnHub` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
 | `LearnLessonScreen` Next row (`learnHub` on) | `selection()` | The next lesson opens |
 | `CourseHomeScreen` / `CourseWeekScreen` rows (`learnCourses` on) | `selection()` | A week or a lesson opens (Open the course and Read lesson are `PrimaryButton`s: `softImpact()`) |
-| `CourseLessonScreen` (`learnCourses` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button) |
+| `CourseLessonScreen` (`learnCourses` on) | `success()` / `error()` | The server saved the completion / the save failed (the sentence stays above the button); the c06 footer's Next is a `PrimaryButton` (`softImpact()`) and adds none |
 | `CourseHomeScreen` / `CourseWeekScreen` week done (`useWeekMoment`, `learnCourses` on) | `success()` | A week turns done and its Week done page (c08) opens; when that week finishes the course, the course record (c10) opens with it instead |
 | `CourseHomeScreen` week not open yet (`learnCourses` on) | `selection()` | Its sheet (c09) opens: when it opens, why, its lesson titles, OK and Message {coach} (OK is a `PrimaryButton`: `softImpact()`; Message, a text action, adds none, as Learn's) |
 | `HomeDial` (rings Home, flag `clientHomeRings`) | `selection()` | Food, Train or Sleep dial opens its screen |
@@ -109,6 +109,8 @@ When the toggle changes:
 | `HomeTiles` water chip | `success()` / `error()` | One glass of water saved, or not saved |
 | `purchase/PlanActiveMoment` (`clientBillingV2` on) | `success()` | Once, when the plan-is-active moment appears after a confirmed purchase |
 | `MoneyAIPool` (Money page) | `mediumImpact()` / `softImpact()` | "Buy more credits" pressed (filled button / quiet text while the Stripe setup card shows) |
+| `copilot/SuggestionCard` (Path Copilot) | `success()` / `error()` | The change reached the coach, or did not |
+| `coach/copilot/PathChangeDraftCard` | `success()` / `error()` / `selection()` | Approve, Edit or Decline saved, or refused; each day step in Edit |
 | `renewal/RenewalHome`, `HouseCoachScreen` (RENEWAL-M, `FEATURE_PLAN_RENEWAL`) | `mediumImpact()` / `lightImpact()` | "View Coach {N}'s packages" (the one filled choice) / "Join TGP's Top Rated Coach", "Skip for now", Back and a house package row |
 | `HouseCoachConfirmScreen`, `HousePackageScreen` (SWITCH-CONFIRM-M) | `mediumImpact()` / `softImpact()` (HapticPressable `light`) | "Continue" and "Select this plan" (each page's one filled action) / "Not now" and Back |
 

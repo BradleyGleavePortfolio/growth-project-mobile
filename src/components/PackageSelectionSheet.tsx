@@ -57,6 +57,8 @@ import PlanTermsBlock from './purchase/PlanTermsBlock';
 import PurchaseFeedback from './purchase/PurchaseFeedback';
 import { QuietOverline as Overline } from '../ui/sections/QuietSection';
 import { oneToOneCoachingLabel } from '../config/purchaseSurfaces';
+import { HouseJoined } from './renewal/CoachMonogram';
+import { forestPop } from '../theme/tokens';
 import {
   planTerms,
   priceLabel,
@@ -71,7 +73,8 @@ export type CoachPackage = PurchasablePackage;
 export interface PackageSelectionSheetProps {
   visible: boolean;
   onDismiss: () => void;
-  onPaymentSuccess: () => void;
+  /** Continue (or close) after a payment step; `paid` only when the payment is confirmed (phase 'success'). */
+  onPaymentSuccess: (paid: boolean) => void;
   /**
    * "Open your plan" (the plan is active, or its status needs checking). B-343-3
    * (Sol): without it the action reads "Continue to the app" and closes the
@@ -273,6 +276,7 @@ export default function PackageSelectionSheet({
   // ── Skip ──────────────────────────────────────────────────────────────────
   const busy = purchase.busy;
   const done = state.phase === 'success' || state.phase === 'confirm_slow' || state.phase === 'confirmed_pending';
+  const finish = useCallback(() => onPaymentSuccess(state.phase === 'success'), [onPaymentSuccess, state.phase]);
   const handleSkip = useCallback(() => {
     if (busy) return; // never close the sheet in the middle of a payment
     if (dismissedKey) {
@@ -301,8 +305,14 @@ export default function PackageSelectionSheet({
       visible={visible && ready}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={done ? onPaymentSuccess : handleSkip}
+      onRequestClose={done ? finish : handleSkip}
     >
+      {houseName && state.phase === 'success' && state.success ? (
+        // RENEWAL-M H3 (5.1 Step 7): joining the house coach closes on deep, under either billing style.
+        <ScrollView style={{ backgroundColor: forestPop.deep }} contentContainerStyle={{ flexGrow: 1 }}>
+          <HouseJoined name={houseName} title={state.success.title} body={state.success.body} onContinue={finish} />
+        </ScrollView>
+      ) : (
       <View style={styles.sheet}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -359,10 +369,9 @@ export default function PackageSelectionSheet({
 
           <PurchaseFeedback
             purchase={purchase}
-            onContinue={onPaymentSuccess}
+            onContinue={finish}
             onOpenPlan={openPlan}
             openPlanLabel={onOpenPlan ? undefined : 'Continue to the app'}
-            newCoachName={houseName}
           />
 
           {/* CTA */}
@@ -399,6 +408,7 @@ export default function PackageSelectionSheet({
           )}
         </ScrollView>
       </View>
+      )}
     </Modal>
   );
 }
