@@ -196,6 +196,6 @@ const styles = StyleSheet.create({
   },
   dismissText: {
     ...typography.eyebrow,
-    color: colors.stone,
+    color: colors.graphite,
   },
 });

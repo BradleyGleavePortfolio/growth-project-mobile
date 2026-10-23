@@ -269,6 +269,6 @@ const styles = StyleSheet.create({
   },
   laterText: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colors.graphite,
   },
 });
