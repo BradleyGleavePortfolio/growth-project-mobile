@@ -244,6 +244,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
           if (inbox.hasNextPage && !inbox.isFetchingNextPage) void inbox.fetchNextPage();
         }}
         onEndReachedThreshold={0.5}
+        testID="coach-community-inbox-list"
         ListFooterComponent={
           inbox.isFetchingNextPage ? (
             <ActivityIndicator
