@@ -65,7 +65,6 @@ jest.mock('../../../hooks/useCoachCommunity', () => {
   return {
     coachCommunityKeys: actual.coachCommunityKeys,
     useCoachInbox: () => mockInbox,
-    useAckInboxItem: () => ({ mutate: jest.fn(), isPending: false }),
     useCoachEmptyStatePayload: () => ({
       status: 'ready',
       payload: {
@@ -128,7 +127,7 @@ beforeEach(() => {
   mockFetchInboxTriage.mockClear();
   mockUseInboxTriage.mockClear();
   mockInbox = {
-    data: { items: [inboxItem()], next_before: null },
+    data: { items: [inboxItem()], next_cursor: null },
     isLoading: false,
     isError: false,
     isRefetching: false,
@@ -152,7 +151,7 @@ describe('CoachCommunityInboxScreen — AI-triage flag OFF invariance', () => {
 
   it('renders NO triage card in the empty branch either', async () => {
     mockInbox = {
-      data: { items: [], next_before: null },
+      data: { items: [], next_cursor: null },
       isLoading: false,
       isError: false,
       isRefetching: false,

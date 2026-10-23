@@ -32,6 +32,7 @@ import { z } from 'zod';
 import axios from 'axios';
 import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { featureFlags } from '../config/featureFlags';
 
 // ─── Shared enums (mirror backend) ───────────────────────────────────────────
 
@@ -92,6 +93,17 @@ export const CoachDashboardSchema = z
   .passthrough();
 export type CoachDashboard = z.infer<typeof CoachDashboardSchema>;
 
+/** Voice row extras: community-coach-inbox.dto.ts:48. */
+const InboxVoiceSchema = z
+  .object({ note_id: z.string().uuid(), duration_ms: z.number().int().nonnegative() })
+  .passthrough();
+
+/** Per-row ack summary: community-coach-inbox.dto.ts:25-31. */
+export const InboxAckSummarySchema = z
+  .object({ state: z.enum(COACH_ACK_STATES), sla_state: z.enum(COACH_SLA_STATES) })
+  .passthrough();
+export type InboxAckSummary = z.infer<typeof InboxAckSummarySchema>;
+
 /**
  * A single aggregated inbox item — an unanswered client signal surfaced across
  * all of the coach's cohorts. `avatar_url` is nullable so the row falls back to
@@ -109,16 +121,21 @@ export const CoachInboxItemSchema = z
     /** ISO timestamp of the unanswered item; the row renders a relative age. */
     created_at: z.string(),
     acknowledged: z.boolean(),
+    /** Only message rows carry coach acks; a voice row's id is the note's id. */
+    type: z.enum(['message', 'post']),
+    kind: z.enum(['text', 'voice']),
+    voice: InboxVoiceSchema.optional(),
+    ack: InboxAckSummarySchema.optional(),
   })
   .passthrough();
 export type CoachInboxItem = z.infer<typeof CoachInboxItemSchema>;
 
-/** GET /community/coach/inbox — one keyset page of aggregated inbox items. */
+/** One page of the coach inbox, mapped from GET /community/me/coach-inbox. */
 export const CoachInboxPageSchema = z
   .object({
     items: z.array(CoachInboxItemSchema),
-    /** Opaque cursor for the next older page, or null at the end. */
-    next_before: z.string().nullable(),
+    /** Opaque cursor for the next page, or null at the end. */
+    next_cursor: z.string().nullable(),
   })
   .passthrough();
 export type CoachInboxPage = z.infer<typeof CoachInboxPageSchema>;
@@ -500,6 +517,75 @@ function idempotentHeaders(): { headers: Record<string, string> } {
 
 // ─── Endpoint hooks ──────────────────────────────────────────────────────────
 
+// ─── Coach inbox wire shape (community-coach-inbox.dto.ts) ──────────────────
+
+/** Largest page the inbox and roster routes return (MAX_PAGE = 100). */
+const PAGE_LIMIT = 100;
+
+/** Inbox row kinds this build can draw; any other kind is skipped. Read per call, not at import. */
+const inboxRowKinds = (): readonly string[] =>
+  featureFlags.communityVoiceNotes ? ['text', 'voice'] : ['text'];
+
+/** One inbox row: src/community/inbox/community-coach-inbox.dto.ts:34-52. */
+const InboxRowWireSchema = z
+  .object({
+    id: z.string().uuid(),
+    type: z.enum(['message', 'post']),
+    cohort_id: z.string().uuid(),
+    cohort_name: z.string(),
+    author_user_id: z.string().uuid(),
+    author_display_name: z.string(),
+    preview: z.string(),
+    created_at: z.string(),
+    kind: z.string().optional(),
+    voice: InboxVoiceSchema.optional(),
+    ack: InboxAckSummarySchema.optional().catch(undefined),
+  })
+  .passthrough();
+
+/** GET /community/me/coach-inbox: community-coach-inbox.dto.ts:57-62. */
+const InboxPageWireSchema = z
+  .object({ items: z.array(z.unknown()), next_cursor: z.string().nullable() })
+  .passthrough();
+
+/** Parse each row on its own: a row this build cannot read is skipped. */
+function toInboxItems(rows: unknown[]): CoachInboxItem[] {
+  const out: CoachInboxItem[] = [];
+  for (const raw of rows) {
+    const parsed = InboxRowWireSchema.safeParse(raw);
+    if (!parsed.success) continue;
+    const { author_user_id, author_display_name, preview, kind, ...rest } =
+      parsed.data;
+    const rowKind = kind ?? 'text';
+    if (!inboxRowKinds().includes(rowKind)) continue;
+    if (rowKind === 'voice' && !rest.voice) continue;
+    out.push({
+      ...rest,
+      kind: rowKind as CoachInboxItem['kind'],
+      client_user_id: author_user_id,
+      client_name: author_display_name,
+      avatar_url: null,
+      snippet: preview,
+      // The server lists only unanswered items, so none are acknowledged.
+      acknowledged: false,
+    });
+  }
+  return out;
+}
+
+/** 403 body when the caller owns no cohorts: community-coach-inbox.service.ts:24-27. */
+const INBOX_NOT_COACH_CODE = 'community.inbox.not_coach';
+
+function isInboxNotCoach(err: unknown): boolean {
+  if (!(err instanceof CoachCommunityApiError) || err.status !== 403) {
+    return false;
+  }
+  const cause = err.cause;
+  if (!axios.isAxiosError(cause)) return false;
+  const data = cause.response?.data as { code?: unknown } | undefined;
+  return data?.code === INBOX_NOT_COACH_CODE;
+}
+
 export const coachCommunityApi = {
   /**
    * GET /community/coach/dashboard — composed coach landing envelope (unread
@@ -513,33 +599,27 @@ export const coachCommunityApi = {
   },
 
   /**
-   * GET /community/coach/inbox?before=&limit= — one keyset page of aggregated
-   * unanswered items across the coach's cohorts. `before` is the opaque cursor
-   * returned as `next_before`.
+   * GET /community/me/coach-inbox?cursor=&limit= — unanswered items across the
+   * coach's cohorts (community-coach-inbox.controller.ts:25), oldest first. A
+   * coach who owns no cohorts gets a 403 `community.inbox.not_coach`, shown as
+   * an empty inbox.
    */
-  getInbox(
-    opts: { before?: string; limit?: number } = {},
+  async getInbox(
+    opts: { cursor?: string; limit?: number } = {},
   ): Promise<CoachInboxPage> {
-    const params: Record<string, string> = {};
-    if (opts.before) params.before = opts.before;
-    if (opts.limit != null) params.limit = String(opts.limit);
-    return call(CoachInboxPageSchema, () =>
-      api.get<unknown>('/community/coach/inbox', { params }),
-    );
-  },
-
-  /**
-   * POST /community/coach/inbox/:id/ack — acknowledge a single inbox item.
-   * Idempotent (R19). Optimistic removal + rollback lives in the screen hook.
-   */
-  ackInboxItem(itemId: string): Promise<void> {
-    return call(z.unknown(), () =>
-      api.post<unknown>(
-        `/community/coach/inbox/${itemId}/ack`,
-        {},
-        idempotentHeaders(),
-      ),
-    ).then(() => undefined);
+    const params: Record<string, string> = {
+      limit: String(opts.limit ?? PAGE_LIMIT),
+    };
+    if (opts.cursor) params.cursor = opts.cursor;
+    try {
+      const page = await call(InboxPageWireSchema, () =>
+        api.get<unknown>('/community/me/coach-inbox', { params }),
+      );
+      return { items: toInboxItems(page.items), next_cursor: page.next_cursor };
+    } catch (err) {
+      if (isInboxNotCoach(err)) return { items: [], next_cursor: null };
+      throw err;
+    }
   },
 
   /**
@@ -547,7 +627,7 @@ export const coachCommunityApi = {
    * `seen` signal on a client message and returns the full ack envelope (state
    * + SLA snapshot). Idempotent (R19): re-stamping is a server-side no-op that
    * returns the existing timestamp. The acting coach is derived from the JWT;
-   * no coachId is sent. Disjoint from the v1-6 `ackInboxItem` endpoint above.
+   * no coachId is sent.
    */
   markCoachAckSeen(messageId: string): Promise<AckTransitionResponse> {
     return call(AckTransitionResponseSchema, () =>

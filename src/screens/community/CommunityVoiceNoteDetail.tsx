@@ -67,11 +67,17 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   // controls route REGISTRATION; this is the inner, server-authoritative gate.
   const { flags } = useFeatureFlags();
   const runtimeEnabled = flags.community_search;
+  // VOICE-INBOX: the coach inbox opens a client's note here too; that route is
+  // registered only behind the build-time `communityVoiceNotes` flag.
+  const open =
+    featureFlags.communityVoiceNotes ||
+    (featureFlags.communitySearch && runtimeEnabled);
 
   const note = useQuery({
     queryKey: ['community', 'voice-note', voiceNoteId],
     queryFn: () => communityVoiceApi.getOne(voiceNoteId),
-    enabled: !!voiceNoteId && featureFlags.communitySearch && runtimeEnabled,
+    enabled: !!voiceNoteId && open,
+    meta: { persist: false }, // never saved to the phone, so a restart cannot show a note from before a ban
   });
 
   // Announce the surface once metadata loads so a screen-reader user gets a
@@ -86,7 +92,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
 
   // Defense-in-depth: never reachable with the flag off (route not registered),
   // and additionally hidden if the server flag resolves OFF at runtime.
-  if (!featureFlags.communitySearch || !runtimeEnabled) {
+  if (!open) {
     return (
       <SafeAreaView
         style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
@@ -185,7 +191,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
             style={[styles.kind, { color: semanticColors.textMuted }]}
             accessibilityRole="header"
           >
-            Voice note
+            {data.author_name?.trim() || 'Voice note'}
           </Text>
           {when.length > 0 ? (
             <Text style={[styles.when, { color: semanticColors.textMuted }]}>
@@ -216,6 +222,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
         <VoiceNotePlayer
           url={data.url}
           durationMs={data.duration_ms}
+          peaks={data.waveform_peaks ?? []}
           onPlaybackError={() => void note.refetch()}
           testID="community-voice-detail-player"
         />

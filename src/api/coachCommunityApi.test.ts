@@ -80,14 +80,6 @@ describe('coachCommunityApi — read endpoints', () => {
     expect(res.unread_inbox_count).toBe(3);
   });
 
-  it('getInbox forwards keyset params', async () => {
-    api.get.mockResolvedValueOnce({ data: { items: [], next_before: null } });
-    await coachCommunityApi.getInbox({ before: 'cursor-1', limit: 20 });
-    expect(api.get).toHaveBeenCalledWith('/community/coach/inbox', {
-      params: { before: 'cursor-1', limit: '20' },
-    });
-  });
-
   it('getCohorts unwraps the cohorts array', async () => {
     api.get.mockResolvedValueOnce({
       data: {
@@ -136,16 +128,6 @@ describe('coachCommunityApi — read endpoints', () => {
 });
 
 describe('coachCommunityApi — mutations carry Idempotency-Key + no coachId', () => {
-  it('ackInboxItem posts to the ack endpoint with an idempotency header', async () => {
-    api.post.mockResolvedValueOnce({ data: {} });
-    await coachCommunityApi.ackInboxItem('11111111-1111-1111-1111-111111111111');
-    expect(api.post).toHaveBeenCalledWith(
-      '/community/coach/inbox/11111111-1111-1111-1111-111111111111/ack',
-      {},
-      { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
-    );
-  });
-
   it('createCohort posts the name with an idempotency header (no coachId)', async () => {
     api.post.mockResolvedValueOnce({
       data: {

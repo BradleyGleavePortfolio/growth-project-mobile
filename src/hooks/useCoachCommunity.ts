@@ -3,8 +3,8 @@
  *
  * Read hooks (useQuery) fetch through coachCommunityApi (which Zod-validates the
  * wire shape). Mutation hooks (useMutation) apply OPTIMISTIC updates with
- * rollback on failure per the hard gate: acknowledge inbox item, create cohort,
- * invite member, remove member, hide post, and hide message all reflect
+ * rollback on failure per the hard gate: create cohort, invite member,
+ * remove member, hide post, and hide message all reflect
  * instantly, then reconcile with the server response or roll back.
  *
  * The acting coach is always derived from the JWT inside coachCommunityApi; no
@@ -12,8 +12,11 @@
  */
 import {
   useQuery,
+  useInfiniteQuery,
   useMutation,
   useQueryClient,
+  type InfiniteData,
+  type QueryClient,
   type UseQueryResult,
   type UseMutationResult,
 } from '@tanstack/react-query';
@@ -73,12 +76,38 @@ export function useCoachDashboard(): UseQueryResult<CoachDashboard> {
   });
 }
 
-export function useCoachInbox(): UseQueryResult<CoachInboxPage> {
-  return useQuery({
+/** Module-level so `select` reruns only on new data. */
+const flattenInbox = (d: InfiniteData<CoachInboxPage>) => ({
+  items: d.pages.flatMap((p) => p.items),
+});
+
+/** The coach inbox, one server page at a time (fetchNextPage at the list end). */
+export function useCoachInbox() {
+  return useInfiniteQuery({
     queryKey: coachCommunityKeys.inbox(),
-    queryFn: () => coachCommunityApi.getInbox(),
+    queryFn: ({ pageParam }) => coachCommunityApi.getInbox({ cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: CoachInboxPage) => last.next_cursor ?? undefined,
+    select: flattenInbox,
     staleTime: 30_000,
+    meta: { persist: false }, // never saved to the phone, so a restart cannot show rows from before a ban
   });
+}
+
+/** A blocked or banned person's cached rows go at once; the refetch lets the server filter. */
+export function dropAuthorFromCoachInbox(qc: QueryClient, userId: string): void {
+  qc.setQueriesData<InfiniteData<CoachInboxPage>>(
+    { queryKey: coachCommunityKeys.inbox() },
+    (old) =>
+      old && {
+        ...old,
+        pages: old.pages.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.client_user_id !== userId),
+        })),
+      },
+  );
+  void qc.invalidateQueries({ queryKey: coachCommunityKeys.all });
 }
 
 export function useCoachCohorts(): UseQueryResult<CoachCohort[]> {
@@ -104,6 +133,7 @@ export function useCoachFlagged(): UseQueryResult<CoachFlaggedItem[]> {
     queryKey: coachCommunityKeys.flagged(),
     queryFn: () => coachCommunityApi.getFlagged(),
     staleTime: 15_000,
+    meta: { persist: false }, // reported posts are never saved to the phone (same as the inbox)
   });
 }
 
@@ -240,59 +270,11 @@ export function useCoachPostDetail(
     queryFn: () => coachCommunityApi.getCoachPostDetail(postId),
     enabled: postId.length > 0,
     staleTime: 15_000,
+    meta: { persist: false }, // a post is never saved to the phone (same as the inbox)
   });
 }
 
 // ─── Mutation hooks (optimistic + rollback) ──────────────────────────────────
-
-/**
- * Acknowledge a single inbox item. Optimistically removes it from the cached
- * page and decrements the dashboard unread count; rolls both back on failure.
- */
-export function useAckInboxItem(): UseMutationResult<void, unknown, string> {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (itemId: string) => coachCommunityApi.ackInboxItem(itemId),
-    onMutate: async (itemId) => {
-      await qc.cancelQueries({ queryKey: coachCommunityKeys.inbox() });
-      await qc.cancelQueries({ queryKey: coachCommunityKeys.dashboard() });
-      const prevInbox = qc.getQueryData<CoachInboxPage>(
-        coachCommunityKeys.inbox(),
-      );
-      const prevDash = qc.getQueryData<CoachDashboard>(
-        coachCommunityKeys.dashboard(),
-      );
-      if (prevInbox) {
-        qc.setQueryData<CoachInboxPage>(coachCommunityKeys.inbox(), {
-          ...prevInbox,
-          items: prevInbox.items.filter((i) => i.id !== itemId),
-        });
-      }
-      if (prevDash) {
-        qc.setQueryData<CoachDashboard>(coachCommunityKeys.dashboard(), {
-          ...prevDash,
-          unread_inbox_count: Math.max(0, prevDash.unread_inbox_count - 1),
-        });
-      }
-      return { prevInbox, prevDash };
-    },
-    onError: (_err, _itemId, ctx) => {
-      const c = ctx as
-        | { prevInbox?: CoachInboxPage; prevDash?: CoachDashboard }
-        | undefined;
-      if (c?.prevInbox) {
-        qc.setQueryData(coachCommunityKeys.inbox(), c.prevInbox);
-      }
-      if (c?.prevDash) {
-        qc.setQueryData(coachCommunityKeys.dashboard(), c.prevDash);
-      }
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: coachCommunityKeys.inbox() });
-      qc.invalidateQueries({ queryKey: coachCommunityKeys.dashboard() });
-    },
-  });
-}
 
 /**
  * Create a cohort. Optimistically inserts a provisional row at the top of the
@@ -453,9 +435,15 @@ export function useModerateFlagged(): UseMutationResult<
         qc.setQueryData(coachCommunityKeys.dashboard(), c.prevDash);
       }
     },
+    onSuccess: (_out, { item, action }) => {
+      if (action === 'ban' && item.author_user_id) {
+        dropAuthorFromCoachInbox(qc, item.author_user_id);
+      }
+    },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: coachCommunityKeys.flagged() });
       qc.invalidateQueries({ queryKey: coachCommunityKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: coachCommunityKeys.inbox() });
     },
   });
 }
