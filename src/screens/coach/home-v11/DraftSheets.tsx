@@ -166,7 +166,7 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
           {step.kind === 'ask' ? <Text style={[s.muted, s.mastMuted]}>{nothingSent}</Text> : null}
           <View style={s.mastChip} accessible accessibilityLabel={ask.about} testID="home-draft-context">
             <Ionicons name="refresh" size={16} color={forestPop.onDeep} />
-            <WholeLine parts={aboutParts} style={s.mastChipText} boxStyle={s.mastChipLine} />
+            <WholeLine parts={aboutParts} style={s.mastChipText} boxStyle={s.mastChipLine} testID="home-draft-context-line" />
           </View>
         </View>
       ) : null}
