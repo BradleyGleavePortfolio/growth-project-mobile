@@ -129,13 +129,16 @@ describe('closed chats leave the lists (owner 10-23 "Dissapear")', () => {
   it('on block the DM row and the coach inbox row drop from the cache at once; on unblock both read again', async () => {
     queryClient.setQueryData(['community', 'dms', 'ws-1'], [{ thread_id: 't1', other_user_id: 'client-1' }, { thread_id: 't2', other_user_id: 'x' }]);
     queryClient.setQueryData(['messaging', 'v2', 'coach-inbox', 'all'], {
-      pages: [{ items: [{ thread_id: 'a', client_id: 'client-1' }, { thread_id: 'b', client_id: 'y' }], next_cursor: null, total_unread: 0 }],
+      pages: [{ items: [{ thread_id: 'a', client_id: 'client-1', unread_count: 2 }, { thread_id: 'b', client_id: 'y', unread_count: 1 }], next_cursor: null, total_unread: 3 }],
       pageParams: [null],
     });
+    queryClient.setQueryData(['messages', 'unread-count'], { count: 3 });
     blockPlaced('client-1');
     expect((queryClient.getQueryData(['community', 'dms', 'ws-1']) as { thread_id: string }[]).map((t) => t.thread_id)).toEqual(['t2']);
-    const inbox = queryClient.getQueryData(['messaging', 'v2', 'coach-inbox', 'all']) as { pages: { items: { thread_id: string }[] }[] };
+    const inbox = queryClient.getQueryData(['messaging', 'v2', 'coach-inbox', 'all']) as { pages: { items: { thread_id: string }[]; total_unread: number }[] };
     expect(inbox.pages[0].items.map((t) => t.thread_id)).toEqual(['b']);
+    expect(inbox.pages[0].total_unread).toBe(1); // its unread counts 0 at once
+    expect(queryClient.getQueryState(['messages', 'unread-count'])?.isInvalidated).toBe(true); // the tab badge re-reads
     blockLifted('client-1');
     expect(queryClient.getQueryState(['community', 'dms', 'ws-1'])?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(['messaging', 'v2', 'coach-inbox', 'all'])?.isInvalidated).toBe(true);
