@@ -2,13 +2,15 @@
  * BLOCK-ALL-M: one rule for "this conversation is closed to me" (owner 10-22: "if someone is a banned person from a space
  * or direct5ly person to person banned, hide ALL messaging entirely, dont even let the banned person type!"; #168-4 op 1).
  *
- * Closed when the phone knows it: I blocked the other person (my own block list), the server's inbox or DM-list row says
- * closed, or the server refused a read or a send with one of its "not for you" answers. Every chat composer (coaching 1:1,
- * community DM, Hall posts, replies, challenge notes) swaps for ConversationClosedLine in the same spot. A refused send
- * never clears the draft: the composers keep it on the device.
+ * Closed when the phone knows it: I blocked the other person (my own block list), or the server refused a read or a send
+ * with one of its "not for you" answers. Every chat composer (coaching 1:1, community DM, Hall posts, replies, challenge
+ * notes) swaps for ConversationClosedLine in the same spot. A refused send never clears the draft: the composers keep it
+ * on the device.
  *
  * BLOCK-TELL, owner #169-5 CLOSED-LINE: in a one-to-one conversation the line says who closed it (BAM-2a / BAM-2b);
- * spaces, bans and a member who left keep BAM-1.
+ * spaces, bans and a member who left keep BAM-1. A blocked chat is in neither person's list (owner 10-23 "Dissapear"), so
+ * the side comes from my block list and the server's answer when the chat is reached another way (profile, notification,
+ * link).
  */
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -19,8 +21,6 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, typography } from '../../theme/tokens';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { useFeatureFlags } from '../../hooks/useFeatureFlags';
-import { messagingV2Api } from '../../api/messagingV2Api';
 
 /** BAM-1 = K2-S-104 (planning/MOCKUP3/K2): spaces, bans, a member who left, or no name to show. */
 export const CLOSED_LINE = 'This conversation is closed';
@@ -77,23 +77,19 @@ export function isClosedRefusal(err: unknown): boolean {
   return refusalOf(err) !== undefined;
 }
 
-/** The server's own row for this conversation (coaching inbox or DM list, b#1141 / #169-5). */
-export type ClosedRow = { closed?: boolean; blocked_by_me?: boolean } | null | undefined;
-
 /**
  * `closed` and `by` for one conversation. `otherUserId`: the person on the other side (1:1 and DMs), checked against my
- * block list so an unblock reopens it. `errors`: read or send errors the screen already holds (react-query). `row`: the
- * inbox or DM-list row. `close(err)`: call it with a failed send; it returns true (and closes) when the refusal means
- * closed.
+ * block list so an unblock reopens it. `errors`: read or send errors the screen already holds (react-query). `close(err)`:
+ * call it with a failed send; it returns true (and closes) when the refusal means closed. `by`: 'me' when my block list
+ * has them or the server says the block is mine; 'them' when the server says they blocked me, or a coaching refusal
+ * (which names no side) meets no block of mine; null (BAM-1) for every other closed state.
  */
-export function useConversationClosed(otherUserId?: string | null, errors: unknown[] = [], row?: ClosedRow) {
+export function useConversationClosed(otherUserId?: string | null, errors: unknown[] = []) {
   const blockedByMe = useBlockedUsersStore((s) => !!otherUserId && s.blocked.some((b) => b.id === otherUserId));
   const [refused, setRefused] = useState<Refusal | undefined>(undefined);
-  const [unblocked, setUnblocked] = useState(false);
   const wasBlocked = useRef(blockedByMe);
   useEffect(() => {
-    if (wasBlocked.current && !blockedByMe) { setRefused(undefined); setUnblocked(true); } // unblocked: open again
-    if (blockedByMe) setUnblocked(false);
+    if (wasBlocked.current && !blockedByMe) setRefused(undefined); // unblocked: open again
     wasBlocked.current = blockedByMe;
   }, [blockedByMe]);
   const close = useCallback((err: unknown) => {
@@ -104,37 +100,9 @@ export function useConversationClosed(otherUserId?: string | null, errors: unkno
     return true;
   }, []);
   const said = [refused, ...errors.map((e) => refusalOf(e))].filter((r) => r !== undefined);
-  const mine = blockedByMe || (!!row?.closed && !!row.blocked_by_me && !unblocked) || said.includes('me');
-  const theirs = (!!row?.closed && !row.blocked_by_me) || said.includes('them') || said.includes('pair');
-  const closed = mine || theirs || said.length > 0;
-  const by: ClosedBy = mine ? 'me' : theirs ? 'them' : null;
-  return { closed, by, close };
-}
-
-/** The DM-list row for one member: #169-5's closed, blocked_by_me and other_display_name ride the list's passthrough
- * schema (communityApi CommunityDmThreadSchema). */
-export function dmRowFor(threads: ReadonlyArray<Record<string, unknown>> | undefined, otherUserId?: string | null) {
-  const t = otherUserId ? threads?.find((x) => x.other_user_id === otherUserId) : undefined;
-  if (!t) return null;
-  const name = typeof t.other_display_name === 'string' ? t.other_display_name : undefined;
-  return { closed: t.closed === true, blocked_by_me: t.blocked_by_me === true, name };
-}
-
-/** The coaching inbox row for this 1:1 (closed, blocked_by_me, the other person's name), read once when messaging v2 is
- * on. A failed read leaves it null; the refused send still closes the chat. */
-export function useCoachingRow(side: 'client' | 'coach', otherUserId?: string | null) {
-  const v2 = useFeatureFlags().flags.messaging_core_v2;
-  const [row, setRow] = useState<{ closed?: boolean; blocked_by_me: boolean; counterpart: { display_name: string } } | null>(null);
-  useEffect(() => {
-    if (!v2 || !otherUserId) return undefined;
-    let live = true;
-    Promise.resolve()
-      .then(() => (side === 'client' ? messagingV2Api.getClientInbox() : messagingV2Api.getCoachInbox({ limit: 100 })))
-      .then((res) => { if (live) setRow(res.items.find((t) => (side === 'client' ? t.coach_id : t.client_id) === otherUserId) ?? null); })
-      .catch(() => undefined);
-    return () => { live = false; };
-  }, [v2, side, otherUserId]);
-  return row;
+  const mine = blockedByMe || said.includes('me');
+  const by: ClosedBy = mine ? 'me' : said.includes('them') || said.includes('pair') ? 'them' : null;
+  return { closed: mine || said.length > 0, by, close };
 }
 
 // A stand-in @react-navigation/native (tests) may leave the context out: then there is no list to open.

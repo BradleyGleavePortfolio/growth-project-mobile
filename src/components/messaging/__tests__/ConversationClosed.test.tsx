@@ -22,7 +22,7 @@ import { CommunityApiError } from '../../../api/apiCall';
 import { NavigationContext } from '@react-navigation/native';
 import { fireEvent } from '@testing-library/react-native';
 import {
-  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, dmRowFor, isClosedRefusal, useConversationClosed,
+  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, isClosedRefusal, useConversationClosed,
 } from '../ConversationClosed';
 
 const axiosErr = (status: number, data: Record<string, unknown>) => ({ isAxiosError: true, response: { status, data } });
@@ -121,34 +121,34 @@ describe('ConversationClosedLine', () => {
 });
 
 describe('#169-5 CLOSED-LINE: who closed a one-to-one conversation', () => {
-  const byOf = async (other: string | null, errs: unknown[] = [], row?: { closed?: boolean; blocked_by_me?: boolean }) =>
-    (await renderHook(() => useConversationClosed(other, errs, row))).result.current;
+  const byOf = async (other: string | null, errs: unknown[] = []) =>
+    (await renderHook(() => useConversationClosed(other, errs))).result.current;
 
-  it('BAM-2a when I blocked them: my block list, the row, or blocked_by_you', async () => {
-    expect((await byOf(null, [axiosErr(403, { code: 'community.dm.blocked_by_you' })])).by).toBe('me');
-    expect(await byOf('x', [], { closed: true, blocked_by_me: true })).toMatchObject({ closed: true, by: 'me' });
+  it('BAM-2a when I blocked them: my block list, or blocked_by_you', async () => {
+    expect(await byOf(null, [axiosErr(403, { code: 'community.dm.blocked_by_you' })])).toMatchObject({ closed: true, by: 'me' });
     useBlockedUsersStore.setState({ blocked: [{ id: 'x', displayName: 'Sam', blockedAt: '2026-10-22T00:00:00Z' }] });
+    expect(await byOf('x')).toMatchObject({ closed: true, by: 'me' });
     expect((await byOf('x', [axiosErr(403, COACHING_BLOCKED)])).by).toBe('me');
   });
 
-  it('BAM-2b when they blocked me: the row, blocked_by_them, or a coaching refusal with no block of mine', async () => {
-    expect(await byOf('x', [], { closed: true, blocked_by_me: false })).toMatchObject({ closed: true, by: 'them' });
+  it('BAM-2b when they blocked me: blocked_by_them, or a coaching refusal with no block of mine', async () => {
     expect((await byOf(null, [axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_them' })])).by).toBe('them');
-    expect((await byOf('x', [axiosErr(403, COACHING_BLOCKED)])).by).toBe('them');
+    expect(await byOf('x', [axiosErr(403, COACHING_BLOCKED)])).toMatchObject({ closed: true, by: 'them' });
   });
 
-  it('BAM-1 for a ban or a member who left; an open row stays open', async () => {
+  it('BAM-1 for a ban or a member who left; nothing said stays open', async () => {
     expect(await byOf(null, [axiosErr(404, { code: 'community.dm.not_found' })])).toMatchObject({ closed: true, by: null });
     expect(await byOf(null, [axiosErr(403, { code: 'community.workspace.no_access' })])).toMatchObject({ closed: true, by: null });
-    expect(await byOf('x', [], { closed: false, blocked_by_me: false })).toMatchObject({ closed: false, by: null });
+    expect(await byOf('x', [axiosErr(500, {})])).toMatchObject({ closed: false, by: null });
   });
 
-  it('dmRowFor reads the DM-list row of that member only', () => {
-    const rows = [{ other_user_id: 'x', closed: true, blocked_by_me: false, other_display_name: 'Sam' }, { other_user_id: 'y' }];
-    expect(dmRowFor(rows, 'x')).toEqual({ closed: true, blocked_by_me: false, name: 'Sam' });
-    expect(dmRowFor(rows, 'y')).toEqual({ closed: false, blocked_by_me: false, name: undefined });
-    expect(dmRowFor(rows, 'z')).toBeNull();
-    expect(dmRowFor(undefined, 'x')).toBeNull();
+  it('a refused send says the side; an unblock opens it again', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'x', displayName: 'Sam', blockedAt: '2026-10-22T00:00:00Z' }] });
+    const hook = await renderHook(() => useConversationClosed('x'));
+    await act(async () => { hook.result.current.close(axiosErr(403, COACHING_BLOCKED)); });
+    expect(hook.result.current).toMatchObject({ closed: true, by: 'me' });
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(hook.result.current).toMatchObject({ closed: false, by: null });
   });
 
   it('the lines: BAM-2a, BAM-2b with the name, BAM-1 when there is no name', async () => {

@@ -33,7 +33,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
-import { useConversationClosed, ConversationClosedLine, useCoachingRow } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
@@ -117,9 +117,8 @@ export default function MessagesScreen() {
   const [coachName, setCoachName] = useState('');
   const [coachId, setCoachId] = useState('');
   // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in the draft (or the outbox).
-  // BLOCK-TELL #169-5: the inbox row says who closed it, so the line can name the side.
-  const coachingRow = useCoachingRow('client', coachId);
-  const { closed, by, close } = useConversationClosed(coachId, [], coachingRow);
+  // BLOCK-TELL #169-5: `by` picks the line for my side (BAM-2a when I blocked them, BAM-2b when they blocked me).
+  const { closed, by, close } = useConversationClosed(coachId);
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
   // the CompetencePill at the top of the conversation. Null hides the pill
   // (no review yet, or the backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is OFF).
@@ -922,7 +921,7 @@ export default function MessagesScreen() {
         }}
       />
 
-      {closed ? <ConversationClosedLine by={by} name={coachName || coachingRow?.counterpart.display_name} style={styles.closedBar} testID="messages-closed" /> : <>
+      {closed ? <ConversationClosedLine by={by} name={coachName} style={styles.closedBar} testID="messages-closed" /> : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={[styles.inputBar, styleB && styles.bInputBar]}>

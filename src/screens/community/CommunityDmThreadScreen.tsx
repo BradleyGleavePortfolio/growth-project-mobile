@@ -23,7 +23,6 @@ import { useTheme } from '../../theme/useTheme';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   useDmMessages,
-  useDmThreads,
   useSendDm,
   useCommunityMe,
 } from '../../hooks/useCommunity';
@@ -35,7 +34,7 @@ import {
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import { describeCommunityFailure } from '../../api/communityErrors';
-import { useConversationClosed, ConversationClosedLine, dmRowFor } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
@@ -53,9 +52,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const messages = useDmMessages(workspaceId, recipientId);
   const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
   // BLOCK-ALL-M: a block either way (or a ban) closes the DM: no composer, and the read refusal is not an empty thread.
-  // BLOCK-TELL #169-5: the DM-list row (and the read refusal's code) say who closed it.
-  const dmRow = dmRowFor(useDmThreads(workspaceId).data, recipientId);
-  const { closed, by, close } = useConversationClosed(recipientId, [messages.error], dmRow);
+  // BLOCK-TELL #169-5: the read refusal's code (blocked_by_you / blocked_by_them) says who closed it.
+  const { closed, by, close } = useConversationClosed(recipientId, [messages.error]);
 
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
@@ -155,7 +153,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           />
         )}
 
-        {closed ? <ConversationClosedLine by={by} name={dmRow?.name ?? participantLabel} testID="community-dmthread-closed" /> : <ComposerInput
+        {closed ? <ConversationClosedLine by={by} name={participantLabel} testID="community-dmthread-closed" /> : <ComposerInput
           placeholder="Message"
           maxLength={DM_MAX}
           sending={sendDm.isPending}

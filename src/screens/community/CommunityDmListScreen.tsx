@@ -36,13 +36,6 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import type { CommunityDmThread } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
-import { dmRowFor } from '../../components/messaging/ConversationClosed';
-
-/** BLOCK-TELL #169-5: a closed row shows the other member's name, with no time and no text. */
-const closedName = (t: CommunityDmThread): { participantLabel?: string } => {
-  const row = dmRowFor([t], t.other_user_id);
-  return row?.closed && row.name ? { participantLabel: row.name } : {};
-};
 
 interface Props {
   embedded?: boolean;
@@ -90,11 +83,9 @@ export default function CommunityDmListScreen({
   const prerequisiteError = prerequisiteErrorProp ?? false;
   const retryPrerequisite = onRetryPrerequisite ?? (() => {});
 
-  // BLOCK-TELL #169-5: a closed row opens with the other member's name (the thread's closed line names them).
   const openThread = (thread: CommunityDmThread) =>
     navigation.navigate('CommunityDmThread', {
       recipientId: thread.other_user_id,
-      ...closedName(thread),
     });
 
   const startWithCoach = () =>
@@ -226,9 +217,8 @@ export default function CommunityDmListScreen({
           renderItem={({ item }) => (
             <DmRow
               thread={item}
-              participantLabel={closedName(item).participantLabel ?? 'Coach'}
-              closed={item.closed === true}
-              isCoach={item.closed !== true || item.other_user_id === client?.coach_id}
+              participantLabel="Coach"
+              isCoach
               onPress={openThread}
               testID={`dm-row-${item.thread_id}`}
             />

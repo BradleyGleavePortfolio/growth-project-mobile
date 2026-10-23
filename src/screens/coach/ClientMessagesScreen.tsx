@@ -32,7 +32,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
-import { useConversationClosed, ConversationClosedLine, useCoachingRow } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import { track } from '../../lib/analytics';
 import { MuteBell, PinnedBar, ThreadV2Menus, jumpToMessage } from '../../components/messaging/ThreadV2Parts';
@@ -80,8 +80,8 @@ export default function ClientMessagesScreen() {
   // A reply typed and not sent stays with this client's chat on the device (COACH-CHAT-KEEP, CHAT-DISCARD).
   const [inputText, setInputText, sendKey] = useUnsentReply(clientId, initialDraft);
   // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in this client's unsent reply.
-  // BLOCK-TELL #169-5: the inbox row says who closed it, so the line can name the side.
-  const { closed, by, close } = useConversationClosed(clientId, [], useCoachingRow('coach', clientId));
+  // BLOCK-TELL #169-5: `by` picks the line for my side (BAM-2a when I blocked them, BAM-2b when they blocked me).
+  const { closed, by, close } = useConversationClosed(clientId);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);

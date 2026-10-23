@@ -323,22 +323,30 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(postMock.mock.calls.filter(([url]) => url === '/messages')).toHaveLength(1);
   });
 
-  // BLOCK-TELL #169-5 CLOSED-LINE: the inbox row says who closed it; the line names the side.
-  it.each([
-    ['my coach blocked me', false, 'Sam has blocked you'],
-    ['I blocked my coach (on another phone)', true, 'You blocked them. Unblock in Settings'],
-  ])('%s (inbox row closed): closed before any send, no "start a conversation", the line says who', async (_l, mine, line) => {
+  // BLOCK-TELL #169-5 CLOSED-LINE: the line says who closed it. A blocked chat is in neither list (owner 10-23
+  // "Dissapear"), so the side comes from my block list or the refused send.
+  it('I blocked my coach: "You blocked them. Unblock in Settings" before any send, no "start a conversation"', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'coach-9', displayName: 'Sam', blockedAt: recent }] });
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
-    getMock.mockImplementation(async (url: string) => {
-      if (url !== '/messages/inbox') return { data: url === '/messages/pins' ? { items: [] } : {} };
-      const shut = inbox(false);
-      Object.assign(shut.data.items[0], { closed: true, blocked_by_me: mine, last_activity_at: null });
-      return shut;
-    });
     mockList.mockResolvedValue({ data: { messages: [] } });
     const u = await render(<MessagesScreen />);
-    expect(await u.findByLabelText(line)).toBeTruthy();
+    expect(await u.findByLabelText('You blocked them. Unblock in Settings')).toBeTruthy();
     expect(u.queryByLabelText('Message text')).toBeNull();
     expect(u.queryByText('Start a conversation with your coach')).toBeNull();
+  });
+
+  it('my coach blocked me: the refused send says "Sam has blocked you" (the name on this screen)', async () => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    postMock.mockImplementation(async (url: string) => {
+      if (url !== '/messages') return { data: {} };
+      throw axiosErr({ response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } });
+    });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText(/Message: from the coach/);
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'running late');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    expect(await u.findByText('Sam has blocked you')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByText(/Unblock/)).toBeNull();
   });
 });

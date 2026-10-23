@@ -9,7 +9,6 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { spacing } from '../../theme/tokens';
@@ -24,8 +23,6 @@ export interface DmRowProps {
   /** Whether the other participant is the calling client's coach. */
   isCoach?: boolean;
   unread?: number;
-  /** BLOCK-TELL #169-5: a block closed it; the name only (no time, no text) and a lock. */
-  closed?: boolean;
   onPress: (thread: CommunityDmThread) => void;
   testID?: string;
 }
@@ -49,7 +46,6 @@ export default function DmRow({
   participantLabel,
   isCoach,
   unread = 0,
-  closed = false,
   onPress,
   testID,
 }: DmRowProps): React.ReactElement {
@@ -87,17 +83,11 @@ export default function DmRow({
           {participantLabel}
           {isCoach ? '  ·  your coach' : ''}
         </Text>
-        {closed ? null : (
-          <Text style={[styles.time, { color: semanticColors.textMuted }]}>
-            {time ? `Active ${time} ago` : 'No messages yet'}
-          </Text>
-        )}
+        <Text style={[styles.time, { color: semanticColors.textMuted }]}>
+          {time ? `Active ${time} ago` : 'No messages yet'}
+        </Text>
       </View>
-      {closed ? (
-        <Ionicons name="lock-closed-outline" size={16} color={semanticColors.textMuted} testID="dm-row-closed" />
-      ) : (
-        <UnreadBadge count={unread} corner={false} testID="dm-row-badge" />
-      )}
+      <UnreadBadge count={unread} corner={false} testID="dm-row-badge" />
     </HapticPressable>
   );
 }

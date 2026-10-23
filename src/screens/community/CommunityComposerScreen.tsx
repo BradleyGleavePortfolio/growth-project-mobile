@@ -28,12 +28,11 @@ import { spacing, radius, typography } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   useCreatePost,
-  useDmThreads,
   useSendDm,
   useCommunityMe,
 } from '../../hooks/useCommunity';
 import { describeCommunityFailure } from '../../api/communityErrors';
-import { useConversationClosed, ConversationClosedLine, dmRowFor } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const TITLE_MAX = 200; // mirror backend CreatePostDto.title (1..200)
@@ -62,9 +61,8 @@ export default function CommunityComposerScreen(): React.ReactElement {
   const createPost = useCreatePost(workspaceId, client?.id ?? '');
   const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
   // BLOCK-ALL-M: a block either way (DM) or a ban (post) closes it: the fields go, the typed text stays in this screen.
-  // BLOCK-TELL #169-5: in DM mode the DM-list row says who closed it.
-  const dmRow = dmRowFor(useDmThreads(mode === 'dm' ? workspaceId : null).data, recipientId);
-  const { closed, by, close } = useConversationClosed(mode === 'dm' ? recipientId : null, [], dmRow);
+  // BLOCK-TELL #169-5: in DM mode `by` picks the line for my side. No name shows here, so BAM-2b falls back to BAM-1.
+  const { closed, by, close } = useConversationClosed(mode === 'dm' ? recipientId : null);
 
   const bodyMax = mode === 'dm' ? DM_MAX : POST_BODY_MAX;
   const trimmedTitle = title.trim();
@@ -120,7 +118,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
           {mode === 'dm' ? 'New message' : 'New post'}
         </Text>
 
-        {closed ? <><View style={styles.flex} /><ConversationClosedLine by={mode === 'dm' ? by : null} name={dmRow?.name} testID="community-composer-closed" /></> : <>
+        {closed ? <><View style={styles.flex} /><ConversationClosedLine by={mode === 'dm' ? by : null} testID="community-composer-closed" /></> : <>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.content}
