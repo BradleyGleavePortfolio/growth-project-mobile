@@ -1,8 +1,5 @@
-/**
- * communityVoiceApi — the Studio contract (backend #1122 "Contract for the
- * phone"; OPERATOR RULING 6304777236): the strict view takes the six new keys
- * and still parses today's shape; peaks are clamped and never sent empty.
- */
+/** communityVoiceApi — the Studio contract (backend #1122 "Contract for the phone"; OPERATOR RULING 6304777236): the
+ *  strict view takes the six new keys and still parses today's shape; peaks are clamped and never sent empty. */
 import api from '../../services/api';
 import { communityVoiceApi, VoiceNoteViewSchema, wirePeaks } from '../communityVoiceApi';
 
