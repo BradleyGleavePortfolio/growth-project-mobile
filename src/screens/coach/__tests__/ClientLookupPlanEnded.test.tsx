@@ -204,22 +204,22 @@ describe('L2: Roman as RENEWAL3 draws him (FX-CHURN; LS-866 B2)', () => {
     await fireEvent.press(screen.getByTestId('lookup-roman-maya'));
     const mast = within(screen.getByTestId('home-draft-masthead'));
     expect([mast.getByTestId('home-draft-mark', { includeHiddenElements: true }), mast.getByText('Roman'), mast.getByText('Ask Roman to write to Maya?')].every(Boolean)).toBe(true);
-    expect(textsIn(within(screen.getByTestId('home-draft-context')))).toEqual(['Plan ended today · ', '12-week block']);
+    expect(textsIn(within(screen.getByTestId('home-draft-context-line')))).toEqual(['Plan ended today · ', '12-week block']);
     await act(async () => { fireEvent.press(screen.getByTestId('home-draft-ask')); });
     await waitFor(() => expect(mast.getByText("Roman's draft for Maya")).toBeTruthy()); // K3b
   });
 });
 
 describe('L2: a blocked pair (FX-CHURN; LO-866 B1, b#1141)', () => {
-  afterEach(() => { act(() => { useBlockedUsersStore.setState({ blocked: [] }); }); });
+  afterEach(() => { useBlockedUsersStore.setState({ blocked: [] }); });
   it('leaves out a client the coach blocked, with its Message and Roman buttons, and counts one fewer', async () => {
-    act(() => { useBlockedUsersStore.setState({ blocked: [{ id: 'dev', displayName: 'Dev Patel', role: 'client', blockedAt: '2026-10-22T10:00:00Z' }] }); });
+    useBlockedUsersStore.setState({ blocked: [{ id: 'dev', displayName: 'Dev Patel', role: 'client', blockedAt: '2026-10-22T10:00:00Z' }] });
     await mount();
     expect(screen.getByTestId('lookup-chip-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 6');
     await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
     expect(rowIds()).toEqual(['lookup-row-maya', 'lookup-row-sam', 'lookup-row-lena']);
     expect([screen.queryByTestId('lookup-message-dev'), screen.queryByTestId('lookup-roman-dev')]).toEqual([null, null]);
-    act(() => { useBlockedUsersStore.setState({ blocked: [] }); });
+    await act(async () => { useBlockedUsersStore.setState({ blocked: [] }); });
     expect(rowIds()).toEqual(['lookup-row-maya', 'lookup-row-dev', 'lookup-row-sam', 'lookup-row-lena']);
   });
   it("sends nothing when the server answers the draft for a pair blocked either way with b#1141's 404", async () => {
