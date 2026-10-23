@@ -4,7 +4,8 @@
  * first win over the empty line (LO C1), at 130 % text too (#168-3); a line never on screen never fades (LO r2 B1); one
  * win never turns; Reduce Motion and screen readers keep it still, the row then fitting the one win (LO C2), and with
  * Reduce Motion every change lands at once (#168-3); the fade ends rather than runs while the Home is not in front; a
- * tap mid-fade still reaches the hero.
+ * tap mid-fade still reaches the hero. The row's height glides with the fade, so nothing under the hero jumps when
+ * the line grows, shrinks or goes (LS r3 B1, LO r3 C1 and C2).
  */
 import React from 'react';
 import { AccessibilityInfo, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -54,9 +55,25 @@ const layer = (r: R, id: string) => {
   }
   return undefined;
 };
+/** Where a leaving line sits: over the flow (absolute), inside the row that clips it. */
+const over = (r: R, id: string) => {
+  for (let n = r.getByTestId(`home-win-${id}`, { includeHiddenElements: true }).parent; n; n = n.parent) {
+    if (StyleSheet.flatten(n.props.style)?.position === 'absolute') return true;
+    if (n.props.testID === 'home-winline-flow') return false;
+  }
+  return false;
+};
+const rowH = (r: R) => StyleSheet.flatten(r.getByTestId('home-winline', { includeHiddenElements: true }).props.style)?.height;
+/** The line's measured height, as the phone reports it after a layout. */
+const lay = async (r: R, height: number) => {
+  await act(async () => { fireEvent(r.getByTestId('home-winline-flow', { includeHiddenElements: true }), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 342, height } } }); });
+};
 /** Animated.timing held by hand: a fade runs until the test ends it, so "mid-fade" is exact. */
 let fades: { config: Animated.TimingAnimationConfig; end: (finished: boolean) => void; stop: jest.Mock }[] = [];
-const endFade = async () => { await act(async () => { fades[fades.length - 1].end(true); }); };
+const glides = () => fades.filter((f) => f.config.useNativeDriver === false); // the row's height, on the JS driver
+const opFades = () => fades.filter((f) => f.config.useNativeDriver === true);
+const endFade = async () => { await act(async () => { opFades()[opFades().length - 1].end(true); }); };
+const endGlide = async () => { await act(async () => { glides()[glides().length - 1].end(true); }); };
 const tick = async (ms: number) => { await act(async () => { jest.advanceTimersByTime(ms); }); };
 const a11y = (rm: boolean, sr: boolean) => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(rm);
@@ -124,9 +141,10 @@ describe('the win turn cross-fades (#167-1)', () => {
     await act(async () => { await r.rerender(<Hero wins={[w('w0'), w('w1'), w('w2'), w('w3')]} />); });
     expect(opacity(r, 'w3')).toBe(1);
     expect(opacity(r, 'w2')).toBe(0);
-    // In the flow on the same spot, so the row holds the taller of the old and new lines while it fades (LO r2 C1).
-    expect(layer(r, 'w3')).toEqual(expect.objectContaining({ marginLeft: '-100%' }));
-    expect(layer(r, 'w3')?.position).toBeUndefined();
+    // On the same spot over the flow, clipped by the row while the row's height glides to the new set's (LS r3 B1).
+    expect(over(r, 'w3')).toBe(true);
+    expect(over(r, 'w2')).toBe(false);
+    expect(StyleSheet.flatten(r.getByTestId('home-winline').props.style)).toEqual(expect.objectContaining({ overflow: 'hidden' }));
     await endFade();
     expect(r.queryByTestId('home-win-w3', { includeHiddenElements: true })).toBeNull();
     expect(opacity(r, 'w2')).toBe(1);
@@ -149,8 +167,8 @@ describe('the win turn cross-fades (#167-1)', () => {
     await act(async () => { await r.rerender(<Hero wins={[w('w1')]} />); });
     expect(opacity(r, 'none')).toBe(1);
     expect(opacity(r, 'w1')).toBe(0);
-    expect(layer(r, 'none')).toEqual(expect.objectContaining({ marginLeft: '-100%' }));
-    expect(layer(r, 'none')?.position).toBeUndefined();
+    expect(over(r, 'none')).toBe(true);
+    expect(layer(r, 'w1')?.marginLeft).toBeUndefined();
     await endFade();
     expect(r.queryByTestId('home-win-none', { includeHiddenElements: true })).toBeNull();
     expect(opacity(r, 'w1')).toBe(1);
@@ -173,8 +191,15 @@ describe('the win turn cross-fades (#167-1)', () => {
       return wins.length ? <Pressable key="button">{turn}</Pressable> : <View key="heading">{turn}</View>;
     }
     const a = await render(<Anew wins={[]} />);
+    await lay(a, 20);
     await act(async () => { await a.rerender(<Anew wins={[w('w1')]} />); });
     expect([opacity(a, 'none'), opacity(a, 'w1')]).toEqual([1, 0]);
+    // The row drawn anew starts at the old line's height and glides to the new one's.
+    expect(rowH(a)).toBe(20);
+    await lay(a, 48);
+    expect(glides()).toHaveLength(1);
+    await endGlide();
+    expect(rowH(a)).toBe(48);
     await endFade();
     expect(opacity(a, 'w1')).toBe(1);
   });
@@ -228,7 +253,7 @@ describe('the win turn cross-fades (#167-1)', () => {
     expect(r.getByTestId('home-win-none')).toBeTruthy();
     await act(async () => { await r.rerender(<Hero wins={[w('w1')]} big />); });
     expect(opacity(r, 'none')).toBe(1);
-    expect(layer(r, 'none')?.position).toBeUndefined(); // the row keeps the line's height while it fades
+    expect(over(r, 'none')).toBe(true); // clipped by the row as its height glides to nothing
     expect(r.queryByTestId('home-win-w1', { includeHiddenElements: true })).toBeNull();
     expect(fades).toHaveLength(1);
     expect(fades[0].config).toEqual(expect.objectContaining({ toValue: 1, duration: WIN_FADE_MS, useNativeDriver: true }));
@@ -245,6 +270,44 @@ describe('the win turn cross-fades (#167-1)', () => {
     expect(r.queryByTestId('home-win-w1', { includeHiddenElements: true })).toBeNull();
     expect(r.getByTestId('home-win-none')).toBeTruthy();
     expect(fades).toHaveLength(0);
+  });
+
+  it.each<[string, boolean, number, number]>([
+    ['the first win, at 100 % text', false, 20, 48],
+    ['the first win at 130 % text, where the empty line goes and no line follows', true, 52, 0],
+  ])('the row\'s height glides with the fade over 0.3 s, so nothing under the hero jumps (LS r3 B1, LO r3 C1): %s', async (_n, big, from, to) => {
+    const r = await render(<Hero wins={[]} big={big} />);
+    await tick(0);
+    await lay(r, from);
+    expect(glides()).toHaveLength(0); // the first measure only sets the height
+    await act(async () => { await r.rerender(<Hero wins={[w('w1')]} big={big} />); });
+    expect(rowH(r)).toBe(from); // the first frame keeps the old height
+    await lay(r, to);
+    expect(glides()).toHaveLength(1);
+    expect(glides()[0].config).toEqual(expect.objectContaining({ toValue: to, duration: WIN_FADE_MS, useNativeDriver: false }));
+    expect(rowH(r)).toBe(from);
+    await endGlide();
+    expect(rowH(r)).toBe(to);
+    // And back: the wins going glides the row back to the empty line's height.
+    await endFade();
+    await act(async () => { await r.rerender(<Hero wins={[]} big={big} />); });
+    await lay(r, from);
+    expect(glides()[1].config).toEqual(expect.objectContaining({ toValue: from, useNativeDriver: false }));
+    await endGlide();
+    expect(rowH(r)).toBe(from);
+  });
+
+  it.each([['Reduce Motion', true, true], ['the Home not in front', false, false]])('with %s the row takes its new height at once', async (_n, rm, live) => {
+    a11y(rm, false);
+    const r = await render(<Hero wins={[]} live={live} />);
+    await tick(0);
+    await lay(r, 20);
+    await act(async () => { await r.rerender(<Hero wins={[w('w1')]} live={live} />); });
+    await tick(0);
+    expect(rowH(r)).toBeUndefined();
+    await lay(r, 48);
+    expect(glides()).toHaveLength(0);
+    expect(rowH(r)).toBeUndefined();
   });
 
   it('ends a fade under way when the Home leaves the front, and starts no turn off screen', async () => {
