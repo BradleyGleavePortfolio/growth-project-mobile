@@ -105,8 +105,12 @@ test('a failed Show older says so under the list, where the link was, and Try ag
   const err = await s.findByTestId('copilot-past-error');
   expect(s.queryByText('Show older questions')).toBeNull();
   // Drawn after the last row, not above the list.
-  const order = JSON.stringify(s.toJSON());
-  expect(order.indexOf('copilot-past-error')).toBeGreaterThan(order.indexOf('Should I add a fifth day?'));
+  type Node = { props?: { testID?: string }; children?: (Node | string)[] | null };
+  const ids = (n: Node | string | null): string[] =>
+    !n || typeof n === 'string' ? [] : [...(n.props?.testID ? [n.props.testID] : []), ...(n.children ?? []).flatMap(ids)];
+  const order = ([] as (Node | string)[]).concat((s.toJSON() as never) ?? []).flatMap(ids);
+  expect(order).toContain('copilot-past-m3');
+  expect(order.indexOf('copilot-past-error')).toBeGreaterThan(order.indexOf('copilot-past-m3'));
   expect(err).toBeTruthy();
   route([PAGE1, PAGE2]);
   await act(async () => fireEvent.press(s.getByText('Try again')));
