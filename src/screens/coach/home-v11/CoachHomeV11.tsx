@@ -4,8 +4,8 @@
  * Open alerts, the day's rings. Page: push ask and brief, Roman, one Needs you tile, Business, Clients rows. Only real
  * numbers: a server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
  */
-import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
@@ -22,10 +22,10 @@ import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './Ho
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
 import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
+import { WinTurn, useWinFade, useWinTurn } from './WinTurn';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
 const REACH_ROWS = 5;
-const WIN_TURN_MS = 6000;
 
 type Go = () => void;
 interface Props {
@@ -41,25 +41,6 @@ interface Props {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** One win at a time (LS B2); with more, the next every few seconds unless motion or a screen reader is off-limits or the Home is not in front. */
-function useWinTurn(n: number) {
-  const [turn, setTurn] = useState(0);
-  const [still, setStill] = useState(true);
-  useEffect(() => {
-    let live = true;
-    void Promise.all([AccessibilityInfo.isReduceMotionEnabled(), AccessibilityInfo.isScreenReaderEnabled()])
-      .then(([rm, sr]) => { if (live) setStill(rm || sr); })
-      .catch(() => undefined);
-    return () => { live = false; };
-  }, []);
-  useEffect(() => {
-    if (still || n <= 1) return undefined;
-    const t = setInterval(() => setTurn((x) => x + 1), WIN_TURN_MS);
-    return () => clearInterval(t);
-  }, [still, n]);
-  return turn;
-}
-
 export default function CoachHomeV11(p: Props) {
   const { colors, semanticColors: sc } = useTheme();
   const cs = useCardStyles();
@@ -73,8 +54,15 @@ export default function CoachHomeV11(p: Props) {
   const roster = o?.roster_size ?? 0;
   const rosterN = formatCount(roster);
   const items = home?.wins.items ?? [];
-  const turn = useWinTurn(focused ? items.length : 0); // paused while another tab is in front (LO C2)
-  const win = items.length > 0 ? items[turn % Math.min(3, items.length)] : undefined; // the newest three take turns (spec item 2)
+  // Paused while another tab is in front (LO C2), and at 130 % text, where no win line is drawn.
+  const { turn, still, calm } = useWinTurn(focused && !bigText ? items.length : 0);
+  const newest = items.slice(0, 3); // the newest three take turns (spec item 2), each a cross-fade (#167-1)
+  const win = newest.length > 0 ? newest[turn % newest.length] : undefined;
+  // What the win line draws: nothing until the wins hero is up (Loading, an error, no clients) or for a win at 130 %.
+  const line = !o || roster === 0 || !home || (win && bigText) ? undefined : win ?? null;
+  const fade = useWinFade(line, focused, calm, (
+    <Text style={s.onDeepMuted}>{(home?.wins.count ?? 0) === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>
+  ));
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
@@ -127,9 +115,10 @@ export default function CoachHomeV11(p: Props) {
             <Text style={s.heroValue} maxFontSizeMultiplier={1.15}>{h.value}</Text><Text style={s.heroUnit}>{h.unit}</Text>
             {win ? <Ionicons name="chevron-forward" size={22} color={forestPop.onDeepMuted} /> : null}
           </View>
-          {win && bigText ? null : win ? (
-            <View style={s.win}><View style={s.winDot} /><Text style={s.winText} numberOfLines={2} testID={`home-win-${win.id}`}>{winLine(win)}</Text></View>
-          ) : <Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>}
+          <WinTurn
+            wins={still && win ? [win] : newest} fade={fade} // nothing turns: the row fits the one win (LO C2)
+            line={(w, id) => <Text style={s.winText} numberOfLines={2} testID={id}>{winLine(w)}</Text>}
+          />
         </Pressable>
       );
     }
@@ -354,9 +343,7 @@ const s = StyleSheet.create({
   heroRight: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, marginLeft: 'auto' },
   bar: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.forest, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.leaf },
-  win: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  winDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: forestPop.leaf },
-  winText: { ...typography.body, color: forestPop.onDeep, flex: 1 },
+  winText: { ...typography.body, color: forestPop.onDeep },
   onDeep: { ...typography.body, color: forestPop.onDeep },
   onDeepMuted: { ...typography.bodySmall, color: forestPop.onDeepMuted },
   retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: forestPop.brand400 },
