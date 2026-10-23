@@ -123,6 +123,7 @@ export function groupPlanEnded(rows: PlanEndedRow[]): PlanEndedGroup[] {
 export const planEndedAsk = (r: PlanEndedRow): DraftAsk => ({
   clientName: r.name,
   about: rowLine(r), // RN3-34, the K3 context line
+  aboutParts: rowParts(r),
   request: { capability: 'draft.coach_message', subject_user_id: r.client_id, message: '' },
   path: `/v1/coach/churned-clients/${encodeURIComponent(r.client_id)}/draft`,
   look: 'roman', // K3a/K3b's deep Roman head
