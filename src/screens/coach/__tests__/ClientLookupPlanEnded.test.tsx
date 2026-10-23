@@ -169,7 +169,7 @@ describe('L2: picked', () => {
     await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
     await fireEvent.press(screen.getByTestId('lookup-roman-maya'));
     expect(screen.getByText('Ask Roman to write to Maya?')).toBeTruthy();
-    expect(within(screen.getByTestId('home-draft-sheet')).getByText('Plan ended today · 12-week block')).toBeTruthy();
+    expect(within(screen.getByTestId('home-draft-about-line')).getAllByText(/./).map((t) => t.props.children)).toEqual(['Plan ended today ·', '12-week block']); // RN3-34, package kept whole
     expect(mockPost).not.toHaveBeenCalled();
     await act(async () => { fireEvent.press(screen.getByTestId('home-draft-ask')); });
     expect(mockPost).toHaveBeenCalledWith('/v1/coach/churned-clients/maya/draft', {});
