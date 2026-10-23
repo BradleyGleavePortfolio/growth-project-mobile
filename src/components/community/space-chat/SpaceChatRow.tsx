@@ -100,6 +100,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
         <View style={s.who} accessible accessibilityLabel={label} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 40)}>
           <Text style={s.name}>{p.name}</Text>
           {p.isCoach ? <Text style={s.mark}>Coach</Text> : null}
+          {shown === 'waiting' ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
         </View>
         {local ? null : (
