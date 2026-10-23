@@ -431,7 +431,7 @@ export default function ClientMessagesScreen() {
               Start a conversation with {clientName.split(' ')[0]}
             </Text>
           </View>
-        )}
+        }
         renderItem={({ item, index }) => {
           const isCoach = item.sender_role === 'coach';
           const showDateSep =
