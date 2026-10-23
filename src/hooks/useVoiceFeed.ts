@@ -67,5 +67,6 @@ export function useVoiceFeed(options: UseVoiceFeedOptions): VoiceFeedQuery {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: !!workspaceId && featureFlags.communityVoiceNotes,
+    meta: { persist: false }, // never a list saved to the phone, so a restart cannot show notes from before a ban
   });
 }
