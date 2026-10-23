@@ -72,7 +72,7 @@ test('the week block draws the server week, and a change this week offers its ow
   expect(s.getByText('Roman answers from your plan, check-ins and logs. Changes go to Alex first.')).toBeTruthy();
 });
 
-test('a question goes through Roman with the Copilot header; the answer shows its facts and the suggestion card', async () => {
+test('a question goes through Roman with the Copilot header; an answer that offers a change is plain text over the suggestion card', async () => {
   get.mockResolvedValue({ data: { week: { ...WEEK, target: { ...WEEK.target, from: '2020-01-06T00:00:00Z' } }, suggestions: [] } } as never);
   send.mockResolvedValueOnce({ text: 'Friday works [1]. Saturday trains other muscles [2].', messageId: 'm1', interrupted: false,
     copilot: { sources: FACTS, suggestion: SUGGESTED } } as never);
@@ -82,11 +82,11 @@ test('a question goes through Roman with the Copilot header; the answer shows it
   await act(async () => fireEvent.press(s.getByText('Explain my targets')));
   expect(open).toHaveBeenCalledWith('client');
   expect(send).toHaveBeenCalledWith('sess-1', 'Explain my targets', { copilot: true });
-  expect(s.getByTestId('copilot-lead').props.children).toBe('Friday works.');
-  expect(s.getByText('Saturday trains other muscles.')).toBeTruthy();
-  expect(s.getByText('From your data')).toBeTruthy();
-  expect(s.getByText(FACTS[1].label)).toBeTruthy();
-  expect(s.getByText('Check-in')).toBeTruthy();
+  // Frame 04 (Sol B-851-G2): no serif lead and no facts tray; the suggestion card carries the source tags.
+  expect(s.queryByTestId('copilot-lead')).toBeNull();
+  expect(s.getByText('Friday works. Saturday trains other muscles.')).toBeTruthy();
+  expect(s.queryByText('From your data')).toBeNull();
+  expect(s.getByText('Plan')).toBeTruthy();
   expect(s.getByText('Send to Alex')).toBeTruthy();
   expect(s.getByTestId('copilot-suggestion-tags')).toBeTruthy();
   expect(s.getByText('2,150 kcal target')).toBeTruthy();
