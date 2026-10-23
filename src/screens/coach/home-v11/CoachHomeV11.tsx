@@ -54,10 +54,13 @@ export default function CoachHomeV11(p: Props) {
   const roster = o?.roster_size ?? 0;
   const rosterN = formatCount(roster);
   const items = home?.wins.items ?? [];
-  const { turn, still } = useWinTurn(focused ? items.length : 0); // paused while another tab is in front (LO C2)
+  // Paused while another tab is in front (LO C2), and at 130 % text, where no win line is drawn.
+  const { turn, still, calm } = useWinTurn(focused && !bigText ? items.length : 0);
   const newest = items.slice(0, 3); // the newest three take turns (spec item 2), each a cross-fade (#167-1)
   const win = newest.length > 0 ? newest[turn % newest.length] : undefined;
-  const fade = useWinFade(win ?? null, focused, (
+  // What the win line draws: nothing until the wins hero is up (Loading, an error, no clients) or for a win at 130 %.
+  const line = !o || roster === 0 || !home || (win && bigText) ? undefined : win ?? null;
+  const fade = useWinFade(line, focused, calm, (
     <Text style={s.onDeepMuted}>{(home?.wins.count ?? 0) === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>
   ));
   const bell = data.unreadNotifications;
@@ -112,12 +115,10 @@ export default function CoachHomeV11(p: Props) {
             <Text style={s.heroValue} maxFontSizeMultiplier={1.15}>{h.value}</Text><Text style={s.heroUnit}>{h.unit}</Text>
             {win ? <Ionicons name="chevron-forward" size={22} color={forestPop.onDeepMuted} /> : null}
           </View>
-          {win && bigText ? null : (
-            <WinTurn
-              wins={still && win ? [win] : newest} fade={fade} // nothing turns: the row fits the one win (LO C2)
-              line={(w, id) => <Text style={s.winText} numberOfLines={2} testID={id}>{winLine(w)}</Text>}
-            />
-          )}
+          <WinTurn
+            wins={still && win ? [win] : newest} fade={fade} // nothing turns: the row fits the one win (LO C2)
+            line={(w, id) => <Text style={s.winText} numberOfLines={2} testID={id}>{winLine(w)}</Text>}
+          />
         </Pressable>
       );
     }

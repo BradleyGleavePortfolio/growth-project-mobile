@@ -1,8 +1,10 @@
 /**
  * The hero's win line (spec #688 item 2, OD-2), where every change is a cross-fade (owner #167-1: "make sure it has
  * smooth fade in/out animations ... just make sure it doesnt instantly pop up a new one"): the 6 s turn, a re-read that
- * brings a new win or drops the one on screen, and the first win of the week over the empty line. The old fades out
- * while the new one fades in, together, so no frame is empty and nothing pops. Opacity only, on the native driver.
+ * brings a new win or drops the one on screen, and the first win of the week over the empty line, at 130 % text too,
+ * where the empty line fades out and no win line follows (#168-3 op 1). The old fades out while the new one fades in,
+ * together, so no frame is empty and nothing pops. Opacity only, on the native driver. With Reduce Motion on, every
+ * change lands at once (#168-3; docs/QUIET_LUXURY_DOCTRINE.md section 5).
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
@@ -17,55 +19,61 @@ export const WIN_FADE_MS = 300;
  * Which win takes the hero: the next every 6 s while `n` > 1. `n` is 0 while the Home is not in front (LO C2), so
  * nothing turns off screen. With Reduce Motion or a screen reader on the line holds still (as m#688 built it), so a
  * screen reader never hears a turn; `still` says so once it is known, so the row can fit the one win it shows.
+ * `calm`: Reduce Motion is on, so no change of the line fades (#168-3).
  */
 export function useWinTurn(n: number) {
   const [turn, setTurn] = useState(0);
-  const [still, setStill] = useState<boolean | null>(null); // null until known: no turn yet
+  const [a11y, setA11y] = useState<{ rm: boolean; sr: boolean } | null>(null); // null until known: no turn yet
   useEffect(() => {
     let live = true;
     void Promise.all([AccessibilityInfo.isReduceMotionEnabled(), AccessibilityInfo.isScreenReaderEnabled()])
-      .then(([rm, sr]) => { if (live) setStill(rm || sr); })
+      .then(([rm, sr]) => { if (live) setA11y({ rm, sr }); })
       .catch(() => undefined);
     return () => { live = false; };
   }, []);
+  const still = a11y ? a11y.rm || a11y.sr : null;
   useEffect(() => {
     if (still !== false || n <= 1) return undefined;
     const t = setInterval(() => setTurn((x) => x + 1), WIN_TURN_MS);
     return () => clearInterval(t);
   }, [still, n]);
-  return { turn, still: still === true };
+  return { turn, still: still === true, calm: a11y?.rm === true };
 }
 
-/** `was` is what fades out, kept whole (a win, or null for the empty line with the words it had), so it still draws
- * when a re-read drops it. */
-type Turn = { now: HomeWin | null; was?: { w: HomeWin | null; e?: React.ReactNode }; fade: Animated.Value };
+/** What the line draws: a win, the empty line (`w` null, with the words it had when it leaves), or nothing ('off'). */
+type Drawn = { k: string; w: HomeWin | null; e?: React.ReactNode };
+type Turn = { now: Drawn; was?: Drawn; fade: Animated.Value };
 type Role = 'now' | 'was' | null;
-export type WinFade = { t: Turn; shown: HomeWin | null; empty: React.ReactNode };
+export type WinFade = { t: Turn; empty: React.ReactNode };
 
 /**
  * The fade's state, held by the screen rather than by the line, so it lives on when the hero above the line is drawn
  * anew (on the web the hero's element changes from a heading to a button when the first win lands).
- * `shown` null: no win to show, so the `empty` line instead. `live` false while the Home is not in front: a change then
- * lands at once, and a fade under way ends.
+ * `line`: the win on screen, null for the `empty` line, undefined when no line is on screen (Loading, an error, no
+ * clients, or a win at 130 % text). Only a line that was on screen fades out: what follows Loading or an error lands
+ * at once, so a line never seen never shows (LO r2 B1). `live` false while the Home is not in front, or `calm`
+ * (Reduce Motion): a change lands at once, and a fade under way ends.
  */
-export function useWinFade(shown: HomeWin | null, live: boolean, empty: React.ReactNode): WinFade {
-  const [t, setT] = useState<Turn>(() => ({ now: shown, fade: new Animated.Value(1) }));
+export function useWinFade(line: HomeWin | null | undefined, live: boolean, calm: boolean, empty: React.ReactNode): WinFade {
+  const next: Drawn = { k: line === undefined ? 'off' : line === null ? 'empty' : line.id, w: line ?? null };
+  const [t, setT] = useState<Turn>(() => ({ now: next, fade: new Animated.Value(1) }));
   const seen = useRef<React.ReactNode>(empty); // the empty line as last drawn: a leaving one keeps its words
   let cur = t;
   // A change starts a fresh fade at 0 in this same render, so its first frame is the old line, never the new one at full.
-  if (t.now?.id !== shown?.id) {
-    cur = { now: shown, was: live ? { w: t.now, e: t.now ? undefined : seen.current } : undefined, fade: new Animated.Value(live ? 0 : 1) };
+  if (t.now.k !== next.k) {
+    const go = live && !calm && t.now.k !== 'off';
+    cur = { now: next, was: go ? { ...t.now, e: t.now.w ? undefined : seen.current } : undefined, fade: new Animated.Value(go ? 0 : 1) };
     setT(cur);
   }
-  if (!shown) seen.current = empty;
+  if (line === null) seen.current = empty;
   useEffect(() => {
     if (!t.was) return undefined;
-    if (!live) { t.fade.setValue(1); setT((x) => ({ ...x, was: undefined })); return undefined; }
+    if (!live || calm) { t.fade.setValue(1); setT((x) => ({ ...x, was: undefined })); return undefined; }
     const run = Animated.timing(t.fade, { toValue: 1, duration: WIN_FADE_MS, easing: Easing.bezier(...motion.easing.smooth), useNativeDriver: true });
     run.start(({ finished }) => { if (finished) setT((x) => (x.fade === t.fade ? { ...x, was: undefined } : x)); });
     return () => run.stop();
-  }, [t, live]);
-  return { t: cur, shown, empty };
+  }, [t, live, calm]);
+  return { t: cur, empty };
 }
 
 interface Props {
@@ -76,20 +84,20 @@ interface Props {
   line: (w: HomeWin, testID?: string) => React.ReactNode;
 }
 
-export function WinTurn({ wins, fade: { t, shown, empty }, line }: Props) {
-  const was = t.was;
-  if (!shown && !was) return <>{empty}</>; // m#688's empty line, as it drew it
+export function WinTurn({ wins, fade: { t, empty }, line }: Props) {
+  const { now, was } = t;
+  if (!was && !now.w) return now.k === 'empty' ? <>{empty}</> : null; // m#688's empty line, as it drew it, or no line
   const out = t.fade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const flow = shown ? wins : [null];
-  const role = (w: HomeWin | null): Role => (w?.id === shown?.id ? 'now' : was && w?.id === was.w?.id ? 'was' : null);
-  const draw = (w: HomeWin | null, r: Role, i: number, gone = false) => {
+  const flow = now.w ? wins : now.k === 'empty' ? [null] : [];
+  const role = (w: HomeWin | null): Role => (w?.id === now.w?.id ? 'now' : was && w?.id === was.w?.id ? 'was' : null);
+  const draw = (w: HomeWin | null, r: Role, i: number) => {
     const op = r === 'now' ? t.fade : r === 'was' ? out : 0;
     // One dot on the first line: the shown win draws it, steady between two wins and fading in over the empty line; a
-    // leaving win draws it only when the empty line comes next.
-    const dot = r === 'now' ? (was && !was.w ? t.fade : 1) : r === 'was' && !shown ? out : 0;
+    // leaving win draws it only when no win comes next.
+    const dot = r === 'now' ? (was && !was.w ? t.fade : 1) : r === 'was' && !now.w ? out : 0;
     return (
       <View
-        key={w?.id ?? ''} style={[s.layer, gone ? s.gone : i > 0 && s.over]}
+        key={w?.id ?? ''} style={[s.layer, i > 0 && s.over]}
         importantForAccessibility={r === 'now' ? 'auto' : 'no-hide-descendants'} accessibilityElementsHidden={r !== 'now'}
       >
         {w ? (
@@ -101,13 +109,14 @@ export function WinTurn({ wins, fade: { t, shown, empty }, line }: Props) {
       </View>
     );
   };
-  // What leaves without a place of its own (a re-read dropped it from the newest three, or it is the empty line) draws
-  // as one more layer out of the flow, so the row keeps its height, until its fade ends (LO/LS B1).
-  const kept = !!was && flow.some((w) => w?.id === was.w?.id);
+  // What leaves without a place of its own (a re-read dropped it from the newest three, the empty line, or the line
+  // before a win at 130 % text) draws as one more layer on the same spot, in the flow, so the row holds the taller of
+  // the old and new lines until its fade ends (LO/LS B1, LO r2 C1).
+  const kept = !!was && flow.some((w) => w !== null && w.id === was.w?.id);
   return (
     <View style={s.stack}>
       {flow.map((w, i) => draw(w, role(w), i))}
-      {was && !kept ? draw(was.w, 'was', 0, true) : null}
+      {was && !kept ? draw(was.w, 'was', flow.length) : null}
     </View>
   );
 }
@@ -117,7 +126,6 @@ const s = StyleSheet.create({
   stack: { flexDirection: 'row' },
   layer: { width: '100%' },
   over: { marginLeft: '-100%' },
-  gone: { position: 'absolute', top: 0, left: 0 },
   win: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: (typography.body.lineHeight - 8) / 2, backgroundColor: forestPop.leaf },
   text: { flex: 1 },

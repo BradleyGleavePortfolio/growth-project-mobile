@@ -1,9 +1,10 @@
 /**
  * The coach Home's win turn as a cross-fade (owner #167-1, on m#688 OD-2): the old win fades out while the new one
  * fades in, so no frame pops or is empty, on a turn, on a re-read that drops the win on screen (LO/LS B1), and for the
- * first win over the empty line (LO C1); one win never turns; Reduce Motion and screen readers keep it still, the row
- * then fitting the one win (LO C2); the fade ends rather than runs while the Home is not in front; a tap mid-fade still
- * reaches the hero.
+ * first win over the empty line (LO C1), at 130 % text too (#168-3); a line never on screen never fades (LO r2 B1); one
+ * win never turns; Reduce Motion and screen readers keep it still, the row then fitting the one win (LO C2), and with
+ * Reduce Motion every change lands at once (#168-3); the fade ends rather than runs while the Home is not in front; a
+ * tap mid-fade still reaches the hero.
  */
 import React from 'react';
 import { AccessibilityInfo, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -18,18 +19,20 @@ const line = (x: HomeWin, id?: string) => <Text testID={id}>{x.id}</Text>;
 const empty = <Text testID="home-win-none">none</Text>;
 
 /** The line on its own, with its fade's state held above it as the screen holds it. */
-function Line({ wins, shown, live = true, words = empty }: { wins: HomeWin[]; shown: HomeWin | null; live?: boolean; words?: React.ReactNode }) {
-  return <WinTurn wins={wins} fade={useWinFade(shown, live, words)} line={line} />;
+function Line({ wins, shown, live = true, words = empty }: { wins: HomeWin[]; shown: HomeWin | null | undefined; live?: boolean; words?: React.ReactNode }) {
+  return <WinTurn wins={wins} fade={useWinFade(shown, live, false, words)} line={line} />;
 }
 
-/** The screen's wiring (CoachHomeV11.tsx), on its own. */
-function Hero({ wins, live = true }: { wins: HomeWin[]; live?: boolean }) {
-  const { turn, still } = useWinTurn(live ? wins.length : 0);
+/** The screen's wiring (CoachHomeV11.tsx), on its own: `up` false while the wins hero is not up (Loading, an error),
+ * `big` at 130 % text. */
+function Hero({ wins, live = true, up = true, big = false }: { wins: HomeWin[]; live?: boolean; up?: boolean; big?: boolean }) {
+  const { turn, still, calm } = useWinTurn(live && !big ? wins.length : 0);
   const newest = wins.slice(0, 3);
   const shown = newest.length > 0 ? newest[turn % newest.length] : null;
+  const fade = useWinFade(!up || (shown && big) ? undefined : shown, live, calm, empty);
   return (
     <Pressable onPress={onPress} testID="hero">
-      <WinTurn wins={still && shown ? [shown] : newest} fade={useWinFade(shown, live, empty)} line={line} />
+      {up ? <WinTurn wins={still && shown ? [shown] : newest} fade={fade} line={line} /> : null}
     </Pressable>
   );
 }
@@ -112,7 +115,7 @@ describe('the win turn cross-fades (#167-1)', () => {
     expect(r.queryByTestId('home-win-w2', { includeHiddenElements: true })).toBeNull();
   });
 
-  it('a re-read that drops the win on screen from the newest three keeps it drawn, over the row, until its fade ends (LO B1)', async () => {
+  it('a re-read that drops the win on screen from the newest three keeps it drawn, on the row, until its fade ends (LO B1)', async () => {
     const r = await render(<Hero wins={[w('w1'), w('w2'), w('w3')]} />);
     await tick(0);
     for (let k = 0; k < 2; k += 1) { await tick(WIN_TURN_MS); await endFade(); }
@@ -121,8 +124,9 @@ describe('the win turn cross-fades (#167-1)', () => {
     await act(async () => { await r.rerender(<Hero wins={[w('w0'), w('w1'), w('w2'), w('w3')]} />); });
     expect(opacity(r, 'w3')).toBe(1);
     expect(opacity(r, 'w2')).toBe(0);
-    expect(layer(r, 'w3')).toEqual(expect.objectContaining({ position: 'absolute' })); // out of the flow: the row keeps its height
-    expect(layer(r, 'w2')?.position).toBeUndefined();
+    // In the flow on the same spot, so the row holds the taller of the old and new lines while it fades (LO r2 C1).
+    expect(layer(r, 'w3')).toEqual(expect.objectContaining({ marginLeft: '-100%' }));
+    expect(layer(r, 'w3')?.position).toBeUndefined();
     await endFade();
     expect(r.queryByTestId('home-win-w3', { includeHiddenElements: true })).toBeNull();
     expect(opacity(r, 'w2')).toBe(1);
@@ -145,7 +149,8 @@ describe('the win turn cross-fades (#167-1)', () => {
     await act(async () => { await r.rerender(<Hero wins={[w('w1')]} />); });
     expect(opacity(r, 'none')).toBe(1);
     expect(opacity(r, 'w1')).toBe(0);
-    expect(layer(r, 'none')).toEqual(expect.objectContaining({ position: 'absolute' }));
+    expect(layer(r, 'none')).toEqual(expect.objectContaining({ marginLeft: '-100%' }));
+    expect(layer(r, 'none')?.position).toBeUndefined();
     await endFade();
     expect(r.queryByTestId('home-win-none', { includeHiddenElements: true })).toBeNull();
     expect(opacity(r, 'w1')).toBe(1);
@@ -163,7 +168,7 @@ describe('the win turn cross-fades (#167-1)', () => {
     expect(r.getByText('before', { includeHiddenElements: true })).toBeTruthy();
     expect(r.queryByText('after', { includeHiddenElements: true })).toBeNull();
     function Anew({ wins }: { wins: HomeWin[] }) {
-      const fade = useWinFade(wins[0] ?? null, true, empty);
+      const fade = useWinFade(wins[0] ?? null, true, false, empty);
       const turn = <WinTurn wins={wins} fade={fade} line={line} />;
       return wins.length ? <Pressable key="button">{turn}</Pressable> : <View key="heading">{turn}</View>;
     }
@@ -185,16 +190,61 @@ describe('the win turn cross-fades (#167-1)', () => {
     expect(['w1', 'w2', 'w3'].map((id) => still.queryAllByText(id, { includeHiddenElements: true }).length)).toEqual([1, 0, 0]);
   });
 
-  it('with Reduce Motion, a new newest win from a re-read still fades in, never pops', async () => {
+  it('with Reduce Motion, every change lands at once (#168-3): a re-read, the first win, and the last win going', async () => {
     a11y(true, false);
     const r = await render(<Hero wins={[w('w1'), w('w2')]} />);
     await tick(0);
     await act(async () => { await r.rerender(<Hero wins={[w('w0'), w('w1'), w('w2')]} />); });
-    expect(opacity(r, 'w0')).toBe(0);
-    expect(opacity(r, 'w1')).toBe(1);
-    await endFade();
+    await tick(0);
     expect(opacity(r, 'w0')).toBe(1);
     expect(r.queryByTestId('home-win-w1', { includeHiddenElements: true })).toBeNull();
+    await act(async () => { await r.rerender(<Hero wins={[]} />); });
+    await tick(0);
+    expect(r.queryByTestId('home-win-w0', { includeHiddenElements: true })).toBeNull();
+    expect(r.getByTestId('home-win-none')).toBeTruthy();
+    await act(async () => { await r.rerender(<Hero wins={[w('w1')]} />); });
+    await tick(0);
+    expect(r.queryByTestId('home-win-none', { includeHiddenElements: true })).toBeNull();
+    expect(opacity(r, 'w1')).toBe(1);
+    expect(fades).toHaveLength(0);
+  });
+
+  it.each<[string, HomeWin[]]>([['wins', [w('w1'), w('w2')]], ['no wins', []]])('a line that follows Loading or an error lands at once, with no empty line before it (LO r2 B1): %s', async (_n, wins) => {
+    const r = await render(<Hero wins={[]} up={false} />);
+    await tick(0);
+    await act(async () => { await r.rerender(<Hero wins={wins} />); });
+    if (wins.length) {
+      expect(r.queryByTestId('home-win-none', { includeHiddenElements: true })).toBeNull();
+      expect(opacity(r, 'w1')).toBe(1);
+    } else {
+      expect(r.getByTestId('home-win-none')).toBeTruthy();
+    }
+    expect(fades).toHaveLength(0);
+  });
+
+  it('at 130 % text the empty line fades out over 0.3 s when the first win comes, and no win line follows (#168-3)', async () => {
+    const r = await render(<Hero wins={[]} big />);
+    await tick(0);
+    expect(r.getByTestId('home-win-none')).toBeTruthy();
+    await act(async () => { await r.rerender(<Hero wins={[w('w1')]} big />); });
+    expect(opacity(r, 'none')).toBe(1);
+    expect(layer(r, 'none')?.position).toBeUndefined(); // the row keeps the line's height while it fades
+    expect(r.queryByTestId('home-win-w1', { includeHiddenElements: true })).toBeNull();
+    expect(fades).toHaveLength(1);
+    expect(fades[0].config).toEqual(expect.objectContaining({ toValue: 1, duration: WIN_FADE_MS, useNativeDriver: true }));
+    await endFade();
+    expect(r.queryByTestId('home-win-none', { includeHiddenElements: true })).toBeNull();
+    expect(r.queryByTestId('home-win-w1', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('at 130 % text a win never drawn never fades, and wins never turn (LO r2 C2 and N)', async () => {
+    const r = await render(<Hero wins={[w('w1'), w('w2'), w('w3')]} big />);
+    await tick(WIN_TURN_MS * 3);
+    expect(fades).toHaveLength(0);
+    await act(async () => { await r.rerender(<Hero wins={[]} big />); });
+    expect(r.queryByTestId('home-win-w1', { includeHiddenElements: true })).toBeNull();
+    expect(r.getByTestId('home-win-none')).toBeTruthy();
+    expect(fades).toHaveLength(0);
   });
 
   it('ends a fade under way when the Home leaves the front, and starts no turn off screen', async () => {
