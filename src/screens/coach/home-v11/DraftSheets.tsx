@@ -12,11 +12,12 @@ import HapticPressable from '../../../components/HapticPressable';
 import api from '../../../services/api';
 import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, typography } from '../../../theme/tokens';
+import { forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietLoading } from '../../../ui/states/QuietStates';
 import type { AtRiskEntry } from '../../../services/commandCenterApi';
 import { firstWord, type HomeWinDraft } from './homeDay';
+import { RomanMark } from './RomanMark';
 
 export interface DraftAsk {
   clientName: string;
@@ -27,6 +28,8 @@ export interface DraftAsk {
   path?: string;
   /** That route answered 404 (b#1141: the pair is blocked, or the plan is no longer ended): the list re-reads without it. */
   onGone?: () => void;
+  /** RENEWAL3 K3a/K3b: Roman's deep head (mark, "Roman", the title, the context chip) over the sheet. Plan-ended asks only. */
+  look?: 'roman';
 }
 
 type Step =
@@ -79,8 +82,8 @@ export function HomeSheet({ list, ask, onCloseList, onCloseAsk, onSent }: { list
     <Modal visible transparent animationType="slide" onRequestClose={() => close.current()}>
       <View style={s.scrim}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close.current()} accessibilityRole="button" accessibilityLabel="Close" />
-        <View style={[s.sheet, { paddingBottom: bottom + 16 }]} testID={ask ? 'home-draft-sheet' : 'home-list-sheet'}>
-          <View style={s.grab} />
+        <View style={[s.sheet, ask?.look === 'roman' && s.sheetRoman, { paddingBottom: bottom + 16 }]} testID={ask ? 'home-draft-sheet' : 'home-list-sheet'}>
+          {ask?.look === 'roman' ? null : <View style={s.grab} />}
           {ask ? <DraftSteps ask={ask} s={s} close={close} onClose={onCloseAsk} onSent={onSent} /> : list ? (
             <>
               <Text style={s.title} accessibilityRole="header">{list.title}</Text>
@@ -151,14 +154,30 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
   closeRef.current = close;
 
   const draft = step.kind === 'ready' || step.kind === 'sending' ? step : step.kind === 'failed' ? step.draft : undefined;
+  const title = step.kind === 'sent' ? `Sent to ${first}` : draft ? `Roman's draft for ${first}` : `Ask Roman to write to ${first}?`;
   return (
     <>
+      {ask.look === 'roman' ? (
+        <View style={s.head} testID="home-draft-head">
+          <View style={[s.grab, s.grabOnDeep]} />
+          <View style={s.headMark}>
+            <RomanMark size={44} />
+            <Text style={s.headName} accessibilityElementsHidden importantForAccessibility="no">{'Roman'.toUpperCase()}</Text>
+          </View>
+          <Text style={[s.title, s.titleOnDeep]} accessibilityRole="header">{title}</Text>
+          {step.kind === 'ask' ? <Text style={[s.muted, s.mutedOnDeep]}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
+          {step.kind !== 'sent' ? (
+            <View style={s.about} testID="home-draft-about">
+              <Ionicons name="refresh" size={16} color={forestPop.onDeep} />
+              <Text style={s.aboutText}>{ask.about}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
       <ScrollView bounces={false}>
-        <Text style={s.title} accessibilityRole="header">
-          {step.kind === 'sent' ? `Sent to ${first}` : draft ? `Roman's draft for ${first}` : `Ask Roman to write to ${first}?`}
-        </Text>
-        {step.kind === 'ask' ? <Text style={s.body}>{ask.about}</Text> : null}
-        {step.kind === 'ask' ? <Text style={s.muted}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
+        {ask.look === 'roman' ? null : <Text style={s.title} accessibilityRole="header">{title}</Text>}
+        {step.kind === 'ask' && ask.look !== 'roman' ? <Text style={s.body}>{ask.about}</Text> : null}
+        {step.kind === 'ask' && ask.look !== 'roman' ? <Text style={s.muted}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
         {step.kind === 'writing' ? <QuietLoading label="Roman is writing" /> : null}
         {draft ? <View style={s.draft}><Text style={s.body} testID="home-draft-text">{draft.reply}</Text></View> : null}
         {step.kind === 'failed' ? <Text style={s.error} accessibilityLiveRegion="polite">{step.words}</Text> : null}
@@ -189,6 +208,16 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: sem.overlay },
     sheet: { maxHeight: '85%', paddingTop: 8, paddingHorizontal: layout.gutter, backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
     grab: { width: 40, height: 5, borderRadius: radius.chip, backgroundColor: sem.border, alignSelf: 'center', marginBottom: 12 },
+    // RENEWAL3 K3a/K3b: the deep head runs edge to edge over the sheet's top.
+    sheetRoman: { paddingTop: 0, overflow: 'hidden' },
+    head: { marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter, paddingTop: 8, paddingBottom: 16, marginBottom: 16, backgroundColor: forestPop.deep },
+    grabOnDeep: { backgroundColor: forestPop.brand400 },
+    headMark: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+    headName: { ...typography.caption, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.8, color: forestPop.gold },
+    titleOnDeep: { fontSize: 22, lineHeight: 28, color: forestPop.onDeep },
+    mutedOnDeep: { ...typography.body, marginTop: 0, color: forestPop.onDeepMuted },
+    about: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 8, marginTop: 12, minHeight: 36, paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.chip, backgroundColor: forestPop.forest },
+    aboutText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: forestPop.onDeep, flexShrink: 1 },
     title: { fontFamily: 'Inter_600SemiBold', fontSize: 20, lineHeight: 26, color: colors.textPrimary, marginBottom: 8 },
     body: { ...typography.body, color: colors.textPrimary },
     muted: { ...typography.bodySmall, color: colors.textMuted, marginTop: 6 },

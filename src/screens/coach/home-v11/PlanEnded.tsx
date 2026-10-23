@@ -16,11 +16,11 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietError, loadFailureMessage } from '../../../ui/states/QuietStates';
-import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { openInboxChat } from '../../../navigation/coachInbox';
 import type { DraftAsk } from './DraftSheets';
 import { SEMI, useCardStyles } from './HomeParts';
+import { RomanMark } from './RomanMark';
 import {
   groupPlanEnded, homeLabel, homeParts, initialsOf, messagedLine, planEndedAsk, planEndedTitle, rowLine, rowParts,
   type LineParts, type PlanEndedPage, type PlanEndedRow,
@@ -47,6 +47,7 @@ export function KeepTail({ parts, style, box, maxFontSizeMultiplier, testID }: {
   );
 }
 const kt = StyleSheet.create({ row: { flexDirection: 'row', flexWrap: 'wrap', minWidth: 0 }, part: { flexShrink: 1 } });
+
 
 /** P1 (tappable, newest first, up to three monograms) or P1-0 (nobody: quiet, not tappable). */
 export function PlanEndedHomeRow({ page, onOpen }: { page: PlanEndedPage; onOpen: () => void }) {
@@ -183,7 +184,7 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk, 
                         style={({ pressed }) => [ls.button, ls.ask, pressed && ls.pressed]} onPress={() => { void HapticService.softImpact(); onAsk(planEndedAsk(r)); }}
                         accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${r.name}`} testID="plan-ended-ask"
                       >
-                        <RomanAvatar size={26} />
+                        <RomanMark />
                         <Text style={[ls.buttonText, { color: forestPop.onDeep }]}>Ask Roman to write</Text>
                       </Pressable>
                       <Pressable
