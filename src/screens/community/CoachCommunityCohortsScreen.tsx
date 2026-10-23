@@ -1,6 +1,6 @@
 /**
  * CoachCommunityCohortsScreen — the coach's cohort list (v1-6). Consumes
- * `GET /community/coach/cohorts` and `POST /community/coach/cohorts`.
+ * `GET /community/cohorts` and `POST /community/workspaces/:id/cohorts`.
  *
  * Features:
  *   - Pull-to-refresh on the list.
