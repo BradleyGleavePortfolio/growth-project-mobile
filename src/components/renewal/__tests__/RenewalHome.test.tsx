@@ -3,7 +3,7 @@
  * the entitlement's `renewal` block. Real storage and pop-up rule; the sheet, navigation and network are mocked.
  */
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readRenewal, type Renewal } from '../../../lib/planRenewal';
@@ -144,4 +144,13 @@ it("Skip closes the pop-up and the banner stays; a plan_renewal tap re-reads the
   mockRenewal = ended(1); // the re-read
   await s.rerender(<RenewalHome />);
   expect(await s.findByTestId('renewal-popup')).toBeTruthy();
+});
+
+it('m#860 FIX R2 (Sol B2): quiet fill on the second choice; the pop-up monogram 72 across, the banner one 47 (r3.py .cms)', async () => {
+  const s = await open(ended(0));
+  for (const b of s.getAllByTestId('renewal-house-coach')) {
+    expect(StyleSheet.flatten(b.props.style)).toMatchObject({ backgroundColor: '#26402F', borderWidth: 1.5, borderColor: '#4A6553' });
+  }
+  const widths = s.getAllByTestId('coach-monogram', { includeHiddenElements: true }).map((m) => StyleSheet.flatten(m.props.style).width);
+  expect(widths.sort()).toEqual([47, 72]);
 });

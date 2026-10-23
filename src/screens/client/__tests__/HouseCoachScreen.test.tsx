@@ -1,8 +1,12 @@
 /** RENEWAL-M H1 (RENEWAL3), after SWITCH-CONFIRM-M's confirm page: his full name, what joining includes, his packages; a package opens its page. */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
+import { forestPop as fp } from '../../../theme/tokens';
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+const mockBand = jest.fn();
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: (c: string) => mockBand(c) }));
 const mockRefresh = jest.fn(async () => undefined);
 jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ refreshEntitlement: mockRefresh }) }));
 let mockRead: () => Promise<unknown>;
@@ -33,6 +37,18 @@ it('H1 (W-168-HC): his full name and monogram, then Includes (HC-2 to HC-7), the
   expect(order.map((t) => texts.indexOf(t))).toEqual(order.map((t) => texts.indexOf(t)).sort((a, b) => a - b));
   expect(order.every((t) => texts.includes(t))).toBe(true);
   expect(s.getByText('Includes').props.accessibilityRole).toBe('header');
+});
+
+it('m#860 FIX R2 (Opus B1, B2; Sol B2): the frame\'s gold ring outside a deep gap, 72 across; the eyebrow and status bar on deep', async () => {
+  const s = await mount();
+  await s.findByTestId('house-package-h-1');
+  const ring = StyleSheet.flatten(s.getByTestId('coach-monogram', { includeHiddenElements: true }).props.style);
+  expect(ring).toMatchObject({ width: 72, height: 72, borderWidth: 2, borderColor: fp.gold, backgroundColor: fp.deep });
+  const fill = StyleSheet.flatten(s.getByTestId('coach-monogram', { includeHiddenElements: true }).props.children.props.style);
+  expect(fill).toMatchObject({ width: 64, height: 64, backgroundColor: '#26402F' });
+  expect(fill.borderWidth).toBeUndefined();
+  expect(StyleSheet.flatten(s.getByText("TGP's Top Rated Coach").props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 11, lineHeight: 14, letterSpacing: 1.6 });
+  expect(mockBand).toHaveBeenCalledWith(fp.deep);
 });
 
 it('a server without full_name (before backend #1142): the first name and monogram, as before', async () => {

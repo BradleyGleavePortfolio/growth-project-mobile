@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../../components/HapticPressable';
+import { renewalTone } from '../../components/renewal/CoachMonogram';
 import { HouseMasthead } from '../../components/renewal/HouseMasthead';
 import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
@@ -20,7 +21,7 @@ import api from '../../services/api';
 import { forestPop as fp, lightTokens, radius, typography } from '../../theme/tokens';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 
-export const HOUSE_COACH_COPY = { eyebrow: "TGP's Top Rated Coach", back: 'Back', loading: 'Loading packages', what: 'Packages' };
+export const HOUSE_COACH_COPY = { eyebrow: "TGP's Top Rated Coach", loading: 'Loading packages', what: 'Packages' };
 /** W-168-HC, HC-2 to HC-7 (owner-approved, m#853 6353883504): what joining the house coach includes. */
 export const HOUSE_INCLUDES_COPY = {
   heading: 'Includes',
@@ -53,7 +54,7 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
 
   return (
     <View style={s.page}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
         <HouseMasthead eyebrow={HOUSE_COACH_COPY.eyebrow} title={name} monogram={name} onBack={() => navigation.goBack()} />
         <View style={s.body}>
           <Text style={s.overline} accessibilityRole="header">{HOUSE_INCLUDES_COPY.heading}</Text>
@@ -93,17 +94,19 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
   );
 }
 
+// H1 follows r3.py house_page(): white cards (.hpk, 14 12 14 16) on the app's #166-2 ground, .k3l overlines in
+// #168-13's dark grey; the Includes card (owner HC-2 to HC-7, no frame) takes the package card's look.
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: lightTokens.bgPrimary }, flex: { flex: 1 },
-  body: { paddingHorizontal: 20, paddingTop: 24 },
-  overline: { ...typography.eyebrow, color: fp.n700, marginBottom: 4 },
+  body: { paddingHorizontal: 20, paddingTop: 20 },
+  overline: { ...typography.eyebrow, lineHeight: 14, color: renewalTone.graphite, marginBottom: 4 },
   next: { marginTop: 28 },
-  card: { backgroundColor: fp.surface, borderColor: fp.sageLine, borderWidth: 1, borderRadius: radius.card, paddingHorizontal: 18, marginTop: 6 },
+  card: { backgroundColor: renewalTone.white, borderColor: fp.sageLine, borderWidth: 1, borderRadius: radius.card, paddingHorizontal: 16, marginTop: 6 },
   include: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 48, paddingVertical: 10 },
   rule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
   dot: { width: 28, height: 28, borderRadius: 14, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
   includeText: { ...typography.body, flex: 1, color: fp.ink },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, backgroundColor: fp.surface, borderColor: fp.sageLine, borderWidth: 1, borderRadius: radius.card, paddingVertical: 14, paddingHorizontal: 18, marginTop: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, backgroundColor: renewalTone.white, borderColor: fp.sageLine, borderWidth: 1, borderRadius: radius.card, paddingVertical: 14, paddingLeft: 16, paddingRight: 12, marginTop: 10 },
   pkg: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 17, lineHeight: 22, color: fp.ink },
   price: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 20, lineHeight: 26, color: fp.forest, marginTop: 2 },
 });

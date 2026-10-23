@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import HapticPressable from '../HapticPressable';
-import { Monogram } from './CoachMonogram';
+import { Monogram, renewalTone } from './CoachMonogram';
 import PackageSelectionSheet from '../PackageSelectionSheet';
 import { clientPaymentsApi } from '../../api/clientPaymentsApi';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
@@ -48,16 +48,16 @@ function useDetails(on: boolean): { name?: string; pkg?: string } {
   return d;
 }
 
-function Choices({ r, onOwn, onHouse }: { r: Ended; onOwn: () => void; onHouse: (c: RenewalCoach, from: RenewalCoach | null) => void }) {
+function Choices({ r, onOwn, onHouse, small }: { r: Ended; onOwn: () => void; onHouse: (c: RenewalCoach, from: RenewalCoach | null) => void; small?: boolean }) {
   const house = r.houseCoach && r.houseCoach.id !== r.coach?.id ? r.houseCoach : null;
   return (<>
     {r.coach ? (
-      <HapticPressable intent="medium" style={[s.btn, s.leaf]} onPress={onOwn} accessibilityRole="button" testID="renewal-own-coach">
+      <HapticPressable intent="medium" style={[s.btn, s.leaf, small && s.bannerBtn]} onPress={onOwn} accessibilityRole="button" testID="renewal-own-coach">
         <Text style={[s.btnText, { color: fp.ink }]}>{RENEWAL_COPY.ownCoach(r.coach.firstName)}</Text>
       </HapticPressable>
     ) : null}
     {house ? (
-      <HapticPressable intent="light" style={[s.btn, s.quiet]} onPress={() => onHouse(house, r.coach)} accessibilityRole="button" testID="renewal-house-coach">
+      <HapticPressable intent="light" style={[s.btn, s.quiet, small && s.bannerBtn, small && s.bannerSecond]} onPress={() => onHouse(house, r.coach)} accessibilityRole="button" testID="renewal-house-coach">
         <Text style={[s.btnText, { color: fp.onDeep }]}>{RENEWAL_COPY.houseCoach}</Text>
       </HapticPressable>
     ) : null}
@@ -107,13 +107,13 @@ export default function RenewalHome(): React.ReactElement | null {
       {r.bannerDue && r.coach ? (
         <View style={s.banner} testID="renewal-banner">
           <View style={s.bannerHead}>
-            <Monogram name={name} size={52} />
+            <Monogram name={name} size={40} ring={1.5} />
             <View style={s.flex}>
               <Text style={s.bannerTitle} accessibilityRole="header">{RENEWAL_COPY.banner}</Text>
-              <Text style={s.muted}>{[details.pkg, RENEWAL_COPY.ended(ended)].filter(Boolean).join(' · ')}</Text>
+              <Text style={s.bannerSub}>{[details.pkg, RENEWAL_COPY.ended(ended)].filter(Boolean).join(' · ')}</Text>
             </View>
           </View>
-          <Choices r={r} onOwn={own} onHouse={house} />
+          <Choices r={r} onOwn={own} onHouse={house} small />
         </View>
       ) : null}
       <Modal visible={!!popup} transparent animationType="fade" statusBarTranslucent onRequestClose={() => close()} onDismiss={runNext} testID="renewal-modal">
@@ -123,9 +123,9 @@ export default function RenewalHome(): React.ReactElement | null {
               <Monogram name={name} />
               <Text style={s.coach}>{name}</Text>
               <Text style={s.title} accessibilityRole="header">{RENEWAL_COPY.title[popup.popupStep ?? 0]}</Text>
-              {popup.coach ? <Text style={[s.muted, s.center]}>{RENEWAL_COPY.body(popup.coach.firstName)}</Text> : null}
+              {popup.coach ? <Text style={s.body}>{RENEWAL_COPY.body(popup.coach.firstName)}</Text> : null}
               {details.pkg ? <View style={s.chip}><View style={s.dot} /><Text style={s.chipText}>{details.pkg}</Text></View> : null}
-              <Choices r={popup} onOwn={own} onHouse={house} />
+              <View style={s.choices}><Choices r={popup} onOwn={own} onHouse={house} /></View>
               <HapticPressable intent="light" style={s.skip} onPress={() => close()} accessibilityRole="button" testID="renewal-skip">
                 <Text style={s.skipText}>{RENEWAL_COPY.skip}</Text>
               </HapticPressable>
@@ -138,19 +138,25 @@ export default function RenewalHome(): React.ReactElement | null {
   );
 }
 
+// r2b.py / r3.py style B: .modal, .cm, .cmn, .dh, .dbd, .plp, .lbtn (22 below), .dbtn2 (10 below, quiet fill); the
+// banner .rbn with .cms, .rbt 26/32, .rbs 14/20 and 48 pt choices (14 and 8 below).
 const s = StyleSheet.create({
-  flex: { flex: 1 }, center: { textAlign: 'center' },
-  banner: { backgroundColor: fp.deep, borderRadius: radius.card, padding: 16, marginVertical: 12 }, bannerTitle: { ...typography.h1, color: fp.onDeep },
-  bannerHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 2 },
-  muted: { ...typography.body, fontSize: 15, lineHeight: 22, color: fp.onDeepMuted },
+  flex: { flex: 1 },
+  banner: { backgroundColor: fp.deep, borderRadius: radius.card, padding: 16, marginVertical: 12 },
+  bannerTitle: { ...typography.h1, fontSize: 26, lineHeight: 32, letterSpacing: 0, color: renewalTone.white },
+  bannerHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bannerSub: { ...typography.body, fontSize: 14, lineHeight: 20, letterSpacing: 0, color: fp.onDeepMuted },
+  bannerBtn: { minHeight: 48, paddingVertical: 10, paddingHorizontal: 14, marginTop: 14 }, bannerSecond: { marginTop: 8 },
   scrim: { flex: 1, backgroundColor: lightTokens.overlay, justifyContent: 'center', padding: 20 },
   card: { backgroundColor: fp.deep, borderRadius: radius.sheet, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 12, alignItems: 'stretch' },
-  coach: { ...typography.bodyMd, fontSize: 15, lineHeight: 21, color: fp.gold, textAlign: 'center', marginTop: 12 },
-  title: { ...typography.h1, color: fp.onDeep, textAlign: 'center', marginTop: 4, marginBottom: 6 },
-  chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 8, backgroundColor: fp.forest, borderRadius: radius.chip, paddingVertical: 6, paddingHorizontal: 14, marginTop: 14 },
-  chipText: { ...typography.bodyMd, fontSize: 14, lineHeight: 19, color: fp.onDeep },
-  btn: { minHeight: 52, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16, marginTop: 12 },
-  leaf: { backgroundColor: fp.leaf, borderWidth: 1.5, borderColor: fp.moss }, quiet: { backgroundColor: fp.forest, borderWidth: 1, borderColor: fp.brand400 },
+  coach: { ...typography.bodyMd, fontSize: 14, lineHeight: 19, letterSpacing: 0.3, color: fp.gold, textAlign: 'center', marginTop: 12 },
+  title: { ...typography.h1, letterSpacing: 0, color: renewalTone.white, textAlign: 'center', marginTop: 6 },
+  body: { ...typography.body, lineHeight: 24, letterSpacing: 0, color: fp.onDeepMuted, textAlign: 'center', marginTop: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 8, backgroundColor: renewalTone.quiet, borderRadius: radius.chip, paddingVertical: 6, paddingHorizontal: 14, marginTop: 14 },
+  chipText: { ...typography.bodyMd, fontSize: 13.5, lineHeight: 18, letterSpacing: 0, color: fp.onDeep },
+  choices: { marginTop: 12 },
+  btn: { minHeight: 52, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16, marginTop: 10 },
+  leaf: { backgroundColor: fp.leaf, borderWidth: 1.5, borderColor: fp.moss }, quiet: { backgroundColor: renewalTone.quiet, borderWidth: 1.5, borderColor: renewalTone.quietLine },
   btnText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 16, lineHeight: 21, textAlign: 'center' },
   skip: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 }, skipText: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, color: fp.onDeepMuted },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: fp.leaf },

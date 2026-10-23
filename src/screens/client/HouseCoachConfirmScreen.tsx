@@ -40,7 +40,7 @@ export default function HouseCoachConfirmScreen({ route, navigation }: Props): R
         <View style={houseFoot.card}>
           {points.map(([icon, text], i) => (
             <View key={icon} style={[s.point, i > 0 && s.rule]}>
-              <View style={s.dot}><Ionicons name={icon} size={20} color={fp.forest} /></View>
+              <View style={s.dot} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden><Ionicons name={icon} size={20} color={fp.forest} /></View>
               <Text style={s.text} testID={`house-confirm-point-${i}`}>{text}</Text>
             </View>
           ))}
