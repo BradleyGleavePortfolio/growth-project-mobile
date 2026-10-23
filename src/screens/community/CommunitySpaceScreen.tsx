@@ -47,6 +47,7 @@ import { ScreenTopBar } from '../../ui/layout/Screen';
 import type { CommunityPost } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
 import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from '../../api/communityErrors';
+import { isClosedRefusal, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 
 interface Props {
   embedded?: boolean;
@@ -133,11 +134,13 @@ export default function CommunitySpaceScreen({
   // `usePosts` into an empty feed silently hides the failure (R65 #36/#44).
   // True-empty is only a successful query that returned zero posts.
   const isPostsError = !posts.isLoading && posts.isError;
+  // BLOCK-ALL-M (#168-4): banned from this space -> no posts, no New post, no box to type in; not a Try again error.
+  const isClosed = isPostsError && isClosedRefusal(posts.error);
   const isEmpty = !posts.isLoading && !posts.isError && data.length === 0;
   // Described once per error (an unexpected one is reported to Sentry once).
   const postsFailure = useMemo(
-    () => (isPostsError ? describeCommunityFailure(posts.error, 'load_posts') : null),
-    [isPostsError, posts.error],
+    () => (isPostsError && !isClosed ? describeCommunityFailure(posts.error, 'load_posts') : null),
+    [isPostsError, isClosed, posts.error],
   );
 
   // Memoised so a refetch re-render keeps the same component type: the page
@@ -222,6 +225,15 @@ export default function CommunitySpaceScreen({
             testID="community-space-no-workspace"
           />
         </View>
+      </Container>
+    );
+  }
+
+  if (isClosed) {
+    return (
+      <Container>
+        <View style={styles.flex} testID="community-space-closed" />
+        <ConversationClosedLine testID="community-space-closed-line" />
       </Container>
     );
   }

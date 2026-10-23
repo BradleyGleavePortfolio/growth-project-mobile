@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { Alert, Platform } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import ClientMessagesScreen from '../ClientMessagesScreen';
 import api from '../../../services/api';
 import { featureFlags } from '../../../config/featureFlags';
@@ -309,5 +309,42 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
     await waitFor(() => expect(queryByTestId('thread-mute-button')).toBeNull());
     await fireEvent.press(getByLabelText('Send message'));
     await waitFor(() => expect(mockLegacySend).toHaveBeenCalledWith('client-1', 'hello'));
+  });
+});
+
+// BLOCK-ALL-M (owner 10-22 "dont even let the banned person type!"; #168-4 op 1: a block closes the coaching chat both ways).
+describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
+  const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+  afterEach(() => useBlockedUsersStore.setState({ blocked: [] }));
+
+  it('open: the message box is there and the closed line is not', async () => {
+    const u = await render(<ClientMessagesScreen />);
+    await u.findByLabelText(/Message: from the client/);
+    expect(u.getByLabelText('Message text')).toBeTruthy();
+    expect(u.queryByTestId('client-messages-closed')).toBeNull();
+  });
+
+  it('I blocked this client: no message box, only the closed line; an unblock opens it again', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Alice', blockedAt: recent }] });
+    const u = await render(<ClientMessagesScreen />);
+    expect(await u.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(u.getByLabelText('Message text')).toBeTruthy();
+  });
+
+  it('the client blocked me (server 403 BLOCKED on send): closed at once, no "Message not sent" box', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    postMock.mockImplementation(async (url: string) => {
+      if (url !== BASE) return { data: {} };
+      throw axiosErr({ response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } });
+    });
+    const u = await render(<ClientMessagesScreen />);
+    await u.findByLabelText(/Message: from the client/);
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'see you at 6');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    expect(await u.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalledWith('Message not sent', expect.anything());
   });
 });

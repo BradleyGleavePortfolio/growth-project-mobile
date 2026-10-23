@@ -33,6 +33,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
@@ -115,6 +116,8 @@ export default function MessagesScreen() {
   }, [route.params?.openCoachCode, navigation]);
   const [coachName, setCoachName] = useState('');
   const [coachId, setCoachId] = useState('');
+  // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in the draft (or the outbox).
+  const { closed, close } = useConversationClosed(coachId);
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
   // the CompetencePill at the top of the conversation. Null hides the pill
   // (no review yet, or the backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is OFF).
@@ -347,7 +350,7 @@ export default function MessagesScreen() {
       const code = errorCode(err);
       if (errorStatus(err) === 409 || code === 'NO_COACH_ASSIGNED') {
         setNoCoach(true);
-      } else {
+      } else if (!close(err)) {
         const pendingMsg: Message = {
           id: `pending_${Date.now()}`,
           sender_role: 'client',
@@ -409,8 +412,8 @@ export default function MessagesScreen() {
         setMessages((prev) => persist([...prev, { ...pendingMsg, pending: true, parent_message_id: replyToId }]));
         setInputText('');
         setReplyTarget(null);
-      } else {
-        // Refused for a reason the user can act on (blocked, quote gone, ...):
+      } else if (!close(err)) {
+        // Refused for a reason the user can act on (quote gone, ...):
         // keep the typed text so nothing is lost.
         thread.report('Message not sent', err);
       }
@@ -432,6 +435,7 @@ export default function MessagesScreen() {
       });
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
     } else if (ev.error.code === 'NO_COACH_ASSIGNED') setNoCoach(true);
+    else if (close(ev.error)) return; // the message waits in the outbox, on this phone
     else if (!isTransient(ev.error)) thread.report('Message not sent', ev.error);
     else if (online) {
       void HapticService.error(); // once per failure while online
@@ -916,6 +920,7 @@ export default function MessagesScreen() {
         }}
       />
 
+      {closed ? <ConversationClosedLine style={styles.closedBar} testID="messages-closed" /> : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={[styles.inputBar, styleB && styles.bInputBar]}>
@@ -944,11 +949,12 @@ export default function MessagesScreen() {
           />
         </TouchableOpacity>
       </View>
+      </>}
 
       {thread.enabled ? (
         <ThreadV2Menus
           thread={thread}
-          target={actionTarget}
+          target={closed ? null : actionTarget}
           isMine={actionTarget?.sender_role === 'client'}
           onClose={() => setActionTarget(null)}
           onReply={handleReply}
@@ -962,7 +968,8 @@ export default function MessagesScreen() {
           muteOpen={muteMenu}
           onMuteClose={() => setMuteMenu(false)}
         />
-      ) : (
+      ) : null}
+      {!thread.enabled || closed ? ( // closed: Copy and Report only (no reply, edit or pin)
         <MessageActionSheet
           visible={!!actionTarget}
           messagePreview={actionTarget?.body}
@@ -973,7 +980,7 @@ export default function MessagesScreen() {
           canReport={!!actionTarget && actionTarget.sender_role !== 'client'}
           canReply={false}
         />
-      )}
+      ) : null}
 
       <ReportMessageSheet
         visible={!!reportTarget}
@@ -1164,6 +1171,7 @@ const makeStyles = (colors: ThreadColors) => {
   // Style B (C3B-THREAD): no hairlines, a cream field on the bone page.
   bChatList: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: 16 },
   bInputBar: { borderTopWidth: 0, backgroundColor: colors.background, paddingTop: 8 },
+  closedBar: { paddingBottom: 36 },
   bChatInput: { backgroundColor: palette.cream, borderWidth: 0 },
   });
 };

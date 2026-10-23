@@ -32,6 +32,7 @@ import {
   useCommunityMe,
 } from '../../hooks/useCommunity';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const TITLE_MAX = 200; // mirror backend CreatePostDto.title (1..200)
@@ -59,6 +60,8 @@ export default function CommunityComposerScreen(): React.ReactElement {
 
   const createPost = useCreatePost(workspaceId, client?.id ?? '');
   const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
+  // BLOCK-ALL-M: a block either way (DM) or a ban (post) closes it: the fields go, the typed text stays in this screen.
+  const { closed, close } = useConversationClosed(mode === 'dm' ? recipientId : null);
 
   const bodyMax = mode === 'dm' ? DM_MAX : POST_BODY_MAX;
   const trimmedTitle = title.trim();
@@ -73,6 +76,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
   // Apple 1.2 content filter: the server rejects objectionable text with 422.
   // The draft stays in the fields so the member can rephrase.
   const showSendError = (err: unknown) => {
+    if (close(err)) return;
     const failure = describeCommunityFailure(err, mode === 'dm' ? 'send_message' : 'send_post');
     Alert.alert(failure.title, failure.message);
   };
@@ -113,6 +117,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
           {mode === 'dm' ? 'New message' : 'New post'}
         </Text>
 
+        {closed ? <><View style={styles.flex} /><ConversationClosedLine testID="community-composer-closed" /></> : <>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.content}
@@ -226,6 +231,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
             </Text>
           </HapticPressable>
         </View>
+        </>}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

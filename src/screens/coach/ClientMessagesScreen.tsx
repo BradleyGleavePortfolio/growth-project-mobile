@@ -32,6 +32,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import { track } from '../../lib/analytics';
 import { MuteBell, PinnedBar, ThreadV2Menus, jumpToMessage } from '../../components/messaging/ThreadV2Parts';
@@ -78,6 +79,8 @@ export default function ClientMessagesScreen() {
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   // A reply typed and not sent stays with this client's chat on the device (COACH-CHAT-KEEP, CHAT-DISCARD).
   const [inputText, setInputText, sendKey] = useUnsentReply(clientId, initialDraft);
+  // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in this client's unsent reply.
+  const { closed, close } = useConversationClosed(clientId);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
@@ -237,7 +240,7 @@ export default function ClientMessagesScreen() {
           void loadSinceNewest();
         } else {
           if (e.kind === 'network' || e.status >= 500 || e.status === 429) sendKey.keepFailed(text, key);
-          thread.report('Message not sent', err);
+          if (!close(err)) thread.report('Message not sent', err);
         }
       } finally {
         setSending(false);
@@ -258,7 +261,7 @@ export default function ClientMessagesScreen() {
       setMessages((prev) => mergeById(prev, [created]));
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (err) {
-      Alert.alert('Failed to send', errorMessage(err, 'Message could not be sent.'));
+      if (!close(err)) Alert.alert('Failed to send', errorMessage(err, 'Message could not be sent.'));
     } finally {
       setSending(false);
     }
@@ -463,6 +466,7 @@ export default function ClientMessagesScreen() {
         }}
       />
 
+      {closed ? <ConversationClosedLine style={styles.closedBar} testID="client-messages-closed" /> : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={styles.inputBar}>
@@ -491,11 +495,12 @@ export default function ClientMessagesScreen() {
           />
         </TouchableOpacity>
       </View>
+      </>}
 
       {thread.enabled ? (
         <ThreadV2Menus
           thread={thread}
-          target={actionTarget}
+          target={closed ? null : actionTarget}
           isMine={!!currentUser?.id && actionTarget?.sender_id === currentUser.id}
           onClose={() => setActionTarget(null)}
           onReply={handleReply}
@@ -504,7 +509,8 @@ export default function ClientMessagesScreen() {
           muteOpen={muteMenu}
           onMuteClose={() => setMuteMenu(false)}
         />
-      ) : (
+      ) : null}
+      {!thread.enabled || closed ? ( // closed: Copy and Report only (no reply, edit or pin)
         <MessageActionSheet
           visible={!!actionTarget}
           messagePreview={actionTarget?.body}
@@ -515,7 +521,7 @@ export default function ClientMessagesScreen() {
           canReport={!!actionTarget && actionTarget.sender_role !== 'coach'}
           canReply={false}
         />
-      )}
+      ) : null}
 
       <ReportMessageSheet
         visible={!!reportTarget}
@@ -598,6 +604,7 @@ const makeStyles = (colors: ThemeColors) =>
   chatEmptyText: { fontSize: 14, color: colors.textMuted },
   dateSep: { alignItems: 'center', marginVertical: 16 },
   dateSepText: { fontSize: 12, color: colors.textMuted, backgroundColor: colors.background, paddingHorizontal: 12 },
+  closedBar: { paddingBottom: 36 },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',

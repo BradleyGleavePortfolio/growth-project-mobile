@@ -47,6 +47,7 @@ import {
 } from '../../api/communityApi';
 import { useQuery } from '@tanstack/react-query';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import { formatRelative } from '../../components/community/SearchResultRow';
 import {
@@ -118,6 +119,8 @@ export default function CommunityThreadScreen(): React.ReactElement {
   const react = useReactToPost(workspaceId);
   const deletePost = useDeletePost(workspaceId);
   const composerRef = useRef<ComposerInputHandle>(null);
+  // BLOCK-ALL-M: banned from the space (or the post is gone behind a block) -> no reply box, no "Be the first to reply".
+  const { closed, close } = useConversationClosed(null, [post.error, comments.error]);
   const [refreshing, setRefreshing] = useState(false);
 
   const data = comments.data ?? [];
@@ -222,7 +225,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
               tintColor={semanticColors.textMuted} colors={[semanticColors.accent]} />
           }
-          ListEmptyComponent={comments.isLoading || comments.isError ? (
+          ListEmptyComponent={closed ? null : comments.isLoading || comments.isError ? (
             <View style={styles.center} accessibilityState={{ busy: comments.isLoading }}>
               <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>
                 {comments.isLoading ? 'Loading replies…' : 'Replies did not load. Check your connection, then try again.'}
@@ -278,7 +281,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
           style={styles.flex}
         />
 
-        <ComposerInput
+        {closed ? <ConversationClosedLine testID="community-thread-closed" /> : <ComposerInput
           ref={composerRef}
           placeholder="Add a reply"
           maxLength={COMMENT_MAX}
@@ -290,14 +293,16 @@ export default function CommunityThreadScreen(): React.ReactElement {
                 // Apple 1.2 content filter: keep the draft (the composer
                 // restores it on rejection) and say why. Every other failure
                 // gets specific copy or a support reference.
-                const failure = describeCommunityFailure(err, 'send_reply');
-                Alert.alert(failure.title, failure.message);
+                if (!close(err)) {
+                  const failure = describeCommunityFailure(err, 'send_reply');
+                  Alert.alert(failure.title, failure.message);
+                }
                 throw err;
               },
             )
           }
           testID="community-thread-composer"
-        />
+        />}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

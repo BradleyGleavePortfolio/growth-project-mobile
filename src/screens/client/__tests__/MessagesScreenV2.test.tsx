@@ -281,3 +281,45 @@ describe('client MessagesScreen with messaging_core_v2 ON', () => {
     expect(mockLegacySend).not.toHaveBeenCalled();
   });
 });
+
+// BLOCK-ALL-M (owner 10-22 "dont even let the banned person type!"; #168-4 op 1: a block closes the coaching chat both ways).
+describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
+  const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+  afterEach(() => useBlockedUsersStore.setState({ blocked: [] }));
+
+  it('open: the message box is there and the closed line is not', async () => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText(/Message: from the coach/);
+    expect(u.getByLabelText('Message text')).toBeTruthy();
+    expect(u.queryByTestId('messages-closed')).toBeNull();
+  });
+
+  it('I blocked my coach: no message box, only the closed line; an unblock opens it again', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'coach-9', displayName: 'Sam', blockedAt: recent }] });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByLabelText('Send message')).toBeNull();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(u.getByLabelText('Message text')).toBeTruthy();
+    expect(u.queryByTestId('messages-closed')).toBeNull();
+  });
+
+  it('my coach blocked me (server 403 BLOCKED on send): closed at once, nothing sent twice, no "Not sent" bubble', async () => {
+    postMock.mockImplementation(async (url: string) => {
+      if (url !== '/messages') return { data: {} };
+      throw axiosErr({ response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } });
+    });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText(/Message: from the coach/);
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'running late');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.getByText('This conversation is closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByText('Not sent. Long press to send again')).toBeNull();
+    expect(postMock.mock.calls.filter(([url]) => url === '/messages')).toHaveLength(1);
+  });
+});

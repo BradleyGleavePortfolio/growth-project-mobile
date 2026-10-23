@@ -34,6 +34,7 @@ import {
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
@@ -50,6 +51,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
 
   const messages = useDmMessages(workspaceId, recipientId);
   const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
+  // BLOCK-ALL-M: a block either way (or a ban) closes the DM: no composer, and the read refusal is not an empty thread.
+  const { closed, close } = useConversationClosed(recipientId, [messages.error]);
 
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
@@ -64,9 +67,11 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
         // Content filter (draft kept), DM closed by a block, DMs turned off,
         // offline, rate limit: specific copy; anything else carries a
         // support reference and goes to Sentry.
-        const failure = describeCommunityFailure(err, 'send_message');
-        Alert.alert(failure.title, failure.message);
-        throw err;
+        if (!close(err)) {
+          const failure = describeCommunityFailure(err, 'send_message');
+          Alert.alert(failure.title, failure.message);
+        }
+        throw err; // the composer keeps the draft on this phone
       },
     );
 
@@ -98,7 +103,9 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           ) : null}
         </View>
 
-        {isEmpty ? (
+        {closed && isEmpty ? (
+          <View style={styles.flex} />
+        ) : isEmpty ? (
           <View style={styles.center}>
             <CommunityEmptyState
               stem="dmThreadEmpty"
@@ -145,14 +152,14 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           />
         )}
 
-        <ComposerInput
+        {closed ? <ConversationClosedLine testID="community-dmthread-closed" /> : <ComposerInput
           placeholder="Message"
           maxLength={DM_MAX}
           sending={sendDm.isPending}
           onSubmit={onSend}
           draftKey={recipientId && workspaceId ? `dm:${workspaceId}:${recipientId}` : undefined}
           testID="community-dmthread-composer"
-        />
+        />}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
