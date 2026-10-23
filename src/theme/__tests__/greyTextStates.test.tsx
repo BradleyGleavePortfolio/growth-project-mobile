@@ -50,7 +50,8 @@ describe('B1 allergy prompt: Later while a save is pending', () => {
     await fireEvent.press(screen.getByLabelText('None'));
     // The save handler awaits onSubmit, so this press settles only after finish(): do not await it yet.
     const saving = fireEvent.press(screen.getByLabelText('Save restrictions'));
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await Promise.resolve(); // let the press's own act() commit submitting=true (no overlapping act)
+    await Promise.resolve();
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith([]));
     await waitFor(() => expect(textColor(screen.getByText('Set this up later'))).toBe(colors.stone));
     expect(screen.getByLabelText('Set this up later').props.accessibilityState).toMatchObject({ disabled: true });
