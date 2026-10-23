@@ -347,4 +347,26 @@ describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByLabelText('Message text')).toBeNull();
     expect(alertSpy).not.toHaveBeenCalledWith('Message not sent', expect.anything());
   });
+
+  // BLOCK-TELL #169-5 CLOSED-LINE: the coach inbox row says who closed it; the line names the client as the coach sees them.
+  it.each([
+    ['the client blocked me', false, 'Alice Smith has blocked you'],
+    ['I blocked this client (on another phone)', true, 'You blocked them. Unblock in Settings'],
+  ])('%s (inbox row closed): closed before any send, no "start a conversation"', async (_l, mine, line) => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url === `${BASE}/pins`) return { data: { items: [] } };
+      if (!url.startsWith('/coach/messages/inbox')) return { data: {} };
+      return { data: { next_cursor: null, total_unread: 0, items: [{
+        thread_id: 't', kind: 'coach_client', coach_id: 'coach-1', client_id: 'client-1', last_message: null,
+        counterpart: { user_id: 'client-1', display_name: 'Alice Smith' }, unread_count: 0, muted: false, muted_until: null,
+        pinned: false, blocked_by_me: mine, closed: true, last_activity_at: null,
+      }] } };
+    });
+    mockRows.length = 0;
+    const u = await render(<ClientMessagesScreen />);
+    expect(await u.findByLabelText(line)).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByText('Start a conversation with Alice')).toBeNull();
+    expect(getMock).toHaveBeenCalledWith('/coach/messages/inbox?limit=100', expect.anything());
+  });
 });

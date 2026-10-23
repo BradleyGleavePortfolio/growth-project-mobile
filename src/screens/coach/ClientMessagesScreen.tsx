@@ -32,7 +32,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
-import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, ConversationClosedLine, useCoachingRow } from '../../components/messaging/ConversationClosed';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import { track } from '../../lib/analytics';
 import { MuteBell, PinnedBar, ThreadV2Menus, jumpToMessage } from '../../components/messaging/ThreadV2Parts';
@@ -80,7 +80,8 @@ export default function ClientMessagesScreen() {
   // A reply typed and not sent stays with this client's chat on the device (COACH-CHAT-KEEP, CHAT-DISCARD).
   const [inputText, setInputText, sendKey] = useUnsentReply(clientId, initialDraft);
   // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in this client's unsent reply.
-  const { closed, close } = useConversationClosed(clientId);
+  // BLOCK-TELL #169-5: the inbox row says who closed it, so the line can name the side.
+  const { closed, by, close } = useConversationClosed(clientId, [], useCoachingRow('coach', clientId));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
@@ -412,14 +413,14 @@ export default function ClientMessagesScreen() {
             </TouchableOpacity>
           ) : null
         }
-        ListEmptyComponent={
+        ListEmptyComponent={closed ? null : (
           <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
             <Text style={styles.chatEmptyText}>
               Start a conversation with {clientName.split(' ')[0]}
             </Text>
           </View>
-        }
+        )}
         renderItem={({ item, index }) => {
           const isCoach = item.sender_role === 'coach';
           const showDateSep =
@@ -466,7 +467,7 @@ export default function ClientMessagesScreen() {
         }}
       />
 
-      {closed ? <ConversationClosedLine style={styles.closedBar} testID="client-messages-closed" /> : <>
+      {closed ? <ConversationClosedLine by={by} name={clientName} style={styles.closedBar} testID="client-messages-closed" /> : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={styles.inputBar}>

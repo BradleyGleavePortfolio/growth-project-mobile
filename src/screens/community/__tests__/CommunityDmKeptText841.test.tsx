@@ -34,6 +34,7 @@ let mockWorkspace: string | null = 'ws-1';
 jest.mock('../../../hooks/useCommunity', () => ({
   useCommunityMe: () => ({ data: mockWorkspace ? { workspace_id: mockWorkspace } : undefined, isLoading: false, isError: false }),
   useDmMessages: () => ({ data: [], isLoading: false, isError: false }),
+  useDmThreads: () => ({ data: undefined }),
   useSendDm: () => ({ mutateAsync: mockSend, isPending: false }),
 }));
 

@@ -74,6 +74,8 @@ export const InboxThreadSchema = z.object({
   muted_until: isoString.nullable(),
   pinned: z.boolean(),
   blocked_by_me: z.boolean(),
+  /** BLOCK-ALL-BE (b#1141): a block either way closed this 1:1; read by the closed line (#169-5). */
+  closed: z.boolean().optional(),
   last_activity_at: isoString.nullable(),
 });
 export type InboxThread = z.infer<typeof InboxThreadSchema>;

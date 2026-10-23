@@ -322,4 +322,23 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByText('Not sent. Long press to send again')).toBeNull();
     expect(postMock.mock.calls.filter(([url]) => url === '/messages')).toHaveLength(1);
   });
+
+  // BLOCK-TELL #169-5 CLOSED-LINE: the inbox row says who closed it; the line names the side.
+  it.each([
+    ['my coach blocked me', false, 'Sam has blocked you'],
+    ['I blocked my coach (on another phone)', true, 'You blocked them. Unblock in Settings'],
+  ])('%s (inbox row closed): closed before any send, no "start a conversation", the line says who', async (_l, mine, line) => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    getMock.mockImplementation(async (url: string) => {
+      if (url !== '/messages/inbox') return { data: url === '/messages/pins' ? { items: [] } : {} };
+      const shut = inbox(false);
+      Object.assign(shut.data.items[0], { closed: true, blocked_by_me: mine, last_activity_at: null });
+      return shut;
+    });
+    mockList.mockResolvedValue({ data: { messages: [] } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByLabelText(line)).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByText('Start a conversation with your coach')).toBeNull();
+  });
 });

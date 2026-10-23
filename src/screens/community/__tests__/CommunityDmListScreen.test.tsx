@@ -18,7 +18,7 @@
  * The data layer is mocked so each render path is deterministic.
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { render, screen, fireEvent, within } from '@testing-library/react-native';
 
 // ── Theme: real light tokens, no ThemeProvider ───────────────────────────────
 jest.mock('../../../theme/useTheme', () => {
@@ -44,7 +44,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 // ── useDmThreads — the workspace-scoped inbox query (mutable holder) ─────────
 type ThreadsState = {
-  data: Array<{ thread_id: string; other_user_id: string }> | undefined;
+  data: Array<{ thread_id: string; other_user_id: string } & Record<string, unknown>> | undefined;
   isLoading: boolean;
   isError: boolean;
   refetch: jest.Mock;
@@ -159,5 +159,22 @@ describe('CommunityDmListScreen embedded prerequisite', () => {
     expect(screen.getByTestId('community-dmlist-empty')).toBeTruthy();
     expect(screen.queryByTestId('community-dmlist-prereq-error')).toBeNull();
     expect(screen.queryByTestId('community-dmlist-prereq-loading')).toBeNull();
+  });
+
+  // BLOCK-TELL #169-5 CLOSED-LINE: a blocked thread stays listed for both people as a closed row.
+  it('a closed row shows the name only (no time, no text) with a lock, and opens with that name', async () => {
+    mockThreads.data = [
+      { thread_id: 't-1', other_user_id: 'coach-1', last_message_at: new Date().toISOString(), closed: false, blocked_by_me: false, other_display_name: 'Sam' },
+      { thread_id: 't-2', other_user_id: 'member-2', last_message_at: null, closed: true, blocked_by_me: false, other_display_name: 'Jordan' },
+    ];
+    await render(<CommunityDmListScreen embedded workspaceId="ws-1" prerequisiteLoading={false} prerequisiteError={false} />);
+    const shut = screen.getByTestId('dm-row-t-2');
+    expect(within(shut).getByText(/Jordan/)).toBeTruthy();
+    expect(within(shut).getByTestId('dm-row-closed')).toBeTruthy();
+    expect(within(shut).queryByText(/Active|No messages yet/)).toBeNull();
+    expect(within(screen.getByTestId('dm-row-t-1')).getByText(/Coach/)).toBeTruthy();
+    expect(within(screen.getByTestId('dm-row-t-1')).queryByTestId('dm-row-closed')).toBeNull();
+    await fireEvent.press(shut);
+    expect(mockNavigate).toHaveBeenCalledWith('CommunityDmThread', { recipientId: 'member-2', participantLabel: 'Jordan' });
   });
 });

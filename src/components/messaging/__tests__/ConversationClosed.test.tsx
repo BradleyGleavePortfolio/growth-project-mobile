@@ -9,7 +9,7 @@ import { act, render, renderHook } from '@testing-library/react-native';
 const mockWarning = jest.fn(async () => undefined);
 jest.mock('../../../ui/haptics/haptics.service', () => ({
   get HapticService() {
-    return { warning: mockWarning };
+    return { warning: mockWarning, softImpact: jest.fn(async () => undefined) };
   },
 }));
 jest.mock('../../../theme/useTheme', () => {
@@ -19,7 +19,11 @@ jest.mock('../../../theme/useTheme', () => {
 
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { CommunityApiError } from '../../../api/apiCall';
-import { CLOSED_LINE, ConversationClosedLine, isClosedRefusal, useConversationClosed } from '../ConversationClosed';
+import { NavigationContext } from '@react-navigation/native';
+import { fireEvent } from '@testing-library/react-native';
+import {
+  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, dmRowFor, isClosedRefusal, useConversationClosed,
+} from '../ConversationClosed';
 
 const axiosErr = (status: number, data: Record<string, unknown>) => ({ isAxiosError: true, response: { status, data } });
 const COACHING_BLOCKED = { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' };
@@ -113,5 +117,66 @@ describe('ConversationClosedLine', () => {
     expect(view.getByText(CLOSED_LINE)).toBeTruthy();
     expect(line.props.accessibilityLabel).toBe('This conversation is closed');
     expect(line.props.accessibilityLiveRegion).toBe('polite');
+  });
+});
+
+describe('#169-5 CLOSED-LINE: who closed a one-to-one conversation', () => {
+  const byOf = async (other: string | null, errs: unknown[] = [], row?: { closed?: boolean; blocked_by_me?: boolean }) =>
+    (await renderHook(() => useConversationClosed(other, errs, row))).result.current;
+
+  it('BAM-2a when I blocked them: my block list, the row, or blocked_by_you', async () => {
+    expect((await byOf(null, [axiosErr(403, { code: 'community.dm.blocked_by_you' })])).by).toBe('me');
+    expect(await byOf('x', [], { closed: true, blocked_by_me: true })).toMatchObject({ closed: true, by: 'me' });
+    useBlockedUsersStore.setState({ blocked: [{ id: 'x', displayName: 'Sam', blockedAt: '2026-10-22T00:00:00Z' }] });
+    expect((await byOf('x', [axiosErr(403, COACHING_BLOCKED)])).by).toBe('me');
+  });
+
+  it('BAM-2b when they blocked me: the row, blocked_by_them, or a coaching refusal with no block of mine', async () => {
+    expect(await byOf('x', [], { closed: true, blocked_by_me: false })).toMatchObject({ closed: true, by: 'them' });
+    expect((await byOf(null, [axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_them' })])).by).toBe('them');
+    expect((await byOf('x', [axiosErr(403, COACHING_BLOCKED)])).by).toBe('them');
+  });
+
+  it('BAM-1 for a ban or a member who left; an open row stays open', async () => {
+    expect(await byOf(null, [axiosErr(404, { code: 'community.dm.not_found' })])).toMatchObject({ closed: true, by: null });
+    expect(await byOf(null, [axiosErr(403, { code: 'community.workspace.no_access' })])).toMatchObject({ closed: true, by: null });
+    expect(await byOf('x', [], { closed: false, blocked_by_me: false })).toMatchObject({ closed: false, by: null });
+  });
+
+  it('dmRowFor reads the DM-list row of that member only', () => {
+    const rows = [{ other_user_id: 'x', closed: true, blocked_by_me: false, other_display_name: 'Sam' }, { other_user_id: 'y' }];
+    expect(dmRowFor(rows, 'x')).toEqual({ closed: true, blocked_by_me: false, name: 'Sam' });
+    expect(dmRowFor(rows, 'y')).toEqual({ closed: false, blocked_by_me: false, name: undefined });
+    expect(dmRowFor(rows, 'z')).toBeNull();
+    expect(dmRowFor(undefined, 'x')).toBeNull();
+  });
+
+  it('the lines: BAM-2a, BAM-2b with the name, BAM-1 when there is no name', async () => {
+    expect((await render(<ConversationClosedLine by="me" />)).getByLabelText(BLOCKED_BY_ME_LINE)).toBeTruthy();
+    expect((await render(<ConversationClosedLine by="them" name=" Sam Lee " />)).getByText('Sam Lee has blocked you')).toBeTruthy();
+    expect((await render(<ConversationClosedLine by="them" name="" />)).getByText(CLOSED_LINE)).toBeTruthy();
+  });
+
+  it.each([
+    ['client (You stack)', 'MoreTab'],
+    ['coach (Settings stack)', 'SettingsStack'],
+  ])('"Settings" opens the blocked-people list: %s', async (_who, tab) => {
+    const navigate = jest.fn();
+    const stack = { getState: () => ({ routeNames: ['Messages'] }), navigate: jest.fn(), getParent: () => tabs };
+    const tabs = { getState: () => ({ routeNames: ['Home', tab] }), navigate, getParent: () => undefined };
+    const view = await render(
+      <NavigationContext.Provider value={stack as never}>
+        <ConversationClosedLine by="me" testID="closed" />
+      </NavigationContext.Provider>,
+    );
+    expect(view.getByTestId('closed').props.accessibilityRole).toBe('link');
+    expect(view.getByText('Settings')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('closed'));
+    expect(navigate).toHaveBeenCalledWith(tab, { screen: 'BlockedUsers', initial: false });
+  });
+
+  it('with no blocked-people list in reach, BAM-2a is plain text (no dead link)', async () => {
+    const view = await render(<ConversationClosedLine by="me" testID="closed" />);
+    expect(view.getByTestId('closed').props.accessibilityRole).toBe('text');
   });
 });

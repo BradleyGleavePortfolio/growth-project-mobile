@@ -33,7 +33,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
-import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, ConversationClosedLine, useCoachingRow } from '../../components/messaging/ConversationClosed';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
@@ -117,7 +117,9 @@ export default function MessagesScreen() {
   const [coachName, setCoachName] = useState('');
   const [coachId, setCoachId] = useState('');
   // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in the draft (or the outbox).
-  const { closed, close } = useConversationClosed(coachId);
+  // BLOCK-TELL #169-5: the inbox row says who closed it, so the line can name the side.
+  const coachingRow = useCoachingRow('client', coachId);
+  const { closed, by, close } = useConversationClosed(coachId, [], coachingRow);
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
   // the CompetencePill at the top of the conversation. Null hides the pill
   // (no review yet, or the backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is OFF).
@@ -781,7 +783,7 @@ export default function MessagesScreen() {
           ) : null
         }
         ListEmptyComponent={
-          !error && styleB && coachName ? <StyleBFirstCard coachName={coachName} /> : !error ? <View style={styles.chatEmpty}>
+          closed ? null : !error && styleB && coachName ? <StyleBFirstCard coachName={coachName} /> : !error ? <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
             <Text style={styles.chatEmptyText}>Start a conversation with your coach</Text>
           </View> : null
@@ -920,7 +922,7 @@ export default function MessagesScreen() {
         }}
       />
 
-      {closed ? <ConversationClosedLine style={styles.closedBar} testID="messages-closed" /> : <>
+      {closed ? <ConversationClosedLine by={by} name={coachName || coachingRow?.counterpart.display_name} style={styles.closedBar} testID="messages-closed" /> : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={[styles.inputBar, styleB && styles.bInputBar]}>
