@@ -48,6 +48,7 @@ import { WeekBlock } from './copilot/WeekBlock';
 import { PastQuestionsList, PastQuestionsRow, usePastQuestions } from './copilot/PastQuestions';
 import { copilotAnswerKey } from './copilot/copilotErasure';
 import { useCopilotAsk, type CopilotTurn } from './copilot/useCopilotAsk';
+import { ledger } from './copilot/ledger';
 
 export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
 type Params = { view?: 'questions' | 'answer'; item?: PastQuestion };
@@ -164,11 +165,11 @@ function PathView() {
             {asked ? null : (
               <View style={s.section} testID="copilot-ask">
                 <Text style={[typography.bodyMd, s.strong, { color: sc.textPrimary }]} accessibilityRole="header">{A.askHeading}</Text>
-                <View style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
+                <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]}>
                   {starters.map((label, i) => (
                     <Pressable key={label} onPress={() => onAsk(label)} disabled={busy} accessibilityRole="button" accessibilityLabel={label}
                       accessibilityState={{ disabled: busy }} testID={`copilot-starter-${i}`}
-                      style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
+                      style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line },
                         (pressed || label === A.whyCalories) && { backgroundColor: pathTint.leaf }]}>
                       <Text style={[typography.body, s.grow, { color: sc.textPrimary }, label === A.whyCalories && s.strong]}>{label}</Text>
                       <Ionicons name="chevron-forward" size={18} color={forestPop.forest} />
@@ -285,7 +286,7 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
     : error.kind === 'offline' ? [ROMAN_OFFLINE_TITLE, ROMAN_OFFLINE_BODY, true]
     : [ROMAN_ERROR_TRANSIENT, '', true];
   return (
-    <View style={[s.card, s.pad, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} accessibilityRole="alert" testID={`copilot-turn-${error.kind}`}>
+    <View style={[s.card, s.pad, { backgroundColor: ledger.card, borderColor: ledger.line }]} accessibilityRole="alert" testID={`copilot-turn-${error.kind}`}>
       <View style={s.who}>
         <RomanAvatar crop="neutral" size={28} />
         <Text style={[typography.bodyMd, s.strong, s.grow, { color: sc.textPrimary }]}>{title}</Text>

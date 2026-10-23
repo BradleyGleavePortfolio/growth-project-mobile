@@ -13,6 +13,7 @@ import { TextLink } from '../../../ui/buttons/PrimaryButton';
 import { copilotApi, type PastQuestion } from '../../../api/copilotApi';
 import { COPILOT_COPY as C, shortDay } from './pathChangeWords';
 import { ASK_COPY as A, monthYear } from './askWords';
+import { ledger } from './ledger';
 
 export const COPILOT_QUESTIONS_KEY = ['copilot', 'questions'] as const;
 
@@ -32,7 +33,7 @@ export function PastQuestionsRow({ total, onPress }: { total: number; onPress: (
   const { semanticColors: sc } = useTheme();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${A.past}, ${total}`} testID="copilot-past-row"
-      style={({ pressed }) => [s.card, s.row, { backgroundColor: pressed ? sc.bgPrimary : sc.bgSurface, borderColor: sc.border }]}>
+      style={({ pressed }) => [s.card, s.row, { backgroundColor: pressed ? sc.bgPrimary : ledger.card, borderColor: ledger.line }]}>
       <Text style={[typography.body, s.grow, { color: sc.textPrimary }]}>{A.past}</Text>
       <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{total.toLocaleString('en-US')}</Text>
       <Ionicons name="chevron-forward" size={18} color={sc.textMuted} />
@@ -68,14 +69,14 @@ export function PastQuestionsList({ items, onOpen, more, loadingMore, onMore }: 
       {groups.map((g) => (
         <View key={g.month} style={s.group}>
           <Text style={[typography.bodySmall, s.strong, { color: sc.textMuted }]} accessibilityRole="header">{g.month}</Text>
-          <View style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
+          <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]}>
             {g.rows.map((q, i) => {
               const out = outcomeOf(q);
               const day = shortDay(q.askedAt);
               return (
                 <Pressable key={q.messageId} onPress={() => onOpen(q)} accessibilityRole="button" testID={`copilot-past-${q.messageId}`}
                   accessibilityLabel={[q.question, day, out?.text].filter(Boolean).join('. ')}
-                  style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border }, pressed && { backgroundColor: sc.bgPrimary }]}>
+                  style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line }, pressed && { backgroundColor: sc.bgPrimary }]}>
                   <View style={s.grow}>
                     <Text style={[typography.body, { color: sc.textPrimary }]}>{q.question}</Text>
                     <View style={s.meta}>

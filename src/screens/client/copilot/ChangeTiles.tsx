@@ -5,13 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, pathTint, radius, typography } from '../../../theme/tokens';
 import { COPILOT_COPY as C } from './pathChangeWords';
+import { ledger } from './ledger';
 
 /** `inset`: the tiles sit on the coach's grey panel, so Now is white there and grey on a white card. */
 export function ChangeTiles({ from, to, inset = false }: { from: string; to: string; inset?: boolean }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={s.row} accessible accessibilityLabel={`${C.now}, ${from}. ${C.next}, ${to}.`}>
-      <View style={[s.tile, { backgroundColor: inset ? sc.bgSurface : pathTint.still }]}>
+      <View style={[s.tile, { backgroundColor: inset ? ledger.card : pathTint.still }]}>
         <Text style={[typography.caption, { color: sc.textMuted }]}>{C.now}</Text>
         <Text style={[typography.bodyMd, s.value, { color: sc.textPrimary }]}>{from}</Text>
       </View>

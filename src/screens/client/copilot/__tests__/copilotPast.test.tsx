@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
@@ -8,6 +9,7 @@ import { queryClient } from '../../../../services/queryClient';
 import { romanChatsEvents } from '../../../settings/romanChatsEvents';
 import { COPILOT_QUESTIONS_KEY } from '../PastQuestions';
 import { copilotAnswerKey, dropErasedCopilot } from '../copilotErasure';
+import { AnswerCard } from '../AnswerCard';
 
 const mockPush = jest.fn();
 const mockDispatch = jest.fn();
@@ -161,4 +163,32 @@ test('a past answer the server no longer has (404) is not drawn, and a declined 
   const t = await render(wrap(<ClientPathCopilotScreen />));
   expect(await t.findByText('Your coach kept your plan as it is')).toBeTruthy();
   expect(t.queryByText(/Alex/)).toBeNull();
+});
+
+// B-852-G1: one Forest ledger card (white, cool hairline) for the row, the month groups and the answer.
+const card = (el: { props: { style?: unknown } } | null) => StyleSheet.flatten(el?.props.style as never) as { backgroundColor?: string; borderColor?: string };
+const LEDGER = { backgroundColor: '#FFFFFF', borderColor: '#E6E9DF' };
+
+test('the Past questions row sits on the white Forest ledger card with the cool hairline', async () => {
+  route([PAGE1]);
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  expect(card(await s.findByTestId('copilot-past-row'))).toMatchObject(LEDGER);
+});
+
+test('the month groups of past questions sit on the same white Forest ledger card', async () => {
+  route([PAGE1]);
+  mockParams = { view: 'questions' };
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  // The month group: the nearest View above its first row that paints a surface.
+  let group = (await s.findByTestId('copilot-past-m1')).parent;
+  while (group && !card(group).backgroundColor) group = group.parent;
+  expect(card(group)).toMatchObject(LEDGER);
+  expect(card(s.getByTestId('copilot-past-m2'))).toMatchObject({ borderColor: LEDGER.borderColor });
+});
+
+test('an answer and its facts sit on the same white Forest ledger card', async () => {
+  const reply = { sources: [{ n: 1, kind: 'workout_log' as const, label: '7 of 8 sessions done' }], suggestion: null };
+  const s = await render(<AnswerCard text="A steady week [1]." reply={reply as never} />);
+  expect(card(s.getByTestId('copilot-answer'))).toMatchObject(LEDGER);
+  expect(card(s.getByTestId('copilot-facts'))).toMatchObject({ borderColor: LEDGER.borderColor });
 });

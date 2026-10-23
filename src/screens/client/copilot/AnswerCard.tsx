@@ -12,6 +12,7 @@ import RomanCrisisActions from '../../../components/roman/RomanCrisisActions';
 import type { RomanSafetyAction } from '../../../api/romanSafetyActions';
 import type { CopilotReply, SourceKind } from '../../../api/copilotApi';
 import { ASK_COPY as A, SOURCE_TAG, leadAndRest, withoutCites, withoutEmphasis } from './askWords';
+import { ledger } from './ledger';
 
 const TAG: Record<SourceKind, { bg: string; ink: string }> = {
   plan: { bg: forestPop.forest, ink: forestPop.onDeep },
@@ -33,7 +34,7 @@ export function AnswerCard({ text, reply, safety }: { text: string; reply: Copil
   const plain = withoutEmphasis(text);
   const { lead, rest } = reply ? leadAndRest(withoutCites(plain)) : { lead: '', rest: plain };
   return (
-    <View style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="copilot-answer">
+    <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]} testID="copilot-answer">
       <View style={s.pad}>
         <View style={s.who} accessible accessibilityLabel={A.roman}>
           <RomanAvatar crop="neutral" size={28} />
@@ -44,10 +45,10 @@ export function AnswerCard({ text, reply, safety }: { text: string; reply: Copil
         {safety?.length ? <RomanCrisisActions actions={safety} testID="copilot-crisis" /> : null}
       </View>
       {reply && reply.sources.length > 0 ? (
-        <View style={[s.facts, { borderColor: sc.border }]} testID="copilot-facts">
+        <View style={[s.facts, { borderColor: ledger.line }]} testID="copilot-facts">
           <Text style={[typography.bodySmall, s.name, { color: sc.textMuted }]} accessibilityRole="header">{A.fromData}</Text>
           {reply.sources.map((f, i) => (
-            <View key={`${f.n}-${i}`} style={[s.fact, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border }]}
+            <View key={`${f.n}-${i}`} style={[s.fact, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line }]}
               accessible accessibilityLabel={[SOURCE_TAG[f.kind], f.label, f.detail].filter(Boolean).join('. ')} testID={`copilot-fact-${f.kind}`}>
               <SourceTag kind={f.kind} />
               <View style={s.factText}>
