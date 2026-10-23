@@ -176,9 +176,15 @@ describe('plan ended on the coach Home', () => {
   });
   it("asks first, asks b#1130's draft route, and sends only on Send", async () => {
     const v = await renderHome();
-    await press(v, 'home-plan-ended', 'plan-ended-row-c1', 'plan-ended-ask');
+    await press(v, 'home-plan-ended', 'plan-ended-row-c1');
+    // K2's ask carries Roman's mark (deep disc, gold ring, gold serif R), hidden from screen readers: the button names Roman.
+    const mark = within(v.getByTestId('plan-ended-ask')).getByTestId('roman-mark', { includeHiddenElements: true });
+    expect([mark.props.importantForAccessibility, within(mark).getByText('R', { includeHiddenElements: true }).props.style]).toEqual(['no-hide-descendants', expect.arrayContaining([expect.objectContaining({ fontFamily: 'CormorantGaramond_500Medium', color: '#D4B96B' })])]);
+    await press(v, 'plan-ended-ask');
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
-    expect(within(v.getByTestId('home-draft-sheet')).getByText('Plan ended today · 12-week block')).toBeTruthy(); // the K3 context line
+    expect(within(v.getByTestId('home-draft-about')).getByText('Plan ended today · 12-week block')).toBeTruthy(); // the K3 context chip
+    const head = within(v.getByTestId('home-draft-head')); // K3a: Roman's deep head with the mark and "Roman" (RN3-33)
+    expect([head.getByTestId('roman-mark', { includeHiddenElements: true }), head.getByText('ROMAN', { includeHiddenElements: true }), head.getByText('Ask Roman to write to Maya?')].every(Boolean)).toBe(true);
     expect(mockPost).not.toHaveBeenCalled();
     await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
     expect(mockPost).toHaveBeenCalledWith('/v1/coach/churned-clients/c1/draft', {});
