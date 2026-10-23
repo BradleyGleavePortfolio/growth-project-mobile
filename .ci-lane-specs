@@ -1,0 +1,4 @@
+src/screens/coach/
+src/__tests__/coachHome
+src/__tests__/coachPlanEnded
+src/navigation/__tests__/coachTabsV2
