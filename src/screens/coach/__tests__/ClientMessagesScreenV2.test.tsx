@@ -315,7 +315,50 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
 // BLOCK-ALL-M (owner 10-22 "dont even let the banned person type!"; #168-4 op 1: a block closes the coaching chat both ways).
 describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
   const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
-  afterEach(() => useBlockedUsersStore.setState({ blocked: [] }));
+  const { closedRefusals } = jest.requireActual('../../../components/messaging/closedRefusal');
+  const { queryClient } = jest.requireActual('../../../services/queryClient');
+  afterEach(() => {
+    useBlockedUsersStore.setState({ blocked: [] });
+    closedRefusals.clear('client-1');
+    queryClient.clear();
+  });
+  const inboxWith = (closed: boolean) => ({
+    data: {
+      items: [{
+        thread_id: 't', kind: 'coach_client', coach_id: 'coach-1', client_id: 'client-1',
+        counterpart: { user_id: 'client-1', display_name: 'Alice Smith' }, last_message: null, unread_count: 0,
+        muted: false, muted_until: null, pinned: false, blocked_by_me: false, closed, last_activity_at: null,
+      }],
+      next_cursor: null,
+      total_unread: 0,
+    },
+  });
+
+  // FX-872 (Opus B4, Sol B1): the coach the client blocked never gets a box, not only after a refused send.
+  it('the client blocked me: the inbox row says closed, so there is never a box', async () => {
+    getMock.mockImplementation(async (url: string) =>
+      url.startsWith('/coach/messages/inbox') ? inboxWith(true) : { data: { items: [] } });
+    const u = await render(<ClientMessagesScreen />);
+    expect(await u.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByLabelText(/Message: from the client/)).toBeNull();
+  });
+
+  it('FX-872: a refused send stays closed after leaving and coming back', async () => {
+    postMock.mockImplementation(async (url: string) => {
+      if (url !== BASE) return { data: {} };
+      throw axiosErr({ response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } });
+    });
+    const first = await render(<ClientMessagesScreen />);
+    await first.findByLabelText(/Message: from the client/);
+    await fireEvent.changeText(first.getByLabelText('Message text'), 'see you at 6');
+    await fireEvent.press(first.getByLabelText('Send message'));
+    expect(await first.findByTestId('client-messages-closed')).toBeTruthy();
+    first.unmount();
+    const again = await render(<ClientMessagesScreen />);
+    expect(await again.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(again.queryByLabelText('Message text')).toBeNull();
+  });
 
   it('open: the message box is there and the closed line is not', async () => {
     const u = await render(<ClientMessagesScreen />);

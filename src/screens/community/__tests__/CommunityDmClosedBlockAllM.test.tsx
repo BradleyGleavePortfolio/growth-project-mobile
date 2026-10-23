@@ -27,15 +27,24 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
   useRoute: () => ({ params: mockParams.current }),
 }));
-jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana' }) }));
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana', coach_id: 'coach-7' }) }));
 const mockSendAsync = jest.fn();
 const mockSendMutate = jest.fn();
 const mockPostMutate = jest.fn();
 let mockReadError: unknown = null;
 let mockMessages: unknown[] = [];
+let mockReadPending = false;
+let mockMe: { workspace_id: string | null } = { workspace_id: 'ws-1' };
+const mockDmTo = jest.fn();
 jest.mock('../../../hooks/useCommunity', () => ({
-  useCommunityMe: () => ({ data: { workspace_id: 'ws-1' }, isLoading: false, isError: false }),
-  useDmMessages: () => ({ data: mockMessages, isLoading: false, isError: !!mockReadError, error: mockReadError }),
+  useCommunityMe: () => ({ data: mockMe, isLoading: false, isError: false, isSuccess: true }),
+  useDmMessages: (_ws: string, to: string) => {
+    mockDmTo(to);
+    return mockReadPending
+      ? { data: undefined, isLoading: true, isError: false, isSuccess: false, isFetchedAfterMount: false, isStale: true, error: null }
+      : { data: mockMessages, isLoading: false, isError: !!mockReadError, error: mockReadError, isSuccess: !mockReadError, isFetchedAfterMount: true, isStale: false };
+  },
+  usePosts: () => ({ data: [], isLoading: false, isError: !!mockReadError, error: mockReadError, isSuccess: !mockReadError, isFetchedAfterMount: true, isStale: false }),
   useSendDm: () => ({ mutateAsync: mockSendAsync, mutate: mockSendMutate, isPending: false, error: null }),
   useCreatePost: () => ({ mutate: mockPostMutate, isPending: false, error: null }),
   isOptimisticId: () => false,
@@ -56,6 +65,9 @@ let alertSpy: jest.SpyInstance;
 beforeEach(async () => {
   mockReadError = null;
   mockMessages = [];
+  mockReadPending = false;
+  mockMe = { workspace_id: 'ws-1' };
+  mockDmTo.mockReset();
   mockSendAsync.mockReset().mockResolvedValue({ id: 'dm-1' });
   mockSendMutate.mockReset();
   mockPostMutate.mockReset();
@@ -109,6 +121,21 @@ describe('community DM', () => {
     await waitFor(() => expect([...mockDisk.values()].join()).toContain('Hey, are you coming'));
   });
 
+  // FX-872: closed until the server says open.
+  it('no message box and no "Start the conversation" while the DM read is out', async () => {
+    mockReadPending = true;
+    const view = await open();
+    expect(view.queryByTestId(FIELD)).toBeNull();
+    expect(view.queryByText('Start the conversation')).toBeNull();
+  });
+
+  it('signed in with no community membership (left or removed): closed, no box', async () => {
+    mockMe = { workspace_id: null };
+    const view = await open();
+    expect(view.queryByTestId(FIELD)).toBeNull();
+    expect(view.getByTestId('community-dmthread-closed')).toBeTruthy();
+  });
+
   it('a send that fails for another reason keeps the box and says why', async () => {
     mockSendAsync.mockRejectedValueOnce(new Error('Network Error'));
     const view = await open();
@@ -142,6 +169,22 @@ describe('New message / New post composer', () => {
     expect(view.getByTestId('community-composer-closed')).toBeTruthy();
     expect(view.queryByTestId('community-composer-body')).toBeNull();
     expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('FX-872: no fields while the read for this place is out', async () => {
+    mockReadPending = true;
+    mockParams.current = { mode: 'dm', recipientId: 'member-2' };
+    const view = await render(<CommunityComposerScreen />);
+    expect(view.queryByTestId('community-composer-body')).toBeNull();
+    expect(view.queryByTestId('community-composer-submit')).toBeNull();
+  });
+
+  it('FX-872 (Sol B4): "Send your coach a message" opens with no recipient; the DM goes to my coach', async () => {
+    mockParams.current = { mode: 'dm', recipientId: '' };
+    const view = await render(<CommunityComposerScreen />);
+    expect(mockDmTo).toHaveBeenCalledWith('coach-7');
+    expect(mockDmTo).not.toHaveBeenCalledWith('');
+    expect(view.getByTestId('community-composer-body')).toBeTruthy();
   });
 
   it('a content-filter refusal still keeps the fields and says why', async () => {

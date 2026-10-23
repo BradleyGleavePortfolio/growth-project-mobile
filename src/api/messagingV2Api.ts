@@ -74,6 +74,8 @@ export const InboxThreadSchema = z.object({
   muted_until: isoString.nullable(),
   pinned: z.boolean(),
   blocked_by_me: z.boolean(),
+  /** b#1141 contract A: a block on either side, the only way the person blocked learns the chat is closed. */
+  closed: z.boolean().optional(),
   last_activity_at: isoString.nullable(),
 });
 export type InboxThread = z.infer<typeof InboxThreadSchema>;

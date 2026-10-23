@@ -20,6 +20,7 @@ jest.mock('../../../theme/useTheme', () => {
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { CommunityApiError } from '../../../api/apiCall';
 import { CLOSED_LINE, ConversationClosedLine, isClosedRefusal, useConversationClosed } from '../ConversationClosed';
+import { closedRefusals } from '../closedRefusal';
 
 const axiosErr = (status: number, data: Record<string, unknown>) => ({ isAxiosError: true, response: { status, data } });
 const COACHING_BLOCKED = { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' };
@@ -27,6 +28,7 @@ const COACHING_BLOCKED = { error: 'BLOCKED', message: 'Messages cannot be sent t
 beforeEach(() => {
   mockWarning.mockClear();
   useBlockedUsersStore.setState({ blocked: [] });
+  closedRefusals.clear('coach-1');
 });
 
 describe('isClosedRefusal', () => {
@@ -35,6 +37,7 @@ describe('isClosedRefusal', () => {
     ['coaching edit / pin (messaging.blocked)', axiosErr(403, { error: 'messaging.blocked', code: 'messaging.blocked' })],
     ['DM to someone I blocked', axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_you' })],
     ['DM with someone who blocked me (not disclosed)', axiosErr(404, { error: 'not_found', code: 'community.dm.not_found' })],
+    ['DM with someone who blocked me (#169-5 code)', axiosErr(403, { code: 'community.dm.blocked_by_them' })],
     ['banned from the space', axiosErr(403, { code: 'community.workspace.no_access' })],
     ['banned from the cohort', axiosErr(403, { code: 'community.cohort.no_access' })],
     ['Hall posts after a ban', axiosErr(404, { code: 'community.post.not_found' })],
@@ -60,8 +63,8 @@ describe('isClosedRefusal', () => {
 });
 
 describe('useConversationClosed', () => {
-  it('open by default; closed when I blocked them; an unblock opens it again', async () => {
-    const { result } = await renderHook(() => useConversationClosed('coach-1'));
+  it('open once the server answered; closed when I blocked them; an unblock opens it again', async () => {
+    const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
     expect(result.current.closed).toBe(false);
     await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'coach-1', displayName: 'Roman', blockedAt: '2026-10-22T00:00:00Z' }] }));
     expect(result.current.closed).toBe(true);
@@ -71,11 +74,11 @@ describe('useConversationClosed', () => {
 
   it('a block on someone else leaves this conversation open', async () => {
     useBlockedUsersStore.setState({ blocked: [{ id: 'other', displayName: 'X', blockedAt: '2026-10-22T00:00:00Z' }] });
-    expect((await renderHook(() => useConversationClosed('coach-1'))).result.current.closed).toBe(false);
+    expect((await renderHook(() => useConversationClosed('coach-1', [], true))).result.current.closed).toBe(false);
   });
 
   it('a refused send closes it at once with a warning haptic; other failures leave it open', async () => {
-    const { result } = await renderHook(() => useConversationClosed('coach-1'));
+    const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
     let r = true;
     await act(async () => { r = result.current.close(new Error('Network Error')); });
     expect(r).toBe(false);
@@ -84,11 +87,12 @@ describe('useConversationClosed', () => {
     await act(async () => { r = result.current.close(axiosErr(403, COACHING_BLOCKED)); });
     expect(r).toBe(true);
     expect(result.current.closed).toBe(true);
+    expect(result.current.open).toBe(false);
     expect(mockWarning).toHaveBeenCalledTimes(1);
   });
 
   it('a server refusal the screen already holds (blocked by them, banned) closes it', async () => {
-    const { result, rerender } = await renderHook(({ errs }: { errs: unknown[] }) => useConversationClosed(null, errs), {
+    const { result, rerender } = await renderHook(({ errs }: { errs: unknown[] }) => useConversationClosed(null, errs, true), {
       initialProps: { errs: [null] as unknown[] },
     });
     expect(result.current.closed).toBe(false);
@@ -98,7 +102,7 @@ describe('useConversationClosed', () => {
 
   it('closed by my block, then I unblock: a refusal from before the unblock no longer holds it closed', async () => {
     useBlockedUsersStore.setState({ blocked: [{ id: 'coach-1', displayName: 'Roman', blockedAt: '2026-10-22T00:00:00Z' }] });
-    const { result } = await renderHook(() => useConversationClosed('coach-1'));
+    const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
     await act(async () => { result.current.close(axiosErr(403, COACHING_BLOCKED)); });
     expect(result.current.closed).toBe(true);
     await act(async () => useBlockedUsersStore.setState({ blocked: [] }));

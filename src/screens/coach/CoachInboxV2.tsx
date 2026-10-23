@@ -36,6 +36,7 @@ import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@r
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { openInboxChat } from '../../navigation/coachInbox';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -149,18 +150,23 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
     if (searching && hasNextPage && !isFetchingNextPage) void fetchNextPage();
   }, [searching, hasNextPage, isFetchingNextPage, fetchNextPage, data]);
 
-  const threads = useMemo(() => {
+  // FX-872 (owner 10-23 "Dissapear"): a chat closed by a block on either side is not a row at all, and that client is
+  // not offered again as "start a conversation" below. The one block cache drops it the moment I block.
+  const blocked = useBlockedUsersStore((st) => st.blocked);
+  const { threads, hidden } = useMemo(() => {
     const seen = new Set<string>();
+    const gone = new Set<string>(blocked.map((b) => b.id));
     const out: InboxThread[] = [];
     for (const page of data?.pages ?? []) {
       for (const t of page.items) {
         if (seen.has(t.thread_id)) continue;
         seen.add(t.thread_id);
-        out.push(t);
+        if (t.closed || t.blocked_by_me) gone.add(t.client_id);
+        else out.push(t);
       }
     }
-    return out;
-  }, [data]);
+    return { threads: out.filter((t) => !gone.has(t.client_id)), hidden: gone };
+  }, [data, blocked]);
   const totalUnread = data?.pages[0]?.total_unread ?? 0;
 
   const rows: Row[] = useMemo(() => {
@@ -172,13 +178,13 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
     if (filter === 'all' && !hasNextPage && data) {
       const withThread = new Set(threads.map((t) => t.client_id));
       for (const c of clients) {
-        if (c.status !== 'active' || withThread.has(c.id)) continue;
+        if (c.status !== 'active' || withThread.has(c.id) || hidden.has(c.id)) continue;
         const name = `${c.firstName} ${c.lastName}`.trim();
         if (match(name)) out.push({ type: 'client', key: `c:${c.id}`, clientId: c.id, name });
       }
     }
     return out;
-  }, [threads, clients, filter, hasNextPage, data, searchQuery]);
+  }, [threads, hidden, clients, filter, hasNextPage, data, searchQuery]);
 
   const openThread = useCallback(
     (clientId: string, clientName: string) => openInboxChat(navigation, clientId, clientName),

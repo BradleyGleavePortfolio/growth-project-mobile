@@ -34,7 +34,7 @@ import {
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import { describeCommunityFailure } from '../../api/communityErrors';
-import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
@@ -52,7 +52,14 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const messages = useDmMessages(workspaceId, recipientId);
   const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
   // BLOCK-ALL-M: a block either way (or a ban) closes the DM: no composer, and the read refusal is not an empty thread.
-  const { closed, close } = useConversationClosed(recipientId, [messages.error]);
+  // FX-872: open only once the DM read came back. Signed in with no community membership (left, removed) is closed too.
+  const noAccess = me.isSuccess && !me.data?.workspace_id;
+  const { closed, open, close } = useConversationClosed(
+    recipientId,
+    [messages.error],
+    useServerAnswered(messages),
+    noAccess ? true : undefined,
+  );
 
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
@@ -103,8 +110,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           ) : null}
         </View>
 
-        {closed && isEmpty ? (
-          <View style={styles.flex} />
+        {closed || (isEmpty && !open) ? (
+          <View style={styles.flex} /> /* closed: no message text, no "Start the conversation" */
         ) : isEmpty ? (
           <View style={styles.center}>
             <CommunityEmptyState
@@ -152,7 +159,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           />
         )}
 
-        {closed ? <ConversationClosedLine testID="community-dmthread-closed" /> : <ComposerInput
+        {closed ? <ConversationClosedLine testID="community-dmthread-closed" /> : !open ? null : <ComposerInput
           placeholder="Message"
           maxLength={DM_MAX}
           sending={sendDm.isPending}

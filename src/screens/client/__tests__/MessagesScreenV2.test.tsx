@@ -285,7 +285,38 @@ describe('client MessagesScreen with messaging_core_v2 ON', () => {
 // BLOCK-ALL-M (owner 10-22 "dont even let the banned person type!"; #168-4 op 1: a block closes the coaching chat both ways).
 describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
   const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
-  afterEach(() => useBlockedUsersStore.setState({ blocked: [] }));
+  const { closedRefusals } = jest.requireActual('../../../components/messaging/closedRefusal');
+  const { queryClient } = jest.requireActual('../../../services/queryClient');
+  afterEach(() => {
+    useBlockedUsersStore.setState({ blocked: [] });
+    closedRefusals.clear('coach-9');
+    queryClient.clear();
+  });
+
+  // FX-872 (Opus B4, Sol B1): the person blocked learns it from the inbox row, before they type anything.
+  it('my coach blocked me: the inbox row says closed, so there is never a box and no message text', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url === '/messages/inbox') {
+        const r = inbox(false);
+        return { data: { ...r.data, items: r.data.items.map((i) => ({ ...i, closed: true })) } };
+      }
+      return { data: { items: [] } };
+    });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByLabelText(/Message: from the coach/)).toBeNull();
+  });
+
+  it('FX-872: nothing to type until the server answered (the inbox read is still out)', async () => {
+    getMock.mockImplementation(async (url: string) => (url === '/messages/inbox' ? new Promise(() => undefined) : { data: { items: [] } }));
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await waitFor(() => expect(mockList).toHaveBeenCalled());
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByLabelText('Send message')).toBeNull();
+  });
 
   it('open: the message box is there and the closed line is not', async () => {
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });

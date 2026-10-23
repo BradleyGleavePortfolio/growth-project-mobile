@@ -32,8 +32,9 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id:
 const mockSend = jest.fn();
 let mockWorkspace: string | null = 'ws-1';
 jest.mock('../../../hooks/useCommunity', () => ({
-  useCommunityMe: () => ({ data: mockWorkspace ? { workspace_id: mockWorkspace } : undefined, isLoading: false, isError: false }),
-  useDmMessages: () => ({ data: [], isLoading: false, isError: false }),
+  useCommunityMe: () => ({ data: mockWorkspace ? { workspace_id: mockWorkspace } : undefined, isLoading: false, isError: false, isSuccess: true }),
+  useDmMessages: () => ({ data: [], isLoading: false, isError: false, isSuccess: true, isFetchedAfterMount: true, isStale: false }),
+  usePosts: () => ({ data: [], isLoading: false, isError: false, isSuccess: true, isFetchedAfterMount: true, isStale: false }),
   useSendDm: () => ({ mutateAsync: mockSend, isPending: false }),
 }));
 

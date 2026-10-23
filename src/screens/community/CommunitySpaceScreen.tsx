@@ -47,7 +47,7 @@ import { ScreenTopBar } from '../../ui/layout/Screen';
 import type { CommunityPost } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
 import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from '../../api/communityErrors';
-import { isClosedRefusal, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 
 interface Props {
   embedded?: boolean;
@@ -110,6 +110,9 @@ export default function CommunitySpaceScreen({
   // Coach messages live in the Home stack; jump there from the Community tab.
   const messageCoach = () => rootNavigation.navigate('Home', { screen: 'Messages' });
 
+  // FX-872: the one shared check. New post, Record and "Be the first to post" draw only once the feed read came back.
+  const { closed: isClosed, open } = useConversationClosed(null, [posts.error], useServerAnswered(posts));
+
   const openThread = (post: CommunityPost) =>
     navigation.navigate('CommunityThread', { postId: post.id });
 
@@ -118,7 +121,7 @@ export default function CommunitySpaceScreen({
   // Hall voice notes (behind featureFlags.communityVoiceNotes): Record entry
   // point plus the feed, each note with Report / Block / author Delete.
   const showVoice = space === 'hall' && featureFlags.communityVoiceNotes;
-  const voiceSection = showVoice ? (
+  const voiceSection = showVoice && open ? (
     <VoiceNotesSection
       workspaceId={workspaceId ?? null}
       viewerUserId={client?.id}
@@ -135,7 +138,6 @@ export default function CommunitySpaceScreen({
   // True-empty is only a successful query that returned zero posts.
   const isPostsError = !posts.isLoading && posts.isError;
   // BLOCK-ALL-M (#168-4): banned from this space -> no posts, no New post, no box to type in; not a Try again error.
-  const isClosed = isPostsError && isClosedRefusal(posts.error);
   const isEmpty = !posts.isLoading && !posts.isError && data.length === 0;
   // Described once per error (an unexpected one is reported to Sentry once).
   const postsFailure = useMemo(
@@ -301,7 +303,7 @@ export default function CommunitySpaceScreen({
           ListHeaderComponent={
             <>
               {voiceSection}
-              <HapticPressable
+              {open ? <HapticPressable
                 intent="light"
                 onPress={compose}
                 accessibilityRole="button"
@@ -313,7 +315,7 @@ export default function CommunitySpaceScreen({
                 <Text style={[styles.retryLabel, { color: semanticColors.textOnAccent }]}>
                   New post
                 </Text>
-              </HapticPressable>
+              </HapticPressable> : null}
             </>
           }
           renderItem={({ item }) => (
