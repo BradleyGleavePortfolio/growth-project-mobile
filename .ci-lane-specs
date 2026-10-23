@@ -1,0 +1,4 @@
+src/screens/coach/__tests__/ClientLookupPlanEnded.test.tsx
+src/screens/coach/__tests__/ClientLookupUI4.test.tsx
+src/screens/coach/__tests__/ClientsListLookup124.test.tsx
+src/__tests__/coachPlanEnded.test.tsx
