@@ -278,6 +278,7 @@ describe('UI-4 Search first (15 or more)', () => {
     try {
       await mount(UNDER_15);
       expect([screen.queryByTestId('lookup-act-c3'), !!screen.getByTestId('lookup-row-c3'), !!screen.getByTestId('lookup-act-c1')]).toEqual([null, true, true]);
+      expect(screen.getByText('One needs you today. Two are steady.')).toBeTruthy(); // Priya's Say hello is not counted
     } finally {
       useBlockedUsersStore.setState({ blocked: [] });
     }

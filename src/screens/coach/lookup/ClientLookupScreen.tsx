@@ -233,12 +233,13 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   };
   const quickRow = (c: RosterClient) => {
     const name = rosterDisplayName(c);
-    return clientRow(c, { ...lookupReason(c, unread, 'recent'), ok: false }, (
+    // A blocked client keeps the row (it opens the peek) with the chevron in place of Message and Nudge.
+    return clientRow(c, { ...lookupReason(c, unread, 'recent'), ok: false }, canMessage(c) ? (
       <>
-        {canMessage(c) ? iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`) : null}
-        {canMessage(c) ? iconButton('notifications-outline', `Nudge, ${name}`, () => nudge.open(c), `lookup-nudge-${c.id}`) : null}
+        {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
+        {iconButton('notifications-outline', `Nudge, ${name}`, () => nudge.open(c), `lookup-nudge-${c.id}`)}
       </>
-    ));
+    ) : null);
   };
   // L2: "Plan ended {n} days ago · {package}" (RN3-30), "Messaged {Mon D}" (RN3-31) when the server has the coach's last
   // message, and Roman's mark in the bell's place: the ask-first draft the Home's list opens (RN3-41).
@@ -294,7 +295,11 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     body = <QuietError message={loadError} onRetry={() => coachId && loadClients(coachId, filterStatus)} testID="lookup-error" />;
   } else if (!searchFirst) {
     // Mockup 1's order: last logged first (sortRoster 'recent').
-    const all = sortRoster(roster, 'recent').map((c) => ({ c, r: lookupReason(c, unread, 'needs') }));
+    // A blocked client's Reply, Nudge or Say hello is no action at all, so the sentence and the Needs you view never count it.
+    const all = sortRoster(roster, 'recent').map((c) => {
+      const r = lookupReason(c, unread, 'needs');
+      return { c, r: r.action && r.action !== 'review' && !canMessage(c) ? { ...r, action: null } : r };
+    });
     const rows = needsView ? all.filter((x) => x.r.action) : all;
     const needs = all.filter((x) => x.r.action).length;
     body = (
@@ -302,7 +307,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
         {stale}
         {/* The sentence counts everyone, so the Needs you view with no one waiting still reads "Twelve are steady." */}
         {all.length > 0 ? <Text style={s.sentence} testID="lookup-sentence">{needsYouSentence(needs, all.length - needs)}</Text> : null}
-        {rows.map(({ c, r }) => clientRow(c, r, r.action && (r.action === 'review' || canMessage(c)) ? (
+        {rows.map(({ c, r }) => clientRow(c, r, r.action ? (
           <HapticPressable intent="light" style={s.act} onPress={() => runAction(c, r.action as LookupAction)} accessibilityRole="button" accessibilityLabel={`${ACTION_LABEL[r.action]}, ${rosterDisplayName(c)}`} testID={`lookup-act-${c.id}`}>
             <Text style={s.actText}>{ACTION_LABEL[r.action]}</Text>
           </HapticPressable>
