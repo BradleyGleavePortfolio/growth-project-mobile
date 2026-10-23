@@ -65,6 +65,13 @@ jest.mock('../../../components/community/VoiceNotePlayer', () => {
   return (p: { testID: string; durationMs: number }) => <Text testID={p.testID}>{`player ${p.durationMs}`}</Text>;
 });
 jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn(async () => ({ url: 'https://x/v.m4a' })) } }));
+// SC-M2: m#848's voice outbox and record sheet (FX-848) stand in; the space chat only feeds them.
+const mockVoice = { items: [] as unknown[], online: true, send: jest.fn(), retry: jest.fn(), discard: jest.fn() };
+jest.mock('../../../hooks/useVoiceOutbox', () => ({ useVoiceOutbox: () => mockVoice }));
+jest.mock('../../../components/community/VoiceRecordSheet', () => {
+  const { Text } = jest.requireActual('react-native');
+  return { __esModule: true, default: (p: { visible: boolean; target: { cohortName: string } }) => (p.visible ? <Text testID="voice-sheet">{p.target.cohortName}</Text> : null) };
+});
 jest.mock('../../../components/community/SafetyMenu', () => {
   const { Text } = jest.requireActual('react-native');
   return (p: { testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void> }) => (
@@ -102,6 +109,9 @@ beforeEach(() => {
   mockCohorts.refetch.mockReset();
   mockNavigate.mockReset();
   mockFlags.communityVoiceNotes = true;
+  mockVoice.items = [];
+  mockVoice.retry.mockReset();
+  mockVoice.discard.mockReset();
   mockNet.isOnline = true;
   mockNet.reachable = null;
   mockRole = 'client';
@@ -398,4 +408,37 @@ it('every control has a spoken label and no text is locked to a size', async () 
   const locked = walk(r.toJSON()).filter((n) => !JSON.stringify(n.props.style ?? '').includes('ionicons')
     && (n.props.allowFontScaling === false || n.props.maxFontSizeMultiplier != null));
   expect(locked).toHaveLength(0);
+});
+
+it('SC-M2: the mic sits in the composer until there is text and opens the record sheet for this space', async () => {
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  fireEvent.press(r.getByTestId('space-chat-mic'));
+  expect((await r.findByTestId('voice-sheet')).props.children).toBe('Everyone');
+  await act(async () => { fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'hi'); });
+  expect(await r.findByTestId('space-chat-composer-send')).toBeTruthy();
+  expect(r.queryByTestId('space-chat-mic')).toBeNull();
+});
+
+it('SC-M2: no mic while communityVoiceNotes is off', async () => {
+  mockFlags.communityVoiceNotes = false;
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  expect(r.getByTestId('space-chat-composer-field')).toBeTruthy();
+  expect(r.queryByTestId('space-chat-mic')).toBeNull();
+});
+
+it('SC-M2: a voice note on its way to this space shows at the bottom with its state; Not sent has Try again and Delete', async () => {
+  const note = (id: string, cohortId: string, status: string) => ({
+    id, authorId: 'me-1', workspaceId: 'ws', peaks: [0.4], status, input: { uri: `file:///${id}.m4a`, durationMs: 8000, cohortId },
+  });
+  mockVoice.items = [note('vo-1', 'c-every', 'failed'), note('vo-2', 'c-ann', 'sending')];
+  const r = await open();
+  await r.findByTestId('space-chat-row-vo-1');
+  expect(r.queryByTestId('space-chat-row-vo-2')).toBeNull();
+  expect(r.getByTestId('space-chat-failed-vo-1')).toBeTruthy();
+  fireEvent.press(r.getByText('Try again'));
+  expect(mockVoice.retry).toHaveBeenCalledWith('vo-1');
+  fireEvent.press(r.getByText('Delete'));
+  expect(mockVoice.discard).toHaveBeenCalledWith('vo-1');
 });

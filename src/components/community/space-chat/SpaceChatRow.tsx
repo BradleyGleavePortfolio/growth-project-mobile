@@ -2,17 +2,15 @@
  * SC-M1 (agent 168), FX-871 (agent 169): one Studio row of the space chat (mockup VOICE-B 05b). Rounded-square avatar
  * (members on the Studio greens, the coach deep with a gold initial), the name exactly as the server sends it, the Coach
  * mark (VN-M1) on the coach's rows, the time, then the content under the name. Each message kind draws in one place
- * (MessageBody): text unboxed, voice on m#848's player (only while communityVoiceNotes is on); a later kind adds a case.
+ * (MessageBody): text unboxed, voice on m#848's player via SpaceVoiceNote (New / Played, SC-M2); a later kind adds a case.
  * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send rows are
  * faded; Not sent has Try again (the same Idempotency-Key) and Delete. Report / Block / Delete go through SafetyMenu.
  */
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
 import SafetyMenu from '../SafetyMenu';
-import VoiceNotePlayer from '../VoiceNotePlayer';
-import { communityVoiceApi } from '../../../api/communityVoiceApi';
+import SpaceVoiceNote from './SpaceVoiceNote';
 import { brand, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
 import type { PendingState } from './spaceChatOutbox';
@@ -38,6 +36,8 @@ export interface SpaceChatRowProps {
   createdAt: string;
   body: string | null;
   voice?: SpaceMessage['voice_note'];
+  /** A voice note still in the phone's outbox (SC-M2): played from this file. */
+  localUri?: string | null;
   authorId: string;
   /** Local rows only ('waiting' is drawn as sending while the phone is online: it is next in the queue). */
   state?: PendingState;
@@ -50,27 +50,12 @@ export interface SpaceChatRowProps {
   onBlocked?: (userId: string) => void;
 }
 
-function VoiceBody({ voice, coach, offline }: { voice: NonNullable<SpaceMessage['voice_note']>; coach: boolean; offline: boolean }) {
-  const note = useQuery({
-    queryKey: ['community', 'space-chat-voice', voice.id],
-    queryFn: () => communityVoiceApi.getOne(voice.id),
-    staleTime: 5 * 60_000,
-  });
-  return (
-    <VoiceNotePlayer
-      url={note.data?.url ?? null}
-      durationMs={voice.duration_ms}
-      peaks={voice.waveform_peaks ?? undefined}
-      tone={coach ? 'coach' : 'light'}
-      offline={offline}
-      testID={`space-chat-voice-${voice.id}`}
-    />
-  );
-}
-
 /** One place per message kind: a later kind (photo, reply) adds its case here. */
 function MessageBody(p: SpaceChatRowProps): React.ReactElement | null {
-  if (p.voice) return <VoiceBody voice={p.voice} coach={p.isCoach} offline={p.offline} />;
+  if (p.voice) {
+    const mine = !!p.viewerUserId && p.authorId === p.viewerUserId;
+    return <SpaceVoiceNote voice={p.voice} coach={p.isCoach} mine={mine} offline={p.offline} localUri={p.localUri} />;
+  }
   if (p.body) return <Text style={s.body} importantForAccessibility="no" accessibilityElementsHidden>{p.body}</Text>;
   return null;
 }
