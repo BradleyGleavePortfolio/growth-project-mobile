@@ -92,6 +92,29 @@ test('the list groups by month with outcomes, pages older questions, and a row o
   expect(mockPush).toHaveBeenCalledWith('Copilot', { view: 'answer', item: expect.objectContaining({ sessionId: 'sess-1', messageId: 'm2' }) });
 });
 
+test('a failed Show older says so under the list, where the link was, and Try again reads that page again (Opus C1)', async () => {
+  mockParams = { view: 'questions' };
+  get.mockImplementation((async (url: string, cfg?: { params?: { cursor?: string } }) => {
+    if (url !== COPILOT_PATHS.questions) return { data: { week: null, suggestions: [] } };
+    if (cfg?.params?.cursor) throw Object.assign(new Error('Network Error'), { isAxiosError: true });
+    return { data: PAGE1 };
+  }) as never);
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  expect(await s.findByText('186 questions since Oct 2025')).toBeTruthy();
+  await act(async () => fireEvent.press(s.getByText('Show older questions')));
+  const err = await s.findByTestId('copilot-past-error');
+  expect(s.queryByText('Show older questions')).toBeNull();
+  // Drawn after the last row, not above the list.
+  const order = JSON.stringify(s.toJSON());
+  expect(order.indexOf('copilot-past-error')).toBeGreaterThan(order.indexOf('Should I add a fifth day?'));
+  expect(err).toBeTruthy();
+  route([PAGE1, PAGE2]);
+  await act(async () => fireEvent.press(s.getByText('Try again')));
+  expect(await s.findByText('How was my week')).toBeTruthy();
+  expect(get).toHaveBeenLastCalledWith(COPILOT_PATHS.questions, { params: { cursor: 'c2' } });
+  expect(s.queryByTestId('copilot-past-error')).toBeNull();
+});
+
 test('one past answer reads back from its chat with the facts Roman used', async () => {
   mockParams = { view: 'answer', item: { question: 'Can I swap Thursday for Friday?', askedAt: '2026-10-15T14:33:00Z', sessionId: 'sess-1', messageId: 'm2', outcome: 'approved' } };
   get.mockResolvedValueOnce({ data: { messages: [{ id: 'm2', content: 'Friday works [1]. Saturday trains other muscles.', copilot: { sources: [{ n: 1, kind: 'workout_log', label: '7 of 8 sessions done' }], suggestion: null } }] } } as never);

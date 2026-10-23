@@ -303,6 +303,12 @@ function QuestionsView() {
   const q = usePastQuestions();
   const first = q.data?.pages[0] ?? null;
   const items = (q.data?.pages ?? []).flatMap((pg) => pg?.items ?? []);
+  // A failed "Show older questions" says so where the link is, and its Try again reads that page again (Opus C1).
+  const older = q.isFetchNextPageError;
+  const failed = q.error ? (
+    <QuietError message={loadFailureMessage(q.error, A.past)} onRetry={() => void (older ? q.fetchNextPage() : q.refetch())}
+      retrying={older ? q.isFetchingNextPage : q.isRefetching} layout={older ? 'inline' : 'block'} testID="copilot-past-error" />
+  ) : null;
   return (
     <>
       <ForestStatusBar />
@@ -317,9 +323,10 @@ function QuestionsView() {
         </Mast>
         <View style={s.body}>
           {q.isPending ? <QuietLoading label="Loading past questions" rows={4} testID="copilot-past-loading" /> : null}
-          {q.error ? <QuietError message={loadFailureMessage(q.error, A.past)} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-past-error" /> : null}
-          <PastQuestionsList items={items} more={q.hasNextPage} loadingMore={q.isFetchingNextPage}
+          {older ? null : failed}
+          <PastQuestionsList items={items} more={q.hasNextPage && !older} loadingMore={q.isFetchingNextPage}
             onMore={() => void q.fetchNextPage()} onOpen={(item) => navigation.push('Copilot', { view: 'answer', item })} />
+          {older ? failed : null}
         </View>
       </Screen>
     </>
