@@ -6,7 +6,7 @@
  * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send rows are
  * faded; Not sent has Try again (the same Idempotency-Key) and Delete. Report / Block / Delete go through SafetyMenu.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -84,6 +84,8 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const initial = p.name.trim().charAt(0).toUpperCase();
   const isOwn = !!p.viewerUserId && p.authorId === p.viewerUserId;
   const tile: Tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
+  // Name, chip and time wrap to two lines at large text sizes: then the body starts below them, not tucked up.
+  const [wrapped, setWrapped] = useState(false);
   const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
   return (
     <View style={s.row} testID={`space-chat-row-${p.id}`}>
@@ -95,7 +97,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             <Text style={[p.isCoach ? s.coachInitial : s.initial, { color: tile.fg }]}>{initial}</Text>
           </View>
         )}
-        <View style={s.who} accessible accessibilityLabel={label}>
+        <View style={s.who} accessible accessibilityLabel={label} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 40)}>
           <Text style={s.name}>{p.name}</Text>
           {p.isCoach ? <Text style={s.mark}>Coach</Text> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
@@ -115,7 +117,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           />
         )}
       </View>
-      <View style={[s.content, shown === 'sending' || shown === 'waiting' ? s.faded : null]}>
+      <View style={[s.content, wrapped ? s.untucked : null, shown === 'sending' || shown === 'waiting' ? s.faded : null]}>
         <MessageBody {...p} />
         {p.state === 'failed' ? (
           <View style={s.actions}>
@@ -174,6 +176,7 @@ const s = StyleSheet.create({
   time: { ...typography.bodySmall, color: SMALL_GREY },
   // Up under the name, as in 05b (the head row stays 44 pt for the menu's touch target).
   content: { marginLeft: AVATAR + spacing.sm, marginRight: spacing.md, marginTop: -12, gap: spacing.xs },
+  untucked: { marginTop: 0 },
   faded: { opacity: 0.55 },
   body: { ...typography.body, lineHeight: 22, color: fp.ink },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },

@@ -25,8 +25,8 @@ export default function SpaceChatComposer({ cohortId, onSend, leading, trailing 
   const [text, setText] = useChatDraft(`space:${cohortId}`);
   const body = text.trim();
   return (
-    <View style={s.bar} testID="space-chat-composer">
-      <View style={s.slot}>{leading}</View>
+    <View style={[s.bar, leading ? null : s.noLead]} testID="space-chat-composer">
+      {leading ? <View style={s.slot}>{leading}</View> : null}
       <TextInput
         value={text}
         onChangeText={setText}
@@ -57,6 +57,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm,
     backgroundColor: colors.bone, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine,
   },
+  noLead: { paddingLeft: spacing.lg },
   slot: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   field: {
     ...typography.body, flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: spacing.lg, paddingTop: 11, paddingBottom: 11,
