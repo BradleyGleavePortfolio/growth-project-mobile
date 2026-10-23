@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { Alert, Platform } from 'react-native';
-import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor, cleanup } from '@testing-library/react-native';
 import ClientMessagesScreen from '../ClientMessagesScreen';
 import api from '../../../services/api';
 import { featureFlags } from '../../../config/featureFlags';
@@ -317,7 +317,8 @@ describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
   const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
   const { closedRefusals } = jest.requireActual('../../../components/messaging/closedRefusal');
   const { queryClient } = jest.requireActual('../../../services/queryClient');
-  afterEach(() => {
+  afterEach(async () => {
+    await cleanup(); // unmount first, so no screen reads the inbox again into the cleared cache
     useBlockedUsersStore.setState({ blocked: [] });
     closedRefusals.clear('client-1');
     queryClient.clear();
@@ -354,7 +355,7 @@ describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     await fireEvent.changeText(first.getByLabelText('Message text'), 'see you at 6');
     await fireEvent.press(first.getByLabelText('Send message'));
     expect(await first.findByTestId('client-messages-closed')).toBeTruthy();
-    first.unmount();
+    await first.unmount();
     const again = await render(<ClientMessagesScreen />);
     expect(await again.findByTestId('client-messages-closed')).toBeTruthy();
     expect(again.queryByLabelText('Message text')).toBeNull();
@@ -363,7 +364,7 @@ describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
   it('open: the message box is there and the closed line is not', async () => {
     const u = await render(<ClientMessagesScreen />);
     await u.findByLabelText(/Message: from the client/);
-    expect(u.getByLabelText('Message text')).toBeTruthy();
+    expect(await u.findByLabelText('Message text')).toBeTruthy(); // once the inbox row answered too
     expect(u.queryByTestId('client-messages-closed')).toBeNull();
   });
 

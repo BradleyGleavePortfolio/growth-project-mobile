@@ -8,9 +8,12 @@
  * the coaching row read again, so the chat comes back.
  */
 import type { InfiniteData } from '@tanstack/react-query';
-import { queryClient } from '../services/queryClient';
 import { useBlockedUsersStore, type BlockedUser } from '../store/blockedUsersStore';
 import { closedRefusals } from '../components/messaging/closedRefusal';
+
+// The app's one query client, read at call time: the API wrappers that call here load before (and without) the cache.
+const qc = (): typeof import('../services/queryClient').queryClient =>
+  (require('../services/queryClient') as typeof import('../services/queryClient')).queryClient;
 
 const DM_LISTS = ['community', 'dms'] as const; // communityKeys.dmThreads(workspaceId)
 const DM_READS = ['community', 'dm'] as const; // communityKeys.dmMessages(workspaceId, recipientId)
@@ -34,6 +37,7 @@ export function blockPlaced(userId: string, who: BlockedWho = {}): void {
     displayName: who.displayName || known?.displayName || 'Blocked user',
     role: who.role ?? known?.role ?? 'other',
   });
+  const queryClient = qc();
   queryClient.setQueriesData<Row[]>({ queryKey: DM_LISTS }, (old) => (Array.isArray(old) ? old.filter(isOther(userId)) : old));
   queryClient.setQueriesData<InfiniteData<Page>>({ queryKey: COACH_INBOX }, (old) =>
     old?.pages ? { ...old, pages: old.pages.map((p) => ({ ...p, items: (p.items ?? []).filter(isOther(userId)) })) } : old,
@@ -46,6 +50,7 @@ export function blockLifted(userId: string): void {
   if (!userId) return;
   void useBlockedUsersStore.getState().unblock(userId);
   closedRefusals.clear(userId);
+  const queryClient = qc();
   [DM_LISTS, DM_READS, COACH_INBOX, COACHING_ROW, ...BLOCK_LISTS].forEach(
     (queryKey) => void queryClient.invalidateQueries({ queryKey }),
   );

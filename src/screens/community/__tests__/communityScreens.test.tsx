@@ -111,7 +111,7 @@ jest.mock('../../../hooks/useCommunity', () => ({
 // stub the post query by mocking @tanstack/react-query useQuery for that screen.
 jest.mock('@tanstack/react-query', () => {
   const actual = jest.requireActual('@tanstack/react-query');
-  return { ...actual, useQuery: () => ({ data: { title: 'A post', body: 'Body' } }) };
+  return { ...actual, useQuery: () => ({ data: { title: 'A post', body: 'Body' }, isSuccess: true, isFetchedAfterMount: true, isStale: false }) };
 });
 
 import { COMMUNITY_REACTION_EMOJI } from '../../../api/communityApi';

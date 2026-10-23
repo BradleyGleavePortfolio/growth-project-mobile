@@ -57,7 +57,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const { closed, open, close } = useConversationClosed(
     recipientId,
     [messages.error],
-    useServerAnswered(messages),
+    useServerAnswered(messages) && workspaceId.length > 0,
     noAccess ? true : undefined,
   );
 

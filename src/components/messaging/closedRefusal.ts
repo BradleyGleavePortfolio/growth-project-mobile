@@ -3,6 +3,8 @@
  * client's retry rule reads it too: a closed answer is final, never retried (FX-872: no box while a refusal retries).
  */
 
+import { authEvents } from '../../utils/authEvents';
+
 /** Backend answers that mean "closed to you" (messaging-errors.ts, community-safety, community.service, posts). */
 const CLOSED_CODES = new Set([
   'messaging.blocked', // edit / pin / react with a block on either side
@@ -60,4 +62,12 @@ export const closedRefusals = {
       listeners.delete(l);
     };
   },
+  /** Sign-out: the next person on this phone starts with none. */
+  clearAll() {
+    if (refusedWith.size === 0) return;
+    refusedWith.clear();
+    listeners.forEach((l) => l());
+  },
 };
+// Optional calls: some suites replace authEvents with a partial stub.
+authEvents?.on?.('logout', () => closedRefusals.clearAll());

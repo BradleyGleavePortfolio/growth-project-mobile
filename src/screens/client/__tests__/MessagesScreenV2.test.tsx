@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { Alert, Platform, StyleSheet, Text } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, cleanup } from '@testing-library/react-native';
 import api from '../../../services/api';
 import * as Clipboard from 'expo-clipboard';
 
@@ -287,7 +287,8 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
   const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
   const { closedRefusals } = jest.requireActual('../../../components/messaging/closedRefusal');
   const { queryClient } = jest.requireActual('../../../services/queryClient');
-  afterEach(() => {
+  afterEach(async () => {
+    await cleanup(); // unmount first, so no screen reads the inbox again into the cleared cache
     useBlockedUsersStore.setState({ blocked: [] });
     closedRefusals.clear('coach-9');
     queryClient.clear();
@@ -322,7 +323,7 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
     const u = await render(<MessagesScreen />);
     await u.findByLabelText(/Message: from the coach/);
-    expect(u.getByLabelText('Message text')).toBeTruthy();
+    expect(await u.findByLabelText('Message text')).toBeTruthy(); // once the inbox row answered too
     expect(u.queryByTestId('messages-closed')).toBeNull();
   });
 

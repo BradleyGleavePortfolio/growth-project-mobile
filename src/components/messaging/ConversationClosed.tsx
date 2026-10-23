@@ -106,6 +106,7 @@ export function useCoachingRow(side: 'client' | 'coach', otherUserId: string | n
     enabled,
     staleTime: 0,
     retry: false, // a failed inbox read settles at once; the send refusal still closes it
+    meta: { persist: false }, // never an "open" row saved to the phone on an earlier visit
     queryFn: async (): Promise<InboxThread | null> => {
       if (side === 'client') {
         const res = await messagingV2Api.getClientInbox();
@@ -122,7 +123,8 @@ export function useCoachingRow(side: 'client' | 'coach', otherUserId: string | n
       return null;
     },
   }, queryClient); // the app's one client (also outside a provider), so the block cache can drop and refetch this row
-  return { row: q.data, settled: !enabled || q.isSuccess || q.isError };
+  // Settled only by a read made on this visit (a row still in memory from an earlier screen does not count).
+  return { row: q.data, settled: !enabled || ((q.isSuccess || q.isError) && q.isFetchedAfterMount) };
 }
 
 /** The closed state, drawn where the composer was (same bar: surface, hairline top, composer padding). */

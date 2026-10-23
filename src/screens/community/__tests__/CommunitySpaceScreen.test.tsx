@@ -87,7 +87,8 @@ jest.mock('../../../hooks/useCommunity', () => ({
   isOptimisticId: (id: string) => id.startsWith('optimistic:'),
   usePosts: (workspaceId: string | null | undefined) => {
     mockUsePostsSpy(workspaceId);
-    return mockPosts;
+    // FX-872: the screen opens once the feed read answered on this visit.
+    return { ...mockPosts, isSuccess: !mockPosts.isLoading && !mockPosts.isError, isFetchedAfterMount: true, isStale: false };
   },
 }));
 

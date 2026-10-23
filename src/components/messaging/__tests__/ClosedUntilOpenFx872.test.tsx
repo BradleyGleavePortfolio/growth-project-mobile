@@ -66,7 +66,7 @@ describe('closed until the server says open', () => {
     const first = await renderHook(() => useConversationClosed('client-1', [], true));
     await act(async () => { first.result.current.close(refusal); });
     expect(first.result.current.closed).toBe(true);
-    first.unmount();
+    await first.unmount();
     const again = await renderHook(({ row }: { row?: boolean }) => useConversationClosed('client-1', [], true, row), {
       initialProps: { row: undefined as boolean | undefined },
     });
