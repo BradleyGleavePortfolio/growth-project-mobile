@@ -19,11 +19,12 @@ import type { PendingState } from './spaceChatOutbox';
 
 /** Owner #168-13 GREY-TEXT op 1: every small grey text on this page is #2C2C2C (13.4:1 on bone #F7FAF7). */
 export const SMALL_GREY = '#2C2C2C';
-/** Member tiles on the Studio greens (mockup 05b), picked per person; light initials except on leaf. */
-const TILES = [
-  { bg: fp.moss, fg: fp.onDeep }, { bg: brand[500], fg: fp.onDeep }, { bg: fp.leaf, fg: fp.deep }, { bg: fp.forest, fg: fp.onDeep },
-] as const;
-export function tileFor(authorId: string): (typeof TILES)[number] {
+/** Member tiles on the Studio greens (mockup 05b), picked per person; light initials, except ink on leaf with a moss edge. */
+type Tile = { bg: string; fg: string; edge?: string };
+const TILES: readonly Tile[] = [
+  { bg: fp.moss, fg: fp.onDeep }, { bg: brand[500], fg: fp.onDeep }, { bg: fp.leaf, fg: fp.ink, edge: fp.moss }, { bg: fp.forest, fg: fp.onDeep },
+];
+export function tileFor(authorId: string): Tile {
   let h = 0;
   for (let i = 0; i < authorId.length; i += 1) h = (h * 31 + authorId.charCodeAt(i)) | 0;
   return TILES[Math.abs(h) % TILES.length];
@@ -82,7 +83,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const time = shown && shown !== 'sent' ? STATE_WORD[shown] : spaceTime(p.createdAt);
   const initial = p.name.trim().charAt(0).toUpperCase();
   const isOwn = !!p.viewerUserId && p.authorId === p.viewerUserId;
-  const tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
+  const tile: Tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
   const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
   return (
     <View style={s.row} testID={`space-chat-row-${p.id}`}>
@@ -90,7 +91,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
         {p.avatarUrl ? (
           <Image source={{ uri: p.avatarUrl }} style={s.avatar} accessibilityIgnoresInvertColors />
         ) : (
-          <View style={[s.avatar, { backgroundColor: tile.bg }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <View style={[s.avatar, { backgroundColor: tile.bg }, tile.edge ? { borderWidth: 1, borderColor: tile.edge } : null]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
             <Text style={[p.isCoach ? s.coachInitial : s.initial, { color: tile.fg }]}>{initial}</Text>
           </View>
         )}
@@ -172,15 +173,16 @@ const s = StyleSheet.create({
   mark: { ...typography.caption, color: fp.gold, backgroundColor: fp.deep, borderRadius: radius.chip, paddingHorizontal: spacing.sm, paddingVertical: 2, overflow: 'hidden' },
   time: { ...typography.bodySmall, color: SMALL_GREY },
   // Up under the name, as in 05b (the head row stays 44 pt for the menu's touch target).
-  content: { marginLeft: AVATAR + spacing.sm, marginRight: spacing.md, marginTop: -10, gap: spacing.xs },
+  content: { marginLeft: AVATAR + spacing.sm, marginRight: spacing.md, marginTop: -12, gap: spacing.xs },
   faded: { opacity: 0.55 },
-  body: { ...typography.body, color: fp.ink },
+  body: { ...typography.body, lineHeight: 22, color: fp.ink },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },
   again: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.button, backgroundColor: fp.forest },
   againText: { ...typography.bodyMd, color: fp.onDeep },
   discard: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.sm, justifyContent: 'center' },
   discardText: { ...typography.bodyMd, color: SMALL_GREY },
-  day: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', color: fp.ink, textAlign: 'center', marginTop: spacing.sm, marginBottom: spacing.lg },
+  // A small sans day mark ("Thu, Oct 22"), as in the Voice B frames.
+  day: { ...typography.caption, letterSpacing: 0, color: SMALL_GREY, textAlign: 'center', marginVertical: spacing.sm },
   newLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   newDash: { width: 12, height: 2, backgroundColor: fp.leaf },
   newText: { ...typography.caption, color: fp.moss },

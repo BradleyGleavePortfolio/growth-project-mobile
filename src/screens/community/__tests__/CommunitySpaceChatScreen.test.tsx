@@ -50,7 +50,7 @@ jest.mock('../../../hooks/useNetworkStatus', () => ({
 }));
 let mockRole = 'client';
 const cohorts = () => [
-  { id: 'c-every', workspace_id: 'ws', name: 'Everyone', is_default: true, kind: 'default', member_count: 24, my_role: mockRole },
+  { id: 'c-every', workspace_id: 'ws', name: 'Everyone', is_default: true, kind: 'default', member_count: 1000, my_role: mockRole },
   { id: 'c-ann', workspace_id: 'ws', name: 'Announcements', is_default: false, kind: 'announcement', posting_policy: 'coach', member_count: 24, my_role: mockRole },
 ];
 const mockCohorts = { failed: false, refetch: jest.fn() };
@@ -138,7 +138,7 @@ it('member Everyone: header, rows with names as sent, Coach mark, voice row, New
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
   expect(r.getByText('# Everyone')).toBeTruthy();
-  expect(r.getByText('24 members')).toBeTruthy();
+  expect(r.getByText('1,000 members')).toBeTruthy();
   expect(r.getByText('jo b.')).toBeTruthy();
   expect(r.getAllByText('Coach')).toHaveLength(2);
   expect(r.getByTestId('space-chat-voice-v1')).toBeTruthy();

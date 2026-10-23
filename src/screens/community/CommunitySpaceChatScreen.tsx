@@ -164,7 +164,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     if (cohorts.isError) void cohorts.refetch();
     void chat.list.refetch();
   };
-  const members = cohort ? `${cohort.member_count} ${cohort.member_count === 1 ? 'member' : 'members'}` : '';
+  const members = cohort ? `${cohort.member_count.toLocaleString('en-US')} ${cohort.member_count === 1 ? 'member' : 'members'}` : '';
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
@@ -177,7 +177,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           ) : <SpaceListButton color={fp.onDeep} />}
         </View>
         <View style={s.titles} accessible accessibilityRole="header">
-          <Text style={s.title} numberOfLines={1}>{cohort ? `# ${cohort.name}` : ' '}</Text>
+          <Text style={s.title} numberOfLines={1}>{cohort ? <><Text style={s.hash}>#</Text>{` ${cohort.name}`}</> : ' '}</Text>
           {cohort ? <Text style={s.sub}>{members}</Text> : null}
         </View>
         <View style={s.icon}>
@@ -250,7 +250,9 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm, backgroundColor: fp.deep },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   titles: { flex: 1, minWidth: 0 },
-  title: { ...typography.h4, color: fp.onDeep },
+  // 05b: a 20 pt semibold title with a muted "#", and "1,000 members" under it.
+  title: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 20, lineHeight: 25, color: fp.onDeep },
+  hash: { color: fp.onDeepMuted },
   sub: { ...typography.bodySmall, color: fp.onDeepMuted },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
   muted: { ...typography.body, color: SMALL_GREY, textAlign: 'center' },

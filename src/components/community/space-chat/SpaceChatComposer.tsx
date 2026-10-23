@@ -9,7 +9,7 @@ import React from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatDraft } from '../../../lib/chatDrafts';
-import { colors, forestPop as fp, spacing, typography } from '../../../theme/tokens';
+import { colors, forestPop as fp, neutral, spacing, typography, voiceShades } from '../../../theme/tokens';
 import { SPACE_MESSAGE_MAX } from './spaceChatApi';
 
 export interface SpaceChatComposerProps {
@@ -60,7 +60,7 @@ const s = StyleSheet.create({
   slot: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   field: {
     ...typography.body, flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: spacing.lg, paddingTop: 11, paddingBottom: 11,
-    borderRadius: 22, borderWidth: 1, borderColor: fp.sageLine, backgroundColor: fp.surface, color: fp.ink,
+    borderRadius: 22, borderWidth: 1, borderColor: voiceShades.track, backgroundColor: neutral[0], color: fp.ink,
   },
   send: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fp.forest },
 });
