@@ -5,8 +5,10 @@
 // avoid real network calls.
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
-import CoachLtvDashboard, { LtvMetrics } from '../components/command-center/CoachLtvDashboard';
+import CoachLtvDashboard, { JEWEL_GOLD_STOPS, LtvMetrics } from '../components/command-center/CoachLtvDashboard';
+import { brand, colors, lightTokens } from '../theme/tokens';
 
 // Force mock mode for all tests
 jest.mock('../services/api', () => ({
@@ -156,6 +158,41 @@ describe('CoachLtvDashboard', () => {
         expect(screen.getByTestId('ltv-hero-rpcm')).toBeTruthy();
       });
       expect(() => screen.getByText('RECORD')).toThrow();
+    });
+  });
+
+  describe('RECORD badge colours (owner #185 option 2, jewelry gold)', () => {
+    // WCAG 2.x contrast ratio.
+    const lum = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    const textColor = (text: string) => StyleSheet.flatten(screen.getByText(text).props.style).color;
+
+    it('paints the RPCM card deep forest with readable text, and leaves the LTV card on cream', async () => {
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, is_new_rpcm_record: true }));
+      await waitFor(() => expect(screen.getByTestId('ltv-hero-rpcm')).toBeTruthy());
+      expect(flat('ltv-hero-rpcm').backgroundColor).toBe(brand[800]);
+      expect(textColor('Rev / client / mo')).toBe(brand[100]);
+      expect(textColor('$208')).toBe(lightTokens.textOnAccent);
+      expect(textColor('MRR: $2,500')).toBe(brand[100]);
+      expect(flat('ltv-hero-ltv').backgroundColor).toBe(colors.cream);
+      expect(textColor('Avg client LTV')).toBe('#2C2C2C');
+      for (const c of [brand[100], lightTokens.textOnAccent]) expect(ratio(c, brand[800])).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('draws RECORD in deep forest on gold, and every gold stop keeps 4.5:1', async () => {
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, is_new_rpcm_record: true }));
+      await waitFor(() => expect(screen.getByTestId('ltv-record-badge')).toBeTruthy());
+      expect(textColor('RECORD')).toBe(brand[800]);
+      const ratios = JEWEL_GOLD_STOPS.map((s) => ratio(s.color, brand[800]));
+      expect(Math.min(...ratios)).toBeGreaterThanOrEqual(4.5);
     });
   });
 
