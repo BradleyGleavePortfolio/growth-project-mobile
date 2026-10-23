@@ -150,6 +150,9 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   }, [showEnded, haveEnded, loadEnded]);
   // b#1141's server leaves blocked pairs out; the phone also leaves out clients on the coach's own block list.
   const blocked = useBlockedUsersStore((st) => st.blocked);
+  // Owner (b#1141): a blocked pair gets no messaging at all, so no Message, Nudge, Reply or Say hello on any lookup row.
+  const blockedIds = useMemo(() => new Set(blocked.map((b) => b.id)), [blocked]);
+  const canMessage = (c: RosterClient) => !blockedIds.has(c.id);
   const endedPage = useMemo(
     () => (ended && ended.coach === coachId ? withoutBlocked(ended.page, blocked.map((b) => b.id)) : null),
     [ended, coachId, blocked],
@@ -232,8 +235,8 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     const name = rosterDisplayName(c);
     return clientRow(c, { ...lookupReason(c, unread, 'recent'), ok: false }, (
       <>
-        {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
-        {iconButton('notifications-outline', `Nudge, ${name}`, () => nudge.open(c), `lookup-nudge-${c.id}`)}
+        {canMessage(c) ? iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`) : null}
+        {canMessage(c) ? iconButton('notifications-outline', `Nudge, ${name}`, () => nudge.open(c), `lookup-nudge-${c.id}`) : null}
       </>
     ));
   };
@@ -299,7 +302,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
         {stale}
         {/* The sentence counts everyone, so the Needs you view with no one waiting still reads "Twelve are steady." */}
         {all.length > 0 ? <Text style={s.sentence} testID="lookup-sentence">{needsYouSentence(needs, all.length - needs)}</Text> : null}
-        {rows.map(({ c, r }) => clientRow(c, r, r.action ? (
+        {rows.map(({ c, r }) => clientRow(c, r, r.action && (r.action === 'review' || canMessage(c)) ? (
           <HapticPressable intent="light" style={s.act} onPress={() => runAction(c, r.action as LookupAction)} accessibilityRole="button" accessibilityLabel={`${ACTION_LABEL[r.action]}, ${rosterDisplayName(c)}`} testID={`lookup-act-${c.id}`}>
             <Text style={s.actText}>{ACTION_LABEL[r.action]}</Text>
           </HapticPressable>

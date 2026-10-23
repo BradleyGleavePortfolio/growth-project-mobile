@@ -58,6 +58,7 @@ jest.mock('../../../navigation/coachLanding', () => ({ coachLandingTab: () => 'C
 import ClientLookupScreen from '../lookup/ClientLookupScreen';
 import { CoachTeamEntryContext } from '../../../navigation/coachTeamEntry';
 import { useCoachStore } from '../../../store/coachStore';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { featureFlags } from '../../../config/featureFlags';
 import { dayWord, groupByLetter, lastLoggedWord, lookupReason, needsYouSentence, parseLookupQuery, recentFromRoster } from '../../../utils/coach/clientLookup';
 import type { RosterClient } from '../../../utils/coach/clientRoster';
@@ -271,6 +272,27 @@ describe('UI-4 Search first (15 or more)', () => {
     await fireEvent.press(screen.getByTestId('lookup-chip-quiet'));
     expect(screen.getByText('2 results')).toBeTruthy();
     expect(screen.getByText('Ava Price')).toBeTruthy();
+  });
+  it('a client this coach blocked gets no messaging on any row (owner, b#1141): no Say hello, Reply, Message or Nudge; Review and the row stay', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'c3', displayName: 'Priya Nair', role: 'client', blockedAt: '2026-10-20T10:00:00Z' }] });
+    try {
+      await mount(UNDER_15);
+      expect([screen.queryByTestId('lookup-act-c3'), !!screen.getByTestId('lookup-row-c3'), !!screen.getByTestId('lookup-act-c1')]).toEqual([null, true, true]);
+    } finally {
+      useBlockedUsersStore.setState({ blocked: [] });
+    }
+  });
+  it('the same on the 15+ list: a blocked client keeps the row with no Message or Nudge; an unblocked one keeps both', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'm2', displayName: 'Ben Carter', role: 'client', blockedAt: '2026-10-20T10:00:00Z' }] });
+    try {
+      await mount(MANY);
+      await fireEvent.changeText(screen.getByTestId('lookup-search'), 'ben');
+      expect([!!screen.getByTestId('lookup-row-m2'), screen.queryByTestId('lookup-message-m2'), screen.queryByTestId('lookup-nudge-m2')]).toEqual([true, null, null]);
+      await fireEvent.changeText(screen.getByTestId('lookup-search'), 'bianca');
+      expect([!!screen.getByTestId('lookup-message-m3'), !!screen.getByTestId('lookup-nudge-m3')]).toEqual([true, true]); // control: not blocked
+    } finally {
+      useBlockedUsersStore.setState({ blocked: [] });
+    }
   });
   it('message and bell open the thread and the nudge form; a sent nudge gives the success haptic', async () => {
     mockSendNudge.mockResolvedValue({});
