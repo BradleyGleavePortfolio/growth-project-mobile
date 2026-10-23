@@ -34,7 +34,7 @@ it('W-168-HC: the house coach\'s monogram is his full initials, and Continue car
   const coach = { ...HOUSE, fullName: 'Bradley Gleave' };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = await render(<Screen route={{ key: 'c', name: 'HouseCoachConfirm', params: { coach, from: null } } as any} navigation={nav as any} />);
-  expect(s.getByText('BG')).toBeTruthy();
+  expect(s.getByText('BG', { includeHiddenElements: true })).toBeTruthy(); // the monogram is hidden from screen readers
   await fireEvent.press(s.getByTestId('house-confirm-continue'));
   expect(nav.navigate.mock.calls).toEqual([['HouseCoach', { coach }]]);
 });

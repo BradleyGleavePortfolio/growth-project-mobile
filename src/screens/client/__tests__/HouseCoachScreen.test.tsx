@@ -38,7 +38,8 @@ it('H1 (W-168-HC): his full name and monogram, then Includes (HC-2 to HC-7), the
 it('a server without full_name (before backend #1142): the first name and monogram, as before', async () => {
   const s = await mount({ id: 'house-1', firstName: 'Bradley' });
   await s.findByTestId('house-package-h-1');
-  for (const t of ['B', 'Bradley', '1:1 coaching with Bradley', 'Direct access to Bradley']) expect(s.getByText(t)).toBeTruthy();
+  expect(s.getByText('B', { includeHiddenElements: true })).toBeTruthy(); // the monogram is hidden from screen readers
+  for (const t of ['Bradley', '1:1 coaching with Bradley', 'Direct access to Bradley']) expect(s.getByText(t)).toBeTruthy();
 });
 
 it('H1: a package opens its own page (no sheet, no checkout here); Back goes back', async () => {
