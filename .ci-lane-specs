@@ -1,0 +1,13 @@
+src/theme/__tests__
+src/__tests__/commandCenterScreens.test.tsx
+src/__tests__/commandCenterNavigation.test.tsx
+src/__tests__/qaCoachHome131.test.tsx
+src/__tests__/coachCheckInReviewFu126.test.tsx
+src/__tests__/coachSafetyAlert.test.tsx
+src/components/__tests__/AllergySafetyPrompt.copy.test.tsx
+src/screens/client/__tests__/ProfileScreen.savedValues.test.tsx
+src/screens/client/__tests__/Recipes.saved128.test.tsx
+src/screens/client/__tests__/Recipes.allergens130.test.tsx
+src/screens/client/__tests__/Recipes.quiet128.test.tsx
+src/screens/client/__tests__/ProgressScreen
+src/screens/client/progress/__tests__
