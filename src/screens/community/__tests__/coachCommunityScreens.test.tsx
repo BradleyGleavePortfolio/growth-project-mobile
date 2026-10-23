@@ -33,7 +33,7 @@
  */
 import React from 'react';
 import { render, fireEvent, configure, act } from '@testing-library/react-native';
-import { Alert, FlatList } from 'react-native';
+import { Alert } from 'react-native';
 import {
   CoachCommunityApiError,
   ACK_ILLEGAL_TRANSITION_CODE,
@@ -1271,11 +1271,11 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     const base = { data: { items: [inboxItem()] }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn(), fetchNextPage };
     mockState.inbox = { ...base, hasNextPage: true, isFetchingNextPage: false };
     const view = await render(<CoachCommunityInboxScreen />);
-    act(() => view.UNSAFE_getByType(FlatList).props.onEndReached());
+    act(() => view.UNSAFE_getByProps({ onEndReachedThreshold: 0.5 }).props.onEndReached());
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
     mockState.inbox = { ...base, hasNextPage: true, isFetchingNextPage: true };
     await view.rerender(<CoachCommunityInboxScreen />);
-    act(() => view.UNSAFE_getByType(FlatList).props.onEndReached());
+    act(() => view.UNSAFE_getByProps({ onEndReachedThreshold: 0.5 }).props.onEndReached());
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
     expect(view.getByTestId('coach-community-inbox-next-page')).toBeTruthy();
   });
