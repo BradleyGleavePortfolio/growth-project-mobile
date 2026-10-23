@@ -355,6 +355,7 @@ function useLeaveWhenErased(sessionId: string) {
 
 function AnswerView({ item }: { item: PastQuestion }) {
   const coach = useCoachFirstName();
+  const qc = useQueryClient();
   useLeaveWhenErased(item.sessionId);
   const q = useQuery({
     queryKey: copilotAnswerKey(item.sessionId, item.messageId),
@@ -383,7 +384,10 @@ function AnswerView({ item }: { item: PastQuestion }) {
           {q.error || missing ? <QuietError message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
           {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} /> : null}
           {/* A decided change was decided by whoever coached then; only an unsent one goes to today's coach (C1). */}
-          {q.data ? <SuggestionSlot suggestion={sug} coach={sug?.status === 'suggested' ? coach : C.yourCoach} /> : null}
+          {/* Sent from here, Your path's lists and this answer read the server again (as a turn's Send does). */}
+          {q.data ? (
+            <SuggestionSlot suggestion={sug} coach={sug?.status === 'suggested' ? coach : C.yourCoach} onSent={() => void qc.invalidateQueries({ queryKey: ['copilot'] })} />
+          ) : null}
         </View>
       </Screen>
     </>

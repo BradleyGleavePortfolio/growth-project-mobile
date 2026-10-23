@@ -192,3 +192,16 @@ test('an answer and its facts sit on the same white Forest ledger card', async (
   expect(card(s.getByTestId('copilot-answer'))).toMatchObject(LEDGER);
   expect(card(s.getByTestId('copilot-facts'))).toMatchObject({ borderColor: LEDGER.borderColor });
 });
+
+test('Send from a past answer reads Your path and the answer again, as a turn\'s Send does', async () => {
+  mockParams = { view: 'answer', item: ITEM };
+  const unsent = { id: 'sg2', status: 'suggested', change: { kind: 'set_calorie_target', target_id: 't1', from_kcal: 2600, to_kcal: 2450 }, reason: 'r', note: null, sent_at: null, decided_at: null };
+  get.mockResolvedValue({ data: { messages: [{ id: 'm2', content: 'Fewer calories.', copilot: { sources: [], suggestion: unsent } }] } } as never);
+  jest.mocked(api.post).mockResolvedValueOnce({ data: { ...unsent, status: 'pending', sent_at: '2026-10-21T21:41:00Z' } } as never);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const spy = jest.spyOn(qc, 'invalidateQueries');
+  const s = await render(<QueryClientProvider client={qc}>{<ClientPathCopilotScreen />}</QueryClientProvider>);
+  await act(async () => fireEvent.press(await s.findByTestId('copilot-send')));
+  expect(api.post).toHaveBeenCalledWith(COPILOT_PATHS.send('sg2'));
+  expect(spy).toHaveBeenCalledWith({ queryKey: ['copilot'] });
+});
