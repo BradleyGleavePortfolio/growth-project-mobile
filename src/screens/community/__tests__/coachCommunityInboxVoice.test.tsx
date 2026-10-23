@@ -112,7 +112,8 @@ describe('CoachCommunityInboxScreen — voice rows (flag on)', () => {
     expect(getByTestId(`coach-community-inbox-row-${VOICE_ID}`)).toBeTruthy();
     expect(getByTestId(`coach-community-inbox-voice-${VOICE_ID}`)).toBeTruthy();
     expect(getByTestId(`coach-community-inbox-mark-acked-${TEXT_ID}`)).toBeTruthy();
-    expect(getByText('Voice note · 0:42')).toBeTruthy();
+    // The mic glyph is an inline icon character at the start of the same line.
+    expect(getByText(/^\S? ?Voice note · 0:42$/u)).toBeTruthy();
     expect(getByText('Sam Lee')).toBeTruthy();
     expect(getByText('Quick question about my plan')).toBeTruthy();
     expect(getByTestId(`coach-community-inbox-row-${VOICE_ID}`).props.accessibilityLabel).toBe(
