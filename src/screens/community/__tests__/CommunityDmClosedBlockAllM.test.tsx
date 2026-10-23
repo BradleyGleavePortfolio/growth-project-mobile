@@ -58,6 +58,7 @@ const { authEvents } = require('../../../utils/authEvents');
 const axiosErr = (status: number, data: Record<string, unknown>) => ({ isAxiosError: true, response: { status, data } });
 const BLOCKED_BY_YOU = axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_you', message: 'You blocked this member.' });
 const NOT_FOUND = axiosErr(404, { error: 'not_found', code: 'community.dm.not_found', message: 'This conversation is not available.' });
+const BLOCKED_BY_THEM = axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_them' });
 const FIELD = 'community-dmthread-composer-field';
 const block = (id: string) => useBlockedUsersStore.setState({ blocked: [{ id, displayName: 'Jordan', blockedAt: '2026-10-22T00:00:00Z' }] });
 
@@ -97,16 +98,26 @@ describe('community DM', () => {
     expect(view.queryByTestId(FIELD)).toBeNull();
     expect(view.queryByText('Start the conversation')).toBeNull();
     expect(view.getByTestId('community-dmthread-closed')).toBeTruthy();
-    expect(view.getByText('This conversation is closed')).toBeTruthy();
+    // #169-5 BAM-2a: the blocker is told it is their block and where to undo it.
+    expect(view.getByLabelText('You blocked them. Unblock in Settings')).toBeTruthy();
     await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
     expect(view.getByTestId(FIELD)).toBeTruthy();
   });
 
-  it('they blocked me (server 404, block not disclosed): closed, and the line names nobody', async () => {
+  it('they blocked me (#169-5, server 403 blocked_by_them): closed, and the line names them as the header does', async () => {
+    mockReadError = BLOCKED_BY_THEM;
+    const view = await open();
+    expect(view.queryByTestId(FIELD)).toBeNull();
+    expect(view.queryByText('Start the conversation')).toBeNull();
+    expect(view.getByText('Jordan Lee has blocked you')).toBeTruthy();
+    expect(view.queryByText(/Unblock/)).toBeNull();
+  });
+
+  it('a member who left or is banned (404): the plain closed line, naming nobody', async () => {
     mockReadError = NOT_FOUND;
     const view = await open();
     expect(view.queryByTestId(FIELD)).toBeNull();
-    expect(view.getByTestId('community-dmthread-closed')).toBeTruthy();
+    expect(view.getByText('This conversation is closed')).toBeTruthy();
     expect(view.queryByText(/blocked/i)).toBeNull();
   });
 
@@ -155,6 +166,18 @@ describe('New message / New post composer', () => {
     expect(view.queryByTestId('community-composer-body')).toBeNull();
     expect(view.queryByTestId('community-composer-submit')).toBeNull();
     expect(view.getByTestId('community-composer-closed')).toBeTruthy();
+    expect(view.getByLabelText('You blocked them. Unblock in Settings')).toBeTruthy();
+  });
+
+  it('New message to someone who blocked me (#169-5): the refused send closes it; no name shows here, so BAM-1', async () => {
+    mockSendMutate.mockImplementation((_v: unknown, o: { onError: (e: unknown) => void }) => o.onError(BLOCKED_BY_THEM));
+    mockParams.current = { mode: 'dm', recipientId: 'member-2' };
+    const view = await render(<CommunityComposerScreen />);
+    await fireEvent.changeText(view.getByTestId('community-composer-body'), 'hello');
+    await act(async () => { fireEvent.press(view.getByTestId('community-composer-submit')); });
+    expect(view.getByText('This conversation is closed')).toBeTruthy();
+    expect(view.queryByTestId('community-composer-body')).toBeNull();
+    expect(view.queryByText(/blocked/i)).toBeNull();
   });
 
   it('New post refused after a ban: the fields go, the closed line shows, no error box', async () => {

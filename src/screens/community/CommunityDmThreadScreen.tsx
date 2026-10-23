@@ -34,7 +34,7 @@ import {
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import { describeCommunityFailure } from '../../api/communityErrors';
-import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
@@ -60,6 +60,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
     useServerAnswered(messages) && workspaceId.length > 0,
     noAccess ? true : undefined,
   );
+  // BLOCK-TELL #169-5: the read refusal's code (blocked_by_you / blocked_by_them) says who closed it.
+  const by = useClosedBy(recipientId, closed, { errors: [messages.error] });
 
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
@@ -159,7 +161,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           />
         )}
 
-        {closed ? <ConversationClosedLine testID="community-dmthread-closed" /> : !open ? null : <ComposerInput
+        {closed ? <ConversationClosedLine by={by} name={participantLabel} testID="community-dmthread-closed" /> : !open ? null : <ComposerInput
           placeholder="Message"
           maxLength={DM_MAX}
           sending={sendDm.isPending}

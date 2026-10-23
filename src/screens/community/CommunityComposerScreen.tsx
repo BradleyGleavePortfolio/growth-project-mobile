@@ -34,7 +34,7 @@ import {
   usePosts,
 } from '../../hooks/useCommunity';
 import { describeCommunityFailure } from '../../api/communityErrors';
-import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const TITLE_MAX = 200; // mirror backend CreatePostDto.title (1..200)
@@ -75,6 +75,8 @@ export default function CommunityComposerScreen(): React.ReactElement {
     [gateRead.error],
     useServerAnswered(gateRead),
   );
+  // BLOCK-TELL #169-5: in DM mode `by` picks the line for my side. No name shows here, so BAM-2b falls back to BAM-1.
+  const by = useClosedBy(mode === 'dm' ? dmTo : null, closed, { errors: [gateRead.error] });
 
   const bodyMax = mode === 'dm' ? DM_MAX : POST_BODY_MAX;
   const trimmedTitle = title.trim();
@@ -131,7 +133,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
           {mode === 'dm' ? 'New message' : 'New post'}
         </Text>
 
-        {closed ? <><View style={styles.flex} /><ConversationClosedLine testID="community-composer-closed" /></> : <>
+        {closed ? <><View style={styles.flex} /><ConversationClosedLine by={mode === 'dm' ? by : null} testID="community-composer-closed" /></> : <>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.content}

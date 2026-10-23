@@ -391,4 +391,37 @@ describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByLabelText('Message text')).toBeNull();
     expect(alertSpy).not.toHaveBeenCalledWith('Message not sent', expect.anything());
   });
+
+  // BLOCK-TELL #169-5 CLOSED-LINE: the line says who closed it, naming the client as the coach sees them. A blocked chat is
+  // in neither list (owner 10-23 "Dissapear"), so the side comes from my block list or the refused send.
+  it('the thread read says x-conversation-closed: blocked_by_them -> "Alice Smith has blocked you" before any send', async () => {
+    mockGetClientMessages.mockImplementationOnce(async () => ({ data: { messages: [] }, headers: { 'x-conversation-closed': 'blocked_by_them' } }) as never);
+    const u = await render(<ClientMessagesScreen />);
+    expect(await u.findByText('Alice Smith has blocked you')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+  });
+
+  it('I blocked this client: "You blocked them. Unblock in Settings" before any send, no "start a conversation"', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Alice', blockedAt: recent }] });
+    mockRows.length = 0;
+    const u = await render(<ClientMessagesScreen />);
+    expect(await u.findByLabelText('You blocked them. Unblock in Settings')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByText('Start a conversation with Alice')).toBeNull();
+  });
+
+  it('the client blocked me: the refused send says "Alice Smith has blocked you"', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    postMock.mockImplementation(async (url: string) => {
+      if (url !== BASE) return { data: {} };
+      throw axiosErr({ response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } });
+    });
+    const u = await render(<ClientMessagesScreen />);
+    await u.findByLabelText(/Message: from the client/);
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'see you at 6');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    expect(await u.findByText('Alice Smith has blocked you')).toBeTruthy();
+    expect(u.queryByText(/Unblock/)).toBeNull();
+    alertSpy.mockRestore();
+  });
 });

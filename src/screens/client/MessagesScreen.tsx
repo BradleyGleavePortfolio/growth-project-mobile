@@ -33,7 +33,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
-import { useConversationClosed, useCoachingRow, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useCoachingRow, useClosedBy, closedSideOfHeader, ConversationClosedLine, type ClosedBy } from '../../components/messaging/ConversationClosed';
 import { closedByHeader } from '../../components/messaging/closedRefusal';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
@@ -121,6 +121,7 @@ export default function MessagesScreen() {
   // FX-872: nothing to type until the server answered: the inbox row (v2, it carries `closed`) and the first read.
   const [answered, setAnswered] = useState(false);
   const [threadClosed, setThreadClosed] = useState(false); // the last thread read carried x-conversation-closed
+  const [threadSide, setThreadSide] = useState<ClosedBy>(null); // BLOCK-TELL #169-5: that header's side
   const coachingRow = useCoachingRow('client', coachId);
   const { closed, open, close } = useConversationClosed(
     coachId,
@@ -128,6 +129,8 @@ export default function MessagesScreen() {
     answered && coachingRow.settled,
     threadClosed || coachingRow.row?.closed,
   );
+  // BLOCK-TELL #169-5: `by` picks the line for my side (BAM-2a when I blocked them, BAM-2b when they blocked me).
+  const by = useClosedBy(coachId, closed, { pair: true, mine: coachingRow.row?.blocked_by_me, side: threadSide });
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
   // the CompetencePill at the top of the conversation. Null hides the pill
   // (no review yet, or the backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is OFF).
@@ -201,6 +204,7 @@ export default function MessagesScreen() {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
       setThreadClosed(closedByHeader(res)); // same batch as `answered`: never a render with a box first
+      setThreadSide(closedSideOfHeader(res));
       const list = normalizeList(res.data, currentUser?.id);
       if (outboxOn() && currentUser?.id) settleOutbox(currentUser.id, list.map((m) => m.v2?.client_message_id));
       setMessages((prev) => mergeById(list, reconcilePending(prev, list)));
@@ -932,7 +936,7 @@ export default function MessagesScreen() {
         }}
       />
 
-      {closed ? <ConversationClosedLine style={styles.closedBar} testID="messages-closed" /> : !open ? null : <>
+      {closed ? <ConversationClosedLine by={by} name={coachName} style={styles.closedBar} testID="messages-closed" /> : !open ? null : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={[styles.inputBar, styleB && styles.bInputBar]}>
