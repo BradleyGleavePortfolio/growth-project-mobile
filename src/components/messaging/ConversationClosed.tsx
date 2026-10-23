@@ -35,13 +35,16 @@ type ErrLike = {
   status?: number;
   code?: unknown;
   userMessage?: unknown;
+  cause?: unknown;
   response?: { status?: number; data?: { code?: unknown; error?: unknown; message?: unknown } };
 };
 
-/** True when a failed request means this conversation is closed to the viewer (axios errors and MessagingApiError). */
-export function isClosedRefusal(err: unknown): boolean {
+/** True when a failed request means this conversation is closed to the viewer (axios errors, MessagingApiError, and
+ * CommunityApiError, which keeps the axios error as `cause`). */
+export function isClosedRefusal(err: unknown, depth = 0): boolean {
   if (!err || typeof err !== 'object') return false;
   const e = err as ErrLike;
+  if (depth < 2 && e.cause && isClosedRefusal(e.cause, depth + 1)) return true;
   const data = e.response?.data;
   const code = typeof data?.code === 'string' ? data.code : e.code;
   if (typeof code === 'string' && CLOSED_CODES.has(code)) return true;
@@ -68,7 +71,7 @@ export function useConversationClosed(otherUserId?: string | null, errors: unkno
     void HapticService.warning();
     return true;
   }, []);
-  return { closed: blockedByMe || refused || errors.some(isClosedRefusal), close };
+  return { closed: blockedByMe || refused || errors.some((e) => isClosedRefusal(e)), close };
 }
 
 /** The closed state, drawn where the composer was (same bar: surface, hairline top, composer padding). */

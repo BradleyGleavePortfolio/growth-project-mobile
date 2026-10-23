@@ -232,6 +232,10 @@ export default function CommunitySpaceScreen({
   if (isClosed) {
     return (
       <Container>
+        <View style={styles.heading}>
+          <Text style={[typography.eyebrow, { color: semanticColors.textMuted }]}>Community</Text>
+          <Text accessibilityRole="header" style={[typography.h1, { color: semanticColors.textPrimary }]}>{space === 'hall' ? 'Hall' : 'Cohort'}</Text>
+        </View>
         <View style={styles.flex} testID="community-space-closed" />
         <ConversationClosedLine testID="community-space-closed-line" />
       </Container>

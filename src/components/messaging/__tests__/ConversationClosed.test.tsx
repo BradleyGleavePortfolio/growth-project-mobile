@@ -18,6 +18,7 @@ jest.mock('../../../theme/useTheme', () => {
 });
 
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
+import { CommunityApiError } from '../../../api/apiCall';
 import { CLOSED_LINE, ConversationClosedLine, isClosedRefusal, useConversationClosed } from '../ConversationClosed';
 
 const axiosErr = (status: number, data: Record<string, unknown>) => ({ isAxiosError: true, response: { status, data } });
@@ -39,6 +40,8 @@ describe('isClosedRefusal', () => {
     ['Hall posts after a ban', axiosErr(404, { code: 'community.post.not_found' })],
     ['challenge notes after a ban', axiosErr(404, { code: 'community.challenge.not_found' })],
     ['MessagingApiError with the code', { status: 403, code: 'messaging.blocked' }],
+    ['CommunityApiError from the community API (axios error kept as cause)',
+      new CommunityApiError('unknown', 404, 'community request failed (404)', axiosErr(404, { code: 'community.post.not_found' }))],
     ['MessagingApiError with only the server text', { status: 403, code: null, userMessage: COACHING_BLOCKED.message }],
   ])('%s -> closed', (_label, err) => {
     expect(isClosedRefusal(err)).toBe(true);
@@ -50,6 +53,7 @@ describe('isClosedRefusal', () => {
     ['coach read-only space (not a ban)', axiosErr(403, { code: 'community.space.read_only' })],
     ['plain 403 without the block text', axiosErr(403, { error: 'Forbidden', message: 'Nope' })],
     ['nothing', null],
+    ['CommunityApiError for a server failure', new CommunityApiError('server', 500, 'community request failed (500)', axiosErr(500, {}))],
   ])('%s -> open', (_label, err) => {
     expect(isClosedRefusal(err)).toBe(false);
   });

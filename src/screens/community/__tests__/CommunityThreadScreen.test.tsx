@@ -215,7 +215,10 @@ describe('CommunityThreadScreen own post, Back and refresh (U3, U5, U6)', () => 
 
 // BLOCK-ALL-M (#168-4 op 1): banned from the space, or the post is gone behind a block -> no reply box.
 describe('CommunityThreadScreen closed (BLOCK-ALL-M)', () => {
-  const notFound = { isAxiosError: true, response: { status: 404, data: { code: 'community.post.not_found' } } };
+  // The community API rejects with CommunityApiError, keeping the axios error as its cause.
+  const { CommunityApiError } = jest.requireActual('../../../api/apiCall');
+  const notFound = new CommunityApiError('unknown', 404, 'community request failed (404)',
+    { isAxiosError: true, response: { status: 404, data: { code: 'community.post.not_found' } } });
   const renderBare = async () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },

@@ -267,7 +267,9 @@ describe('CommunitySpaceScreen banned from the space (BLOCK-ALL-M)', () => {
     ['Hall posts read as not found after a ban', { code: 'community.post.not_found' }, 404],
     ['cohort refused after a ban', { code: 'community.cohort.no_access' }, 403],
   ])('%s: the closed line, and nothing to post or type', async (_label, data, status) => {
-    withError({ isAxiosError: true, response: { status, data } });
+    // usePosts rejects with the community API's CommunityApiError, which keeps the axios error as its cause.
+    const { CommunityApiError } = jest.requireActual('../../../api/apiCall');
+    withError(new CommunityApiError('unknown', status, 'community request failed', { isAxiosError: true, response: { status, data } }));
     await render(<CommunitySpaceScreen embedded space="hall" workspaceId="ws-1" prerequisiteLoading={false} prerequisiteError={false} />);
     expect(screen.getByTestId('community-space-closed-line')).toBeTruthy();
     expect(screen.getByText('This conversation is closed')).toBeTruthy();
