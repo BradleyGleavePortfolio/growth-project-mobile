@@ -90,6 +90,7 @@ export function useCoachInbox() {
     getNextPageParam: (last: CoachInboxPage) => last.next_cursor ?? undefined,
     select: flattenInbox,
     staleTime: 30_000,
+    meta: { persist: false }, // never saved to the phone, so a restart cannot show rows from before a ban
   });
 }
 
