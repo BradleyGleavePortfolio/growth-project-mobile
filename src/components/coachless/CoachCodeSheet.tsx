@@ -19,6 +19,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -112,6 +113,27 @@ export default function CoachCodeSheet({
   useEffect(() => {
     if (visible) setCode(initialCode ?? '');
   }, [visible, initialCode]);
+  // With the keyboard up at large text, Cancel sat under it (LO-845 N3): scroll to the end when the keyboard
+  // opens and when the check line or coach card grows the sheet, so Join and Cancel stay in view above it.
+  const scrollRef = useRef<ScrollView>(null);
+  const keyboardUp = useRef(false);
+  const toEnd = useCallback(() => {
+    if (keyboardUp.current) scrollRef.current?.scrollToEnd({ animated: true });
+  }, []);
+  useEffect(() => {
+    if (!visible) return undefined;
+    const shown = Keyboard.addListener('keyboardDidShow', () => {
+      keyboardUp.current = true;
+      toEnd();
+    });
+    const hidden = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardUp.current = false;
+    });
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, [visible, toEnd]);
 
   // Live validation (debounced; a stale answer never overwrites a newer one).
   useEffect(() => {
@@ -198,9 +220,12 @@ export default function CoachCodeSheet({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
       <ScrollView
+        ref={scrollRef}
+        onContentSizeChange={toEnd}
         style={{ flex: 1, backgroundColor: sc.bgPrimary }}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         testID="coach-code-sheet"
       >
         {welcome ? (

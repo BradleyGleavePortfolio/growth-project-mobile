@@ -7,6 +7,7 @@
  */
 import React, { useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import api from '../../../services/api';
 import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
@@ -24,6 +25,8 @@ export interface DraftAsk {
   request: HomeWinDraft;
   /** A server route that builds Roman's request itself (b#1130's plan-ended draft); the answer reads as invoke's. */
   path?: string;
+  /** That route answered 404 (b#1141: the pair is blocked, or the plan is no longer ended): the list re-reads without it. */
+  onGone?: () => void;
 }
 
 type Step =
@@ -59,7 +62,7 @@ export function reachOutAsk(r: AtRiskEntry): DraftAsk {
   };
 }
 
-export interface ListRow { id: string; title: string; line?: string; label: string; onPick: () => void }
+export interface ListRow { id: string; title: string; line?: string; label: string; onPick: () => void; /** a quiet done mark, e.g. Reached out today */ mark?: string }
 export interface SheetList { title: string; rows: ListRow[] }
 type S = ReturnType<typeof makeStyles>;
 
@@ -87,6 +90,12 @@ export function HomeSheet({ list, ask, onCloseList, onCloseAsk, onSent }: { list
                     <View style={s.rowText}>
                       <Text style={s.rowTitle}>{r.title}</Text>
                       {r.line ? <Text style={s.muted} numberOfLines={2}>{r.line}</Text> : null}
+                      {r.mark ? (
+                        <View style={s.mark} testID={`home-list-mark-${r.id}`}>
+                          <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} />
+                          <Text style={s.markText}>{r.mark}</Text>
+                        </View>
+                      ) : null}
                     </View>
                     <Text style={s.chev}>›</Text>
                   </Pressable>
@@ -113,7 +122,12 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
     try {
       const d = await askRomanToDraft(ask.request, ask.path);
       setStep(d ? { kind: 'ready', ...d } : { kind: 'failed', words: "Roman can't write this right now. Nothing was sent." });
-    } catch {
+    } catch (err) {
+      if (ask.path && (err as { response?: { status?: number } })?.response?.status === 404) {
+        setStep({ kind: 'failed', words: "Roman can't write this right now. Nothing was sent." }); // not "try again": it won't work
+        ask.onGone?.();
+        return;
+      }
       setStep({ kind: 'failed', words: "Roman couldn't write this. Nothing was sent. Try again in a moment." });
     }
   };
@@ -189,4 +203,6 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     rowText: { flex: 1, minWidth: 0 },
     rowTitle: { ...typography.bodyMd, color: colors.textPrimary },
     chev: { fontSize: 24, color: colors.textMuted, paddingLeft: 8 },
+    mark: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+    markText: { ...typography.bodySmall, color: colors.textMuted, flexShrink: 1 },
   });

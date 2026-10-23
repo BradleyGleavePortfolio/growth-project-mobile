@@ -65,10 +65,17 @@ interface CoachClientRow {
   activity?: unknown;
 }
 
+// Bumped by reset() (sign-out). A load started before it never writes after it, so a late answer for the
+// previous coach cannot land in the next coach's store.
+let session = 0;
+
 export const useCoachStore = create<CoachStore>((set, get) => ({
   ...initialCoachState,
 
-  reset: () => set({ ...initialCoachState }),
+  reset: () => {
+    session += 1;
+    set({ ...initialCoachState });
+  },
 
   loadClients: async (
     _coachId: string,
@@ -76,6 +83,7 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
     opts?: { silent?: boolean },
   ) => {
     const wireStatus = status ?? 'active';
+    const mine = session;
     try {
       set(opts?.silent ? { loadError: null } : { isLoading: true, loadError: null });
       const raw: CoachClientRow[] = [];
@@ -83,6 +91,7 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
       let cursor: string | undefined;
       for (let page = 0; page < ROSTER_MAX_PAGES; page += 1) {
         const res = await coachApi.getClients(wireStatus, cursor, ROSTER_PAGE_SIZE);
+        if (mine !== session) return;
         const rows: unknown = res.data;
         if (!Array.isArray(rows)) {
           // A first reply that is not a list reads as an empty roster, as it
@@ -118,6 +127,7 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
       });
       set({ clients, isLoading: false, loadError: null });
     } catch (err) {
+      if (mine !== session) return;
       // Read-only client list load. Existing state stays so the previous
       // roster remains visible if the user already loaded once; the new
       // loadError flag lets the screen render an error/retry block. A page

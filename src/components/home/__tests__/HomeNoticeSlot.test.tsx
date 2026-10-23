@@ -7,14 +7,14 @@ import { Pressable, Text } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+jest.mock('@react-navigation/native', () => ({ NavigationContext: require('react').createContext(undefined), useNavigation: () => ({ navigate: mockNavigate }) }));
 const mockGetPerms = jest.fn(async () => ({ status: 'undetermined', canAskAgain: true }));
 jest.mock('expo-notifications', () => ({ getPermissionsAsync: () => mockGetPerms() }));
 jest.mock('../../../services/pushNotifications', () => ({ registerForPushNotifications: jest.fn() }));
 jest.mock('../../../services/api', () => ({ usersApi: { updatePushToken: jest.fn() } }));
 const mockPrefs = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
-  prefsStorage: { getStringAsync: async (k: string) => mockPrefs.get(k), set: async (k: string, v: string) => void mockPrefs.set(k, v) },
+  prefsStorage: { getString: (k: string) => mockPrefs.get(k), getStringAsync: async (k: string) => mockPrefs.get(k), set: async (k: string, v: string) => void mockPrefs.set(k, v) },
 }));
 const mockUser: { id: string; coach_id: string; profile: Record<string, unknown> } = { id: 'u1', coach_id: '', profile: {} };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));

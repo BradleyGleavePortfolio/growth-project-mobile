@@ -20,7 +20,8 @@ export type HomeWin = HomeWinBase & (
 export interface HomeRings {
   check_ins: { reviewed: number; submitted: number };
   replies: { answered: number; received: number };
-  reach_outs: { contacted: number; goal: number };
+  /** contacted_ids (REACHED-TODAY, b#1133): the Needs-you clients the coach reached today; absent on an older server. */
+  reach_outs: { contacted: number; goal: number; contacted_ids?: string[] };
 }
 
 export interface CoachHomeDay {
@@ -73,7 +74,10 @@ function parseRings(v: unknown): HomeRings | null {
   return {
     check_ins: { reviewed: c.reviewed, submitted: c.submitted },
     replies: { answered: r.answered, received: r.received },
-    reach_outs: { contacted: o.contacted, goal: o.goal },
+    reach_outs: {
+      contacted: o.contacted, goal: o.goal,
+      ...(Array.isArray(o.contacted_ids) ? { contacted_ids: o.contacted_ids.filter(text) } : {}), // unreadable ids mark no row
+    },
   };
 }
 
