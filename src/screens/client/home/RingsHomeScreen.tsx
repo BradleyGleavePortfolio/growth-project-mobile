@@ -34,6 +34,7 @@ import HomeTiles, { type HomeTilesProps } from '../../../components/home/rings/H
 import { HomeNoticeSlot } from '../../../components/home/HomeNoticeSlot';
 import { DunningBanner } from '../../../entitlements/dunning/DunningBanner';
 import PendingInviteBanner from '../../../components/PendingInviteBanner';
+import RenewalHome from '../../../components/renewal/RenewalHome';
 import FinishJoining from '../../../components/join/FinishJoining';
 import ProfileNudge from '../../../components/home/ProfileNudge';
 import PushPermissionCard from '../../../components/home/PushPermissionCard';
@@ -134,6 +135,8 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
         </View>
         {/* #RINGS-PAY-SLOT: the failed payment alone, up under the dials; every other notice waits in the slot. */}
         <DunningBanner surface="HomeScreen" presentation="section" style={styles.pay} />
+        {/* RENEWAL-M (C3): the ended plan's renewal banner sits with the payment banner, under the dials. */}
+        <RenewalHome />
         <CoachlessHomeSlot part="join" />
         {/* Once the user is known, so a coached client never sees Roman locked first. */}
         {currentUser ? <HomeRomanLine coached={!!currentUser.coach_id} /> : null}

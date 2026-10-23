@@ -32,6 +32,7 @@ jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockDaySt
 jest.mock('@react-navigation/native', () => {
   const ReactActual = jest.requireActual('react');
   return {
+    NavigationContext: require('react').createContext(undefined),
     useNavigation: () => ({ navigate: jest.fn() }),
     // Run the focus callback like a screen that just gained focus.
     useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),

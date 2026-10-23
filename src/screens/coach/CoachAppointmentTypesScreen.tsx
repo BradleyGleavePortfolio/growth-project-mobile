@@ -223,7 +223,8 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
       {!editing && error ? <Text accessibilityLiveRegion="polite" style={[typography.bodySmall, { color: colors.error }]}>{error}</Text> : null}
 
       <Modal visible={editing !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!busy) setEditing(null); }}>
-        <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container} testID="coach-type-editor">
+        {/* The link field and Save sit low: the sheet scrolls them above the keyboard. */}
+        <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container} automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" testID="coach-type-editor">
           <Text style={[typography.h2, { color: colors.textPrimary }]} accessibilityRole="header">
             {editing === 'new' ? 'New appointment type' : 'Edit appointment type'}
           </Text>

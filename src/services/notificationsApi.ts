@@ -313,11 +313,21 @@ export function inboxScreenForKind(kind: string): string | undefined {
   return undefined;
 }
 
+/**
+ * SWITCH-TELL (b#1132): the former coach's one in-app row when a client moves
+ * to the house coach. The server body is the whole message, so the row shows
+ * it as its one line, with no "Update" title and no tap action; payload.client_id
+ * is never used (the former coach keeps no read of that client).
+ */
+const CLIENT_MOVED_KIND = 'coach_client_moved';
+const CLIENT_MOVED_FALLBACK = 'A client has moved to another coach.';
+
 /** Backend row or AppNotification -> AppNotification; null when unusable. */
 export function normalizeNotification(raw: unknown): AppNotification | null {
   const r = asRecord(raw);
   if (!r || typeof r.id !== 'string' || r.id.length === 0) return null;
   const rawKind = typeof r.kind === 'string' ? r.kind : 'system';
+  if (rawKind === CLIENT_MOVED_KIND) return clientMovedRow(r);
   const payload = asRecord(r.payload) ?? {};
   // MONEY-INBOX-130: the Day 3, Day 7 and dispute payment blocker names
   // itself in payload.headline and opens the card screen. The full-refund
@@ -333,13 +343,8 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
         ? payload.title
         : blockerHeadline ?? defaultTitleFor(rawKind);
   const body = typeof r.body === 'string' ? r.body : '';
-  const read =
-    typeof r.read === 'boolean' ? r.read : r.read_at !== null && r.read_at !== undefined;
-  const createdRaw = typeof r.createdAt === 'string' ? r.createdAt : r.created_at;
-  const createdAt =
-    typeof createdRaw === 'string' && !Number.isNaN(Date.parse(createdRaw))
-      ? createdRaw
-      : new Date(0).toISOString();
+  const read = readOf(r);
+  const createdAt = createdAtOf(r);
   const screenRaw = typeof r.actionScreen === 'string' ? r.actionScreen : payload.actionScreen;
   const actionScreen =
     typeof screenRaw === 'string' && SCREEN_NAME.test(screenRaw)
@@ -365,6 +370,27 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
     ...(actionScreen ? { actionScreen } : {}),
     ...(actionParams ? { actionParams } : {}),
     ...(typeof deepLink === 'string' ? { deepLink } : {}),
+  };
+}
+
+function readOf(r: Record<string, unknown>): boolean {
+  return typeof r.read === 'boolean' ? r.read : r.read_at !== null && r.read_at !== undefined;
+}
+
+function createdAtOf(r: Record<string, unknown>): string {
+  const raw = typeof r.createdAt === 'string' ? r.createdAt : r.created_at;
+  return typeof raw === 'string' && !Number.isNaN(Date.parse(raw)) ? raw : new Date(0).toISOString();
+}
+
+function clientMovedRow(r: Record<string, unknown>): AppNotification {
+  const body = typeof r.body === 'string' ? r.body.trim() : '';
+  return {
+    id: r.id as string,
+    kind: 'system',
+    title: body || CLIENT_MOVED_FALLBACK,
+    body: '',
+    read: readOf(r),
+    createdAt: createdAtOf(r),
   };
 }
 

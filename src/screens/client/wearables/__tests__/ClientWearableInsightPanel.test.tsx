@@ -487,7 +487,7 @@ describe('source_metrics provenance', () => {
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(
-      getByText('Steps, Heart Rate, VO₂ Max +2 more'),
+      getByText('Steps, Heart Rate, VO₂ Max +2\u00A0more'),
     ).toBeTruthy();
   });
 });

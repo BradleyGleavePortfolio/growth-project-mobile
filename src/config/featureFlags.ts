@@ -47,6 +47,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COACH_BRIEF_GATE: process.env.EXPO_PUBLIC_FF_COACH_BRIEF_GATE,
   EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP: process.env.EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
+  EXPO_PUBLIC_FF_COACH_HOME_V11: process.env.EXPO_PUBLIC_FF_COACH_HOME_V11,
   EXPO_PUBLIC_FF_COACH_LESSONS: process.env.EXPO_PUBLIC_FF_COACH_LESSONS,
   EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT: process.env.EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT,
   EXPO_PUBLIC_FF_COACH_TABS_V2: process.env.EXPO_PUBLIC_FF_COACH_TABS_V2,
@@ -124,6 +125,8 @@ export const featureFlags = {
   romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
   /** Team management stays hidden for launch, including in development. */
   teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),
+  /** The coach Home (spec m#688), only with coachTabsV2 (PK-2a); off, no eas.json line. env: EXPO_PUBLIC_FF_COACH_HOME_V11 */
+  coachHomeV11: readFlag('EXPO_PUBLIC_FF_COACH_HOME_V11', false),
 
   /**
    * COACHTABS: the coach bar becomes Overview, Programs, Money, Calendar,

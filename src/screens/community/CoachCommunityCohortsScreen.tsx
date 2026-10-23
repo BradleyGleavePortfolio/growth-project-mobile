@@ -18,6 +18,8 @@
  */
 import React, { useCallback, useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   View,
   Text,
   StyleSheet,
@@ -178,7 +180,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
         onRequestClose={() => setModalOpen(false)}
         testID="coach-community-cohorts-modal"
       >
-        <View
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={[
             styles.scrim,
             { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
@@ -262,7 +264,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
               </HapticPressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <CompletionToast state={completion.toast} />

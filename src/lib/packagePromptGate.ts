@@ -23,6 +23,9 @@
  *    dunning banner and lockout screens own that moment and a second plan
  *    must not start beside an unpaid one. Read only when the entitlement is
  *    already inactive; a failed read fails closed.
+ *  - RENEWAL-M (lib/planRenewal): never when the server says the coach revoked this client's access, and
+ *    never at start for an ended plan (Home shows the renewal pop-up and banner instead). With no renewal
+ *    sequence (never bought, or an older server) it opens at start once, not daily (#836-CAP).
  *  - Once per 24 h (packagePromptDueAtStart): a day after the sheet was last
  *    shown or skipped. The unsolicited sheet saves the time in the same key
  *    the moment it opens (PackageSelectionSheet `recordShown`, #836 Sol B1),
@@ -44,6 +47,7 @@ import { loadTutorial } from '../tutorial/tutorialStorage';
 import type { TutorialStatus } from '../tutorial/types';
 import { prefsStorage } from '../storage/mmkv';
 import { readUserCache } from './userCache';
+import { readRenewal, shownOnce, type Renewal } from './planRenewal';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -61,15 +65,21 @@ async function tourAtStart(userId: string): Promise<TutorialStatus | 'starting' 
   return saved === 'not_started' && featureFlags.consultationOnboarding ? 'ask' : saved;
 }
 
+async function readOffer(): Promise<{ renewal: Renewal | undefined } | null> {
+  if (!(await readUserCache())?.coach_id) return null;
+  const res = await clientPaymentsApi.getEntitlement();
+  if (!res || !res.ok) return null;
+  const data = res.data as { active?: unknown; entitlement_active?: unknown } | null | undefined;
+  if (!data || typeof data !== 'object') return null;
+  if (data.entitlement_active === true || data.active !== false) return null;
+  const renewal = readRenewal(data);
+  if (renewal?.state === 'revoked') return null;
+  return (await dunningApi.getStatus()).state === 'none' ? { renewal } : null;
+}
+
 export async function shouldOfferPackagePrompt(): Promise<boolean> {
   try {
-    if (!(await readUserCache())?.coach_id) return false;
-    const res = await clientPaymentsApi.getEntitlement();
-    if (!res || !res.ok) return false;
-    const data = res.data as { active?: unknown; entitlement_active?: unknown } | null | undefined;
-    if (!data || typeof data !== 'object') return false;
-    if (data.entitlement_active === true || data.active !== false) return false;
-    return (await dunningApi.getStatus()).state === 'none';
+    return !!(await readOffer());
   } catch {
     return false;
   }
@@ -84,7 +94,8 @@ export async function packagePromptDueAtStart(userId: string, now: number = Date
     if (lastAt ? !(now - new Date(lastAt).getTime() > DAY_MS) : !ios) return false;
     const tour = await tourAtStart(userId);
     if (tour === 'starting' || tour === 'active') return false;
-    if (await shouldOfferPackagePrompt()) {
+    const offer = await readOffer();
+    if (offer && offer.renewal?.state !== 'ended' && !(await shownOnce(userId))) {
       return !(tour === 'ask' && (await consultationApi.getState())?.completed === true);
     }
     if (ios) await prefsStorage.set(key, new Date(now).toISOString());

@@ -68,6 +68,7 @@ jest.mock('../../../entitlements/EntitlementProvider', () => ({
 }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
 jest.mock('@react-navigation/native', () => ({
+  NavigationContext: require('react').createContext(undefined),
   useNavigation: () => ({ navigate: mockNavigate }),
   useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
 }));

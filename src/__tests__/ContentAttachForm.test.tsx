@@ -16,13 +16,13 @@ import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const THEME_COLORS = {
-  background: '#F5EFE4',
+  background: '#F7FAF7',
   surface: '#F1E8D5',
   primary: '#2C4A36',
   textPrimary: '#1A1A18',
   textSecondary: '#3D3D3A',
   textMuted: '#6B675F',
-  textOnPrimary: '#F5EFE4',
+  textOnPrimary: '#F7FAF7',
   border: 'rgba(176,141,87,0.2)',
   divider: 'rgba(176,141,87,0.15)',
   success: '#2C4A36',
