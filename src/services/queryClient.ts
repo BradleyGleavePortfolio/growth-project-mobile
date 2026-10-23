@@ -32,6 +32,7 @@ import type { PersistedClient } from '@tanstack/react-query-persist-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSealedCacheValue, openCacheValue, sealCacheValue } from './queryCacheCrypto';
 import { isClosedRefusal } from '../components/messaging/closedRefusal';
+import { registerBlockSyncClient } from '../lib/blockSync';
 
 function getHttpStatus(err: unknown): number | undefined {
   return (err as { response?: { status?: number } })?.response?.status;
@@ -66,6 +67,7 @@ export const queryClient = new QueryClient({
     },
   },
 });
+registerBlockSyncClient(queryClient); // FX-872: blocking and unblocking update this cache (src/lib/blockSync.ts)
 
 /**
  * Persisted React Query cache — identity-bound (S6-P1).

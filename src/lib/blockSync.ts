@@ -7,13 +7,16 @@
  * DM list and the coach inbox at once (the server drops it on the next read); on unblock both lists, the DM reads and
  * the coaching row read again, so the chat comes back.
  */
-import type { InfiniteData } from '@tanstack/react-query';
+import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { useBlockedUsersStore, type BlockedUser } from '../store/blockedUsersStore';
 import { closedRefusals } from '../components/messaging/closedRefusal';
 
-// The app's one query client, read at call time: the API wrappers that call here load before (and without) the cache.
-const qc = (): typeof import('../services/queryClient').queryClient =>
-  (require('../services/queryClient') as typeof import('../services/queryClient')).queryClient;
+// The app's one query client registers itself here (services/queryClient.ts), so the API wrappers that call here never
+// load the cache module themselves. Before it registers there is no cached list to update.
+let client: QueryClient | null = null;
+export function registerBlockSyncClient(qc: QueryClient): void {
+  client = qc;
+}
 
 const DM_LISTS = ['community', 'dms'] as const; // communityKeys.dmThreads(workspaceId)
 const DM_READS = ['community', 'dm'] as const; // communityKeys.dmMessages(workspaceId, recipientId)
@@ -38,7 +41,8 @@ export function blockPlaced(userId: string, who: BlockedWho = {}): void {
     displayName: who.displayName || known?.displayName || 'Blocked user',
     role: who.role ?? known?.role ?? 'other',
   });
-  const queryClient = qc();
+  const queryClient = client;
+  if (!queryClient) return;
   queryClient.setQueriesData<Row[]>({ queryKey: DM_LISTS }, (old) => (Array.isArray(old) ? old.filter(isOther(userId)) : old));
   queryClient.setQueriesData<InfiniteData<Page>>({ queryKey: COACH_INBOX }, (old) => {
     if (!old?.pages) return old;
@@ -61,7 +65,8 @@ export function blockLifted(userId: string): void {
   if (!userId) return;
   void useBlockedUsersStore.getState().unblock(userId);
   closedRefusals.clear(userId);
-  const queryClient = qc();
+  const queryClient = client;
+  if (!queryClient) return;
   [DM_LISTS, DM_READS, COACH_INBOX, COACHING_ROW, ...BLOCK_LISTS, ...BADGES].forEach(
     (queryKey) => void queryClient.invalidateQueries({ queryKey }),
   );
