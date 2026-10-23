@@ -9,6 +9,7 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, pathTint, radius, typography } from '../../../theme/tokens';
 import type { CopilotSuggestion } from '../../../api/copilotApi';
 import { COPILOT_COPY as C, describeChange, statusLine, type StatusTone } from './pathChangeWords';
+import { ledger } from './ledger';
 
 const TONE: Record<StatusTone, { icon: 'time-outline' | 'checkmark' | 'remove-circle-outline'; bg: string; ink: string }> = {
   waiting: { icon: 'time-outline', bg: pathTint.gold, ink: forestPop.goldInk },
@@ -21,14 +22,14 @@ export function SuggestionStatusList({ items, coach, now }: { items: CopilotSugg
   return (
     <View style={s.wrap} testID="copilot-status-list">
       <Text style={[typography.bodyMd, s.heading, { color: sc.textPrimary }]} accessibilityRole="header">{C.suggestions}</Text>
-      <View style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
+      <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]}>
         {items.map((item, i) => {
           const st = statusLine(item, coach, now);
           const tone = TONE[st.tone];
           const title = describeChange(item.change).summary;
           const note = item.status === 'rejected' && item.note ? item.note : null;
           return (
-            <View key={item.id} style={[s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border }]}
+            <View key={item.id} style={[s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line }]}
               accessible accessibilityLabel={[title, st.line, note, st.meta].filter(Boolean).join('. ')} testID={`copilot-status-${item.status}`}>
               <View style={[s.tile, { backgroundColor: tone.bg }]}>
                 <Ionicons name={tone.icon} size={18} color={tone.ink} />

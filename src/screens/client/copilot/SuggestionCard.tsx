@@ -18,6 +18,7 @@ import { copilotApi, copilotErrorOf, type CopilotSuggestion } from '../../../api
 import { COPILOT_COPY as C, describeChange, when } from './pathChangeWords';
 import { ChangeTiles } from './ChangeTiles';
 import { SourceTag } from './AnswerCard';
+import { ledger } from './ledger';
 
 export interface SuggestionCardProps {
   suggestion: CopilotSuggestion;
@@ -75,13 +76,13 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
   const d = describeChange(suggestion.change);
   const kinds = Array.from(new Set((suggestion.change.sources ?? []).map((x) => x.kind))); // CP-A-16, as frame 04 draws them
   return (
-    <View style={[s.card, { borderColor: forestPop.moss, backgroundColor: sc.bgSurface }]} testID="copilot-suggestion">
+    <View style={[s.card, { borderColor: forestPop.moss, backgroundColor: ledger.card }]} testID="copilot-suggestion">
       <View style={s.head}>
         <View style={s.eyebrow}>
           <Ionicons name="sparkles-outline" size={14} color={forestPop.goldInk} />
           <Text style={[typography.bodySmall, s.strong, { color: forestPop.goldInk }]}>{C.suggested}</Text>
         </View>
-        <Text style={[typography.caption, s.badge, { color: sc.textMuted, borderColor: sc.border }]}>{C.notApplied}</Text>
+        <Text style={[typography.caption, s.badge, { color: sc.textMuted, borderColor: ledger.line }]}>{C.notApplied}</Text>
       </View>
       <Text style={[typography.h4, { color: sc.textPrimary }]} accessibilityRole="header">{d.title}</Text>
       <ChangeTiles from={d.from} to={d.to} />

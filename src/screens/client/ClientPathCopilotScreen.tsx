@@ -3,8 +3,9 @@
  *
  * The masthead holds the week block (frames 02, 13; it folds to two chips once a question is asked, frame 03). Below:
  * "Ask about your path" with the starter questions, Roman's answers with the facts he used (frame 03), the suggestion
- * card under an answer that offers a change (frame 04) and the sent suggestions (frame 05). Questions go through
- * Roman's normal send path with the Copilot opt-in header (backend #1129), in the client's open Roman chat.
+ * card under an answer that offers a change (frame 04), the sent suggestions (frame 05) and "Past questions" (14).
+ * Questions go through Roman's normal send path with the Copilot opt-in header (backend #1129), in the client's
+ * open Roman chat. One screen, three views on the same route: Your path, Past questions, and one past answer.
  * Behind `featureFlags.clientPathCopilot` (off) and the server switch: a server without Copilot (404, or no
  * `copilot` on the reply) shows the plain Roman reply and no week block (truthful fallback). Coachless: Roman's lock.
  * A follow-up question scrolls into view as it is asked and keeps its place while the answer arrives. When Settings
@@ -13,7 +14,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { CommonActions, useNavigation, useRoute, type ParamListBase, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { forestPop, layout, pathTint, typography, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -35,16 +37,22 @@ import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import type { RomanApiError } from '../../api/romanApi';
-import { copilotApi, copilotErrorOf, type CopilotSuggestion } from '../../api/copilotApi';
-import { COPILOT_COPY as C } from './copilot/pathChangeWords';
-import { ASK_COPY as A, targetChangedOn, timeOf, withoutCites } from './copilot/askWords';
+import { copilotApi, copilotErrorOf, type CopilotSuggestion, type PastQuestion } from '../../api/copilotApi';
+import { romanChatsEvents } from '../settings/romanChatsEvents';
+import { COPILOT_COPY as C, shortDay } from './copilot/pathChangeWords';
+import { ASK_COPY as A, monthYear, targetChangedOn, timeOf, withoutCites } from './copilot/askWords';
 import { SuggestionStatusList } from './copilot/SuggestionStatusList';
 import { SuggestionCard } from './copilot/SuggestionCard';
 import { AnswerCard } from './copilot/AnswerCard';
 import { WeekBlock } from './copilot/WeekBlock';
+import { PastQuestionsList, PastQuestionsRow, usePastQuestions } from './copilot/PastQuestions';
+import { copilotAnswerKey } from './copilot/copilotErasure';
 import { useCopilotAsk, type CopilotTurn } from './copilot/useCopilotAsk';
+import { ledger } from './copilot/ledger';
 
 export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
+type Params = { view?: 'questions' | 'answer'; item?: PastQuestion };
+type Nav = NativeStackNavigationProp<ParamListBase>;
 
 /** The coach's first name for "Send to {coach}" and the status lines, or "your coach" when it is not known yet. */
 export function useCoachFirstName(): string {
@@ -68,7 +76,16 @@ function CoachLock() {
   return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
 }
 
-/** The forest masthead: back, the serif title, then the week block. */
+function PathCopilot() {
+  const needsCoach = useClientNeedsCoach();
+  const p = useRoute<RouteProp<Record<string, Params | undefined>, string>>().params ?? {};
+  if (needsCoach) return <CoachLock />;
+  if (p.view === 'questions') return <QuestionsView />;
+  if (p.view === 'answer' && p.item) return <AnswerView item={p.item} />;
+  return <PathView />;
+}
+
+/** The forest masthead: back, the serif title, then the week block or a chip. */
 function Mast({ back, title, compact, children }: { back: string; title: string; compact?: boolean; children?: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   const insets = useScreenInsets();
@@ -86,12 +103,14 @@ function Mast({ back, title, compact, children }: { back: string; title: string;
   );
 }
 
-function PathCopilot() {
+function PathView() {
   const { semanticColors: sc } = useTheme();
+  const navigation = useNavigation<Nav>();
   const qc = useQueryClient();
   const coach = useCoachFirstName();
   const needsCoach = useClientNeedsCoach();
   const q = useQuery({ queryKey: COPILOT_RECENT_KEY, queryFn: () => copilotApi.recent(), enabled: !needsCoach });
+  const past = usePastQuestions();
   const { turns, busy, ask, erased } = useCopilotAsk();
   const [draft, setDraft] = useState('');
   const refilled = useRef('');
@@ -99,6 +118,7 @@ function PathCopilot() {
   const refusal = q.error ? aiRefusalOf(q.error) : null;
   const week = q.data?.week ?? null;
   const items = q.data?.suggestions ?? [];
+  const total = past.data?.pages[0]?.total ?? 0;
   const asked = turns.length > 0;
   const reveal = useReveal(turns);
   // The server says the same (b#1129: 403 ROMAN_REQUIRES_COACH) when the phone has not heard the coach left yet; a send can too.
@@ -145,11 +165,11 @@ function PathCopilot() {
             {asked ? null : (
               <View style={s.section} testID="copilot-ask">
                 <Text style={[typography.bodyMd, s.strong, { color: sc.textPrimary }]} accessibilityRole="header">{A.askHeading}</Text>
-                <View style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
+                <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]}>
                   {starters.map((label, i) => (
                     <Pressable key={label} onPress={() => onAsk(label)} disabled={busy} accessibilityRole="button" accessibilityLabel={label}
                       accessibilityState={{ disabled: busy }} testID={`copilot-starter-${i}`}
-                      style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
+                      style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line },
                         (pressed || label === A.whyCalories) && { backgroundColor: pathTint.leaf }]}>
                       <Text style={[typography.body, s.grow, { color: sc.textPrimary }, label === A.whyCalories && s.strong]}>{label}</Text>
                       <Ionicons name="chevron-forward" size={18} color={forestPop.forest} />
@@ -160,6 +180,7 @@ function PathCopilot() {
               </View>
             )}
             {listed.length > 0 ? <SuggestionStatusList items={listed} coach={coach} /> : null}
+            {total > 0 ? <PastQuestionsRow total={total} onPress={() => navigation.push('Copilot', { view: 'questions' })} /> : null}
           </View>
         </ScrollView>
       </Screen>
@@ -203,11 +224,11 @@ function useReveal(turns: CopilotTurn[]) {
   };
 }
 
-function Asked({ question, at }: { question: string; at: Date }) {
+function Asked({ question, at, day }: { question: string; at: Date; day?: string }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={s.asked}>
-      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{A.youAsked(timeOf(at))}</Text>
+      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{A.youAsked(day ? `${day}, ${timeOf(at)}` : timeOf(at))}</Text>
       <Text style={[typography.h4, s.strong, { color: sc.textPrimary }]} accessibilityRole="header">{question}</Text>
     </View>
   );
@@ -265,7 +286,7 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
     : error.kind === 'offline' ? [ROMAN_OFFLINE_TITLE, ROMAN_OFFLINE_BODY, true]
     : [ROMAN_ERROR_TRANSIENT, '', true];
   return (
-    <View style={[s.card, s.pad, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} accessibilityRole="alert" testID={`copilot-turn-${error.kind}`}>
+    <View style={[s.card, s.pad, { backgroundColor: ledger.card, borderColor: ledger.line }]} accessibilityRole="alert" testID={`copilot-turn-${error.kind}`}>
       <View style={s.who}>
         <RomanAvatar crop="neutral" size={28} />
         <Text style={[typography.bodyMd, s.strong, s.grow, { color: sc.textPrimary }]}>{title}</Text>
@@ -276,9 +297,114 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
   );
 }
 
+function QuestionsView() {
+  const { semanticColors: sc } = useTheme();
+  const navigation = useNavigation<Nav>();
+  const q = usePastQuestions();
+  const first = q.data?.pages[0] ?? null;
+  const items = (q.data?.pages ?? []).flatMap((pg) => pg?.items ?? []);
+  // A failed "Show older questions" says so where the link is, and its Try again reads that page again (Opus C1).
+  const older = q.isFetchNextPageError;
+  const failed = q.error ? (
+    <QuietError message={loadFailureMessage(q.error, A.past)} onRetry={() => void (older ? q.fetchNextPage() : q.refetch())}
+      retrying={older ? q.isFetchingNextPage : q.isRefetching} layout={older ? 'inline' : 'block'} testID="copilot-past-error" />
+  ) : null;
+  return (
+    <>
+      <ForestStatusBar />
+      <Screen edges={['bottom']} testID="copilot-questions" contentStyle={s.list}
+        refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} tintColor={sc.textMuted} />}>
+        <Mast back={C.title} title={A.past} compact>
+          {first?.since ? (
+            <View style={[s.chip, { backgroundColor: sc.surface.forestBand }]}>
+              <Text style={[typography.bodySmall, { color: sc.textOnAccent }]}>{A.since(first.total, monthYear(first.since))}</Text>
+            </View>
+          ) : null}
+        </Mast>
+        <View style={s.body}>
+          {q.isPending ? <QuietLoading label="Loading past questions" rows={4} testID="copilot-past-loading" /> : null}
+          {older ? null : failed}
+          <PastQuestionsList items={items} more={q.hasNextPage && !older} loadingMore={q.isFetchingNextPage}
+            onMore={() => void q.fetchNextPage()} onOpen={(item) => navigation.push('Copilot', { view: 'answer', item })} />
+          {older ? failed : null}
+        </View>
+      </Screen>
+    </>
+  );
+}
+
+/**
+ * The answer route leaves the stack when its chat is erased (Delete or Delete all in Settings, or the
+ * transcript finds it gone), so its question cannot be read again with Back (#852 round 1, B1). Only this
+ * route is removed; the screen on top (Settings) stays where it is.
+ */
+function useLeaveWhenErased(sessionId: string) {
+  const navigation = useNavigation<Nav>();
+  const routeKey = useRoute().key;
+  useEffect(() => {
+    const leave = (id: string | null) => {
+      if (id !== null && id !== sessionId) return;
+      navigation.dispatch((state) => {
+        const at = state.routes.findIndex((r) => r.key === routeKey);
+        if (at < 0 || state.routes.length < 2) return CommonActions.goBack();
+        const routes = state.routes.filter((r) => r.key !== routeKey);
+        return CommonActions.reset({ ...state, routes, index: at <= state.index ? Math.max(0, state.index - 1) : state.index });
+      });
+    };
+    const offErased = romanChatsEvents.onErased((e) => leave(e.id));
+    const offGone = romanChatsEvents.onGone((e) => leave(e.id));
+    return () => {
+      offErased();
+      offGone();
+    };
+  }, [navigation, routeKey, sessionId]);
+}
+
+function AnswerView({ item }: { item: PastQuestion }) {
+  const coach = useCoachFirstName();
+  const qc = useQueryClient();
+  useLeaveWhenErased(item.sessionId);
+  const q = useQuery({
+    queryKey: copilotAnswerKey(item.sessionId, item.messageId),
+    // null: the server no longer has it (chat deleted elsewhere, 404). It replaces any answer read before,
+    // so a deleted answer is never drawn from the cache.
+    queryFn: async () => {
+      try {
+        return await copilotApi.answer(item.sessionId, item.messageId);
+      } catch (err) {
+        if (copilotErrorOf(err).status === 404) return null;
+        throw err;
+      }
+    },
+    meta: { persist: false },
+  });
+  const sug = q.data?.reply?.suggestion ?? null;
+  const missing = q.isSuccess && !q.data;
+  return (
+    <>
+      <ForestStatusBar />
+      <Screen edges={['bottom']} testID="copilot-past-answer" contentStyle={s.list}>
+        <Mast back={A.past} title={C.title} compact />
+        <View style={[s.body, s.turn]}>
+          <Asked question={item.question ?? ''} at={new Date(item.askedAt)} day={shortDay(item.askedAt)} />
+          {q.isPending ? <QuietLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
+          {q.error || missing ? <QuietError message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
+          {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} /> : null}
+          {/* A decided change was decided by whoever coached then; only an unsent one goes to today's coach (C1). */}
+          {/* Sent from here, Your path's lists and this answer read the server again (as a turn's Send does). */}
+          {q.data ? (
+            <SuggestionSlot suggestion={sug} coach={sug?.status === 'suggested' ? coach : C.yourCoach} onSent={() => void qc.invalidateQueries({ queryKey: ['copilot'] })} />
+          ) : null}
+        </View>
+      </Screen>
+    </>
+  );
+}
+
 const s = StyleSheet.create({
   flagOff: { flex: 1, justifyContent: 'center' },
   page: { paddingHorizontal: 0, paddingBottom: 0 },
+  list: { paddingHorizontal: 0 },
   scroll: { flexGrow: 1, paddingBottom: layout.gutter },
   mast: { paddingHorizontal: 20, paddingBottom: 24, gap: 8, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
   back: { minWidth: 44, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
@@ -292,4 +418,5 @@ const s = StyleSheet.create({
   pad: { padding: 16, gap: 12 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  chip: { alignSelf: 'flex-start', borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 4 },
 });

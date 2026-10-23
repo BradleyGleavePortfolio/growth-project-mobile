@@ -15,7 +15,7 @@ jest.mock('../../../../config/featureFlags', () => ({ featureFlags: { clientPath
 const mockFlags: { clientPathCopilot: boolean } = jest.requireMock('../../../../config/featureFlags').featureFlags;
 jest.mock('../../../../api/schedulingApi', () => ({ resolveClientTimezone: () => 'UTC' }));
 jest.mock('../../../../hooks/useCalendar', () => ({ useMyCoaches: () => ({ data: mockCoaches }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack }) }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack }), useRoute: () => ({ params: undefined }) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
@@ -126,7 +126,7 @@ test('a server without Copilot (404) still lets the client ask Roman, with no we
   await b.unmount();
   mockFlags.clientPathCopilot = false;
   expect((await render(wrap(<ClientPathCopilotScreen />))).getByText('Path suggestions are not available on this account.')).toBeTruthy();
-  expect(get).toHaveBeenCalledTimes(2);
+  expect(get.mock.calls.filter(([url]) => url === '/client/copilot')).toHaveLength(2);
 });
 
 test('a client with no coach gets the existing Roman lock page and no read; Not now waits while Send is in flight', async () => {
