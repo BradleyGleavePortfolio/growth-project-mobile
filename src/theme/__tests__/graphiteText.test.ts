@@ -16,12 +16,16 @@ const ratio = (a: string, b: string) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
-// Disabled marks keep stone (a dark grey would read as enabled). CoachLtvDashboard
-// is swept by its own lane (LTV-GOLD).
-const ALLOWED = new Set([
-  'components/roman/adjust/RomanAdjustmentCard.tsx',
-  'components/command-center/CoachLtvDashboard.tsx',
-]);
+// Faint greys that fail AA as text on light grounds: stone and its legacy copies (#B1A89F) and the recovery slate.
+const FAINT = /\b(colors|tokens)\.stone\b|#B1A89F|#7E879E|\b(Colors|colors)\.(streak|tabInactive|medalSilver)\b|\baccentMuted\b/i;
+// Each allowance is one reviewed line (file | text on that line) and must still match, so none goes stale.
+// Disabled marks keep stone (a dark grey would read as enabled); the recovery resolver's `color` is the ring fill.
+const ALLOWED = [
+  'components/roman/adjust/RomanAdjustmentCard.tsx|disabledText: { color: colors.stone }',
+  'components/AllergySafetyPrompt.tsx|laterTextDisabled: { color: colors.stone }',
+  'screens/coach/client-detail/WearableInsightPanel.tsx|{ color: canEdit ? accentInk : colors.stone }',
+  'screens/client/wearables/recoveryTheme.ts|color: (p) => p.accentMuted',
+];
 const SRC = path.join(__dirname, '..', '..');
 const files = (dir: string): string[] =>
   fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -38,11 +42,24 @@ describe('#168-13 graphite small text', () => {
     }
   });
 
-  it('no text style uses stone outside the allowed disabled marks', () => {
-    const hits = files(SRC)
-      .map((f) => path.relative(SRC, f).split(path.sep).join('/'))
-      .filter((rel) => !ALLOWED.has(rel))
-      .filter((rel) => /\bcolor:\s*(colors|tokens)\.stone\b/.test(fs.readFileSync(path.join(SRC, rel), 'utf8')));
-    expect(hits).toEqual([]);
+  it('no text colour, plain or conditional, uses a faint grey outside the allowed lines', () => {
+    const hits: string[] = [];
+    for (const file of files(SRC)) {
+      const rel = path.relative(SRC, file).split(path.sep).join('/');
+      fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+        for (const m of line.matchAll(/\bcolor:/g)) {
+          const rest = line.slice((m.index ?? 0) + 6);
+          const cut = rest.search(/,\s*\w+\s*:/); // stop at the next style key
+          const value = cut < 0 ? rest : rest.slice(0, cut);
+          if (FAINT.test(value)) hits.push(`${rel}:${i + 1}|${line.trim()}`);
+        }
+      });
+    }
+    const allowed = (hit: string, entry: string) => {
+      const [file, text] = entry.split('|');
+      return hit.startsWith(`${file}:`) && hit.includes(text);
+    };
+    expect(hits.filter((hit) => !ALLOWED.some((entry) => allowed(hit, entry)))).toEqual([]);
+    expect(ALLOWED.filter((entry) => !hits.some((hit) => allowed(hit, entry)))).toEqual([]);
   });
 });

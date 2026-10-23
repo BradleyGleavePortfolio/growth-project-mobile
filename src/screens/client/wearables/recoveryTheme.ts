@@ -17,6 +17,7 @@
  */
 
 import type { ThemeColors } from '../../../theme/ThemeProvider';
+import { colors as brand } from '../../../theme/tokens';
 
 export interface RecoveryPalette {
   /** Primary cool accent (indigo). Used for ring fill at healthy recovery. */
@@ -52,6 +53,11 @@ export interface RecoveryStateView {
   label: string;
   /** Cool ring/fill colour for this state. */
   color: (palette: RecoveryPalette) => string;
+  /**
+   * Text colour for the label. Indigo reads at AA; the slate fill does not (3.4:1 on bone), so a slate
+   * state labels in graphite (#168-13) while its ring stays slate.
+   */
+  labelColor: (palette: RecoveryPalette) => string;
 }
 
 /**
@@ -65,16 +71,17 @@ export function resolveRecoveryState(score: number | null): RecoveryStateView {
       state: 'unknown',
       label: 'Recovery',
       color: (p) => p.accentMuted,
+      labelColor: () => brand.graphite,
     };
   }
   if (score >= 67) {
-    return { state: 'recovered', label: 'Recovered', color: (p) => p.accent };
+    return { state: 'recovered', label: 'Recovered', color: (p) => p.accent, labelColor: (p) => p.accent };
   }
   if (score >= 34) {
-    return { state: 'recovering', label: 'Recovering', color: (p) => p.accent };
+    return { state: 'recovering', label: 'Recovering', color: (p) => p.accent, labelColor: (p) => p.accent };
   }
   // Low recovery — desaturated slate, reassurance-first label. NEVER red.
-  return { state: 'run_down', label: 'Run-down', color: (p) => p.accentMuted };
+  return { state: 'run_down', label: 'Run-down', color: (p) => p.accentMuted, labelColor: () => brand.graphite };
 }
 
 /** Convenience: the card surface colour, blending theme surface with cool tint. */
