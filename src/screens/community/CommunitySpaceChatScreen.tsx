@@ -24,6 +24,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, useRoute, type NavigationProp, type ParamListBase, type RouteProp } from '@react-navigation/native';
 import { SpaceListButton } from '../../components/community/SpaceDrawer';
 import SpaceChatComposer from '../../components/community/space-chat/SpaceChatComposer';
+import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
+import { useSpaceVoiceOutbox } from '../../components/community/space-chat/useSpaceVoiceOutbox';
+import type { VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
 import SpaceChatRow, { DayLine, NewMessagesLine, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
 import { type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
@@ -39,6 +42,7 @@ type Params = { CommunitySpaceChat: { cohortId: string; messageId?: string } };
 type Item =
   | { type: 'msg'; key: string; m: SpaceMessage }
   | { type: 'local'; key: string; r: PendingRow }
+  | { type: 'voice'; key: string; v: VoiceOutboxItem; at: string }
   | { type: 'day'; key: string; label: string }
   | { type: 'new'; key: string };
 
@@ -61,6 +65,9 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   // Only once the server has let this person in (a loaded page, no 404 / 403): never while loading or offline cold.
   const admitted = !!cohort && !!chat.list.data && !chat.noAccess;
   const canPost = admitted && (isCoachViewer || !coachOnly);
+  // SC-M2: voice notes into this space (m#848's outbox, sent with this space's id) while communityVoiceNotes is on.
+  const voiceOn = featureFlags.communityVoiceNotes && !!cohort?.workspace_id && !!client?.id;
+  const voice = useSpaceVoiceOutbox(voiceOn ? cohort?.workspace_id ?? null : null, client?.id ?? null, cohortId);
 
   const myName = useMemo(() => chat.messages.find((m) => m.sender_user_id === client?.id)?.sender?.name
     ?? client?.name ?? [client?.firstName, client?.lastName].filter(Boolean).join(' '), [chat.messages, client]);
@@ -71,6 +78,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
       ...chat.messages.filter(drawable).map((m) => ({ at: m.created_at, item: { type: 'msg', key: m.id, m } as Item, mine: m.sender_user_id === client?.id })),
       ...chat.pending.filter((r) => r.state !== 'sent' || !chat.messages.some((m) => m.id === r.serverId))
         .map((r) => ({ at: r.createdAt, item: { type: 'local', key: r.localId, r } as Item, mine: true })),
+      ...voice.rows.map(({ v, at }) => ({ at, item: { type: 'voice', key: v.id, v, at } as Item, mine: true })),
     ].sort((a, b) => a.at.localeCompare(b.at));
     const lastRead = chat.readCursor?.last_read_at ?? null;
     const out: Item[] = [];
@@ -86,7 +94,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
       out.push(row.item);
     }
     return out.reverse();
-  }, [chat.messages, chat.pending, chat.readCursor, client?.id]);
+  }, [chat.messages, chat.pending, chat.readCursor, client?.id, voice.rows]);
 
   // Open at the message asked for (older pages load until it is found or there are none), else at the New messages
   // line; once per visit, after the read cursor has answered.
@@ -139,6 +147,17 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         />
       );
     }
+    if (item.type === 'voice') {
+      const v = item.v;
+      return (
+        <SpaceChatRow
+          id={v.id} name={myName} isCoach={isCoachViewer} createdAt={item.at} body={null}
+          voice={{ id: v.id, duration_ms: v.input.durationMs, waveform_peaks: v.peaks }} localUri={v.input.uri}
+          authorId={client?.id ?? ''} state={v.status} onRetry={() => voice.retry(v.id)} onDiscard={() => voice.discard(v.id)}
+          viewerUserId={client?.id} offline={!isOnline}
+        />
+      );
+    }
     const m = item.m;
     return (
       <SpaceChatRow
@@ -148,7 +167,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         onDelete={() => chat.remove(m.id)} onBlocked={chat.dropAuthor}
       />
     );
-  }, [chat, client, isCoachViewer, isOnline, myName]);
+  }, [chat, client, isCoachViewer, isOnline, myName, voice]);
 
   const loading = chat.list.isLoading || cohorts.isLoading;
   // Offline with nothing kept: say so at once rather than spin through the retries.
@@ -235,7 +254,11 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         {chat.noAccess ? (
           <Text style={s.line} testID="space-chat-no-access">This conversation is closed</Text>
         ) : canPost ? (
-          <SpaceChatComposer cohortId={cohortId} onSend={chat.send} />
+          <SpaceChatComposer
+            cohortId={cohortId}
+            onSend={chat.send}
+            trailing={voiceOn ? <SpaceChatMic cohortName={cohort?.name ?? ''} onSend={voice.send} /> : undefined}
+          />
         ) : admitted ? (
           <Text style={s.line} testID="space-chat-hint">Only your coach posts here. Press and hold a message to reply.</Text>
         ) : null}
