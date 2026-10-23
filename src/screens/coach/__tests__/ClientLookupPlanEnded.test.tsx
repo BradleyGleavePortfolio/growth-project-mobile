@@ -40,6 +40,7 @@ jest.mock('../../../navigation/coachLanding', () => ({ coachLandingTab: () => 'C
 
 import ClientLookupScreen from '../lookup/ClientLookupScreen';
 import { useCoachStore } from '../../../store/coachStore';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 
 const wire = (id: string, name: string) => ({
   id, name, email: `${id}@example.com`, created_at: '2026-08-01T10:00:00.000Z',
@@ -138,9 +139,11 @@ describe('L2: picked', () => {
     expect(screen.getByTestId('lookup-chip-ended').props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText('4 results')).toBeTruthy();
     expect(rowIds()).toEqual(['lookup-row-maya', 'lookup-row-dev', 'lookup-row-sam', 'lookup-row-lena']); // not "gone"
-    expect(screen.getByText('Plan ended today · 12-week block')).toBeTruthy();
-    expect(screen.getByText('Plan ended 1 day ago · Monthly coaching')).toBeTruthy();
-    expect(screen.getByText('Plan ended 3 days ago · 12-week block')).toBeTruthy();
+    // RN3-30 in two pieces: the package moves to the next line whole, never split inside "12-week" (RENEWAL3 L2's nowrap span).
+    const line = (id: string) => within(screen.getByTestId(`lookup-line-${id}`)).getAllByText(/./).map((t) => t.props.children);
+    expect([line('maya'), line('sam'), line('lena')]).toEqual([
+      ['Plan ended today ·', '12-week block'], ['Plan ended 1 day ago ·', 'Monthly coaching'], ['Plan ended 3 days ago ·', '12-week block'],
+    ]);
     expect(screen.getAllByText(/^Messaged /).map((t) => t.props.children)).toEqual(['Messaged Oct 20']); // only where the server says so
     expect(screen.getByTestId('lookup-row-sam').props.accessibilityLabel).toBe('Sam Okafor, Plan ended 1 day ago · Monthly coaching, Messaged Oct 20');
     expect(screen.getByTestId('lookup-row-maya').props.accessibilityLabel).toBe('Maya Ortiz, Plan ended today · 12-week block');
@@ -189,5 +192,64 @@ describe('L3: nobody in it', () => {
     await fireEvent.press(screen.getByTestId('stub-clear'));
     expect(screen.getByTestId('lookup-chip-ended').props.accessibilityState).toEqual({ selected: false });
     expect(screen.getByTestId('lookup-everyone')).toBeTruthy();
+  });
+});
+
+describe('L1-L2: the count and the list agree (LO C1)', () => {
+  it('counts what it lists when every server row is on this roster', async () => {
+    churned = () => Promise.resolve({ data: page(ROWS.filter((r) => r.client_id !== 'gone')) });
+    await mount();
+    expect(screen.getByTestId('lookup-chip-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 4');
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    expect([screen.getByText('4 results'), rowIds().length]).toEqual([expect.anything(), 4]);
+  });
+});
+
+describe('L1: no read where the chip cannot show (LO C3)', () => {
+  it('does not read the list for a roster under 15', async () => {
+    mockGetClients.mockImplementation(async (status: string) => ({ data: status === 'archived' ? [] : ROSTER.slice(0, 5) }));
+    await mount();
+    expect([screen.queryByTestId('lookup-chip-ended'), churnReads()]).toEqual([null, 0]);
+    await refresh();
+    expect(churnReads()).toBe(0);
+  });
+});
+
+describe('L2: blocked clients never show (b#1141; owner: hide all messaging)', () => {
+  afterEach(() => act(() => { useBlockedUsersStore.setState({ blocked: [] }); }));
+  it('leaves out a client this coach blocked, with no Message or Ask Roman; the others stay (control)', async () => {
+    await mount();
+    await act(() => { useBlockedUsersStore.setState({ blocked: [{ id: 'maya', displayName: 'Maya Ortiz', role: 'client', blockedAt: '2026-10-21T10:00:00Z' }] }); });
+    expect(screen.getByTestId('lookup-chip-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 6');
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    expect(rowIds()).toEqual(['lookup-row-dev', 'lookup-row-sam', 'lookup-row-lena']);
+    expect([screen.queryByTestId('lookup-message-maya'), screen.queryByTestId('lookup-roman-maya')]).toEqual([null, null]);
+    expect([screen.getByTestId('lookup-message-dev'), screen.getByTestId('lookup-roman-dev')].every(Boolean)).toBe(true);
+  });
+  it('re-reads when the draft route says the client is gone (404), and sends nothing', async () => {
+    await mount();
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    await fireEvent.press(screen.getByTestId('lookup-roman-maya'));
+    mockPost.mockRejectedValueOnce(Object.assign(new Error('404'), { response: { status: 404, data: { code: 'CHURNED_CLIENT_NOT_FOUND' } } }));
+    churned = () => Promise.resolve({ data: page(ROWS.slice(1), { total: 6 }) });
+    const before = churnReads();
+    await act(async () => { fireEvent.press(screen.getByTestId('home-draft-ask')); });
+    await waitFor(() => expect(screen.getByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy());
+    await waitFor(() => expect(churnReads()).toBe(before + 1));
+    expect(mockApprove).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId('home-draft-close'));
+    await waitFor(() => expect(screen.queryByTestId('lookup-row-maya')).toBeNull());
+  });
+});
+
+describe("L2: Roman's mark (RENEWAL3 L2, Sol B2)", () => {
+  it('puts the deep disc, gold ring and gold serif R on the row button, hidden from screen readers', async () => {
+    await mount();
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    const mark = within(screen.getByTestId('lookup-roman-maya')).getByTestId('roman-mark', { includeHiddenElements: true });
+    expect(mark.props.importantForAccessibility).toBe('no-hide-descendants');
+    expect(within(mark).getByText('R', { includeHiddenElements: true })).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('lookup-roman-maya'));
+    expect(within(screen.getByTestId('home-draft-head')).getByTestId('roman-mark', { includeHiddenElements: true })).toBeTruthy(); // K3a's head
   });
 });

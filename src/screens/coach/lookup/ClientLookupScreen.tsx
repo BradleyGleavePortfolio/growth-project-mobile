@@ -30,9 +30,13 @@ import {
   needsYouSentence, parseLookupQuery, readRecentClientIds, recentFromRoster, rememberRecentClient,
   type LookupAction, type LookupFilter, type LookupReason, type UnreadByClient,
 } from '../../../utils/coach/clientLookup';
-import RomanAvatar from '../../../components/roman/RomanAvatar';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { HomeSheet, type DraftAsk } from '../home-v11/DraftSheets';
-import { messagedLine, planEndedAsk, planEndedTitle, readPlanEnded, rowLine, type PlanEndedPage, type PlanEndedRow } from '../home-v11/planEndedData';
+import {
+  messagedLine, planEndedAsk, planEndedTitle, readPlanEnded, rowLine, rowParts, withoutBlocked, type LineParts, type PlanEndedPage, type PlanEndedRow,
+} from '../home-v11/planEndedData';
+import { KeepTail } from '../home-v11/PlanEnded';
+import { RomanMark } from '../home-v11/RomanMark';
 import { useLookupNudge } from './useLookupNudge';
 import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
@@ -81,17 +85,31 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const teamEntry = useContext(CoachTeamEntryContext); // COACHTABS: a Team Mode head coach opens Team here, as on today's list
   const archived = filterStatus === 'archived';
 
+  // The chip shows only on the 15+ (Search first) list, not Archived (owner 6352485746): no read for a list that can't show it.
+  const wantEnded = useRef(false);
+  const endedBusy = useRef<string | null>(null); // the coach whose read is in flight
+  const loadEnded = useCallback(async () => {
+    if (!coachId || !wantEnded.current || endedBusy.current === coachId) return; // a read in flight is already fresh
+    const mine = ++endedSeq.current;
+    endedBusy.current = coachId;
+    try {
+      const page = await readPlanEnded();
+      if (mine === endedSeq.current) setEnded({ coach: coachId, page });
+    } catch {
+      // a failed re-read keeps the last list
+    } finally {
+      if (mine === endedSeq.current) endedBusy.current = null;
+    }
+  }, [coachId]);
   const loadSide = useCallback(async () => {
     if (!coachId) return;
-    const mine = ++endedSeq.current;
     setRecentIds(await readRecentClientIds(coachId));
-    const [u, a, e] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE), readPlanEnded()]);
-    if (e.status === 'fulfilled' && mine === endedSeq.current) setEnded({ coach: coachId, page: e.value });
+    const [u, a] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE), loadEnded()]);
     // A failed unread read keeps the counts already shown. The archived count shows only when one page holds them all.
     if (u.status === 'fulfilled') setUnread((u.value?.data?.by_client as UnreadByClient) ?? {});
     const rows: unknown = a.status === 'fulfilled' ? a.value?.data : null;
     setArchivedCount(Array.isArray(rows) && rows.length < ROSTER_PAGE_SIZE ? rows.length : null);
-  }, [coachId]);
+  }, [coachId, loadEnded]);
 
   useEffect(() => {
     if (coachId) loadClients(coachId, filterStatus);
@@ -124,7 +142,18 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   }, [navigation, needsView]);
   const searchFirst = archived || (!needsView && (activeTotal.current ?? roster.length) >= SEARCH_FIRST_AT);
   const parsed = parseLookupQuery(query);
-  const endedPage = ended && ended.coach === coachId ? ended.page : null;
+  wantEnded.current = searchFirst && !archived;
+  const showEnded = wantEnded.current;
+  const haveEnded = !!ended && ended.coach === coachId;
+  useEffect(() => {
+    if (showEnded && !haveEnded) void loadEnded(); // the roster reached 15 after this focus's read was skipped
+  }, [showEnded, haveEnded, loadEnded]);
+  // b#1141's server leaves blocked pairs out; the phone also leaves out clients on the coach's own block list.
+  const blocked = useBlockedUsersStore((st) => st.blocked);
+  const endedPage = useMemo(
+    () => (ended && ended.coach === coachId ? withoutBlocked(ended.page, blocked.map((b) => b.id)) : null),
+    [ended, coachId, blocked],
+  );
   const endedOn = chip === 'ended' && endedPage != null;
   const filters = chip && chip !== 'ended' && !parsed.filters.includes(chip) ? [...parsed.filters, chip] : parsed.filters;
   const narrowing = parsed.text.length > 0 || filters.length > 0 || endedOn;
@@ -172,7 +201,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
       <Ionicons name={icon} size={20} color={colors.primary} />
     </HapticPressable>
   );
-  const clientRow = (c: RosterClient, r: LookupReason, trailing: React.ReactNode, messaged?: string | null) => {
+  const clientRow = (c: RosterClient, r: LookupReason, trailing: React.ReactNode, messaged?: string | null, parts?: LineParts) => {
     const name = rosterDisplayName(c);
     return (
       <View key={c.id} style={s.row}>
@@ -183,7 +212,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
               <Text style={s.name} numberOfLines={2}>{name}</Text>
               <View style={s.reasonRow}>
                 {r.ok ? <View style={s.dot} /> : null}
-                <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>
+                {parts ? <KeepTail parts={parts} style={s.reason} box={s.mid} testID={`lookup-line-${c.id}`} /> : <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>}
               </View>
               {messaged ? (
                 <View style={s.messaged}>
@@ -213,11 +242,11 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const endedRow = ({ c, r }: { c: RosterClient; r: PlanEndedRow }) => clientRow(c, { text: rowLine(r), action: null, ok: false }, (
     <>
       {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
-      <HapticPressable intent="light" style={s.iconBtn} onPress={() => setAsk(planEndedAsk(r))} accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${firstName(c)}`} testID={`lookup-roman-${c.id}`}>
-        <RomanAvatar size={26} />
+      <HapticPressable intent="light" style={s.iconBtn} onPress={() => setAsk({ ...planEndedAsk(r), onGone: () => void loadEnded() })} accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${firstName(c)}`} testID={`lookup-roman-${c.id}`}>
+        <RomanMark size={27} />
       </HapticPressable>
     </>
-  ), r.last_coach_message_at && endedPage ? messagedLine(r.last_coach_message_at, endedPage.time_zone) : null);
+  ), r.last_coach_message_at && endedPage ? messagedLine(r.last_coach_message_at, endedPage.time_zone) : null, rowParts(r));
 
   const header = (
     <View>
