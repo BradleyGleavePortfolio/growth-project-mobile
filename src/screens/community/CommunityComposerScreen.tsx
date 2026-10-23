@@ -30,9 +30,11 @@ import {
   useCreatePost,
   useSendDm,
   useCommunityMe,
+  useDmMessages,
+  usePosts,
 } from '../../hooks/useCommunity';
 import { describeCommunityFailure } from '../../api/communityErrors';
-import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const TITLE_MAX = 200; // mirror backend CreatePostDto.title (1..200)
@@ -58,17 +60,30 @@ export default function CommunityComposerScreen(): React.ReactElement {
   const [body, setBody] = useState('');
   const [confirmation, setConfirmation] = useState<string | null>(null);
 
+  // FX-872: "Send your coach a message" opens this with no recipient; the DM goes to the member's coach.
+  const dmTo = mode === 'dm' ? recipientId || client?.coach_id || '' : '';
   const createPost = useCreatePost(workspaceId, client?.id ?? '');
-  const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
+  const sendDm = useSendDm(workspaceId, dmTo, client?.id ?? '');
   // BLOCK-ALL-M: a block either way (DM) or a ban (post) closes it: the fields go, the typed text stays in this screen.
+  // FX-872: the fields draw only once the server answered for this exact place: the DM read with this person, or the
+  // feed read for this space (both shared with their screens, so no extra request when you came from there).
+  const dmRead = useDmMessages(mode === 'dm' ? workspaceId : '', dmTo);
+  const postRead = usePosts(mode === 'post' && hasWorkspace ? workspaceId : null);
+  const gateRead = mode === 'dm' ? dmRead : postRead;
+  const { closed, open, close } = useConversationClosed(
+    mode === 'dm' ? dmTo : null,
+    [gateRead.error],
+    useServerAnswered(gateRead),
+  );
   // BLOCK-TELL #169-5: in DM mode `by` picks the line for my side. No name shows here, so BAM-2b falls back to BAM-1.
-  const { closed, by, close } = useConversationClosed(mode === 'dm' ? recipientId : null);
+  const by = useClosedBy(mode === 'dm' ? dmTo : null, closed, { errors: [gateRead.error] });
 
   const bodyMax = mode === 'dm' ? DM_MAX : POST_BODY_MAX;
   const trimmedTitle = title.trim();
   const trimmedBody = body.trim();
   const sending = createPost.isPending || sendDm.isPending;
   const canSubmit =
+    open &&
     hasWorkspace &&
     !sending &&
     trimmedBody.length > 0 &&
@@ -132,6 +147,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
               <Text style={[typography.bodySmall, { color: semanticColors.accentText }]}>Try again</Text>
             </HapticPressable>
           </View> : null}
+          {open ? <>
           {mode === 'post' ? (
             <TextInput
               value={title}
@@ -171,6 +187,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
           <Text style={[styles.count, { color: semanticColors.textMuted }]} accessibilityLabel="Body character count">
             {body.length} / {bodyMax}
           </Text>
+          </> : null}
 
           {noWorkspace ? (
             <Text
@@ -192,7 +209,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
           ) : null}
         </ScrollView>
 
-        <View
+        {open ? <View
           style={[
             styles.footer,
             {
@@ -231,7 +248,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
               {mode === 'dm' ? 'Send' : 'Post'}
             </Text>
           </HapticPressable>
-        </View>
+        </View> : null}
         </>}
       </KeyboardAvoidingView>
     </SafeAreaView>

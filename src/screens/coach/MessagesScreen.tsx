@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -100,7 +101,9 @@ function LegacyCoachMessages() {
     setRefreshing(false);
   }, [currentUser?.id, loadUnread]);
 
-  const activeClients = clients.filter((c) => c.status === 'active');
+  // FX-872 (owner 10-23 "Dissapear"): a client I blocked is not a chat row (the one block cache, src/lib/blockSync.ts).
+  const blocked = useBlockedUsersStore((st) => st.blocked);
+  const activeClients = clients.filter((c) => c.status === 'active' && !blocked.some((b) => b.id === c.id));
   const totalUnread = Object.values(unreadByClient).reduce((a, b) => a + (b || 0), 0);
 
   const list = activeClients

@@ -33,7 +33,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
-import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useCoachingRow, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
@@ -117,8 +117,17 @@ export default function MessagesScreen() {
   const [coachName, setCoachName] = useState('');
   const [coachId, setCoachId] = useState('');
   // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in the draft (or the outbox).
+  // FX-872: nothing to type until the server answered: the inbox row (v2, it carries `closed`) and the first read.
+  const [answered, setAnswered] = useState(false);
+  const coachingRow = useCoachingRow('client', coachId);
+  const { closed, open, close } = useConversationClosed(
+    coachId,
+    [],
+    answered && coachingRow.settled,
+    coachingRow.row?.closed,
+  );
   // BLOCK-TELL #169-5: `by` picks the line for my side (BAM-2a when I blocked them, BAM-2b when they blocked me).
-  const { closed, by, close } = useConversationClosed(coachId);
+  const by = useClosedBy(coachId, closed, { pair: true, mine: coachingRow.row?.blocked_by_me });
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
   // the CompetencePill at the top of the conversation. Null hides the pill
   // (no review yet, or the backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is OFF).
@@ -218,6 +227,7 @@ export default function MessagesScreen() {
       return [];
     } finally {
       setLoading(false);
+      setAnswered(true);
     }
   }, [currentUser?.id, loadCoachReview]);
 
@@ -728,7 +738,7 @@ export default function MessagesScreen() {
         {thread.enabled ? <MuteBell muted={thread.muted} onPress={() => setMuteMenu(true)} /> : <View style={{ width: 24 }} />}
       </View>}
 
-      {thread.enabled ? (
+      {thread.enabled && !closed ? (
         <PinnedBar pins={thread.pins} onOpen={(id) => jumpToMessage(flatListRef.current, visibleMessages, id)} />
       ) : null}
 
@@ -753,7 +763,7 @@ export default function MessagesScreen() {
 
       <FlatList
         ref={flatListRef}
-        data={visibleMessages}
+        data={closed ? [] : visibleMessages /* FX-872: a closed chat shows no message text */}
         keyExtractor={(item) => (styleB && item.v2?.client_message_id) || item.id}
         contentContainerStyle={[styles.chatList, styleB && styles.bChatList]}
         showsVerticalScrollIndicator={false}
@@ -782,7 +792,7 @@ export default function MessagesScreen() {
           ) : null
         }
         ListEmptyComponent={
-          closed ? null : !error && styleB && coachName ? <StyleBFirstCard coachName={coachName} /> : !error ? <View style={styles.chatEmpty}>
+          !open ? null : !error && styleB && coachName ? <StyleBFirstCard coachName={coachName} /> : !error ? <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
             <Text style={styles.chatEmptyText}>Start a conversation with your coach</Text>
           </View> : null
@@ -921,7 +931,7 @@ export default function MessagesScreen() {
         }}
       />
 
-      {closed ? <ConversationClosedLine by={by} name={coachName} style={styles.closedBar} testID="messages-closed" /> : <>
+      {closed ? <ConversationClosedLine by={by} name={coachName} style={styles.closedBar} testID="messages-closed" /> : !open ? null : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={[styles.inputBar, styleB && styles.bInputBar]}>
@@ -955,7 +965,7 @@ export default function MessagesScreen() {
       {thread.enabled ? (
         <ThreadV2Menus
           thread={thread}
-          target={closed ? null : actionTarget}
+          target={open ? actionTarget : null}
           isMine={actionTarget?.sender_role === 'client'}
           onClose={() => setActionTarget(null)}
           onReply={handleReply}
@@ -970,7 +980,7 @@ export default function MessagesScreen() {
           onMuteClose={() => setMuteMenu(false)}
         />
       ) : null}
-      {!thread.enabled || closed ? ( // closed: Copy and Report only (no reply, edit or pin)
+      {!thread.enabled || !open ? ( // closed or not yet open: Copy and Report only (no reply, edit or pin)
         <MessageActionSheet
           visible={!!actionTarget}
           messagePreview={actionTarget?.body}

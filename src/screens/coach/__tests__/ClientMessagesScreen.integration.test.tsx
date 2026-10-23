@@ -305,7 +305,7 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
       },
     ];
 
-    const { queryByText, findByText } = await render(<ClientMessagesScreen />);
+    const { queryByText, findByTestId } = await render(<ClientMessagesScreen />);
 
     // Before server hydration completes (GET /users/blocks still gated), the
     // screen renders ONLY the loading indicator — assert NOTHING from the
@@ -316,13 +316,12 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
     expect(queryByText('should-be-filtered')).toBeNull();
     expect(queryByText('should-stay-visible')).toBeNull();
 
-    // Release the blocks response so hydration completes, then the unblocked
-    // message renders.
+    // Release the blocks response so hydration completes. FX-872 (#168-13: never show message text once closed):
+    // the coach blocked this client, so the chat is closed both ways: the closed line, and no message from either side.
     releaseBlocks();
-    await findByText('should-stay-visible');
-
-    // And the blocked sender's message is still absent.
+    await findByTestId('client-messages-closed');
     expect(queryByText('should-be-filtered')).toBeNull();
+    expect(queryByText('should-stay-visible')).toBeNull();
 
     // Hydration store state reflects the block.
     await waitFor(() => {

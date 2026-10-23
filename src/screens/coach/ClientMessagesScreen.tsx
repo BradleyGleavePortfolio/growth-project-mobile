@@ -32,7 +32,7 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
-import { useConversationClosed, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useCoachingRow, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import { track } from '../../lib/analytics';
 import { MuteBell, PinnedBar, ThreadV2Menus, jumpToMessage } from '../../components/messaging/ThreadV2Parts';
@@ -80,8 +80,18 @@ export default function ClientMessagesScreen() {
   // A reply typed and not sent stays with this client's chat on the device (COACH-CHAT-KEEP, CHAT-DISCARD).
   const [inputText, setInputText, sendKey] = useUnsentReply(clientId, initialDraft);
   // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in this client's unsent reply.
+  // FX-872: nothing to type until the server answered: this client's inbox row (v2; `closed` is the only way the coach
+  // learns the client blocked them) and the first thread read. A refused send stays closed for the session.
+  const [answered, setAnswered] = useState(false);
+  const coachingRow = useCoachingRow('coach', clientId);
+  const { closed, open, close } = useConversationClosed(
+    clientId,
+    [],
+    answered && coachingRow.settled,
+    coachingRow.row?.closed,
+  );
   // BLOCK-TELL #169-5: `by` picks the line for my side (BAM-2a when I blocked them, BAM-2b when they blocked me).
-  const { closed, by, close } = useConversationClosed(clientId);
+  const by = useClosedBy(clientId, closed, { pair: true, mine: coachingRow.row?.blocked_by_me });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
@@ -124,6 +134,7 @@ export default function ClientMessagesScreen() {
       return [];
     } finally {
       setLoading(false);
+      setAnswered(true);
     }
   }, [clientId]);
 
@@ -374,7 +385,7 @@ export default function ClientMessagesScreen() {
         {thread.enabled ? <MuteBell muted={thread.muted} onPress={() => setMuteMenu(true)} /> : <View style={{ width: 24 }} />}
       </View>
 
-      {thread.enabled ? (
+      {thread.enabled && !closed ? (
         <PinnedBar pins={thread.pins} onOpen={(id) => jumpToMessage(flatListRef.current, visibleMessages, id)} />
       ) : null}
 
@@ -386,7 +397,7 @@ export default function ClientMessagesScreen() {
 
       <FlatList
         ref={flatListRef}
-        data={visibleMessages}
+        data={closed ? [] : visibleMessages /* FX-872: a closed chat shows no message text */}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
@@ -413,8 +424,8 @@ export default function ClientMessagesScreen() {
             </TouchableOpacity>
           ) : null
         }
-        ListEmptyComponent={closed ? null : (
-          <View style={styles.chatEmpty}>
+        ListEmptyComponent={
+          !open ? null : <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
             <Text style={styles.chatEmptyText}>
               Start a conversation with {clientName.split(' ')[0]}
@@ -467,7 +478,7 @@ export default function ClientMessagesScreen() {
         }}
       />
 
-      {closed ? <ConversationClosedLine by={by} name={clientName} style={styles.closedBar} testID="client-messages-closed" /> : <>
+      {closed ? <ConversationClosedLine by={by} name={clientName} style={styles.closedBar} testID="client-messages-closed" /> : !open ? null : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={styles.inputBar}>
@@ -501,7 +512,7 @@ export default function ClientMessagesScreen() {
       {thread.enabled ? (
         <ThreadV2Menus
           thread={thread}
-          target={closed ? null : actionTarget}
+          target={open ? actionTarget : null}
           isMine={!!currentUser?.id && actionTarget?.sender_id === currentUser.id}
           onClose={() => setActionTarget(null)}
           onReply={handleReply}
@@ -511,7 +522,7 @@ export default function ClientMessagesScreen() {
           onMuteClose={() => setMuteMenu(false)}
         />
       ) : null}
-      {!thread.enabled || closed ? ( // closed: Copy and Report only (no reply, edit or pin)
+      {!thread.enabled || !open ? ( // closed or not yet open: Copy and Report only (no reply, edit or pin)
         <MessageActionSheet
           visible={!!actionTarget}
           messagePreview={actionTarget?.body}

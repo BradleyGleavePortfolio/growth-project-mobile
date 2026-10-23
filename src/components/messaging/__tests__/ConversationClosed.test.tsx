@@ -22,8 +22,9 @@ import { CommunityApiError } from '../../../api/apiCall';
 import { NavigationContext } from '@react-navigation/native';
 import { fireEvent } from '@testing-library/react-native';
 import {
-  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, isClosedRefusal, useConversationClosed,
+  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, isClosedRefusal, useClosedBy, useConversationClosed,
 } from '../ConversationClosed';
+import { closedRefusals } from '../closedRefusal';
 
 const axiosErr = (status: number, data: Record<string, unknown>) => ({ isAxiosError: true, response: { status, data } });
 const COACHING_BLOCKED = { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' };
@@ -31,6 +32,7 @@ const COACHING_BLOCKED = { error: 'BLOCKED', message: 'Messages cannot be sent t
 beforeEach(() => {
   mockWarning.mockClear();
   useBlockedUsersStore.setState({ blocked: [] });
+  closedRefusals.clear('coach-1');
 });
 
 describe('isClosedRefusal', () => {
@@ -39,6 +41,7 @@ describe('isClosedRefusal', () => {
     ['coaching edit / pin (messaging.blocked)', axiosErr(403, { error: 'messaging.blocked', code: 'messaging.blocked' })],
     ['DM to someone I blocked', axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_you' })],
     ['DM with someone who blocked me (not disclosed)', axiosErr(404, { error: 'not_found', code: 'community.dm.not_found' })],
+    ['DM with someone who blocked me (#169-5 code)', axiosErr(403, { code: 'community.dm.blocked_by_them' })],
     ['banned from the space', axiosErr(403, { code: 'community.workspace.no_access' })],
     ['banned from the cohort', axiosErr(403, { code: 'community.cohort.no_access' })],
     ['Hall posts after a ban', axiosErr(404, { code: 'community.post.not_found' })],
@@ -64,8 +67,8 @@ describe('isClosedRefusal', () => {
 });
 
 describe('useConversationClosed', () => {
-  it('open by default; closed when I blocked them; an unblock opens it again', async () => {
-    const { result } = await renderHook(() => useConversationClosed('coach-1'));
+  it('open once the server answered; closed when I blocked them; an unblock opens it again', async () => {
+    const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
     expect(result.current.closed).toBe(false);
     await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'coach-1', displayName: 'Roman', blockedAt: '2026-10-22T00:00:00Z' }] }));
     expect(result.current.closed).toBe(true);
@@ -75,11 +78,11 @@ describe('useConversationClosed', () => {
 
   it('a block on someone else leaves this conversation open', async () => {
     useBlockedUsersStore.setState({ blocked: [{ id: 'other', displayName: 'X', blockedAt: '2026-10-22T00:00:00Z' }] });
-    expect((await renderHook(() => useConversationClosed('coach-1'))).result.current.closed).toBe(false);
+    expect((await renderHook(() => useConversationClosed('coach-1', [], true))).result.current.closed).toBe(false);
   });
 
   it('a refused send closes it at once with a warning haptic; other failures leave it open', async () => {
-    const { result } = await renderHook(() => useConversationClosed('coach-1'));
+    const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
     let r = true;
     await act(async () => { r = result.current.close(new Error('Network Error')); });
     expect(r).toBe(false);
@@ -88,11 +91,12 @@ describe('useConversationClosed', () => {
     await act(async () => { r = result.current.close(axiosErr(403, COACHING_BLOCKED)); });
     expect(r).toBe(true);
     expect(result.current.closed).toBe(true);
+    expect(result.current.open).toBe(false);
     expect(mockWarning).toHaveBeenCalledTimes(1);
   });
 
   it('a server refusal the screen already holds (blocked by them, banned) closes it', async () => {
-    const { result, rerender } = await renderHook(({ errs }: { errs: unknown[] }) => useConversationClosed(null, errs), {
+    const { result, rerender } = await renderHook(({ errs }: { errs: unknown[] }) => useConversationClosed(null, errs, true), {
       initialProps: { errs: [null] as unknown[] },
     });
     expect(result.current.closed).toBe(false);
@@ -102,7 +106,7 @@ describe('useConversationClosed', () => {
 
   it('closed by my block, then I unblock: a refusal from before the unblock no longer holds it closed', async () => {
     useBlockedUsersStore.setState({ blocked: [{ id: 'coach-1', displayName: 'Roman', blockedAt: '2026-10-22T00:00:00Z' }] });
-    const { result } = await renderHook(() => useConversationClosed('coach-1'));
+    const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
     await act(async () => { result.current.close(axiosErr(403, COACHING_BLOCKED)); });
     expect(result.current.closed).toBe(true);
     await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
@@ -120,35 +124,47 @@ describe('ConversationClosedLine', () => {
   });
 });
 
-describe('#169-5 CLOSED-LINE: who closed a one-to-one conversation', () => {
-  const byOf = async (other: string | null, errs: unknown[] = []) =>
-    (await renderHook(() => useConversationClosed(other, errs))).result.current;
+describe('#169-5 CLOSED-LINE: who closed a one-to-one conversation (useClosedBy)', () => {
+  const SAM = { id: 'x', displayName: 'Sam', blockedAt: '2026-10-22T00:00:00Z' };
+  const byOf = async (other: string | null, closed: boolean, opts?: Parameters<typeof useClosedBy>[2]) =>
+    (await renderHook(() => useClosedBy(other, closed, opts))).result.current;
 
-  it('BAM-2a when I blocked them: my block list, or blocked_by_you', async () => {
-    expect(await byOf(null, [axiosErr(403, { code: 'community.dm.blocked_by_you' })])).toMatchObject({ closed: true, by: 'me' });
-    useBlockedUsersStore.setState({ blocked: [{ id: 'x', displayName: 'Sam', blockedAt: '2026-10-22T00:00:00Z' }] });
-    expect(await byOf('x')).toMatchObject({ closed: true, by: 'me' });
-    expect((await byOf('x', [axiosErr(403, COACHING_BLOCKED)])).by).toBe('me');
+  it('BAM-2a when I blocked them: my block list, the coaching row, or blocked_by_you', async () => {
+    expect(await byOf(null, true, { errors: [axiosErr(403, { code: 'community.dm.blocked_by_you' })] })).toBe('me');
+    expect(await byOf('x', true, { pair: true, mine: true })).toBe('me');
+    useBlockedUsersStore.setState({ blocked: [SAM] });
+    expect(await byOf('x', true)).toBe('me');
+    expect(await byOf('x', true, { pair: true })).toBe('me');
   });
 
-  it('BAM-2b when they blocked me: blocked_by_them, or a coaching refusal with no block of mine', async () => {
-    expect((await byOf(null, [axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_them' })])).by).toBe('them');
-    expect(await byOf('x', [axiosErr(403, COACHING_BLOCKED)])).toMatchObject({ closed: true, by: 'them' });
+  it('BAM-2b when they blocked me: blocked_by_them (also through a CommunityApiError cause), or a coaching chat closed by no block of mine', async () => {
+    expect(await byOf(null, true, { errors: [axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_them' })] })).toBe('them');
+    const wrapped = new CommunityApiError('forbidden', 403, 'community request failed (403)', axiosErr(403, { code: 'community.dm.blocked_by_them' }));
+    expect(await byOf('x', true, { errors: [wrapped] })).toBe('them');
+    expect(await byOf('x', true, { pair: true })).toBe('them');
   });
 
-  it('BAM-1 for a ban or a member who left; nothing said stays open', async () => {
-    expect(await byOf(null, [axiosErr(404, { code: 'community.dm.not_found' })])).toMatchObject({ closed: true, by: null });
-    expect(await byOf(null, [axiosErr(403, { code: 'community.workspace.no_access' })])).toMatchObject({ closed: true, by: null });
-    expect(await byOf('x', [axiosErr(500, {})])).toMatchObject({ closed: false, by: null });
+  it('BAM-1 for a ban or a member who left; null while open', async () => {
+    expect(await byOf('x', true, { errors: [axiosErr(404, { code: 'community.dm.not_found' })] })).toBeNull();
+    expect(await byOf('x', true, { errors: [axiosErr(403, { code: 'community.workspace.no_access' })] })).toBeNull();
+    expect(await byOf('x', false, { pair: true })).toBeNull();
+    useBlockedUsersStore.setState({ blocked: [SAM] });
+    expect(await byOf('x', false)).toBeNull();
   });
 
-  it('a refused send says the side; an unblock opens it again', async () => {
-    useBlockedUsersStore.setState({ blocked: [{ id: 'x', displayName: 'Sam', blockedAt: '2026-10-22T00:00:00Z' }] });
-    const hook = await renderHook(() => useConversationClosed('x'));
+  it('with the gate: a refused coaching send closes it and says they blocked me; my block says me; an unblock opens it', async () => {
+    const hook = await renderHook(() => {
+      const gate = useConversationClosed('x', [], true);
+      return { ...gate, by: useClosedBy('x', gate.closed, { pair: true }) };
+    });
+    expect(hook.result.current).toMatchObject({ closed: false, by: null });
     await act(async () => { hook.result.current.close(axiosErr(403, COACHING_BLOCKED)); });
+    expect(hook.result.current).toMatchObject({ closed: true, by: 'them' });
+    await act(async () => useBlockedUsersStore.setState({ blocked: [SAM] }));
     expect(hook.result.current).toMatchObject({ closed: true, by: 'me' });
     await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
     expect(hook.result.current).toMatchObject({ closed: false, by: null });
+    closedRefusals.clear('x');
   });
 
   it('the lines: BAM-2a, BAM-2b with the name, BAM-1 when there is no name', async () => {
