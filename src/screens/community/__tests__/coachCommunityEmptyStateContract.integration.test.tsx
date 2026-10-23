@@ -206,7 +206,7 @@ describe('coach screen empty-state CONTRACT path (real hook, mocked API only)', 
   });
 
   it('Inbox: a 200 missing coach_community_inbox_empty renders CoachErrorState + retry — never the Roman empty state, face, or fallback copy', async () => {
-    mockGetInbox.mockResolvedValue({ items: [], next_before: null });
+    mockGetInbox.mockResolvedValue({ items: [], next_cursor: null });
     mockGetEmptyStates.mockResolvedValue(
       responseMissing('coach_community_inbox_empty'),
     );

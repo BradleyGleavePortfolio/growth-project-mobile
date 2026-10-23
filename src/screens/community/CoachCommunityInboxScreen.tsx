@@ -1,23 +1,11 @@
 /**
  * CoachCommunityInboxScreen — aggregated unanswered items across the coach's
- * cohorts (v1-6). Consumes `GET /community/me/coach-inbox` (paged) and
- * `POST /community/coach/inbox/:id/ack`.
+ * cohorts (v1-6). Consumes `GET /community/me/coach-inbox`.
  *
- * VOICE-INBOX (#167-4): behind `communityVoiceNotes`, a client's voice note is
- * a row too: a mic glyph, "Voice note · 0:42", the client's name and time.
- * Tapping it opens the note (openInboxVoiceNote, the one place that decides
- * where a note opens).
- *
- * Each row shows the client avatar (with a monogram badge fallback), a snippet,
- * a relative age, and an acknowledge button. Acks are optimistic with rollback
- * (see useAckInboxItem).
- *
- * Batch acknowledge (UX P1.3 — dual affordance):
- *   - A visible "Select" toggle in the header enters multi-select mode; rows
- *     show a checkbox and a footer "Mark N as read" button appears. This is the
- *     discoverable, sighted-user path.
- *   - A long-press on a row still marks every visible item in that client's
- *     cohort thread as read — retained as a power-user shortcut.
+ * Each row shows the client avatar (with a monogram badge fallback), a snippet
+ * and a relative age. The server has no route to dismiss a row: an item leaves
+ * the inbox when the coach replies in that space (the server stamps
+ * `coach_replied_at`, and the inbox lists only unanswered items).
  *
  * THREE distinct branches (UX P0.2): a loading spinner; an honest
  * CoachErrorState on failure (never a calm/empty masquerade); and — on a
@@ -25,7 +13,7 @@
  * copy + crop come from the backend voice policy (face + voice contract).
  * Touch targets are >= 44pt.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -34,8 +22,6 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
@@ -53,7 +39,6 @@ import CompletionToast, {
 } from '../../components/community/CompletionToast';
 import {
   useCoachInbox,
-  useAckInboxItem,
   useCoachAckState,
   useCoachEmptyStatePayload,
   coachCommunityKeys,
@@ -63,13 +48,13 @@ import {
   isIllegalAckTransition,
 } from '../../hooks/useCoachAckActions';
 import { featureFlags } from '../../config/featureFlags';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { formatDuration } from '../../components/community/voiceFormat';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
-import { useQueryClient } from '@tanstack/react-query';
-import { AckStateSchema } from '../../api/coachCommunityApi';
 import type {
   CoachInboxItem,
   AckStateDto,
@@ -86,38 +71,6 @@ const ACKS_ENABLED = featureFlags.communityAcks;
 // stable for the lifetime of the build (the triage hook lives behind this gate
 // at the component level, never conditionally inside a render).
 const TRIAGE_ENABLED = featureFlags.communityAiTriage;
-
-// VOICE-INBOX kill switch (build-time, default off): when OFF no voice row
-// ever shows and the inbox is exactly today's typed-message list.
-const VOICE_ENABLED = featureFlags.communityVoiceNotes;
-
-/**
- * The rows the coach sees. A voice row (`kind: 'voice'` with its note) shows
- * only with the voice flag on, and reads "Voice note · 0:42". An older server
- * sends no kind and no voice rows, so every row stays a typed row.
- */
-export function visibleInboxItems(
-  items: CoachInboxItem[],
-  voiceOn: boolean = VOICE_ENABLED,
-): CoachInboxItem[] {
-  return items.flatMap((item) => {
-    if (item.kind !== 'voice') return [item];
-    if (!voiceOn || item.voice == null) return [];
-    const length = formatDuration(item.voice.duration_ms);
-    return [{ ...item, snippet: `Voice note · ${length}` }];
-  });
-}
-
-/**
- * Where a voice row opens: the voice note detail today. When the space chat
- * ships (#167-3), this one line points the row at the note in the chat.
- */
-export function openInboxVoiceNote(
-  navigation: CoachCommunityNav,
-  noteId: string,
-): void {
-  navigation.navigate('CommunityVoiceNoteDetail', { voiceNoteId: noteId });
-}
 
 /**
  * AI triage summary banner, pinned above the inbox list. Owns the
@@ -197,12 +150,7 @@ function buildRowAccessibilityLabel(
 export default function CoachCommunityInboxScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const inbox = useCoachInbox();
-  const ack = useAckInboxItem();
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
-  const qc = useQueryClient();
-
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // UX F6: a subtle, proportionate closure moment on a successful acknowledge,
   // reusing the established CompletionToast pattern (no new infrastructure).
@@ -214,100 +162,22 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   // Memoise the row list so its identity is stable across renders — otherwise
   // the `?? []` fallback allocates a fresh array each render and churns the
   // useCallback deps below (and the FlatList data prop).
-  const items = useMemo(
-    () => visibleInboxItems(inbox.data?.items ?? []),
-    [inbox.data?.items],
-  );
+  const items = useMemo(() => inbox.data?.items ?? [], [inbox.data?.items]);
 
-  // v2-2: seed the per-message ack cache from any ack envelope the backend
-  // attached to an inbox row (additive `ack` field, present only when
-  // FEATURE_COMMUNITY_ACKS is on server-side). The inbox payload is the source
-  // of truth; this only PRIMES the cache so the badge has a value before any
-  // optimistic action. Validated at the boundary so a drifted shape is dropped
-  // rather than fed into the badge. No-op when the flag is off or no ack is
-  // present. We never overwrite a value already in the cache (an in-flight
-  // optimistic state must win until it reconciles).
-  useEffect(() => {
-    if (!ACKS_ENABLED) return;
-    for (const item of items) {
-      const raw = (item as { ack?: unknown }).ack;
-      if (raw == null) continue;
-      const key = coachCommunityKeys.ackState(item.id);
-      if (qc.getQueryData<AckStateDto>(key) != null) continue;
-      const parsed = AckStateSchema.safeParse(raw);
-      if (parsed.success) {
-        qc.setQueryData<AckStateDto>(key, parsed.data);
-      }
-    }
-  }, [items, qc]);
   const isEmpty = !inbox.isLoading && !inbox.isError && items.length === 0;
-
-  const onAck = useCallback(
-    (id: string) => {
-      ack.mutate(id);
-    },
-    [ack],
-  );
-
-  // Long-press: mark all visible items in the same cohort thread as read.
-  const onMarkThreadRead = useCallback(
-    (item: CoachInboxItem) => {
-      items
-        .filter((i) => i.cohort_id === item.cohort_id)
-        .forEach((i) => ack.mutate(i.id));
-    },
-    [items, ack],
-  );
-
-  const toggleSelectMode = useCallback(() => {
-    setSelecting((prev) => {
-      if (prev) setSelected(new Set());
-      return !prev;
-    });
-  }, []);
-
-  const toggleRowSelected = useCallback((id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const onMarkSelectedRead = useCallback(() => {
-    selected.forEach((id) => ack.mutate(id));
-    setSelected(new Set());
-    setSelecting(false);
-  }, [selected, ack]);
 
   const renderItem = useCallback(
     ({ item }: { item: CoachInboxItem }) => (
       <InboxRowOrVoice
         item={item}
-        selecting={selecting}
-        checked={selected.has(item.id)}
         surface={semanticColors.bgSurface}
         border={semanticColors.border}
         titleColor={semanticColors.textPrimary}
         metaColor={semanticColors.textMuted}
-        accent={semanticColors.accent}
-        onAccent={semanticColors.textOnAccent}
-        onAck={onAck}
-        onMarkThreadRead={onMarkThreadRead}
-        onToggleSelected={toggleRowSelected}
         onAcknowledged={onAcknowledged}
       />
     ),
-    [
-      semanticColors,
-      selecting,
-      selected,
-      onAck,
-      onMarkThreadRead,
-      toggleRowSelected,
-      onAcknowledged,
-    ],
+    [semanticColors, onAcknowledged],
   );
 
   if (inbox.isLoading) {
@@ -364,83 +234,33 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
       style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
       testID="coach-community-inbox-screen"
     >
-      <View style={[styles.toolbar, { borderBottomColor: semanticColors.border }]}>
-        <HapticPressable
-          intent="light"
-          onPress={toggleSelectMode}
-          accessibilityRole="button"
-          accessibilityLabel={
-            selecting ? 'Cancel selection' : 'Select items to mark as read'
-          }
-          accessibilityState={{ selected: selecting }}
-          testID="coach-community-inbox-select-toggle"
-          style={styles.toolbarButton}
-        >
-          <Text style={[styles.toolbarLabel, { color: semanticColors.accent }]}>
-            {selecting ? 'Cancel' : 'Select'}
-          </Text>
-        </HapticPressable>
-      </View>
-
       <FlatList
         data={items}
         keyExtractor={(i) => i.id}
         renderItem={renderItem}
         ListHeaderComponent={TRIAGE_ENABLED ? <InboxTriageBanner /> : null}
         contentContainerStyle={styles.listContent}
+        onEndReached={() => {
+          if (inbox.hasNextPage && !inbox.isFetchingNextPage) void inbox.fetchNextPage();
+        }}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          inbox.isFetchingNextPage ? (
+            <ActivityIndicator
+              color={semanticColors.accent}
+              style={styles.pageSpinner}
+              testID="coach-community-inbox-next-page"
+            />
+          ) : null
+        }
         refreshControl={
           <RefreshControl
-            refreshing={inbox.isRefetching}
+            refreshing={inbox.isRefetching && !inbox.isFetchingNextPage}
             onRefresh={() => inbox.refetch()}
             tintColor={semanticColors.accent}
           />
         }
       />
-
-      {selecting ? (
-        <View
-          style={[
-            styles.footer,
-            {
-              backgroundColor: semanticColors.bgSurface,
-              borderTopColor: semanticColors.border,
-            },
-          ]}
-        >
-          <HapticPressable
-            intent="success"
-            onPress={onMarkSelectedRead}
-            disabled={selected.size === 0}
-            accessibilityRole="button"
-            accessibilityLabel={`Mark ${selected.size} as read`}
-            accessibilityState={{ disabled: selected.size === 0 }}
-            testID="coach-community-inbox-mark-selected"
-            style={[
-              styles.footerButton,
-              {
-                backgroundColor:
-                  selected.size === 0
-                    ? semanticColors.disabledBg
-                    : semanticColors.accent,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.footerLabel,
-                {
-                  color:
-                    selected.size === 0
-                      ? semanticColors.textOnDisabled
-                      : semanticColors.textOnAccent,
-                },
-              ]}
-            >
-              {`Mark ${selected.size} as read`}
-            </Text>
-          </HapticPressable>
-        </View>
-      ) : null}
 
       {ACKS_ENABLED ? (
         <CompletionToast
@@ -455,12 +275,14 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
 type InboxRowProps = React.ComponentProps<typeof InboxRow>;
 
 /**
- * Picks the row. A voice row gets its own component so only voice rows read
- * the navigator; a row's kind never changes, so the hooks stay stable.
+ * VOICE-INBOX (#167-4): a voice row (the API sends one only with
+ * communityVoiceNotes on, and only with its note) reads "Voice note · 0:42"
+ * and opens the note; every other row is the typed row, which opens nothing.
  */
 function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
-  return props.item.kind === 'voice' && props.item.voice != null ? (
-    <VoiceInboxRow {...props} noteId={props.item.voice.note_id} />
+  const { voice } = props.item;
+  return props.item.kind === 'voice' && voice ? (
+    <VoiceInboxRow {...props} noteId={voice.note_id} durationMs={voice.duration_ms} />
   ) : (
     <InboxRow {...props} />
   );
@@ -468,45 +290,57 @@ function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
 
 function VoiceInboxRow({
   noteId,
+  durationMs,
+  item,
   ...props
-}: InboxRowProps & { noteId: string }): React.ReactElement {
+}: InboxRowProps & { noteId: string; durationMs: number }): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
+  const labelled = { ...item, snippet: `Voice note · ${formatDuration(durationMs)}` };
   return (
-    <InboxRow {...props} onOpen={() => openInboxVoiceNote(navigation, noteId)} />
+    <HapticPressable
+      intent="light"
+      onPress={() => openInboxVoiceNote(navigation, noteId)}
+      accessibilityRole="button"
+      accessibilityLabel={buildRowAccessibilityLabel(labelled, undefined)}
+    >
+      <InboxRow {...props} item={labelled} />
+    </HapticPressable>
+  );
+}
+
+/** Where a voice row opens: the voice note today; the space chat (#167-3) re-points this one line. */
+export function openInboxVoiceNote(navigation: CoachCommunityNav, noteId: string): void {
+  navigation.navigate('CommunityVoiceNoteDetail', { voiceNoteId: noteId });
+}
+
+/** The mic glyph a voice row's line starts with, inline in its text. */
+function VoiceGlyph({ id, color }: { id: string; color: string }): React.ReactElement {
+  return (
+    <Text>
+      <Ionicons
+        name="mic-outline"
+        size={15}
+        color={color}
+        testID={`coach-community-inbox-voice-${id}`}
+      />{' '}
+    </Text>
   );
 }
 
 function InboxRow({
   item,
-  selecting,
-  checked,
   surface,
   border,
   titleColor,
   metaColor,
-  accent,
-  onAccent,
-  onAck,
-  onMarkThreadRead,
-  onToggleSelected,
   onAcknowledged,
-  onOpen,
 }: {
   item: CoachInboxItem;
-  selecting: boolean;
-  checked: boolean;
   surface: string;
   border: string;
   titleColor: string;
   metaColor: string;
-  accent: string;
-  onAccent: string;
-  onAck: (id: string) => void;
-  onMarkThreadRead: (item: CoachInboxItem) => void;
-  onToggleSelected: (id: string) => void;
   onAcknowledged: () => void;
-  /** Voice rows only: opens the note (VoiceInboxRow passes it). */
-  onOpen?: () => void;
 }): React.ReactElement {
   // ACKS_ENABLED is a build-time constant, so the number/order of hooks is
   // stable for the entire lifetime of a build — a hook guarded by it never
@@ -518,37 +352,12 @@ function InboxRow({
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const ackState = ACKS_ENABLED ? useCoachAckState(item.id) : undefined;
   return (
-    <HapticPressable
-      intent="light"
-      onPress={selecting ? () => onToggleSelected(item.id) : onOpen}
-      onLongPress={selecting ? undefined : () => onMarkThreadRead(item)}
-      accessibilityRole={selecting ? 'checkbox' : 'button'}
+    <View
+      accessible
       accessibilityLabel={buildRowAccessibilityLabel(item, ackState)}
-      accessibilityHint={
-        selecting
-          ? 'Tap to select this item'
-          : 'Long press to mark this cohort thread as read'
-      }
-      accessibilityState={selecting ? { checked } : undefined}
       testID={`coach-community-inbox-row-${item.id}`}
       style={[styles.row, { backgroundColor: surface, borderColor: border }]}
     >
-      {selecting ? (
-        <View
-          testID={`coach-community-inbox-check-${item.id}`}
-          style={[
-            styles.checkbox,
-            {
-              borderColor: accent,
-              backgroundColor: checked ? accent : 'transparent',
-            },
-          ]}
-        >
-          {checked ? (
-            <Text style={[styles.checkmark, { color: onAccent }]}>✓</Text>
-          ) : null}
-        </View>
-      ) : null}
       <MonogramBadge
         name={item.client_name}
         avatarUrl={item.avatar_url}
@@ -573,30 +382,14 @@ function InboxRow({
         >
           {item.cohort_name}
         </Text>
-        {item.kind === 'voice' ? (
-          <View style={styles.voiceLine}>
-            <Ionicons
-              name="mic-outline"
-              size={16}
-              color={metaColor}
-              testID={`coach-community-inbox-voice-${item.id}`}
-            />
-            <Text
-              style={[styles.rowSnippet, styles.voiceText, { color: titleColor }]}
-              numberOfLines={2}
-            >
-              {item.snippet}
-            </Text>
-          </View>
-        ) : (
-          <Text
-            style={[styles.rowSnippet, { color: titleColor }]}
-            numberOfLines={2}
-          >
-            {item.snippet}
-          </Text>
-        )}
-        {ACKS_ENABLED && !selecting ? (
+        <Text
+          style={[styles.rowSnippet, { color: titleColor }]}
+          numberOfLines={2}
+        >
+          {item.kind === 'voice' ? <VoiceGlyph id={item.id} color={metaColor} /> : null}
+          {item.snippet}
+        </Text>
+        {ACKS_ENABLED && item.type === 'message' && item.kind === 'text' ? (
           <CoachAckRow
             item={item}
             ackState={ackState}
@@ -604,28 +397,7 @@ function InboxRow({
           />
         ) : null}
       </View>
-      {/*
-        UX F1 — ONE visible ack action per row. The legacy `Ack` button POSTs
-        `/community/coach/inbox/:id/ack`, which DISMISSES the row. The v2-2
-        `Acknowledge` action (in CoachAckRow) stamps the ack signal without
-        removing the row — genuinely different verbs. When the v2-2 flag is ON
-        we keep a single visible primary (Acknowledge) and demote dismissal to
-        the existing long-press (which already marks the cohort thread read).
-        When the flag is OFF the row is unchanged from v1-6.
-      */}
-      {!ACKS_ENABLED && !selecting ? (
-        <HapticPressable
-          intent="success"
-          onPress={() => onAck(item.id)}
-          accessibilityRole="button"
-          accessibilityLabel={`Acknowledge message from ${item.client_name}`}
-          testID={`coach-community-inbox-ack-${item.id}`}
-          style={[styles.ackButton, { backgroundColor: accent }]}
-        >
-          <Text style={[styles.ackLabel, { color: onAccent }]}>Ack</Text>
-        </HapticPressable>
-      ) : null}
-    </HapticPressable>
+    </View>
   );
 }
 
@@ -653,8 +425,9 @@ function CoachAckRow({
   const { semanticColors } = useTheme();
   const actions = useCoachAckActions(item.id);
   const pending = actions.markAcked.isPending;
-  const alreadyAcked =
-    ackState?.state === 'acked' || ackState?.state === 'replied';
+  // The row's ack summary covers the time before any action fills the cache.
+  const reached = ackState?.state ?? item.ack?.state;
+  const alreadyAcked = reached === 'acked' || reached === 'replied';
 
   // UX F4: the badge is folded into the row's accessibility label, so hide it
   // from the a11y tree here (`labelledByRow`) to avoid a duplicate, decoupled
@@ -711,6 +484,7 @@ function CoachAckRow({
 }
 
 const styles = StyleSheet.create({
+  pageSpinner: { paddingVertical: spacing.lg },
   flex: { flex: 1 },
   triageHeader: {
     paddingHorizontal: spacing.lg,
@@ -720,25 +494,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  toolbar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  toolbarButton: {
-    minHeight: 44,
-    minWidth: 64,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingHorizontal: spacing.sm,
-  },
-  toolbarLabel: {
-    fontSize: 15,
-    fontWeight: '600',
   },
   listContent: {
     padding: spacing.lg,
@@ -752,18 +507,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 64,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkmark: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   rowBody: {
     flex: 1,
@@ -790,26 +533,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 19,
   },
-  voiceLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  voiceText: {
-    flexShrink: 1,
-  },
-  ackButton: {
-    minHeight: 44,
-    minWidth: 56,
-    paddingHorizontal: spacing.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: radius.md,
-  },
-  ackLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
   ackRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -834,19 +557,5 @@ const styles = StyleSheet.create({
     flexBasis: '100%',
     fontSize: 12,
     lineHeight: 16,
-  },
-  footer: {
-    padding: spacing.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  footerButton: {
-    minHeight: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: radius.md,
-  },
-  footerLabel: {
-    fontSize: 15,
-    fontWeight: '600',
   },
 });

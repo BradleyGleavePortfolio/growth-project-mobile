@@ -10,8 +10,8 @@
  *     is absent);
  *   - NO v2-2 "Acknowledge" quick-action is rendered
  *     (`coach-community-inbox-mark-acked-*` is absent);
- *   - the legacy visible dismissal button (`coach-community-inbox-ack-*`) IS
- *     present (the v1-6 row is unchanged);
+ *   - there is no dismissal button either (`coach-community-inbox-ack-*`):
+ *     the server has no route for one;
  *   - the ack data/action hooks (`useCoachAckState`, `useCoachAckActions`) are
  *     NEVER called — the flag-off path must not touch the ack subsystem at all.
  *
@@ -20,32 +20,26 @@
  * module registry cannot hold both the on and off variants of the screen.
  */
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 
 // ── Pin the kill-switch OFF before the screen is imported ────────────────────
 jest.mock('../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../config/featureFlags');
   return {
     ...actual,
-    featureFlags: {
-      ...actual.featureFlags,
-      communityAcks: false,
-      communityVoiceNotes: false,
-    },
+    featureFlags: { ...actual.featureFlags, communityAcks: false },
   };
 });
 
 // ── Spy hooks for the ack subsystem so we can assert they are never called ───
 const mockUseCoachAckState = jest.fn();
 const mockUseCoachAckActions = jest.fn();
-const mockAckMutate = jest.fn();
 
 jest.mock('../../../hooks/useCoachCommunity', () => {
   const actual = jest.requireActual('../../../hooks/useCoachCommunity');
   return {
     coachCommunityKeys: actual.coachCommunityKeys,
     useCoachInbox: () => mockInbox,
-    useAckInboxItem: () => ({ mutate: mockAckMutate, isPending: false }),
     useCoachEmptyStatePayload: () => ({
       status: 'ready',
       payload: {
@@ -115,9 +109,8 @@ let mockInbox: unknown;
 beforeEach(() => {
   mockUseCoachAckState.mockClear();
   mockUseCoachAckActions.mockClear();
-  mockAckMutate.mockClear();
   mockInbox = {
-    data: { items: [inboxItem()], next_before: null },
+    data: { items: [inboxItem()], next_cursor: null },
     isLoading: false,
     isError: false,
     isRefetching: false,
@@ -133,44 +126,14 @@ describe('CoachCommunityInboxScreen — flag OFF invariance (Code F4)', () => {
     expect(queryByTestId(`coach-community-inbox-ack-badge-${MID}`)).toBeNull();
     expect(queryByTestId(`coach-community-inbox-mark-acked-${MID}`)).toBeNull();
 
-    // The legacy v1-6 visible dismissal button IS present (row unchanged).
-    expect(queryByTestId(`coach-community-inbox-ack-${MID}`)).toBeTruthy();
+    // No dismissal button: the server has no route for one.
+    expect(queryByTestId(`coach-community-inbox-ack-${MID}`)).toBeNull();
   });
 
   it('never calls the ack data/action hooks under the flag-off path', async () => {
     await render(<CoachCommunityInboxScreen />);
     expect(mockUseCoachAckState).not.toHaveBeenCalled();
     expect(mockUseCoachAckActions).not.toHaveBeenCalled();
-  });
-
-  it('keeps the legacy visible Ack button wired to the v1-6 dismissal mutation', async () => {
-    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
-    await fireEvent.press(getByTestId(`coach-community-inbox-ack-${MID}`));
-    expect(mockAckMutate).toHaveBeenCalledWith(MID);
-  });
-
-  it('never shows a voice row with communityVoiceNotes off (VOICE-INBOX)', async () => {
-    const VID = '22222222-2222-2222-2222-222222222222';
-    mockInbox = {
-      ...(mockInbox as object),
-      data: {
-        items: [
-          inboxItem(),
-          {
-            ...inboxItem(),
-            id: VID,
-            snippet: 'Voice note',
-            kind: 'voice',
-            voice: { note_id: VID, duration_ms: 42_000 },
-          },
-        ],
-        next_before: null,
-      },
-    };
-    const { queryByTestId, queryByText } = await render(<CoachCommunityInboxScreen />);
-    expect(queryByTestId(`coach-community-inbox-row-${MID}`)).toBeTruthy();
-    expect(queryByTestId(`coach-community-inbox-row-${VID}`)).toBeNull();
-    expect(queryByText(/Voice note/)).toBeNull();
   });
 
   it('the row accessibility label is the plain v1-6 base (no ack/SLA routine)', async () => {
