@@ -33,7 +33,7 @@ import { closedRefusals, isClosedRefusal } from './closedRefusal';
 
 export { isClosedRefusal } from './closedRefusal';
 
-/** K2-S-104 (planning/MOCKUP3/K2), needs owner (137-2). BAM-1: spaces, bans, a member who left, or no name to show. */
+/** K2-S-104 (planning/MOCKUP3/K2), BAM-1, owner-approved 2026-10-23 10:57 PDT (A6.0-170): spaces, bans, a member who left, or no name to show. */
 export const CLOSED_LINE = 'This conversation is closed';
 /** BAM-2a, owner #169-5 (OWNER DECISION 6357189136 on m#872), approved: I blocked them. */
 export const BLOCKED_BY_ME_LINE = 'You blocked them. Unblock in Settings';
