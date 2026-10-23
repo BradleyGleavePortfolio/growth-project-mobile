@@ -1,6 +1,5 @@
 /** RENEWAL-M H1 (RENEWAL3), after SWITCH-CONFIRM-M's confirm page: his full name, what joining includes, his packages; a package opens its page. */
 import React from 'react';
-import { Text } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
@@ -19,12 +18,16 @@ const HOUSE = { id: 'house-1', firstName: 'Bradley', fullName: 'Bradley Gleave' 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mount = (coach: { id: string; firstName: string; fullName?: string } = HOUSE) => render(<Screen route={{ key: 'h', name: 'HouseCoach', params: { coach } } as any} navigation={nav as any} />);
 
+/** Every string the screen draws, top to bottom. */
+const textsOf = (n: unknown): string[] =>
+  !n ? [] : typeof n === 'string' ? [n] : Array.isArray(n) ? n.flatMap(textsOf) : textsOf((n as { children?: unknown }).children);
+
 beforeEach(() => { jest.clearAllMocks(); mockRead = async () => ({ data: { packages: ROWS } }); });
 
 it('H1 (W-168-HC): his full name and monogram, then Includes (HC-2 to HC-7), then his packages, in that order', async () => {
   const s = await mount();
   await s.findByTestId('house-package-h-1');
-  const texts = s.UNSAFE_getAllByType(Text).map((t) => [t.props.children].flat().join(''));
+  const texts = textsOf(s.toJSON());
   const order = ['BG', "TGP's Top Rated Coach", 'Bradley Gleave', 'Includes', 'Personalized workout plans', '1:1 check-ins',
     'Direct access to Bradley', 'Customized meal plans', 'Advanced AI usage', '1:1 coaching with Bradley Gleave', '12-week strength block', 'Monthly coaching'];
   expect(order.map((t) => texts.indexOf(t))).toEqual(order.map((t) => texts.indexOf(t)).sort((a, b) => a - b));
