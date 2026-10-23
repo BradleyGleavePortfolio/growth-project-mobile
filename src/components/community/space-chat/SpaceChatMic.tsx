@@ -17,23 +17,27 @@ export interface SpaceChatMicProps {
 
 export default function SpaceChatMic({ cohortName, onSend }: SpaceChatMicProps): React.ReactElement {
   const [open, setOpen] = useState(false);
+  // The sheet mounts on the first tap (one Modal less per space chat), then stays so closing still slides.
+  const [used, setUsed] = useState(false);
   return (
     <>
       <TouchableOpacity
         style={s.mic}
-        onPress={() => setOpen(true)}
+        onPress={() => { setUsed(true); setOpen(true); }}
         accessibilityRole="button"
         accessibilityLabel="Record a voice note"
         testID="space-chat-mic"
       >
         <Ionicons name="mic-outline" size={24} color={fp.forest} />
       </TouchableOpacity>
-      <VoiceRecordSheet
-        visible={open}
-        target={{ kind: 'cohort', cohortName }}
-        onClose={() => setOpen(false)}
-        onSend={(recording) => { setOpen(false); onSend(recording); }}
-      />
+      {used ? (
+        <VoiceRecordSheet
+          visible={open}
+          target={{ kind: 'cohort', cohortName }}
+          onClose={() => setOpen(false)}
+          onSend={(recording) => { setOpen(false); onSend(recording); }}
+        />
+      ) : null}
     </>
   );
 }

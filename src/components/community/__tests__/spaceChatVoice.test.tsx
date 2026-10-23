@@ -74,6 +74,52 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockOutbox.items = [];
 });
+// The player's own async state updates (VoiceNotePlayer, FX-848) outlive a test: the SpaceVoiceNote cases run last.
+
+describe('SpaceChatMic', () => {
+  it('opens the record sheet aimed at this space and hands the recording on', async () => {
+    const onSend = jest.fn();
+    const r = await render(<SpaceChatMic cohortName="Everyone" onSend={onSend} />);
+    const mic = r.getByTestId('space-chat-mic');
+    expect(mic.props.accessibilityLabel).toBe('Record a voice note');
+    expect(mockSheet).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.press(mic); });
+    expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, target: { kind: 'cohort', cohortName: 'Everyone' } }));
+    const recording = { uri: 'file:///r.m4a', durationMs: 4000 };
+    await act(async () => { (mockSheet.mock.calls[mockSheet.mock.calls.length - 1][0] as { onSend: (x: unknown) => void }).onSend(recording); });
+    expect(onSend).toHaveBeenCalledWith(recording);
+    expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }));
+  });
+});
+
+describe('useSpaceVoiceOutbox', () => {
+  const item = (id: string, cohortId: string, status = 'sending') => ({
+    id, authorId: 'u-1', workspaceId: 'w-1', peaks: [0.3], status,
+    input: { uri: `file:///${id}.m4a`, durationMs: 3000, cohortId },
+  });
+
+  it('keeps this space’s items, sends with this space, and refreshes the messages when an item leaves', async () => {
+    mockOutbox.items = [item('a', 'c-1'), item('b', 'c-2')];
+    const { qc, Wrapper } = wrap();
+    const spy = jest.spyOn(qc, 'invalidateQueries');
+    const { result, rerender } = await renderHook(() => useSpaceVoiceOutbox('w-1', 'u-1', 'c-1'), { wrapper: Wrapper });
+    expect(result.current.rows.map((x) => x.v.id)).toEqual(['a']);
+    const at = result.current.rows[0].at;
+    result.current.send({ uri: 'file:///n.m4a', durationMs: 2000 } as never);
+    expect(mockOutbox.send).toHaveBeenCalledWith(expect.any(Object), { cohortId: 'c-1' });
+
+    mockOutbox.items = [item('a', 'c-1', 'failed'), item('b', 'c-2')];
+    await rerender({});
+    expect(result.current.rows[0].v.status).toBe('failed');
+    expect(result.current.rows[0].at).toBe(at);
+    expect(spy).not.toHaveBeenCalled();
+
+    mockOutbox.items = [item('b', 'c-2')];
+    await rerender({});
+    expect(result.current.rows).toEqual([]);
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'space-chat', 'u-1', 'c-1'] });
+  });
+});
 
 describe('SpaceVoiceNote — New / Played', () => {
   it('shows New on an unheard note, tells the server once when it plays to the end, then shows Played', async () => {
@@ -142,50 +188,5 @@ describe('SpaceVoiceNote — New / Played', () => {
     await waitFor(() => expect(p.load).toHaveBeenLastCalledWith('file:///v-1.m4a', expect.any(Object)));
     await act(async () => { events[events.length - 1].onEnd?.(); });
     expect(spaceChatApi.markHeard).not.toHaveBeenCalled();
-  });
-});
-
-describe('SpaceChatMic', () => {
-  it('opens the record sheet aimed at this space and hands the recording on', async () => {
-    const onSend = jest.fn();
-    const r = await render(<SpaceChatMic cohortName="Everyone" onSend={onSend} />);
-    const mic = r.getByTestId('space-chat-mic');
-    expect(mic.props.accessibilityLabel).toBe('Record a voice note');
-    expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false, target: { kind: 'cohort', cohortName: 'Everyone' } }));
-    fireEvent.press(mic);
-    expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }));
-    const recording = { uri: 'file:///r.m4a', durationMs: 4000 };
-    await act(async () => { (mockSheet.mock.calls[mockSheet.mock.calls.length - 1][0] as { onSend: (x: unknown) => void }).onSend(recording); });
-    expect(onSend).toHaveBeenCalledWith(recording);
-    expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }));
-  });
-});
-
-describe('useSpaceVoiceOutbox', () => {
-  const item = (id: string, cohortId: string, status = 'sending') => ({
-    id, authorId: 'u-1', workspaceId: 'w-1', peaks: [0.3], status,
-    input: { uri: `file:///${id}.m4a`, durationMs: 3000, cohortId },
-  });
-
-  it('keeps this space’s items, sends with this space, and refreshes the messages when an item leaves', async () => {
-    mockOutbox.items = [item('a', 'c-1'), item('b', 'c-2')];
-    const { qc, Wrapper } = wrap();
-    const spy = jest.spyOn(qc, 'invalidateQueries');
-    const { result, rerender } = await renderHook(() => useSpaceVoiceOutbox('w-1', 'u-1', 'c-1'), { wrapper: Wrapper });
-    expect(result.current.rows.map((x) => x.v.id)).toEqual(['a']);
-    const at = result.current.rows[0].at;
-    result.current.send({ uri: 'file:///n.m4a', durationMs: 2000 } as never);
-    expect(mockOutbox.send).toHaveBeenCalledWith(expect.any(Object), { cohortId: 'c-1' });
-
-    mockOutbox.items = [item('a', 'c-1', 'failed'), item('b', 'c-2')];
-    await rerender({});
-    expect(result.current.rows[0].v.status).toBe('failed');
-    expect(result.current.rows[0].at).toBe(at);
-    expect(spy).not.toHaveBeenCalled();
-
-    mockOutbox.items = [item('b', 'c-2')];
-    await rerender({});
-    expect(result.current.rows).toEqual([]);
-    expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'space-chat', 'u-1', 'c-1'] });
   });
 });
