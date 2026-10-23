@@ -133,6 +133,7 @@ export function useCoachFlagged(): UseQueryResult<CoachFlaggedItem[]> {
     queryKey: coachCommunityKeys.flagged(),
     queryFn: () => coachCommunityApi.getFlagged(),
     staleTime: 15_000,
+    meta: { persist: false }, // reported posts are never saved to the phone (same as the inbox)
   });
 }
 
@@ -269,6 +270,7 @@ export function useCoachPostDetail(
     queryFn: () => coachCommunityApi.getCoachPostDetail(postId),
     enabled: postId.length > 0,
     staleTime: 15_000,
+    meta: { persist: false }, // a post is never saved to the phone (same as the inbox)
   });
 }
 
