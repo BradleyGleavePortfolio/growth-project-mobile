@@ -190,7 +190,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
             style={[styles.kind, { color: semanticColors.textMuted }]}
             accessibilityRole="header"
           >
-            Voice note
+            {data.author_name?.trim() || 'Voice note'}
           </Text>
           {when.length > 0 ? (
             <Text style={[styles.when, { color: semanticColors.textMuted }]}>
