@@ -61,7 +61,7 @@ export function useWinFade(line: HomeWin | null | undefined, live: boolean, calm
   let cur = t;
   // A change starts a fresh fade at 0 in this same render, so its first frame is the old line, never the new one at full.
   if (t.now.k !== next.k) {
-    const go = live && !calm && t.now.k !== 'off';
+    const go = live && !calm;
     cur = { now: next, was: go ? { ...t.now, e: t.now.w ? undefined : seen.current } : undefined, fade: new Animated.Value(go ? 0 : 1) };
     setT(cur);
   }
