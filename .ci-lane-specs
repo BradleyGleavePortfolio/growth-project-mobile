@@ -1,0 +1,3 @@
+src/__tests__/copyVoice.guard.test.ts
+src/__tests__/screenshotsHarness.test.ts
+src/__tests__/screenshotsMockAdapter.test.ts
