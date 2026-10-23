@@ -518,12 +518,14 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
             // Honest load-failure state (audit R2 P2): a fetch error must NOT be
             // dressed up as the benign empty copy. CoachErrorState co-mounts
             // Roman's neutral face, an honest one-sentence line in his register
-            // (no contractions, no exclamation), and a retry action.
+            // (no contractions, no exclamation), and a retry action. No face
+            // for a client with no coach (139-15).
             <CoachErrorState
               message="The weight chart did not load. Pull down to try again."
               onRetry={onChartRetry}
               retrying={chartRetrying}
               testID="progress-weight-chart-error"
+              roman={!romanLocked}
             />
           ) : chartData.length >= 2 ? (
             <View>

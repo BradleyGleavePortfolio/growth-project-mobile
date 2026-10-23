@@ -111,6 +111,8 @@ export interface MoneyCharge {
   /** What the bank took back on a lost dispute (0 when none). */
   chargedBackCents: number;
   createdAt: string;
+  /** SWITCH-TELL (b#1132): when this client moved to another coach after this charge; null when they did not. */
+  movedAwayAt: string | null;
 }
 
 export interface MoneyChargeBreakdown {
@@ -470,6 +472,7 @@ function readCharge(r: Reader, raw: unknown, at: string): MoneyCharge {
         ? 0
         : r.cents(c.charged_back_cents, `${at}.charged_back_cents`),
     createdAt: r.date(c.created_at, `${at}.created_at`),
+    movedAwayAt: r.dateOrNull(c.moved_away_at, `${at}.moved_away_at`),
   };
 }
 

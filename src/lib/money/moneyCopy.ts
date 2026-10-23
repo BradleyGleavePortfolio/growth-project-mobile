@@ -26,6 +26,20 @@ export function shortDate(iso: string | null): string | null {
   });
 }
 
+/** SWITCH-TELL (b#1132): the quiet line on a charge whose client moved to another coach. */
+export function movedAwayLine(c: MoneyCharge): string | null {
+  const day = shortDate(c.movedAwayAt);
+  return day ? `Moved to another coach · ${day}` : null;
+}
+
+/** A charge row's spoken label; a moved client's row has no package name. */
+export function chargeRowLabel(c: MoneyCharge): string {
+  const moved = movedAwayLine(c)?.replace(" · ", ", ");
+  return `${[c.client.name, c.packageName, money(c.amountCents, c.currency), chargeStateLabel(c), moved]
+    .filter(Boolean)
+    .join(", ")}. Open the breakdown`;
+}
+
 export const RANGE_LABEL: Record<MoneyRange, string> = {
   today: "Today",
   "30d": "30 days",

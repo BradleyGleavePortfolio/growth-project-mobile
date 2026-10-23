@@ -12,6 +12,8 @@
  *
  * Copy is Roman's butler voice: no contractions, no exclamation marks, no
  * emoji. Numbers are the client's real targets when known, otherwise omitted.
+ * Coachless clients have no Roman (139-15): the card never shows for them and
+ * leaves the Home notice slot free (both Homes render this one component).
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -20,6 +22,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import RomanAvatar from '../roman/RomanAvatar';
 import { dismissFullMacrosIntro, useFullMacrosIntroVisible } from '../../macros/macroDisplayStore';
 import { useNoticeSlot } from './HomeNoticeSlot';
+import { useClientNeedsCoach } from '../coachless/JoinCoachState';
 
 const fmt = (v: number): string => Math.round(v).toLocaleString('en-US');
 const known = (v: number | null | undefined): v is number =>
@@ -77,7 +80,8 @@ export default function FullMacrosIntroCard({
   carbsG?: number | null;
   fatG?: number | null;
 }): React.ReactElement | null {
-  const visible = useNoticeSlot('fullMacros', useFullMacrosIntroVisible());
+  const romanLocked = useClientNeedsCoach();
+  const visible = useNoticeSlot('fullMacros', useFullMacrosIntroVisible() && !romanLocked);
   if (!visible) return null;
   return (
     <FullMacrosIntroCardView carbsG={carbsG} fatG={fatG} onDismiss={() => dismissFullMacrosIntro()} />
