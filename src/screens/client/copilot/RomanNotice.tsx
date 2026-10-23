@@ -24,7 +24,7 @@ export function RomanNotice({ title, body, children, testID }: { title?: string;
   const ink = { color: sc.textPrimary };
   return (
     <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]} accessibilityRole="alert" accessibilityLiveRegion="polite" testID={testID}>
-      <View style={s.who}>
+      <View style={[s.who, !title && s.top]}>
         <RomanAvatar crop="neutral" size={36} />
         {title
           ? <Text style={[typography.bodyMd, s.strong, s.grow, ink]} testID={testID ? `${testID}-title` : undefined}>{title}</Text>
@@ -55,6 +55,7 @@ export function CopilotRefusal({ refusal, onRetry, testID }: { refusal: AiRefusa
 const s = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: radius.card, padding: 16, gap: 12 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  top: { alignItems: 'flex-start' },
   strong: { fontWeight: '600' },
   grow: { flex: 1 },
 });

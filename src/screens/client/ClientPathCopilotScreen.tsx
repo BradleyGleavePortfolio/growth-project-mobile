@@ -135,9 +135,9 @@ function PathView() {
   // A suggestion already shown under an answer is not listed a second time below.
   const underAnswers = new Set(turns.map((t) => t.answer?.reply?.suggestion?.id));
   // After an answer, the starters not asked yet stay as quick chips under the last turn (frame 03, Opus B-G1); none
-  // while Roman answers, and none once credits or the daily cap hold every question (frames 08, 09).
+  // while Roman answers, and none while AI help is off, credits are out or the daily cap holds (frames 07, 08, 09).
   const last = turns[turns.length - 1];
-  const held = last?.error?.kind === 'poolEmpty' || last?.error?.kind === 'dailyCap';
+  const held = ['poolEmpty', 'dailyCap', 'aiRefused'].includes(last?.error?.kind ?? '');
   const more = asked && !busy && !held ? starters.filter((q) => !turns.some((t) => t.question === q)) : [];
   const listed = items.filter((i) => !underAnswers.has(i.id));
   const composer = (

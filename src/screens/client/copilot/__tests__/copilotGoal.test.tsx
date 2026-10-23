@@ -106,4 +106,5 @@ test('AI help off is Roman\u2019s card with main\u2019s words and the full Allow
   expect(s.getByTestId('copilot-ai-refusal-title').props.children).toBe('AI help is off');
   expect(s.getByText(/^Roman cannot use your information because AI help is not on for your account\./)).toBeTruthy();
   expect(s.getByTestId('copilot-ai-refusal-allow')).toBeTruthy();
+  expect(s.queryByTestId('copilot-more')).toBeNull();
 });
