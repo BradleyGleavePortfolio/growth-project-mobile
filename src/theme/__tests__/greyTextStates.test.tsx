@@ -48,12 +48,15 @@ describe('B1 allergy prompt: Later while a save is pending', () => {
     expect(textColor(screen.getByText('Set this up later'))).toBe(colors.graphite);
 
     await fireEvent.press(screen.getByLabelText('None'));
-    await fireEvent.press(screen.getByLabelText('Save restrictions'));
+    // The save handler awaits onSubmit, so this press settles only after finish(): do not await it yet.
+    const saving = fireEvent.press(screen.getByLabelText('Save restrictions'));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith([]));
-    expect(textColor(screen.getByText('Set this up later'))).toBe(colors.stone);
+    await waitFor(() => expect(textColor(screen.getByText('Set this up later'))).toBe(colors.stone));
     expect(screen.getByLabelText('Set this up later').props.accessibilityState).toMatchObject({ disabled: true });
 
     await act(async () => finish());
+    await saving;
     await waitFor(() => expect(textColor(screen.getByText('Set this up later'))).toBe(colors.graphite));
   });
 });
