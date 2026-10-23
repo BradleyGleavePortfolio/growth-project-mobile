@@ -40,6 +40,7 @@ jest.mock('../../../navigation/coachLanding', () => ({ coachLandingTab: () => 'C
 
 import ClientLookupScreen from '../lookup/ClientLookupScreen';
 import { useCoachStore } from '../../../store/coachStore';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 
 const wire = (id: string, name: string) => ({
   id, name, email: `${id}@example.com`, created_at: '2026-08-01T10:00:00.000Z',
@@ -84,6 +85,8 @@ const refresh = () => act(async () => { await screen.getByTestId('lookup-scroll'
 const ids = (re: RegExp) => screen.getAllByTestId(re).map((n) => n.props.testID as string).filter((id, i, all) => all.indexOf(id) === i);
 const chipIds = () => ids(/^lookup-chip-/);
 const rowIds = () => ids(/^lookup-row-/);
+/** The words of every Text under a node, in order (WholeLine draws one line as several Texts). */
+const textsIn = (w: ReturnType<typeof within>) => w.queryAllByText(/[\s\S]*/).map((t) => ([] as unknown[]).concat(t.props.children).join(''));
 
 describe('L1: the chip', () => {
   it("sits before Archived and counts the server's total, never one page's rows", async () => {
@@ -138,9 +141,10 @@ describe('L2: picked', () => {
     expect(screen.getByTestId('lookup-chip-ended').props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText('4 results')).toBeTruthy();
     expect(rowIds()).toEqual(['lookup-row-maya', 'lookup-row-dev', 'lookup-row-sam', 'lookup-row-lena']); // not "gone"
-    expect(screen.getByText('Plan ended today · 12-week block')).toBeTruthy();
-    expect(screen.getByText('Plan ended 1 day ago · Monthly coaching')).toBeTruthy();
-    expect(screen.getByText('Plan ended 3 days ago · 12-week block')).toBeTruthy();
+    // RN3-30 as written, in pieces that keep the package whole (WholeLine; LO-866 B2)
+    expect(['maya', 'sam', 'lena'].map((id) => textsIn(within(screen.getByTestId(`lookup-line-${id}`))))).toEqual([
+      ['Plan ended today · ', '12-week block'], ['Plan ended 1 day ago · ', 'Monthly coaching'], ['Plan ended 3 days ago · ', '12-week block'],
+    ]);
     expect(screen.getAllByText(/^Messaged /).map((t) => t.props.children)).toEqual(['Messaged Oct 20']); // only where the server says so
     expect(screen.getByTestId('lookup-row-sam').props.accessibilityLabel).toBe('Sam Okafor, Plan ended 1 day ago · Monthly coaching, Messaged Oct 20');
     expect(screen.getByTestId('lookup-row-maya').props.accessibilityLabel).toBe('Maya Ortiz, Plan ended today · 12-week block');
@@ -166,7 +170,7 @@ describe('L2: picked', () => {
     await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
     await fireEvent.press(screen.getByTestId('lookup-roman-maya'));
     expect(screen.getByText('Ask Roman to write to Maya?')).toBeTruthy();
-    expect(within(screen.getByTestId('home-draft-sheet')).getByText('Plan ended today · 12-week block')).toBeTruthy();
+    expect(screen.getByTestId('home-draft-context').props.accessibilityLabel).toBe('Plan ended today · 12-week block');
     expect(mockPost).not.toHaveBeenCalled();
     await act(async () => { fireEvent.press(screen.getByTestId('home-draft-ask')); });
     expect(mockPost).toHaveBeenCalledWith('/v1/coach/churned-clients/maya/draft', {});
@@ -189,5 +193,42 @@ describe('L3: nobody in it', () => {
     await fireEvent.press(screen.getByTestId('stub-clear'));
     expect(screen.getByTestId('lookup-chip-ended').props.accessibilityState).toEqual({ selected: false });
     expect(screen.getByTestId('lookup-everyone')).toBeTruthy();
+  });
+});
+
+describe('L2: Roman as RENEWAL3 draws him (FX-CHURN; LS-866 B2)', () => {
+  it("puts his ringed mark in the bell's place and opens K3 under his forest masthead", async () => {
+    await mount();
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    expect(within(screen.getByTestId('lookup-roman-maya')).getByTestId('lookup-roman-mark-maya', { includeHiddenElements: true })).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('lookup-roman-maya'));
+    const mast = within(screen.getByTestId('home-draft-masthead'));
+    expect([mast.getByTestId('home-draft-mark', { includeHiddenElements: true }), mast.getByText('Roman'), mast.getByText('Ask Roman to write to Maya?')].every(Boolean)).toBe(true);
+    expect(textsIn(within(screen.getByTestId('home-draft-context')))).toEqual(['Plan ended today · ', '12-week block']);
+    await act(async () => { fireEvent.press(screen.getByTestId('home-draft-ask')); });
+    await waitFor(() => expect(mast.getByText("Roman's draft for Maya")).toBeTruthy()); // K3b
+  });
+});
+
+describe('L2: a blocked pair (FX-CHURN; LO-866 B1, b#1141)', () => {
+  afterEach(() => { act(() => { useBlockedUsersStore.setState({ blocked: [] }); }); });
+  it('leaves out a client the coach blocked, with its Message and Roman buttons, and counts one fewer', async () => {
+    act(() => { useBlockedUsersStore.setState({ blocked: [{ id: 'dev', displayName: 'Dev Patel', role: 'client', blockedAt: '2026-10-22T10:00:00Z' }] }); });
+    await mount();
+    expect(screen.getByTestId('lookup-chip-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 6');
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    expect(rowIds()).toEqual(['lookup-row-maya', 'lookup-row-sam', 'lookup-row-lena']);
+    expect([screen.queryByTestId('lookup-message-dev'), screen.queryByTestId('lookup-roman-dev')]).toEqual([null, null]);
+    act(() => { useBlockedUsersStore.setState({ blocked: [] }); });
+    expect(rowIds()).toEqual(['lookup-row-maya', 'lookup-row-dev', 'lookup-row-sam', 'lookup-row-lena']);
+  });
+  it("sends nothing when the server answers the draft for a pair blocked either way with b#1141's 404", async () => {
+    mockPost.mockRejectedValue(Object.assign(new Error('404'), { response: { status: 404, data: { code: 'CHURNED_CLIENT_NOT_FOUND' } } }));
+    await mount();
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    await fireEvent.press(screen.getByTestId('lookup-roman-maya'));
+    await act(async () => { fireEvent.press(screen.getByTestId('home-draft-ask')); });
+    await waitFor(() => expect(screen.getByText("Roman couldn't write this. Nothing was sent. Try again in a moment.")).toBeTruthy());
+    expect([screen.queryByTestId('home-draft-send'), mockApprove.mock.calls]).toEqual([null, []]);
   });
 });

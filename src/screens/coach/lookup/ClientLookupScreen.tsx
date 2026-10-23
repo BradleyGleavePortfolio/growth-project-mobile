@@ -30,9 +30,11 @@ import {
   needsYouSentence, parseLookupQuery, readRecentClientIds, recentFromRoster, rememberRecentClient,
   type LookupAction, type LookupFilter, type LookupReason, type UnreadByClient,
 } from '../../../utils/coach/clientLookup';
-import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { HomeSheet, type DraftAsk } from '../home-v11/DraftSheets';
-import { messagedLine, planEndedAsk, planEndedTitle, readPlanEnded, rowLine, type PlanEndedPage, type PlanEndedRow } from '../home-v11/planEndedData';
+import {
+  messagedLine, planEndedAsk, planEndedTitle, readPlanEnded, rowLine, rowLineParts, useBlockedIds, withoutBlocked, type PlanEndedPage, type PlanEndedRow,
+} from '../home-v11/planEndedData';
+import { RomanRingMark, WholeLine } from '../home-v11/PlanEndedBits';
 import { useLookupNudge } from './useLookupNudge';
 import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
@@ -124,7 +126,9 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   }, [navigation, needsView]);
   const searchFirst = archived || (!needsView && (activeTotal.current ?? roster.length) >= SEARCH_FIRST_AT);
   const parsed = parseLookupQuery(query);
-  const endedPage = ended && ended.coach === coachId ? ended.page : null;
+  // A client the coach blocked on this phone is left out, as on the Home; the server drops a pair blocked either way (b#1141).
+  const blockedIds = useBlockedIds();
+  const endedPage = useMemo(() => withoutBlocked(ended && ended.coach === coachId ? ended.page : null, blockedIds), [ended, coachId, blockedIds]);
   const endedOn = chip === 'ended' && endedPage != null;
   const filters = chip && chip !== 'ended' && !parsed.filters.includes(chip) ? [...parsed.filters, chip] : parsed.filters;
   const narrowing = parsed.text.length > 0 || filters.length > 0 || endedOn;
@@ -172,7 +176,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
       <Ionicons name={icon} size={20} color={colors.primary} />
     </HapticPressable>
   );
-  const clientRow = (c: RosterClient, r: LookupReason, trailing: React.ReactNode, messaged?: string | null) => {
+  const clientRow = (c: RosterClient, r: LookupReason, trailing: React.ReactNode, messaged?: string | null, parts?: readonly string[]) => {
     const name = rosterDisplayName(c);
     return (
       <View key={c.id} style={s.row}>
@@ -183,7 +187,8 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
               <Text style={s.name} numberOfLines={2}>{name}</Text>
               <View style={s.reasonRow}>
                 {r.ok ? <View style={s.dot} /> : null}
-                <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>
+                {parts ? <WholeLine parts={parts} style={s.reason} boxStyle={s.reasonLine} testID={`lookup-line-${c.id}`} />
+                  : <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>}
               </View>
               {messaged ? (
                 <View style={s.messaged}>
@@ -209,15 +214,16 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     ));
   };
   // L2: "Plan ended {n} days ago · {package}" (RN3-30), "Messaged {Mon D}" (RN3-31) when the server has the coach's last
-  // message, and Roman's mark in the bell's place: the ask-first draft the Home's list opens (RN3-41).
+  // message, and Roman's mark in the bell's place: the ask-first draft the Home's list opens (RN3-41). The line keeps its package
+  // whole (WholeLine); the mark is L2's forest disc with a gold ring, and the sheet opens under K3's forest masthead.
   const endedRow = ({ c, r }: { c: RosterClient; r: PlanEndedRow }) => clientRow(c, { text: rowLine(r), action: null, ok: false }, (
     <>
       {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
       <HapticPressable intent="light" style={s.iconBtn} onPress={() => setAsk(planEndedAsk(r))} accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${firstName(c)}`} testID={`lookup-roman-${c.id}`}>
-        <RomanAvatar size={26} />
+        <RomanRingMark size={30} testID={`lookup-roman-mark-${c.id}`} />
       </HapticPressable>
     </>
-  ), r.last_coach_message_at && endedPage ? messagedLine(r.last_coach_message_at, endedPage.time_zone) : null);
+  ), r.last_coach_message_at && endedPage ? messagedLine(r.last_coach_message_at, endedPage.time_zone) : null, rowLineParts(r));
 
   const header = (
     <View>
@@ -426,6 +432,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     reasonRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
     reason: { ...typography.bodySmall, color: colors.textMuted, flexShrink: 1 },
     reasonOk: { color: colors.textPrimary },
+    reasonLine: { flex: 1 },
     messaged: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     messagedText: { fontFamily: 'Inter_600SemiBold', color: colors.success },
     dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: colors.primary },
