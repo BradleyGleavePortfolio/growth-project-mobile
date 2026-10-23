@@ -97,7 +97,7 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
 }
 
 const s = StyleSheet.create({
-  card: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: radius.card, padding: 16, gap: 12 },
+  card: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: radius.card, padding: 16, gap: 10 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
   eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   strong: { fontWeight: '600' },

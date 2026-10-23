@@ -188,7 +188,7 @@ function PathView() {
                 {more.map((label, i) => (
                   <Pressable key={label} onPress={() => onAsk(label)} accessibilityRole="button" accessibilityLabel={label} testID={`copilot-more-${i}`}
                     style={({ pressed }) => [s.more, { backgroundColor: pressed ? pathTint.leaf : ledger.card, borderColor: ledger.chip }]}>
-                    <Text style={[typography.body, { color: forestPop.forest }]}>{label}</Text>
+                    <Text style={[typography.body, { color: forestPop.forest, flexShrink: 1 }]}>{label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -418,6 +418,6 @@ const s = StyleSheet.create({
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
   chip: { alignSelf: 'flex-start', borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  more: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: radius.button, paddingHorizontal: 14, paddingVertical: 8 },
+  more: { maxWidth: '100%', minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: radius.button, paddingHorizontal: 14, paddingVertical: 8 },
   footer: { textAlign: 'center', paddingTop: 8 },
 });

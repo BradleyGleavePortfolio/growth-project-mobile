@@ -68,7 +68,7 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 4 },
   tile: { flex: 1, minWidth: 96, minHeight: 104, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: 12, gap: 4 },
-  half: { flex: 0, width: '48%' },
+  half: { flexGrow: 0, flexShrink: 0, flexBasis: '48%' },
   stacked: { flexBasis: '100%', minHeight: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, paddingVertical: 10 },
   grow: { flex: 1, minWidth: 120 },
   value: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontSize: 22, lineHeight: 28, fontWeight: '600' },

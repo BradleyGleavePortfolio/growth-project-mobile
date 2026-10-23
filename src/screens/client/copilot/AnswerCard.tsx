@@ -31,12 +31,15 @@ export function SourceTag({ kind }: { kind: SourceKind }) {
   );
 }
 
+/** A compact answer reads as one paragraph; a list keeps its lines. */
+const oneParagraph = (x: string) => (/^\s*[-*\u2022]\s/m.test(x) ? x : x.replace(/\s*\n+\s*/g, ' ').trim());
+
 export function AnswerCard({ text, reply, safety, compact = false }: {
   text: string; reply: CopilotReply | null; safety?: readonly RomanSafetyAction[]; compact?: boolean;
 }) {
   const { semanticColors: sc } = useTheme();
   const plain = withoutEmphasis(text);
-  const { lead, rest } = !reply ? { lead: '', rest: plain } : compact ? { lead: '', rest: withoutCites(plain) } : leadAndRest(withoutCites(plain));
+  const { lead, rest } = !reply ? { lead: '', rest: plain } : compact ? { lead: '', rest: oneParagraph(withoutCites(plain)) } : leadAndRest(withoutCites(plain));
   return (
     <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]} testID="copilot-answer">
       <View style={s.pad}>
