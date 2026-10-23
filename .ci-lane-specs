@@ -1,0 +1,10 @@
+src/__tests__/coachLtvDashboard.test.tsx
+src/__tests__/coachHomeV11.test.tsx
+src/__tests__/coachHomeAudit13.test.tsx
+src/__tests__/coachHomeCards134.test.tsx
+src/__tests__/coachHome134.test.tsx
+src/__tests__/qaCoachHome131.test.tsx
+src/__tests__/commandCenterScreens.test.tsx
+src/__tests__/coachCheckInReviewFu126.test.tsx
+src/screens/coach/__tests__/coachTabsV2Entries.test.tsx
+src/screens/coach/__tests__/coachDay1Hunt05.test.tsx
