@@ -30,7 +30,7 @@ import HomeScreen from '../screens/client/HomeScreen';
 import HouseCoachScreen from '../screens/client/HouseCoachScreen';
 import HouseCoachConfirmScreen from '../screens/client/HouseCoachConfirmScreen';
 import HousePackageScreen from '../screens/client/HousePackageScreen';
-import type { HousePackage } from '../lib/planRenewal';
+import type { HousePackage, RenewalCoach } from '../lib/planRenewal';
 import HabitsScreen from '../screens/client/HabitsScreen';
 import LogScreen from '../screens/client/LogScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
@@ -221,9 +221,9 @@ const TAB_BUTTON_PADDING = 5;
 export type HomeStackParamList = {
   HomeMain: undefined;
   /** RENEWAL-M H1: the house coach's page, from the renewal pop-up or the Home banner. */
-  HouseCoach: { coach: { id: string; firstName: string } };
-  HouseCoachConfirm: { coach: { id: string; firstName: string }; from: { id: string; firstName: string } | null };
-  HousePackage: { coach: { id: string; firstName: string }; pkg: HousePackage };
+  HouseCoach: { coach: RenewalCoach };
+  HouseCoachConfirm: { coach: RenewalCoach; from: RenewalCoach | null };
+  HousePackage: { coach: RenewalCoach; pkg: HousePackage };
   Habits: { initialTab?: 'checkin' } | undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;

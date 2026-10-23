@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../../components/HapticPressable';
 import { HouseMasthead, houseFoot } from '../../components/renewal/HouseMasthead';
 import type { HomeStackParamList } from '../../navigation/ClientNavigator';
+import { houseCoachName } from '../../lib/planRenewal';
 import { forestPop as fp, lightTokens, typography } from '../../theme/tokens';
 import { HOUSE_COACH_COPY } from './HouseCoachScreen';
 
@@ -35,7 +36,7 @@ export default function HouseCoachConfirmScreen({ route, navigation }: Props): R
   return (
     <View style={s.page}>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <HouseMasthead eyebrow={HOUSE_COACH_COPY.eyebrow} title={HOUSE_CONFIRM_COPY.title} monogram={coach.firstName} onBack={() => navigation.goBack()} />
+        <HouseMasthead eyebrow={HOUSE_COACH_COPY.eyebrow} title={HOUSE_CONFIRM_COPY.title} monogram={houseCoachName(coach)} onBack={() => navigation.goBack()} />
         <View style={houseFoot.card}>
           {points.map(([icon, text], i) => (
             <View key={icon} style={[s.point, i > 0 && s.rule]}>

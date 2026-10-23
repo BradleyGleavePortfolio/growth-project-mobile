@@ -103,6 +103,12 @@ it('house coach from the banner: the same confirm page; with no current coach it
   expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: HOUSE, from: null }]]);
 });
 
+it('house coach full name (backend #1142): it reaches the confirm page; the current coach stays first name only', async () => {
+  const s = await open(ended(7, { coach: { ...COACH, full_name: 'Jordan Reyes' }, house_coach: { id: 'house-1', first_name: 'Bradley', full_name: ' Bradley Gleave ' } }));
+  await fireEvent.press(s.getAllByTestId('renewal-house-coach')[0]);
+  expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: { ...HOUSE, fullName: 'Bradley Gleave' }, from: { id: 'coach-1', firstName: 'Jordan' } }]]);
+});
+
 it('banner day: "Renew now" with the last package and end date, no pop-up, no ack; own coach opens the sheet', async () => {
   mockRenewal = ended(null);
   const s = await render(<RenewalHome />);

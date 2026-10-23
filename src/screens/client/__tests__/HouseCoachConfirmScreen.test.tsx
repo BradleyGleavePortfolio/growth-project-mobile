@@ -30,6 +30,15 @@ it('says one coach at a time and names the current coach; Continue opens the hou
   expect(nav.goBack).not.toHaveBeenCalled();
 });
 
+it('W-168-HC: the house coach\'s monogram is his full initials, and Continue carries his full name on', async () => {
+  const coach = { ...HOUSE, fullName: 'Bradley Gleave' };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = await render(<Screen route={{ key: 'c', name: 'HouseCoachConfirm', params: { coach, from: null } } as any} navigation={nav as any} />);
+  expect(s.getByText('BG')).toBeTruthy();
+  await fireEvent.press(s.getByTestId('house-confirm-continue'));
+  expect(nav.navigate.mock.calls).toEqual([['HouseCoach', { coach }]]);
+});
+
 it.each([['Not now', 'house-confirm-not-now'], ['Back', 'house-coach-back']])('%s goes back and changes nothing', async (_l, id) => {
   const s = await mount(null);
   expect(s.getByText('Your current coach stops being your coach once you pay, and no longer sees your logs.')).toBeTruthy();

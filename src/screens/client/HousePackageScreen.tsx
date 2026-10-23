@@ -14,8 +14,11 @@ import { HouseMasthead, houseFoot } from '../../components/renewal/HouseMasthead
 import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import type { HomeStackParamList } from '../../navigation/ClientNavigator';
+import { houseCoachName } from '../../lib/planRenewal';
 import { planTerms } from '../../lib/planTerms';
 import { patchUserCache } from '../../lib/userCache';
+import { authEvents } from '../../utils/authEvents';
+import { logger } from '../../utils/logger';
 import { forestPop as fp, lightTokens, typography } from '../../theme/tokens';
 import { CLIENT_PLAN_COPY } from './packageDetail/ClientPlanPresentation';
 
@@ -38,13 +41,24 @@ export default function HousePackageScreen({ route, navigation }: Props): React.
     [HOUSE_PACKAGE_COPY.length, [pkg.weeks ? HOUSE_PACKAGE_COPY.weeks(pkg.weeks) : null]],
     [CLIENT_PLAN_COPY.included, [pkg.description]],
   ] as const).map(([title, lines]) => [title, lines.filter((l): l is string => !!l)] as const).filter(([, lines]) => lines.length > 0);
-  // m#853's H1 join: the server has moved the client; the phone only refreshes what it shows.
-  const joined = () => { setSheet(false); void patchUserCache({ coach_id: coach.id }); void refreshEntitlement(); navigation.popToTop(); };
+  const name = houseCoachName(coach); // "Bradley Gleave" here, on the sheet and on H3 (owner W-168-HC)
+  // m#853 FIX R1 B3: only a confirmed payment makes him the coach here; Home re-reads the account (authEvents 'login',
+  // as AddCoachCodeScreen does) after the cached coach changes. A slow or pending confirmation waits for the server.
+  const joined = (paid: boolean) => {
+    setSheet(false);
+    if (paid) {
+      void patchUserCache({ coach_id: coach.id })
+        .catch((err: unknown) => logger.warn('HousePackage', 'user cache patch after joining failed', err))
+        .then(() => authEvents.emit('login'));
+    }
+    void refreshEntitlement();
+    navigation.popToTop();
+  };
 
   return (
     <View style={s.page}>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <HouseMasthead eyebrow={oneToOneCoachingLabel(coach.firstName)} title={pkg.name} onBack={() => navigation.goBack()}>
+        <HouseMasthead eyebrow={oneToOneCoachingLabel(name)} title={pkg.name} onBack={() => navigation.goBack()}>
           <Text style={s.price} testID="house-package-price">{terms.price}</Text>
         </HouseMasthead>
         {sections.length ? (
@@ -64,7 +78,7 @@ export default function HousePackageScreen({ route, navigation }: Props): React.
         </HapticPressable>
       </View>
       {sheet ? (
-        <PackageSelectionSheet visible skipSnoozeCheck house={{ id: coach.id, name: coach.firstName }} initialPackageId={pkg.id} onDismiss={() => setSheet(false)} onPaymentSuccess={joined} />
+        <PackageSelectionSheet visible skipSnoozeCheck house={{ id: coach.id, name }} initialPackageId={pkg.id} onDismiss={() => setSheet(false)} onPaymentSuccess={joined} />
       ) : null}
     </View>
   );

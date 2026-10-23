@@ -9,7 +9,8 @@ import { prefsStorage } from '../storage/mmkv';
 import { purchasableFromCoachPackage, type PurchasablePackage } from './planTerms';
 
 export type PopupStep = 0 | 1 | 7;
-export type RenewalCoach = { id: string; firstName: string };
+/** `fullName` only on the house coach (backend #1142 CONTRACT); the client's own coach is named by first name only. */
+export type RenewalCoach = { id: string; firstName: string; fullName?: string };
 export type Renewal =
   | { state: 'none' | 'revoked' }
   | { state: 'ended'; endedAt: string; popupStep: PopupStep | null; bannerDue: boolean; coach: RenewalCoach | null; houseCoach: RenewalCoach | null };
@@ -18,6 +19,12 @@ const coachOf = (c: unknown): RenewalCoach | null => {
   const o = c as { id?: unknown; first_name?: unknown } | null;
   return o && typeof o.id === 'string' && typeof o.first_name === 'string' && o.first_name ? { id: o.id, firstName: o.first_name } : null;
 };
+const houseOf = (c: unknown): RenewalCoach | null => {
+  const [o, full] = [coachOf(c), (c as { full_name?: unknown } | null)?.full_name];
+  return o && typeof full === 'string' && full.trim() ? { ...o, fullName: full.trim() } : o;
+};
+/** The house pages name him in full, "Bradley Gleave" (owner W-168-HC); a server without full_name falls back to the first name. */
+export const houseCoachName = (c: RenewalCoach): string => c.fullName ?? c.firstName;
 
 /** The `renewal` block. undefined = no key (older server, switch off); a block the phone cannot read = 'none'. */
 export function readRenewal(data: unknown): Renewal | undefined {
@@ -26,7 +33,7 @@ export function readRenewal(data: unknown): Renewal | undefined {
   if (r?.state === 'revoked') return { state: 'revoked' };
   if (r?.state !== 'ended' || typeof r.ended_at !== 'string') return { state: 'none' };
   const step = r.popup_due === true && [0, 1, 7].includes(r.popup_step as number) ? (r.popup_step as PopupStep) : null;
-  return { state: 'ended', endedAt: r.ended_at, popupStep: step, bannerDue: r.banner_due === true, coach: coachOf(r.coach), houseCoach: coachOf(r.house_coach) };
+  return { state: 'ended', endedAt: r.ended_at, popupStep: step, bannerDue: r.banner_due === true, coach: coachOf(r.coach), houseCoach: houseOf(r.house_coach) };
 }
 
 const onceKey = (userId: string) => `plan_renewal.shown_once:${userId}`;

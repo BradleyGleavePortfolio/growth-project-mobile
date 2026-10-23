@@ -1,5 +1,6 @@
-/** RENEWAL-M H1 (RENEWAL3), after SWITCH-CONFIRM-M's confirm page: the house coach's packages; a package opens its page. */
+/** RENEWAL-M H1 (RENEWAL3), after SWITCH-CONFIRM-M's confirm page: his full name, what joining includes, his packages; a package opens its page. */
 import React from 'react';
+import { Text } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
@@ -14,19 +15,35 @@ const Screen: typeof import('../HouseCoachScreen').default = require('../HouseCo
 const ROWS = [{ id: 'h-1', name: '12-week strength block', price_cents: 29900, currency: 'usd', billing_type: 'one_time' },
   { id: 'h-2', name: 'Monthly coaching', amount_cents: 14900, currency: 'usd', billing_type: 'recurring', interval: 'month' }];
 const nav = { goBack: jest.fn(), navigate: jest.fn() };
+const HOUSE = { id: 'house-1', firstName: 'Bradley', fullName: 'Bradley Gleave' };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mount = () => render(<Screen route={{ key: 'h', name: 'HouseCoach', params: { coach: { id: 'house-1', firstName: 'Bradley' } } } as any} navigation={nav as any} />);
+const mount = (coach: { id: string; firstName: string; fullName?: string } = HOUSE) => render(<Screen route={{ key: 'h', name: 'HouseCoach', params: { coach } } as any} navigation={nav as any} />);
 
 beforeEach(() => { jest.clearAllMocks(); mockRead = async () => ({ data: { packages: ROWS } }); });
 
-it('H1: his name and packages; a package opens its own page (no sheet, no checkout here); Back goes back', async () => {
+it('H1 (W-168-HC): his full name and monogram, then Includes (HC-2 to HC-7), then his packages, in that order', async () => {
+  const s = await mount();
+  await s.findByTestId('house-package-h-1');
+  const texts = s.UNSAFE_getAllByType(Text).map((t) => [t.props.children].flat().join(''));
+  const order = ['BG', "TGP's Top Rated Coach", 'Bradley Gleave', 'Includes', 'Personalized workout plans', '1:1 check-ins',
+    'Direct access to Bradley', 'Customized meal plans', 'Advanced AI usage', '1:1 coaching with Bradley Gleave', '12-week strength block', 'Monthly coaching'];
+  expect(order.map((t) => texts.indexOf(t))).toEqual(order.map((t) => texts.indexOf(t)).sort((a, b) => a - b));
+  expect(order.every((t) => texts.includes(t))).toBe(true);
+  expect(s.getByText('Includes').props.accessibilityRole).toBe('header');
+});
+
+it('a server without full_name (before backend #1142): the first name and monogram, as before', async () => {
+  const s = await mount({ id: 'house-1', firstName: 'Bradley' });
+  await s.findByTestId('house-package-h-1');
+  for (const t of ['B', 'Bradley', '1:1 coaching with Bradley', 'Direct access to Bradley']) expect(s.getByText(t)).toBeTruthy();
+});
+
+it('H1: a package opens its own page (no sheet, no checkout here); Back goes back', async () => {
   const s = await mount();
   await fireEvent.press(await s.findByTestId('house-package-h-2'));
   expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach/packages?coach_id=house-1');
-  expect(s.getByText("TGP's Top Rated Coach")).toBeTruthy();
-  expect(s.getByText('1:1 coaching with Bradley')).toBeTruthy();
   expect(s.getByTestId('house-package-h-1')).toBeTruthy();
-  expect(nav.navigate).toHaveBeenCalledWith('HousePackage', { coach: { id: 'house-1', firstName: 'Bradley' }, pkg: expect.objectContaining({ id: 'h-2', description: null, weeks: null }) });
+  expect(nav.navigate).toHaveBeenCalledWith('HousePackage', { coach: HOUSE, pkg: expect.objectContaining({ id: 'h-2', description: null, weeks: null }) });
   expect(mockPost).not.toHaveBeenCalled();
   await fireEvent.press(s.getByTestId('house-coach-back'));
   expect(nav.goBack).toHaveBeenCalledTimes(1);
@@ -55,7 +72,8 @@ it.each([
   mockRead = read;
   const s = await mount();
   await s.findByTestId('house-coach-error');
-  expect(s.getByText('Bradley')).toBeTruthy();
+  expect(s.getByText('Bradley Gleave')).toBeTruthy();
+  expect(s.getByTestId('house-coach-includes')).toBeTruthy();
   mockRead = async () => ({ data: ROWS });
   await fireEvent.press(s.getByTestId('house-coach-error-retry'));
   await s.findByTestId('house-package-h-1');
