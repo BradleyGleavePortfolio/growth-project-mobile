@@ -4,7 +4,7 @@
  * title, "{name} is now your coach." beside his monogram, the success sentence and one Continue. One success haptic.
  */
 import React, { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { PACKAGE_PAYMENT_COPY } from '../../lib/packagePayment';
@@ -52,7 +52,7 @@ export function HouseJoined({ name, title, body, onContinue }: { name: string; t
   }, [grow]);
   const scale = grow.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
   return (
-    <View style={s.joined} testID="payment-success" accessibilityLiveRegion="polite">
+    <View style={[s.joined, Platform.OS === 'android' && s.joinedAndroid]} testID="payment-success" accessibilityLiveRegion="polite">
       <View style={s.handle} />
       <View style={s.moment}>
         <Animated.View style={[s.check, { opacity: grow, transform: [{ scale }] }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden testID="house-joined-check">
@@ -80,13 +80,14 @@ const s = StyleSheet.create({
   mono: { backgroundColor: renewalTone.quiet, alignItems: 'center', justifyContent: 'center' },
   monoText: { fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', color: fp.gold, textAlign: 'center' },
   joined: { flexGrow: 1, backgroundColor: fp.deep, paddingHorizontal: 24, paddingTop: 8, paddingBottom: 34 },
+  joinedAndroid: { paddingHorizontal: 18, paddingBottom: 24 }, // .android .dp
   moment: { flexGrow: 1, justifyContent: 'flex-end', paddingTop: 6 },
   handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: renewalTone.quietLine, marginBottom: 12 },
   check: { alignSelf: 'center', width: 60, height: 60, borderRadius: 30, backgroundColor: renewalTone.quiet, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
   title: { ...typography.h1, letterSpacing: 0, color: renewalTone.white, textAlign: 'center', marginTop: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'stretch', backgroundColor: renewalTone.quiet, borderRadius: radius.button, paddingVertical: 12, paddingHorizontal: 14, marginTop: 16 },
   text: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 16, lineHeight: 21, letterSpacing: 0, flex: 1, color: renewalTone.white },
-  body: { ...typography.body, lineHeight: 24, letterSpacing: 0, color: fp.onDeepMuted, textAlign: 'center', marginTop: 14 },
+  body: { ...typography.body, lineHeight: 24, color: fp.onDeepMuted, textAlign: 'center', marginTop: 14 },
   cta: { alignSelf: 'stretch', minHeight: 52, borderRadius: radius.button, backgroundColor: fp.leaf, borderWidth: 1.5, borderColor: fp.moss, alignItems: 'center', justifyContent: 'center', marginTop: 22, paddingVertical: 12, paddingHorizontal: 16 },
   ctaText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 16, lineHeight: 21, letterSpacing: 0, color: fp.ink, textAlign: 'center' },
 });

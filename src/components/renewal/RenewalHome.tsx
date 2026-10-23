@@ -17,7 +17,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import api from '../../services/api';
 import { onPlanRenewalTap } from '../../services/pushTapRouter';
 import { settleHouseJoin, takeRenewalPopup, type Renewal, type RenewalCoach } from '../../lib/planRenewal';
-import { forestPop as fp, lightTokens, radius, typography } from '../../theme/tokens';
+import { forestPop as fp, lightTokens, radius, shadows, typography } from '../../theme/tokens';
 
 export const RENEWAL_COPY = {
   title: { 0: 'Your plan ended today', 1: 'Your plan ended yesterday', 7: 'Your plan ended a week ago' },
@@ -120,9 +120,9 @@ export default function RenewalHome(): React.ReactElement | null {
         </View>
       ) : null}
       <Modal visible={!!popup} transparent animationType="fade" statusBarTranslucent onRequestClose={() => close()} onDismiss={runNext} testID="renewal-modal">
-        <View style={s.scrim}>
+        <View style={[s.scrim, ANDROID && s.scrimAndroid]}>
           {popup ? (
-            <View style={s.card} accessibilityViewIsModal testID="renewal-popup">
+            <View style={[s.card, ANDROID && s.cardAndroid]} accessibilityViewIsModal testID="renewal-popup">
               <Monogram name={name} />
               <Text style={s.coach}>{name}</Text>
               <Text style={s.title} accessibilityRole="header">{RENEWAL_COPY.title[popup.popupStep ?? 0]}</Text>
@@ -142,19 +142,22 @@ export default function RenewalHome(): React.ReactElement | null {
 }
 
 // r2b.py / r3.py style B: .modal, .cm, .cmn, .dh, .dbd, .plp, .lbtn (22 below), .dbtn2 (10 below, quiet fill); the
-// banner .rbn with .cms, .rbt 26/32, .rbs 14/20 and 48 pt choices (14 and 8 below).
+// banner .rbn with .cms, .rbt 26/32, .rbs 14/20 and 48 pt choices (14 and 8 below). .android .modal is 16 from the
+// edges with 24/18/10 inside; the frame's lift is the theme's modal shadow (shadows.lg).
+const ANDROID = Platform.OS === 'android';
 const s = StyleSheet.create({
   flex: { flex: 1 },
   banner: { backgroundColor: fp.deep, borderRadius: radius.card, padding: 16, marginVertical: 12 },
   bannerTitle: { ...typography.h1, fontSize: 26, lineHeight: 32, letterSpacing: 0, color: renewalTone.white },
   bannerHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  bannerSub: { ...typography.body, fontSize: 14, lineHeight: 20, letterSpacing: 0, color: fp.onDeepMuted },
+  bannerSub: { ...typography.body, fontSize: 14, lineHeight: 20, color: fp.onDeepMuted },
   bannerBtn: { minHeight: 48, paddingVertical: 10, paddingHorizontal: 14, marginTop: 14 }, bannerSecond: { marginTop: 8 },
-  scrim: { flex: 1, backgroundColor: lightTokens.overlay, justifyContent: 'center', padding: 20 },
-  card: { backgroundColor: fp.deep, borderRadius: radius.sheet, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 12, alignItems: 'stretch' },
+  scrim: { flex: 1, backgroundColor: lightTokens.overlay, justifyContent: 'center', padding: 20 }, scrimAndroid: { paddingHorizontal: 16 },
+  card: { backgroundColor: fp.deep, borderRadius: radius.sheet, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 12, alignItems: 'stretch', ...shadows.lg },
+  cardAndroid: { paddingHorizontal: 18, paddingTop: 24, paddingBottom: 10 },
   coach: { ...typography.bodyMd, fontSize: 14, lineHeight: 19, letterSpacing: 0.3, color: fp.gold, textAlign: 'center', marginTop: 12 },
   title: { ...typography.h1, letterSpacing: 0, color: renewalTone.white, textAlign: 'center', marginTop: 6 },
-  body: { ...typography.body, lineHeight: 24, letterSpacing: 0, color: fp.onDeepMuted, textAlign: 'center', marginTop: 6 },
+  body: { ...typography.body, lineHeight: 24, color: fp.onDeepMuted, textAlign: 'center', marginTop: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 8, backgroundColor: renewalTone.quiet, borderRadius: radius.chip, paddingVertical: 6, paddingHorizontal: 14, marginTop: 14 },
   chipText: { ...typography.bodyMd, fontSize: 13.5, lineHeight: 18, letterSpacing: 0, color: fp.onDeep },
   choices: { marginTop: 12 },

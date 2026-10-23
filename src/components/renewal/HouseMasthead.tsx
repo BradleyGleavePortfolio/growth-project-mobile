@@ -4,7 +4,7 @@
  * focused the status bar is the masthead's deep with light icons (StatusBarBand), as the frames draw it (.surf .sb).
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../HapticPressable';
@@ -12,6 +12,7 @@ import { useStatusBarBand } from '../StatusBarBand';
 import { Monogram, renewalTone } from './CoachMonogram';
 import { forestPop as fp, radius, typography } from '../../theme/tokens';
 
+const ANDROID = Platform.OS === 'android';
 export const HOUSE_MAST_COPY = { back: 'Back' };
 
 type Props = { eyebrow: string; title: string; monogram?: string; onBack: () => void; children?: React.ReactNode };
@@ -20,7 +21,7 @@ export function HouseMasthead({ eyebrow, title, monogram, onBack, children }: Pr
   const top = useSafeAreaInsets().top;
   useStatusBarBand(fp.deep);
   return (
-    <View style={[s.mast, { paddingTop: top, paddingBottom: monogram ? 24 : 22 }]}>
+    <View style={[s.mast, ANDROID && s.mastAndroid, { paddingTop: top, paddingBottom: monogram ? 24 : ANDROID ? 20 : 22 }]}>
       <View style={s.backWrap}>
         <HapticPressable intent="light" style={s.back} onPress={onBack} accessibilityRole="button" accessibilityLabel={HOUSE_MAST_COPY.back} testID="house-coach-back">
           <Ionicons name="chevron-back" size={26} color={fp.onDeep} />
@@ -43,8 +44,9 @@ export const houseFoot = StyleSheet.create({
 });
 
 const s = StyleSheet.create({
-  // r2b.py .dmast (0 20 22; H1 24), its 52 pt Back row, .cm 6 below it, .gol (Inter 600 11/14, 1.6 tracking) and .dh.
+  // r2b.py .dmast (0 20 22, Android 0 16 20; H1 24 on both), its 52 pt Back row, .cm 6 below it, .gol (Inter 600 11/14, 1.6 tracking) and .dh.
   mast: { backgroundColor: fp.deep, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, paddingHorizontal: 20, alignItems: 'center' },
+  mastAndroid: { paddingHorizontal: 16 },
   backWrap: { alignSelf: 'flex-start', minHeight: 52, justifyContent: 'center', marginLeft: -10 }, back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   mono: { marginTop: 6 },
   eyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14, letterSpacing: 1.6, color: fp.gold, textAlign: 'center' },
