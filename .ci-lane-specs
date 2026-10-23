@@ -1,0 +1,9 @@
+src/screens/client/__tests__/House
+src/components/renewal
+src/components/__tests__/PackageSelectionSheet
+src/components/purchase
+src/lib/__tests__/packagePromptGate.test.ts
+src/navigation/__tests__
+src/__tests__/renewalLineYourPlans144.test.tsx
+src/__tests__/RingsHomeScreen.test.tsx
+src/__tests__/rootNavigatorPackagePromptGate.test.tsx
