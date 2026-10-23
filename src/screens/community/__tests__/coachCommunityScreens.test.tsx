@@ -665,12 +665,12 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     // A failed invite says so; an unknown email gets its own line.
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const notFound = { isAxiosError: true, response: { status: 404, data: { code: 'community.cohort.user_not_found' } } };
-    act(() => mockInviteMutate.mock.calls[0][1].onError(notFound));
+    await act(async () => mockInviteMutate.mock.calls[0][1].onError(notFound));
     expect(alertSpy).toHaveBeenLastCalledWith(
       'Action not applied',
       'No client of yours has that email. Check it and try again.',
     );
-    act(() => mockInviteMutate.mock.calls[0][1].onError({ isAxiosError: true }));
+    await act(async () => mockInviteMutate.mock.calls[0][1].onError({ isAxiosError: true }));
     expect(alertSpy.mock.calls[1][0]).toBe('Action not applied');
     expect(alertSpy.mock.calls[1][1]).not.toMatch(/that email/);
     alertSpy.mockRestore();

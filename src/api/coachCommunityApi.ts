@@ -626,8 +626,8 @@ function isToday(iso: string, now: Date): boolean {
 /** Largest page the inbox and roster routes return (MAX_PAGE = 100). */
 const PAGE_LIMIT = 100;
 
-/** Inbox row kinds this build can draw; a row of any other kind is skipped. */
-export const COACH_INBOX_ROW_KINDS: readonly string[] =
+/** Inbox row kinds this build can draw; any other kind is skipped. Read per call, not at import. */
+const inboxRowKinds = (): readonly string[] =>
   featureFlags.communityVoiceNotes ? ['text', 'voice'] : ['text'];
 
 /** One inbox row: src/community/inbox/community-coach-inbox.dto.ts:34-52. */
@@ -661,7 +661,7 @@ function toInboxItems(rows: unknown[]): CoachInboxItem[] {
     const { author_user_id, author_display_name, preview, kind, ...rest } =
       parsed.data;
     const rowKind = kind ?? 'text';
-    if (!COACH_INBOX_ROW_KINDS.includes(rowKind)) continue;
+    if (!inboxRowKinds().includes(rowKind)) continue;
     if (rowKind === 'voice' && !rest.voice) continue;
     out.push({
       ...rest,
