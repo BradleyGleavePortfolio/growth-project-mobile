@@ -4,9 +4,12 @@
  * and the "Renew now" banner while `banner_due` (components/renewal). `revoked`: nothing is offered. `none`, or no
  * key (older server, switch off): #836's first-offer sheet at most once.
  */
-import api from '../services/api';
+import api, { authApi } from '../services/api';
 import { prefsStorage } from '../storage/mmkv';
+import { authEvents } from '../utils/authEvents';
+import { logger } from '../utils/logger';
 import { purchasableFromCoachPackage, type PurchasablePackage } from './planTerms';
+import { patchUserCache, readUserCacheSync } from './userCache';
 
 export type PopupStep = 0 | 1 | 7;
 /** `fullName` only on the house coach (backend #1142 CONTRACT); the client's own coach is named by first name only. */
@@ -54,6 +57,43 @@ export async function takeRenewalPopup(userId: string, r: Extract<Renewal, { sta
   if (!seen) await prefsStorage.set(seenKey(userId), mark).catch(() => undefined);
   void api.post('/v1/checkout/renewal/popup-ack', { step: r.popupStep }).catch(() => undefined); // retried while due
   return !seen;
+}
+
+const houseJoinKey = (userId: string) => `plan_renewal.house_join:${userId}`;
+const HOUSE_JOIN_WAIT_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * m#860 FIX R2 (Sol B1): the house payment was still confirming when the client tapped Continue. Nothing moves yet
+ * (house join OWNER DECISIONS: nothing moves before a confirmed payment); Home settles it later, settleHouseJoin.
+ */
+export const noteHouseJoinPending = (userId: string, coachId: string) =>
+  prefsStorage.set(houseJoinKey(userId), JSON.stringify({ coachId, at: Date.now() })).catch(() => undefined);
+
+/**
+ * Re-reads this account while a house join is pending. Once the server names the house coach for the same signed-in
+ * user, the cached coach follows and Home re-reads it (authEvents 'login', as the paid path does); while the server
+ * still names the old coach nothing changes. The wait ends after a day, or once the cache already names him.
+ */
+export async function settleHouseJoin(userId: string): Promise<boolean> {
+  try {
+    const raw = await prefsStorage.getStringAsync(houseJoinKey(userId));
+    if (!raw) return false;
+    const { coachId, at } = JSON.parse(raw) as { coachId?: unknown; at?: unknown };
+    const cached = readUserCacheSync();
+    if (typeof coachId !== 'string' || typeof at !== 'number' || Date.now() - at > HOUSE_JOIN_WAIT_MS || cached?.coach_id === coachId) {
+      await prefsStorage.delete(houseJoinKey(userId));
+      return false;
+    }
+    const me = ((await authApi.me())?.data ?? {}) as { id?: unknown; coach_id?: unknown };
+    if (me.id !== userId || me.coach_id !== coachId || readUserCacheSync()?.id !== userId) return false;
+    await patchUserCache({ coach_id: coachId });
+    await prefsStorage.delete(houseJoinKey(userId));
+    authEvents.emit('login');
+    return true;
+  } catch (err) {
+    logger.warn('planRenewal', 'house join check failed; retried on the next return to Home', err);
+    return false;
+  }
 }
 
 /** HOUSE-JOIN-BE: the client package list for the house coach while his door is open for this client (else 404). */

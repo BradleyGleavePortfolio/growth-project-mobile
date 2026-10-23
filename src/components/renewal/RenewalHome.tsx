@@ -16,7 +16,7 @@ import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import api from '../../services/api';
 import { onPlanRenewalTap } from '../../services/pushTapRouter';
-import { takeRenewalPopup, type Renewal, type RenewalCoach } from '../../lib/planRenewal';
+import { settleHouseJoin, takeRenewalPopup, type Renewal, type RenewalCoach } from '../../lib/planRenewal';
 import { forestPop as fp, lightTokens, radius, typography } from '../../theme/tokens';
 
 export const RENEWAL_COPY = {
@@ -77,6 +77,9 @@ export default function RenewalHome(): React.ReactElement | null {
   const details = useDetails(!!r);
 
   useEffect(() => onPlanRenewalTap(() => { tapped.current = true; void refreshEntitlement(); }), [refreshEntitlement]);
+  // m#860 FIX R2 (Sol B1): a house payment still confirming at Continue settles on Home, on return and on each
+  // entitlement read (foreground, popToTop), once the server names the house coach for this account.
+  useEffect(() => { if (focused && userId) void settleHouseJoin(userId); }, [focused, userId, renewal]);
 
   useEffect(() => {
     if (!r || r.popupStep === null || !focused || !userId) return;

@@ -6,7 +6,9 @@ import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { readRenewal, type Renewal } from '../../../lib/planRenewal';
+import { noteHouseJoinPending, readRenewal, type Renewal } from '../../../lib/planRenewal';
+import { readUserCacheSync, setUserCache } from '../../../lib/userCache';
+import { authEvents } from '../../../utils/authEvents';
 
 let mockRenewal: Renewal | undefined;
 const mockRefresh = jest.fn(async () => undefined);
@@ -18,7 +20,8 @@ jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
 }));
 const mockPost = jest.fn(async (..._a: unknown[]) => ({ data: {} }));
-jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: async () => ({ data: { name: 'Jordan Avery-Blake' } }), post: (...a: unknown[]) => mockPost(...a) } }));
+const mockMe = jest.fn(async (): Promise<{ data: unknown }> => ({ data: {} }));
+jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: async () => ({ data: { name: 'Jordan Avery-Blake' } }), post: (...a: unknown[]) => mockPost(...a) }, authApi: { me: () => mockMe() } }));
 jest.mock('../../../api/clientPaymentsApi', () => ({ clientPaymentsApi: {
   getPurchases: async () => ({ ok: true, data: [{ package_id: 'p-old', created_at: '2026-01-02' }, { package_id: 'p-last', created_at: '2026-07-01' }] }),
   getPackages: async () => ({ ok: true, data: [{ id: 'p-last', name: '12-week strength block' }, { id: 'p-old', name: 'Starter' }] }),
@@ -144,6 +147,30 @@ it("Skip closes the pop-up and the banner stays; a plan_renewal tap re-reads the
   mockRenewal = ended(1); // the re-read
   await s.rerender(<RenewalHome />);
   expect(await s.findByTestId('renewal-popup')).toBeTruthy();
+});
+
+it('m#860 FIX R2 (Sol B1): a house join still confirming at Continue settles on Home once the server names him, not before', async () => {
+  await setUserCache({ id: 'client-1', email: '', role: 'student', coach_id: 'coach-1' });
+  await noteHouseJoinPending('client-1', 'house-1');
+  const login = jest.fn();
+  authEvents.on('login', login);
+  mockMe.mockResolvedValue({ data: { id: 'client-1', coach_id: 'coach-1' } }); // Home on return: the webhook has not landed
+  mockRenewal = ended(null);
+  const s = await render(<RenewalHome />);
+  await waitFor(() => expect(mockMe).toHaveBeenCalledTimes(1));
+  await act(async () => undefined);
+  expect(readUserCacheSync()?.coach_id).toBe('coach-1');
+  expect(login).not.toHaveBeenCalled();
+  mockMe.mockResolvedValue({ data: { id: 'client-1', coach_id: 'house-1' } }); // it lands; the next plan read (foreground)
+  mockRenewal = { state: 'none' };
+  await s.rerender(<RenewalHome />);
+  await waitFor(() => expect(login).toHaveBeenCalledTimes(1));
+  expect(readUserCacheSync()?.coach_id).toBe('house-1');
+  mockRenewal = { state: 'none' };
+  await s.rerender(<RenewalHome />);
+  await act(async () => undefined);
+  expect(mockMe).toHaveBeenCalledTimes(2); // settled: no more reads
+  authEvents.off('login', login);
 });
 
 it('m#860 FIX R2 (Sol B2): quiet fill on the second choice; the pop-up monogram 72 across, the banner one 47 (r3.py .cms)', async () => {

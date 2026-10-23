@@ -10,11 +10,13 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../../components/HapticPressable';
 import PackageSelectionSheet from '../../components/PackageSelectionSheet';
+import { renewalTone } from '../../components/renewal/CoachMonogram';
 import { HouseMasthead, houseFoot } from '../../components/renewal/HouseMasthead';
 import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import type { HomeStackParamList } from '../../navigation/ClientNavigator';
-import { houseCoachName } from '../../lib/planRenewal';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { houseCoachName, noteHouseJoinPending } from '../../lib/planRenewal';
 import { planTerms } from '../../lib/planTerms';
 import { patchUserCache } from '../../lib/userCache';
 import { authEvents } from '../../utils/authEvents';
@@ -34,6 +36,7 @@ export default function HousePackageScreen({ route, navigation }: Props): React.
   const { coach, pkg } = route.params;
   const bottom = useSafeAreaInsets().bottom;
   const { refreshEntitlement } = useEntitlement();
+  const userId = useCurrentUser()?.id;
   const [sheet, setSheet] = useState(false);
   const terms = planTerms(pkg);
   const sections = ([
@@ -43,13 +46,16 @@ export default function HousePackageScreen({ route, navigation }: Props): React.
   ] as const).map(([title, lines]) => [title, lines.filter((l): l is string => !!l)] as const).filter(([, lines]) => lines.length > 0);
   const name = houseCoachName(coach); // "Bradley Gleave" here, on the sheet and on H3 (owner W-168-HC)
   // m#853 FIX R1 B3: only a confirmed payment makes him the coach here; Home re-reads the account (authEvents 'login',
-  // as AddCoachCodeScreen does) after the cached coach changes. A slow or pending confirmation waits for the server.
+  // as AddCoachCodeScreen does) after the cached coach changes. A slow or pending confirmation waits for the server:
+  // it is noted, and Home moves the cached coach once the server names him (planRenewal settleHouseJoin, FIX R2 B1).
   const joined = (paid: boolean) => {
     setSheet(false);
     if (paid) {
       void patchUserCache({ coach_id: coach.id })
         .catch((err: unknown) => logger.warn('HousePackage', 'user cache patch after joining failed', err))
         .then(() => authEvents.emit('login'));
+    } else if (userId) {
+      void noteHouseJoinPending(userId, coach.id);
     }
     void refreshEntitlement();
     navigation.popToTop();
@@ -89,6 +95,6 @@ const s = StyleSheet.create({
   price: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 22, lineHeight: 28, color: fp.onDeep, marginTop: 8, textAlign: 'center', fontVariant: ['tabular-nums'] },
   section: { paddingVertical: 16 },
   rule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
-  overline: { ...typography.eyebrow, color: fp.n700, marginBottom: 6 },
+  overline: { ...typography.eyebrow, lineHeight: 14, color: renewalTone.graphite, marginBottom: 6 },
   line: { ...typography.body, color: fp.ink, marginTop: 2 },
 });

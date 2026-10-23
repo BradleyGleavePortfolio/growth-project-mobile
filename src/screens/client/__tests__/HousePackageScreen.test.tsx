@@ -1,18 +1,23 @@
 /** SWITCH-CONFIRM-M (owner #166-5): one house package, everything the server sends and its price; pay only from its button. */
 import React from 'react';
-import { act, fireEvent, render, within } from '@testing-library/react-native';
-import { readHousePackages, type HousePackage } from '../../../lib/planRenewal';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { readHousePackages, settleHouseJoin, type HousePackage } from '../../../lib/planRenewal';
 import { planTerms } from '../../../lib/planTerms';
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client-1', email: '', role: 'student', coach_id: 'old-1' }) }));
 const mockRefresh = jest.fn(async () => undefined);
 jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ refreshEntitlement: mockRefresh }) }));
 const mockPatch = jest.fn(async (..._a: unknown[]) => undefined);
-jest.mock('../../../lib/userCache', () => ({ patchUserCache: (...a: unknown[]) => mockPatch(...a) }));
+let mockCached: { id: string; coach_id?: string } | null = { id: 'client-1', coach_id: 'old-1' };
+jest.mock('../../../lib/userCache', () => ({ patchUserCache: (...a: unknown[]) => mockPatch(...a), readUserCacheSync: () => mockCached }));
 const mockEmit = jest.fn();
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: (...a: unknown[]) => mockEmit(...a) } }));
 const mockApi = { get: jest.fn(), post: jest.fn() };
-jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi }));
+const mockMe = jest.fn(async (): Promise<{ data: unknown }> => ({ data: {} }));
+jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi, authApi: { me: () => mockMe() } }));
 type SheetProps = { visible: boolean; house?: { id: string; name: string }; initialPackageId?: string; skipSnoozeCheck?: boolean; onDismiss: () => void; onPaymentSuccess: (paid: boolean) => void };
 let mockSheet: SheetProps | null = null;
 jest.mock('../../../components/PackageSelectionSheet', () => (p: SheetProps) => {
@@ -32,7 +37,9 @@ const nav = { goBack: jest.fn(), popToTop: jest.fn() };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mount = (pkg: HousePackage, coach: { id: string; firstName: string; fullName?: string } = HOUSE) => render(<Screen route={{ key: 'p', name: 'HousePackage', params: { coach, pkg } } as any} navigation={nav as any} />);
 
-beforeEach(() => { jest.clearAllMocks(); mockSheet = null; });
+const noted = () => waitFor(async () => expect((await AsyncStorage.getAllKeys()).some((k) => k.includes('house_join'))).toBe(true));
+
+beforeEach(async () => { jest.clearAllMocks(); mockSheet = null; mockCached = { id: 'client-1', coach_id: 'old-1' }; await AsyncStorage.clear(); });
 
 it('one-time: price, billing, length and what is included, in that order; no sheet and no request until the button', async () => {
   const s = await mount(ONE);
@@ -104,6 +111,45 @@ it('B3 (m#853 FIX R1): Continue after a slow or pending confirmation: no coach c
   expect(mockEmit).not.toHaveBeenCalled();
   expect(mockRefresh).toHaveBeenCalledTimes(1);
   expect(nav.popToTop).toHaveBeenCalledTimes(1);
+});
+
+it('Sol B1 (m#860 FIX R2): pending at Continue, then the server moves him later: Home\'s check moves the cached coach once, never before', async () => {
+  const s = await mount(ONE);
+  await fireEvent.press(s.getByTestId('house-package-select'));
+  await act(async () => (mockSheet as SheetProps).onPaymentSuccess(false));
+  await noted();
+  mockMe.mockResolvedValue({ data: { id: 'client-1', coach_id: 'old-1' } }); // the webhook has not landed
+  await expect(settleHouseJoin('client-1')).resolves.toBe(false);
+  mockMe.mockResolvedValue({ data: { id: 'client-2', coach_id: 'house-1' } }); // another account's answer
+  await expect(settleHouseJoin('client-1')).resolves.toBe(false);
+  mockCached = { id: 'client-2' }; // signed out and in as someone else meanwhile
+  mockMe.mockResolvedValue({ data: { id: 'client-1', coach_id: 'house-1' } });
+  await expect(settleHouseJoin('client-1')).resolves.toBe(false);
+  expect(mockPatch).not.toHaveBeenCalled();
+  expect(mockEmit).not.toHaveBeenCalled();
+  mockCached = { id: 'client-1', coach_id: 'old-1' };
+  await expect(settleHouseJoin('client-1')).resolves.toBe(true); // the server names him: the phone follows
+  expect(mockPatch.mock.calls).toEqual([[{ coach_id: 'house-1' }]]);
+  expect(mockEmit.mock.calls).toEqual([['login']]);
+  mockMe.mockClear();
+  await expect(settleHouseJoin('client-1')).resolves.toBe(false); // settled: no more reads
+  expect(mockMe).not.toHaveBeenCalled();
+});
+
+it('Sol B1: a paid join notes nothing; a pending one older than a day is dropped without a read', async () => {
+  const s = await mount(ONE);
+  await fireEvent.press(s.getByTestId('house-package-select'));
+  await act(async () => (mockSheet as SheetProps).onPaymentSuccess(true));
+  await expect(settleHouseJoin('client-1')).resolves.toBe(false);
+  await fireEvent.press(s.getByTestId('house-package-select'));
+  await act(async () => (mockSheet as SheetProps).onPaymentSuccess(false));
+  await noted();
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 25 * 60 * 60 * 1000);
+  await expect(settleHouseJoin('client-1')).resolves.toBe(false);
+  clock.mockRestore();
+  await expect(settleHouseJoin('client-1')).resolves.toBe(false);
+  expect(mockMe).not.toHaveBeenCalled();
 });
 
 it('a failed cache write still re-reads the account and goes Home', async () => {
