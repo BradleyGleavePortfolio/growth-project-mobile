@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   View,
   Text,
   StyleSheet,
@@ -308,7 +310,7 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
         )}
 
       <Modal visible={showCreateModal} transparent animationType="fade" onRequestClose={() => setShowCreateModal(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>New Invite Code</Text>
             <Text style={styles.modalDesc}>
@@ -370,7 +372,7 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

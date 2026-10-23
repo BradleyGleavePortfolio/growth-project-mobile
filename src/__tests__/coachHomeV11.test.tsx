@@ -246,11 +246,21 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     expect([label(v, 'home-list-r1'), label(v, 'home-list-r2')]).toEqual(['Reach out to Jordan Ellis?', 'Reach out to Priya Nair?']);
     expect(v.getByText('No check-in for 5 days')).toBeTruthy();
     expect(v.queryByTestId('home-list-c1')).toBeNull(); // the Needs you list's rule is not this ring's
+    expect(v.queryByTestId('home-list-mark-r1')).toBeNull(); // an older server sends no contacted_ids: no row is marked
     await press(v, 'home-list-r1');
     expect(v.getByText('Ask Roman to write to Jordan?')).toBeTruthy();
     await press(v, 'home-draft-ask');
     expect(mockPost).toHaveBeenCalledWith('/ai/gateway/invoke', expect.objectContaining({ capability: 'draft.coach_message', subject_user_id: 'r1' }));
     expect(mockPost.mock.calls[0][1].message).toMatch(/For you only, never say it to them: No check-in for 5 days\./); // LO C4
+  });
+  it('marks the Reach-outs rows the coach already reached today, and only those (REACHED-TODAY)', async () => {
+    const r = rings();
+    mockGet.mockResolvedValue({ data: { ...overview(30), home: { ...home([win(1)], 1), rings: { ...r, reach_outs: { ...r.reach_outs, contacted_ids: ['r2', 'moved-away'] } } } } });
+    const v = await renderHome();
+    await press(v, 'home-ring-reach_outs');
+    expect([label(v, 'home-list-r1'), label(v, 'home-list-r2')]).toEqual(['Reach out to Jordan Ellis?', 'Reach out to Priya Nair? Reached out today']);
+    expect([!!v.queryByTestId('home-list-mark-r1'), !!v.queryByTestId('home-list-mark-r2')]).toEqual([false, true]);
+    expect(v.getAllByText('Reached out today')).toHaveLength(1);
   });
   it.each([
     ['the ring has no goal', () => mockGet.mockResolvedValue({ data: { ...overview(30), home: home([win(1)], 1, 0) } })],
@@ -366,6 +376,10 @@ describe('homeDay, pure', () => {
   it('is absent without a readable wins count, and draws no rings it cannot read', () => {
     expect([parseHomeDay(undefined), parseHomeDay({ wins: { count: -1, items: [] } })]).toEqual([null, null]);
     expect(parseHomeDay({ wins: { count: 2, items: [] }, rings: { check_ins: { reviewed: 1 } } })?.rings).toBeNull();
+    const ids = (contacted_ids: unknown) => parseHomeDay({ wins: { count: 2, items: [] }, rings: { ...rings(), reach_outs: { contacted: 2, goal: 5, contacted_ids } } })?.rings?.reach_outs;
+    expect([ids(['r1', 7, '', 'r2']), ids('r1'), ids(undefined)]).toEqual([
+      { contacted: 2, goal: 5, contacted_ids: ['r1', 'r2'] }, { contacted: 2, goal: 5 }, { contacted: 2, goal: 5 },
+    ]); // REACHED-TODAY: unreadable ids mark no row and never cost the rings
   });
   it('words the hero and captions the rings', () => {
     expect(winsHeadline(1)).toEqual({ value: '1', unit: 'win this week' });

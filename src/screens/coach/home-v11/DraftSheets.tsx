@@ -7,15 +7,17 @@
  */
 import React, { useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import api from '../../../services/api';
 import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, typography } from '../../../theme/tokens';
+import { forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietLoading } from '../../../ui/states/QuietStates';
 import type { AtRiskEntry } from '../../../services/commandCenterApi';
 import { firstWord, type HomeWinDraft } from './homeDay';
+import { RomanRingMark, WholeLine } from './PlanEndedBits';
 
 export interface DraftAsk {
   clientName: string;
@@ -24,6 +26,10 @@ export interface DraftAsk {
   request: HomeWinDraft;
   /** A server route that builds Roman's request itself (b#1130's plan-ended draft); the answer reads as invoke's. */
   path?: string;
+  /** `about` in pieces that never break inside (WholeLine); joined they are `about`. */
+  aboutParts?: readonly string[];
+  /** RENEWAL3 K3a / K3b: Roman's forest masthead (his mark, "Roman", the title, `about` in a chip). Plan ended only. */
+  masthead?: boolean;
 }
 
 type Step =
@@ -59,7 +65,7 @@ export function reachOutAsk(r: AtRiskEntry): DraftAsk {
   };
 }
 
-export interface ListRow { id: string; title: string; line?: string; label: string; onPick: () => void }
+export interface ListRow { id: string; title: string; line?: string; label: string; onPick: () => void; /** a quiet done mark, e.g. Reached out today */ mark?: string }
 export interface SheetList { title: string; rows: ListRow[] }
 type S = ReturnType<typeof makeStyles>;
 
@@ -76,8 +82,8 @@ export function HomeSheet({ list, ask, onCloseList, onCloseAsk, onSent }: { list
     <Modal visible transparent animationType="slide" onRequestClose={() => close.current()}>
       <View style={s.scrim}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close.current()} accessibilityRole="button" accessibilityLabel="Close" />
-        <View style={[s.sheet, { paddingBottom: bottom + 16 }]} testID={ask ? 'home-draft-sheet' : 'home-list-sheet'}>
-          <View style={s.grab} />
+        <View style={[s.sheet, ask?.masthead && s.sheetMast, { paddingBottom: bottom + 16 }]} testID={ask ? 'home-draft-sheet' : 'home-list-sheet'}>
+          {ask?.masthead ? null : <View style={s.grab} />}
           {ask ? <DraftSteps ask={ask} s={s} close={close} onClose={onCloseAsk} onSent={onSent} /> : list ? (
             <>
               <Text style={s.title} accessibilityRole="header">{list.title}</Text>
@@ -87,6 +93,12 @@ export function HomeSheet({ list, ask, onCloseList, onCloseAsk, onSent }: { list
                     <View style={s.rowText}>
                       <Text style={s.rowTitle}>{r.title}</Text>
                       {r.line ? <Text style={s.muted} numberOfLines={2}>{r.line}</Text> : null}
+                      {r.mark ? (
+                        <View style={s.mark} testID={`home-list-mark-${r.id}`}>
+                          <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} />
+                          <Text style={s.markText}>{r.mark}</Text>
+                        </View>
+                      ) : null}
                     </View>
                     <Text style={s.chev}>›</Text>
                   </Pressable>
@@ -137,14 +149,31 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
   closeRef.current = close;
 
   const draft = step.kind === 'ready' || step.kind === 'sending' ? step : step.kind === 'failed' ? step.draft : undefined;
+  const title = step.kind === 'sent' ? `Sent to ${first}` : draft ? `Roman's draft for ${first}` : `Ask Roman to write to ${first}?`;
+  const nothingSent = 'You read it before it goes. Nothing is sent until you tap Send.';
+  const aboutParts = ask.aboutParts ?? [ask.about];
   return (
     <>
+      {ask.masthead ? (
+        // K3a / K3b: the forest masthead. "Roman" (RN3-33) is drawn in capitals, as the mockup's overline.
+        <View style={s.mast} testID="home-draft-masthead">
+          <View style={[s.grab, s.grabOnDeep]} />
+          <View style={s.mastWho}>
+            <RomanRingMark size={40} testID="home-draft-mark" />
+            <Text style={s.mastName} maxFontSizeMultiplier={1.3}>Roman</Text>
+          </View>
+          <Text style={[s.title, s.mastTitle]} accessibilityRole="header">{title}</Text>
+          {step.kind === 'ask' ? <Text style={[s.muted, s.mastMuted]}>{nothingSent}</Text> : null}
+          <View style={s.mastChip} accessible accessibilityLabel={ask.about} testID="home-draft-context">
+            <Ionicons name="refresh" size={16} color={forestPop.onDeep} />
+            <WholeLine parts={aboutParts} style={s.mastChipText} boxStyle={s.mastChipLine} />
+          </View>
+        </View>
+      ) : null}
       <ScrollView bounces={false}>
-        <Text style={s.title} accessibilityRole="header">
-          {step.kind === 'sent' ? `Sent to ${first}` : draft ? `Roman's draft for ${first}` : `Ask Roman to write to ${first}?`}
-        </Text>
-        {step.kind === 'ask' ? <Text style={s.body}>{ask.about}</Text> : null}
-        {step.kind === 'ask' ? <Text style={s.muted}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
+        {ask.masthead ? null : <Text style={s.title} accessibilityRole="header">{title}</Text>}
+        {step.kind === 'ask' && !ask.masthead ? <Text style={s.body}>{ask.about}</Text> : null}
+        {step.kind === 'ask' && !ask.masthead ? <Text style={s.muted}>{nothingSent}</Text> : null}
         {step.kind === 'writing' ? <QuietLoading label="Roman is writing" /> : null}
         {draft ? <View style={s.draft}><Text style={s.body} testID="home-draft-text">{draft.reply}</Text></View> : null}
         {step.kind === 'failed' ? <Text style={s.error} accessibilityLiveRegion="polite">{step.words}</Text> : null}
@@ -175,6 +204,23 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: sem.overlay },
     sheet: { maxHeight: '85%', paddingTop: 8, paddingHorizontal: layout.gutter, backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
     grab: { width: 40, height: 5, borderRadius: radius.chip, backgroundColor: sem.border, alignSelf: 'center', marginBottom: 12 },
+    // K3a / K3b: the masthead runs to the sheet's edges; the grab sits on it.
+    sheetMast: { paddingTop: 0 },
+    mast: {
+      marginHorizontal: -layout.gutter, marginBottom: 16, paddingTop: 8, paddingBottom: 20, paddingHorizontal: layout.gutter,
+      backgroundColor: forestPop.deep, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
+    },
+    grabOnDeep: { backgroundColor: forestPop.brand400 },
+    mastWho: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+    mastName: { ...typography.caption, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.8, textTransform: 'uppercase', color: forestPop.gold },
+    mastTitle: { color: forestPop.onDeep, fontSize: 22, lineHeight: 28 },
+    mastMuted: { color: forestPop.onDeepMuted, marginTop: 0, marginBottom: 4 },
+    mastChip: {
+      flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', maxWidth: '100%', gap: 8, marginTop: 10,
+      minHeight: 36, paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.chip, backgroundColor: forestPop.forest,
+    },
+    mastChipLine: { flexShrink: 1 },
+    mastChipText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: forestPop.onDeep },
     title: { fontFamily: 'Inter_600SemiBold', fontSize: 20, lineHeight: 26, color: colors.textPrimary, marginBottom: 8 },
     body: { ...typography.body, color: colors.textPrimary },
     muted: { ...typography.bodySmall, color: colors.textMuted, marginTop: 6 },
@@ -189,4 +235,6 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     rowText: { flex: 1, minWidth: 0 },
     rowTitle: { ...typography.bodyMd, color: colors.textPrimary },
     chev: { fontSize: 24, color: colors.textMuted, paddingLeft: 8 },
+    mark: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+    markText: { ...typography.bodySmall, color: colors.textMuted, flexShrink: 1 },
   });

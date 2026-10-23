@@ -14,7 +14,7 @@ import { lightTokens } from '../theme/tokens';
 // zero-offset behaviour and avoiding a double top inset on screens that apply
 // their own safe-area padding. Must live inside a SafeAreaProvider so the inset
 // resolves to the real device value (notch / cutout height). Bone is the default.
-export const STATUS_BAR_BONE = '#F5EFE4';
+export const STATUS_BAR_BONE = '#F7FAF7';
 export const STATUS_BAR_BAND_Z_INDEX = 1000; // above app content, below modal layer
 
 // A focused dark screen owns both the inset colour and its icon contrast.

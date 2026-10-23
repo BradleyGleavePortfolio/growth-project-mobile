@@ -39,7 +39,7 @@ If a change in this repo would violate one of the rules below, the rule wins. Wh
 
 - Corners are rounded, soft and premium, never a near-square rectangle (owner ruling 17:07 on 8 October 2026: "I want nice rounded corners, luxurious, not rectangles"; decision 133-4). Use the semantic radius tokens in `src/theme/tokens.ts`, never a literal: `radius.button` 12 and `radius.input` 12, `radius.card` 16, `radius.sheet` 24 on bottom-sheet and modal top corners, `radius.chip` (pill) for chips, `radius.control` 6 for boxes under 28 pt such as a checkbox.
 - The legacy keys `radius.sm` / `md` / `lg` / `xl` / `2xl` and every `Radius` export now resolve to the rounded scale (12 / 12 / 16 / 16 / 24), so older screens round too; new code still names the semantic key.
-- Backgrounds: `bone` (`#F5EFE4`) is the global background. Cards sit on `cream` or `surface`. Never use `#000`; ink (`#1A1A18`) is the dark.
+- Backgrounds: `bone` (`#F7FAF7`) is the global background. Cards sit on `cream` or `surface`. Never use `#000`; ink (`#1A1A18`) is the dark.
 - Single accent: forest (`#2C4A36`). Avoid neon greens (`#52B788`, `#2D6A4F`), terra-cottas, steel blues, and the rest of the legacy palette.
 - Style C v2 keeps forest as the only accent for actions. Leaf, fern and moss (`data.leaf`, `data.fern`, `data.moss`) are data colours, not accents, and never a button. Leaf and fern are never text or a lone mark on bone; moss draws marks, lines and chip edges on light ground (4.39:1 on bone) but is never text. gold.300 (`data.peak`) marks a personal best only, with a star and words. No gradients, glow, shimmer or shadow on charts. See `src/theme/README.md`.
 - Shadows are capped at `shadows.lg` (12px radius, 8% opacity). No drop shadows above that.

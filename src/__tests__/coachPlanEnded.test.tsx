@@ -7,7 +7,7 @@ import React from 'react';
 import { BackHandler, Platform } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
-  groupPlanEnded, homeLabel, homeLine, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, type PlanEndedRow,
+  groupPlanEnded, homeLabel, homeLine, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, rowLineParts, withoutBlocked, type PlanEndedRow,
 } from '../screens/coach/home-v11/planEndedData';
 
 const [mockNavigate, mockGet, mockPost, mockApprove, mockReject] = Array.from({ length: 5 }, () => jest.fn());
@@ -54,6 +54,8 @@ jest.mock('../screens/coach/command-center/coachHomeSources', () => ({
 }));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const CommandCenterScreen = require('../screens/coach/command-center/CommandCenterScreen').default as React.ComponentType;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { useBlockedUsersStore } = require('../store/blockedUsersStore') as typeof import('../store/blockedUsersStore');
 
 const row = (id: string, name: string, days: number, pkg = '12-week block', messaged: string | null = null) => ({
   client_id: id, first_name: name.split(' ')[0], name, avatar_url: null, ended_at: '2026-10-21T09:00:00Z', ended_on: '2026-10-21',
@@ -85,6 +87,8 @@ async function renderHome() {
 }
 type View = Awaited<ReturnType<typeof renderHome>>;
 const press = (v: View, ...ids: string[]) => ids.reduce((p, id) => p.then(() => fireEvent.press(v.getByTestId(id))), Promise.resolve());
+/** The words of every Text under a node, in order (WholeLine draws one line as several Texts). */
+const textsIn = (w: ReturnType<typeof within>) => w.queryAllByText(/[\s\S]*/).map((t) => ([] as unknown[]).concat(t.props.children).join(''));
 const churnReads = () => mockGet.mock.calls.filter(([url]) => url === '/v1/coach/churned-clients').length;
 
 describe('plan ended: the read and its words', () => {
@@ -167,7 +171,8 @@ describe('plan ended on the coach Home', () => {
     const v = await renderHome();
     await press(v, 'home-plan-ended', 'plan-ended-row-c1', 'plan-ended-ask');
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
-    expect(within(v.getByTestId('home-draft-sheet')).getByText('Plan ended today · 12-week block')).toBeTruthy(); // the K3 context line
+    expect(v.getByTestId('home-draft-context').props.accessibilityLabel).toBe('Plan ended today · 12-week block'); // the K3 context line
+    expect(textsIn(within(v.getByTestId('home-draft-context')))).toEqual(['Plan ended today · ', '12-week block']);
     expect(mockPost).not.toHaveBeenCalled();
     await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
     expect(mockPost).toHaveBeenCalledWith('/v1/coach/churned-clients/c1/draft', {});
@@ -242,5 +247,58 @@ describe('plan ended: screen readers stay in the open list (LO C1)', () => {
     await press(v, 'plan-ended-row-c1', 'plan-ended-ask'); // K3's sheet takes the screen reader while it is up
     expect(v.getByTestId('plan-ended-list', { includeHiddenElements: true }).props.accessibilityViewIsModal).toBe(false);
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
+  });
+});
+
+describe('plan ended: the package stays whole, and Roman as K3 draws him (FX-CHURN; LO-866 B2, LS-866 B2)', () => {
+  it('draws RN3-30 exactly, in pieces that never break inside the package', async () => {
+    const [maya, , , , omar] = parsePlanEndedPage(page([...ROWS, row('c6', 'Ana Ruiz', 2, '')]))!.items as PlanEndedRow[];
+    const c6 = parsePlanEndedPage(page([row('c6', 'Ana Ruiz', 2, '')]))!.items[0] as PlanEndedRow;
+    expect([rowLineParts(maya), rowLineParts(omar), rowLineParts(c6)]).toEqual([
+      ['Plan ended today · ', '12-week block'], ['Plan ended 6 days ago · ', '12-week block'], ['Plan ended 2 days ago'],
+    ]);
+    for (const r of [maya, omar, c6]) {
+      expect(rowLineParts(r).join('')).toBe(rowLine(r));
+      expect(rowLine(r)).not.toMatch(/[\u00a0\u2011\u202f]/); // the approved characters, no non-breaking ones
+    }
+    const v = await renderHome();
+    await press(v, 'home-plan-ended');
+    expect(textsIn(within(v.getByTestId('plan-ended-line-c1')))).toEqual(['Plan ended today · ', '12-week block']);
+    expect(v.getByTestId('plan-ended-line-c1').props.style).toEqual(expect.arrayContaining([expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap' })]));
+  });
+  it("puts Roman's ringed mark on Ask Roman to write and his forest masthead on K3a and K3b", async () => {
+    const v = await renderHome();
+    await press(v, 'home-plan-ended', 'plan-ended-row-c1');
+    expect(within(v.getByTestId('plan-ended-ask')).getByTestId('plan-ended-ask-mark', { includeHiddenElements: true })).toBeTruthy();
+    await press(v, 'plan-ended-ask');
+    const mast = within(v.getByTestId('home-draft-masthead'));
+    expect([mast.getByTestId('home-draft-mark', { includeHiddenElements: true }), mast.getByText('Roman'), mast.getByText('Ask Roman to write to Maya?')].every(Boolean)).toBe(true);
+    expect(mast.getByText('You read it before it goes. Nothing is sent until you tap Send.')).toBeTruthy();
+    await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
+    await waitFor(() => expect(mast.getByText("Roman's draft for Maya")).toBeTruthy()); // K3b
+    expect(v.getByTestId('home-draft-context').props.accessibilityLabel).toBe('Plan ended today · 12-week block');
+  });
+});
+
+describe('plan ended: a blocked pair (FX-CHURN; LS-859 B1, b#1141)', () => {
+  afterEach(() => { act(() => { useBlockedUsersStore.setState({ blocked: [] }); }); });
+  it('drops a client the coach blocked from the Home row and the list, and brings them back when the block lifts', async () => {
+    const blocked = { id: 'c2', displayName: 'Dev Patel', role: 'client' as const, blockedAt: '2026-10-22T10:00:00Z' };
+    act(() => { useBlockedUsersStore.setState({ blocked: [blocked] }); });
+    expect(withoutBlocked(parsePlanEndedPage(page(ROWS))!, ['c2'])!.items.map((r) => r.client_id)).toEqual(['c1', 'c3', 'c4', 'c5']);
+    const v = await renderHome();
+    expect(v.getByTestId('home-plan-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 4. Maya Ortiz, plan ended today, and 3 more');
+    await press(v, 'home-plan-ended');
+    expect([v.queryByTestId('plan-ended-row-c2'), v.queryByText('Dev Patel')]).toEqual([null, null]);
+    act(() => { useBlockedUsersStore.setState({ blocked: [] }); });
+    expect(v.getByTestId('plan-ended-row-c2')).toBeTruthy();
+  });
+  it("sends nothing when the server answers the draft for a pair blocked either way with b#1141's 404", async () => {
+    mockPost.mockRejectedValue(Object.assign(new Error('404'), { response: { status: 404, data: { code: 'CHURNED_CLIENT_NOT_FOUND' } } }));
+    const v = await renderHome();
+    await press(v, 'home-plan-ended', 'plan-ended-row-c1', 'plan-ended-ask');
+    await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
+    await waitFor(() => expect(v.getByText("Roman couldn't write this. Nothing was sent. Try again in a moment.")).toBeTruthy());
+    expect([v.queryByTestId('home-draft-send'), mockApprove.mock.calls]).toEqual([null, []]);
   });
 });

@@ -39,7 +39,7 @@ export const Colors = {
   gold:            CanonicalColors.warning,           // #C5A253 mutedGold
   orange:          CanonicalColors.error,             // #4A0404 oxblood
   dark:            CanonicalColors.textPrimary,       // #1A1A18 ink
-  background:      CanonicalColors.background,        // #F5EFE4 bone
+  background:      CanonicalColors.background,        // #F7FAF7 bone
   surface:         CanonicalColors.surface,           // #F1E8D5 cream
   surfaceElevated: CanonicalColors.surfaceElevated,
   textMuted:       CanonicalColors.textMuted,         // readable warm grey

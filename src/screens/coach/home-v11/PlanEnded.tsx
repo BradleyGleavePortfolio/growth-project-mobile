@@ -13,13 +13,13 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietError, loadFailureMessage } from '../../../ui/states/QuietStates';
-import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { openInboxChat } from '../../../navigation/coachInbox';
 import type { DraftAsk } from './DraftSheets';
 import { SEMI, useCardStyles } from './HomeParts';
+import { RomanRingMark, WholeLine } from './PlanEndedBits';
 import {
-  groupPlanEnded, homeLabel, homeLine, initialsOf, messagedLine, planEndedAsk, planEndedTitle, rowLine,
+  groupPlanEnded, homeLabel, homeLine, initialsOf, messagedLine, planEndedAsk, planEndedTitle, rowLine, rowLineParts,
   type PlanEndedPage, type PlanEndedRow,
 } from './planEndedData';
 
@@ -144,7 +144,7 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk, 
                     <View style={ls.mono}><Text style={ls.monoText} maxFontSizeMultiplier={1.2}>{initialsOf(r.name)}</Text></View>
                     <View style={cs.rowText}>
                       <Text style={cs.title}>{r.name}</Text>
-                      <Text style={cs.muted}>{rowLine(r)}</Text>
+                      <WholeLine parts={rowLineParts(r)} style={cs.muted} testID={`plan-ended-line-${r.client_id}`} />
                       {messaged ? (
                         <View style={ls.messaged}>
                           <Ionicons name="checkmark" size={16} color={colors.success} />
@@ -160,7 +160,7 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk, 
                         style={({ pressed }) => [ls.button, ls.ask, pressed && ls.pressed]} onPress={() => { void HapticService.softImpact(); onAsk(planEndedAsk(r)); }}
                         accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${r.name}`} testID="plan-ended-ask"
                       >
-                        <RomanAvatar size={26} />
+                        <RomanRingMark size={28} testID="plan-ended-ask-mark" />
                         <Text style={[ls.buttonText, { color: forestPop.onDeep }]}>Ask Roman to write</Text>
                       </Pressable>
                       <Pressable

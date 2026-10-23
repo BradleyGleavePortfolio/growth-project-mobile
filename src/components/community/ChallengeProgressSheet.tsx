@@ -22,6 +22,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   StyleSheet,
@@ -237,7 +238,7 @@ export default function ChallengeProgressSheet({
       onRequestClose={onClose}
       testID={testID}
     >
-      <View style={[styles.backdrop, { backgroundColor: semanticColors.overlay }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.backdrop, { backgroundColor: semanticColors.overlay }]}>
         <View
           style={[
             styles.sheet,
@@ -432,7 +433,7 @@ export default function ChallengeProgressSheet({
           </>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
