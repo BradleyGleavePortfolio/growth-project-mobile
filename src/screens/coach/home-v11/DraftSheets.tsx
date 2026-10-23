@@ -18,11 +18,15 @@ import { QuietLoading } from '../../../ui/states/QuietStates';
 import type { AtRiskEntry } from '../../../services/commandCenterApi';
 import { firstWord, type HomeWinDraft } from './homeDay';
 import { RomanMark } from './RomanMark';
+import { KeepTail } from './KeepTail';
+import type { LineParts } from './planEndedData';
 
 export interface DraftAsk {
   clientName: string;
   /** What the draft is for, in the coach's words: shown on the ask step. */
   about: string;
+  /** `about` in pieces, for the K3 context chip: its package moves to the next line whole (KeepTail). */
+  aboutParts?: LineParts;
   request: HomeWinDraft;
   /** A server route that builds Roman's request itself (b#1130's plan-ended draft); the answer reads as invoke's. */
   path?: string;
@@ -169,7 +173,7 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
           {step.kind !== 'sent' ? (
             <View style={s.about} testID="home-draft-about">
               <Ionicons name="refresh" size={16} color={forestPop.onDeep} />
-              <Text style={s.aboutText}>{ask.about}</Text>
+              {ask.aboutParts ? <KeepTail parts={ask.aboutParts} style={s.aboutText} box={s.aboutBox} testID="home-draft-about-line" /> : <Text style={s.aboutText}>{ask.about}</Text>}
             </View>
           ) : null}
         </View>
@@ -218,6 +222,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     mutedOnDeep: { ...typography.body, marginTop: 0, color: forestPop.onDeepMuted },
     about: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 8, marginTop: 12, minHeight: 36, paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.chip, backgroundColor: forestPop.forest },
     aboutText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: forestPop.onDeep, flexShrink: 1 },
+    aboutBox: { flexShrink: 1 },
     title: { fontFamily: 'Inter_600SemiBold', fontSize: 20, lineHeight: 26, color: colors.textPrimary, marginBottom: 8 },
     body: { ...typography.body, color: colors.textPrimary },
     muted: { ...typography.bodySmall, color: colors.textMuted, marginTop: 6 },

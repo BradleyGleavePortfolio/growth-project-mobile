@@ -182,7 +182,8 @@ describe('plan ended on the coach Home', () => {
     expect([mark.props.importantForAccessibility, within(mark).getByText('R', { includeHiddenElements: true }).props.style]).toEqual(['no-hide-descendants', expect.arrayContaining([expect.objectContaining({ fontFamily: 'CormorantGaramond_500Medium', color: '#D4B96B' })])]);
     await press(v, 'plan-ended-ask');
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
-    expect(within(v.getByTestId('home-draft-about')).getByText('Plan ended today · 12-week block')).toBeTruthy(); // the K3 context chip
+    // the K3 context chip: RN3-34 in two pieces, so "12-week block" moves down whole at large text (KeepTail, as on P1/K2)
+    expect(within(v.getByTestId('home-draft-about-line')).getAllByText(/./).map((t) => t.props.children)).toEqual(['Plan ended today ·', '12-week block']);
     const head = within(v.getByTestId('home-draft-head')); // K3a: Roman's deep head with the mark and "Roman" (RN3-33)
     expect([head.getByTestId('roman-mark', { includeHiddenElements: true }), head.getByText('ROMAN', { includeHiddenElements: true }), head.getByText('Ask Roman to write to Maya?')].every(Boolean)).toBe(true);
     expect(mockPost).not.toHaveBeenCalled();
