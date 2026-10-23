@@ -73,14 +73,28 @@ interface Target {
   params?: Record<string, string>;
   /** The stack routes set under `screen`, so Back walks them (TIMELINE: Timeline over Progress). */
   beneath?: string[];
+  /** Runs once the navigation is sent (RENEWAL-M: open the renewal pop-up over Home). */
+  after?: () => void;
 }
 
 type Resolver = () => Target | null;
+
+let planRenewalTap: (() => void) | null = null;
+let planRenewalTapWaiting = false;
+const tapPlanRenewal = () => (planRenewalTap ? planRenewalTap() : void (planRenewalTapWaiting = true));
+/** RENEWAL-M: Home's renewal host hears a delivered plan_renewal tap (one delivered before Home mounts waits for it). */
+export function onPlanRenewalTap(listener: () => void): () => void {
+  planRenewalTap = listener;
+  if (planRenewalTapWaiting) { planRenewalTapWaiting = false; listener(); }
+  return () => { if (planRenewalTap === listener) planRenewalTap = null; };
+}
 
 /** Client (student) destinations. Root = ClientNavigator tab names. */
 export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Messages: () => ({ root: 'Home', screen: 'Messages' }),
   NotificationCenter: () => ({ root: 'Home', screen: 'NotificationCenter' }),
+  // RENEWAL-M: pushNotifications maps a plan_renewal push here; Home, then the renewal pop-up over it.
+  PlanRenewal: () => ({ root: 'Home', screen: 'HomeMain', pop: true, after: tapPlanRenewal }),
   // Legacy name: the Home stack's Notifications stub resolves to the center.
   Notifications: () => ({ root: 'Home', screen: 'NotificationCenter' }),
   Habits: () => ({ root: 'Home', screen: 'Habits' }),
@@ -388,6 +402,7 @@ function deliverTarget(nav: PushNavigator, target: Target, params?: Record<strin
     } else {
       nav.navigate(target.root, target.params ? { ...params, ...target.params } : params);
     }
+    target.after?.();
     return true;
   } catch {
     return false;

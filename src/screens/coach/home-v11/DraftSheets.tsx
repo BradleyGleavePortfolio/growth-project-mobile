@@ -7,6 +7,7 @@
  */
 import React, { useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import api from '../../../services/api';
 import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
@@ -57,7 +58,7 @@ export function reachOutAsk(r: AtRiskEntry): DraftAsk {
   };
 }
 
-export interface ListRow { id: string; title: string; line?: string; label: string; onPick: () => void }
+export interface ListRow { id: string; title: string; line?: string; label: string; onPick: () => void; /** a quiet done mark, e.g. Reached out today */ mark?: string }
 export interface SheetList { title: string; rows: ListRow[] }
 type S = ReturnType<typeof makeStyles>;
 
@@ -85,6 +86,12 @@ export function HomeSheet({ list, ask, onCloseList, onCloseAsk, onSent }: { list
                     <View style={s.rowText}>
                       <Text style={s.rowTitle}>{r.title}</Text>
                       {r.line ? <Text style={s.muted} numberOfLines={2}>{r.line}</Text> : null}
+                      {r.mark ? (
+                        <View style={s.mark} testID={`home-list-mark-${r.id}`}>
+                          <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} />
+                          <Text style={s.markText}>{r.mark}</Text>
+                        </View>
+                      ) : null}
                     </View>
                     <Text style={s.chev}>›</Text>
                   </Pressable>
@@ -187,4 +194,6 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     rowText: { flex: 1, minWidth: 0 },
     rowTitle: { ...typography.bodyMd, color: colors.textPrimary },
     chev: { fontSize: 24, color: colors.textMuted, paddingLeft: 8 },
+    mark: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+    markText: { ...typography.bodySmall, color: colors.textMuted, flexShrink: 1 },
   });

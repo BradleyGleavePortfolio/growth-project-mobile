@@ -24,21 +24,24 @@ jest.mock('../../../entitlements/EntitlementProvider', () => ({
   useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
 }));
 
-jest.mock('../../../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({
-    id: 'u1',
-    email: 'a@b.c',
-    profile: { calorie_target: 1789, protein_target: 150, carbs_target: 185, fat_target: 50 },
-  }),
-}));
+const BASE_USER = {
+  id: 'u1',
+  email: 'a@b.c',
+  profile: { calorie_target: 1789, protein_target: 150, carbs_target: 185, fat_target: 50 },
+};
+let mockUser: typeof BASE_USER & { role?: string; coach_id?: string } = BASE_USER;
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../store/clientStore', () => ({
   useClientStore: () => mockDayState,
 }));
 jest.mock('@react-navigation/native', () => ({
+  NavigationContext: require('react').createContext(undefined),
   useNavigation: () => ({ navigate: jest.fn() }),
   useFocusEffect: () => undefined,
 }));
 jest.mock('../../../services/api', () => ({
+  __esModule: true,
+  default: { get: () => Promise.resolve({ data: {} }) }, // the coach row's name read (coached client)
   workoutApi: { getAll: () => Promise.resolve({ data: [] }) },
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
@@ -59,6 +62,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   mockDayState.loadError = null;
   mockDayState.isLoading = false;
+  mockUser = BASE_USER;
   await AsyncStorage.clear();
   __resetMacroDisplayStoreForTests();
 });
@@ -114,5 +118,44 @@ describe('HomeScreen macro display mode', () => {
     expect(screen.getByText('CARBS')).toBeTruthy();
     expect(screen.getByTestId('full-macros-intro-card')).toBeTruthy();
     expect(screen.getByText(/185 grams of carbohydrate and 50 grams of fat a day/)).toBeTruthy();
+  });
+});
+
+describe('Home for a client with no coach: Roman stays locked (139-15)', () => {
+  const SOLO = { ...BASE_USER, role: 'student' };
+  const COACHED = { ...SOLO, coach_id: 'coach-1' };
+
+  it('the load error keeps its words and retry, without Roman\'s face', async () => {
+    mockUser = SOLO;
+    mockDayState.loadError = 'Food and water data could not refresh. Check your connection and try again.';
+    await render(<HomeScreen />);
+    expect(screen.getByTestId('home-day-data-error')).toBeTruthy();
+    expect(screen.getByTestId('home-day-data-error-retry')).toBeTruthy();
+    expect(screen.queryByTestId('home-day-data-error-avatar')).toBeNull();
+  });
+
+  it('a coached client keeps Roman\'s face on the same error', async () => {
+    mockUser = COACHED;
+    mockDayState.loadError = 'Food and water data could not refresh. Check your connection and try again.';
+    await render(<HomeScreen />);
+    expect(screen.getByTestId('home-day-data-error-avatar')).toBeTruthy();
+  });
+
+  it('after the simple week: the full grid shows, Roman\'s card does not', async () => {
+    mockUser = SOLO;
+    await hydrateMacroDisplay('u1');
+    reportMacroDisplay({ macro_display_mode: 'simple', simple_until: '2000-01-01' });
+    await render(<HomeScreen />);
+    expect(await screen.findByTestId('home-number-grid')).toBeTruthy();
+    expect(screen.getByText('CARBS')).toBeTruthy();
+    expect(screen.queryByTestId('full-macros-intro-card')).toBeNull();
+  });
+
+  it('a coached client still gets Roman\'s card after the simple week', async () => {
+    mockUser = COACHED;
+    await hydrateMacroDisplay('u1');
+    reportMacroDisplay({ macro_display_mode: 'simple', simple_until: '2000-01-01' });
+    await render(<HomeScreen />);
+    expect(await screen.findByTestId('full-macros-intro-card')).toBeTruthy();
   });
 });

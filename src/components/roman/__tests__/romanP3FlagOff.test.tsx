@@ -135,7 +135,7 @@ describe('P3 surfaces are gated behind featureFlags.romanChat in their hosts', (
 
   it('§2.7 streak card is gated on romanChat AND romanStreakBackendLive', () => {
     expect(PROGRESS).toMatch(
-      /featureFlags\.romanChat && featureFlags\.romanStreakBackendLive && streakTier !== null/,
+      /featureFlags\.romanChat && featureFlags\.romanStreakBackendLive && !romanLocked && streakTier !== null/,
     );
   });
 
