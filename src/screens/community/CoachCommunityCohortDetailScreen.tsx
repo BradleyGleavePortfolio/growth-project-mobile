@@ -26,6 +26,7 @@
  */
 import React, { useCallback, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   View,
@@ -55,8 +56,26 @@ import {
   useRemoveMember,
   useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
-import type { CoachCohortMember } from '../../api/coachCommunityApi';
+import {
+  CoachCommunityApiError,
+  type CoachCohortMember,
+} from '../../api/coachCommunityApi';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CoachCommunityRoute } from './coachCommunityNavTypes';
+
+/** An invite or remove that failed: the shared community copy, plus the one roster case it lacks. */
+function alertMemberFailure(err: unknown): void {
+  const f = describeCommunityFailure(
+    err instanceof CoachCommunityApiError ? err.cause : err,
+    'moderate',
+  );
+  Alert.alert(
+    f.title,
+    f.code === 'community.cohort.user_not_found'
+      ? 'No client of yours has that email. Check it and try again.'
+      : f.message,
+  );
+}
 
 /** Minimal, intentionally permissive email shape check (server is the gate). */
 function looksLikeEmail(value: string): boolean {
@@ -104,6 +123,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           setInviteOpen(false);
           completion.show('Invite sent.');
         },
+        onError: alertMemberFailure,
       },
     );
   }, [email, invite, completion]);
@@ -111,6 +131,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
   const onConfirmRemove = useCallback(() => {
     if (!pendingRemove) return;
     remove.mutate(pendingRemove.user_id, {
+      onError: alertMemberFailure,
       onSettled: () => setPendingRemove(null),
     });
   }, [pendingRemove, remove]);
@@ -142,13 +163,15 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           </Text>
           <Text
             style={[styles.memberMeta, { color: semanticColors.textMuted }]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {item.role}
             {item.email ? ` · ${item.email}` : ''}
           </Text>
         </View>
-        {item.role === 'client' ? (
+        {/* Only a saved membership can be removed; people a space shows from
+            its audience (status null) have no row to remove. */}
+        {item.role === 'client' && item.status != null ? (
           <HapticPressable
             intent="light"
             onPress={() => setMenuMember(item)}

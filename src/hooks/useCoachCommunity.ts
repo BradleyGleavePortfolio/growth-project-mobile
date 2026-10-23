@@ -12,8 +12,11 @@
  */
 import {
   useQuery,
+  useInfiniteQuery,
   useMutation,
   useQueryClient,
+  type InfiniteData,
+  type QueryClient,
   type UseQueryResult,
   type UseMutationResult,
 } from '@tanstack/react-query';
@@ -73,12 +76,37 @@ export function useCoachDashboard(): UseQueryResult<CoachDashboard> {
   });
 }
 
-export function useCoachInbox(): UseQueryResult<CoachInboxPage> {
-  return useQuery({
+/** Module-level so `select` reruns only on new data. */
+const flattenInbox = (d: InfiniteData<CoachInboxPage>) => ({
+  items: d.pages.flatMap((p) => p.items),
+});
+
+/** The coach inbox, one server page at a time (fetchNextPage at the list end). */
+export function useCoachInbox() {
+  return useInfiniteQuery({
     queryKey: coachCommunityKeys.inbox(),
-    queryFn: () => coachCommunityApi.getInbox(),
+    queryFn: ({ pageParam }) => coachCommunityApi.getInbox({ cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: CoachInboxPage) => last.next_cursor ?? undefined,
+    select: flattenInbox,
     staleTime: 30_000,
   });
+}
+
+/** A blocked or banned person's cached rows go at once; the refetch lets the server filter. */
+export function dropAuthorFromCoachInbox(qc: QueryClient, userId: string): void {
+  qc.setQueriesData<InfiniteData<CoachInboxPage>>(
+    { queryKey: coachCommunityKeys.inbox() },
+    (old) =>
+      old && {
+        ...old,
+        pages: old.pages.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.client_user_id !== userId),
+        })),
+      },
+  );
+  void qc.invalidateQueries({ queryKey: coachCommunityKeys.all });
 }
 
 export function useCoachCohorts(): UseQueryResult<CoachCohort[]> {
@@ -404,9 +432,15 @@ export function useModerateFlagged(): UseMutationResult<
         qc.setQueryData(coachCommunityKeys.dashboard(), c.prevDash);
       }
     },
+    onSuccess: (_out, { item, action }) => {
+      if (action === 'ban' && item.author_user_id) {
+        dropAuthorFromCoachInbox(qc, item.author_user_id);
+      }
+    },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: coachCommunityKeys.flagged() });
       qc.invalidateQueries({ queryKey: coachCommunityKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: coachCommunityKeys.inbox() });
     },
   });
 }

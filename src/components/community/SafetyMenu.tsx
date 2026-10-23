@@ -25,6 +25,7 @@ import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, semantic } from '../../theme/tokens';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { dropAuthorFromCoachInbox } from '../../hooks/useCoachCommunity';
 import {
   communitySafetyApi,
   COMMUNITY_REPORT_REASONS,
@@ -146,7 +147,8 @@ export default function SafetyMenu({
               await communitySafetyApi.block(authorUserId);
               close();
               // Refetch every community surface so the blocked person's content
-              // disappears everywhere at once.
+              // disappears everywhere at once (the coach inbox included).
+              dropAuthorFromCoachInbox(qc, authorUserId);
               await qc.invalidateQueries({ queryKey: ['community'] });
               onBlocked?.(authorUserId);
             } catch (err) {

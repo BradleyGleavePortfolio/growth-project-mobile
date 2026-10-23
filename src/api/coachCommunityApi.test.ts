@@ -163,11 +163,15 @@ describe('coachCommunityApi — read endpoints on the server routes', () => {
     });
   });
 
-  it('getCohorts with no spaces is an empty list', async () => {
-    serveGets({
-      '/community/cohorts': { feature_flag_state: 'enabled', cohorts: [] },
-    });
-    await expect(coachCommunityApi.getCohorts()).resolves.toEqual([]);
+  it('getCohorts: a coach with no spaces yet is set up by GET /community/me, then read again', async () => {
+    const lists = [[], [serverCohortSummary]];
+    api.get.mockImplementation((url: string) => Promise.resolve({
+      data: url === '/community/me' ? { workspace_id: WORKSPACE_ID } : { cohorts: lists.shift() ?? [] },
+    }));
+    const res = await coachCommunityApi.getCohorts();
+    const urls = api.get.mock.calls.map((c: unknown[]) => c[0]);
+    expect(urls).toEqual(['/community/cohorts', '/community/me', '/community/cohorts']);
+    expect(res.map((c) => c.name)).toEqual(['Spring']);
   });
 
   it('getInbox reads GET /community/me/coach-inbox and maps the row (community-coach-inbox.controller.ts:25)', async () => {
@@ -194,6 +198,8 @@ describe('coachCommunityApi — read endpoints on the server routes', () => {
       snippet: 'Can I swap Thursday for Friday?',
       created_at: '2026-10-21T09:00:00.000Z',
       acknowledged: false,
+      type: 'message',
+      kind: 'text',
       ack,
     });
   });
@@ -321,16 +327,19 @@ describe('coachCommunityApi — read endpoints on the server routes', () => {
     });
   });
 
-  it('getCohortDetail with an empty roster has no members', async () => {
-    serveGets({
-      [`/community/cohorts/${COHORT_ID}`]: {
-        ...serverCohortSummary,
-        created_at: '2026-10-01T00:00:00.000Z',
-      },
-      [`/community/cohorts/${COHORT_ID}/members`]: { members: [], next_cursor: null },
-    });
+  it('getCohortDetail reads every roster page (next_cursor)', async () => {
+    const pages: Record<string, unknown> = {
+      first: { members: [serverMember()], next_cursor: 'c2' },
+      c2: { members: [serverMember({ user_id: ROW_1, display_name: 'Ola Ade' })], next_cursor: null },
+    };
+    const space = { ...serverCohortSummary, created_at: '2026-10-01T00:00:00.000Z' };
+    api.get.mockImplementation((url: string, cfg?: { params?: { cursor?: string } }) =>
+      Promise.resolve({ data: url.endsWith('/members') ? pages[cfg?.params?.cursor ?? 'first'] : space }));
     const res = await coachCommunityApi.getCohortDetail(COHORT_ID);
-    expect(res.members).toEqual([]);
+    expect(res.members.map((m) => m.name)).toEqual(['Dana Reyes', 'Ola Ade']);
+    expect(api.get).toHaveBeenLastCalledWith(`/community/cohorts/${COHORT_ID}/members`, {
+      params: { limit: '100', cursor: 'c2' },
+    });
   });
 
   it('getFlagged unwraps the items array', async () => {

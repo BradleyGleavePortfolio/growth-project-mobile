@@ -33,6 +33,7 @@
  */
 import React from 'react';
 import { render, fireEvent, configure, act } from '@testing-library/react-native';
+import { Alert, FlatList } from 'react-native';
 import {
   CoachCommunityApiError,
   ACK_ILLEGAL_TRANSITION_CODE,
@@ -258,6 +259,8 @@ const inboxItem = (over: Partial<Record<string, unknown>> = {}) => ({
   snippet: 'Quick question about my plan',
   created_at: new Date(Date.now() - 3_600_000).toISOString(),
   acknowledged: false,
+  type: 'message',
+  kind: 'text',
   ...over,
 });
 
@@ -276,6 +279,7 @@ const member = (over: Partial<Record<string, unknown>> = {}) => ({
   email: 'dana@example.com',
   avatar_url: null,
   role: 'client',
+  status: 'active',
   joined_at: new Date().toISOString(),
   ...over,
 });
@@ -655,6 +659,25 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       { email: 'new@example.com' },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+    // A failed invite says so; an unknown email gets its own line.
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const notFound = { isAxiosError: true, response: { status: 404, data: { code: 'community.cohort.user_not_found' } } };
+    act(() => mockInviteMutate.mock.calls[0][1].onError(notFound));
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      'Action not applied',
+      'No client of yours has that email. Check it and try again.',
+    );
+    act(() => mockInviteMutate.mock.calls[0][1].onError({ isAxiosError: true }));
+    expect(alertSpy.mock.calls[1][0]).toBe('Action not applied');
+    expect(alertSpy.mock.calls[1][1]).not.toMatch(/that email/);
+    alertSpy.mockRestore();
+  });
+
+  it('a person the space shows from its audience (no saved row) has no Remove menu', async () => {
+    mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' };
+    mockState.cohortDetail = { data: { cohort: cohort(), members: [member({ status: null })] }, isLoading: false, isError: false };
+    const { queryByTestId } = await render(<CoachCommunityCohortDetailScreen />);
+    expect(queryByTestId('coach-community-member-menu-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')).toBeNull();
   });
 
   it('does not invite with an invalid email', async () => {
@@ -1225,5 +1248,35 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     expect(
       queryByTestId(`coach-community-inbox-ack-conflict-${MID}`),
     ).toBeNull();
+  });
+
+  it('only message text rows get ack controls; a summary ack shows as done', async () => {
+    const POST = '22222222-2222-2222-2222-222222222222';
+    const VOICE = '33333333-3333-3333-3333-333333333333';
+    const items = [
+      inboxItem({ ack: { state: 'acked', sla_state: 'within' } }),
+      inboxItem({ id: POST, type: 'post' }),
+      inboxItem({ id: VOICE, kind: 'voice' }),
+    ];
+    mockState.inbox = { data: { items }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
+    const mark = getByTestId(`coach-community-inbox-mark-acked-${MID}`);
+    expect(mark.props.accessibilityState).toEqual({ disabled: true });
+    expect(queryByTestId(`coach-community-inbox-mark-acked-${POST}`)).toBeNull();
+    expect(queryByTestId(`coach-community-inbox-mark-acked-${VOICE}`)).toBeNull();
+  });
+
+  it('loads the next inbox page at the end of the list, once at a time', async () => {
+    const fetchNextPage = jest.fn();
+    const base = { data: { items: [inboxItem()] }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn(), fetchNextPage };
+    mockState.inbox = { ...base, hasNextPage: true, isFetchingNextPage: false };
+    const view = await render(<CoachCommunityInboxScreen />);
+    act(() => view.UNSAFE_getByType(FlatList).props.onEndReached());
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+    mockState.inbox = { ...base, hasNextPage: true, isFetchingNextPage: true };
+    await view.rerender(<CoachCommunityInboxScreen />);
+    act(() => view.UNSAFE_getByType(FlatList).props.onEndReached());
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+    expect(view.getByTestId('coach-community-inbox-next-page')).toBeTruthy();
   });
 });

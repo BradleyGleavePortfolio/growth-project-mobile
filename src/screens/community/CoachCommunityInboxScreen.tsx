@@ -13,7 +13,7 @@
  * copy + crop come from the backend voice policy (face + voice contract).
  * Touch targets are >= 44pt.
  */
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -51,8 +51,6 @@ import { featureFlags } from '../../config/featureFlags';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
-import { useQueryClient } from '@tanstack/react-query';
-import { AckStateSchema } from '../../api/coachCommunityApi';
 import type {
   CoachInboxItem,
   AckStateDto,
@@ -149,7 +147,6 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const inbox = useCoachInbox();
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
-  const qc = useQueryClient();
 
   // UX F6: a subtle, proportionate closure moment on a successful acknowledge,
   // reusing the established CompletionToast pattern (no new infrastructure).
@@ -163,27 +160,6 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   // useCallback deps below (and the FlatList data prop).
   const items = useMemo(() => inbox.data?.items ?? [], [inbox.data?.items]);
 
-  // v2-2: seed the per-message ack cache from any ack envelope the backend
-  // attached to an inbox row (additive `ack` field, present only when
-  // FEATURE_COMMUNITY_ACKS is on server-side). The inbox payload is the source
-  // of truth; this only PRIMES the cache so the badge has a value before any
-  // optimistic action. Validated at the boundary so a drifted shape is dropped
-  // rather than fed into the badge. No-op when the flag is off or no ack is
-  // present. We never overwrite a value already in the cache (an in-flight
-  // optimistic state must win until it reconciles).
-  useEffect(() => {
-    if (!ACKS_ENABLED) return;
-    for (const item of items) {
-      const raw = (item as { ack?: unknown }).ack;
-      if (raw == null) continue;
-      const key = coachCommunityKeys.ackState(item.id);
-      if (qc.getQueryData<AckStateDto>(key) != null) continue;
-      const parsed = AckStateSchema.safeParse(raw);
-      if (parsed.success) {
-        qc.setQueryData<AckStateDto>(key, parsed.data);
-      }
-    }
-  }, [items, qc]);
   const isEmpty = !inbox.isLoading && !inbox.isError && items.length === 0;
 
   const renderItem = useCallback(
@@ -260,9 +236,22 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
         renderItem={renderItem}
         ListHeaderComponent={TRIAGE_ENABLED ? <InboxTriageBanner /> : null}
         contentContainerStyle={styles.listContent}
+        onEndReached={() => {
+          if (inbox.hasNextPage && !inbox.isFetchingNextPage) void inbox.fetchNextPage();
+        }}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          inbox.isFetchingNextPage ? (
+            <ActivityIndicator
+              color={semanticColors.accent}
+              style={styles.pageSpinner}
+              testID="coach-community-inbox-next-page"
+            />
+          ) : null
+        }
         refreshControl={
           <RefreshControl
-            refreshing={inbox.isRefetching}
+            refreshing={inbox.isRefetching && !inbox.isFetchingNextPage}
             onRefresh={() => inbox.refetch()}
             tintColor={semanticColors.accent}
           />
@@ -340,7 +329,7 @@ function InboxRow({
         >
           {item.snippet}
         </Text>
-        {ACKS_ENABLED ? (
+        {ACKS_ENABLED && item.type === 'message' && item.kind === 'text' ? (
           <CoachAckRow
             item={item}
             ackState={ackState}
@@ -376,8 +365,9 @@ function CoachAckRow({
   const { semanticColors } = useTheme();
   const actions = useCoachAckActions(item.id);
   const pending = actions.markAcked.isPending;
-  const alreadyAcked =
-    ackState?.state === 'acked' || ackState?.state === 'replied';
+  // The row's ack summary covers the time before any action fills the cache.
+  const reached = ackState?.state ?? item.ack?.state;
+  const alreadyAcked = reached === 'acked' || reached === 'replied';
 
   // UX F4: the badge is folded into the row's accessibility label, so hide it
   // from the a11y tree here (`labelledByRow`) to avoid a duplicate, decoupled
@@ -434,6 +424,7 @@ function CoachAckRow({
 }
 
 const styles = StyleSheet.create({
+  pageSpinner: { paddingVertical: spacing.lg },
   flex: { flex: 1 },
   triageHeader: {
     paddingHorizontal: spacing.lg,
