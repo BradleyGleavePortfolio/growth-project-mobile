@@ -2,7 +2,7 @@
 // B1 a disabled Later keeps stone while a save is pending; B2 the recovery label never takes the slate ring
 // colour as text; B3 an unavailable cross-pillar tile keeps its words opaque (no ancestor opacity).
 import React from 'react';
-import { AccessibilityInfo, StyleSheet } from 'react-native';
+import { AccessibilityInfo, StyleSheet, type TextStyle } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { RecoveryRingHero } from '../../screens/client/wearables/cards/RecoveryRingHero';
@@ -31,7 +31,8 @@ const ratio = (a: string, b: string) => {
   const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 };
-const textColor = (node: { props: { style?: unknown } }) => StyleSheet.flatten(node.props.style as never)?.color as string;
+const flat = (node: { props: { style?: unknown } }): TextStyle => (StyleSheet.flatten(node.props.style as TextStyle) ?? {}) as TextStyle;
+const textColor = (node: { props: { style?: unknown } }) => flat(node).color as string;
 
 beforeEach(() => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
@@ -96,7 +97,7 @@ describe('B3 cross-pillar overview: the Wealth tile while finance is unavailable
     for (const words of ['WEALTH USERS', 'Backend unavailable']) {
       const node = await screen.findByText(words);
       for (let n: typeof node | null = node; n; n = n.parent) {
-        const opacity = StyleSheet.flatten(n.props.style as never)?.opacity;
+        const opacity = flat(n).opacity;
         expect(opacity === undefined || opacity === 1).toBe(true);
       }
       expect(ratio(textColor(node), ground)).toBeGreaterThanOrEqual(4.5);
