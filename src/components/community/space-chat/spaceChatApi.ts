@@ -2,8 +2,8 @@
  * SC-M1 (agent 168): the space chat's server calls. Shapes from SC-BE1's CONTRACT (b#1135 @ 81ff66f3, comment
  * 6348434182) and SC-BE2's CONTRACT (b#1137, comment 6352782763: the read line). Paths have no /api prefix (services/api adds the base).
  *   GET  community/cohorts/:id/messages?before=&limit=  newest first, deleted and blocked (either way) left out; 404/403 = no access
- *   POST community/cohorts/:id/messages { body }        Idempotency-Key reused on a retry; the server keeps no key yet, so a
- *                                                       retry after a lost answer can post twice until FX-IDEM adds it
+ *   POST community/cohorts/:id/messages { body }        Idempotency-Key reused on every retry and Try again; FX-IDEM (b#1144,
+ *                                                       CONTRACT 6370303541) answers a resend with the first message
  *   DELETE community/messages/:id                       own text message
  *   GET/POST community/cohorts/:id/read                  SC-BE2; any failure (404 before it ships) hides the line
  */
