@@ -1,7 +1,8 @@
 /**
  * FX-COMM (agent 170): the voice note a coach opens from the inbox draws the
  * note's own loudness bars (waveform_peaks from GET /community/voice-notes/:id),
- * not a flat line, and names the sender (author_name, #C6-NAMES-EVERYWHERE).
+ * not a flat line, names the sender (author_name, #C6-NAMES-EVERYWHERE) and is
+ * never saved to the phone (meta.persist false, same as useVoiceFeed).
  */
 import React from 'react';
 import { render } from '@testing-library/react-native';
@@ -65,7 +66,7 @@ async function renderDetail() {
     </QueryClientProvider>,
   );
   await screen.findByTestId('community-voice-detail-scroll');
-  return screen;
+  return { ...screen, qc };
 }
 
 beforeEach(() => {
@@ -91,4 +92,13 @@ it('falls back to "Voice note" with no name and an empty bar list with no peaks'
     | undefined;
   expect(last?.peaks).toEqual([]);
   expect(getAllByText('Voice note').length).toBeGreaterThanOrEqual(2);
+});
+
+it('keeps the note off the phone, so a restart never shows a note from before a ban', async () => {
+  mockGetOne.mockResolvedValue(note());
+  const { qc } = await renderDetail();
+  const query = qc
+    .getQueryCache()
+    .find({ queryKey: ['community', 'voice-note', 'n1'] });
+  expect(query?.meta).toEqual({ persist: false });
 });

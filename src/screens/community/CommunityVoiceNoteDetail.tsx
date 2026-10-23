@@ -77,6 +77,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
     queryKey: ['community', 'voice-note', voiceNoteId],
     queryFn: () => communityVoiceApi.getOne(voiceNoteId),
     enabled: !!voiceNoteId && open,
+    meta: { persist: false }, // never saved to the phone, so a restart cannot show a note from before a ban
   });
 
   // Announce the surface once metadata loads so a screen-reader user gets a
