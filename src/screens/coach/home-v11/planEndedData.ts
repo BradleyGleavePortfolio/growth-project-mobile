@@ -5,9 +5,10 @@
  * the server's Monday-to-Sunday `group`). Shown only when the server answers with the list: a 404 (FEATURE_PLAN_RENEWAL
  * off) or any other answer hides it. Nothing here writes to a client: Roman only drafts, and only when asked.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import api from '../../../services/api';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import type { DraftAsk } from './DraftSheets';
 
 export interface PlanEndedRow {
@@ -75,8 +76,11 @@ export async function readPlanEnded(): Promise<PlanEndedPage | null> {
 
 export const planEndedTitle = (n: number) => `Plan ended last 7 days, ${n}`; // RN3-24, the owner's words
 const ended = (days: number) => (days <= 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`);
+/** RN3-30, in the pieces WholeLine draws without breaking inside one: joined, they are exactly `rowLine`. */
+export const rowLineParts = (r: PlanEndedRow): string[] =>
+  r.package_name ? [`Plan ended ${ended(r.days_since)} · `, r.package_name] : [`Plan ended ${ended(r.days_since)}`];
 /** RN3-30 */
-export const rowLine = (r: PlanEndedRow) => `Plan ended ${ended(r.days_since)}${r.package_name ? ` · ${r.package_name}` : ''}`;
+export const rowLine = (r: PlanEndedRow) => rowLineParts(r).join('');
 /** RN3-25 */
 export const homeLine = (r: PlanEndedRow) => `${r.name} · ended ${ended(r.days_since)}`;
 /** RN3-26 (P1) and RN3-27 (P1-0), for a screen reader. */
@@ -114,9 +118,30 @@ export function groupPlanEnded(rows: PlanEndedRow[]): PlanEndedGroup[] {
 export const planEndedAsk = (r: PlanEndedRow): DraftAsk => ({
   clientName: r.name,
   about: rowLine(r), // RN3-34, the K3 context line
+  aboutParts: rowLineParts(r),
+  masthead: true, // K3a / K3b: Roman's forest masthead, the context line in its chip
   request: { capability: 'draft.coach_message', subject_user_id: r.client_id, message: '' },
   path: `/v1/coach/churned-clients/${encodeURIComponent(r.client_id)}/draft`,
 });
+
+/**
+ * The rows without anyone the coach has blocked on this phone. The server is the authority both ways (b#1141 drops a
+ * blocked pair from GET /v1/coach/churned-clients and 404s its draft); this only keeps a block made a moment ago from
+ * showing until the next read. {N} drops by the rows taken out.
+ */
+export function withoutBlocked(page: PlanEndedPage | null, blockedIds: readonly string[]): PlanEndedPage | null {
+  if (!page || blockedIds.length === 0) return page;
+  const blocked = new Set(blockedIds);
+  const items = page.items.filter((r) => !blocked.has(r.client_id));
+  if (items.length === page.items.length) return page;
+  return { ...page, total: Math.max(items.length, page.total - (page.items.length - items.length)), items };
+}
+
+/** The ids the coach has blocked, as this phone knows them (blockedUsersStore). */
+export function useBlockedIds(): string[] {
+  const blocked = useBlockedUsersStore((s) => s.blocked);
+  return useMemo(() => blocked.map((b) => b.id), [blocked]);
+}
 
 /** The Home's read: on mount, on each return to the Home, and on `reload`. A failed re-read keeps the last list. */
 export function usePlanEnded() {
@@ -143,5 +168,7 @@ export function usePlanEnded() {
     mounted.current = true;
     void reload();
   }, [isFocused, reload]);
-  return { page, loading: state.loading, error: state.error, reload };
+  const blockedIds = useBlockedIds();
+  const shown = useMemo(() => withoutBlocked(page, blockedIds), [page, blockedIds]);
+  return { page: shown, loading: state.loading, error: state.error, reload };
 }
