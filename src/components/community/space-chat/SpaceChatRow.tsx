@@ -171,7 +171,8 @@ const s = StyleSheet.create({
   name: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: fp.ink, flexShrink: 1 },
   mark: { ...typography.caption, color: fp.gold, backgroundColor: fp.deep, borderRadius: radius.chip, paddingHorizontal: spacing.sm, paddingVertical: 2, overflow: 'hidden' },
   time: { ...typography.bodySmall, color: SMALL_GREY },
-  content: { marginLeft: AVATAR + spacing.sm, marginRight: spacing.md, gap: spacing.xs },
+  // Up under the name, as in 05b (the head row stays 44 pt for the menu's touch target).
+  content: { marginLeft: AVATAR + spacing.sm, marginRight: spacing.md, marginTop: -10, gap: spacing.xs },
   faded: { opacity: 0.55 },
   body: { ...typography.body, color: fp.ink },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },
