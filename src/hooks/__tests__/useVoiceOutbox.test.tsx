@@ -1,8 +1,5 @@
-/**
- * useVoiceOutbox — the Style B outbox: Send closes the sheet and the note
- * waits here until the server has it (sending → gone, failed → retry,
- * offline → waiting → sends on reconnect, from any screen and after a restart).
- */
+/** useVoiceOutbox — the Style B outbox: Send closes the sheet and the note waits here until the server has it
+ *  (sending → gone, failed → retry, offline → waiting → sends on reconnect, from any screen and after a restart). */
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
