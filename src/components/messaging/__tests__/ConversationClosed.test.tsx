@@ -22,7 +22,8 @@ import { CommunityApiError } from '../../../api/apiCall';
 import { NavigationContext } from '@react-navigation/native';
 import { fireEvent } from '@testing-library/react-native';
 import {
-  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, isClosedRefusal, useClosedBy, useConversationClosed,
+  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, closedSideOfHeader, isClosedRefusal, useClosedBy,
+  useConversationClosed,
 } from '../ConversationClosed';
 import { closedRefusals } from '../closedRefusal';
 
@@ -142,6 +143,17 @@ describe('#169-5 CLOSED-LINE: who closed a one-to-one conversation (useClosedBy)
     const wrapped = new CommunityApiError('forbidden', 403, 'community request failed (403)', axiosErr(403, { code: 'community.dm.blocked_by_them' }));
     expect(await byOf('x', true, { errors: [wrapped] })).toBe('them');
     expect(await byOf('x', true, { pair: true })).toBe('them');
+  });
+
+  it('the coaching header names the side and wins (b#1141 CONTRACT 6370968268)', async () => {
+    expect(closedSideOfHeader({ headers: { 'x-conversation-closed': 'blocked_by_you' } })).toBe('me');
+    expect(closedSideOfHeader({ headers: { get: (n: string) => (n === 'x-conversation-closed' ? 'blocked_by_them' : undefined) } })).toBe('them');
+    expect(closedSideOfHeader({ headers: {} })).toBeNull();
+    expect(closedSideOfHeader(null)).toBeNull();
+    expect(await byOf('x', true, { pair: true, side: 'me' })).toBe('me');
+    useBlockedUsersStore.setState({ blocked: [SAM] });
+    expect(await byOf('x', true, { pair: true, side: 'them' })).toBe('them');
+    expect(await byOf('x', false, { side: 'them' })).toBeNull();
   });
 
   it('BAM-1 for a ban or a member who left; null while open', async () => {

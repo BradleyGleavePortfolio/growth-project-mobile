@@ -310,6 +310,15 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByLabelText(/Message: from the coach/)).toBeNull();
   });
 
+  it('FX-872 (b#1141 CONTRACT 6370968268): the inbox is empty and the thread read carries x-conversation-closed: closed, no box', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValueOnce({ data: [], headers: { 'x-conversation-closed': 'blocked_by_them' } });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+  });
+
   it('FX-872: nothing to type until the server answered (the inbox read is still out)', async () => {
     getMock.mockImplementation(async (url: string) => (url === '/messages/inbox' ? new Promise(() => undefined) : { data: { items: [] } }));
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
@@ -357,6 +366,18 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
 
   // BLOCK-TELL #169-5 CLOSED-LINE: the line says who closed it. A blocked chat is in neither list (owner 10-23
   // "Dissapear"), so the side comes from my block list or the refused send.
+  it.each([
+    ['blocked_by_them', 'Sam has blocked you'],
+    ['blocked_by_you', 'You blocked them. Unblock in Settings'], // e.g. blocked on another device, not in this list yet
+  ])('the thread read says x-conversation-closed: %s -> "%s" before any send (b#1141 CONTRACT 6370968268)', async (side, line) => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValueOnce({ data: [], headers: { 'x-conversation-closed': side } });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByLabelText(line)).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+  });
+
   it('I blocked my coach: "You blocked them. Unblock in Settings" before any send, no "start a conversation"', async () => {
     useBlockedUsersStore.setState({ blocked: [{ id: 'coach-9', displayName: 'Sam', blockedAt: recent }] });
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });

@@ -33,7 +33,8 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
-import { useConversationClosed, useCoachingRow, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useConversationClosed, useCoachingRow, useClosedBy, closedSideOfHeader, ConversationClosedLine, type ClosedBy } from '../../components/messaging/ConversationClosed';
+import { closedByHeader } from '../../components/messaging/closedRefusal';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
@@ -119,15 +120,17 @@ export default function MessagesScreen() {
   // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in the draft (or the outbox).
   // FX-872: nothing to type until the server answered: the inbox row (v2, it carries `closed`) and the first read.
   const [answered, setAnswered] = useState(false);
+  const [threadClosed, setThreadClosed] = useState(false); // the last thread read carried x-conversation-closed
+  const [threadSide, setThreadSide] = useState<ClosedBy>(null); // BLOCK-TELL #169-5: that header's side
   const coachingRow = useCoachingRow('client', coachId);
   const { closed, open, close } = useConversationClosed(
     coachId,
     [],
     answered && coachingRow.settled,
-    coachingRow.row?.closed,
+    threadClosed || coachingRow.row?.closed,
   );
   // BLOCK-TELL #169-5: `by` picks the line for my side (BAM-2a when I blocked them, BAM-2b when they blocked me).
-  const by = useClosedBy(coachId, closed, { pair: true, mine: coachingRow.row?.blocked_by_me });
+  const by = useClosedBy(coachId, closed, { pair: true, mine: coachingRow.row?.blocked_by_me, side: threadSide });
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
   // the CompetencePill at the top of the conversation. Null hides the pill
   // (no review yet, or the backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is OFF).
@@ -200,6 +203,8 @@ export default function MessagesScreen() {
   const load = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
+      setThreadClosed(closedByHeader(res)); // same batch as `answered`: never a render with a box first
+      setThreadSide(closedSideOfHeader(res));
       const list = normalizeList(res.data, currentUser?.id);
       if (outboxOn() && currentUser?.id) settleOutbox(currentUser.id, list.map((m) => m.v2?.client_message_id));
       setMessages((prev) => mergeById(list, reconcilePending(prev, list)));

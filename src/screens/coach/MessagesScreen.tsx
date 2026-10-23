@@ -104,7 +104,9 @@ function LegacyCoachMessages() {
   // FX-872 (owner 10-23 "Dissapear"): a client I blocked is not a chat row (the one block cache, src/lib/blockSync.ts).
   const blocked = useBlockedUsersStore((st) => st.blocked);
   const activeClients = clients.filter((c) => c.status === 'active' && !blocked.some((b) => b.id === c.id));
-  const totalUnread = Object.values(unreadByClient).reduce((a, b) => a + (b || 0), 0);
+  const totalUnread = Object.entries(unreadByClient)
+    .filter(([id]) => !blocked.some((b) => b.id === id)) // counted 0 once blocked
+    .reduce((a, [, n]) => a + (n || 0), 0);
 
   const list = activeClients
     .filter((c) =>

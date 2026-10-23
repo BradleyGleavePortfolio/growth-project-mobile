@@ -56,19 +56,29 @@ function refusalSide(err: unknown, depth = 0): ClosedBy | undefined {
   return undefined;
 }
 
+/** The side named by a coaching thread read's `x-conversation-closed` (b#1141 CONTRACT 6370968268): `blocked_by_you`
+ * -> 'me', `blocked_by_them` -> 'them'; no header (open) -> null. FX-872's `closedByHeader` reads open/closed. */
+export function closedSideOfHeader(res: unknown): ClosedBy {
+  const h = (res as { headers?: { get?: (n: string) => unknown; [k: string]: unknown } } | null)?.headers;
+  const v = !h ? undefined : typeof h.get === 'function' ? h.get('x-conversation-closed') : h['x-conversation-closed'];
+  return v === 'blocked_by_you' ? 'me' : v === 'blocked_by_them' ? 'them' : null;
+}
+
 /**
- * Which line a closed one-to-one conversation shows (#169-5). 'me' when my block list has them, the coaching row says
- * the block is mine (`mine`), or the server says blocked_by_you; 'them' when the server says blocked_by_them, or in a
- * coaching chat (`pair`: every closed state there is a block on one side) when the block is not mine; null (BAM-1) for
- * bans, a member who left, and everything else. Null while open.
+ * Which line a closed one-to-one conversation shows (#169-5). The server's `side` (the coaching thread header) wins
+ * when given. Otherwise 'me' when my block list has them, the coaching row says the block is mine (`mine`), or the
+ * server says blocked_by_you; 'them' when the server says blocked_by_them, or in a coaching chat (`pair`: every closed
+ * state there is a block on one side) when the block is not mine; null (BAM-1) for bans, a member who left, and
+ * everything else. Null while open.
  */
 export function useClosedBy(
   otherUserId: string | null | undefined,
   closed: boolean,
-  { errors = [], pair = false, mine = false }: { errors?: unknown[]; pair?: boolean; mine?: boolean } = {},
+  { errors = [], pair = false, mine = false, side = null }: { errors?: unknown[]; pair?: boolean; mine?: boolean; side?: ClosedBy } = {},
 ): ClosedBy {
   const blockedByMe = useBlockedUsersStore((s) => !!otherUserId && s.blocked.some((b) => b.id === otherUserId));
   if (!closed) return null;
+  if (side) return side;
   const said = errors.map((e) => refusalSide(e));
   if (blockedByMe || mine || said.includes('me')) return 'me';
   return said.includes('them') || pair ? 'them' : null;

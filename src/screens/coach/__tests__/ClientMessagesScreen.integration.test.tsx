@@ -332,6 +332,18 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
     expect(queryByText('should-be-filtered')).toBeNull();
   });
 
+  it('FX-872: a thread read with x-conversation-closed (the client blocked me) shows the closed line and no box', async () => {
+    mockMessagesByClient['client-1'] = [];
+    mockGetClientMessages.mockImplementationOnce(async () => ({
+      data: { messages: [] },
+      headers: { 'x-conversation-closed': 'blocked_by_them' },
+    }));
+    const { findByTestId, queryByPlaceholderText } = await render(<ClientMessagesScreen />);
+    await findByTestId('client-messages-closed');
+    expect(queryByPlaceholderText(/message/i)).toBeNull();
+    expect(useBlockedUsersStore.getState().isBlocked('client-1')).toBe(false); // their block, not mine
+  });
+
   it('preserves the server-provided blockedAt (does not stamp new Date())', async () => {
     const serverIso = '2025-12-01T12:34:56.000Z';
     getMock.mockImplementation(async (url: string) => {

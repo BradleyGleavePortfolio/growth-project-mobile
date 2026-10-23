@@ -394,6 +394,13 @@ describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
 
   // BLOCK-TELL #169-5 CLOSED-LINE: the line says who closed it, naming the client as the coach sees them. A blocked chat is
   // in neither list (owner 10-23 "Dissapear"), so the side comes from my block list or the refused send.
+  it('the thread read says x-conversation-closed: blocked_by_them -> "Alice Smith has blocked you" before any send', async () => {
+    mockGetClientMessages.mockImplementationOnce(async () => ({ data: { messages: [] }, headers: { 'x-conversation-closed': 'blocked_by_them' } }) as never);
+    const u = await render(<ClientMessagesScreen />);
+    expect(await u.findByText('Alice Smith has blocked you')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+  });
+
   it('I blocked this client: "You blocked them. Unblock in Settings" before any send, no "start a conversation"', async () => {
     useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Alice', blockedAt: recent }] });
     mockRows.length = 0;
