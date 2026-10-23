@@ -33,6 +33,7 @@ import MessageBubble, { BubbleMessage } from '../../components/messaging/Message
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
 import { useConversationClosed, useCoachingRow, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { closedByHeader } from '../../components/messaging/closedRefusal';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import { track } from '../../lib/analytics';
 import { MuteBell, PinnedBar, ThreadV2Menus, jumpToMessage } from '../../components/messaging/ThreadV2Parts';
@@ -83,12 +84,13 @@ export default function ClientMessagesScreen() {
   // FX-872: nothing to type until the server answered: this client's inbox row (v2; `closed` is the only way the coach
   // learns the client blocked them) and the first thread read. A refused send stays closed for the session.
   const [answered, setAnswered] = useState(false);
+  const [threadClosed, setThreadClosed] = useState(false); // the last thread read carried x-conversation-closed
   const coachingRow = useCoachingRow('coach', clientId);
   const { closed, open, close } = useConversationClosed(
     clientId,
     [],
     answered && coachingRow.settled,
-    coachingRow.row?.closed,
+    threadClosed || coachingRow.row?.closed,
   );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -121,6 +123,7 @@ export default function ClientMessagesScreen() {
   const loadInitial = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await coachApi.getClientMessages(clientId, { limit: PAGE_LIMIT });
+      setThreadClosed(closedByHeader(res)); // same batch as `answered`: never a render with a box first
       const list: Message[] = normalizeList(res.data, clientId);
       setMessages(list);
       setHasMoreOlder(list.length >= PAGE_LIMIT);
@@ -164,6 +167,7 @@ export default function ClientMessagesScreen() {
   const loadSinceNewest = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await coachApi.getClientMessages(clientId, { limit: 100 });
+      setThreadClosed(closedByHeader(res)); // closed until a read answers without the header
       const list: Message[] = normalizeList(res.data, clientId);
       setMessages((prev) => mergeById(prev, list));
       return list;

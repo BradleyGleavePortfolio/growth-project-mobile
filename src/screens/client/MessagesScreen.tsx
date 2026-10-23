@@ -34,6 +34,7 @@ import MessageBubble, { BubbleMessage } from '../../components/messaging/Message
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
 import { useConversationClosed, useCoachingRow, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { closedByHeader } from '../../components/messaging/closedRefusal';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
@@ -119,12 +120,13 @@ export default function MessagesScreen() {
   // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in the draft (or the outbox).
   // FX-872: nothing to type until the server answered: the inbox row (v2, it carries `closed`) and the first read.
   const [answered, setAnswered] = useState(false);
+  const [threadClosed, setThreadClosed] = useState(false); // the last thread read carried x-conversation-closed
   const coachingRow = useCoachingRow('client', coachId);
   const { closed, open, close } = useConversationClosed(
     coachId,
     [],
     answered && coachingRow.settled,
-    coachingRow.row?.closed,
+    threadClosed || coachingRow.row?.closed,
   );
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
   // the CompetencePill at the top of the conversation. Null hides the pill
@@ -198,6 +200,7 @@ export default function MessagesScreen() {
   const load = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
+      setThreadClosed(closedByHeader(res)); // same batch as `answered`: never a render with a box first
       const list = normalizeList(res.data, currentUser?.id);
       if (outboxOn() && currentUser?.id) settleOutbox(currentUser.id, list.map((m) => m.v2?.client_message_id));
       setMessages((prev) => mergeById(list, reconcilePending(prev, list)));

@@ -25,7 +25,7 @@ import { queryClient } from '../../../services/queryClient';
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { messagesModerationApi } from '../../../api/messagesApi';
 import { useConversationClosed, useServerAnswered } from '../ConversationClosed';
-import { closedRefusals } from '../closedRefusal';
+import { closedByHeader, closedRefusals } from '../closedRefusal';
 import { blockPlaced, blockLifted } from '../../../lib/blockSync';
 
 const refusal = { isAxiosError: true, response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } };
@@ -89,6 +89,14 @@ describe('closed until the server says open', () => {
   it('useServerAnswered: a failed read never opens', async () => {
     const { result } = await renderHook(() => useServerAnswered(read({ isSuccess: false, isFetchedAfterMount: true })));
     expect(result.current).toBe(false);
+  });
+
+  it('a coaching thread read with x-conversation-closed means closed (b#1141 CONTRACT 6370968268); no header means open', () => {
+    expect(closedByHeader({ headers: { 'x-conversation-closed': 'blocked_by_them' } })).toBe(true);
+    expect(closedByHeader({ headers: { get: (n: string) => (n === 'x-conversation-closed' ? 'blocked_by_you' : undefined) } })).toBe(true);
+    expect(closedByHeader({ headers: {} })).toBe(false);
+    expect(closedByHeader({ data: [] })).toBe(false);
+    expect(closedByHeader(undefined)).toBe(false);
   });
 
   it('a closed refusal is not retried (no seconds with a box while it retries)', () => {

@@ -40,6 +40,14 @@ export function isClosedRefusal(err: unknown, depth = 0): boolean {
   return status === 403 && (data?.error === 'BLOCKED' || data?.message === COACHING_BLOCKED || e.userMessage === COACHING_BLOCKED);
 }
 
+/** b#1141 CONTRACT 6370968268: a coaching thread read answers `200 []` with `x-conversation-closed` (`blocked_by_you` or
+ * `blocked_by_them`) while either person blocks; no header means open. The value is BLOCK-TELL's (m#877) to word. */
+export function closedByHeader(res: unknown): boolean {
+  const h = (res as { headers?: { get?: (n: string) => unknown; [k: string]: unknown } } | null)?.headers;
+  if (!h) return false;
+  return !!(typeof h.get === 'function' ? h.get('x-conversation-closed') : h['x-conversation-closed']);
+}
+
 /** Refusals this session already got, by the other person's id: leaving and coming back keeps the chat closed. Cleared
  * when I unblock that person or the server's own row says open again (FX-872, Opus B4). */
 const refusedWith = new Set<string>();

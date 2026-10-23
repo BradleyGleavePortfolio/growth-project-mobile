@@ -310,6 +310,15 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByLabelText(/Message: from the coach/)).toBeNull();
   });
 
+  it('FX-872 (b#1141 CONTRACT 6370968268): the inbox is empty and the thread read carries x-conversation-closed: closed, no box', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValueOnce({ data: [], headers: { 'x-conversation-closed': 'blocked_by_them' } });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+  });
+
   it('FX-872: nothing to type until the server answered (the inbox read is still out)', async () => {
     getMock.mockImplementation(async (url: string) => (url === '/messages/inbox' ? new Promise(() => undefined) : { data: { items: [] } }));
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
