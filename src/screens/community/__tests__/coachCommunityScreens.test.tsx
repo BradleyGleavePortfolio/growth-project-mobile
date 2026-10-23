@@ -279,7 +279,7 @@ const member = (over: Partial<Record<string, unknown>> = {}) => ({
   email: 'dana@example.com',
   avatar_url: null,
   role: 'client',
-  status: 'active',
+  id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
   joined_at: new Date().toISOString(),
   ...over,
 });
@@ -675,7 +675,7 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
 
   it('a person the space shows from its audience (no saved row) has no Remove menu', async () => {
     mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' };
-    mockState.cohortDetail = { data: { cohort: cohort(), members: [member({ status: null })] }, isLoading: false, isError: false };
+    mockState.cohortDetail = { data: { cohort: cohort(), members: [member({ id: null })] }, isLoading: false, isError: false };
     const { queryByTestId } = await render(<CoachCommunityCohortDetailScreen />);
     expect(queryByTestId('coach-community-member-menu-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')).toBeNull();
   });

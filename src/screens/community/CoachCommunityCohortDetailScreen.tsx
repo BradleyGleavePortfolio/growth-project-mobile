@@ -169,9 +169,9 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
             {item.email ? ` · ${item.email}` : ''}
           </Text>
         </View>
-        {/* Only a saved membership can be removed; people a space shows from
-            its audience (status null) have no row to remove. */}
-        {item.role === 'client' && item.status != null ? (
+        {/* Only a saved membership can be removed: a person the space lets in
+            by its rule has no row (id null), and the server answers 404. */}
+        {item.role === 'client' && item.id != null ? (
           <HapticPressable
             intent="light"
             onPress={() => setMenuMember(item)}
