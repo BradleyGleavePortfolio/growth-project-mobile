@@ -1,0 +1,16 @@
+src/__tests__/coachHomeAudit13.test.tsx
+src/__tests__/coachHomeCards134.test.tsx
+src/__tests__/coachHome134.test.tsx
+src/__tests__/qaCoachHome131.test.tsx
+src/__tests__/coachHomeV11.test.tsx
+src/__tests__/coachHomeWinTurn.test.tsx
+src/__tests__/commandCenterNavigation.test.tsx
+src/__tests__/coachHomeWinOpen.test.tsx
+src/__tests__/commandCenterScreens.test.tsx
+src/__tests__/quietLuxuryDoctrine.test.ts
+src/screens/coach/__tests__/coachTabsV2Entries.test.tsx
+src/screens/coach/__tests__/coachTabsGaps153.test.ts
+src/screens/coach/__tests__/coachHomeThreeArcFlagOff.test.tsx
+src/navigation/__tests__/coachTabLabels143.test.tsx
+src/navigation/__tests__/coachLanding.test.tsx
+src/navigation/__tests__/coachTabsV2.test.tsx
