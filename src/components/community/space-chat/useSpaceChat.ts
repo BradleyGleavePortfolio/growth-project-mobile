@@ -1,32 +1,21 @@
 /**
- * SC-M1 (agent 168): one space's stream. The list is the server's page set (keyset `before`, newest first), keyed by the
- * signed-in user and the space. Rows the viewer sends live here until the server list carries them: sending, waiting
- * (written offline, sent when the phone is back online) or failed (Try again reuses the same Idempotency-Key). They are
- * kept per user and space for the session, so leaving the space and coming back keeps them (owner chat-discard op 1).
- * New rows come from a 10 s poll floor plus a refetch whenever the realtime ping refreshes community/me; the realtime
- * payload is never drawn (the server list already leaves out deleted rows and blocked people either way).
+ * SC-M1 (agent 168), FX-871 (agent 169): one space's stream. The list is the server's page set (keyset `before`, newest
+ * first), keyed by the signed-in user and the space. Rows the viewer sends live in the outbox (spaceChatOutbox: kept on
+ * the device, sent one at a time) until the server list carries them. New rows come from a 10 s poll floor while the page
+ * is in front (`focused`) plus a refetch whenever the realtime ping refreshes community/me; the realtime payload is never
+ * drawn (the server list already leaves out deleted rows and blocked people either way).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { generateIdempotencyKey } from '../../../utils/idempotency';
-import { authEvents } from '../../../utils/authEvents';
 import { useCommunityMe } from '../../../hooks/useCommunity';
 import { isNoAccess, spaceChatApi, type SpaceMessage, type SpaceMessagePage } from './spaceChatApi';
+import { setSpaceOutboxOnline, spaceOutbox, startSpaceOutbox, useSpaceOutbox, type PendingRow } from './spaceChatOutbox';
 
-export type PendingState = 'sending' | 'waiting' | 'failed' | 'sent';
-export interface PendingRow { localId: string; key: string; body: string; createdAt: string; state: PendingState; serverId?: string }
-
-const pendingStore = new Map<string, PendingRow[]>();
-try {
-  authEvents.on('logout', () => pendingStore.clear());
-  authEvents.on('login', () => pendingStore.clear());
-} catch {
-  // A test double without named events.
-}
+export type { PendingRow, PendingState } from './spaceChatOutbox';
 
 export const spaceChatKey = (userId: string, cohortId: string) => ['community', 'space-chat', userId, cohortId] as const;
 
-export function useSpaceChat(cohortId: string, userId: string | null, isOnline: boolean) {
+export function useSpaceChat(cohortId: string, userId: string | null, isOnline: boolean, focused = true) {
   const qc = useQueryClient();
   const uid = userId ?? '';
   const key = useMemo(() => spaceChatKey(uid, cohortId), [uid, cohortId]);
@@ -36,7 +25,7 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => spaceChatApi.list(cohortId, pageParam),
     getNextPageParam: (last: SpaceMessagePage) => last.next_before ?? undefined,
-    refetchInterval: 10_000,
+    refetchInterval: focused ? 10_000 : false,
     retry: (n, err) => !isNoAccess(err) && n < 2,
   });
   // SC-BE2 read cursor, read once when the space opens (the New messages line stays where it was while you read).
@@ -57,40 +46,11 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     void qc.invalidateQueries({ queryKey: key });
   }, [me.dataUpdatedAt, qc, key]);
 
-  const scope = `${uid}:${cohortId}`;
-  const [pending, setPendingState] = useState<PendingRow[]>(() => pendingStore.get(scope) ?? []);
-  useEffect(() => setPendingState(pendingStore.get(scope) ?? []), [scope]);
-  const setPending = useCallback((fn: (rows: PendingRow[]) => PendingRow[]) => {
-    const next = fn(pendingStore.get(scope) ?? []);
-    pendingStore.set(scope, next);
-    setPendingState(next);
-  }, [scope]);
-  const patch = useCallback((localId: string, change: Partial<PendingRow>) =>
-    setPending((rows) => rows.map((r) => (r.localId === localId ? { ...r, ...change } : r))), [setPending]);
-
-  const deliver = useCallback((row: PendingRow) => {
-    patch(row.localId, { state: 'sending' });
-    spaceChatApi.send(cohortId, row.body, row.key).then(
-      (sent) => {
-        patch(row.localId, { state: 'sent', serverId: sent.id });
-        void qc.invalidateQueries({ queryKey: key });
-      },
-      () => patch(row.localId, { state: 'failed' }),
-    );
-  }, [cohortId, patch, qc, key]);
-
-  const send = useCallback((body: string) => {
-    const k = generateIdempotencyKey();
-    const row: PendingRow = { localId: k, key: k, body, createdAt: new Date().toISOString(), state: isOnline ? 'sending' : 'waiting' };
-    setPending((rows) => [...rows, row]);
-    if (isOnline) deliver(row);
-  }, [isOnline, deliver, setPending]);
-
-  // Back online: rows written offline go out, oldest first.
-  useEffect(() => {
-    if (!isOnline) return;
-    (pendingStore.get(scope) ?? []).filter((r) => r.state === 'waiting').forEach(deliver);
-  }, [isOnline, scope, deliver]);
+  useEffect(() => startSpaceOutbox(userId), [userId]);
+  useEffect(() => setSpaceOutboxOnline(isOnline), [isOnline]);
+  useEffect(() => spaceOutbox.onSent((id) => { void qc.invalidateQueries({ queryKey: spaceChatKey(uid, id) }); }), [qc, uid]);
+  const pending = useSpaceOutbox(cohortId);
+  const send = useCallback((body: string) => spaceOutbox.add(cohortId, body), [cohortId]);
 
   const messages: SpaceMessage[] = useMemo(() => {
     const seen = new Set<string>();
@@ -101,15 +61,8 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     return out;
   }, [list.data]);
 
-  // A sent row leaves the local list once the server list carries it.
-  useEffect(() => {
-    const ids = new Set(messages.map((m) => m.id));
-    if (pending.some((r) => r.serverId && ids.has(r.serverId))) {
-      setPending((rows) => rows.filter((r) => !(r.serverId && ids.has(r.serverId))));
-    }
-  }, [messages, pending, setPending]);
-
-  const removeLocal = useCallback((localId: string) => setPending((rows) => rows.filter((r) => r.localId !== localId)), [setPending]);
+  // A sent row leaves the outbox once the server list carries it.
+  useEffect(() => spaceOutbox.settle(new Set(messages.map((m) => m.id))), [messages]);
 
   const dropFromCache = useCallback((keep: (m: SpaceMessage) => boolean) => {
     qc.setQueryData<InfiniteData<SpaceMessagePage>>(key, (data) => data && {
@@ -138,9 +91,11 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     noAccess: list.isError && isNoAccess(list.error),
     // Hidden whenever the server has no read route (404) or the read failed.
     readCursor: read.isSuccess ? read.data : null,
+    /** The read cursor answered or failed: the opening position and read marks wait for it. */
+    readSettled: !read.isLoading,
     send,
-    retry: deliver,
-    removeLocal,
+    retry: (r: PendingRow) => spaceOutbox.retry(r.localId),
+    removeLocal: (localId: string) => spaceOutbox.discard(localId),
     remove,
     dropAuthor,
     markRead,

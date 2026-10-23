@@ -1,13 +1,17 @@
 /**
- * SC-M1 (agent 168): the space chat with communitySpaceChat on. Member Everyone (rows, names as sent, Coach mark,
- * voice row), member Announcements (no composer, SC-W03), coach Everyone, empty, offline, send failure and Try again
- * (same Idempotency-Key), a written-offline row sent when back online, the draft kept per space, the New messages line
- * (hidden when the read route is 404), no access (404: no content, no composer), block (rows leave at once), and a
- * label on every control. Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
+ * SC-M1 (agent 168), FX-871 (agent 169): the space chat with communitySpaceChat on. Member Everyone (rows, names as
+ * sent, Coach mark, voice row), member Announcements (no composer, SC-W03), coach Everyone (info button to the member
+ * page), empty, loading (no composer), offline, send failure (Try again with the same Idempotency-Key, Delete), rows
+ * written offline sent in order when back online (even with the page closed), the draft kept per space, the New
+ * messages line (hidden when the read route is 404), read marks only in front and after the cursor answers, a linked
+ * message on an older page, no access (404 / 403), a failed space list, block, own delete, and a label on every control.
+ * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import NetInfo from '@react-native-community/netinfo';
+import { authEvents } from '../../../utils/authEvents';
 
 const mockDisk = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
@@ -26,22 +30,34 @@ jest.mock('../../../theme/useTheme', () => {
 const mockFlags = { communitySpaceChat: true, communityVoiceNotes: true };
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: mockFlags }));
 const mockParams: { current: Record<string, unknown> } = { current: { cohortId: 'c-every' } };
-const mockGoBack = jest.fn();
+const mockNavigate = jest.fn();
+const mockStack = { routes: ['CommunityTab', 'CommunitySpaceChat'], focused: true };
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack }),
+  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), getState: () => ({ routeNames: mockStack.routes }) }),
   useRoute: () => ({ params: mockParams.current }),
+  useIsFocused: () => mockStack.focused,
 }));
+jest.mock('../../../components/community/SpaceDrawer', () => {
+  const { Text } = jest.requireActual('react-native');
+  return { SpaceListButton: () => <Text testID="space-list-open" accessibilityLabel="Open space list">list</Text> };
+});
 let mockUser = { id: 'me-1', name: 'Dana Reyes', coach_id: 'coach-1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
-const mockNet = { isOnline: true };
-jest.mock('../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({ isOnline: mockNet.isOnline, isInternetReachable: null }) }));
+const mockNet: { isOnline: boolean; reachable: boolean | null } = { isOnline: true, reachable: null };
+jest.mock('../../../hooks/useNetworkStatus', () => ({
+  useNetworkStatus: () => ({ isOnline: mockNet.isOnline, isInternetReachable: mockNet.reachable }),
+  isEffectivelyOnline: jest.requireActual('../../../hooks/useNetworkStatus').isEffectivelyOnline,
+}));
 let mockRole = 'client';
 const cohorts = () => [
   { id: 'c-every', workspace_id: 'ws', name: 'Everyone', is_default: true, kind: 'default', member_count: 24, my_role: mockRole },
   { id: 'c-ann', workspace_id: 'ws', name: 'Announcements', is_default: false, kind: 'announcement', posting_policy: 'coach', member_count: 24, my_role: mockRole },
 ];
+const mockCohorts = { failed: false, refetch: jest.fn() };
 jest.mock('../../../hooks/useCommunity', () => ({
-  useCommunityCohorts: () => ({ data: { feature_flag_state: 'on', cohorts: cohorts() }, isLoading: false }),
+  useCommunityCohorts: () => (mockCohorts.failed
+    ? { data: undefined, isLoading: false, isError: true, error: Object.assign(new Error('HTTP 500'), { isAxiosError: true, response: { status: 500, data: {} } }), refetch: mockCohorts.refetch }
+    : { data: { feature_flag_state: 'on', cohorts: cohorts() }, isLoading: false, isError: false, refetch: mockCohorts.refetch }),
   useCommunityMe: () => ({ dataUpdatedAt: 0 }),
 }));
 jest.mock('../../../components/community/VoiceNotePlayer', () => {
@@ -51,8 +67,11 @@ jest.mock('../../../components/community/VoiceNotePlayer', () => {
 jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn(async () => ({ url: 'https://x/v.m4a' })) } }));
 jest.mock('../../../components/community/SafetyMenu', () => {
   const { Text } = jest.requireActual('react-native');
-  return (p: { testID: string; authorUserId: string; onBlocked?: (id: string) => void }) => (
-    <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
+  return (p: { testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void> }) => (
+    <>
+      <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
+      {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { void p.onDelete?.(); }}>delete</Text> : null}
+    </>
   );
 });
 const mockApi = { get: jest.fn(), post: jest.fn(), delete: jest.fn() };
@@ -72,10 +91,19 @@ const fail = (status: number) => Object.assign(new Error(`HTTP ${status}`), { is
 let page: unknown[] = [];
 let readAnswer: unknown = { last_read_at: '2026-10-22T09:00:00.000Z', last_read_message_id: 'm1' };
 
+const sends = () => mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/messages'));
+
 beforeEach(() => {
+  authEvents.emit('logout');
   mockDisk.clear();
+  mockStack.routes = ['CommunityTab', 'CommunitySpaceChat'];
+  mockStack.focused = true;
+  mockCohorts.failed = false;
+  mockCohorts.refetch.mockReset();
+  mockNavigate.mockReset();
   mockFlags.communityVoiceNotes = true;
   mockNet.isOnline = true;
+  mockNet.reachable = null;
   mockRole = 'client';
   mockUser = { id: 'me-1', name: 'Dana Reyes', coach_id: 'coach-1' };
   mockParams.current = { cohortId: 'c-every' };
@@ -154,6 +182,72 @@ it('coach Everyone and Announcements: the coach has the composer', async () => {
   expect(r.queryByTestId('space-chat-hint')).toBeNull();
 });
 
+it('coach header: the space list and the info button (members, invites, removals) on the coach stack', async () => {
+  mockRole = 'owner';
+  mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+  mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  await fireEvent.press(r.getByLabelText('Space info'));
+  expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityCohortDetail', { cohortId: 'c-every', cohortName: 'Everyone' });
+  await fireEvent.press(r.getByLabelText('Open space list'));
+  expect(mockNavigate).toHaveBeenLastCalledWith('CoachCommunityCohorts');
+});
+
+it('while the space loads there is no composer (a banned member never gets a box), and no read mark', async () => {
+  mockApi.get.mockImplementation(() => new Promise(() => undefined));
+  const r = await open();
+  expect(r.getByTestId('space-chat-loading')).toBeTruthy();
+  expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+  expect(r.queryByTestId('space-chat-hint')).toBeNull();
+});
+
+it('a failed space list: the error and Try again (reads the list again), no blank header with no composer', async () => {
+  mockCohorts.failed = true;
+  const r = await open();
+  expect(await r.findByTestId('space-chat-error')).toBeTruthy();
+  expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+  await fireEvent.press(r.getByLabelText('Try again'));
+  expect(mockCohorts.refetch).toHaveBeenCalled();
+});
+
+it('read marks wait for the read cursor and for the page to be in front', async () => {
+  let answer: (v: unknown) => void = () => undefined;
+  mockApi.get.mockImplementation(async (url: string) => (url.endsWith('/read')
+    ? new Promise((res) => { answer = res; }) : { data: { messages: page, next_before: null } }));
+  mockStack.focused = false;
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  await act(async () => { answer({ data: readAnswer }); });
+  await r.findByTestId('space-chat-new-line');
+  expect(mockApi.post).not.toHaveBeenCalledWith('/community/cohorts/c-every/read', expect.anything());
+  mockStack.focused = true;
+  await r.rerender(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+  await waitFor(() => expect(mockApi.post).toHaveBeenCalledWith('/community/cohorts/c-every/read', { message_id: 'm3' }));
+});
+
+it('a linked message on an older page: older pages load until it is found', async () => {
+  mockParams.current = { cohortId: 'c-every', messageId: 'm0' };
+  mockApi.get.mockImplementation(async (url: string, cfg?: { params?: { before?: string } }) => {
+    if (url.endsWith('/read')) return { data: readAnswer };
+    return cfg?.params?.before
+      ? { data: { messages: [msg('m0', '2026-10-21T08:00:00.000Z', JO)], next_before: null } }
+      : { data: { messages: page, next_before: 'cur-1' } };
+  });
+  const r = await open();
+  expect(await r.findByTestId('space-chat-row-m0')).toBeTruthy();
+  expect(mockApi.get).toHaveBeenCalledWith('/community/cohorts/c-every/messages', { params: { limit: 30, before: 'cur-1' } });
+});
+
+it('own text message: Delete removes it', async () => {
+  page = [msg('m-own', '2026-10-22T10:10:00.000Z', ME), ...page];
+  const r = await open();
+  await fireEvent.press(await r.findByTestId('space-chat-menu-m-own-delete'));
+  await waitFor(() => expect(r.queryByTestId('space-chat-row-m-own')).toBeNull());
+  expect(mockApi.delete).toHaveBeenCalledWith('/community/messages/m-own');
+  expect(r.queryByTestId('space-chat-menu-m3-delete')).toBeNull();
+});
+
 it('empty space: SC-W05 and the composer', async () => {
   page = [];
   const r = await open();
@@ -174,6 +268,7 @@ it.each([404, 403])('no access (%i: not a member or banned): no rows, no compose
   mockApi.get.mockImplementation(async () => { throw fail(status); });
   const r = await open();
   expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
+  expect(r.getByText('This conversation is closed')).toBeTruthy();
   expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
   expect(r.queryByTestId('space-chat-list')).toBeNull();
   expect(mockApi.get.mock.calls.filter(([u]) => String(u).endsWith('/messages'))).toHaveLength(1);
@@ -190,17 +285,39 @@ it('a failed send says Not sent; Try again reuses the same Idempotency-Key', asy
   await r.findByTestId('space-chat-row-m3');
   await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Hey, loved that set');
   await fireEvent.press(r.getByTestId('space-chat-composer-send'));
-  const retry = await r.findByLabelText('Not sent. Tap to send again');
+  expect(await r.findByText('Not sent')).toBeTruthy();
   const key1 = mockApi.post.mock.calls.find(([u]) => String(u).endsWith('/messages'))[2].headers['Idempotency-Key'];
-  await fireEvent.press(retry);
+  await fireEvent.press(r.getByLabelText('Try again'));
   await waitFor(() => expect(mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/messages'))).toHaveLength(2));
-  const sends = mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/messages'));
-  expect(sends[1][1]).toEqual({ body: 'Hey, loved that set' });
-  expect(sends[1][2].headers['Idempotency-Key']).toBe(key1);
+  expect(sends()[1][1]).toEqual({ body: 'Hey, loved that set' });
+  expect(sends()[1][2].headers['Idempotency-Key']).toBe(key1);
 });
 
-it('written offline: Waiting to send, then sent when back online', async () => {
-  mockNet.isOnline = false;
+it('a failed send: Delete drops it without sending', async () => {
+  mockApi.post.mockImplementation(async (url: string) => { if (url.endsWith('/messages')) throw fail(500); return { data: { ok: true } }; });
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Wrong space');
+  await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+  await r.findByText('Not sent');
+  await fireEvent.press(r.getByLabelText('Delete'));
+  await waitFor(() => expect(r.queryByText('Wrong space')).toBeNull());
+  expect(sends()).toHaveLength(1);
+});
+
+it('a send in flight says Sending…', async () => {
+  mockApi.post.mockImplementation(() => new Promise(() => undefined));
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Nice work');
+  await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+  expect(await r.findByText('Sending…')).toBeTruthy();
+  expect(r.getByTestId('space-chat-composer-field').props.value).toBe('');
+});
+
+it.each([['no connection', false, null], ['connected, internet not reachable', true, false]] as const)('written offline (%s): Waiting to send, then sent when back online', async (_l, isOnline, reachable) => {
+  mockNet.isOnline = isOnline;
+  mockNet.reachable = reachable;
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
   await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'On the train');
@@ -208,8 +325,40 @@ it('written offline: Waiting to send, then sent when back online', async () => {
   expect(await r.findByText('Waiting to send')).toBeTruthy();
   expect(mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/messages'))).toHaveLength(0);
   mockNet.isOnline = true;
+  mockNet.reachable = true;
   await r.rerender(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
   await waitFor(() => expect(mockApi.post).toHaveBeenCalledWith('/community/cohorts/c-every/messages', { body: 'On the train' }, expect.anything()));
+});
+
+it('written offline then the page closed: kept on the device, sent one at a time in order when the phone is back online', async () => {
+  mockNet.isOnline = false;
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  for (const t of ['first', 'second']) {
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), t);
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+  }
+  await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('second'));
+  await r.unmount();
+  let done: () => void = () => undefined;
+  mockApi.post.mockImplementation((url: string, body: { body: string }) => (url.endsWith('/messages') && body.body === 'first'
+    ? new Promise((res) => { done = () => res({ data: { message: msg('m10', new Date().toISOString(), ME) } }); })
+    : Promise.resolve({ data: { message: msg('m11', new Date().toISOString(), ME) } })));
+  await act(async () => { (NetInfo as unknown as { __setState: (s: object) => void }).__setState({ isConnected: true, isInternetReachable: true }); });
+  await waitFor(() => expect(sends()).toHaveLength(1));
+  expect(sends()[0][1]).toEqual({ body: 'first' });
+  await act(async () => { done(); });
+  await waitFor(() => expect(sends()).toHaveLength(2));
+  expect(sends()[1][1]).toEqual({ body: 'second' });
+});
+
+it('after an app restart the rows kept on the device are back and go out', async () => {
+  const kept = { localId: 'k1', key: 'k1', cohortId: 'c-every', body: 'Kept from yesterday', createdAt: '2026-10-22T10:20:00.000Z', state: 'sending' };
+  mockDisk.set('space_outbox_me-1', JSON.stringify([kept]));
+  await open();
+  await waitFor(() => expect(sends()).toHaveLength(1));
+  expect(sends()[0][1]).toEqual({ body: 'Kept from yesterday' });
+  expect(sends()[0][2].headers['Idempotency-Key']).toBe('k1');
 });
 
 it('the half-typed text stays with this space across navigation; another space starts empty', async () => {
@@ -237,7 +386,8 @@ it('block: the blocked person\'s rows leave the stream at once', async () => {
 it('every control has a spoken label and no text is locked to a size', async () => {
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
-  expect(r.getByLabelText('Go back')).toBeTruthy();
+  expect(r.getByLabelText('Open space list')).toBeTruthy();
+  expect(r.queryByLabelText('Space info')).toBeNull();
   expect(r.getByLabelText(/^jo b\., .*\. body m3$/)).toBeTruthy();
   expect(r.getByLabelText(/^Sam Okafor, Coach, .*\. body m1$/)).toBeTruthy();
   expect(r.getByLabelText('New messages')).toBeTruthy();

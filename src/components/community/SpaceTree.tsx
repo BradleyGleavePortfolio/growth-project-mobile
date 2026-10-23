@@ -9,7 +9,7 @@
  * other spaces, so they wait for B-LAYERS. The coach row is the C3 coach
  * thread with its real unread count.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCommunityCohorts, useCommunityMe, useCommunityWorkspace } from '../../hooks/useCommunity';
 import { HapticService } from '../../ui/haptics/haptics.service';
+import { startSpaceOutbox } from './space-chat/spaceChatOutbox';
 import { forestPop as fp, layout, typography } from '../../theme/tokens';
 import type { CommunityNav } from '../../screens/community/communityNavTypes';
 
@@ -36,7 +37,10 @@ const firstWord = (v: unknown) => (typeof v === 'string' ? (v.trim().split(/\s+/
 
 /** The community name, its sections, and the load state, from today's endpoints. */
 export function useSpaceTree() {
-  const coachId = useCurrentUser()?.coach_id ?? null;
+  const user = useCurrentUser();
+  const coachId = user?.coach_id ?? null;
+  // FX-871: the space chat outbox starts with Community Home, so texts kept from an earlier session go out unopened.
+  useEffect(() => { if (featureFlags.communitySpaceChat) startSpaceOutbox(user?.id ?? null); }, [user?.id]);
   const me = useCommunityMe();
   const workspaceId = me.data?.feature_flag_state === 'enabled' ? (me.data.workspace_id ?? null) : null;
   const cohorts = useCommunityCohorts(workspaceId != null);

@@ -1,6 +1,7 @@
 /**
  * SC-M1 (agent 168): communitySpaceChat. Off (the default): SpaceTree opens today's CommunitySpace and the coach space
- * list opens CoachCommunityCohortDetail, and neither stack registers CommunitySpaceChat. On: both open the chat.
+ * list opens CoachCommunityCohortDetail, and neither stack registers CommunitySpaceChat. On: both open the chat, and the
+ * Community tab is the chat-capable Community Home even with communityHomeV2 off (FX-871, Sol B1 on m#871).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -48,4 +49,10 @@ it('flag off: a space opens today\'s screen; flag on: it opens the chat (drawer 
 it('the coach space list keeps CoachCommunityCohortDetail when off', () => {
   const src = read('screens/community/CoachCommunityCohortsScreen.tsx');
   expect(src).toMatch(/featureFlags\.communitySpaceChat\s*\?\s*navigation\.navigate\('CommunitySpaceChat', \{ cohortId: item\.id \}\)\s*:\s*navigation\.navigate\('CoachCommunityCohortDetail'/);
+});
+
+it('flag on selects the chat-capable Community Home, so no space opens inline or through the old space page', () => {
+  const lines = read('navigation/CommunityNavigator.tsx').split('\n').filter((l) => l.includes('name="CommunityTab"'));
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain('component={featureFlags.communityHomeV2 || featureFlags.communitySpaceChat ? CommunityHomeScreen : CommunityTabScreen}');
 });

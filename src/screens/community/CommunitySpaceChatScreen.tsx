@@ -1,13 +1,18 @@
 /**
- * SC-M1 (agent 168, owner #167-3 / #167-5 / #167-6 op 1): the space chat. One Slack / iMessage-style stream per space,
- * newest at the bottom, for members and the coach. Registered only behind `communitySpaceChat` (off by default); with
- * the flag off SpaceTree and the coach space list open today's screens.
+ * SC-M1 (agent 168, owner #167-3 / #167-5 / #167-6 op 1), FX-871 (agent 169): the space chat. One Slack / iMessage-style
+ * stream per space, newest at the bottom, for members and the coach. Registered only behind `communitySpaceChat` (off by
+ * default); with the flag off SpaceTree and the coach space list open today's screens.
+ *   - Header (mockup VOICE-B 05b): the space list on the left (members: the space drawer; the coach: the coach's space
+ *     list), `# name` and the member count, and on the coach's side the info button (members, invites, removals).
  *   - Rows: Studio rows (SpaceChatRow), day lines (Style B's day format), voice rows when communityVoiceNotes is on.
- *   - Composer: ComposerInput with this space's draft kept on the device (owner chat-discard op 1).
+ *   - Composer: SpaceChatComposer (pill field, slots for SC-M4's "+" and SC-M2's mic), shown only once the space has
+ *     loaded and the server let this person in, so a banned member never gets a box to type in (owner 10-22 ban ruling).
  *   - Announcements (a coach-posting space): members get no composer, only SC-W03; the coach posts as usual.
- *   - No access (the server answers 404 or 403: not a member, or banned): no space content and no composer (owner 10-22 ban
- *     ruling, 6352485175), one line where the composer was.
- *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route.
+ *   - No access (the server answers 404 or 403: not a member, or banned): no space content and no composer, one line
+ *     where the composer was: "This conversation is closed" (BAM-1, owner #169-5).
+ *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route. The page
+ *     opens there (or at the message asked for, loading older pages to reach it) once the cursor has answered, and marks
+ *     read only while it is in front and at the newest row.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -16,18 +21,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import ComposerInput from '../../components/community/ComposerInput';
-import SpaceChatRow, { DayLine, NewMessagesLine, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
+import { useIsFocused, useNavigation, useRoute, type NavigationProp, type ParamListBase, type RouteProp } from '@react-navigation/native';
+import { SpaceListButton } from '../../components/community/SpaceDrawer';
+import SpaceChatComposer from '../../components/community/space-chat/SpaceChatComposer';
+import SpaceChatRow, { DayLine, NewMessagesLine, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
-import { SPACE_MESSAGE_MAX, type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
+import { type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { CommunityApiError } from '../../api/apiCall';
 import { useCommunityCohorts } from '../../hooks/useCommunity';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { featureFlags } from '../../config/featureFlags';
-import { forestPop as fp, radius, spacing, typography } from '../../theme/tokens';
+import { colors, forestPop as fp, radius, spacing, typography } from '../../theme/tokens';
 
 type Params = { CommunitySpaceChat: { cohortId: string; messageId?: string } };
 type Item =
@@ -40,16 +46,21 @@ const drawable = (m: SpaceMessage) =>
   !m.deleted && (m.kind === 'voice' ? featureFlags.communityVoiceNotes && !!m.voice_note : m.kind === 'text' && !!m.body);
 
 export default function CommunitySpaceChatScreen(): React.ReactElement {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { cohortId, messageId } = useRoute<RouteProp<Params, 'CommunitySpaceChat'>>().params;
+  // The coach's stack has the space's member page; the member stack has the space drawer.
+  const coachStack = !!navigation.getState?.()?.routeNames?.includes('CoachCommunityCohortDetail');
   const client = useCurrentUser();
-  const { isOnline } = useNetworkStatus();
+  const isOnline = isEffectivelyOnline(useNetworkStatus());
+  const focused = useIsFocused();
   const cohorts = useCommunityCohorts();
   const cohort = cohorts.data?.cohorts.find((c) => c.id === cohortId);
-  const chat = useSpaceChat(cohortId, client?.id ?? null, isOnline);
+  const chat = useSpaceChat(cohortId, client?.id ?? null, isOnline, focused);
   const isCoachViewer = cohort?.my_role === 'coach' || cohort?.my_role === 'owner';
   const coachOnly = cohort?.kind === 'announcement' || (cohort as { posting_policy?: string } | undefined)?.posting_policy === 'coach';
-  const canPost = !!cohort && !chat.noAccess && (isCoachViewer || !coachOnly);
+  // Only once the server has let this person in (a loaded page, no 404 / 403): never while loading or offline cold.
+  const admitted = !!cohort && !!chat.list.data && !chat.noAccess;
+  const canPost = admitted && (isCoachViewer || !coachOnly);
 
   const myName = useMemo(() => chat.messages.find((m) => m.sender_user_id === client?.id)?.sender?.name
     ?? client?.name ?? [client?.firstName, client?.lastName].filter(Boolean).join(' '), [chat.messages, client]);
@@ -77,15 +88,20 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     return out.reverse();
   }, [chat.messages, chat.pending, chat.readCursor, client?.id]);
 
-  // Open at the message asked for, else at the New messages line (once per visit).
+  // Open at the message asked for (older pages load until it is found or there are none), else at the New messages
+  // line; once per visit, after the read cursor has answered.
   const listRef = useRef<FlatList<Item>>(null);
-  const jumped = useRef(false);
+  const [jumped, setJumped] = useState(false);
   useEffect(() => {
-    if (jumped.current || items.length === 0) return;
+    if (jumped || !chat.readSettled || items.length === 0) return;
     const index = items.findIndex((i) => (messageId ? i.key === messageId : i.type === 'new'));
-    jumped.current = true;
+    if (index < 0 && messageId && chat.list.hasNextPage) {
+      if (!chat.list.isFetchingNextPage) void chat.list.fetchNextPage();
+      return;
+    }
+    setJumped(true);
     if (index > 0) requestAnimationFrame(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }));
-  }, [items, messageId]);
+  }, [items, messageId, jumped, chat.readSettled, chat.list]);
 
   // The pill: new rows from others while you read older ones; tap goes to the bottom.
   const [away, setAway] = useState(false);
@@ -100,10 +116,10 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   }, [newest, away, client?.id]);
   const marked = useRef<string | null>(null);
   useEffect(() => {
-    if (!newest || away || marked.current === newest.id) return;
+    if (!newest || away || !focused || !jumped || marked.current === newest.id) return;
     marked.current = newest.id;
     chat.markRead(newest.id);
-  }, [newest, away, chat]);
+  }, [newest, away, focused, jumped, chat]);
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const isAway = e.nativeEvent.contentOffset.y > 240;
     setAway(isAway);
@@ -118,8 +134,8 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
       return (
         <SpaceChatRow
           id={r.localId} name={myName} isCoach={isCoachViewer} createdAt={r.createdAt} body={r.body}
-          authorId={client?.id ?? ''} state={r.state} onRetry={() => chat.retry(r)} viewerUserId={client?.id}
-          offline={!isOnline}
+          authorId={client?.id ?? ''} state={r.state} onRetry={() => chat.retry(r)} onDiscard={() => chat.removeLocal(r.localId)}
+          viewerUserId={client?.id} offline={!isOnline}
         />
       );
     }
@@ -137,31 +153,55 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   const loading = chat.list.isLoading || cohorts.isLoading;
   // Offline with nothing kept: say so at once rather than spin through the retries.
   const offlineEmpty = !isOnline && !chat.list.data;
-  const failure = (chat.list.isError || offlineEmpty) && !chat.noAccess && items.length === 0
-    ? describeCommunityFailure(isOnline ? chat.list.error : new CommunityApiError('network', 0, 'offline', { isAxiosError: true }), 'load_space') : null;
+  const offlineError = new CommunityApiError('network', 0, 'offline', { isAxiosError: true });
+  // The space's name and posting rules come from the cohort list: without them there is no header and no composer.
+  const metaFailed = cohorts.isError && !cohort;
+  const failure = chat.noAccess ? null
+    : metaFailed ? describeCommunityFailure(isOnline ? cohorts.error : offlineError, 'load_space')
+      : (chat.list.isError || offlineEmpty) && items.length === 0
+        ? describeCommunityFailure(isOnline ? chat.list.error : offlineError, 'load_space') : null;
+  const reload = () => {
+    if (cohorts.isError) void cohorts.refetch();
+    void chat.list.refetch();
+  };
+  const members = cohort ? `${cohort.member_count} ${cohort.member_count === 1 ? 'member' : 'members'}` : '';
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
       <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Go back" style={s.icon} testID="space-chat-back">
-          <Ionicons name="chevron-back" size={24} color={fp.onDeep} />
-        </TouchableOpacity>
+        <View style={s.icon}>
+          {coachStack ? (
+            <TouchableOpacity onPress={() => navigation.navigate('CoachCommunityCohorts')} accessibilityRole="button" accessibilityLabel="Open space list" style={s.icon} testID="space-chat-spaces">
+              <Ionicons name="menu-outline" size={24} color={fp.onDeep} />
+            </TouchableOpacity>
+          ) : <SpaceListButton color={fp.onDeep} />}
+        </View>
         <View style={s.titles} accessible accessibilityRole="header">
           <Text style={s.title} numberOfLines={1}>{cohort ? `# ${cohort.name}` : ' '}</Text>
-          {cohort ? <Text style={s.sub}>{`${cohort.member_count} members`}</Text> : null}
+          {cohort ? <Text style={s.sub}>{members}</Text> : null}
+        </View>
+        <View style={s.icon}>
+          {coachStack && cohort ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('CoachCommunityCohortDetail', { cohortId, cohortName: cohort.name })}
+              accessibilityRole="button" accessibilityLabel="Space info" style={s.icon} testID="space-chat-info"
+            >
+              <Ionicons name="information-circle-outline" size={24} color={fp.onDeep} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {chat.noAccess ? <View style={s.flex} /> : failure ? (
           <View style={s.center} testID="space-chat-error">
-            <Ionicons name={isOnline ? 'alert-circle-outline' : 'cloud-offline-outline'} size={28} color={fp.n700} />
+            <Ionicons name={isOnline ? 'alert-circle-outline' : 'cloud-offline-outline'} size={28} color={SMALL_GREY} />
             <Text style={s.muted}>{failure.message}</Text>
-            <TouchableOpacity onPress={() => chat.list.refetch()} accessibilityRole="button" accessibilityLabel="Try again" style={s.retry} testID="space-chat-reload">
+            <TouchableOpacity onPress={reload} accessibilityRole="button" accessibilityLabel="Try again" style={s.retry} testID="space-chat-reload">
               <Text style={s.retryLabel}>Try again</Text>
             </TouchableOpacity>
           </View>
         ) : loading && items.length === 0 ? (
-          <View style={s.center}><ActivityIndicator color={fp.n700} /></View>
+          <View style={s.center} testID="space-chat-loading"><ActivityIndicator color={fp.forest} /></View>
         ) : items.length === 0 ? (
           <View style={s.center} testID="space-chat-empty">
             {canPost ? <Text style={s.muted}>No messages yet. Say hello.</Text> : null}
@@ -175,6 +215,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
             renderItem={renderItem}
             onScroll={onScroll}
             scrollEventThrottle={100}
+            keyboardShouldPersistTaps="handled"
             onEndReached={() => { if (chat.list.hasNextPage && !chat.list.isFetchingNextPage) void chat.list.fetchNextPage(); }}
             onEndReachedThreshold={0.4}
             onScrollToIndexFailed={(info) => listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })}
@@ -192,16 +233,10 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           </TouchableOpacity>
         ) : null}
         {chat.noAccess ? (
-          <Text style={s.line} testID="space-chat-no-access">You can&apos;t see or send messages in this space.</Text>
+          <Text style={s.line} testID="space-chat-no-access">This conversation is closed</Text>
         ) : canPost ? (
-          <ComposerInput
-            placeholder="Type a message..."
-            maxLength={SPACE_MESSAGE_MAX}
-            onSubmit={chat.send}
-            draftKey={`space:${cohortId}`}
-            testID="space-chat-composer"
-          />
-        ) : cohort ? (
+          <SpaceChatComposer cohortId={cohortId} onSend={chat.send} />
+        ) : admitted ? (
           <Text style={s.line} testID="space-chat-hint">Only your coach posts here. Press and hold a message to reply.</Text>
         ) : null}
       </KeyboardAvoidingView>
@@ -211,14 +246,14 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: fp.deep },
-  flex: { flex: 1, backgroundColor: fp.surface },
+  flex: { flex: 1, backgroundColor: colors.bone },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm, backgroundColor: fp.deep },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   titles: { flex: 1, minWidth: 0 },
   title: { ...typography.h4, color: fp.onDeep },
   sub: { ...typography.bodySmall, color: fp.onDeepMuted },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
-  muted: { ...typography.body, color: fp.n700, textAlign: 'center' },
+  muted: { ...typography.body, color: SMALL_GREY, textAlign: 'center' },
   retry: { minHeight: 44, paddingHorizontal: spacing.lg, justifyContent: 'center', borderRadius: radius.button, borderWidth: 1, borderColor: fp.deep },
   retryLabel: { ...typography.bodyMd, color: fp.deep },
   stream: { paddingVertical: spacing.sm },
@@ -227,5 +262,5 @@ const s = StyleSheet.create({
     minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.chip, backgroundColor: fp.deep,
   },
   pillText: { ...typography.bodyMd, color: fp.onDeep },
-  line: { ...typography.bodySmall, color: fp.n700, textAlign: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.n700 },
+  line: { ...typography.bodySmall, color: SMALL_GREY, textAlign: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
 });
