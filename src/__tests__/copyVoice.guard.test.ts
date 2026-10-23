@@ -76,12 +76,6 @@ const ALLOWED: ReadonlyArray<{ file: string; includes: string; rule: Rule; why: 
     rule: 'first_person',
     why: 'P0 consent paragraph 3 (collection and use, box 1): hashed into consult-consent-v3 (CONSENT_COPY_SHA256); rewording needs a new consent version on both sides.',
   },
-  {
-    file: 'screenshots/fixtures.ts',
-    includes: 'Let us hold the deficit',
-    rule: 'first_person',
-    why: 'Demo message written by a coach (a named human) to the client in a screenshot fixture.',
-  },
 ];
 
 /** Call targets whose string arguments never reach a person. */
