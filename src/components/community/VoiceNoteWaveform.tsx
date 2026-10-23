@@ -13,9 +13,8 @@
  *   - Decorative by default: the strip carries `accessibilityElementsHidden`
  *     so a screen reader announces the parent control's label (duration), not
  *     a meaningless list of bars (DESIGN_INTELLIGENCE — no noise to AT).
- *   - Style B tones (VOICE-M): `light` (white card / sheet: leaf bars with a
- *     moss edge, played bars forest) and `deep` (the coach card: unplayed
- *     voiceShades.barOnDeep, played leaf).
+ *   - Style B tones (VOICE-M): `light` (white card / sheet: leaf bars, moss edge, played forest)
+ *     and `deep` (the coach card: unplayed voiceShades.barOnDeep, played leaf).
  *   - Tokens only (no raw hex). No emoji, no heavy font weights.
  */
 import React, { useMemo } from 'react';

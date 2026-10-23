@@ -1,13 +1,12 @@
 /**
- * useVoiceOutbox — Style B: Send closes the sheet and the note waits here, on
- * the feed, until the server has it. sending (spinner, "Sending…") · waiting (offline: spinner + wifi-off, sends when the
- * signal is back) · failed (online failure: Try again / Delete, recording
- * kept). Kept on the phone until sent or deleted: the queue is saved to
- * AsyncStorage and the audio is moved into the app's documents folder, so a
- * restart picks it up again. Per signed-in author, emptied on sign-out.
+ * useVoiceOutbox — Style B: Send closes the sheet and the note waits here, on the feed, until the server
+ * has it: sending (spinner, "Sending…") · waiting (offline: spinner + wifi-off, sends when the signal is
+ * back, from any screen) · failed (online: Try again / Delete, recording kept). The queue is saved to
+ * AsyncStorage and the audio moved into documents, so a restart picks it up. Per author, emptied on sign-out.
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { Directory, File, Paths } from 'expo-file-system';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { HapticService } from '../ui/haptics/haptics.service';
@@ -34,6 +33,9 @@ let items: VoiceOutboxItem[] = [];
 let online = true;
 let seq = 0;
 let restored: Promise<void> | null = null;
+// Who sends the queue once every voice screen has closed (B2), and the one signal listener.
+let session: { authorId: string; qc: QueryClient } | null = null;
+let unwatch: (() => void) | null = null;
 const listeners = new Set<() => void>();
 
 function commit(next: VoiceOutboxItem[]): void {
@@ -84,7 +86,16 @@ function subscribe(l: () => void): () => void {
   listeners.add(l);
   return () => void listeners.delete(l);
 }
+/** Send what waits for the signed-in author: restored, or the signal is back. */
+function flush(): void {
+  const s = session;
+  if (!s) return;
+  void restore().then(() => {
+    if (online) items.filter((i) => i.authorId === s.authorId && i.status === 'waiting').forEach((i) => void run(i.id, s.qc));
+  });
+}
 authEvents.on('logout', () => {
+  session = null;
   dropFiles(items);
   commit([]);
 });
@@ -93,6 +104,9 @@ authEvents.on('logout', () => {
 export function resetVoiceOutbox(coldStart = false): void {
   online = true;
   restored = null;
+  session = null;
+  unwatch?.();
+  unwatch = null;
   items = [];
   if (!coldStart) void AsyncStorage.removeItem(STORE_KEY);
 }
@@ -120,10 +134,7 @@ async function run(id: string, qc: QueryClient): Promise<void> {
 export interface VoiceOutbox {
   items: VoiceOutboxItem[];
   online: boolean;
-  send: (
-    recording: VoiceRecordingResult,
-    opts?: { cohortId?: string; conversationId?: string },
-  ) => void;
+  send: (recording: VoiceRecordingResult, opts?: { cohortId?: string; conversationId?: string }) => void;
   retry: (id: string) => void;
   discard: (id: string) => void;
 }
@@ -133,16 +144,15 @@ export function useVoiceOutbox(workspaceId: string | null, authorId: string | nu
   const isOnline = isEffectivelyOnline(useNetworkStatus());
   const all = useSyncExternalStore(subscribe, () => items);
 
-  // Restored, or the signal is back: send what was waiting for this author.
+  // Session scope (B2): the listener outlives this screen, so a waiting note sends from any screen.
   useEffect(() => {
     online = isOnline;
-    if (!authorId) return;
-    void restore().then(() => {
-      if (!online) return;
-      items
-        .filter((i) => i.authorId === authorId && i.status === 'waiting')
-        .forEach((i) => void run(i.id, qc));
+    if (authorId) session = { authorId, qc };
+    unwatch ??= NetInfo.addEventListener((s) => {
+      online = isEffectivelyOnline({ isOnline: !!s.isConnected, isInternetReachable: s.isInternetReachable });
+      flush();
     });
+    flush();
   }, [authorId, isOnline, qc]);
 
   const send = useCallback<VoiceOutbox['send']>(

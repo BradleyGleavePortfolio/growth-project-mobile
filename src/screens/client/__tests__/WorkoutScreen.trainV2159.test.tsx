@@ -27,6 +27,7 @@ const mockNavigation = { navigate: mockNavigate, setParams: jest.fn(), getParent
 jest.mock('@react-navigation/native', () => {
   const ReactLib = jest.requireActual('react');
   return {
+    NavigationContext: require('react').createContext(undefined),
     useNavigation: () => mockNavigation,
     useRoute: () => ({ params: {} }),
     useFocusEffect: (cb: () => undefined | (() => void)) => {

@@ -31,6 +31,8 @@ export interface CoachErrorStateProps {
   retrying?: boolean;
   /** Root testID — the avatar nested inside uses `${testID}-avatar`. */
   testID?: string;
+  /** Roman's face above the chip; false for a client with no coach (139-15). */
+  roman?: boolean;
 }
 
 export default function CoachErrorState({
@@ -38,15 +40,18 @@ export default function CoachErrorState({
   onRetry,
   retrying = false,
   testID,
+  roman = true,
 }: CoachErrorStateProps): React.ReactElement {
   const { semanticColors } = useTheme();
   return (
     <View style={styles.container} testID={testID}>
-      <RomanAvatar
-        crop="neutral"
-        size={64}
-        testID={testID ? `${testID}-avatar` : 'error-roman-avatar'}
-      />
+      {roman ? (
+        <RomanAvatar
+          crop="neutral"
+          size={64}
+          testID={testID ? `${testID}-avatar` : 'error-roman-avatar'}
+        />
+      ) : null}
       <View
         style={[
           styles.chip,

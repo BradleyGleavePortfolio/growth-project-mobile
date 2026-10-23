@@ -25,6 +25,7 @@ import {
   chargeIsProblem,
   chargeStateLabel,
   money,
+  movedAwayLine,
   shortDate,
 } from "../../../lib/money/moneyCopy";
 import SetupNotice from "../../../components/coach/setup/SetupNotice";
@@ -152,6 +153,11 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
               .filter(Boolean)
               .join(", ")}
           </Text>
+          {movedAwayLine(c) ? (
+            <Text style={styles.rowSub} testID="money-charge-moved">
+              {movedAwayLine(c)}
+            </Text>
+          ) : null}
         </View>
         {noMoney ? (
           <View style={styles.card} testID="money-charge-no-money">

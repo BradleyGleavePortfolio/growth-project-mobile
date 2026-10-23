@@ -93,6 +93,7 @@ import { setWorkoutLeaveGuard } from '../../navigation/workoutLeaveGuard';
 // set-logging flow on ActiveWorkoutScreen (documented in the report). Gated
 // behind featureFlags.romanChat (default OFF).
 import RomanVoiceLogReadback from '../../components/roman/RomanVoiceLogReadback';
+import { useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 
 // Debounce window for persistence writes. Mutations happen rapidly while
 // the user is logging sets; coalescing them into a single AsyncStorage
@@ -148,6 +149,8 @@ export default function ActiveWorkoutScreen() {
   // wait on it before touching storage.
   const currentUser = useCurrentUser();
   const userId = currentUser?.id ?? '';
+  // Coachless clients have no Roman (139-15): no set readback in his voice.
+  const romanLocked = useClientNeedsCoach();
 
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
   const [workoutNotes, setWorkoutNotes] = useState('');
@@ -1265,7 +1268,7 @@ export default function ActiveWorkoutScreen() {
             at least one set has been completed. Default mode: a per-set PR
             signal is not tracked in the live session, so no celebration is
             fabricated (documented in the report). */}
-        {featureFlags.romanChat && lastCompletedSet ? (
+        {featureFlags.romanChat && lastCompletedSet && !romanLocked ? (
           <View style={styles.readback}>
             <RomanVoiceLogReadback
               weight={lastCompletedSet.weight}

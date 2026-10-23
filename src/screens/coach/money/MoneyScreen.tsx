@@ -68,8 +68,10 @@ import {
   breakdownRows,
   changeLine,
   chargeIsProblem,
+  chargeRowLabel,
   chargeStateLabel,
   money,
+  movedAwayLine,
   PAYOUT_LABEL,
   RANGE_LABEL,
   shortDate,
@@ -788,10 +790,7 @@ export default function MoneyScreen({
                     navigation.navigate("CoachMoneyCharge", { chargeId: ch.id })
                   }
                   accessibilityRole="button"
-                  accessibilityLabel={`${ch.client.name}, ${ch.packageName}, ${money(
-                    ch.amountCents,
-                    ch.currency,
-                  )}, ${chargeStateLabel(ch)}. Open the breakdown`}
+                  accessibilityLabel={chargeRowLabel(ch)}
                   testID={`money-charge-${ch.id}`}
                 >
                   <View style={styles.rowText}>
@@ -801,6 +800,9 @@ export default function MoneyScreen({
                         .filter(Boolean)
                         .join(", ")}
                     </Text>
+                    {movedAwayLine(ch) ? (
+                      <Text style={styles.rowSub}>{movedAwayLine(ch)}</Text>
+                    ) : null}
                   </View>
                   <View style={styles.rowEnd}>
                     <Text style={styles.rowAmount}>

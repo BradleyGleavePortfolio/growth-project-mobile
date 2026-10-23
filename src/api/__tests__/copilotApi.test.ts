@@ -1,7 +1,9 @@
 import api from '../../services/api';
-import { COPILOT_PATHS, PATH_DRAFTS_MAX_PAGES, copilotApi, copilotErrorOf, parseChange, parseSuggestion } from '../copilotApi';
+import { COPILOT_PATHS, PATH_DRAFTS_MAX_PAGES, copilotApi, copilotErrorOf, parseChange, parseReply, parseSuggestion, parseWeek } from '../copilotApi';
+import { sendMessage } from '../romanApi';
 
 jest.mock('../../services/api', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
+jest.mock('../../services/secureStorage', () => ({ secureStorage: { getItem: jest.fn(async () => 'test-token') } }));
 const get = jest.mocked(api.get);
 const post = jest.mocked(api.post);
 const patch = jest.mocked(api.patch);
@@ -26,7 +28,7 @@ test('a change parses only when every field the phone draws is there', () => {
 
 test('the client read: rows it cannot draw are left out, and a server without Copilot (404) is "nothing new"', async () => {
   get.mockResolvedValueOnce(ok({ suggestions: [VIEW, { ...VIEW, id: 's2', change: { kind: 'other' } }], suggestions_total: 2 }));
-  expect((await copilotApi.recent())?.map((s) => s.id)).toEqual(['s1']);
+  expect(await copilotApi.recent()).toMatchObject({ week: null, suggestions: [{ id: 's1' }] });
   expect(get).toHaveBeenCalledWith(COPILOT_PATHS.recent);
   get.mockRejectedValueOnce(fail(404));
   expect(await copilotApi.recent()).toBeNull();
@@ -65,4 +67,51 @@ test('decide sends the body as given, and errors expose status, code and the ser
   expect(patch).toHaveBeenCalledWith('/ai/gateway/drafts/d1', { decision: 'rejected', note: 'Keep the run.' });
   expect(copilotErrorOf(fail(409, { code: 'COPILOT_PLAN_CHANGED', message: 'm' }))).toEqual({ status: 409, code: 'COPILOT_PLAN_CHANGED', message: 'm' });
   expect(copilotErrorOf(new Error('offline'))).toEqual({ status: null, code: null, message: null });
+});
+
+const FACTS = [
+  { n: 1, kind: 'plan', id: 't1', date: '2026-10-19', label: 'Target 2,150 kcal from Mon 19 Oct, set by Alex', detail: 'Was 2,300 kcal' },
+  { n: 3, kind: 'food_log', id: null, date: '2026-10-21', label: '2,260 kcal a day over the last 7 days', detail: null },
+  { n: 4, kind: 'mood', id: null, date: '2026-10-21', label: 'Unknown kind', detail: null },
+];
+
+test('a Copilot reply keeps the facts it can draw, in order, and its suggestion; a plain reply has none', () => {
+  expect(parseReply({ sources: FACTS, suggestion: { ...VIEW, status: 'suggested', sent_at: null, change: { ...MOVE, sources: [FACTS[0]] } } })).toEqual({
+    sources: [
+      { n: 1, kind: 'plan', label: FACTS[0].label, detail: 'Was 2,300 kcal' },
+      { n: 3, kind: 'food_log', label: FACTS[1].label, detail: null },
+    ],
+    suggestion: expect.objectContaining({ id: 's1', status: 'suggested', sent_at: null, change: expect.objectContaining({ sources: [expect.objectContaining({ kind: 'plan' })] }) }),
+  });
+  expect(parseReply({ sources: [], suggestion: null })).toEqual({ sources: [], suggestion: null });
+  expect(parseReply(undefined)).toBeNull();
+});
+
+test('the week block reads only what the server sent; missing pieces stay empty, never invented', () => {
+  const week = { number: 3, coach_first_name: 'Alex', target: { kcal: 2150, from: '2026-10-19T00:00:00Z', set_by: 'Alex', note: null, previous_kcal: 2300 },
+    workouts: { done: 1, total: 4 }, last_check_in: '2026-10-18' };
+  expect(parseWeek(week)).toEqual({ number: 3, coach: 'Alex', target: { kcal: 2150, from: week.target.from, previous: 2300 }, workouts: { done: 1, total: 4 }, lastCheckIn: '2026-10-18' });
+  expect(parseWeek({ number: null, coach_first_name: null, target: null, workouts: {}, last_check_in: 'yesterday' }))
+    .toEqual({ number: null, coach: null, target: null, workouts: { done: 0, total: 0 }, lastCheckIn: null });
+  expect(parseWeek(undefined)).toBeNull();
+});
+
+describe('the Copilot opt-in header', () => {
+  const realFetch = global.fetch;
+  afterEach(() => { global.fetch = realFetch; });
+  const respond = (frame: Record<string, unknown>) => {
+    global.fetch = jest.fn(async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => `data: ${JSON.stringify(frame)}\n\n` }) as unknown as Response);
+    return global.fetch as jest.Mock;
+  };
+  const headersOf = (f: jest.Mock) => (f.mock.calls[0][1] as { headers: Record<string, string> }).headers;
+
+  test('only a Copilot send carries it, and its done frame keeps the copilot field', async () => {
+    let f = respond({ type: 'done', text: 'Alex lowered your target [1].', messageId: 'cm1', interrupted: false, copilot: { sources: FACTS.slice(0, 1), suggestion: null } });
+    const r = await sendMessage('sess', 'Why did my calories change this week?', { copilot: true });
+    expect(headersOf(f)['x-roman-copilot']).toBe('1');
+    expect(parseReply(r.copilot)?.sources).toHaveLength(1);
+    f = respond({ type: 'done', text: 'Hello.', messageId: 'cm2', interrupted: false });
+    expect(await sendMessage('sess', 'hello')).toEqual({ text: 'Hello.', messageId: 'cm2', interrupted: false });
+    expect(headersOf(f)).not.toHaveProperty('x-roman-copilot');
+  });
 });

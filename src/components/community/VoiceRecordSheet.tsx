@@ -38,18 +38,7 @@ export default function VoiceRecordSheet({
 
 const styles = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: voiceShades.scrim },
-  sheet: {
-    backgroundColor: neutral[0],
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
-    paddingTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: radius.chip,
-    backgroundColor: voiceShades.track,
-  },
+  sheet: { backgroundColor: neutral[0], borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
+    paddingTop: spacing.sm, gap: spacing.sm },
+  handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: radius.chip, backgroundColor: voiceShades.track },
 });
