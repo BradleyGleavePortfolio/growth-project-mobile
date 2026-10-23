@@ -13,7 +13,7 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { NavigationContext } from '@react-navigation/native';
+import * as ReactNavigation from '@react-navigation/native';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, typography } from '../../theme/tokens';
@@ -137,6 +137,10 @@ export function useCoachingRow(side: 'client' | 'coach', otherUserId?: string | 
   return row;
 }
 
+// A stand-in @react-navigation/native (tests) may leave the context out: then there is no list to open.
+const NAV_CONTEXT =
+  (ReactNavigation as unknown as { NavigationContext?: React.Context<unknown> }).NavigationContext ?? React.createContext<unknown>(undefined);
+
 type NavLike = {
   getParent?: () => NavLike | undefined;
   getState?: () => { routeNames?: string[] } | undefined;
@@ -146,7 +150,7 @@ type NavLike = {
 /** "Settings" in BAM-2a opens the blocked-people list (client: the You stack; coach: the Settings stack), when this
  * navigator tree has one; otherwise the line is plain text (no dead link). */
 function useOpenBlockedList(): (() => void) | null {
-  const navigation = useContext(NavigationContext) as NavLike | undefined;
+  const navigation = useContext(NAV_CONTEXT) as NavLike | undefined;
   return useMemo(() => {
     for (let nav = navigation; nav; nav = nav.getParent?.()) {
       const at = nav;
