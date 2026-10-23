@@ -4,7 +4,7 @@
  * to the foreground; Health on this phone on first open and on each return to the app.
  */
 import React from 'react';
-import { AppState, Text, type AppStateStatus } from 'react-native';
+import { AppState, StyleSheet, Text, type AppStateStatus } from 'react-native';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 
 let mockFocused = true;
@@ -62,8 +62,8 @@ jest.mock('../../../store/clientStore', () => ({ useClientStore: () => ({ logWat
 jest.mock('../../../components/home/HomeHeaderActions', () => () => null);
 jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 jest.mock('../../../components/home/rings/HomeRomanLine', () => () => null);
-jest.mock('../../../components/renewal/RenewalHome', () => () => (mockDue.has('renewal')
-  ? jest.requireActual('react').createElement(jest.requireActual('react-native').View, { testID: 'renewal-home' }) : null)); // outside the slot
+jest.mock('../../../components/renewal/RenewalHome', () => (p: { style?: unknown }) => (mockDue.has('renewal')
+  ? jest.requireActual('react').createElement(jest.requireActual('react-native').View, { testID: 'renewal-home', style: p.style }) : null)); // outside the slot
 
 // Each of today's notices as a stand-in that asks the slot (due while its id is in mockDue) and prints its props.
 const mockDue = new Set<NoticeId | 'dunning' | 'renewal'>();
@@ -158,6 +158,10 @@ it.each<[string, Array<'renewal' | 'dunning'>]>([
   if (renewal >= 0) expect(date < renewal && renewal < dials).toBe(true);
   if (pay >= 0) expect(dials < pay && pay < tiles).toBe(true);
   expect(screen.queryAllByTestId('renewal-home')).toHaveLength(due.includes('renewal') ? 1 : 0); // one banner, one place
+  const sp = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+  expect(sp('home-date').marginBottom + sp('home-dials').marginTop).toBe(18); // no banner: the date to the dials as before
+  // RENEWAL3 B1 gap: 14 under the date, and 11 over the dials (about 14 to the ring itself), not 12 + 18.
+  if (renewal >= 0) expect([sp('home-date').marginBottom + sp('renewal-home').marginTop, sp('renewal-home').marginBottom + sp('home-dials').marginTop]).toEqual([14, 11]);
 });
 
 it('Finish joining shows ahead of the notifications ask, and Finish your profile waits behind both (#RINGS-JOIN-FIRST)', async () => {

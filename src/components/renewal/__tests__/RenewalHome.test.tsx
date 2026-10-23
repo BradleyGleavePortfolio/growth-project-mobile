@@ -3,7 +3,7 @@
  * the entitlement's `renewal` block. Real storage and pop-up rule; the sheet, navigation and network are mocked.
  */
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readRenewal, type Renewal } from '../../../lib/planRenewal';
@@ -91,11 +91,27 @@ it('banner day: "Renew now" with the last package and end date, no pop-up, no ac
   mockRenewal = ended(null);
   const s = await render(<RenewalHome />);
   expect(await s.findByText('Renew now')).toBeTruthy();
-  await waitFor(() => expect(s.getByText(/^12-week strength block · ended /)).toBeTruthy());
+  await waitFor(() => expect(s.getByText(/^12-week strength block · ended\u00A0/)).toBeTruthy()); // "ended Oct 21" on one line
   expect(s.queryByTestId('renewal-popup')).toBeNull();
   expect(mockPost).not.toHaveBeenCalled();
   await fireEvent.press(s.getByTestId('renewal-own-coach'));
   expect(s.getByTestId('package-sheet-true')).toBeTruthy();
+});
+
+it("banner (RENEWAL3 B1-B2) has its own sizes and the pop-up keeps its own; the screen's style places the banner", async () => {
+  const s = await open(ended(1)); // the banner under the pop-up: both on screen
+  await s.rerender(<RenewalHome style={{ marginTop: 7, marginBottom: 0 }} />);
+  const st = (e: { props: { style?: unknown } }) => StyleSheet.flatten(e.props.style as never) as Record<string, unknown>;
+  expect(st(s.getByTestId('renewal-banner'))).toMatchObject({ marginTop: 7, marginBottom: 0, padding: 16, borderRadius: 16 });
+  expect(st(s.getByTestId('renewal-banner-monogram'))).toMatchObject({ width: 47, height: 47, borderWidth: 1.5 });
+  expect(st(s.getByText('Renew now'))).toMatchObject({ fontSize: 26, lineHeight: 32, letterSpacing: 0, color: '#FFFFFF' });
+  const [bannerOwn, popupOwn] = s.getAllByTestId('renewal-own-coach').map(st);
+  const [bannerHouse, popupHouse] = s.getAllByTestId('renewal-house-coach').map(st);
+  expect(bannerOwn).toMatchObject({ minHeight: 48, paddingVertical: 10, paddingHorizontal: 14, marginTop: 14 });
+  expect(bannerHouse).toMatchObject({ minHeight: 48, marginTop: 8, backgroundColor: '#26402F', borderWidth: 1.5, borderColor: '#4A6553' });
+  expect(popupOwn).toMatchObject({ minHeight: 52, paddingVertical: 12, paddingHorizontal: 16, marginTop: 12 }); // unchanged
+  expect(popupHouse).toMatchObject({ minHeight: 52, marginTop: 12, borderWidth: 1 }); // unchanged
+  expect(st(s.getAllByText("View Coach Jordan's packages")[0])).toMatchObject({ color: '#142019', letterSpacing: 0 });
 });
 
 it.each([['active', { state: 'active' }], ['none', { state: 'none' }]])(

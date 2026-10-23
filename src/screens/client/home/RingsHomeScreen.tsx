@@ -124,9 +124,10 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
         {day.error ? (
           <QuietError layout="inline" message={day.error} onRetry={() => void refresh()} retrying={day.retrying} testID="home-day-data-error" />
         ) : null}
-        <Text testID="home-date" style={[typography.eyebrow, { color: sc.textMuted }]}>{homeDateLine(new Date())}</Text>
-        {/* RENEWAL3 B1: the ended plan's "Renew now" banner (and its Day 0/1/7 pop-up) above the dials, as the GOAL draws it. */}
-        <RenewalHome />
+        <Text testID="home-date" style={[typography.eyebrow, styles.date, { color: sc.textMuted }]}>{homeDateLine(new Date())}</Text>
+        {/* RENEWAL3 B1: the ended plan's "Renew now" banner (and its Day 0/1/7 pop-up) above the dials, as the GOAL draws it:
+            14 pt under the date and about 14 pt over the rings (11 here plus the ring's own inset). */}
+        <RenewalHome style={styles.renew} />
         <View style={styles.dials} testID="home-dials">
           <HomeDial label="Food" view={food} testID="home-dial-food" accessibilityLabel={dialLabel('Food', food)}
             onPress={() => navigation.navigate('Log')} />
@@ -169,7 +170,9 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: layout.gutter, paddingTop: 6, paddingBottom: 48 },
-  dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
+  date: { marginBottom: 7 }, // with the dials' 11: 18 from the date to the dials when there is no banner
+  renew: { marginTop: 7, marginBottom: 0 },
+  dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 11 },
   cta: { marginTop: 20 },
   pay: { marginTop: 20, marginBottom: 0, paddingBottom: 0 }, // the Roman line or the button below brings its own gap
   notices: { marginTop: layout.sectionGap },
