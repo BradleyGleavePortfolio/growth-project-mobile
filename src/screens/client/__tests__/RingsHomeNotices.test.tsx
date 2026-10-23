@@ -62,6 +62,8 @@ jest.mock('../../../store/clientStore', () => ({ useClientStore: () => ({ logWat
 jest.mock('../../../components/home/HomeHeaderActions', () => () => null);
 jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 jest.mock('../../../components/home/rings/HomeRomanLine', () => () => null);
+jest.mock('../../../components/renewal/RenewalHome', () => () =>
+  jest.requireActual('react').createElement(jest.requireActual('react-native').View, { testID: 'renewal-home' }));
 
 // Each of today's notices as a stand-in that asks the slot (due while its id is in mockDue) and prints its props.
 const mockDue = new Set<NoticeId | 'dunning'>();
@@ -135,6 +137,8 @@ it('with every notice due, the failed payment shows alone under the dials and th
   const tree = JSON.stringify(screen.toJSON(), (k, v) => (k === 'refreshControl' ? undefined : v));
   const at = ['"home-dials"', '"dunning {', '"home-tiles"', '"home-notice-slot"', '"invite {'].map((id) => tree.indexOf(id));
   expect(at.every((i, n) => i > (n ? at[n - 1] : 0))).toBe(true); // the dials, the payment, the tiles, then the slot with the invite
+  const renewal = tree.indexOf('"renewal-home"'); // RENEWAL-M C3: the renewal banner beside the payment, under the dials
+  expect(renewal > at[1] && renewal < at[2]).toBe(true);
   expect(screen.getByText(/^dunning /).props.children).toContain('"surface":"HomeScreen","presentation":"section"');
 });
 

@@ -111,7 +111,7 @@ All chart wrappers read colors from `useTheme().colors` (ThemeProvider). This en
 | Line / bar fill       | `colors.primary`           | `#2C4A36`     |
 | Grid lines            | `colors.border`            | `#B08D57`     |
 | Axis labels           | `colors.textMuted`         | `#B1A89F`     |
-| Tooltip background    | `#F5EFE4` (bone — hardcoded) | —           |
+| Tooltip background    | `#F7FAF7` (bone — hardcoded) | —           |
 | Tooltip text          | `#1A1A18` (ink — hardcoded)  | —           |
 | Tooltip border        | `#4A0404` (oxblood — hardcoded) | —        |
 

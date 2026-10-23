@@ -28,7 +28,9 @@
  *   MMKV key 'onboarding.package_prompt_dismissed_at:<userId>' (ISO string).
  *   If set and < 24h ago → call onDismiss() immediately.
  *   If set and > 24h ago (or not set) → show sheet.
- *   Written on "Skip for now" tap.
+ *   Written on "Skip for now" tap, and (`recordShown`, the unsolicited
+ *   sheet) the moment it opens, so closing the app, going back or an empty
+ *   list never brings it back inside 24h (#836 Sol B1).
  */
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
@@ -40,17 +42,23 @@ import {
   Pressable,
   ScrollView,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../theme/tokens';
 import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
+import { houseCoachPackagesPath, markShownOnce } from '../lib/planRenewal';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useEntitlement } from '../entitlements/EntitlementProvider';
 import { usePackagePurchase } from '../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from './purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from './purchase/PlanTermsBlock';
 import PurchaseFeedback from './purchase/PurchaseFeedback';
+import { QuietOverline as Overline } from '../ui/sections/QuietSection';
+import { oneToOneCoachingLabel } from '../config/purchaseSurfaces';
+import { HouseJoined } from './renewal/CoachMonogram';
+import { forestPop } from '../theme/tokens';
 import {
   planTerms,
   priceLabel,
@@ -65,7 +73,8 @@ export type CoachPackage = PurchasablePackage;
 export interface PackageSelectionSheetProps {
   visible: boolean;
   onDismiss: () => void;
-  onPaymentSuccess: () => void;
+  /** Continue (or close) after a payment step; `paid` only when the payment is confirmed (phase 'success'). */
+  onPaymentSuccess: (paid: boolean) => void;
   /**
    * "Open your plan" (the plan is active, or its status needs checking). B-343-3
    * (Sol): without it the action reads "Continue to the app" and closes the
@@ -87,6 +96,12 @@ export interface PackageSelectionSheetProps {
   recheckDelaysMs?: number[];
   /** Coachless Home hand-off: select this package once the list loads (when it is in the list). */
   initialPackageId?: string | null;
+  /** Unsolicited sheet (package_prompt, Day 1 on iPhone): save the 24h time when it opens, not only on Skip. */
+  recordShown?: boolean;
+  /** RENEWAL-M: the client opened it (renewal pop-up, Home banner, house coach page), so the 24h check does not apply. */
+  skipSnoozeCheck?: boolean;
+  /** RENEWAL-M H2-H3: the house coach's packages (lib/planRenewal), labelled with his name; payment makes him the coach. */
+  house?: { id: string; name: string };
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -117,7 +132,11 @@ export default function PackageSelectionSheet({
   entitlementPollDelaysMs,
   recheckDelaysMs,
   initialPackageId,
+  recordShown = false,
+  skipSnoozeCheck = false,
+  house,
 }: PackageSelectionSheetProps) {
+  const [houseId, houseName] = [house?.id, house?.name];
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const currentUser = useCurrentUser();
@@ -134,6 +153,7 @@ export default function PackageSelectionSheet({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ready, setReady] = useState(false); // passed 24h suppression check
   const [reloadTick, setReloadTick] = useState(0);
+  const [coachName, setCoachName] = useState<string | null>(null);
 
   // Latest-ref pattern: callers may pass an inline onDismiss that re-creates
   // every render. Subscribing the effects below to `onDismiss` directly would
@@ -165,7 +185,7 @@ export default function PackageSelectionSheet({
     let cancelled = false;
     (async () => {
       try {
-        const dismissedAt = await prefsStorage.getStringAsync(dismissedKey);
+        const dismissedAt = skipSnoozeCheck ? undefined : await prefsStorage.getStringAsync(dismissedKey);
         if (dismissedAt) {
           const elapsed = Date.now() - new Date(dismissedAt).getTime();
           if (elapsed < TWENTY_FOUR_HOURS) {
@@ -177,10 +197,19 @@ export default function PackageSelectionSheet({
       } catch {
         // best-effort; show if check fails
       }
+      if (cancelled) return;
+      if (recordShown) {
+        try {
+          await prefsStorage.set(dismissedKey, new Date().toISOString());
+          if (currentUser?.id) await markShownOnce(currentUser.id); // RENEWAL-M: #836's first offer opens once
+        } catch {
+          // best-effort; still show
+        }
+      }
       if (!cancelled) setReady(true);
     })();
     return () => { cancelled = true; };
-  }, [visible, dismissedKey]);
+  }, [visible, dismissedKey, recordShown, skipSnoozeCheck, currentUser?.id]);
 
   // ── Fetch packages when ready (and after a price / terms change) ──────────
   useEffect(() => {
@@ -193,8 +222,12 @@ export default function PackageSelectionSheet({
     }
     (async () => {
       try {
+        // #161-5: on iOS the list is labelled 1:1 coaching with the coach by name, as on ClientPackages.
+        const coachRead = houseName ?? (Platform.OS === 'ios' && firstLoad
+          ? (async () => (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name)().catch(() => null)
+          : null);
         const res = await api.get<{ packages: unknown[] } | unknown[]>(
-          '/v1/clients/me/coach/packages',
+          houseId ? houseCoachPackagesPath(houseId) : '/v1/clients/me/coach/packages',
         );
         // Backend may return { packages: [...] } or a bare array
         const data = res.data;
@@ -215,6 +248,9 @@ export default function PackageSelectionSheet({
           if (firstLoad) onDismissRef.current();
           return;
         }
+        const name = await coachRead;
+        if (cancelled) return;
+        if (typeof name === 'string') setCoachName(name);
         setPackages(list);
         setDescriptions(desc);
         if (firstLoad && initialPackageId && list.some((p) => p.id === initialPackageId)) {
@@ -228,7 +264,7 @@ export default function PackageSelectionSheet({
       }
     })();
     return () => { cancelled = true; };
-  }, [ready, reloadTick, initialPackageId]);
+  }, [ready, reloadTick, initialPackageId, houseId, houseName]);
 
   const selected = packages.find((p) => p.id === selectedId) ?? null;
 
@@ -240,6 +276,7 @@ export default function PackageSelectionSheet({
   // ── Skip ──────────────────────────────────────────────────────────────────
   const busy = purchase.busy;
   const done = state.phase === 'success' || state.phase === 'confirm_slow' || state.phase === 'confirmed_pending';
+  const finish = useCallback(() => onPaymentSuccess(state.phase === 'success'), [onPaymentSuccess, state.phase]);
   const handleSkip = useCallback(() => {
     if (busy) return; // never close the sheet in the middle of a payment
     if (dismissedKey) {
@@ -268,8 +305,14 @@ export default function PackageSelectionSheet({
       visible={visible && ready}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={done ? onPaymentSuccess : handleSkip}
+      onRequestClose={done ? finish : handleSkip}
     >
+      {houseName && state.phase === 'success' && state.success ? (
+        // RENEWAL-M H3 (5.1 Step 7): joining the house coach closes on deep, under either billing style.
+        <ScrollView style={{ backgroundColor: forestPop.deep }} contentContainerStyle={{ flexGrow: 1 }}>
+          <HouseJoined name={houseName} title={state.success.title} body={state.success.body} onContinue={finish} />
+        </ScrollView>
+      ) : (
       <View style={styles.sheet}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -279,6 +322,10 @@ export default function PackageSelectionSheet({
 
           <Text style={styles.heading}>Choose your plan</Text>
           <Text style={styles.subtext}>Start with a plan that fits your goals.</Text>
+
+          {(Platform.OS === 'ios' || houseName) && !loading ? (
+            <Overline testID="package-sheet-one-to-one">{oneToOneCoachingLabel(coachName)}</Overline>
+          ) : null}
 
           {/* Package cards */}
           {loading ? (
@@ -322,7 +369,7 @@ export default function PackageSelectionSheet({
 
           <PurchaseFeedback
             purchase={purchase}
-            onContinue={onPaymentSuccess}
+            onContinue={finish}
             onOpenPlan={openPlan}
             openPlanLabel={onOpenPlan ? undefined : 'Continue to the app'}
           />
@@ -361,6 +408,7 @@ export default function PackageSelectionSheet({
           )}
         </ScrollView>
       </View>
+      )}
     </Modal>
   );
 }

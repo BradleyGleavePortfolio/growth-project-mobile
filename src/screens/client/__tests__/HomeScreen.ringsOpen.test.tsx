@@ -12,6 +12,7 @@ let mockRings = true;
 let mockFocused = true;
 const mockVisits = new Set<() => void>();
 jest.mock('@react-navigation/native', () => ({
+  NavigationContext: require('react').createContext(undefined),
   useNavigation: () => ({ navigate: jest.fn() }),
   // Focus as React Navigation runs it: the effect runs while focused and cleans up on blur.
   useFocusEffect: (cb: () => void | (() => void)) => {

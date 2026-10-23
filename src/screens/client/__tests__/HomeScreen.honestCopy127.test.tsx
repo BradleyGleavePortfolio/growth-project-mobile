@@ -38,6 +38,7 @@ jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: 
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockDay }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => mockMacroMode }));
 jest.mock('@react-navigation/native', () => ({
+  NavigationContext: require('react').createContext(undefined),
   useNavigation: () => ({ navigate: mockNavigate }),
   useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
 }));

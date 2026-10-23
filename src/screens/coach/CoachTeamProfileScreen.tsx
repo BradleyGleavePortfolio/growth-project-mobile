@@ -14,7 +14,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -141,7 +143,12 @@ export default function CoachTeamProfileScreen() {
         </View>
 
         <Modal visible={setupOpen} transparent animationType="fade" onRequestClose={() => setSetupOpen(false)}>
-          <View style={styles.modalOverlay}>
+          {/* The card rises above the keyboard so Save stays reachable (as coach Settings). */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalOverlay}
+            testID="team-profile-setup-avoider"
+          >
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Business profile</Text>
               <Text style={styles.label}>Business name</Text>
@@ -182,7 +189,7 @@ export default function CoachTeamProfileScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </Screen>
     );

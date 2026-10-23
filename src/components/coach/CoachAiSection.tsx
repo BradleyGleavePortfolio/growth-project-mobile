@@ -416,7 +416,8 @@ export default function CoachAiSection({
       >
         <View style={styles.modalContainer}>
           <ModalHeader title="Generate workout program" onClose={closeModal} />
-          <ScrollView contentContainerStyle={styles.modalContent}>
+          {/* Notes and Generate sit low: the sheet scrolls them above the keyboard. */}
+          <ScrollView contentContainerStyle={styles.modalContent} automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled">
             <Text style={styles.fieldLabel}>Weeks ({weeks})</Text>
             <NumberStepper
               value={weeks}

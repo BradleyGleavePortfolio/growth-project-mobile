@@ -4,7 +4,7 @@
  * (case-insensitive) before the destructive button is enabled.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { colors as tokenColors, withAlpha } from '../../theme/tokens';
@@ -46,7 +46,7 @@ export default function RomanChatsConfirmSheet({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} testID={testID}>
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
         <View style={styles.sheet} accessibilityViewIsModal>
           <Text style={styles.title} accessibilityRole="header">
             {title}
@@ -92,7 +92,7 @@ export default function RomanChatsConfirmSheet({
             <Text style={styles.quietText}>{ROMAN_CHATS_COPY.keep}</Text>
           </HapticPressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
