@@ -232,3 +232,66 @@ test('Send from a past answer reads Your path and the answer again, as a turn\'s
   expect(api.post).toHaveBeenCalledWith(COPILOT_PATHS.send('sg2'));
   expect(spy).toHaveBeenCalledWith({ queryKey: ['copilot'] });
 });
+
+// #852 round 3, B-H1: the history in style A's type and sizes (GOAL .mhs, .nav, .mhs .mini, .hist .m, .hrow, .ot).
+const flat = (el: { props: { style?: unknown } } | null) => StyleSheet.flatten(el?.props.style as never) as Record<string, unknown>;
+
+test('past questions use style A: compact forest masthead, month headings, 60-high rows and quiet outcome chips', async () => {
+  route([PAGE1]);
+  mockParams = { view: 'questions' };
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await s.findByTestId('copilot-past-m1');
+  expect(flat(s.getByTestId('copilot-mast'))).toMatchObject({ paddingBottom: 14, borderBottomLeftRadius: 24 });
+  expect(flat(s.getByTestId('copilot-mast-title'))).toMatchObject({ fontFamily: 'CormorantGaramond_500Medium', fontSize: 25, lineHeight: 32 });
+  expect(flat(s.getByText('Your path'))).toMatchObject({ fontSize: 16, color: '#B8CCBF' });
+  expect(flat(s.getByTestId('copilot-past-since'))).toMatchObject({ borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: 'rgba(255,255,255,0.08)' });
+  expect(flat(s.getByText('186 questions since Oct 2025'))).toMatchObject({ fontSize: 12.5 });
+  expect(flat(s.getByText('October 2026'))).toMatchObject({ fontSize: 13, fontWeight: '600', color: '#5A5A56', paddingBottom: 8 });
+  expect(flat(s.getByText('September 2026'))).toMatchObject({ paddingTop: 18 });
+  expect(flat(s.getByTestId('copilot-past-m1'))).toMatchObject({ minHeight: 60, paddingVertical: 11, paddingHorizontal: 16 });
+  expect(flat(s.getByText('Why did my weight go up after Saturday?'))).toMatchObject({ fontSize: 15, lineHeight: 20 });
+  expect(flat(s.getByText('Sun 18 Oct'))).toMatchObject({ fontSize: 12.5, color: '#5A5A56' });
+  expect(flat(s.getByTestId('copilot-past-m2-outcome'))).toMatchObject({ fontSize: 12, fontWeight: '600', borderRadius: 6, backgroundColor: '#EEF4E0', color: '#2C4A36' });
+  expect(flat(s.getByTestId('copilot-past-m3-outcome'))).toMatchObject({ backgroundColor: '#F2F2EE', color: '#5A5A56' });
+});
+
+// #852 round 3, B-H2: every history read that fails is Roman's white ledger notice with a filled Try again.
+const NET = () => Object.assign(new Error('Network Error'), { isAxiosError: true });
+const notice = (s: { getByTestId: (id: string) => { props: { style?: unknown } } }, id: string) => {
+  expect(flat(s.getByTestId(id))).toMatchObject({ backgroundColor: '#FFFFFF', borderColor: '#E6E9DF', borderRadius: 16, paddingVertical: 20, paddingHorizontal: 18 });
+  expect(s.getByTestId(`${id}-roman`)).toBeTruthy();
+  expect(flat(s.getByTestId(`${id}-retry`))).toMatchObject({ backgroundColor: '#2C4A36', borderRadius: 12 });
+};
+
+test('a failed first page of past questions is Roman\'s notice card, and its Try again reads the list again', async () => {
+  mockParams = { view: 'questions' };
+  get.mockRejectedValueOnce(NET());
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await s.findByTestId('copilot-past-error');
+  notice(s as never, 'copilot-past-error');
+  route([PAGE1]);
+  await act(async () => fireEvent.press(s.getByTestId('copilot-past-error-retry')));
+  expect(await s.findByText('Why did my weight go up after Saturday?')).toBeTruthy();
+  expect(s.queryByTestId('copilot-past-error')).toBeNull();
+});
+
+test('a failed Show older is the same notice card under the rows it keeps', async () => {
+  mockParams = { view: 'questions' };
+  get.mockImplementation((async (url: string, cfg?: { params?: { cursor?: string } }) => {
+    if (cfg?.params?.cursor) throw NET();
+    return { data: url === COPILOT_PATHS.questions ? PAGE1 : { week: null, suggestions: [] } };
+  }) as never);
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await act(async () => fireEvent.press(await s.findByText('Show older questions')));
+  await s.findByTestId('copilot-past-error');
+  notice(s as never, 'copilot-past-error');
+  expect(s.getByTestId('copilot-past-m1')).toBeTruthy();
+});
+
+test('a past answer that fails to load is the same notice card', async () => {
+  mockParams = { view: 'answer', item: ITEM };
+  get.mockRejectedValueOnce(NET());
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await s.findByTestId('copilot-answer-error');
+  notice(s as never, 'copilot-answer-error');
+});
