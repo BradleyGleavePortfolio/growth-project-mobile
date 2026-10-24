@@ -1,10 +1,11 @@
 /**
  * The coach Home's win line on the real screen (m#863): a cold open or a retry after an error lands the win at once,
  * with no empty line under the wins headline (LO r2 B1, 6352710559); at 130 % text the empty line fades out over the
- * same 0.3 s when the first win comes (#168-3 op 1, 6353564001), and with Reduce Motion on it goes at once.
+ * same 0.3 s when the first win comes (#168-3 op 1, 6353564001), and with Reduce Motion on it goes at once. Open
+ * alerts take Style A's two looks (Sol r4 B2 G8): an outline on deep at zero, white with the red count when any are open.
  */
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { AccessibilityInfo, Animated, StyleSheet } from 'react-native';
 import type { HomeWin } from '../screens/coach/home-v11/homeDay';
 
@@ -215,5 +216,31 @@ describe('#168-3 op 1: at 130 % text the empty line fades out when the first win
     expect(headline(v)).toMatch(/^1 win/);
     expect(v.queryAllByText(EMPTY, all)).toHaveLength(0);
     expect(fades.filter((f) => f.duration === 300)).toHaveLength(0);
+  });
+});
+
+describe('Open alerts in Style A (Sol r4 B2 G8)', () => {
+  const look = async (alerts: number) => {
+    mockGet.mockResolvedValue({ data: { ...overview(30), open_alerts: alerts, home: home([win(1)], 1) } });
+    const v = await renderHome();
+    const row = v.getByTestId('home-alerts');
+    const count = within(row).getByText(String(alerts));
+    return { v, row: StyleSheet.flatten(row.props.style), count: StyleSheet.flatten(count.props.style), waiting: within(row).queryByText('Waiting in Actions') };
+  };
+
+  it('a positive count draws the white row, the red count and Waiting in Actions', async () => {
+    const { v, row, count, waiting } = await look(3);
+    expect(row).toMatchObject({ backgroundColor: '#FFFFFF', borderColor: '#FFFFFF', borderRadius: 12, minHeight: 50 });
+    expect(count).toMatchObject({ color: '#B91C1C', fontSize: 22, lineHeight: 26 });
+    expect(waiting).toBeTruthy();
+    expect(v.getByTestId('home-alerts').props.accessibilityLabel).toBe('Open alerts, 3');
+  });
+
+  it('zero draws the outline on deep, the count in the hero white and no second line', async () => {
+    const { row, count, waiting } = await look(0);
+    expect(row.backgroundColor).toBeUndefined();
+    expect(row).toMatchObject({ borderColor: '#4A6553', borderWidth: 1 });
+    expect(count.color).toBe('#F4F7F2');
+    expect(waiting).toBeNull();
   });
 });
