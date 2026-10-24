@@ -158,7 +158,7 @@ const s = StyleSheet.create({
   cm: { marginTop: 6 }, // r2b.py .cm: 6 below the card's 28, the ring drawn 4 outside the 64 disc
   coach: { ...typography.bodyMd, fontSize: 14, lineHeight: 19, letterSpacing: 0.3, color: fp.gold, textAlign: 'center', marginTop: 12 },
   title: { ...typography.h1, letterSpacing: 0, color: renewalTone.white, textAlign: 'center', marginTop: 6 },
-  body: { ...typography.body, lineHeight: 24, letterSpacing: 0, color: fp.onDeepMuted, textAlign: 'center', marginTop: 6 }, // r2b.py .dbd 16/24, no tracking
+  body: { ...typography.body, lineHeight: 24, color: fp.onDeepMuted, textAlign: 'center', marginTop: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 8, backgroundColor: renewalTone.quiet, borderRadius: radius.chip, paddingVertical: 6, paddingHorizontal: 14, marginTop: 14 },
   chipText: { ...typography.bodyMd, fontSize: 13.5, lineHeight: 18, letterSpacing: 0, color: fp.onDeep },
   choices: { marginTop: 12 },
