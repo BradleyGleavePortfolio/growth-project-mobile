@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { forestPop, pathTint, radius, typography } from '../../../theme/tokens';
+import { forestPop, pathTint, radius } from '../../../theme/tokens';
 import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import AiRefusalNotice from '../../../components/ai/AiRefusalNotice';
@@ -18,7 +18,7 @@ import { copilotApi, copilotErrorOf, type CopilotSuggestion } from '../../../api
 import { COPILOT_COPY as C, describeChange, when } from './pathChangeWords';
 import { ChangeTiles } from './ChangeTiles';
 import { SourceTag } from './AnswerCard';
-import { ledger } from './ledger';
+import { ledger, ledgerType } from './ledger';
 
 export interface SuggestionCardProps {
   suggestion: CopilotSuggestion;
@@ -68,7 +68,7 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
     return (
       <Animated.View style={[s.pill, { opacity: fade, backgroundColor: pathTint.leaf }]} accessibilityRole="text" testID="copilot-sent">
         <Ionicons name="checkmark" size={16} color={forestPop.forest} />
-        <Text style={[typography.bodyMd, { color: forestPop.forest, flexShrink: 1 }]}>{C.sent(coach, when(sent.sent_at ?? new Date().toISOString()))}</Text>
+        <Text style={[ledgerType.sent, { color: forestPop.forest, flexShrink: 1 }]}>{C.sent(coach, when(sent.sent_at ?? new Date().toISOString()))}</Text>
       </Animated.View>
     );
   }
@@ -80,16 +80,16 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
       <View style={s.head}>
         <View style={s.eyebrow}>
           <Ionicons name="sparkles-outline" size={14} color={forestPop.goldInk} />
-          <Text style={[typography.bodySmall, s.strong, { color: forestPop.goldInk }]}>{C.suggested}</Text>
+          <Text style={[ledgerType.label, { color: forestPop.goldInk }]}>{C.suggested}</Text>
         </View>
-        <Text style={[typography.caption, s.badge, { color: sc.textMuted, borderColor: ledger.line }]}>{C.notApplied}</Text>
+        <Text style={[ledgerType.badge, s.badge, { color: ledger.muted, borderColor: ledger.line }]} testID="copilot-not-applied">{C.notApplied}</Text>
       </View>
-      <Text style={[typography.h4, { color: sc.textPrimary }]} accessibilityRole="header">{d.title}</Text>
+      <Text style={[ledgerType.change, { color: sc.textPrimary }]} accessibilityRole="header" testID="copilot-suggestion-title">{d.title}</Text>
       <ChangeTiles from={d.from} to={d.to} />
       {kinds.length ? <View style={s.tags} testID="copilot-suggestion-tags">{kinds.map((k) => <SourceTag key={k} kind={k} />)}</View> : null}
-      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`${C.nothingYet(coach)} ${C.privacy(coach)}`}</Text>
+      <Text style={[ledgerType.privacy, { color: ledger.muted }]}>{`${C.nothingYet(coach)} ${C.privacy(coach)}`}</Text>
       {refusal ? <AiRefusalNotice refusal={refusal} audience="client" surface="roman" onRetry={() => void onSend()} compact /> : null}
-      {line ? <Text style={[typography.bodySmall, { color: forestPop.error }]} accessibilityRole="alert" testID="copilot-send-error">{line}</Text> : null}
+      {line ? <Text style={[ledgerType.privacy, { color: forestPop.error }]} accessibilityRole="alert" testID="copilot-send-error">{line}</Text> : null}
       {gone ? null : <PrimaryButton label={C.send(coach)} onPress={() => void onSend()} loading={busy} haptic={false} wrap testID="copilot-send" />}
       {onDismiss ? <TextLink label={C.notNow} onPress={onDismiss} tone="muted" align="center" disabled={busy} testID="copilot-not-now" /> : null}
     </View>
@@ -100,8 +100,8 @@ const s = StyleSheet.create({
   card: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: radius.card, padding: 16, gap: 10 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
   eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  strong: { fontWeight: '600' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  badge: { borderWidth: 1, borderRadius: radius.chip, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: radius.chip, paddingHorizontal: 14, paddingVertical: 10 },
+  // Style A (.na, .sentl; Sol B-G2).
+  badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, minHeight: 36 },
 });

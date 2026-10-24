@@ -295,3 +295,21 @@ test('a past answer that fails to load is the same notice card', async () => {
   await s.findByTestId('copilot-answer-error');
   notice(s as never, 'copilot-answer-error');
 });
+
+// #878 round 1, Sol B-G3: a past answer with a change folds as a turn's does (no serif lead, no facts list).
+test('a past answer that carries a change is drawn compact, the change under it; one without stays full', async () => {
+  mockParams = { view: 'answer', item: ITEM };
+  const unsent = { id: 'sg2', status: 'suggested', change: { kind: 'set_calorie_target', target_id: 't1', from_kcal: 2600, to_kcal: 2450 }, reason: 'r', note: null, sent_at: null, decided_at: null };
+  const facts = [{ n: 1, kind: 'plan', label: 'Target 2,600 kcal' }];
+  get.mockResolvedValueOnce({ data: { messages: [{ id: 'm2', content: 'Fewer calories [1]. It fits your week.', copilot: { sources: facts, suggestion: unsent } }] } } as never);
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  expect(await s.findByTestId('copilot-suggestion')).toBeTruthy();
+  expect(s.queryByTestId('copilot-lead')).toBeNull();
+  expect(s.queryByTestId('copilot-facts')).toBeNull();
+  expect(s.getByTestId('copilot-answer-body').props.children).toBe('Fewer calories. It fits your week.');
+  s.unmount();
+  get.mockResolvedValueOnce({ data: { messages: [{ id: 'm2', content: 'Fewer calories [1]. It fits your week.', copilot: { sources: facts, suggestion: null } }] } } as never);
+  const t = await render(wrap(<ClientPathCopilotScreen />));
+  expect(await t.findByTestId('copilot-lead')).toBeTruthy();
+  expect(t.getByTestId('copilot-facts')).toBeTruthy();
+});

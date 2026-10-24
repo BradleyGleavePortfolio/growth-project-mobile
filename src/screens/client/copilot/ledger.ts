@@ -22,7 +22,23 @@ export const ledger = {
   ink: '#2E2E2B',
   /** Back on the forest masthead (GOAL .nav). */
   nav: brand[100],
+  /** The composer bar (GOAL .cmp). */
+  bar: '#FFFDF8',
+  /** A hairline between facts (GOAL .fact). */
+  factLine: '#F0F2EA',
+  /** The masthead's week tiles and their changed chip (GOAL .stat, .chg). */
+  tile: 'rgba(255,255,255,0.06)',
+  tileLine: 'rgba(184,204,191,0.2)',
+  mini: 'rgba(255,255,255,0.08)',
+  changed: '#A3C46A',
+  changedInk: '#1A1A18',
+  /** The new Your path row on More (GOAL .lrow.new). */
+  rowNew: '#EEF4E0',
+  rowNewIcon: brand[800],
 } as const;
+
+/** Style A's page gutter (GOAL --g): 20 on a phone 375 wide or more, 16 below it (Opus B-878-G2). */
+export const ledgerGutter = (width: number) => (width < 375 ? 16 : 20);
 
 const serif = (size: number) => ({ fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500' as const, fontSize: size, lineHeight: Math.ceil(size * SERIF_MIN_LINE_RATIO) });
 const sans = (size: number, lh: number, weight: '400' | '500' | '600' = '400') => ({
@@ -49,4 +65,38 @@ export const ledgerType = StyleSheet.create({
   /** A notice's title and body (.stc h3, .stc p), and an answer's body (.ans .body). */
   title: sans(17, 1.3, '600'),
   body: sans(15, 1.5),
+  /** The masthead title (.mh h1). */
+  mast: serif(34),
+  /** The masthead's week line, tiles and changed chip (.mh .sub, .stat b, .stat span, .chg). */
+  sub: sans(14, 1.35),
+  stat: sans(21, 1.1, '600'),
+  statLabel: sans(12, 1.25),
+  changed: sans(11, 1.35, '600'),
+  /** The question asked (.ask .who, .ask .q). */
+  who: sans(12.5, 1.35),
+  question: sans(18, 1.35, '600'),
+  /** An answer (.ans .hd, .ans .lead) and its facts (.fy, .fact .t, .fact .t small, .tag). */
+  head: sans(13, 1.35, '600'),
+  lead: serif(24),
+  factsLabel: sans(12.5, 1.35, '600'),
+  fact: sans(14.5, 1.35),
+  tag: sans(11.5, 1.35, '600'),
+  /** A quick chip under an answer (.chip), and the composer's field (.cmp .in). */
+  chip: sans(14.5, 1.35, '500'),
+  field: sans(16, 1.35),
+  /** A suggestion (.sug .lbl, .na, .sug h3, .pv, .lnk, .sentl). */
+  label: sans(13, 1.35, '600'),
+  badge: sans(11.5, 1.35, '600'),
+  change: sans(19, 1.3, '600'),
+  privacy: sans(13, 1.45),
+  link: sans(15, 1.35, '500'),
+  sent: sans(13.5, 1.35, '600'),
+  /** A section heading (.sec h2) and a status row (.stl .t, .stl .s, .stl .d). */
+  section: sans(15, 1.35, '600'),
+  statusTitle: sans(15, 1.3, '600'),
+  status: sans(13.5, 1.35, '500'),
+  meta: sans(12.5, 1.35),
+  /** Ask rows on Your path (.qrow) and the footer (.foot). */
+  ask: sans(16, 1.3),
+  foot: sans(12, 1.4),
 });

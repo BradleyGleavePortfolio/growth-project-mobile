@@ -13,6 +13,7 @@ jest.mock('../../../../components/tutorial/TutorialTarget', () => ({ children }:
 jest.mock('../../../../components/HapticPressable', () => jest.requireActual('react-native').Pressable);
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import MoreScreen, { COPILOT_MORE_ITEM, planMoreItems } from '../../MoreScreen';
 
@@ -29,4 +30,16 @@ test('with the Copilot flag on, Your path is the first Your plan row and opens C
 
 test('with the flag off there is no row into an unregistered route', () => {
   expect(planMoreItems()).not.toContain(COPILOT_MORE_ITEM);
+});
+
+// Sol B-G1 (#878 round 1): Your path is style A's new row (.lrow.new), the other rows stay as they are.
+test('Your path is the leaf-tint new row with the forest icon tile; the next row is unchanged', async () => {
+  mockFlags.clientPathCopilot = true;
+  const s = await render(<MoreScreen />);
+  const flat = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
+  expect(flat(s.getByLabelText('Your path'))).toMatchObject({ backgroundColor: '#EEF4E0', minHeight: 62, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 16 });
+  expect(flat(s.getByTestId('more-row-new-icon'))).toMatchObject({ width: 36, height: 36, borderRadius: 12, backgroundColor: '#1C3023' });
+  expect(flat(s.getByText('Your path'))).toMatchObject({ fontSize: 16, fontWeight: '500' });
+  expect(flat(s.getByText('Ask why your plan is set the way it is'))).toMatchObject({ fontSize: 13.5, color: '#5A5A56' });
+  expect(s.getAllByTestId('more-row-new-icon')).toHaveLength(1);
 });

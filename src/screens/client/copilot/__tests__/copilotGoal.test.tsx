@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { Dimensions, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
@@ -107,4 +107,84 @@ test('AI help off is Roman\u2019s card with main\u2019s words and the full Allow
   expect(s.getByText(/^Roman cannot use your information because AI help is not on for your account\./)).toBeTruthy();
   expect(s.getByTestId('copilot-ai-refusal-allow')).toBeTruthy();
   expect(s.queryByTestId('copilot-more')).toBeNull();
+});
+
+// FR-852 (#878 round 1): Opus B-878-G1..G3, Sol B-G2.
+const flat = (el: { props: { style?: unknown } } | null) => StyleSheet.flatten(el?.props.style as never) as Record<string, unknown>;
+const at = (width: number) => act(() => { Dimensions.set({ window: { width, height: 800, scale: 2, fontScale: 1 }, screen: { width, height: 800, scale: 2, fontScale: 1 } }); });
+afterEach(() => at(750));
+
+test('Opus B-878-G3: no quick chips under an offline turn, a rate limit or a crisis reply; the crisis reply keeps its buttons', async () => {
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [] } } as never);
+  send.mockRejectedValueOnce(new RomanApiError('offline', 'offline'));
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await act(async () => fireEvent.press(await s.findByText('Explain my targets')));
+  expect(s.getByTestId('copilot-turn-offline')).toBeTruthy();
+  expect(s.queryByTestId('copilot-more')).toBeNull();
+  send.mockRejectedValueOnce(Object.assign(new RomanApiError('rateLimited', 'slow'), { retryAfterSeconds: 30 }));
+  await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'And now?'));
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  expect(s.getByTestId('copilot-turn-rateLimited')).toBeTruthy();
+  expect(s.queryByTestId('copilot-more')).toBeNull();
+  send.mockResolvedValueOnce({ text: 'Please reach out now.', messageId: 'm9', interrupted: false, copilot: null,
+    safetyActions: [{ kind: 'call', label: 'Call 988', value: '988' }] } as never);
+  await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'I feel unsafe'));
+  await act(async () => fireEvent.press(s.getByLabelText('Send message')));
+  expect(s.getByText('crisis buttons')).toBeTruthy();
+  expect(s.queryByTestId('copilot-more')).toBeNull();
+});
+
+test('Opus B-878-G2: below 375 wide the masthead uses the 16 gutter and the week tiles take style A\u2019s padding and chip', async () => {
+  await at(360);
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [] } } as never);
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  const tile = await s.findByTestId('copilot-week-target');
+  expect(flat(s.getByTestId('copilot-mast'))).toMatchObject({ paddingHorizontal: 16 });
+  expect(flat(s.getByTestId('copilot-body'))).toMatchObject({ paddingHorizontal: 16, paddingTop: 22 });
+  expect(flat(tile)).toMatchObject({ paddingTop: 12, paddingHorizontal: 10, paddingBottom: 11, borderRadius: 16, borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(184,204,191,0.2)' });
+  expect(flat(s.getByTestId('copilot-week-checkin-label'))).toMatchObject({ fontSize: 12, lineHeight: 15, color: '#B8CCBF' });
+  expect(flat(s.getByTestId('copilot-week-changed'))).toMatchObject({ backgroundColor: '#A3C46A', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 });
+  expect(flat(s.getByText(/^Changed /))).toMatchObject({ fontSize: 11, fontWeight: '600', color: '#1A1A18' });
+  expect(flat(s.getByTestId('copilot-mast-title'))).toMatchObject({ fontFamily: 'CormorantGaramond_500Medium', fontSize: 34 });
+  await at(390);
+  expect(flat(s.getByTestId('copilot-mast'))).toMatchObject({ paddingHorizontal: 20 });
+});
+
+test('Opus B-878-G1 and Sol B-G2: once asked, the folded masthead and the answer take style A\u2019s tighter sizes', async () => {
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [] } } as never);
+  send.mockResolvedValueOnce({ text: 'Your target is 2,150 kcal [1]. It held this week.', messageId: 'm1', interrupted: false,
+    copilot: { sources: FACTS, suggestion: null } } as never);
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await act(async () => fireEvent.press(await s.findByText('Explain my targets')));
+  expect(flat(s.getByTestId('copilot-mast'))).toMatchObject({ paddingBottom: 14 });
+  expect(flat(s.getByTestId('copilot-body'))).toMatchObject({ paddingTop: 18 });
+  expect(flat(s.getByText(/^You asked/))).toMatchObject({ fontSize: 12.5, color: '#5A5A56' });
+  expect(flat(s.getByTestId('copilot-asked'))).toMatchObject({ fontSize: 18, fontWeight: '600', lineHeight: 24 });
+  expect(flat(s.getByText('Roman'))).toMatchObject({ fontSize: 13, fontWeight: '600', color: '#2C4A36' });
+  expect(flat(s.getByTestId('copilot-lead'))).toMatchObject({ fontFamily: 'CormorantGaramond_500Medium', fontSize: 24, lineHeight: 30 });
+  expect(flat(s.getByTestId('copilot-answer-body'))).toMatchObject({ fontSize: 15, lineHeight: 23, color: '#2E2E2B' });
+  expect(flat(s.getByText('From your data'))).toMatchObject({ fontSize: 12.5, fontWeight: '600', color: '#5A5A56', paddingTop: 11 });
+  expect(flat(s.getByTestId('copilot-fact-plan'))).toMatchObject({ minHeight: 56, paddingVertical: 9, paddingHorizontal: 16 });
+  expect(flat(s.getByText('How was my week'))).toMatchObject({ fontSize: 14.5, fontWeight: '500', color: '#2C4A36' });
+});
+
+test('Sol B-G2: the composer is style A\u2019s cream bar with a 46-high leaf-edged field and the send square', async () => {
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [] } } as never);
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  const bar = await s.findByTestId('copilot-composer');
+  expect(flat(bar)).toMatchObject({ backgroundColor: '#FFFDF8', borderTopWidth: 1, borderTopColor: '#E6E9DF', paddingTop: 10, paddingHorizontal: 20 });
+  expect(flat(s.getByTestId('roman-composer-field'))).toMatchObject({ borderColor: '#D2E2B4', minHeight: 46, borderRadius: 12, paddingHorizontal: 14 });
+  expect(flat(s.getByTestId('roman-composer-input'))).toMatchObject({ fontSize: 16 });
+  expect(flat(s.getByTestId('roman-composer-send'))).toMatchObject({ width: 46, height: 46, borderRadius: 12, backgroundColor: '#EEF4E0' });
+});
+
+test('Sol B-G2: a failure card is style A\u2019s state card (20/18 in, Roman at 40, 17/600 title, 15/1.5 body)', async () => {
+  get.mockResolvedValue({ data: { week: WEEK, suggestions: [] } } as never);
+  send.mockRejectedValueOnce(new RomanApiError('offline', 'offline'));
+  const s = await render(wrap(<ClientPathCopilotScreen />));
+  await act(async () => fireEvent.press(await s.findByText('Explain my targets')));
+  expect(flat(s.getByTestId('copilot-turn-offline'))).toMatchObject({ paddingVertical: 20, paddingHorizontal: 18, borderRadius: 16, backgroundColor: '#FFFFFF' });
+  expect(s.getByTestId('copilot-turn-offline-roman')).toBeTruthy();
+  expect(flat(s.getByTestId('copilot-turn-offline-title'))).toMatchObject({ fontSize: 17, fontWeight: '600' });
 });

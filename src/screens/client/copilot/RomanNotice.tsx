@@ -10,27 +10,27 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { radius, typography } from '../../../theme/tokens';
+import { radius } from '../../../theme/tokens';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
 import AiRefusalNotice, { AI_REFUSAL_ACTIONS } from '../../../components/ai/AiRefusalNotice';
 import AiConsentSheet from '../../../components/ai/AiConsentSheet';
 import { useOpenSupport } from '../../../components/ai/useOpenSupport';
 import { aiRefusalCopy, type AiRefusal } from '../../../lib/ai/aiRefusal';
 import { PrimaryButton } from '../../../ui';
-import { ledger } from './ledger';
+import { ledger, ledgerType } from './ledger';
 
 export function RomanNotice({ title, body, children, testID }: { title?: string; body?: string; children?: React.ReactNode; testID?: string }) {
   const { semanticColors: sc } = useTheme();
-  const ink = { color: sc.textPrimary };
+  const ink = { color: ledger.ink };
   return (
     <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]} accessibilityRole="alert" accessibilityLiveRegion="polite" testID={testID}>
       <View style={[s.who, !title && s.top]}>
-        <RomanAvatar crop="neutral" size={36} />
+        <RomanAvatar crop="neutral" size={40} testID={testID ? `${testID}-roman` : undefined} />
         {title
-          ? <Text style={[typography.bodyMd, s.strong, s.grow, ink]} testID={testID ? `${testID}-title` : undefined}>{title}</Text>
-          : <Text style={[typography.body, s.grow, ink]}>{body}</Text>}
+          ? <Text style={[ledgerType.title, s.grow, { color: sc.textPrimary }]} testID={testID ? `${testID}-title` : undefined}>{title}</Text>
+          : <Text style={[ledgerType.body, s.grow, ink]}>{body}</Text>}
       </View>
-      {title && body ? <Text style={[typography.body, ink]}>{body}</Text> : null}
+      {title && body ? <Text style={[ledgerType.body, ink]}>{body}</Text> : null}
       {children}
     </View>
   );
@@ -53,9 +53,9 @@ export function CopilotRefusal({ refusal, onRetry, testID }: { refusal: AiRefusa
 }
 
 const s = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: radius.card, padding: 16, gap: 12 },
+  // Style A's state card (.stc, .stc h3, .stc p; Sol B-G2), as the history's notice (LedgerRetry) draws it.
+  card: { borderWidth: 1, borderRadius: radius.card, paddingVertical: 20, paddingHorizontal: 18, gap: 12 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   top: { alignItems: 'flex-start' },
-  strong: { fontWeight: '600' },
   grow: { flex: 1 },
 });

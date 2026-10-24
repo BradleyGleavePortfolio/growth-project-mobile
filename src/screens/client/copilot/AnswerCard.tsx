@@ -8,13 +8,13 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { forestPop, radius, typography } from '../../../theme/tokens';
+import { forestPop, radius } from '../../../theme/tokens';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
 import RomanCrisisActions from '../../../components/roman/RomanCrisisActions';
 import type { RomanSafetyAction } from '../../../api/romanSafetyActions';
 import type { CopilotReply, SourceKind } from '../../../api/copilotApi';
 import { ASK_COPY as A, SOURCE_TAG, leadAndRest, withoutCites, withoutEmphasis } from './askWords';
-import { ledger } from './ledger';
+import { ledger, ledgerType } from './ledger';
 
 const TAG: Record<SourceKind, { bg: string; ink: string }> = {
   plan: { bg: forestPop.forest, ink: forestPop.onDeep },
@@ -26,7 +26,7 @@ const TAG: Record<SourceKind, { bg: string; ink: string }> = {
 export function SourceTag({ kind }: { kind: SourceKind }) {
   return (
     <View style={[s.tag, { backgroundColor: TAG[kind].bg }]}>
-      <Text style={[typography.caption, s.tagText, { color: TAG[kind].ink }]} maxFontSizeMultiplier={1.3}>{SOURCE_TAG[kind]}</Text>
+      <Text style={[ledgerType.tag, { color: TAG[kind].ink }]} maxFontSizeMultiplier={1.3}>{SOURCE_TAG[kind]}</Text>
     </View>
   );
 }
@@ -44,23 +44,23 @@ export function AnswerCard({ text, reply, safety, compact = false }: {
     <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]} testID="copilot-answer">
       <View style={s.pad}>
         <View style={s.who} accessible accessibilityLabel={A.roman}>
-          <RomanAvatar crop="neutral" size={28} />
-          <Text style={[typography.bodySmall, s.name, { color: sc.textPrimary }]}>{A.roman}</Text>
+          <RomanAvatar crop="neutral" size={24} />
+          <Text style={[ledgerType.head, { color: forestPop.forest }]}>{A.roman}</Text>
         </View>
-        {lead ? <Text style={[typography.h2, { color: sc.textPrimary }]} testID="copilot-lead">{lead}</Text> : null}
-        {rest ? <Text style={[typography.body, { color: sc.textPrimary }]}>{rest}</Text> : null}
+        {lead ? <Text style={[ledgerType.lead, { color: sc.textPrimary }]} testID="copilot-lead">{lead}</Text> : null}
+        {rest ? <Text style={[ledgerType.body, { color: ledger.ink }]} testID="copilot-answer-body">{rest}</Text> : null}
         {safety?.length ? <RomanCrisisActions actions={safety} testID="copilot-crisis" /> : null}
       </View>
       {reply && reply.sources.length > 0 && !compact ? (
         <View style={[s.facts, { borderColor: ledger.line }]} testID="copilot-facts">
-          <Text style={[typography.bodySmall, s.name, { color: sc.textMuted }]} accessibilityRole="header">{A.fromData}</Text>
+          <Text style={[ledgerType.factsLabel, s.fy, { color: ledger.muted }]} accessibilityRole="header">{A.fromData}</Text>
           {reply.sources.map((f, i) => (
-            <View key={`${f.n}-${i}`} style={[s.fact, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line }]}
+            <View key={`${f.n}-${i}`} style={[s.fact, i > 0 && { borderTopWidth: 1, borderColor: ledger.factLine }]}
               accessible accessibilityLabel={[SOURCE_TAG[f.kind], f.label, f.detail].filter(Boolean).join('. ')} testID={`copilot-fact-${f.kind}`}>
               <SourceTag kind={f.kind} />
               <View style={s.factText}>
-                <Text style={[typography.bodySmall, { color: sc.textPrimary }]}>{f.label}</Text>
-                {f.detail ? <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{f.detail}</Text> : null}
+                <Text style={[ledgerType.fact, { color: sc.textPrimary }]}>{f.label}</Text>
+                {f.detail ? <Text style={[ledgerType.small, s.detail, { color: ledger.muted }]}>{f.detail}</Text> : null}
               </View>
             </View>
           ))}
@@ -72,12 +72,13 @@ export function AnswerCard({ text, reply, safety, compact = false }: {
 
 const s = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
-  pad: { padding: 16, gap: 10 },
+  // Style A's answer (.ans .hd, .lead, .body, .fy, .fact, .tag; Sol B-G2).
+  pad: { paddingTop: 14, paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  name: { fontWeight: '600' },
-  facts: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  fact: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  facts: { borderTopWidth: 1, paddingBottom: 2 },
+  fy: { paddingHorizontal: 16, paddingTop: 11, paddingBottom: 3 },
+  fact: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 9, minHeight: 56 },
   factText: { flex: 1 },
-  tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, minWidth: 84, alignItems: 'center' },
-  tagText: { letterSpacing: 0.2, fontWeight: '600' },
+  detail: { marginTop: 1 },
+  tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, minWidth: 74, alignItems: 'center' },
 });
