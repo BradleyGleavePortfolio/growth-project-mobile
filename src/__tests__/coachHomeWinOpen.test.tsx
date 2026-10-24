@@ -233,7 +233,7 @@ describe('Open alerts in Style A (Sol r4 B2 G8)', () => {
     expect(row).toMatchObject({ backgroundColor: '#FFFFFF', borderColor: '#FFFFFF', borderRadius: 12, minHeight: 50 });
     expect(count).toMatchObject({ color: '#B91C1C', fontSize: 22, lineHeight: 26 });
     expect(waiting).toBeTruthy();
-    expect(v.getByTestId('home-alerts').props.accessibilityLabel).toBe('Open alerts, 3');
+    expect(v.getByTestId('home-alerts').props.accessibilityLabel).toBe('Open alerts, 3, Waiting in Actions');
   });
 
   it('zero draws the outline on deep, the count in the hero white and no second line', async () => {

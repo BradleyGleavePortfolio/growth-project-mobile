@@ -8,7 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { forestPop, radius, typography } from '../../../theme/tokens';
+import { colors as brand, forestPop, radius, typography } from '../../../theme/tokens';
 import type { RingSpec } from './homeDay';
 
 const RING = 44;
@@ -26,7 +26,8 @@ export const styleA = {
   card: '#FFFFFF', // the page cards and the open alerts row
   cardLine: '#DCE3DB', // the card edge and the line between rows
   ink: '#142019', // text on the open alerts row
-  inkMuted: '#4F5D54', // its second line and chevron
+  inkMuted: '#4F5D54', // chevrons and check outlines on white
+  grey: brand.graphite, // small grey text on a light ground: #2C2C2C (owner #168-13, after the mockups, wins over A's #4F5D54)
 } as const;
 
 /** The small capitals over a block: the date, YOUR DAY, ACTIVE TODAY, BUSINESS, CLIENTS (Style A `.eb`, `.sec`). */
@@ -34,6 +35,9 @@ export const EYEBROW = { fontFamily: SEMI, fontSize: 11, lineHeight: 14, letterS
 
 /** Style A's card lift, 0 2px 10px rgba(20,32,25,.05). */
 const CARD_SHADOW = { shadowColor: styleA.ink, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 } as const;
+
+/** Style A's white card (`.card`), light scheme: also drawn by the setup checklist, the push ask and the brief on this Home. */
+export const CARD_A = { backgroundColor: styleA.card, borderRadius: radius.card, borderWidth: 0.5, borderColor: styleA.cardLine, ...CARD_SHADOW } as const;
 
 /** A small figure on the hero: the value in leaf, its words under it. */
 export function MiniTile({ value, label, testID }: { value: string; label: string; testID?: string }) {
@@ -58,8 +62,9 @@ function AlertShield({ color }: { color: string }) {
 
 /** Open alerts: an outline on deep at zero; white with the red count and shield, and "Waiting in Actions", when any are open. */
 export function AlertsRow({ count, onPress }: { count: number | null; onPress: () => void }) {
-  const label = count === null ? 'Open alerts' : `Open alerts, ${count}`;
   const open = count !== null && count > 0;
+  // A screen reader hears what the row shows, its second line too.
+  const label = count === null ? 'Open alerts' : `Open alerts, ${count}${open ? ', Waiting in Actions' : ''}`;
   return (
     <Pressable style={({ pressed }) => [hs.alerts, open && hs.alertsOpen, pressed && hs.pressed]} onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID="home-alerts">
       <AlertShield color={open ? forestPop.error : forestPop.onDeepMuted} />
@@ -109,15 +114,13 @@ export function useCardStyles() {
   const { colors, semanticColors: sem, colorScheme } = useTheme();
   const light = colorScheme !== 'dark'; // Style A's white card is a light-scheme value; a dark scheme keeps the theme's
   return React.useMemo(() => StyleSheet.create({
-    card: {
-      backgroundColor: light ? styleA.card : sem.bgSurface, borderRadius: radius.card, borderWidth: 0.5, borderColor: light ? styleA.cardLine : sem.border,
-      paddingVertical: 18, paddingHorizontal: 16, ...CARD_SHADOW,
-    },
+    card: { ...CARD_A, ...(light ? null : { backgroundColor: sem.bgSurface, borderColor: sem.border }), paddingVertical: 18, paddingHorizontal: 16 },
     title: { fontFamily: SEMI, fontSize: 16, lineHeight: 21, color: colors.textPrimary },
     body: { ...typography.body, color: colors.textPrimary },
-    muted: { ...typography.bodySmall, color: colors.textMuted },
+    // Small grey text on a light ground is graphite #2C2C2C (owner #168-13, m#875); a dark scheme keeps the theme's.
+    muted: { ...typography.bodySmall, color: light ? styleA.grey : colors.textMuted },
     strong: { ...typography.bodyMd, color: colors.textPrimary },
-    section: { ...EYEBROW, color: colors.textMuted, marginTop: 10, marginBottom: 2 },
+    section: { ...EYEBROW, color: light ? styleA.grey : colors.textMuted, marginTop: 10, marginBottom: 2 },
     row: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
     rowLine: { borderTopWidth: 0.5, borderTopColor: light ? styleA.cardLine : sem.border },
     rowText: { flex: 1, minWidth: 0 },
@@ -160,7 +163,7 @@ const hs = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   alertsText: { fontFamily: SEMI, fontSize: 15, lineHeight: 20, color: styleA.onDeep },
   onWhite: { color: styleA.ink },
-  alertsWaiting: { ...typography.bodySmall, fontSize: 13, lineHeight: 17, color: styleA.inkMuted },
+  alertsWaiting: { ...typography.bodySmall, fontSize: 13, lineHeight: 17, color: styleA.grey },
   alertsCount: { fontFamily: SEMI, fontSize: 22, lineHeight: 26, color: styleA.onDeep },
   alertsCountOpen: { color: forestPop.error },
   ring: { flex: 1, alignItems: 'center', minHeight: 44, paddingVertical: 2 },
