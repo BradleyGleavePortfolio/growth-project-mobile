@@ -60,6 +60,7 @@ jest.mock('../VoiceRecordSheet', () => {
 
 const mockListFeed = jest.fn();
 const mockRemove = jest.fn();
+const mockIssue = jest.fn();
 jest.mock('../../../api/communityVoiceApi', () => {
   const actual = jest.requireActual('../../../api/communityVoiceApi');
   return {
@@ -67,6 +68,7 @@ jest.mock('../../../api/communityVoiceApi', () => {
     communityVoiceApi: {
       listFeed: (...a: unknown[]) => mockListFeed(...a),
       remove: (...a: unknown[]) => mockRemove(...a),
+      issueUploadUrl: (...a: unknown[]) => mockIssue(...a),
     },
   };
 });
@@ -120,6 +122,7 @@ beforeEach(() => {
     next_cursor: null,
   });
   mockRemove.mockReset().mockResolvedValue({ id: 'vn-mine', deleted: true });
+  mockIssue.mockReset().mockRejectedValue(new Error('upload target unavailable'));
   mockReport.mockReset().mockResolvedValue(undefined);
   mockBlock.mockReset().mockResolvedValue(undefined);
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -229,3 +232,20 @@ describe('VoiceNotesSection', () => {
     await waitFor(() => expect(mockListFeed.mock.calls.length).toBeGreaterThan(1));
   });
 });
+
+// LS-848 B4 (FR-848R4): while a note goes up, its row draws the GOAL 03 progress line.
+it('a sending note shows the upload progress line', async () => {
+  mockIssue.mockImplementation(() => new Promise(() => undefined)); // still sending
+  const { getByTestId, findByTestId } = await renderSection();
+  await findByTestId('vn-note-vn-other');
+  await act(async () => {
+    fireEvent.press(getByTestId('vn-record'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('sheet-send'));
+  });
+  const line = await findByTestId(/^vn-pending-.*-progress$/);
+  expect(line.props.accessibilityRole).toBe('progressbar');
+  expect(line.props.accessibilityValue).toMatchObject({ min: 0, max: 100, now: 0 });
+});
+

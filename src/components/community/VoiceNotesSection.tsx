@@ -28,7 +28,7 @@ import VoiceRecordSheet from './VoiceRecordSheet';
 import SafetyMenu from './SafetyMenu';
 import { formatRelative } from './SearchResultRow';
 import { useTheme } from '../../theme/useTheme';
-import { forestPop as fp, radius, spacing } from '../../theme/tokens';
+import { forestPop as fp, radius, spacing, voiceShades } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useVoiceFeed } from '../../hooks/useVoiceFeed';
 import { useVoiceOutbox, type VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
@@ -276,6 +276,17 @@ function OutboxRow({ item, onRetry, onDiscard, testID }: {
                 </HapticPressable>
               </View>
             </View>
+          ) : item.status === 'sending' ? (
+            // GOAL 03: a thin line fills as the audio goes up (the owner's circle stays beside the time).
+            <View
+              style={styles.prog}
+              accessibilityRole="progressbar"
+              accessibilityLabel="Sending voice note"
+              accessibilityValue={{ min: 0, max: 100, now: Math.round((item.progress ?? 0) * 100) }}
+              testID={`${testID}-progress`}
+            >
+              <View style={[styles.progFill, { width: `${Math.round((item.progress ?? 0) * 100)}%` }]} />
+            </View>
           ) : null
         }
         testID={`${testID}-player`}
@@ -321,5 +332,7 @@ const styles = StyleSheet.create({
   retry: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
     paddingHorizontal: spacing.lg, borderRadius: radius.button, backgroundColor: fp.forest },
   more: { minHeight: 44, justifyContent: 'center' },
+  prog: { height: 4, borderRadius: 2, backgroundColor: voiceShades.hairline, overflow: 'hidden', marginTop: spacing.sm },
+  progFill: { height: 4, borderRadius: 2, backgroundColor: fp.forest },
   del: { minHeight: 48, minWidth: 48, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
 });

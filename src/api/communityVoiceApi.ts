@@ -262,6 +262,7 @@ export const communityVoiceApi = {
     uploadUrl: string,
     body: Blob | ArrayBuffer,
     mimeType: VoiceNoteMimeType,
+    onProgress?: (fraction: number) => void,
   ): Promise<void> {
     try {
       // The signed URL is an absolute storage endpoint, not an API route, so
@@ -269,6 +270,9 @@ export const communityVoiceApi = {
       await axios.put(uploadUrl, body, {
         headers: { 'Content-Type': mimeType },
         signal: AbortSignal.timeout(VOICE_UPLOAD_TIMEOUT_MS),
+        ...(onProgress
+          ? { onUploadProgress: (e: { loaded: number; total?: number }) => { if (e.total) onProgress(e.loaded / e.total); } }
+          : {}),
       });
     } catch (err) {
       if (axios.isAxiosError(err)) {

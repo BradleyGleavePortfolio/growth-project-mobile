@@ -3,6 +3,9 @@
  * has it: sending (spinner, "Sending…") · waiting (offline: spinner + wifi-off, sends when the signal is
  * back, from any screen) · failed (online: Try again / Delete, recording kept). The queue is saved to
  * AsyncStorage and the audio moved into documents, so a restart picks it up. Per author, emptied on sign-out.
+ * Cold start (LS-848 B2): with the flag on, this module drives the queue from app start — the signed-in
+ * author from the user cache, the signal from NetInfo — so a restart on Home sends what waits with no
+ * voice screen open.
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,6 +14,9 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { HapticService } from '../ui/haptics/haptics.service';
 import { authEvents } from '../utils/authEvents';
+import { featureFlags } from '../config/featureFlags';
+import { readUserCache } from '../lib/userCache';
+import { queryClient } from '../services/queryClient';
 import { isEffectivelyOnline, useNetworkStatus } from './useNetworkStatus';
 import { publishVoiceNote, type VoiceUploadInput } from './useVoiceUpload';
 import { voiceKeys } from './voiceQueryKeys';
@@ -26,6 +32,8 @@ export interface VoiceOutboxItem {
   /** Peaks drawn on the row. */
   peaks: number[];
   status: VoiceOutboxStatus;
+  /** Upload share in [0,1] while sending — the GOAL 03 line under the row. */
+  progress?: number;
 }
 
 const STORE_KEY = 'tgp.voiceOutbox.v1';
@@ -36,6 +44,8 @@ let restored: Promise<void> | null = null;
 // Who sends the queue once every voice screen has closed (B2), and the one signal listener.
 let session: { authorId: string; qc: QueryClient } | null = null;
 let unwatch: (() => void) | null = null;
+let driverEpoch = 0; // bumped on sign-out: a user-cache read still in flight belongs to the last account
+let driverStarted = false;
 const listeners = new Set<() => void>();
 
 function commit(next: VoiceOutboxItem[]): void {
@@ -82,6 +92,13 @@ function restore(): Promise<void> {
 function patch(id: string, p: Partial<VoiceOutboxItem>): void {
   commit(items.map((i) => (i.id === id ? { ...i, ...p } : i)));
 }
+/** Upload progress: drawn, not saved (a restart sends again from the start). */
+function setProgress(id: string, f: number): void {
+  const cur = items.find((i) => i.id === id);
+  if (!cur || cur.status !== 'sending' || (f < 1 && Math.abs(f - (cur.progress ?? 0)) < 0.04)) return;
+  items = items.map((i) => (i.id === id ? { ...i, progress: Math.min(1, Math.max(0, f)) } : i));
+  listeners.forEach((l) => l());
+}
 function subscribe(l: () => void): () => void {
   listeners.add(l);
   return () => void listeners.delete(l);
@@ -95,10 +112,38 @@ function flush(): void {
   });
 }
 authEvents.on('logout', () => {
+  driverEpoch += 1;
   session = null;
   dropFiles(items);
   commit([]);
 });
+
+function watchSignal(): void {
+  unwatch ??= NetInfo.addEventListener((s) => {
+    online = isEffectivelyOnline({ isOnline: !!s.isConnected, isInternetReachable: s.isInternetReachable });
+    flush();
+  });
+}
+/** Adopt whoever is signed in (cache), read the signal once, then send what waits for them. */
+async function adoptSignedIn(): Promise<void> {
+  const epoch = driverEpoch;
+  const [user, net] = await Promise.all([
+    readUserCache().catch(() => null),
+    NetInfo.fetch().catch(() => null),
+  ]);
+  if (epoch !== driverEpoch || !user?.id) return;
+  if (net) online = isEffectivelyOnline({ isOnline: !!net.isConnected, isInternetReachable: net.isInternetReachable });
+  if (session?.authorId !== user.id) session = { authorId: user.id, qc: session?.qc ?? queryClient };
+  watchSignal();
+  flush();
+}
+/** Started once at import (flag on): no root mount needed. Sign-in and sign-out re-read the author. */
+export function startVoiceOutboxDriver(): void {
+  if (!featureFlags.communityVoiceNotes || driverStarted) return;
+  driverStarted = true;
+  authEvents.onAuthChange(() => void adoptSignedIn());
+  void adoptSignedIn();
+}
 
 /** Test seam: an empty store, online; nothing saved unless it is a cold start. */
 export function resetVoiceOutbox(coldStart = false): void {
@@ -107,6 +152,7 @@ export function resetVoiceOutbox(coldStart = false): void {
   session = null;
   unwatch?.();
   unwatch = null;
+  driverEpoch += 1;
   items = [];
   if (!coldStart) void AsyncStorage.removeItem(STORE_KEY);
 }
@@ -118,12 +164,13 @@ async function run(id: string, qc: QueryClient): Promise<void> {
     patch(id, { status: 'waiting' });
     return;
   }
-  patch(id, { status: 'sending' });
+  patch(id, { status: 'sending', progress: 0 });
   try {
-    await publishVoiceNote(item.workspaceId, item.input);
+    await publishVoiceNote(item.workspaceId, item.input, { onProgress: (f) => setProgress(id, f) });
     // Keep the row until the feed holds the real note, so nothing blinks out.
     await qc.invalidateQueries({ queryKey: voiceKeys.feedRoot(item.workspaceId) });
     remove(id);
+    void HapticService.success(); // GOAL: the note is in; a soft success, not silence
   } catch {
     // Offline by now: wait for the signal. Online: say it did not send.
     patch(id, { status: online ? 'failed' : 'waiting' });
@@ -148,10 +195,7 @@ export function useVoiceOutbox(workspaceId: string | null, authorId: string | nu
   useEffect(() => {
     online = isOnline;
     if (authorId) session = { authorId, qc };
-    unwatch ??= NetInfo.addEventListener((s) => {
-      online = isEffectivelyOnline({ isOnline: !!s.isConnected, isInternetReachable: s.isInternetReachable });
-      flush();
-    });
+    watchSignal();
     flush();
   }, [authorId, isOnline, qc]);
 
@@ -178,3 +222,5 @@ export function useVoiceOutbox(workspaceId: string | null, authorId: string | nu
   const mine = all.filter((i) => i.authorId === authorId && i.workspaceId === workspaceId);
   return { items: mine, online: isOnline, send, retry, discard };
 }
+
+startVoiceOutboxDriver();
