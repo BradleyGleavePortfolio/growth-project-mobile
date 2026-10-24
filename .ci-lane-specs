@@ -1,0 +1,5 @@
+src/screens/coach/__tests__/coachTabsV2Entries.test.tsx
+src/store/__tests__/coachStore.session.test.ts
+src/navigation/__tests__/coachTabLabels143.test.tsx
+src/navigation/__tests__/coachLanding.test.tsx
+src/navigation/__tests__/coachTabsV2.test.tsx
