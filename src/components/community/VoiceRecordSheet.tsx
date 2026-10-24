@@ -40,5 +40,6 @@ const styles = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: voiceShades.scrim },
   sheet: { backgroundColor: neutral[0], borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
     paddingTop: spacing.sm, gap: spacing.sm },
-  handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: radius.chip, backgroundColor: voiceShades.track },
+  handle: { alignSelf: 'center', width: 36, height: 5, borderRadius: radius.chip, backgroundColor: voiceShades.track,
+    marginBottom: 2 }, // 8 gap + 2 = GOAL .grab 10
 });

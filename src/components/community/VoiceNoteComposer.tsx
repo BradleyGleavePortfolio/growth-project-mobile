@@ -11,8 +11,9 @@
  *   - denied      → a REAL mic-permission recovery state: a "try again" action,
  *     and when the OS will no longer prompt, an "Open Settings" deep-link
  *     instead of a no-op button (audit req — denial needs real recovery).
- *   - idle        → the timer at 0:00 and the forest record disc.
- *   - recording   → serif timer, live level bars, a line filling to 5:00, stop;
+ *   - idle        → the sheet starts recording as it opens (GOAL 01b, one tap
+ *     from Record); idle shows only after Try again, with the forest disc.
+ *   - recording   → serif timer, live level bars, elapsed · line · 5:00, stop;
  *     "{time} left" and one warning tap from 15 s left; stops at 5:00.
  *   - error       → what failed (permission check / start / save), a Try again
  *     that returns to idle, and a support path with the reported reference.
@@ -53,6 +54,7 @@ export interface VoiceNoteComposerProps {
   testID?: string;
 }
 
+const SHEET_GUTTER = 20;
 const WARN_LEFT_MS = 15_000; // one warning tap and "{time} left" from here
 const HINT_MS = 3_000; // "Records up to 5:00 of audio." for the first seconds
 
@@ -68,6 +70,14 @@ export default function VoiceNoteComposer({
   const rec = useVoiceRecorder(recorder ? { recorder } : {});
   const warned = useRef(false);
   const { start, status } = rec;
+  // One tap from Record (GOAL 01b): the sheet starts recording as it opens. Once per mount, so a
+  // re-render or a later idle (after Try again) never starts a second take on its own.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current) return;
+    autoStarted.current = true;
+    void start();
+  }, [start]);
 
   const left = rec.maxDurationMs - rec.elapsedMs;
   useEffect(() => {
@@ -89,21 +99,21 @@ export default function VoiceNoteComposer({
   // ── Unavailable build ───────────────────────────────────────────────────────
   if (rec.status === 'unavailable') {
     return (
-      <View
-        style={styles.notice}
-        accessibilityRole="text"
-        testID={testID ?? 'voice-composer-unavailable'}
-      >
-        <SheetHeader onCancel={onClose} />
-        <Ionicons
-          name="mic-off-outline"
-          size={22}
-          color={semanticColors.textMuted}
-        />
-        <Text style={[styles.noticeText, { color: semanticColors.textMuted }]}>
-          Voice recording isn’t available on this build yet. You can still send a
-          written note.
-        </Text>
+      <View style={styles.container} testID={testID ?? 'voice-composer-unavailable'}>
+        {/* GOAL 10b: no header; the reason beside a wash circle, then one full-width Close. */}
+        <View style={styles.unavailableRow} accessibilityRole="text">
+          <View style={styles.wash}>
+            <Ionicons name="mic-off-outline" size={24} color={fp.forest} />
+          </View>
+          <Text style={[styles.noticeText, styles.unavailableText]}>
+            Voice recording isn’t available on this build yet. You can still send a
+            written note.
+          </Text>
+        </View>
+        <HapticPressable intent="light" onPress={onClose} accessibilityRole="button" accessibilityLabel="Close"
+          testID="voice-composer-close" style={[styles.primaryAction, styles.outlined]}>
+          <Text style={[styles.primaryLabel, { color: fp.forest }]}>Close</Text>
+        </HapticPressable>
       </View>
     );
   }
@@ -111,15 +121,11 @@ export default function VoiceNoteComposer({
   // ── Mic permission denied — real recovery ───────────────────────────────────
   if (rec.status === 'denied') {
     return (
-      <View
-        style={styles.notice}
-        accessibilityRole="text"
-        testID={testID ?? 'voice-composer-denied'}
-      >
-        <View style={[styles.wash, { width: 80, height: 80 }]}>
-          <Ionicons name="mic-off-outline" size={36} color={fp.forest} />
+      <View style={styles.container} testID={testID ?? 'voice-composer-denied'}>
+        <View style={[styles.wash, styles.washLarge]} testID="voice-composer-denied-wash">
+          <Ionicons name="mic-off-outline" size={32} color={fp.forest} />
         </View>
-        <Text style={[styles.noticeText, { color: semanticColors.textPrimary }]}>
+        <Text style={[styles.noticeText, styles.centered]} accessibilityRole="text">
           Microphone access is off, so a voice note can’t be recorded. Turn it on
           to record.
         </Text>
@@ -136,9 +142,9 @@ export default function VoiceNoteComposer({
               : 'Try enabling the microphone again'
           }
           testID="voice-composer-permission-action"
-          style={styles.secondaryAction}
+          style={[styles.primaryAction, styles.filled]}
         >
-          <Text style={styles.secondaryLabel}>
+          <Text style={[styles.primaryLabel, { color: fp.onDeep }]}>
             {rec.mustOpenSettings ? 'Open Settings' : 'Try again'}
           </Text>
         </HapticPressable>
@@ -207,6 +213,7 @@ export default function VoiceNoteComposer({
         />
         <VoicePrivacyCopy target={target} />
         <View style={styles.reviewActions}>
+          <View style={styles.fill}>
           <HapticPressable
             intent="light"
             onPress={restart}
@@ -218,6 +225,8 @@ export default function VoiceNoteComposer({
             <Ionicons name="refresh" size={20} color={fp.forest} />
             <Text style={[styles.primaryLabel, { color: fp.forest }]}>Re-record</Text>
           </HapticPressable>
+          </View>
+          <View style={styles.fill}>
           <HapticPressable
             intent="light"
             onPress={() => { onSend(recording); rec.reset(); }}
@@ -229,6 +238,7 @@ export default function VoiceNoteComposer({
             <Ionicons name="arrow-up" size={20} color={fp.onDeep} />
             <Text style={[styles.primaryLabel, { color: fp.onDeep }]}>Send</Text>
           </HapticPressable>
+          </View>
         </View>
       </View>
     );
@@ -258,12 +268,16 @@ export default function VoiceNoteComposer({
           return v === undefined ? (
             <View key={i} style={styles.dot} />
           ) : (
-            <View key={i} style={[styles.level, { height: 8 + Math.round(v * 48) }]} />
+            <View key={i} style={[styles.level, { height: 8 + Math.round(v * 56) }]} />
           );
         })}
       </View>
-      <View style={styles.track} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <View style={[styles.trackFill, { width: `${Math.min(1, rec.elapsedMs / rec.maxDurationMs) * 100}%` }]} />
+      <View style={styles.line} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Text style={styles.lineLabel} testID="voice-composer-line-elapsed">{formatDuration(rec.elapsedMs)}</Text>
+        <View style={styles.track}>
+          <View style={[styles.trackFill, { width: `${Math.min(1, rec.elapsedMs / rec.maxDurationMs) * 100}%` }]} />
+        </View>
+        <Text style={styles.lineLabel} testID="voice-composer-line-max">{formatDuration(rec.maxDurationMs)}</Text>
       </View>
       <VoiceNoteRecordButton
         status={recordStatus}
@@ -303,39 +317,49 @@ function SheetHeader({ onCancel, cancelLabel = 'Cancel', discard = false }: {
 }
 
 const styles = StyleSheet.create({
+  // GOAL sheet: 20 pt gutters (.bsheet padding 8 20 0).
   container: {
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: SHEET_GUTTER,
     paddingBottom: spacing.md,
   },
   notice: {
     alignItems: 'center',
     gap: spacing.md,
     paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: SHEET_GUTTER,
   },
   noticeText: {
-    fontSize: 17,
+    fontSize: 16,
     lineHeight: 24,
     textAlign: 'center',
+    color: fp.ink,
   },
+  centered: { paddingHorizontal: spacing.sm },
+  unavailableRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 10 },
+  unavailableText: { flex: 1, textAlign: 'left' },
+  fill: { flex: 1, alignSelf: 'stretch' },
   header: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerAction: { minWidth: 72, minHeight: 44, justifyContent: 'center' },
-  cancel: { fontSize: 17, fontWeight: '500', color: fp.forest },
+  cancel: { fontSize: 16, lineHeight: 20, fontWeight: '600', color: fp.forest },
   title: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
-  timer: { fontFamily: typography.display.fontFamily, fontSize: 64, lineHeight: 80, color: fp.ink, textAlign: 'center' },
-  hint: { fontSize: 16, lineHeight: 22, minHeight: 22, color: fp.n700, textAlign: 'center' },
+  timer: { fontFamily: typography.display.fontFamily, fontSize: 56, lineHeight: 70, fontWeight: '500', color: fp.ink,
+    textAlign: 'center', fontVariant: ['tabular-nums'] },
+  hint: { fontSize: 14, lineHeight: 20, minHeight: 20, color: fp.n700, textAlign: 'center' },
   hintWarn: { color: fp.ink, fontWeight: '600' },
-  levels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 56 },
-  level: { width: 6, borderRadius: 3, backgroundColor: fp.leaf, borderWidth: 1, borderColor: fp.moss },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: voiceShades.hairline },
-  track: { height: 4, borderRadius: 2, backgroundColor: voiceShades.hairline, overflow: 'hidden' },
+  levels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 64 },
+  level: { width: 5, borderRadius: 3, backgroundColor: fp.leaf, borderWidth: 1, borderColor: fp.moss },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: voiceShades.hairline },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lineLabel: { fontSize: 13, lineHeight: 16, fontWeight: '500', color: fp.n700, fontVariant: ['tabular-nums'] },
+  track: { flex: 1, height: 4, borderRadius: 2, backgroundColor: voiceShades.hairline, overflow: 'hidden' },
   trackFill: { height: 4, backgroundColor: fp.forest },
-  wash: { width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+  wash: { width: 56, height: 56, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
     backgroundColor: voiceShades.leafWash, borderWidth: 1, borderColor: voiceShades.washEdge },
+  washLarge: { width: 72, height: 72, alignSelf: 'center', marginTop: 14 },
   reviewActions: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: 10,
   },
   secondaryAction: {
     alignSelf: 'stretch',
@@ -352,8 +376,7 @@ const styles = StyleSheet.create({
     color: fp.onDeep,
   },
   primaryAction: {
-    flex: 1,
-    minHeight: 56,
+    minHeight: 54,
     flexDirection: 'row',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
@@ -362,9 +385,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filled: { backgroundColor: fp.forest },
-  outlined: { borderWidth: 1, borderColor: fp.forest, backgroundColor: neutral[0] },
+  outlined: { borderWidth: 1.5, borderColor: fp.forest, backgroundColor: neutral[0] },
   primaryLabel: {
-    fontSize: 17,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: '600',
   },
   quiet: { alignSelf: 'stretch', minHeight: 48, alignItems: 'center', justifyContent: 'center' },

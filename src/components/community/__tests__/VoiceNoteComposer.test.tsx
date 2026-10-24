@@ -1,14 +1,15 @@
 /**
  * VoiceNoteComposer — the Style B record sheet body. The recorder port is
  * injected (deterministic capture). Pins the honest states the audit cares about:
- *   • unavailable build → calm notice, NO record button;
+ *   • unavailable build → calm notice, one full-width Close, NO record button (GOAL 10b);
+ *   • the sheet records as it opens — one tap from Record (GOAL 01b, LO-848 B1);
  *   • mic denied → a REAL recovery action (try again / open settings);
- *   • idle → privacy disclosure (real audience) + record button present;
+ *   • recording → elapsed · line · 5:00 and a 76 pt stop disc (LO-848 B2);
  *   • recorded → listen back + Send hands the recording to the outbox.
  */
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 
 type GetByTestId = Awaited<ReturnType<typeof render>>['getByTestId'];
 
@@ -70,17 +71,34 @@ describe('VoiceNoteComposer — honest states', () => {
     );
     expect(getByTestId('voice-composer-unavailable')).toBeTruthy();
     expect(queryByTestId('voice-record-button')).toBeNull();
+    expect(queryByTestId('voice-composer-cancel')).toBeNull();
+    fireEvent.press(getByTestId('voice-composer-close'));
+    expect(mockClose).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the privacy disclosure + record button when idle', async () => {
+  it('starts recording as the sheet opens, with no second tap (LO-848 B1)', async () => {
     const port = makePort();
-    const { getByTestId } = await render(
+    const { getByTestId, findByTestId } = await render(
       <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
+    expect(await findByTestId('voice-composer-line-max', { includeHiddenElements: true })).toBeTruthy();
+    expect(port.start).toHaveBeenCalledTimes(1);
+    expect(getByTestId('voice-record-button').props.accessibilityLabel).toMatch(/stop/i);
     expect(getByTestId('voice-privacy-copy').props.accessibilityLabel).toBe(
       'Everyone in Spring Block can hear this voice note.',
     );
-    expect(getByTestId('voice-record-button')).toBeTruthy();
+  });
+
+  it('shows elapsed · line · 5:00 and the 76 pt stop disc while recording (LO-848 B2)', async () => {
+    const port = makePort();
+    const { getByTestId, findByTestId } = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={port} />,
+    );
+    const max = await findByTestId('voice-composer-line-max', { includeHiddenElements: true });
+    expect(max.props.children).toBe('5:00');
+    expect(getByTestId('voice-composer-line-elapsed', { includeHiddenElements: true }).props.children).toBe('0:00');
+    const disc = StyleSheet.flatten(getByTestId('voice-record-button').props.style);
+    expect([disc.width, disc.height]).toEqual([76, 76]);
   });
 });
 
@@ -97,9 +115,7 @@ describe('VoiceNoteComposer — mic denial recovery', () => {
       <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
 
-    await act(async () => {
-      fireEvent.press(getByTestId('voice-record-button'));
-    });
+    // The sheet asks as it opens; no tap on a record disc first.
     await waitFor(() => expect(getByTestId('voice-composer-denied')).toBeTruthy());
 
     fireEvent.press(getByTestId('voice-composer-permission-action'));
@@ -109,10 +125,9 @@ describe('VoiceNoteComposer — mic denial recovery', () => {
 });
 
 describe('VoiceNoteComposer — review + send', () => {
+  // Recording starts as the sheet opens; one tap on stop ends it.
   async function recordTo(getByTestId: GetByTestId) {
-    await act(async () => {
-      fireEvent.press(getByTestId('voice-record-button'));
-    });
+    await waitFor(() => expect(getByTestId('voice-record-button').props.accessibilityLabel).toMatch(/stop/i));
     await act(async () => {
       fireEvent.press(getByTestId('voice-record-button'));
     });
@@ -136,7 +151,6 @@ describe('VoiceNoteComposer — recorder failure (B-314-7)', () => {
     const { getByTestId, findByTestId, getByText } = await render(
       <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
-    fireEvent.press(getByTestId('voice-record-button'));
     const notice = await findByTestId('voice-composer-error');
     expect(notice).toBeTruthy();
     expect(getByText(/The microphone could not start recording\. Try again\./)).toBeTruthy();
@@ -144,16 +158,17 @@ describe('VoiceNoteComposer — recorder failure (B-314-7)', () => {
     expect(getByText(/@/)).toBeTruthy();
     fireEvent.press(getByTestId('voice-composer-error-retry'));
     await waitFor(() => expect(getByTestId('voice-record-button')).toBeTruthy());
+    // Try again lands on the record disc; it does not start a second take by itself.
+    expect(port.start).toHaveBeenCalledTimes(1);
   });
 
   it('a permission read that fails says so instead of leaving an idle button', async () => {
     const port = makePort({
       getPermissionStatus: jest.fn().mockRejectedValue(new Error('perm read failed')),
     });
-    const { getByTestId, findByText } = await render(
+    const { findByText } = await render(
       <VoiceNoteComposer {...props} target={target} recorder={port} />,
     );
-    fireEvent.press(getByTestId('voice-record-button'));
     expect(await findByText(/Microphone access could not be checked on this phone\./)).toBeTruthy();
   });
 });
