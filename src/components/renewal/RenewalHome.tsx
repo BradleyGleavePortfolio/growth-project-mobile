@@ -48,16 +48,13 @@ function useDetails(on: boolean): { name?: string; pkg?: string } {
   return d;
 }
 
-// The leaf button's label ink on the banner (RENEWAL3 .rbn .lbtn #142019); no token yet (src/theme belongs to another lane).
-const LEAF_INK = '#142019';
-
 function Choices({ r, onOwn, onHouse, banner }: { r: Ended; onOwn: () => void; onHouse: (c: RenewalCoach, from: RenewalCoach | null) => void; banner?: boolean }) {
   const house = r.houseCoach && r.houseCoach.id !== r.coach?.id ? r.houseCoach : null;
   const v = banner ? b : s; // the banner's own sizes (RENEWAL3 .rbn .lbtn / .dbtn2); the pop-up's (.modal) in s
   return (<>
     {r.coach ? (
       <HapticPressable intent="medium" style={[v.btn, v.leaf]} onPress={onOwn} accessibilityRole="button" testID="renewal-own-coach">
-        <Text style={[v.btnText, { color: banner ? LEAF_INK : fp.ink }]}>{RENEWAL_COPY.ownCoach(r.coach.firstName)}</Text>
+        <Text style={[v.btnText, { color: banner ? renewalTone.leafInk : fp.ink }]}>{RENEWAL_COPY.ownCoach(r.coach.firstName)}</Text>
       </HapticPressable>
     ) : null}
     {house ? (
