@@ -213,17 +213,17 @@ describe('a closed coaching chat leaves Community Home and the drawer', () => {
   const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
   const COACH_CHAT = ['messaging', 'coach-chat-closed'];
   beforeEach(() => appClient.clear());
-  afterEach(async () => {
+  afterEach(() => {
     mockCoachClosed = false;
-    await useBlockedUsersStore.getState().unblock?.('coach-1');
     useBlockedUsersStore.setState({ blocked: [] });
     appClient.clear();
   });
   const gone = () => {
     expect(screen.queryByTestId('space-row-coach')).toBeNull();
     expect(screen.queryByTestId('space-row-coach-badge')).toBeNull();
-    expect(screen.queryByText(/Sam|Your coach|3 new/)).toBeNull();
-    expect(screen.queryByLabelText(/Sam|Your coach/)).toBeNull();
+    expect(screen.queryByText('Sam')).toBeNull(); // the coach's name ("Sam's Strength Club" is the space, not the coach)
+    expect(screen.queryByText(/Your coach|new$/)).toBeNull();
+    expect(screen.queryByLabelText(/Your coach/)).toBeNull();
   };
 
   it('the coach blocked me: no coach row on Home (never shown first); a read that says open brings it back', async () => {
