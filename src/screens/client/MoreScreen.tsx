@@ -13,7 +13,7 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
-import { spacing as Spacing, typography, SemanticTokens } from '../../theme/tokens';
+import { spacing as Spacing, typography, SemanticTokens, radius as Radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { featureFlags } from '../../config/featureFlags';
@@ -444,14 +444,14 @@ const makeStyles = (colors: SemanticTokens) =>
     paddingVertical: 11,
     paddingHorizontal: 16,
     marginVertical: 4,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderBottomWidth: 0,
     backgroundColor: NEW_ROW.bg,
   },
   iconNew: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
