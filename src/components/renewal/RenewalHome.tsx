@@ -51,7 +51,8 @@ function useDetails(on: boolean): { name?: string; pkg?: string } {
 // 1.5 pt line and the leaf button's label ink. Banner only; the pop-up (M1-M4) keeps today's look.
 const SHADE = { deep2: '#26402F', line: '#4A6553', leafInk: '#142019' } as const;
 
-/** Banner monogram (RENEWAL3 .cms): a 40 pt deep-2 disc, a 2 pt deep gap, then a 1.5 pt gold ring; 47 pt outside. */
+/** Banner monogram (RENEWAL3 .cms): a 40 pt deep-2 disc, a 2 pt deep gap, then a 1.5 pt gold ring; 47 pt painted.
+ *  The ring is painted outside the disc's layout box (margin -3.5), as the frame's box-shadow ring: the row lays out 40. */
 function BannerMonogram({ name }: { name: string }): React.ReactElement {
   const initials = name.trim().split(/\s+/).map((w) => w.charAt(0)).join('').slice(0, 2).toUpperCase();
   return (
@@ -174,7 +175,7 @@ const s = StyleSheet.create({
 // The banner (RENEWAL3 r3.py .rbn/.cms/.rbt/.rbs; buttons .rbn .lbtn and .rbn .dbtn2): its own sizes, not the pop-up's.
 const b = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  ring: { width: 47, height: 47, borderRadius: 23.5, borderWidth: 1.5, borderColor: fp.gold, backgroundColor: fp.deep, alignItems: 'center', justifyContent: 'center' },
+  ring: { width: 47, height: 47, borderRadius: 23.5, borderWidth: 1.5, borderColor: fp.gold, backgroundColor: fp.deep, alignItems: 'center', justifyContent: 'center', margin: -3.5 },
   disc: { width: 40, height: 40, borderRadius: 20, backgroundColor: SHADE.deep2, alignItems: 'center', justifyContent: 'center' },
   initials: { fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', fontSize: 16, lineHeight: 20, color: fp.gold },
   title: { ...typography.h1, fontSize: 26, lineHeight: 32, letterSpacing: 0, color: neutral[0] },

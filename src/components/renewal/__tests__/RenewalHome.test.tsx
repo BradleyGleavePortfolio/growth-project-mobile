@@ -105,7 +105,12 @@ it("banner (RENEWAL3 B1-B2) has its own sizes and the pop-up keeps its own; the 
   await s.rerender(<RenewalHome style={{ marginTop: 7, marginBottom: 0 }} />);
   const st = (e: { props: { style?: unknown } }) => StyleSheet.flatten(e.props.style as never) as Record<string, unknown>;
   expect(st(s.getByTestId('renewal-banner'))).toMatchObject({ marginTop: 7, marginBottom: 0, padding: 16, borderRadius: 16 });
-  expect(st(s.getByTestId('renewal-banner-monogram', { includeHiddenElements: true }))).toMatchObject({ width: 47, height: 47, borderWidth: 1.5 });
+  const ring = st(s.getByTestId('renewal-banner-monogram', { includeHiddenElements: true }));
+  expect(ring).toMatchObject({ width: 47, height: 47, borderWidth: 1.5, margin: -3.5 });
+  // the ring is painted outside the 40 pt disc and lays out 40, so the text starts 16 + 40 + 12 = 68 in (r3.py .rbn, .cms, gap)
+  const head = st(s.getByTestId('renewal-banner').props.children[0]);
+  expect(head).toMatchObject({ flexDirection: 'row', alignItems: 'center', gap: 12 });
+  expect(Number(st(s.getByTestId('renewal-banner')).padding) + Number(ring.width) + 2 * Number(ring.margin) + Number(head.gap)).toBe(68);
   expect(st(s.getByText('Renew now'))).toMatchObject({ fontSize: 26, lineHeight: 32, letterSpacing: 0, color: '#FFFFFF' });
   const [bannerOwn, popupOwn] = s.getAllByTestId('renewal-own-coach').map(st);
   const [bannerHouse, popupHouse] = s.getAllByTestId('renewal-house-coach').map(st);
