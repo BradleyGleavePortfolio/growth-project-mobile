@@ -18,7 +18,7 @@ import { formatCount } from '../../../components/home/rings/homeRings';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
-import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './HomeParts';
+import { AlertsRow, DayRing, EYEBROW, LinkRow, MiniTile, SEMI, styleA, useCardStyles } from './HomeParts';
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
 import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
@@ -290,11 +290,11 @@ export default function CoachHomeV11(p: Props) {
               onPress={tap(p.onOpenNotifications)} hitSlop={8} style={s.icon} testID="home-bell"
               accessibilityRole="button" accessibilityLabel={bell > 0 ? `Notifications, ${bell > 99 ? '99+' : bell} unread` : 'Notifications'}
             >
-              <Ionicons name="notifications-outline" size={26} color={forestPop.onDeep} />
+              <Ionicons name="notifications-outline" size={26} color={styleA.onDeep} />
               {bell > 0 ? <View style={s.bellBadge}><Text style={s.bellBadgeText} maxFontSizeMultiplier={1.2}>{bell > 99 ? '99+' : bell}</Text></View> : null}
             </Pressable>
             <Pressable onPress={tap(p.onOpenSettings)} hitSlop={8} style={s.icon} accessibilityRole="button" accessibilityLabel="Settings" testID="home-gear">
-              <Ionicons name="settings-outline" size={26} color={forestPop.onDeep} />
+              <Ionicons name="settings-outline" size={26} color={styleA.onDeep} />
             </Pressable>
           </View>
           {/* The checklist hides itself once setup is done. */}
@@ -332,24 +332,24 @@ const s = StyleSheet.create({
   fill: { flex: 1 },
   hero: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 12, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, gap: 6 },
   topRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 },
-  date: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, flex: 1 },
+  date: { ...EYEBROW, color: forestPop.onDeepMuted, flex: 1 },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   bellBadge: { position: 'absolute', top: -2, right: -10, minWidth: 22, height: 22, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
   bellBadgeText: { ...typography.caption, fontSize: 12, lineHeight: 15, letterSpacing: 0, fontFamily: SEMI, color: forestPop.deep },
   heroBlock: { gap: 0 },
   heroLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  heroValue: { fontFamily: SEMI, fontSize: 48, lineHeight: 56, letterSpacing: -1, color: forestPop.onDeep },
-  heroUnit: { ...typography.body, fontSize: 20, lineHeight: 26, color: forestPop.onDeep, flexShrink: 1 },
-  heroRight: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, marginLeft: 'auto' },
-  bar: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.forest, overflow: 'hidden' },
+  heroValue: { fontFamily: SEMI, fontSize: 48, lineHeight: 56, letterSpacing: -1, color: styleA.figure },
+  heroUnit: { ...typography.body, fontSize: 20, lineHeight: 26, color: forestPop.onDeepMuted, flexShrink: 1 },
+  heroRight: { ...EYEBROW, color: forestPop.onDeepMuted, marginLeft: 'auto' },
+  bar: { height: 8, borderRadius: radius.chip, backgroundColor: styleA.track, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.leaf },
-  winText: { ...typography.body, color: forestPop.onDeep },
-  onDeep: { ...typography.body, color: forestPop.onDeep },
+  winText: { ...typography.body, color: styleA.onDeep },
+  onDeep: { ...typography.body, color: styleA.onDeep },
   onDeepMuted: { ...typography.bodySmall, color: forestPop.onDeepMuted },
-  retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: forestPop.brand400 },
-  retryText: { ...typography.bodyMd, color: forestPop.onDeep },
+  retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: styleA.line },
+  retryText: { ...typography.bodyMd, color: styleA.onDeep },
   tiles: { flexDirection: 'row', gap: 10 },
-  dayLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.gold, marginBottom: 2 },
+  dayLabel: { ...EYEBROW, color: forestPop.gold, marginBottom: 2 },
   rings: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 2 },
   page: { paddingHorizontal: layout.gutter, paddingTop: 10, gap: 10 },
   grow: { flex: 1, minWidth: 0 },
