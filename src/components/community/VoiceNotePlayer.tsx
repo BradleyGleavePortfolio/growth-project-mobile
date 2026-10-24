@@ -244,7 +244,7 @@ export default function VoiceNotePlayer({
         styles.row,
         tone === 'bare'
           ? styles.bare
-          : { backgroundColor: deep ? fp.deep : neutral[0], borderColor: deep ? fp.deep : voiceShades.hairline },
+          : [styles.card, { backgroundColor: deep ? fp.deep : neutral[0], borderColor: deep ? fp.deep : voiceShades.hairline }],
       ]}
       testID={testID ?? 'voice-player'}
     >
@@ -326,6 +326,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     borderWidth: 1,
   },
+  // GOAL .bcard box-shadow 0 2px 8px rgba(26,26,24,.05)
+  card: { shadowColor: fp.ink, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, shadowOpacity: 0.05, elevation: 1 },
   bare: { padding: 0, borderWidth: 0 },
   control: {
     width: 52,

@@ -262,7 +262,7 @@ function OutboxRow({ item, onRetry, onDiscard, testID }: {
                   style={styles.retry}
                 >
                   <Ionicons name="refresh" size={18} color={fp.onDeep} />
-                  <Text style={[styles.recordLabel, { color: fp.onDeep }]}>Try again</Text>
+                  <Text style={[styles.recordLabel, styles.retryLabel, { color: fp.onDeep }]}>Try again</Text>
                 </HapticPressable>
                 <HapticPressable
                   intent="light"
@@ -313,6 +313,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   recordLabel: { fontSize: 14, fontWeight: '600' },
+  retryLabel: { fontSize: 15 }, // GOAL .btn.sm 0.9375rem
   state: { gap: spacing.sm, alignItems: 'flex-start' },
   muted: { fontSize: 14, lineHeight: 20 },
   note: { gap: spacing.sm },

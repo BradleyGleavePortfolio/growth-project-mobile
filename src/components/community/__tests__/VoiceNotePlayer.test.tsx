@@ -359,6 +359,8 @@ describe('VoiceNotePlayer — GOAL geometry (FR-848R4)', () => {
     expect(strip.props.children[0]).toHaveLength(48);
     const duration = getByTestId('voice-player-duration', { includeHiddenElements: true });
     expect(StyleSheet.flatten(duration.props.style)).toMatchObject({ fontSize: 14, fontWeight: '600' });
+    // GOAL .bcard: the card's subtle shadow (0 2px 8px at 5%).
+    expect(StyleSheet.flatten(getByTestId('voice-player').props.style)).toMatchObject({ shadowOpacity: 0.05, shadowRadius: 4 });
   });
 
   it('the review sheet (bare) shows a playhead and no duration under the bars', async () => {
