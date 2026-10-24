@@ -72,6 +72,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
     queryKey: ['community', 'voice-note', voiceNoteId],
     queryFn: () => communityVoiceApi.getOne(voiceNoteId),
     enabled: !!voiceNoteId && featureFlags.communitySearch && runtimeEnabled,
+    meta: { persist: false }, // like the feed: never saved to the phone, so a restart cannot replay a banned author's note
   });
 
   // Announce the surface once metadata loads so a screen-reader user gets a
@@ -216,6 +217,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
         <VoiceNotePlayer
           url={data.url}
           durationMs={data.duration_ms}
+          peaks={data.waveform_peaks ?? []}
           onPlaybackError={() => void note.refetch()}
           testID="community-voice-detail-player"
         />

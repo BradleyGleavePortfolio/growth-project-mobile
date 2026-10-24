@@ -336,3 +336,31 @@ describe('VoiceNotePlayer — seek (B-LS848-3)', () => {
     }
   });
 });
+
+// LS-848 B4: the GOAL geometry — a 52 pt disc and a 48-bar, 34-high strip on the card; the review
+// sheet (tone bare) draws 44-high bars with a playhead and no second duration under them.
+describe('VoiceNotePlayer — GOAL geometry (FR-848R4)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  it('the feed card has a 52 pt disc, 48 bars 34 high and the duration under the bars', async () => {
+    const { getByTestId, getAllByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9, 0.4]} playback={makePlayback(true)} />,
+    );
+    const disc = StyleSheet.flatten(getByTestId('voice-player-toggle').props.style);
+    expect([disc.width, disc.height]).toEqual([52, 52]);
+    const strip = getAllByTestId('voice-waveform', { includeHiddenElements: true })[0];
+    expect(StyleSheet.flatten(strip.props.style)).toMatchObject({ height: 34, gap: 2 });
+    expect(strip.props.children[0]).toHaveLength(48);
+    const duration = getByTestId('voice-player-duration', { includeHiddenElements: true });
+    expect(StyleSheet.flatten(duration.props.style)).toMatchObject({ fontSize: 14, fontWeight: '600' });
+  });
+
+  it('the review sheet (bare) shows a playhead and no duration under the bars', async () => {
+    const { queryByTestId, getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} tone="bare" playback={makePlayback(true)} />,
+    );
+    expect(getByTestId('voice-waveform-playhead', { includeHiddenElements: true })).toBeTruthy();
+    expect(queryByTestId('voice-player-duration', { includeHiddenElements: true })).toBeNull();
+    const strip = getByTestId('voice-waveform', { includeHiddenElements: true });
+    expect(StyleSheet.flatten(strip.props.style)).toMatchObject({ height: 44, gap: 3 });
+  });
+});

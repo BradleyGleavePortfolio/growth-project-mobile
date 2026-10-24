@@ -40,6 +40,10 @@ export interface VoiceNoteWaveformProps {
   height?: number;
   /** Ground the strip sits on (Style B). */
   tone?: VoiceWaveTone;
+  /** Space between bars (GOAL: 2 on the feed card, 3 in the review sheet). */
+  gap?: number;
+  /** Draw the review sheet's 2 pt ink playhead at `progress` (GOAL 02 .bscrub .ph). */
+  playhead?: boolean;
   testID?: string;
 }
 
@@ -53,6 +57,8 @@ export default function VoiceNoteWaveform({
   barCount = DEFAULT_BARS,
   height = DEFAULT_HEIGHT,
   tone = 'light',
+  gap = 3,
+  playhead = false,
   testID,
 }: VoiceNoteWaveformProps): React.ReactElement {
   const t = TONES[tone];
@@ -65,7 +71,7 @@ export default function VoiceNoteWaveform({
 
   return (
     <View
-      style={[styles.row, { height }]}
+      style={[styles.row, { height, gap }]}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       testID={testID ?? 'voice-waveform'}
@@ -87,6 +93,9 @@ export default function VoiceNoteWaveform({
           />
         );
       })}
+      {playhead ? (
+        <View testID="voice-waveform-playhead" style={[styles.playhead, { left: `${clampedProgress * 100}%` }]} />
+      ) : null}
     </View>
   );
 }
@@ -105,4 +114,5 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     borderWidth: 1,
   },
+  playhead: { position: 'absolute', top: -4, bottom: -4, width: 2, marginLeft: -1, borderRadius: 1, backgroundColor: fp.ink },
 });

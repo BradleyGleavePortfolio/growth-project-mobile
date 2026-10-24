@@ -258,7 +258,7 @@ export default function VoiceNotePlayer({
         testID="voice-player-toggle"
         style={[styles.control, { backgroundColor: discBg }]}
       >
-        <Ionicons name={iconName} size={24} color={discFg} />
+        <Ionicons name={iconName} size={22} color={discFg} />
       </HapticPressable>
 
       <View style={styles.middle}>
@@ -277,9 +277,11 @@ export default function VoiceNotePlayer({
           style={styles.seek}
           testID="voice-player-seek"
         >
-          <VoiceNoteWaveform peaks={peaks} progress={progress} height={40} tone={deep ? 'deep' : 'light'} />
+          {/* GOAL: the card strip is 48 thin bars, 34 high, 2 apart; the review sheet 44 high, 3 apart, with a playhead. */}
+          <VoiceNoteWaveform peaks={peaks} progress={progress} tone={deep ? 'deep' : 'light'}
+            {...(tone === 'bare' ? { height: 44, barCount: 40, gap: 3, playhead: true } : { height: 34, barCount: 48, gap: 2 })} />
         </Pressable>
-        <View style={styles.meta}>
+        {tone === 'bare' ? null : <View style={styles.meta}>
           <Text
             style={[styles.duration, { color: ink }]}
             accessibilityElementsHidden
@@ -288,7 +290,7 @@ export default function VoiceNotePlayer({
             {time}
           </Text>
           {trailing}
-        </View>
+        </View>}
       </View>
 
       {state === 'error' ? (
@@ -306,31 +308,35 @@ export default function VoiceNotePlayer({
 }
 
 const styles = StyleSheet.create({
+  // GOAL .bcard: padding 10 10 8 12, a 1 pt hairline, radius 16.
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.md,
+    paddingTop: 10,
+    paddingRight: 10,
+    paddingBottom: spacing.sm,
+    paddingLeft: spacing.md,
     borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
   bare: { padding: 0, borderWidth: 0 },
   control: {
-    width: 64,
-    height: 64,
+    width: 52,
+    height: 52,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  middle: { flex: 1, gap: spacing.xs },
+  middle: { flex: 1, gap: 6 },
   seek: { minHeight: 44, flexDirection: 'row', alignItems: 'center', pointerEvents: 'box-only' },
-  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 },
-  duration: { fontSize: 17, lineHeight: 22, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 24 },
+  duration: { fontSize: 14, lineHeight: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
   retry: {
     width: '100%',
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
   },
   full: { width: '100%' },
 });
