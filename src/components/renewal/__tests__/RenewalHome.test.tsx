@@ -32,6 +32,7 @@ jest.mock('../../PackageSelectionSheet', () => (p: { skipSnoozeCheck?: boolean; 
   jest.requireActual('react').createElement(jest.requireActual('react-native').Pressable, { testID: `package-sheet-${p.skipSnoozeCheck}`, onPress: p.onPaymentSuccess }));
 
 const RenewalHome: typeof import('../RenewalHome').default = require('../RenewalHome').default;
+const { HouseJoined }: typeof import('../CoachMonogram') = require('../CoachMonogram');
 const COACH = { id: 'coach-1', first_name: 'Jordan' };
 const ended = (step: number | null, extra: Record<string, unknown> = {}) => readRenewal({ renewal: { state: 'ended',
   ended_at: '2026-10-21T10:00:00.000Z', popup_due: step !== null, popup_step: step, banner_due: true, coach: COACH,
@@ -173,11 +174,30 @@ it('m#860 FIX R2 (Sol B1): a house join still confirming at Continue settles on 
   authEvents.off('login', login);
 });
 
-it('m#860 FIX R2 (Sol B2): quiet fill on the second choice; the pop-up monogram 72 across, the banner one 47 (r3.py .cms)', async () => {
+it('m#860 FIX R2 (Sol B2) + R3 (Sol B1): quiet fill on the second choice; each ring painted outside the disc and taking no room', async () => {
   const s = await open(ended(0));
   for (const b of s.getAllByTestId('renewal-house-coach')) {
     expect(StyleSheet.flatten(b.props.style)).toMatchObject({ backgroundColor: '#26402F', borderWidth: 1.5, borderColor: '#4A6553' });
   }
-  const widths = s.getAllByTestId('coach-monogram', { includeHiddenElements: true }).map((m) => StyleSheet.flatten(m.props.style).width);
-  expect(widths.sort()).toEqual([47, 72]);
+  // painted: 72 (r2b.py .cm 64 + 2 gap + 2 ring) and 47 (r3.py .cms 40 + 2 + 1.5); laid out: the disc only, 64 and 40
+  const rings = s.getAllByTestId('coach-monogram', { includeHiddenElements: true }).map((m) => StyleSheet.flatten(m.props.style));
+  expect(rings.map((r) => [r.width, r.height, r.margin]).sort()).toEqual([[47, 47, -3.5], [72, 72, -4]]);
+  expect(rings.map((r) => Number(r.width) + 2 * Number(r.margin)).sort()).toEqual([40, 64]);
+  // the pop-up's disc sits 6 below the card's 28 (.cm margin 6px auto 0), so its ring starts 30 down, as in the frame
+  const pop = s.getByTestId('renewal-popup');
+  expect(StyleSheet.flatten(pop.props.style).paddingTop).toBe(28);
+  expect(StyleSheet.flatten(pop.props.children[0].props.style)).toEqual({ marginTop: 6 });
+  // the banner's text starts 16 + 40 + 12 = 68 in from the card edge (r3.py .rbn padding 16, .cms 40, gap 12)
+  const banner = s.getByTestId('renewal-banner');
+  expect(StyleSheet.flatten(banner.props.style).padding).toBe(16);
+  expect(StyleSheet.flatten(banner.props.children[0].props.style)).toMatchObject({ flexDirection: 'row', gap: 12 });
+});
+
+it('m#860 FIX R3 (Sol B1, Opus C2): H3, his row is 12 + 40 + 12 tall and its text 14 + 40 + 12 in, as r3.py .nowc', async () => {
+  const s = await render(<HouseJoined name="Bradley Gleave" title="You're all set" body="Body." onContinue={() => undefined} />);
+  const row = s.getByTestId('payment-new-coach');
+  expect(StyleSheet.flatten(row.props.style)).toMatchObject({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14 });
+  const ring = StyleSheet.flatten(s.getByTestId('coach-monogram', { includeHiddenElements: true }).props.style);
+  expect(ring).toMatchObject({ width: 47, height: 47, borderWidth: 1.5, margin: -3.5 });
+  expect(Number(ring.width) + 2 * Number(ring.margin)).toBe(40);
 });

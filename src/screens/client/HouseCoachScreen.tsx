@@ -78,7 +78,7 @@ export default function HouseCoachScreen({ route, navigation }: Props): React.Re
                       <Text style={s.pkg}>{p.name}</Text>
                       <Text style={s.price}>{priceLabel(p)}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color={fp.n700} />
+                    <Ionicons name="chevron-forward" size={20} color={renewalTone.mute} />
                   </HapticPressable>
                 ))}
               </>

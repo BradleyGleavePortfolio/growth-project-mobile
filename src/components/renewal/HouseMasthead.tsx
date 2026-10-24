@@ -35,9 +35,13 @@ export function HouseMasthead({ eyebrow, title, monogram, onBack, children }: Pr
   );
 }
 
-/** The one filled action of a house path page, pinned under the scroll (Forest Pop: forest is the filled action). */
+/**
+ * The one filled action of a house path page, pinned under the scroll (Forest Pop: forest is the filled action). The
+ * pages sit above the client tab bar, whose height already holds the bottom inset (ClientNavigator tabBarStyle, 64 plus
+ * the inset), so the foot adds no inset of its own (m#860 FIX R3, Opus C4).
+ */
 export const houseFoot = StyleSheet.create({
-  foot: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
+  foot: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
   primary: { minHeight: 52, borderRadius: radius.button, backgroundColor: fp.forest, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16 },
   primaryText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 16, lineHeight: 21, color: fp.onDeep, textAlign: 'center' },
   card: { backgroundColor: renewalTone.white, borderColor: fp.sageLine, borderWidth: 1, borderRadius: radius.card, marginHorizontal: 20, marginTop: 24, paddingHorizontal: 16 },

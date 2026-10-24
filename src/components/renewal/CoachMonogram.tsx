@@ -16,18 +16,21 @@ import { HapticService } from '../../ui/haptics/haptics.service';
  * yet (src/theme is the GREY-TEXT lane's this wave), so they live here once. graphite is #168-13's small grey text on
  * light (owner: "use a nice dark grey like #2c2c2c"), colors.graphite once m#875 merges.
  */
-export const renewalTone = { quiet: '#26402F', quietLine: '#4A6553', white: '#FFFFFF', graphite: '#2C2C2C' } as const;
+export const renewalTone = { quiet: '#26402F', quietLine: '#4A6553', white: '#FFFFFF', graphite: '#2C2C2C', mute: '#4F5D54' } as const;
 
 /**
  * The coach's monogram: initials in Cormorant on a quiet fill, a deep gap, then the gold ring outside (r2b.py .cm: 64
- * plus a 2 pt gap and a 2 pt ring, 72 across; r3.py .cms: 40 plus 2 and 1.5, 47 across).
+ * plus a 2 pt gap and a 2 pt ring, 72 across; r3.py .cms: 40 plus 2 and 1.5, 47 across). The frames paint the gap and
+ * ring as box-shadow, so they take no room: the layout box is the disc (64 or 40) and the ring is drawn outside it by
+ * a negative margin (m#860 FIX R3, Sol B1 / Opus C1, C2), and every place lines up as the frame does.
  */
 export function Monogram({ name, size = 64, ring = 2 }: { name: string; size?: number; ring?: number }): React.ReactElement {
   const initials = name.trim().split(/\s+/).map((w) => w.charAt(0)).join('').slice(0, 2).toUpperCase();
   const outer = size + 4 + ring * 2;
+  const bleed = -(2 + ring); // painted outside the disc's layout box
   const font = size >= 64 ? 24 : Math.round(size * 0.4);
   return (
-    <View style={[s.ring, { width: outer, height: outer, borderRadius: outer / 2, borderWidth: ring }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden testID="coach-monogram">
+    <View style={[s.ring, { width: outer, height: outer, borderRadius: outer / 2, borderWidth: ring, margin: bleed }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden testID="coach-monogram">
       <View style={[s.mono, { width: size, height: size, borderRadius: size / 2 }]}>
         <Text style={[s.monoText, { fontSize: font, lineHeight: Math.round(font * 1.25) }]} maxFontSizeMultiplier={1}>{initials}</Text>
       </View>

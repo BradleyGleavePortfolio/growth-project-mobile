@@ -39,16 +39,20 @@ it('H1 (W-168-HC): his full name and monogram, then Includes (HC-2 to HC-7), the
   expect(s.getByText('Includes').props.accessibilityRole).toBe('header');
 });
 
-it('m#860 FIX R2 (Opus B1, B2; Sol B2): the frame\'s gold ring outside a deep gap, 72 across; the eyebrow and status bar on deep', async () => {
+it('m#860 FIX R2 (Opus B1, B2; Sol B2) + R3 (Sol B1, Opus C1): the gold ring outside a deep gap, 72 painted, 64 laid out; the eyebrow and status bar on deep', async () => {
   const s = await mount();
   await s.findByTestId('house-package-h-1');
   const ring = StyleSheet.flatten(s.getByTestId('coach-monogram', { includeHiddenElements: true }).props.style);
-  expect(ring).toMatchObject({ width: 72, height: 72, borderWidth: 2, borderColor: fp.gold, backgroundColor: fp.deep });
+  expect(ring).toMatchObject({ width: 72, height: 72, borderWidth: 2, borderColor: fp.gold, backgroundColor: fp.deep, margin: -4 });
+  expect(Number(ring.width) + 2 * Number(ring.margin)).toBe(64); // the masthead counts the 64 disc, as r2b.py .cm does
   const fill = StyleSheet.flatten(s.getByTestId('coach-monogram', { includeHiddenElements: true }).props.children.props.style);
   expect(fill).toMatchObject({ width: 64, height: 64, backgroundColor: '#26402F' });
   expect(fill.borderWidth).toBeUndefined();
   expect(StyleSheet.flatten(s.getByText("TGP's Top Rated Coach").props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 11, lineHeight: 14, letterSpacing: 1.6 });
   expect(mockBand).toHaveBeenCalledWith(fp.deep);
+  const drawn = JSON.stringify(s.toJSON()); // the package chevrons in r3.py .mut, not the old grey (Sol C1)
+  expect(drawn.match(/"fontSize":20,"color":"#4F5D54"/g)).toHaveLength(2);
+  expect(drawn).not.toContain('#5A5A56');
 });
 
 it('a server without full_name (before backend #1142): the first name and monogram, as before', async () => {

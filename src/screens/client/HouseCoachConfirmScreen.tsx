@@ -8,7 +8,6 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../../components/HapticPressable';
 import { HouseMasthead, houseFoot } from '../../components/renewal/HouseMasthead';
 import type { HomeStackParamList } from '../../navigation/ClientNavigator';
@@ -28,7 +27,6 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'HouseCoachConfirm'>;
 
 export default function HouseCoachConfirmScreen({ route, navigation }: Props): React.ReactElement {
   const { coach, from } = route.params;
-  const bottom = useSafeAreaInsets().bottom;
   const points: [keyof typeof Ionicons.glyphMap, string][] = [
     ['person-outline', HOUSE_CONFIRM_COPY.oneCoach],
     ['eye-off-outline', HOUSE_CONFIRM_COPY.stops(from?.firstName ?? null)],
@@ -46,7 +44,7 @@ export default function HouseCoachConfirmScreen({ route, navigation }: Props): R
           ))}
         </View>
       </ScrollView>
-      <View style={[houseFoot.foot, { paddingBottom: bottom + 8 }]}>
+      <View style={houseFoot.foot} testID="house-confirm-foot">
         <HapticPressable intent="medium" style={houseFoot.primary} onPress={() => navigation.navigate('HouseCoach', { coach })} accessibilityRole="button" accessibilityLabel={HOUSE_CONFIRM_COPY.continue} testID="house-confirm-continue">
           <Text style={houseFoot.primaryText}>{HOUSE_CONFIRM_COPY.continue}</Text>
         </HapticPressable>

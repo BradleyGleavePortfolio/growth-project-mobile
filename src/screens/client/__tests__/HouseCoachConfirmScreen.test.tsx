@@ -1,9 +1,10 @@
 /** SWITCH-CONFIRM-M (owner #166-5): the one-coach confirm page in front of the house coach's packages. */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }) }));
 jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 const mockApi = { get: jest.fn(), post: jest.fn(), patch: jest.fn(), put: jest.fn(), delete: jest.fn() };
 jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi }));
@@ -48,4 +49,9 @@ it.each([['Not now', 'house-confirm-not-now'], ['Back', 'house-coach-back']])('%
   expect(nav.navigate).not.toHaveBeenCalled();
   for (const fn of Object.values(mockApi)) expect(fn).not.toHaveBeenCalled();
   expect(await AsyncStorage.getAllKeys()).toEqual([]);
+});
+
+it('m#860 FIX R3 (Opus C4): on a home-indicator iPhone (34 inset) the foot adds none; the tab bar under the page holds it', async () => {
+  const s = await mount(null);
+  expect(StyleSheet.flatten(s.getByTestId('house-confirm-foot').props.style)).toMatchObject({ paddingTop: 12, paddingBottom: 8 });
 });

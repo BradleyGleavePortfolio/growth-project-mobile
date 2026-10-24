@@ -1,11 +1,15 @@
 /** SWITCH-CONFIRM-M (owner #166-5): one house package, everything the server sends and its price; pay only from its button. */
 import React from 'react';
+import { Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readHousePackages, settleHouseJoin, type HousePackage } from '../../../lib/planRenewal';
 import { planTerms } from '../../../lib/planTerms';
 
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+let mockBottom = 0;
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: mockBottom, left: 0, right: 0 }) }));
+jest.mock('expo-status-bar', () => ({ StatusBar: ({ style }: { style: string }) =>
+  jest.requireActual('react').createElement(jest.requireActual('react-native').View, { testID: `status-bar-${style}` }) }));
 jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client-1', email: '', role: 'student', coach_id: 'old-1' }) }));
 const mockRefresh = jest.fn(async () => undefined);
@@ -159,4 +163,33 @@ it('a failed cache write still re-reads the account and goes Home', async () => 
   await act(async () => (mockSheet as SheetProps).onPaymentSuccess(true));
   expect(mockEmit).toHaveBeenCalledWith('login');
   expect(nav.popToTop).toHaveBeenCalledTimes(1);
+});
+
+it('m#860 FIX R3 (Opus C4): the foot adds no bottom inset; the tab bar under the page holds it', async () => {
+  mockBottom = 34;
+  try {
+    const s = await mount(ONE);
+    expect(StyleSheet.flatten(s.getByTestId('house-package-foot').props.style)).toMatchObject({ paddingTop: 12, paddingBottom: 8 });
+  } finally { mockBottom = 0; }
+});
+
+it('m#860 FIX R3 (Opus C5): on Android dark status icons go up before the light sheet opens and stay while it is up; iOS keeps its bar', async () => {
+  const realOS = Platform.OS;
+  const s = await mount(ONE);
+  await fireEvent.press(s.getByTestId('house-package-select'));
+  expect(s.getByTestId('package-sheet')).toBeTruthy();
+  expect(s.queryByTestId('status-bar-dark')).toBeNull();
+  await act(async () => (mockSheet as SheetProps).onDismiss());
+  s.unmount();
+  Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+  try {
+    const a = await mount(ONE);
+    expect(a.queryByTestId('status-bar-dark')).toBeNull();
+    await fireEvent.press(a.getByTestId('house-package-select'));
+    await waitFor(() => expect(a.getByTestId('status-bar-dark')).toBeTruthy());
+    await waitFor(() => expect(a.getByTestId('package-sheet')).toBeTruthy());
+    expect(a.getByTestId('status-bar-dark')).toBeTruthy(); // held while the sheet is up; it comes down with sheet 'off'
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => realOS });
+  }
 });

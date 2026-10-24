@@ -123,7 +123,7 @@ export default function RenewalHome(): React.ReactElement | null {
         <View style={[s.scrim, ANDROID && s.scrimAndroid]}>
           {popup ? (
             <View style={[s.card, ANDROID && s.cardAndroid]} accessibilityViewIsModal testID="renewal-popup">
-              <Monogram name={name} />
+              <View style={s.cm}><Monogram name={name} /></View>
               <Text style={s.coach}>{name}</Text>
               <Text style={s.title} accessibilityRole="header">{RENEWAL_COPY.title[popup.popupStep ?? 0]}</Text>
               {popup.coach ? <Text style={s.body}>{RENEWAL_COPY.body(popup.coach.firstName)}</Text> : null}
@@ -155,6 +155,7 @@ const s = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: lightTokens.overlay, justifyContent: 'center', padding: 20 }, scrimAndroid: { paddingHorizontal: 16 },
   card: { backgroundColor: fp.deep, borderRadius: radius.sheet, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 12, alignItems: 'stretch', ...shadows.lg },
   cardAndroid: { paddingHorizontal: 18, paddingTop: 24, paddingBottom: 10 },
+  cm: { marginTop: 6 }, // r2b.py .cm: 6 below the card's 28, the ring drawn 4 outside the 64 disc
   coach: { ...typography.bodyMd, fontSize: 14, lineHeight: 19, letterSpacing: 0.3, color: fp.gold, textAlign: 'center', marginTop: 12 },
   title: { ...typography.h1, letterSpacing: 0, color: renewalTone.white, textAlign: 'center', marginTop: 6 },
   body: { ...typography.body, lineHeight: 24, color: fp.onDeepMuted, textAlign: 'center', marginTop: 6 },

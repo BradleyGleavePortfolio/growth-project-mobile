@@ -4,10 +4,10 @@
  * RULING agent 166). Its one button opens #836's sheet unchanged with this package picked (H2); the sheet pays and shows
  * that he is now the client's coach (H3), the server moves the client after payment, and Home returns.
  */
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../../components/HapticPressable';
 import PackageSelectionSheet from '../../components/PackageSelectionSheet';
 import { renewalTone } from '../../components/renewal/CoachMonogram';
@@ -34,10 +34,19 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'HousePackage'>;
 
 export default function HousePackageScreen({ route, navigation }: Props): React.ReactElement {
   const { coach, pkg } = route.params;
-  const bottom = useSafeAreaInsets().bottom;
   const { refreshEntitlement } = useEntitlement();
   const userId = useCurrentUser()?.id;
-  const [sheet, setSheet] = useState(false);
+  // m#860 FIX R3 (Opus C5): on Android the sheet's window takes the status-bar icon colour of the page under it once, as
+  // it opens (react-native ReactModalHostView.updateSystemAppearance), and draws under the bar (SDK 56 edge-to-edge).
+  // This page's deep band sets light icons, which would sit on the light sheet (H2), so dark icons go up first and the
+  // sheet opens on the next frame. iOS keeps the page's bar above its page sheet.
+  const android = Platform.OS === 'android';
+  const [sheet, setSheet] = useState<'off' | 'icons' | 'open'>('off');
+  useEffect(() => {
+    if (sheet !== 'icons') return undefined;
+    const frame = requestAnimationFrame(() => setSheet('open'));
+    return () => cancelAnimationFrame(frame);
+  }, [sheet]);
   const terms = planTerms(pkg);
   const sections = ([
     [CLIENT_PLAN_COPY.billing, [terms.firstCharge, terms.renewal]],
@@ -49,7 +58,7 @@ export default function HousePackageScreen({ route, navigation }: Props): React.
   // as AddCoachCodeScreen does) after the cached coach changes. A slow or pending confirmation waits for the server:
   // it is noted, and Home moves the cached coach once the server names him (planRenewal settleHouseJoin, FIX R2 B1).
   const joined = (paid: boolean) => {
-    setSheet(false);
+    setSheet('off');
     if (paid) {
       void patchUserCache({ coach_id: coach.id })
         .catch((err: unknown) => logger.warn('HousePackage', 'user cache patch after joining failed', err))
@@ -78,13 +87,14 @@ export default function HousePackageScreen({ route, navigation }: Props): React.
           </View>
         ) : null}
       </ScrollView>
-      <View style={[houseFoot.foot, { paddingBottom: bottom + 8 }]}>
-        <HapticPressable intent="medium" style={houseFoot.primary} onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel={`${HOUSE_PACKAGE_COPY.select}, ${pkg.name}, ${terms.price}`} testID="house-package-select">
+      <View style={houseFoot.foot} testID="house-package-foot">
+        <HapticPressable intent="medium" style={houseFoot.primary} onPress={() => setSheet(android ? 'icons' : 'open')} accessibilityRole="button" accessibilityLabel={`${HOUSE_PACKAGE_COPY.select}, ${pkg.name}, ${terms.price}`} testID="house-package-select">
           <Text style={houseFoot.primaryText}>{HOUSE_PACKAGE_COPY.select}</Text>
         </HapticPressable>
       </View>
-      {sheet ? (
-        <PackageSelectionSheet visible skipSnoozeCheck house={{ id: coach.id, name }} initialPackageId={pkg.id} onDismiss={() => setSheet(false)} onPaymentSuccess={joined} />
+      {android && sheet !== 'off' ? <StatusBar style="dark" /> : null}
+      {sheet === 'open' ? (
+        <PackageSelectionSheet visible skipSnoozeCheck house={{ id: coach.id, name }} initialPackageId={pkg.id} onDismiss={() => setSheet('off')} onPaymentSuccess={joined} />
       ) : null}
     </View>
   );
