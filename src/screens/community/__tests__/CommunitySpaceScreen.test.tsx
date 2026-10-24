@@ -87,7 +87,8 @@ jest.mock('../../../hooks/useCommunity', () => ({
   isOptimisticId: (id: string) => id.startsWith('optimistic:'),
   usePosts: (workspaceId: string | null | undefined) => {
     mockUsePostsSpy(workspaceId);
-    return mockPosts;
+    // FX-872: the screen opens once the feed read answered on this visit.
+    return { ...mockPosts, isSuccess: !mockPosts.isLoading && !mockPosts.isError, isFetchedAfterMount: true, isStale: false };
   },
 }));
 
@@ -254,3 +255,34 @@ describe.each(['hall', 'cohort'] as const)(
     });
   },
 );
+
+// BLOCK-ALL-M (#168-4 op 1): banned from this space -> no posts, no New post, no box to type in, no Try again.
+describe('CommunitySpaceScreen banned from the space (BLOCK-ALL-M)', () => {
+  const withError = (error: unknown) => {
+    mockPosts.isError = true;
+    (mockPosts as PostsState & { error?: unknown }).error = error;
+  };
+  afterEach(() => { delete (mockPosts as PostsState & { error?: unknown }).error; });
+
+  it.each([
+    ['Hall posts read as not found after a ban', { code: 'community.post.not_found' }, 404],
+    ['cohort refused after a ban', { code: 'community.cohort.no_access' }, 403],
+  ])('%s: the closed line, and nothing to post or type', async (_label, data, status) => {
+    // usePosts rejects with the community API's CommunityApiError, which keeps the axios error as its cause.
+    const { CommunityApiError } = jest.requireActual('../../../api/apiCall');
+    withError(new CommunityApiError('unknown', status, 'community request failed', { isAxiosError: true, response: { status, data } }));
+    await render(<CommunitySpaceScreen embedded space="hall" workspaceId="ws-1" prerequisiteLoading={false} prerequisiteError={false} />);
+    expect(screen.getByTestId('community-space-closed-line')).toBeTruthy();
+    expect(screen.getByText('This conversation is closed')).toBeTruthy();
+    expect(screen.queryByTestId('community-space-new-post')).toBeNull();
+    expect(screen.queryByText('Be the first to post')).toBeNull();
+    expect(screen.queryByTestId('community-space-posts-retry')).toBeNull();
+  });
+
+  it('a load failure that is not a ban still offers Try again', async () => {
+    withError(new Error('Network Error'));
+    await render(<CommunitySpaceScreen embedded space="hall" workspaceId="ws-1" prerequisiteLoading={false} prerequisiteError={false} />);
+    expect(screen.getByTestId('community-space-posts-retry')).toBeTruthy();
+    expect(screen.queryByTestId('community-space-closed-line')).toBeNull();
+  });
+});
