@@ -1,0 +1,6 @@
+src/services/__tests__/voiceAudio.test.tsx
+src/services/__tests__/queryClient
+src/services/__tests__/persistedQueryCache
+src/navigation/__tests__/rootNavigatorPersistedCacheGate
+src/navigation/__tests__/communityVoiceFlagOff.test.ts
+src/__tests__/copyVoice.guard.test.ts
