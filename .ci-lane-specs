@@ -1,0 +1,3 @@
+src/services/__tests__/accountBinding.transport.test.ts
+src/hooks/__tests__/useCurrentUser.composition.test.tsx
+src/services/__tests__/voiceAudioMissingModule.test.tsx
