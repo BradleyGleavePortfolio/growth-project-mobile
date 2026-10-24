@@ -153,6 +153,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { typography } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCoachTeamStatus } from '../hooks/useCoachRoleType';
+import { useBlockedUsersStore } from '../store/blockedUsersStore';
 import { CoachTeamEntryContext } from './coachTeamEntry';
 
 // Match ClientNavigator: reclaim the tab button's 5 pt inset for one-line labels.
@@ -790,8 +791,9 @@ function TeamStackNavigator() {
   );
 }
 
-function useCoachUnreadPolling(): number {
+export function useCoachUnreadPolling(): number {
   const [total, setTotal] = useState(0);
+  const blocked = useBlockedUsersStore((st) => st.blocked); // FR-872 (Sol B4): a block or unblock reads the count again
   useEffect(() => {
     let mounted = true;
     const refresh = async () => {
@@ -815,7 +817,7 @@ function useCoachUnreadPolling(): number {
       clearInterval(id);
       sub.remove();
     };
-  }, []);
+  }, [blocked]);
   return total;
 }
 

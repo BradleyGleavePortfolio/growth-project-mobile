@@ -243,6 +243,23 @@ describe('CommunityThreadScreen closed (BLOCK-ALL-M)', () => {
     expect(view.queryByTestId('community-thread-retry')).toBeNull();
   });
 
+  it('FR-872 (Opus C3): shown, then a closed refetch hides the post words, reactions and the reply box', async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
+    });
+    const view = await render(<QueryClientProvider client={qc}><CommunityThreadScreen /></QueryClientProvider>);
+    await waitFor(() => expect(view.getByText('World')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId(`reaction-${E0}`)).toBeTruthy());
+    expect(view.getByTestId('community-thread-composer-field')).toBeTruthy();
+    mockApi.getPost.mockRejectedValue(notFound);
+    mockApi.listComments.mockRejectedValue(notFound);
+    await act(async () => { await qc.refetchQueries().catch(() => undefined); });
+    await waitFor(() => expect(view.getByTestId('community-thread-closed')).toBeTruthy());
+    expect(view.queryByText('World')).toBeNull();
+    expect(view.queryByTestId(`reaction-${E0}`)).toBeNull();
+    expect(view.queryByTestId('community-thread-composer-field')).toBeNull();
+  });
+
   it('a reply refused by a ban closes at once with no error box', async () => {
     mockApi.addComment.mockRejectedValue({ isAxiosError: true, response: { status: 403, data: { code: 'community.workspace.no_access' } } });
     const view = await renderThread();

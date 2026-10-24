@@ -310,6 +310,23 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByLabelText(/Message: from the coach/)).toBeNull();
   });
 
+  it('FR-872 (Opus C3): closed by the header with an empty thread shows no Start a conversation invite', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValue({ data: [], headers: { 'x-conversation-closed': 'blocked_by_them' } });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByText('Start a conversation with your coach')).toBeNull();
+  });
+
+  it('FR-872 (Opus C3) control: open with an empty thread shows the invite', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValue({ data: [], headers: {} });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByText('Start a conversation with your coach')).toBeTruthy();
+  });
+
   it('FX-872 (b#1141 CONTRACT 6370968268): the inbox is empty and the thread read carries x-conversation-closed: closed, no box', async () => {
     getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
     mockList.mockResolvedValueOnce({ data: [], headers: { 'x-conversation-closed': 'blocked_by_them' } });
