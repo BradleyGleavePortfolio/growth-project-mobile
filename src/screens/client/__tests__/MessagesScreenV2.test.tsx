@@ -366,6 +366,7 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
   });
 
   it('FR-872 (Sol B5): an edit sheet already open goes when the chat closes; nothing left to save', async () => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
     const u = await render(<MessagesScreen />);
     await fireEvent(await u.findByLabelText(/Message: answer/), 'longPress');
     await fireEvent.press(await waitFor(() => u.getByLabelText('Edit')));

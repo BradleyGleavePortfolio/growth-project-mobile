@@ -318,10 +318,9 @@ describe('Composer — submit wiring', () => {
     };
     try {
       mockRouteParams.current = { mode: 'post' };
-      const { getByTestId } = await render(<CommunityComposerScreen />);
-      await fireEvent.changeText(getByTestId('community-composer-title'), 'My title');
-      await fireEvent.changeText(getByTestId('community-composer-body'), 'My body');
-      await fireEvent.press(getByTestId('community-composer-submit'));
+      const { getByTestId, queryByTestId } = await render(<CommunityComposerScreen />);
+      expect(queryByTestId('community-composer-title')).toBeNull(); // FR-872 (Sol B3): no space, nothing to type
+      expect(queryByTestId('community-composer-submit')).toBeNull();
       expect(mockMutate).not.toHaveBeenCalled();
       expect(getByTestId('community-composer-no-workspace')).toBeTruthy();
     } finally {
