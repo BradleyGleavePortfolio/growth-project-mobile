@@ -1,0 +1,4 @@
+src/__tests__/rootNavigatorPersistedCacheGate.test.tsx
+src/services/__tests__/api.authRefresh.test.ts
+src/services/__tests__/accountBinding.test.ts
+src/hooks/__tests__/useCurrentUser.test.tsx
