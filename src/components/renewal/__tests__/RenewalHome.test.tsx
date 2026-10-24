@@ -187,6 +187,8 @@ it('m#860 FIX R2 (Sol B2) + R3 (Sol B1): quiet fill on the second choice; each r
   const pop = s.getByTestId('renewal-popup');
   expect(StyleSheet.flatten(pop.props.style).paddingTop).toBe(28);
   expect(StyleSheet.flatten(pop.props.children[0].props.style)).toEqual({ marginTop: 6 });
+  // r2b.py .dbd is 16/24 with no tracking, so at 390 pt the line wraps as in M1 (the card is 469 tall, not 445)
+  expect(StyleSheet.flatten(s.getByText('Pick a plan to keep working with Jordan.').props.style)).toMatchObject({ fontSize: 16, lineHeight: 24, letterSpacing: 0 });
   // the banner's text starts 16 + 40 + 12 = 68 in from the card edge (r3.py .rbn padding 16, .cms 40, gap 12)
   const banner = s.getByTestId('renewal-banner');
   expect(StyleSheet.flatten(banner.props.style).padding).toBe(16);
