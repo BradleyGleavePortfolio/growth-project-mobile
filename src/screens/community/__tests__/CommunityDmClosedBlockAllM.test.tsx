@@ -86,6 +86,16 @@ describe('community DM', () => {
     return render(<CommunityDmThreadScreen />);
   };
 
+  it('FR-872 (Opus C2): a DM read that is out or failed says so, with Try again on a failure; no box either way', async () => {
+    mockReadPending = true;
+    expect((await open()).getByText('Loading messages…')).toBeTruthy();
+    mockReadPending = false;
+    mockReadError = new Error('Network Error');
+    const view = await open();
+    expect(view.getByTestId('community-dmthread-retry')).toBeTruthy();
+    expect(view.queryByTestId(FIELD)).toBeNull();
+  });
+
   it('open: the message box is there and the closed line is not', async () => {
     const view = await open();
     expect(view.getByTestId(FIELD)).toBeTruthy();
@@ -179,6 +189,14 @@ describe('New message / New post composer', () => {
     const view = await render(<CommunityComposerScreen />);
     expect(view.queryByTestId('community-composer-body')).toBeNull();
     expect(view.queryByTestId('community-composer-submit')).toBeNull();
+  });
+
+  it('FR-872 (Opus C2): New message with a failed read offers Try again, and no fields', async () => {
+    mockParams.current = { mode: 'dm', recipientId: 'member-2' };
+    mockReadError = new Error('Network Error');
+    const view = await render(<CommunityComposerScreen />);
+    expect(view.getByTestId('community-composer-retry')).toBeTruthy();
+    expect(view.queryByTestId('community-composer-body')).toBeNull();
   });
 
   it.each(['post', 'dm'])('FR-872 (Sol B3): %s, the membership goes after the read answered: the fields go too', async (mode) => {

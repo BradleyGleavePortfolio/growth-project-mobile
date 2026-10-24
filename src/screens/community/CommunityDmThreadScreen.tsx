@@ -16,10 +16,13 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Text,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
+import { typography } from '../../theme/tokens';
+import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   useDmMessages,
@@ -110,8 +113,20 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           ) : null}
         </View>
 
-        {closed || (isEmpty && !open) ? (
+        {closed ? (
           <View style={styles.flex} /> /* closed: no message text, no "Start the conversation" */
+        ) : messages.isLoading || (messages.isError && !open) ? ( /* FR-872 (Opus C2): never blank, never stuck */
+          <View style={styles.center} accessibilityState={{ busy: messages.isLoading }} testID="community-dmthread-state">
+            <Text style={[typography.bodySmall, styles.stateText, { color: semanticColors.textMuted }]}>
+              {messages.isLoading ? 'Loading messages…' : 'Messages did not load. Check your connection, then try again.'}
+            </Text>
+            {messages.isError ? <HapticPressable onPress={() => void messages.refetch()} accessibilityRole="button"
+              accessibilityLabel="Try again" testID="community-dmthread-retry" style={styles.retry}>
+              <Text style={[typography.bodySmall, styles.stateText, { color: semanticColors.accentText }]}>Try again</Text>
+            </HapticPressable> : null}
+          </View>
+        ) : isEmpty && !open ? (
+          <View style={styles.flex} />
         ) : isEmpty ? (
           <View style={styles.center}>
             <CommunityEmptyState
@@ -176,6 +191,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
   center: { flex: 1, justifyContent: 'center' },
+  stateText: { textAlign: 'center', paddingHorizontal: 24 },
+  retry: { minHeight: 44, justifyContent: 'center' },
   list: { paddingVertical: 8 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
   messageRow: { flexDirection: 'row', alignItems: 'center' },

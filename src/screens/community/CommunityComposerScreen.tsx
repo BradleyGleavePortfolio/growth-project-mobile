@@ -137,10 +137,11 @@ export default function CommunityComposerScreen(): React.ReactElement {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          {me.isLoading ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Loading community space…</Text> : null}
-          {me.isError ? <View>
+          {/* FR-872 (Opus C2): the read for this place counts too, so this is never a blank page with no way back */}
+          {me.isLoading || gateRead.isLoading ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Loading community space…</Text> : null}
+          {me.isError || (gateRead.isError && !open) ? <View>
             <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Community space did not load. Check your connection, then try again.</Text>
-            <HapticPressable onPress={() => void me.refetch()} accessibilityRole="button" accessibilityLabel="Try again"
+            <HapticPressable onPress={() => void (me.isError ? me.refetch() : gateRead.refetch())} accessibilityRole="button" accessibilityLabel="Try again"
               testID="community-composer-retry" style={styles.retry}>
               <Text style={[typography.bodySmall, { color: semanticColors.accentText }]}>Try again</Text>
             </HapticPressable>
