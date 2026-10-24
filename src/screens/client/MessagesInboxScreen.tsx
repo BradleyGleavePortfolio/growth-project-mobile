@@ -8,6 +8,9 @@
  * which states the safety exception in full. No coach: the coach card offers Join a coach and Contact support, the
  * Roman card says Roman works with a coach (with the app's crisis line), and the client's old Roman chats stay one tap
  * away. Each read fails on its own and only hides its part (the last good value stays); every card still opens.
+ * FR-880 (owner 10-23, "Dissapear"): while the coach chat is closed (I blocked my coach, or the server's inbox leaves
+ * the coach row out: it does while either person blocks) the coach card leaves the list, with no name and no unread;
+ * an unblock reads the list again and the card comes back.
  * Cards slide up 250 ms on the decel curve; with Reduce Motion they fade in 150 ms and nothing moves.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -31,12 +34,17 @@ import { Headline, Screen, ScreenTopBar } from '../../ui';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { colors as palette, gold, layout, motion, radius, typography } from '../../theme/tokens';
 
 interface CoachRow {
+  id: string | null;
   name: string | null;
   unread: number;
   preview: string | null;
+  /** The server's inbox left the coach row out or marked it closed (b#1141: it leaves it out while either person
+   * blocks; a coached client's open chat always has its row, even before the first message). */
+  gone: boolean;
 }
 
 /** The thread's last line, by CoachInboxV2's inboxPreview rules (the server already hides a blocked sender's). */
@@ -62,6 +70,7 @@ const ok = <T,>(r: PromiseSettledResult<T>) => (r.status === 'fulfilled' ? r.val
 /** Reads on focus and every 30 s while the list is open; a failed read keeps the last good value. */
 function useInbox(coached: boolean) {
   const v2 = useFeatureFlags().flags.messaging_core_v2;
+  const blocked = useBlockedUsersStore((st) => st.blocked); // a block or unblock reads the list again
   const [coach, setCoach] = useState<CoachRow | null>(null);
   const [left, setLeft] = useState<number | null>(null);
   useFocusEffect(useCallback(() => {
@@ -69,18 +78,21 @@ function useInbox(coached: boolean) {
     let live = true;
     const read = () => {
       void Promise.allSettled([
-        api.get<{ name?: unknown }>('/v1/clients/me/coach'),
+        api.get<{ id?: unknown; name?: unknown }>('/v1/clients/me/coach'),
         api.get<{ total?: unknown }>('/messages/unread-count'),
         v2 ? messagingV2Api.getClientInbox() : Promise.reject(new Error('messaging v2 off')),
       ]).then(([who, count, inbox]) => {
         if (!live) return;
         const name = ok(who)?.data?.name;
+        const id = ok(who)?.data?.id;
         const total = Number(ok(count)?.data?.total);
         const thread = ok(inbox);
         setCoach((prev) => ({
+          id: typeof id === 'string' && id ? id : (thread?.items[0]?.coach_id ?? prev?.id ?? null),
           name: typeof name === 'string' && name.trim() ? name.trim() : (prev?.name ?? null),
           unread: count.status === 'fulfilled' ? (Number.isFinite(total) && total > 0 ? Math.floor(total) : 0) : (prev?.unread ?? 0),
           preview: thread ? previewOf(thread.items[0]) : (prev?.preview ?? null),
+          gone: thread ? !thread.items[0] || thread.items[0].closed === true || thread.items[0].blocked_by_me : (prev?.gone ?? false),
         }));
       });
       if (featureFlags.romanChat) {
@@ -93,8 +105,10 @@ function useInbox(coached: boolean) {
       live = false;
       clearInterval(id);
     };
-  }, [coached, v2]));
-  return { coach, left };
+  }, [coached, v2, blocked]));
+  // My own block hides the card at once; the server's answer covers theirs (and mine, from the next read).
+  const closed = !!coach && (coach.gone || (!!coach.id && blocked.some((b) => b.id === coach.id)));
+  return { coach, left, closed };
 }
 
 /** One card: slides up 250 ms (decel), or fades in 150 ms under Reduce Motion. */
@@ -118,7 +132,7 @@ function Rise({ index, children }: { index: number; children: React.ReactNode })
 export default function MessagesInboxScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const needsCoach = useClientNeedsCoach();
-  const { coach, left } = useInbox(!needsCoach);
+  const { coach, left, closed } = useInbox(!needsCoach);
   const { messageCoach } = useEntitlement();
   const openSupport = useOpenSupport();
   const roman = featureFlags.romanChat;
@@ -180,32 +194,34 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
       </View>
     );
   } else {
-    const first = firstName(coach.name); // first name, as Home's "Message Sam"
+    const first = closed ? null : firstName(coach.name); // first name, as Home's "Message Sam"; none while closed
     const unread = coach.unread > 99 ? '99+' : String(coach.unread);
     const coachLabel = `${first ? `${first}, your coach` : 'Your coach'}${coach.unread > 0 ? `, ${unread} unread` : ''}${coach.preview ? `. ${coach.preview}` : ''}`;
     const privacy = `${first ?? 'Your coach'} never sees this chat, with one safety exception.`;
     body = (
       <>
-        <Rise index={0}>
-          <Pressable onPress={tap(() => navigation.navigate('Messages'))} accessibilityRole="button" accessibilityLabel={coachLabel} testID="inbox-coach" style={({ pressed }) => [s.card, s.hero, { backgroundColor: sc.accent }, pressed && s.pressed]}>
-            <View style={s.top}>
-              <View style={[s.mono, { backgroundColor: sc.textOnAccent }]}>
-                {first ? <Text style={[s.monoText, { color: sc.accent }]}>{first.charAt(0).toUpperCase()}</Text>
-                  : <Ionicons name="person-outline" size={24} color={sc.accent} />}
-              </View>
-              <View style={s.who}>
-                <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
-                <Text style={[s.title, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
-              </View>
-              {coach.unread > 0 ? (
-                <View style={[s.unread, { borderColor: gold[300] }]} testID="inbox-unread">
-                  <Text style={[s.unreadText, { color: sc.textOnAccent }]}>{unread}</Text>
+        {closed ? null : (
+          <Rise index={0}>
+            <Pressable onPress={tap(() => navigation.navigate('Messages'))} accessibilityRole="button" accessibilityLabel={coachLabel} testID="inbox-coach" style={({ pressed }) => [s.card, s.hero, { backgroundColor: sc.accent }, pressed && s.pressed]}>
+              <View style={s.top}>
+                <View style={[s.mono, { backgroundColor: sc.textOnAccent }]}>
+                  {first ? <Text style={[s.monoText, { color: sc.accent }]}>{first.charAt(0).toUpperCase()}</Text>
+                    : <Ionicons name="person-outline" size={24} color={sc.accent} />}
                 </View>
-              ) : null}
-            </View>
-            {coach.preview ? <Text style={[s.preview, { color: sc.textOnAccent }]} testID="inbox-preview">{coach.preview}</Text> : null}
-          </Pressable>
-        </Rise>
+                <View style={s.who}>
+                  <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
+                  <Text style={[s.title, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
+                </View>
+                {coach.unread > 0 ? (
+                  <View style={[s.unread, { borderColor: gold[300] }]} testID="inbox-unread">
+                    <Text style={[s.unreadText, { color: sc.textOnAccent }]}>{unread}</Text>
+                  </View>
+                ) : null}
+              </View>
+              {coach.preview ? <Text style={[s.preview, { color: sc.textOnAccent }]} testID="inbox-preview">{coach.preview}</Text> : null}
+            </Pressable>
+          </Rise>
+        )}
         {roman ? (
           <>
             <Rise index={1}>
