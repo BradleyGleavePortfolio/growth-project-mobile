@@ -9,8 +9,8 @@
  * Roman card says Roman works with a coach (with the app's crisis line), and the client's old Roman chats stay one tap
  * away. Each read fails on its own and only hides its part (the last good value stays); every card still opens.
  * FR-880 (owner 10-23, "Dissapear"): while the coach chat is closed (I blocked my coach, or the server's inbox leaves
- * the coach row out: it does while either person blocks) the coach card leaves the list, with no name and no unread;
- * an unblock reads the list again and the card comes back.
+ * the coach row out: it does while either person blocks; with messaging v2 off the thread read's closed header says it,
+ * FR-880R2) the coach card leaves the list, with no name and no unread; an unblock reads again and the card comes back.
  * Cards slide up 250 ms on the decel curve; with Reduce Motion they fade in 150 ms and nothing moves.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -35,6 +35,7 @@ import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import { readCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import { colors as palette, gold, layout, motion, radius, typography } from '../../theme/tokens';
 
 interface CoachRow {
@@ -81,18 +82,23 @@ function useInbox(coached: boolean) {
         api.get<{ id?: unknown; name?: unknown }>('/v1/clients/me/coach'),
         api.get<{ total?: unknown }>('/messages/unread-count'),
         v2 ? messagingV2Api.getClientInbox() : Promise.reject(new Error('messaging v2 off')),
-      ]).then(([who, count, inbox]) => {
+        // FR-880R2 (Sol B2): with messaging v2 off the thread read says it (`x-conversation-closed`, either person's block).
+        v2 ? null : readCoachChatClosed(),
+      ]).then(([who, count, inbox, legacy]) => {
         if (!live) return;
         const name = ok(who)?.data?.name;
         const id = ok(who)?.data?.id;
         const total = Number(ok(count)?.data?.total);
         const thread = ok(inbox);
+        const legacyClosed = ok(legacy);
         setCoach((prev) => ({
           id: typeof id === 'string' && id ? id : (thread?.items[0]?.coach_id ?? prev?.id ?? null),
           name: typeof name === 'string' && name.trim() ? name.trim() : (prev?.name ?? null),
           unread: count.status === 'fulfilled' ? (Number.isFinite(total) && total > 0 ? Math.floor(total) : 0) : (prev?.unread ?? 0),
           preview: thread ? previewOf(thread.items[0]) : (prev?.preview ?? null),
-          gone: thread ? !thread.items[0] || thread.items[0].closed === true || thread.items[0].blocked_by_me : (prev?.gone ?? false),
+          gone: thread
+            ? !thread.items[0] || thread.items[0].closed === true || thread.items[0].blocked_by_me
+            : typeof legacyClosed === 'boolean' ? legacyClosed : (prev?.gone ?? false),
         }));
       });
       if (featureFlags.romanChat) {

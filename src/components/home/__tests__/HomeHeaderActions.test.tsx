@@ -157,7 +157,8 @@ describe('HomeHeaderActions', () => {
   });
 
   // FR-880: a block or unblock reads the count again at once (the server counts a blocked pair 0), not on the 30 s tick.
-  it('a block and an unblock read the coach-message count again at once', async () => {
+  // FR-880R2: while my block stands Home offers no "Message {coach}" at all; the unblock brings it back with its count.
+  it('a block hides the coach entry at once and an unblock brings it back, the count read again', async () => {
     let total = 2;
     mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
     mockGet.mockImplementation(async (u: string) =>
@@ -167,11 +168,59 @@ describe('HomeHeaderActions', () => {
     expect(await view.findByLabelText('Message Bradley, 2 unread')).toBeTruthy();
     const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
     total = 0;
+    const reads = mockGet.mock.calls.filter(([u]) => u === '/messages/unread-count').length;
     await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'c1', displayName: 'Bradley', blockedAt: '2026-10-24T00:00:00Z' }] }));
-    expect(await view.findByLabelText('Message Bradley')).toBeTruthy();
+    expect(view.queryByTestId('home-message-coach')).toBeNull();
+    expect(view.queryByText(/Bradley/)).toBeNull();
+    expect(view.getByTestId('home-leading-empty')).toBeTruthy();
+    await waitFor(() => expect(mockGet.mock.calls.filter(([u]) => u === '/messages/unread-count').length).toBe(reads + 1));
     total = 2;
     await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
     expect(await view.findByLabelText('Message Bradley, 2 unread')).toBeTruthy();
+  });
+
+  // FR-880R2 (operator call on m#880; owner 10-23 "Dissapear"): the coach's block closes the chat too. The thread read
+  // answers 200 [] with x-conversation-closed (b#1141); Home then offers no "Message {coach}" until a read says open.
+  describe('the coach blocked me', () => {
+    const { queryClient } = jest.requireActual('../../../services/queryClient');
+    const { COACH_CHAT_KEY } = jest.requireActual('../../../hooks/useCoachChatClosed');
+    afterEach(() => queryClient.clear());
+    const serve = (closed: { now: boolean }) => mockGet.mockImplementation(async (u: string) => {
+      if (u === '/messages?limit=1') return { data: [], headers: closed.now ? { 'x-conversation-closed': 'blocked_by_them' } : {} };
+      return u === '/messages/unread-count' ? { data: { total: 0 } } : { data: { name: 'Bradley Gleave' } };
+    });
+
+    it.each([false, true])('no coach entry while the thread read says closed (rings %s); a read that says open brings it back', async (rings) => {
+      mockRomanChat.mockReturnValue(true);
+      mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+      const closed = { now: true };
+      serve(closed);
+      const view = await render(<HomeHeaderActions layout={rings ? 'rings' : undefined} />);
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/messages?limit=1'));
+      await waitFor(() => expect(view.queryByTestId('home-message-coach')).toBeNull());
+      expect(view.queryByText(/Bradley|coach/i)).toBeNull();
+      expect(view.queryByLabelText(/Bradley|coach/i)).toBeNull();
+      expect(view.getByTestId('home-leading-empty')).toBeTruthy();
+      expect(view.queryByTestId('home-roman-locked-header')).toBeNull(); // still a coached client: never "Opens with a coach"
+      expect(view.getByTestId('home-notification-bell')).toBeTruthy();
+      if (!rings) expect(view.getByTestId('home-roman-chat')).toBeTruthy(); // Roman's door stays
+      closed.now = false;
+      await act(async () => { await queryClient.invalidateQueries({ queryKey: COACH_CHAT_KEY }); });
+      expect(await view.findByLabelText('Message Bradley')).toBeTruthy();
+    });
+
+    it('a failed thread read keeps the last answer: closed stays closed', async () => {
+      mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+      serve({ now: true });
+      const view = await render(<HomeHeaderActions />);
+      await waitFor(() => expect(view.getByTestId('home-leading-empty')).toBeTruthy());
+      mockGet.mockImplementation(async (u: string) => {
+        if (u === '/messages?limit=1') throw new Error('offline');
+        return { data: { name: 'Bradley Gleave' } };
+      });
+      await act(async () => { await queryClient.invalidateQueries({ queryKey: COACH_CHAT_KEY }); });
+      expect(view.queryByTestId('home-message-coach')).toBeNull();
+    });
   });
 
   // C3B-S2: with Style B and Roman chat on, every message entry opens the Messages list (HomeStack MessagesInbox).

@@ -64,6 +64,11 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
     noAccess ? true : undefined,
   );
 
+  // FR-880R2 (Sol B1, LO-872R4 C2): the DM read waits for /community/me (it is off until the space is known), so a slow,
+  // failed or offline me read is this screen's read too: the same two lines, and Try again reads me again.
+  const meFailed = !me.data && me.isError;
+  const reading = messages.isLoading || (!me.data && !me.isError);
+  const failed = meFailed || (messages.isError && !open);
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
   // Header-level Report / Block acts on the latest message from the other
@@ -115,12 +120,12 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
 
         {closed ? (
           <View style={styles.flex} /> /* closed: no message text, no "Start the conversation" */
-        ) : messages.isLoading || (messages.isError && !open) ? ( /* FR-872 (Opus C2): never blank, never stuck */
-          <View style={styles.center} accessibilityState={{ busy: messages.isLoading }} testID="community-dmthread-state">
+        ) : reading || failed ? ( /* FR-872 (Opus C2): never blank, never stuck */
+          <View style={styles.center} accessibilityState={{ busy: reading }} testID="community-dmthread-state">
             <Text style={[typography.bodySmall, styles.stateText, { color: semanticColors.textMuted }]}>
-              {messages.isLoading ? 'Loading messages…' : 'Messages did not load. Check your connection, then try again.'}
+              {reading ? 'Loading messages…' : 'Messages did not load. Check your connection, then try again.'}
             </Text>
-            {messages.isError ? <HapticPressable onPress={() => void messages.refetch()} accessibilityRole="button"
+            {failed ? <HapticPressable onPress={() => void (meFailed ? me.refetch() : messages.refetch())} accessibilityRole="button"
               accessibilityLabel="Try again" testID="community-dmthread-retry" style={styles.retry}>
               <Text style={[typography.bodySmall, styles.stateText, { color: semanticColors.accentText }]}>Try again</Text>
             </HapticPressable> : null}

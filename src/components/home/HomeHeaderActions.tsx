@@ -36,6 +36,7 @@ import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientUnreadCount } from '../../hooks/useClientUnreadCount';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import NotificationBadge from '../NotificationBadge';
 import { useTheme } from '../../theme/ThemeProvider';
 import { radius, typography } from '../../theme/tokens';
@@ -136,6 +137,9 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
   const openRoman = () =>
     toList ? navigation.navigate('MessagesInbox') : navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false });
   const hasCoach = !!coachId;
+  // FR-880R2 (owner 10-23 "Dissapear"): while the coaching chat is closed (either person's block) Home offers no
+  // "Message {coach}"; the slot stays empty (Roman's door stays) and the button comes back on unblock.
+  const coachChat = useCoachChatClosed(coachId);
   // useCurrentUser reads the cache asynchronously (first render is null): choose
   // coach or Roman only once the user is known, so a coached client never sees
   // "Ask Roman" flash first (U1 on m#618).
@@ -145,7 +149,9 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
 
   return (
     <View style={[styles.row, rings && styles.ringsRow]}>
-      {hasCoach ? (
+      {hasCoach && coachChat.closed ? (
+        <View style={styles.message} testID="home-leading-empty" />
+      ) : hasCoach ? (
         <Pressable
           onPress={openMessages}
           accessibilityRole="button"

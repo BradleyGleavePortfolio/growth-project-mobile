@@ -151,4 +151,14 @@ describe('closed chats leave the lists (owner 10-23 "Dissapear")', () => {
     expect(queryClient.getQueryState(['community', 'dms', 'ws-1'])?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(['messaging', 'v2', 'coach-inbox', 'all'])?.isInvalidated).toBe(true);
   });
+
+  // FR-880R2 (LO-872R4 C5, Sol B2): the coach row's count on Community Home and in the drawer, and the one "is my
+  // coaching chat closed" answer, read again on block and on unblock, like the tab badges.
+  it.each([['block', blockPlaced], ['unblock', blockLifted]] as const)('on %s the coach row count and the closed answer read again', (_, sync) => {
+    queryClient.setQueryData(['community', 'home', 'coach-unread', 'coach-1'], 3);
+    queryClient.setQueryData(['messaging', 'coach-chat-closed', 'coach-1'], false);
+    sync('coach-1');
+    expect(queryClient.getQueryState(['community', 'home', 'coach-unread', 'coach-1'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(['messaging', 'coach-chat-closed', 'coach-1'])?.isInvalidated).toBe(true);
+  });
 });

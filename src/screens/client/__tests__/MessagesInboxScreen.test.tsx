@@ -250,6 +250,36 @@ describe('Messages list, the coach chat closed', () => {
     expect(await u.findByLabelText('Sam, your coach, 2 unread')).toBeTruthy();
   });
 
+  // FR-880R2 (Sol B2): with messaging v2 off there is no inbox read; the thread read (GET /messages) answers 200 [] with
+  // x-conversation-closed while either person blocks (b#1141 CONTRACT 6370968268), any messaging version.
+  it('without the messaging v2 switch the coach blocked me: no card, never shown first; a read that says open brings it back', async () => {
+    mockFlags.messaging_core_v2 = false;
+    let closed = true;
+    mockGet.mockImplementation(async (url: string) => {
+      if (url === '/messages?limit=1') return { data: [], headers: closed ? { 'x-conversation-closed': 'blocked_by_them' } : {} };
+      if (url === '/messages/unread-count') return { data: { total: closed ? 0 : 2 } };
+      if (!(url in ROUTES)) throw Object.assign(new Error(`GET ${url} failed`), { response: { status: 404 } });
+      return { data: ROUTES[url] };
+    });
+    const { u } = await show();
+    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    expectGone(u);
+    expect(mockInbox).not.toHaveBeenCalled();
+    const offline = mockGet.getMockImplementation();
+    mockGet.mockImplementation(async (url: string) => {
+      if (url === '/messages?limit=1') throw new Error('offline');
+      return offline?.(url);
+    });
+    await act(async () => mockRefocus());
+    await waitFor(() => expect(mockGet.mock.calls.filter(([url]) => url === '/messages?limit=1')).toHaveLength(2));
+    expectGone(u); // a failed read keeps the last answer
+    mockGet.mockImplementation(offline as never);
+    closed = false;
+    await act(async () => mockRefocus());
+    expect(await u.findByLabelText('Sam, your coach, 2 unread')).toBeTruthy();
+    expect(u.getByLabelText('Sam never sees this chat, with one safety exception.')).toBeTruthy();
+  });
+
   it.each<[string, Partial<InboxThread>]>([['closed', { closed: true }], ['blocked by me', { blocked_by_me: true }]])('a row the server marks %s leaves the list too', async (_, o) => {
     mockInbox.mockResolvedValue({ items: [thread(o)], next_cursor: null, total_unread: 0 });
     const { u } = await show();
