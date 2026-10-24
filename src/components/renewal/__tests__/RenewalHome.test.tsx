@@ -3,10 +3,12 @@
  * the entitlement's `renewal` block. Real storage and pop-up rule; the sheet, navigation and network are mocked.
  */
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { readRenewal, type Renewal } from '../../../lib/planRenewal';
+import { noteHouseJoinPending, readRenewal, type Renewal } from '../../../lib/planRenewal';
+import { readUserCacheSync, setUserCache } from '../../../lib/userCache';
+import { authEvents } from '../../../utils/authEvents';
 
 let mockRenewal: Renewal | undefined;
 const mockRefresh = jest.fn(async () => undefined);
@@ -18,7 +20,8 @@ jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
 }));
 const mockPost = jest.fn(async (..._a: unknown[]) => ({ data: {} }));
-jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: async () => ({ data: { name: 'Jordan Avery-Blake' } }), post: (...a: unknown[]) => mockPost(...a) } }));
+const mockMe = jest.fn(async (): Promise<{ data: unknown }> => ({ data: {} }));
+jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: async () => ({ data: { name: 'Jordan Avery-Blake' } }), post: (...a: unknown[]) => mockPost(...a) }, authApi: { me: () => mockMe() } }));
 jest.mock('../../../api/clientPaymentsApi', () => ({ clientPaymentsApi: {
   getPurchases: async () => ({ ok: true, data: [{ package_id: 'p-old', created_at: '2026-01-02' }, { package_id: 'p-last', created_at: '2026-07-01' }] }),
   getPackages: async () => ({ ok: true, data: [{ id: 'p-last', name: '12-week strength block' }, { id: 'p-old', name: 'Starter' }] }),
@@ -29,6 +32,7 @@ jest.mock('../../PackageSelectionSheet', () => (p: { skipSnoozeCheck?: boolean; 
   jest.requireActual('react').createElement(jest.requireActual('react-native').Pressable, { testID: `package-sheet-${p.skipSnoozeCheck}`, onPress: p.onPaymentSuccess }));
 
 const RenewalHome: typeof import('../RenewalHome').default = require('../RenewalHome').default;
+const { HouseJoined }: typeof import('../CoachMonogram') = require('../CoachMonogram');
 const COACH = { id: 'coach-1', first_name: 'Jordan' };
 const ended = (step: number | null, extra: Record<string, unknown> = {}) => readRenewal({ renewal: { state: 'ended',
   ended_at: '2026-10-21T10:00:00.000Z', popup_due: step !== null, popup_step: step, banner_due: true, coach: COACH,
@@ -68,6 +72,8 @@ it.each([['no house coach', null], ['the house coach is the coach', COACH]])('%s
   const s = await open(ended(0, { house_coach: house }));
   expect(s.queryByTestId('renewal-house-coach')).toBeNull();
   expect(s.getAllByTestId('renewal-own-coach')).toHaveLength(2);
+  await fireEvent.press(s.getAllByTestId('renewal-own-coach')[0]);
+  expect(mockNavigate).not.toHaveBeenCalled(); // nothing new without a house coach: own coach still opens the sheet
 });
 
 it('own coach (iOS): the sheet waits until the pop-up has closed', async () => {
@@ -80,11 +86,31 @@ it('own coach (iOS): the sheet waits until the pop-up has closed', async () => {
   expect(s.getByTestId('package-sheet-true')).toBeTruthy();
 });
 
-it('house coach (Android, at once): opens HouseCoach with the coach the server named', async () => {
+const HOUSE = { id: 'house-1', firstName: 'Bradley' };
+it('house coach (Android, at once): the one-coach confirm page first, never the packages, naming the current coach', async () => {
   const s = await open(ended(7));
   await fireEvent.press(s.getAllByTestId('renewal-house-coach')[0]);
   expect(s.queryByTestId('renewal-popup')).toBeNull();
-  expect(mockNavigate).toHaveBeenCalledWith('HouseCoach', { coach: { id: 'house-1', firstName: 'Bradley' } });
+  expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: HOUSE, from: { id: 'coach-1', firstName: 'Jordan' } }]]);
+});
+
+it('house coach from the banner: the same confirm page; with no current coach it names none', async () => {
+  mockRenewal = ended(null);
+  const s = await render(<RenewalHome />);
+  await fireEvent.press(await s.findByTestId('renewal-house-coach'));
+  expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: HOUSE, from: { id: 'coach-1', firstName: 'Jordan' } }]]);
+  await s.unmount();
+  mockNavigate.mockClear();
+  const none = await open(ended(0, { coach: null }));
+  expect(none.queryByTestId('renewal-own-coach')).toBeNull();
+  await fireEvent.press(none.getByTestId('renewal-house-coach'));
+  expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: HOUSE, from: null }]]);
+});
+
+it('house coach full name (backend #1142): it reaches the confirm page; the current coach stays first name only', async () => {
+  const s = await open(ended(7, { coach: { ...COACH, full_name: 'Jordan Reyes' }, house_coach: { id: 'house-1', first_name: 'Bradley', full_name: ' Bradley Gleave ' } }));
+  await fireEvent.press(s.getAllByTestId('renewal-house-coach')[0]);
+  expect(mockNavigate.mock.calls).toEqual([['HouseCoachConfirm', { coach: { ...HOUSE, fullName: 'Bradley Gleave' }, from: { id: 'coach-1', firstName: 'Jordan' } }]]);
 });
 
 it('banner day: "Renew now" with the last package and end date, no pop-up, no ack; own coach opens the sheet', async () => {
@@ -122,4 +148,58 @@ it("Skip closes the pop-up and the banner stays; a plan_renewal tap re-reads the
   mockRenewal = ended(1); // the re-read
   await s.rerender(<RenewalHome />);
   expect(await s.findByTestId('renewal-popup')).toBeTruthy();
+});
+
+it('m#860 FIX R2 (Sol B1): a house join still confirming at Continue settles on Home once the server names him, not before', async () => {
+  await setUserCache({ id: 'client-1', email: '', role: 'student', coach_id: 'coach-1' });
+  await noteHouseJoinPending('client-1', 'house-1');
+  const login = jest.fn();
+  authEvents.on('login', login);
+  mockMe.mockResolvedValue({ data: { id: 'client-1', coach_id: 'coach-1' } }); // Home on return: the webhook has not landed
+  mockRenewal = ended(null);
+  const s = await render(<RenewalHome />);
+  await waitFor(() => expect(mockMe).toHaveBeenCalledTimes(1));
+  await act(async () => undefined);
+  expect(readUserCacheSync()?.coach_id).toBe('coach-1');
+  expect(login).not.toHaveBeenCalled();
+  mockMe.mockResolvedValue({ data: { id: 'client-1', coach_id: 'house-1' } }); // it lands; the next plan read (foreground)
+  mockRenewal = { state: 'none' };
+  await s.rerender(<RenewalHome />);
+  await waitFor(() => expect(login).toHaveBeenCalledTimes(1));
+  expect(readUserCacheSync()?.coach_id).toBe('house-1');
+  mockRenewal = { state: 'none' };
+  await s.rerender(<RenewalHome />);
+  await act(async () => undefined);
+  expect(mockMe).toHaveBeenCalledTimes(2); // settled: no more reads
+  authEvents.off('login', login);
+});
+
+it('m#860 FIX R2 (Sol B2) + R3 (Sol B1): quiet fill on the second choice; each ring painted outside the disc and taking no room', async () => {
+  const s = await open(ended(0));
+  for (const b of s.getAllByTestId('renewal-house-coach')) {
+    expect(StyleSheet.flatten(b.props.style)).toMatchObject({ backgroundColor: '#26402F', borderWidth: 1.5, borderColor: '#4A6553' });
+  }
+  // painted: 72 (r2b.py .cm 64 + 2 gap + 2 ring) and 47 (r3.py .cms 40 + 2 + 1.5); laid out: the disc only, 64 and 40
+  const rings = s.getAllByTestId('coach-monogram', { includeHiddenElements: true }).map((m) => StyleSheet.flatten(m.props.style));
+  expect(rings.map((r) => [r.width, r.height, r.margin]).sort()).toEqual([[47, 47, -3.5], [72, 72, -4]]);
+  expect(rings.map((r) => Number(r.width) + 2 * Number(r.margin)).sort()).toEqual([40, 64]);
+  // the pop-up's disc sits 6 below the card's 28 (.cm margin 6px auto 0), so its ring starts 30 down, as in the frame
+  const pop = s.getByTestId('renewal-popup');
+  expect(StyleSheet.flatten(pop.props.style).paddingTop).toBe(28);
+  expect(StyleSheet.flatten(pop.props.children[0].props.style)).toEqual({ marginTop: 6 });
+  // r2b.py .dbd is 16/24 with no tracking, so at 390 pt the line wraps as in M1 (the card is 469 tall, not 445)
+  expect(StyleSheet.flatten(s.getByText('Pick a plan to keep working with Jordan.').props.style)).toMatchObject({ fontSize: 16, lineHeight: 24, letterSpacing: 0 });
+  // the banner's text starts 16 + 40 + 12 = 68 in from the card edge (r3.py .rbn padding 16, .cms 40, gap 12)
+  const banner = s.getByTestId('renewal-banner');
+  expect(StyleSheet.flatten(banner.props.style).padding).toBe(16);
+  expect(StyleSheet.flatten(banner.props.children[0].props.style)).toMatchObject({ flexDirection: 'row', gap: 12 });
+});
+
+it('m#860 FIX R3 (Sol B1, Opus C2): H3, his row is 12 + 40 + 12 tall and its text 14 + 40 + 12 in, as r3.py .nowc', async () => {
+  const s = await render(<HouseJoined name="Bradley Gleave" title="You're all set" body="Body." onContinue={() => undefined} />);
+  const row = s.getByTestId('payment-new-coach');
+  expect(StyleSheet.flatten(row.props.style)).toMatchObject({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14 });
+  const ring = StyleSheet.flatten(s.getByTestId('coach-monogram', { includeHiddenElements: true }).props.style);
+  expect(ring).toMatchObject({ width: 47, height: 47, borderWidth: 1.5, margin: -3.5 });
+  expect(Number(ring.width) + 2 * Number(ring.margin)).toBe(40);
 });
