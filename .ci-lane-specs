@@ -1,0 +1,5 @@
+src/navigation
+src/screens/community
+src/screens/coach
+src/screens/client/__tests__/Messages
+src/components/messaging
