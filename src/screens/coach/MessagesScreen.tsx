@@ -54,6 +54,7 @@ function LegacyCoachMessages() {
   const currentUser = useCurrentUser();
   const { clients, loadClients } = useCoachStore();
   const [unreadByClient, setUnreadByClient] = useState<UnreadByClient>({});
+  const [closedIds, setClosedIds] = useState<string[]>([]); // FR-872: b#1153 closed_client_ids (blocked either way)
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -64,6 +65,7 @@ function LegacyCoachMessages() {
       const raw = res.data || {};
       const byClient: UnreadByClient = raw.by_client || raw.byClient || {};
       setUnreadByClient(byClient);
+      setClosedIds(Array.isArray(raw.closed_client_ids) ? raw.closed_client_ids : []); // absent on an older server
     } catch (err) {
       // Silent — keep previous counts
     }
@@ -101,11 +103,12 @@ function LegacyCoachMessages() {
     setRefreshing(false);
   }, [currentUser?.id, loadUnread]);
 
-  // FX-872 (owner 10-23 "Dissapear"): a client I blocked is not a chat row (the one block cache, src/lib/blockSync.ts).
+  // FX-872 (owner 10-23 "Dissapear"): a client blocked either way is not a chat row (the one block cache, src/lib/blockSync.ts).
   const blocked = useBlockedUsersStore((st) => st.blocked);
-  const activeClients = clients.filter((c) => c.status === 'active' && !blocked.some((b) => b.id === c.id));
+  const gone = (id: string) => closedIds.includes(id) || blocked.some((b) => b.id === id);
+  const activeClients = clients.filter((c) => c.status === 'active' && !gone(c.id));
   const totalUnread = Object.entries(unreadByClient)
-    .filter(([id]) => !blocked.some((b) => b.id === id)) // counted 0 once blocked
+    .filter(([id]) => !gone(id)) // counted 0 once blocked
     .reduce((a, [, n]) => a + (n || 0), 0);
 
   const list = activeClients

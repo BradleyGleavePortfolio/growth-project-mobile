@@ -73,7 +73,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
   const { closed, open, close } = useConversationClosed(
     mode === 'dm' ? dmTo : null,
     [gateRead.error],
-    useServerAnswered(gateRead),
+    useServerAnswered(gateRead) && hasWorkspace, // FR-872 (Sol B3): no space now = no fields, even after an answer
   );
 
   const bodyMax = mode === 'dm' ? DM_MAX : POST_BODY_MAX;

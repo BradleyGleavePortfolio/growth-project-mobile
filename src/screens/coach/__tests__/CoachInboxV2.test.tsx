@@ -176,6 +176,17 @@ describe('CoachInboxV2', () => {
     useBlockedUsersStore.setState({ blocked: [] });
   });
 
+  // FR-872 (Opus B1, Sol B1; b#1153): a client who blocked me has no row and is listed in closed_client_ids instead.
+  it('a client in closed_client_ids is not offered "Start a conversation"; once the server stops listing her, she is', async () => {
+    http.get.mockResolvedValue({ data: { ...page([pinnedBen]).data, closed_client_ids: ['client-1'] } });
+    const closed = await renderInbox();
+    await closed.findByText('Ben Ode');
+    expect(closed.queryByTestId('inbox-client-client-1')).toBeNull();
+    await closed.unmount();
+    http.get.mockResolvedValue(page([pinnedBen])); // unblocked (or an older server without the field)
+    expect(await (await renderInbox()).findByTestId('inbox-client-client-1')).toBeTruthy();
+  });
+
   it('Unread is a server filter and does not list clients without messages', async () => {
     http.get.mockResolvedValue(page([pinnedBen]));
     const utils = await renderInbox();

@@ -336,6 +336,28 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByTestId('messages-closed')).toBeNull();
   });
 
+  it('FR-872 (Sol B2): a failed first read leaves no box; a retry that answers without the header opens it', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } })); // inbox empty
+    mockList.mockRejectedValueOnce(new Error('offline'));
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText('Retry loading messages');
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    await fireEvent.press(u.getByLabelText('Retry loading messages'));
+    expect(await u.findByLabelText('Message text')).toBeTruthy();
+  });
+
+  it('FR-872 (Sol B5): an edit sheet already open goes when the chat closes; nothing left to save', async () => {
+    const u = await render(<MessagesScreen />);
+    await fireEvent(await u.findByLabelText(/Message: answer/), 'longPress');
+    await fireEvent.press(await waitFor(() => u.getByLabelText('Edit')));
+    expect(u.getByLabelText('Edited message text')).toBeTruthy();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'coach-9', displayName: 'Sam', blockedAt: recent }] }));
+    expect(u.queryByLabelText('Edited message text')).toBeNull();
+    expect(u.queryByLabelText('Save edit')).toBeNull();
+  });
+
   it('I blocked my coach: no message box, only the closed line; an unblock opens it again', async () => {
     useBlockedUsersStore.setState({ blocked: [{ id: 'coach-9', displayName: 'Sam', blockedAt: recent }] });
     mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });

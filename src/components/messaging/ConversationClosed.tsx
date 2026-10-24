@@ -72,7 +72,7 @@ export function useConversationClosed(
   return { closed, open: ready && !closed, close };
 }
 
-type ReadLike = { isSuccess: boolean; isStale: boolean; isFetchedAfterMount: boolean };
+type ReadLike = { isSuccess: boolean; isPending?: boolean; isStale: boolean; isFetchedAfterMount: boolean };
 
 /**
  * `ready` for screens built on react-query reads: true once every read succeeded on this visit (or holds data fetched
@@ -81,11 +81,12 @@ type ReadLike = { isSuccess: boolean; isStale: boolean; isFetchedAfterMount: boo
  */
 export function useServerAnswered(...reads: ReadLike[]): boolean {
   const now = reads.every((r) => r.isSuccess && (r.isFetchedAfterMount || !r.isStale));
+  const none = reads.some((r) => r.isPending); // FR-872 (Sol B3): a new place (or none) with no answer yet
   const [latched, setLatched] = useState(now);
   useEffect(() => {
-    if (now) setLatched(true);
-  }, [now]);
-  return latched || now;
+    if (now || none) setLatched(now);
+  }, [now, none]);
+  return !none && (latched || now);
 }
 
 export const coachingRowKey = (side: 'client' | 'coach', otherUserId: string) =>

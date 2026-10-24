@@ -38,13 +38,15 @@ let mockMe: { workspace_id: string | null } = { workspace_id: 'ws-1' };
 const mockDmTo = jest.fn();
 jest.mock('../../../hooks/useCommunity', () => ({
   useCommunityMe: () => ({ data: mockMe, isLoading: false, isError: false, isSuccess: true }),
-  useDmMessages: (_ws: string, to: string) => {
+  useDmMessages: (ws: string, to: string) => {
     mockDmTo(to);
-    return mockReadPending
-      ? { data: undefined, isLoading: true, isError: false, isSuccess: false, isFetchedAfterMount: false, isStale: true, error: null }
+    return mockReadPending || !ws // no space: the real query is disabled, so it is pending
+      ? { data: undefined, isLoading: true, isPending: true, isError: false, isSuccess: false, isFetchedAfterMount: false, isStale: true, error: null }
       : { data: mockMessages, isLoading: false, isError: !!mockReadError, error: mockReadError, isSuccess: !mockReadError, isFetchedAfterMount: true, isStale: false };
   },
-  usePosts: () => ({ data: [], isLoading: false, isError: !!mockReadError, error: mockReadError, isSuccess: !mockReadError, isFetchedAfterMount: true, isStale: false }),
+  usePosts: (ws: string | null) => (ws
+    ? { data: [], isLoading: false, isError: !!mockReadError, error: mockReadError, isSuccess: !mockReadError, isFetchedAfterMount: true, isStale: false }
+    : { data: undefined, isLoading: false, isPending: true, isError: false, isSuccess: false, isFetchedAfterMount: false, isStale: true, error: null }),
   useSendDm: () => ({ mutateAsync: mockSendAsync, mutate: mockSendMutate, isPending: false, error: null }),
   useCreatePost: () => ({ mutate: mockPostMutate, isPending: false, error: null }),
   isOptimisticId: () => false,
@@ -175,6 +177,16 @@ describe('New message / New post composer', () => {
     mockReadPending = true;
     mockParams.current = { mode: 'dm', recipientId: 'member-2' };
     const view = await render(<CommunityComposerScreen />);
+    expect(view.queryByTestId('community-composer-body')).toBeNull();
+    expect(view.queryByTestId('community-composer-submit')).toBeNull();
+  });
+
+  it.each(['post', 'dm'])('FR-872 (Sol B3): %s, the membership goes after the read answered: the fields go too', async (mode) => {
+    mockParams.current = { mode, recipientId: 'member-2' };
+    const view = await render(<CommunityComposerScreen />);
+    expect(view.getByTestId('community-composer-body')).toBeTruthy();
+    mockMe = { workspace_id: null };
+    await view.rerender(<CommunityComposerScreen />);
     expect(view.queryByTestId('community-composer-body')).toBeNull();
     expect(view.queryByTestId('community-composer-submit')).toBeNull();
   });
