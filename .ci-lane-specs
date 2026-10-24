@@ -1,0 +1,10 @@
+src/components/renewal
+src/screens/client/__tests__/House
+src/screens/client/__tests__/RingsHome
+src/screens/client/__tests__/HomeScreen
+src/components/home
+src/components/__tests__/PackageSelectionSheet
+src/__tests__/renewalLineYourPlans144
+src/navigation
+src/components/coachless
+src/__tests__/keyboardSafeSheets
