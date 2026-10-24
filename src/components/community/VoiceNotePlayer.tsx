@@ -26,7 +26,7 @@
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { forestPop as fp, neutral, radius, spacing, voiceShades } from '../../theme/tokens';
@@ -258,7 +258,12 @@ export default function VoiceNotePlayer({
         testID="voice-player-toggle"
         style={[styles.control, { backgroundColor: discBg }]}
       >
-        <Ionicons name={iconName} size={22} color={discFg} />
+        {state === 'loading' ? (
+          // The audio is on its way: a quiet spinner in the disc, not a play icon that does nothing.
+          <ActivityIndicator size="small" color={discFg} testID="voice-player-loading" />
+        ) : (
+          <Ionicons name={iconName} size={22} color={discFg} />
+        )}
       </HapticPressable>
 
       <View style={styles.middle}>

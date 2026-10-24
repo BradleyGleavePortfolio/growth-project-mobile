@@ -260,7 +260,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     expect(handles[0].unload).toHaveBeenCalledTimes(1);
   });
 
-  it('the control is disabled while loading', async () => {
+  it('the control is disabled while loading and shows a spinner in the disc', async () => {
     const { port } = heldPlayback();
     const { getByTestId } = await render(
       <VoiceNotePlayer url={URL} durationMs={4000} playback={port} />,
@@ -272,6 +272,13 @@ describe('B-314-8: one native player per control, never orphaned', () => {
         busy: true,
       }),
     );
+    expect(getByTestId('voice-player-loading')).toBeTruthy();
+  });
+
+  it('no spinner before the first tap', async () => {
+    const { port } = heldPlayback();
+    const { queryByTestId } = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
+    expect(queryByTestId('voice-player-loading')).toBeNull();
   });
 
   it('a URL change while loading releases the stale load; the new URL loads on the next tap', async () => {
