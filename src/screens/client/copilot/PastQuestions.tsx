@@ -9,11 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, pathTint, radius, typography } from '../../../theme/tokens';
-import { TextLink } from '../../../ui/buttons/PrimaryButton';
+import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
+import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { copilotApi, type PastQuestion } from '../../../api/copilotApi';
 import { COPILOT_COPY as C, shortDay } from './pathChangeWords';
 import { ASK_COPY as A, monthYear } from './askWords';
-import { ledger } from './ledger';
+import { ledger, ledgerType } from './ledger';
 
 export const COPILOT_QUESTIONS_KEY = ['copilot', 'questions'] as const;
 
@@ -47,7 +48,7 @@ export function PastQuestionsRow({ total, onPress }: { total: number; onPress: (
  */
 function outcomeOf(q: PastQuestion): { text: string; bg: string; ink: string } | null {
   if (q.outcome === 'approved') return { text: C.approved, bg: pathTint.leaf, ink: forestPop.forest };
-  if (q.outcome === 'rejected') return { text: C.declined(C.yourCoach), bg: pathTint.still, ink: forestPop.n700 };
+  if (q.outcome === 'rejected') return { text: C.declined(C.yourCoach), bg: ledger.still, ink: ledger.muted };
   if (q.outcome === 'pending') return { text: C.waiting, bg: pathTint.gold, ink: forestPop.goldInk };
   return null;
 }
@@ -66,9 +67,9 @@ export function PastQuestionsList({ items, onOpen, more, loadingMore, onMore }: 
   }
   return (
     <View style={s.list} testID="copilot-past-list">
-      {groups.map((g) => (
-        <View key={g.month} style={s.group}>
-          <Text style={[typography.bodySmall, s.strong, { color: sc.textMuted }]} accessibilityRole="header">{g.month}</Text>
+      {groups.map((g, gi) => (
+        <View key={g.month}>
+          <Text style={[ledgerType.month, gi > 0 && s.monthGap, s.month, { color: ledger.muted }]} accessibilityRole="header">{g.month}</Text>
           <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]}>
             {g.rows.map((q, i) => {
               const out = outcomeOf(q);
@@ -78,10 +79,10 @@ export function PastQuestionsList({ items, onOpen, more, loadingMore, onMore }: 
                   accessibilityLabel={[q.question, day, out?.text].filter(Boolean).join('. ')}
                   style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line }, pressed && { backgroundColor: sc.bgPrimary }]}>
                   <View style={s.grow}>
-                    <Text style={[typography.body, { color: sc.textPrimary }]}>{q.question}</Text>
+                    <Text style={[ledgerType.row, { color: sc.textPrimary }]}>{q.question}</Text>
                     <View style={s.meta}>
-                      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{day}</Text>
-                      {out ? <Text style={[typography.caption, s.pill, { backgroundColor: out.bg, color: out.ink }]}>{out.text}</Text> : null}
+                      <Text style={[ledgerType.small, { color: ledger.muted }]}>{day}</Text>
+                      {out ? <Text style={[ledgerType.outcome, s.pill, { backgroundColor: out.bg, color: out.ink }]} testID={`copilot-past-${q.messageId}-outcome`}>{out.text}</Text> : null}
                     </View>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={sc.textMuted} />
@@ -91,18 +92,39 @@ export function PastQuestionsList({ items, onOpen, more, loadingMore, onMore }: 
           </View>
         </View>
       ))}
-      {more ? <TextLink label={A.older} onPress={onMore} disabled={loadingMore} align="center" testID="copilot-past-more" /> : null}
+      {more ? <TextLink label={A.older} onPress={onMore} disabled={loadingMore} align="center" testID="copilot-past-more" style={s.older} /> : null}
+    </View>
+  );
+}
+
+/**
+ * A history read that failed (the list, a page of older questions, or one answer): Roman's white ledger notice with
+ * the approved words and a filled Try again (style A .stc, #852 round 3 B-H2), not the app's plain quiet line. The
+ * words and what Try again reads are the caller's.
+ */
+export function LedgerRetry({ message, onRetry, retrying, testID }: { message: string; onRetry: () => void; retrying: boolean; testID: string }) {
+  return (
+    <View style={[s.notice, { backgroundColor: ledger.card, borderColor: ledger.line }]} accessibilityRole="alert" accessibilityLiveRegion="polite" testID={testID}>
+      <View style={s.noticeHead}>
+        <RomanAvatar crop="neutral" size={40} testID={`${testID}-roman`} />
+        <Text style={[ledgerType.body, s.grow, { color: ledger.ink }]}>{message}</Text>
+      </View>
+      <PrimaryButton label="Try again" onPress={onRetry} disabled={retrying} haptic={false} wrap testID={`${testID}-retry`} />
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  list: { gap: 20 },
-  group: { gap: 8 },
-  strong: { fontWeight: '600' },
+  list: { gap: 0 },
+  // Style A history (.hist .m, .hrow, .ot; #852 round 3 B-H1): 18 above a month, 8 under it.
+  month: { paddingBottom: 8 },
+  monthGap: { paddingTop: 18 },
+  older: { marginTop: 8 },
   card: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
-  row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  row: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 11 },
   grow: { flex: 1, gap: 2 },
   meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  pill: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden', letterSpacing: 0.2 },
+  pill: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
+  notice: { borderWidth: 1, borderRadius: radius.card, paddingVertical: 20, paddingHorizontal: 18, gap: 14 },
+  noticeHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
 });

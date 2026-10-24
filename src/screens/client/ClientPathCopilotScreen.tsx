@@ -45,10 +45,10 @@ import { SuggestionStatusList } from './copilot/SuggestionStatusList';
 import { SuggestionCard } from './copilot/SuggestionCard';
 import { AnswerCard } from './copilot/AnswerCard';
 import { WeekBlock } from './copilot/WeekBlock';
-import { PastQuestionsList, PastQuestionsRow, usePastQuestions } from './copilot/PastQuestions';
+import { LedgerRetry, PastQuestionsList, PastQuestionsRow, usePastQuestions } from './copilot/PastQuestions';
 import { copilotAnswerKey } from './copilot/copilotErasure';
 import { useCopilotAsk, type CopilotTurn } from './copilot/useCopilotAsk';
-import { ledger } from './copilot/ledger';
+import { ledger, ledgerType } from './copilot/ledger';
 
 export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
 type Params = { view?: 'questions' | 'answer'; item?: PastQuestion };
@@ -92,12 +92,12 @@ function Mast({ back, title, compact, children }: { back: string; title: string;
   const navigation = useNavigation();
   const light = { color: sc.textOnAccent };
   return (
-    <View style={[s.mast, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + 12 }]}>
+    <View style={[s.mast, compact && s.mastSmall, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + 12 }]} testID="copilot-mast">
       <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel={`Back to ${back}`} style={s.back} testID="copilot-back">
-        <Ionicons name="chevron-back" size={22} color={sc.textOnAccent} />
-        <Text style={[typography.bodyMd, light]}>{back}</Text>
+        <Ionicons name="chevron-back" size={22} color={ledger.nav} />
+        <Text style={[ledgerType.nav, { color: ledger.nav }]}>{back}</Text>
       </Pressable>
-      <Text style={[compact ? typography.h2 : typography.h1, light]} accessibilityRole="header">{title}</Text>
+      <Text style={[compact ? ledgerType.mastSmall : typography.h1, light]} accessibilityRole="header" testID="copilot-mast-title">{title}</Text>
       {children}
     </View>
   );
@@ -306,8 +306,8 @@ function QuestionsView() {
   // A failed "Show older questions" says so where the link is, and its Try again reads that page again (Opus C1).
   const older = q.isFetchNextPageError;
   const failed = q.error ? (
-    <QuietError message={loadFailureMessage(q.error, A.past)} onRetry={() => void (older ? q.fetchNextPage() : q.refetch())}
-      retrying={older ? q.isFetchingNextPage : q.isRefetching} layout={older ? 'inline' : 'block'} testID="copilot-past-error" />
+    <LedgerRetry message={loadFailureMessage(q.error, A.past)} onRetry={() => void (older ? q.fetchNextPage() : q.refetch())}
+      retrying={older ? q.isFetchingNextPage : q.isRefetching} testID="copilot-past-error" />
   ) : null;
   return (
     <>
@@ -316,12 +316,12 @@ function QuestionsView() {
         refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} tintColor={sc.textMuted} />}>
         <Mast back={C.title} title={A.past} compact>
           {first?.since ? (
-            <View style={[s.chip, { backgroundColor: sc.surface.forestBand }]}>
-              <Text style={[typography.bodySmall, { color: sc.textOnAccent }]}>{A.since(first.total, monthYear(first.since))}</Text>
+            <View style={s.mini} testID="copilot-past-since">
+              <Text style={[ledgerType.mini, { color: sc.textOnAccent }]}>{A.since(first.total, monthYear(first.since))}</Text>
             </View>
           ) : null}
         </Mast>
-        <View style={s.body}>
+        <View style={[s.body, s.histBody]}>
           {q.isPending ? <QuietLoading label="Loading past questions" rows={4} testID="copilot-past-loading" /> : null}
           {older ? null : failed}
           <PastQuestionsList items={items} more={q.hasNextPage && !older} loadingMore={q.isFetchingNextPage}
@@ -388,7 +388,7 @@ function AnswerView({ item }: { item: PastQuestion }) {
         <View style={[s.body, s.turn]}>
           <Asked question={item.question ?? ''} at={new Date(item.askedAt)} day={shortDay(item.askedAt)} />
           {q.isPending ? <QuietLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
-          {q.error || missing ? <QuietError message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
+          {q.error || missing ? <LedgerRetry message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
           {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} /> : null}
           {/* A decided change was decided by whoever coached then; only an unsent one goes to today's coach (C1). */}
           {/* Sent from here, Your path's lists and this answer read the server again (as a turn's Send does). */}
@@ -407,7 +407,11 @@ const s = StyleSheet.create({
   list: { paddingHorizontal: 0 },
   scroll: { flexGrow: 1, paddingBottom: layout.gutter },
   mast: { paddingHorizontal: 20, paddingBottom: 24, gap: 8, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
-  back: { minWidth: 44, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  // Style A compact masthead (.mhs, .nav, .mhs .mini span; #852 round 3 B-H1).
+  mastSmall: { paddingBottom: 14 },
+  histBody: { paddingTop: 18 },
+  back: { minWidth: 44, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start' },
+  mini: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: 'rgba(255,255,255,0.08)' },
   body: { paddingHorizontal: 20, paddingTop: 24, gap: 16 },
   section: { gap: 10 },
   turn: { gap: 12 },
@@ -418,5 +422,4 @@ const s = StyleSheet.create({
   pad: { padding: 16, gap: 12 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  chip: { alignSelf: 'flex-start', borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 4 },
 });
