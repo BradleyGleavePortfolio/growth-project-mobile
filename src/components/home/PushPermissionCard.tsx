@@ -22,7 +22,7 @@ import { usersApi } from '../../services/api';
 import { prefsStorage } from '../../storage/mmkv';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
 import { useTutorialStore } from '../../tutorial/tutorialStore';
 import { useNoticeSlot } from './HomeNoticeSlot';
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   home: { ...CARD_A, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 12 },
   homeBody: { fontFamily: 'Inter_400Regular', fontSize: 14.5, lineHeight: 19 },
   homeActions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
-  homeTurnOn: { minHeight: 48, minWidth: 110, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  homeTurnOn: { minHeight: 48, minWidth: 110, borderRadius: radius.button, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   homeTurnOnText: { fontFamily: SEMI, fontSize: 15, lineHeight: 20 },
   homeNotNow: { minHeight: 44, justifyContent: 'center' },
   homeNotNowText: { fontFamily: SEMI, fontSize: 14, lineHeight: 18 },

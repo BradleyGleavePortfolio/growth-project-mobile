@@ -310,8 +310,8 @@ const makeHomeStyles = (colors: ThemeColors, light: boolean) =>
     head: { flexDirection: "row", alignItems: "baseline", gap: 8 },
     title: { fontFamily: SEMI, fontSize: 16, lineHeight: 21, color: light ? styleA.ink : colors.textPrimary, flex: 1 },
     sub: { fontFamily: "Inter_400Regular", fontSize: 12.5, lineHeight: 17, color: light ? styleA.grey : colors.textSecondary },
-    bar: { height: 6, borderRadius: 3, backgroundColor: light ? styleA.cardLine : colors.border, overflow: "hidden", marginTop: 10, marginBottom: 6 },
-    barFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
+    bar: { height: 6, borderRadius: radius.chip, backgroundColor: light ? styleA.cardLine : colors.border, overflow: "hidden", marginTop: 10, marginBottom: 6 },
+    barFill: { height: 6, borderRadius: radius.chip, backgroundColor: colors.primary },
     row: {
       flexDirection: "row",
       alignItems: "center",
@@ -324,7 +324,7 @@ const makeHomeStyles = (colors: ThemeColors, light: boolean) =>
     dot: {
       width: 22,
       height: 22,
-      borderRadius: 11,
+      borderRadius: radius.chip,
       borderWidth: 1.5,
       borderColor: light ? styleA.inkMuted : colors.textSecondary,
       alignItems: "center",

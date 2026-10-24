@@ -23,7 +23,7 @@ jest.mock('../storage/mmkv', () => ({
   prefsStorage: { getStringAsync: async () => undefined, set: async () => undefined },
 }));
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach', firstName: 'Sarah' }) }));
-jest.mock('../navigation/coachLanding', () => ({ ...jest.requireActual('../navigation/coachLanding'), coachLandingTab: () => 'Home' }));
+jest.mock('../navigation/coachLanding', () => ({ ...jest.requireActual('../navigation/coachLanding'), coachLandingTab: () => 'CommandCenter' }));
 jest.mock('../config/featureFlags', () => {
   const actual = jest.requireActual('../config/featureFlags');
   return { ...actual, featureFlags: { ...actual.featureFlags, coachBrief: true } };
