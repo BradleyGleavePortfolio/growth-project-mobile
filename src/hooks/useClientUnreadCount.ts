@@ -4,15 +4,18 @@
  * that never rendered (Home stack is headerShown:false). Now used by
  * components/home/HomeHeaderActions, and by the UI-2 coach Home's bell with
  * `enabled` = screen focus: it pauses off screen and re-reads on each return.
+ * FR-880: a block or unblock reads it again at once, not on the next 30 s tick.
  */
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { fetchUnreadCount } from '../services/notificationsApi';
+import { useBlockedUsersStore } from '../store/blockedUsersStore';
 import { logger } from '../utils/logger';
 import { normalizeError } from '../screens/client/_completionLogging';
 
 export function useClientUnreadCount(enabled = true): number {
   const [count, setCount] = useState(0);
+  const blocked = useBlockedUsersStore((st) => st.blocked);
   useEffect(() => {
     if (!enabled) return undefined;
     let mounted = true;
@@ -41,6 +44,6 @@ export function useClientUnreadCount(enabled = true): number {
       clearInterval(interval);
       sub.remove();
     };
-  }, [enabled]);
+  }, [enabled, blocked]);
   return count;
 }

@@ -359,6 +359,7 @@ const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
 
 function useCoachNotificationUnreadCount(): number {
   const [count, setCount] = useState(0);
+  const blocked = useBlockedUsersStore((st) => st.blocked); // FR-880: a block or unblock reads the bell count again
   useEffect(() => {
     let mounted = true;
     const refresh = async () => {
@@ -381,7 +382,7 @@ function useCoachNotificationUnreadCount(): number {
       clearInterval(interval);
       sub.remove();
     };
-  }, []);
+  }, [blocked]);
   return count;
 }
 

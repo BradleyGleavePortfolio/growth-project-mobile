@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import * as fs from 'fs';
 import * as path from 'path';
 import { StyleSheet } from 'react-native';
@@ -154,6 +154,24 @@ describe('HomeHeaderActions', () => {
     const { findByLabelText } = await render(<HomeHeaderActions />);
     expect(await findByLabelText('Message Bradley, 2 unread')).toBeTruthy();
     expect(mockGet).toHaveBeenCalledWith('/messages/unread-count');
+  });
+
+  // FR-880: a block or unblock reads the count again at once (the server counts a blocked pair 0), not on the 30 s tick.
+  it('a block and an unblock read the coach-message count again at once', async () => {
+    let total = 2;
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    mockGet.mockImplementation(async (u: string) =>
+      u === '/messages/unread-count' ? { data: { total } } : { data: { name: 'Bradley Gleave' } },
+    );
+    const view = await render(<HomeHeaderActions />);
+    expect(await view.findByLabelText('Message Bradley, 2 unread')).toBeTruthy();
+    const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+    total = 0;
+    await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'c1', displayName: 'Bradley', blockedAt: '2026-10-24T00:00:00Z' }] }));
+    expect(await view.findByLabelText('Message Bradley')).toBeTruthy();
+    total = 2;
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(await view.findByLabelText('Message Bradley, 2 unread')).toBeTruthy();
   });
 
   // C3B-S2: with Style B and Roman chat on, every message entry opens the Messages list (HomeStack MessagesInbox).

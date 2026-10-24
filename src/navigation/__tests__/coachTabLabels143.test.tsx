@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform, StyleSheet, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import * as fs from 'fs';
 import * as path from 'path';
 import { lightTokens, typography } from '../../theme/tokens';
@@ -16,7 +16,8 @@ jest.mock('../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: jest.requireActual('../../theme/tokens').lightTokens }),
 }));
 jest.mock('../../services/api', () => ({ coachApi: { getUnreadCounts: async () => ({ data: { total: mockUnreadCount } }) } }));
-jest.mock('../../services/notificationsApi', () => ({ fetchUnreadCount: async () => 0 }));
+const mockNotifCount = jest.fn(async () => 0);
+jest.mock('../../services/notificationsApi', () => ({ fetchUnreadCount: () => mockNotifCount() }));
 jest.mock('../../services/commandCenterApi', () => ({ __USING_MOCK_DATA: true }));
 jest.mock('../../components/NotificationBadge', () => () => null);
 jest.mock('../../components/purchases/withNonP2PPurchaseGate', () => ({
@@ -137,4 +138,18 @@ it('a block and an unblock read the Messages badge again at once, not on the nex
   mockUnreadCount = 3; // unblock: the pair counts again
   await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
   expect(await view.findByLabelText('Messages, 3')).toBeTruthy();
+});
+
+// FR-880 (same class as Sol B4): the coach bell on the Clients stack reads its count again on a block or unblock.
+it('a block and an unblock read the coach bell count again at once', async () => {
+  const view = await render(<NavigationContainer><CoachNavigator /></NavigationContainer>);
+  await fireEvent.press(view.getByLabelText(/^Clients(, tab, \d of \d)?$/));
+  expect(await view.findByText('../screens/coach/ClientsListScreen')).toBeTruthy();
+  await waitFor(() => expect(mockNotifCount).toHaveBeenCalled());
+  const reads = mockNotifCount.mock.calls.length;
+  const { useBlockedUsersStore } = jest.requireActual('../../store/blockedUsersStore');
+  await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Ana', blockedAt: '2026-10-24T00:00:00Z' }] }));
+  await waitFor(() => expect(mockNotifCount).toHaveBeenCalledTimes(reads + 1));
+  await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+  await waitFor(() => expect(mockNotifCount).toHaveBeenCalledTimes(reads + 2));
 });

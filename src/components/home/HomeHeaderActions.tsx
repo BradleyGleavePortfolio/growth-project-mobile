@@ -28,13 +28,14 @@
  * (HomeStack `MessagesInbox`), where the coach and Roman sit side by side.
  * Flag off, or Roman chat off, every entry keeps its own destination.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientUnreadCount } from '../../hooks/useClientUnreadCount';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import NotificationBadge from '../NotificationBadge';
 import { useTheme } from '../../theme/ThemeProvider';
 import { radius, typography } from '../../theme/tokens';
@@ -103,6 +104,14 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
       .catch((error: unknown) => logger.warn('homeHeader.unread-messages', { error: String(error) }));
   }, [coachId]);
   useFocusEffect(refreshUnreadMessages);
+  // FR-880: a block or unblock reads the count again at once (a blocked pair counts 0), not on the next 30 s tick.
+  const blocked = useBlockedUsersStore((st) => st.blocked);
+  const seenBlocked = useRef(blocked);
+  useEffect(() => {
+    if (seenBlocked.current === blocked) return;
+    seenBlocked.current = blocked;
+    refreshUnreadMessages();
+  }, [blocked, refreshUnreadMessages]);
   useEffect(() => {
     const id = setInterval(refreshUnreadMessages, 30000);
     const sub = AppState.addEventListener('change', (state) => {
