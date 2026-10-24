@@ -26,6 +26,7 @@ import { typography } from '../../theme/tokens';
 import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
 import { useTutorialStore } from '../../tutorial/tutorialStore';
 import { useNoticeSlot } from './HomeNoticeSlot';
+import { CARD_A, SEMI, styleA } from '../../screens/coach/home-v11/HomeParts';
 
 export const pushPrimerDismissedKey = (userId: string) => `push_primer_dismissed:${userId}`;
 
@@ -43,10 +44,10 @@ export default function PushPermissionCard({
   presentation = 'card',
 }: {
   audience?: PushPermissionAudience;
-  /** 'section' = Home's hairline look (DES-K2-128); other callers keep the card. */
-  presentation?: 'card' | 'section';
+  /** 'section' = Home's hairline look (DES-K2-128); 'home' = the coach Home's Style A white card (HOME3 A); others keep the card. */
+  presentation?: 'card' | 'section' | 'home';
 } = {}) {
-  const { semanticColors: sc } = useTheme();
+  const { semanticColors: sc, colorScheme } = useTheme();
   const user = useCurrentUser();
   const userId = user?.id ?? null;
   const [visible, setVisible] = useState(false);
@@ -100,6 +101,38 @@ export default function PushPermissionCard({
   const body = audience === 'client' && !user?.coach_id
     ? 'Turn on notifications for reminders you set in the app.'
     : BODY_COPY[audience];
+
+  if (presentation === 'home') {
+    // HOME3 A: the ask in the Home's white card, a filled Turn on and a Not now link (a.py `setup()`, `.btn`, `.lnk`).
+    const light = colorScheme !== 'dark';
+    return (
+      <View style={[styles.home, light ? null : { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="push-permission-card">
+        <Text style={[styles.homeBody, { color: light ? styleA.ink : sc.textPrimary }]}>{body}</Text>
+        <View style={styles.homeActions}>
+          <Pressable
+            onPress={enable}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Turn on notifications"
+            accessibilityState={{ disabled: busy, busy }}
+            testID="push-permission-enable"
+            style={({ pressed }) => [styles.homeTurnOn, { backgroundColor: sc.accent, opacity: busy || pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[styles.homeTurnOnText, { color: light ? styleA.figure : sc.textOnAccent }]}>Turn on</Text>
+          </Pressable>
+          <Pressable
+            onPress={dismiss}
+            accessibilityRole="button"
+            accessibilityLabel="Not now"
+            testID="push-permission-dismiss"
+            style={({ pressed }) => [styles.homeNotNow, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[styles.homeNotNowText, { color: sc.accentText }]}>Not now</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   if (presentation === 'section') {
     return (
@@ -169,4 +202,11 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   primary: { paddingHorizontal: 18, minHeight: 44, justifyContent: 'center' },
   secondary: { paddingHorizontal: 18, minHeight: 44, justifyContent: 'center' },
+  home: { ...CARD_A, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 12 },
+  homeBody: { fontFamily: 'Inter_400Regular', fontSize: 14.5, lineHeight: 19 },
+  homeActions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
+  homeTurnOn: { minHeight: 48, minWidth: 110, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  homeTurnOnText: { fontFamily: SEMI, fontSize: 15, lineHeight: 20 },
+  homeNotNow: { minHeight: 44, justifyContent: 'center' },
+  homeNotNowText: { fontFamily: SEMI, fontSize: 14, lineHeight: 18 },
 });

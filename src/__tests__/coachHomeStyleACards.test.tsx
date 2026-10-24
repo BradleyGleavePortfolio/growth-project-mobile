@@ -1,0 +1,93 @@
+// FR-863R5 (HOME-WINS-FADE, GOAL HOME3 Style A): the parts shared components draw on the coach Home are Style A's white
+// cards: the setup checklist on the hero (white, done bar, tick circles, chevrons), the push ask (a card with a filled
+// Turn on) and today's brief. The old Overview ('all') keeps its hairline looks. Section labels and small grey lines on
+// light grounds are graphite #2C2C2C (owner #168-13, m#875); a screen reader hears the open alerts row's second line.
+import React from 'react';
+import { StyleSheet, Text, type TextStyle, type ViewStyle } from 'react-native';
+import { render, within } from '@testing-library/react-native';
+import CoachHomeCards from '../screens/coach/command-center/CoachHomeCards';
+import { AlertsRow, useCardStyles } from '../screens/coach/home-v11/HomeParts';
+
+jest.mock('@react-navigation/native', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  return {
+    ...jest.requireActual('@react-navigation/native'),
+    useNavigation: () => ({ navigate: jest.fn() }),
+    useFocusEffect: (cb: () => void) => R.useEffect(() => cb(), [cb]),
+  };
+});
+jest.mock('expo-notifications', () => ({ getPermissionsAsync: async () => ({ status: 'undetermined', canAskAgain: true }) }));
+jest.mock('../services/pushNotifications', () => ({ registerForPushNotifications: jest.fn() }));
+jest.mock('../storage/mmkv', () => ({
+  ...jest.requireActual('../storage/mmkv'),
+  prefsStorage: { getStringAsync: async () => undefined, set: async () => undefined },
+}));
+jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach', firstName: 'Sarah' }) }));
+jest.mock('../navigation/coachLanding', () => ({ ...jest.requireActual('../navigation/coachLanding'), coachLandingTab: () => 'Home' }));
+jest.mock('../config/featureFlags', () => {
+  const actual = jest.requireActual('../config/featureFlags');
+  return { ...actual, featureFlags: { ...actual.featureFlags, coachBrief: true } };
+});
+jest.mock('../lib/coachSetup/setupStatus', () => ({
+  ...jest.requireActual('../lib/coachSetup/setupStatus'),
+  loadSetupStatus: async () => ({ connect: { state: 'none', actionRequired: false }, livePackageTitle: 'Strong 12', hasClient: true, paid: false, sharedLink: true, errors: [] }),
+}));
+
+const flat = (node: { props: { style?: unknown } }): ViewStyle & TextStyle => StyleSheet.flatten(node.props.style as ViewStyle) ?? {};
+const WHITE_CARD = { backgroundColor: '#FFFFFF', borderColor: '#DCE3DB', borderWidth: 0.5, borderRadius: 16 };
+
+describe('Style A white cards on the coach Home (FR-863R5)', () => {
+  it('draws the setup checklist as the white GOAL card: count beside the title, a done bar, tick circles, chevrons', async () => {
+    const v = await render(<CoachHomeCards part="setup" />);
+    const card = await v.findByTestId('coach-setup-checklist');
+    expect(flat(card)).toMatchObject(WHITE_CARD);
+    expect(flat(card).backgroundColor).not.toBe('#F2EDE4');
+    const title = within(card).getByText('Finish setting up');
+    expect(flat(title)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#142019' });
+    expect(flat(within(card).getByText('2 of 4 done'))).toMatchObject({ color: '#2C2C2C' });
+    expect(flat(within(card).getByTestId('coach-setup-checklist-bar-fill'))).toMatchObject({ width: '50%' });
+    const row = within(card).getByTestId('coach-setup-checklist-package');
+    expect(flat(row)).toMatchObject({ minHeight: 50, borderTopWidth: 0.5 });
+    expect(within(row).getByText('Your package is live.')).toBeTruthy();
+    expect(row.props.accessibilityLabel).toBe('Create your first package. Done. Your package is live.');
+  });
+
+  it('draws the push ask and the brief as white cards, the ask with a filled Turn on and a Not now link', async () => {
+    const v = await render(<CoachHomeCards part="below" />);
+    const push = await v.findByTestId('push-permission-card');
+    expect(flat(push)).toMatchObject(WHITE_CARD);
+    expect(within(push).queryByText('STAY IN TOUCH')).toBeNull();
+    const turnOn = within(push).getByTestId('push-permission-enable');
+    expect(flat(turnOn)).toMatchObject({ minHeight: 48, borderRadius: 12, backgroundColor: '#2C4A36' });
+    expect(flat(within(turnOn).getByText('Turn on'))).toMatchObject({ color: '#FFFFFF' });
+    expect(within(push).getByTestId('push-permission-dismiss').props.accessibilityLabel).toBe('Not now');
+    const brief = v.getByTestId('coach-home-brief-card');
+    expect(flat(brief)).toMatchObject(WHITE_CARD);
+    expect(flat(within(brief).getByText("Today's brief"))).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 16 });
+  });
+
+  it('keeps the old Overview checklist in its hairline card', async () => {
+    const v = await render(<CoachHomeCards />);
+    const card = await v.findByTestId('coach-setup-checklist');
+    expect(flat(card).backgroundColor).not.toBe('#FFFFFF');
+    expect(v.queryByTestId('coach-setup-checklist-bar')).toBeNull();
+  });
+
+  it('colours the section labels graphite #2C2C2C on the light page (owner #168-13)', async () => {
+    function Labels() {
+      const cs = useCardStyles();
+      return <Text style={cs.section} testID="label">BUSINESS</Text>;
+    }
+    const v = await render(<Labels />);
+    expect(flat(v.getByTestId('label')).color).toBe('#2C2C2C');
+  });
+
+  it('says the open row\u2019s second line to a screen reader, and only when it shows', async () => {
+    const open = await render(<AlertsRow count={3} onPress={() => undefined} />);
+    expect(open.getByTestId('home-alerts').props.accessibilityLabel).toBe('Open alerts, 3, Waiting in Actions');
+    expect(open.getByTestId('home-alerts-waiting')).toBeTruthy();
+    const calm = await render(<AlertsRow count={0} onPress={() => undefined} />);
+    expect(calm.getByTestId('home-alerts').props.accessibilityLabel).toBe('Open alerts, 0');
+    expect(calm.queryByTestId('home-alerts-waiting')).toBeNull();
+  });
+});
