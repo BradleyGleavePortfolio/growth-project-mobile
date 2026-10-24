@@ -44,7 +44,7 @@ export default function MilestoneCabinet({ isFoundingMember: _isFoundingMember }
 
   if (milestonesQ.isLoading) {
     return (
-      <Text style={{ ...typography.body, color: colors.stone, paddingVertical: 16 }}>
+      <Text style={{ ...typography.body, color: colors.graphite, paddingVertical: 16 }}>
         Loading…
       </Text>
     );
@@ -52,7 +52,7 @@ export default function MilestoneCabinet({ isFoundingMember: _isFoundingMember }
 
   if (entries.length === 0) {
     return (
-      <Text style={{ ...typography.body, color: colors.stone, paddingVertical: 16 }}>
+      <Text style={{ ...typography.body, color: colors.graphite, paddingVertical: 16 }}>
         Keep training — milestones will appear here.
       </Text>
     );

@@ -154,15 +154,15 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     ...typography.micro,
-    color: colors.stone,
+    color: colors.graphite,
   },
   preview: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colors.graphite,
     lineHeight: 18,
   },
   previewUnread: {
-    color: colors.charcoal,
+    color: colors.ink,
   },
   badge: {
     backgroundColor: colors.forest,

@@ -124,7 +124,7 @@ export default function AlertRow({
       {onDismiss ? (
         <TouchableOpacity
           onPress={onDismiss}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
           accessibilityRole="button"
           accessibilityLabel={`Dismiss alert for ${clientName}`}
           testID="command-center-alert-dismiss"
@@ -196,6 +196,6 @@ const styles = StyleSheet.create({
   },
   dismissText: {
     ...typography.eyebrow,
-    color: colors.stone,
+    color: colors.graphite,
   },
 });
