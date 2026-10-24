@@ -1,0 +1,10 @@
+src/components/community/
+src/screens/community/
+src/hooks/__tests__/useVoice
+src/api/__tests__/communityVoiceApi.test.ts
+src/services/__tests__/voiceAudio.test.ts
+src/lib/__tests__/queryClient
+src/lib/__tests__/persistedQueryCache
+src/navigation/__tests__/rootNavigatorPersistedCacheGate
+src/lib/__tests__/copyVoice
+src/theme/
