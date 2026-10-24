@@ -139,7 +139,8 @@ async function adoptSignedIn(): Promise<void> {
 }
 /** Started once at import (flag on): no root mount needed. Sign-in and sign-out re-read the author. */
 export function startVoiceOutboxDriver(): void {
-  if (!featureFlags.communityVoiceNotes || driverStarted) return;
+  // Flags can be unset while modules load (test mocks); the hook below starts it again on mount.
+  if (driverStarted || !featureFlags?.communityVoiceNotes) return;
   driverStarted = true;
   authEvents.onAuthChange(() => void adoptSignedIn());
   void adoptSignedIn();
@@ -193,6 +194,7 @@ export function useVoiceOutbox(workspaceId: string | null, authorId: string | nu
 
   // Session scope (B2): the listener outlives this screen, so a waiting note sends from any screen.
   useEffect(() => {
+    startVoiceOutboxDriver(); // no-op once started at import
     online = isOnline;
     if (authorId) session = { authorId, qc };
     watchSignal();

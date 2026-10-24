@@ -343,7 +343,8 @@ const styles = StyleSheet.create({
   headerAction: { minWidth: 72, minHeight: 44, justifyContent: 'center' },
   cancel: { fontSize: 16, lineHeight: 20, fontWeight: '600', color: fp.forest },
   title: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
-  timer: { fontFamily: typography.display.fontFamily, fontSize: 56, lineHeight: 70, fontWeight: '500', color: fp.ink,
+  // GOAL .btime: Cormorant 500 at 56/70 — the loaded Medium face (h3), not a synthesised weight.
+  timer: { fontFamily: typography.h3.fontFamily, fontSize: 56, lineHeight: 70, fontWeight: '500', color: fp.ink,
     textAlign: 'center', fontVariant: ['tabular-nums'] },
   hint: { fontSize: 14, lineHeight: 20, minHeight: 20, color: fp.n700, textAlign: 'center' },
   hintWarn: { color: fp.ink, fontWeight: '600' },
