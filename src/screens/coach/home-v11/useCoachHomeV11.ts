@@ -17,10 +17,11 @@ import { isSubCoachBillingBlocked } from '../../../lib/coachSetup/errors';
 import type { LtvMetrics } from '../../../components/command-center/CoachLtvDashboard';
 import type { MoneyPayout, MoneySummary } from '../../../api/coachMoneyApi';
 import { useCoachStore } from '../../../store/coachStore';
-import { lookupReason, type LookupReason, type UnreadByClient } from '../../../utils/coach/clientLookup';
+import type { LookupReason, UnreadByClient } from '../../../utils/coach/clientLookup';
 import { sortRoster, type RosterClient } from '../../../utils/coach/clientRoster';
 import { coachHomeSources, type CoachHomeSources } from '../command-center/coachHomeSources';
 import { fetchOverviewWithHome, type CoachHomeDay, type OverviewRead } from './homeDay';
+import { needsYouReason, useCoachBlockList } from './blockList';
 
 export type MonthState = { kind: 'loading' | 'blocked' | 'error' } | { kind: 'ok'; summary: MoneySummary };
 /** A read that is still on its way, failed with nothing verified to show, or answered (an empty answer included). */
@@ -59,10 +60,12 @@ export interface CoachHomeData {
 const localDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** The Needs you list's rule (ClientLookupScreen, view 'needs'), so the tile and the list agree. */
-export function needsAndSteady(clients: RosterClient[], unread: UnreadByClient, now: Date) {
+const NOBODY: ReadonlySet<string> = new Set();
+
+/** The Needs you list's rule (ClientLookupScreen, view 'needs': `needsYouReason`), so the tile and the list agree. */
+export function needsAndSteady(clients: RosterClient[], unread: UnreadByClient, now: Date, blockedIds: ReadonlySet<string> = NOBODY) {
   const active = clients.filter((c) => c.status !== 'archived');
-  const rows = sortRoster(active, 'recent').map((client) => ({ client, reason: lookupReason(client, unread, 'needs', now) }));
+  const rows = sortRoster(active, 'recent').map((client) => ({ client, reason: needsYouReason(client, unread, blockedIds, now) }));
   const needs = rows.filter((r) => r.reason.action !== null);
   const steadyRows = rows.filter((r) => r.reason.action === null);
   const withDays = steadyRows.filter((r) => r.client.activity);
@@ -153,7 +156,10 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     void loadRoster(seq.current);
   }, [coachId, loadRoster]);
 
-  const { needs, steady } = useMemo(() => needsAndSteady(clients, unread, now), [clients, unread, now]);
+  // The tile waits for this phone's block list, as the lookup's Needs you does, so a cold start counts no blocked client (LO B2).
+  const blockList = useCoachBlockList();
+  const blockedSet = useMemo(() => new Set(blockList.blockedIds), [blockList.blockedIds]);
+  const { needs, steady } = useMemo(() => needsAndSteady(clients, unread, now, blockedSet), [clients, unread, now, blockedSet]);
   const queue = (drafts.data?.drafts ?? []).filter((d) => isStream2Capability(d.capability));
   const draftKinds: DraftKinds = {
     workouts: queue.filter((d) => d.capability === 'draft.assign_workout').length,
@@ -164,7 +170,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
   const draftsState: ReadState = drafts.data ? 'ok' : drafts.isError ? 'error' : 'loading';
   const data: CoachHomeData = {
     overview: read?.overview ?? null, home: read?.home ?? null, overviewFailed, refreshing,
-    needs, reachOuts, steady, rosterState, ltv, month, payout, unreadNotifications,
+    needs, reachOuts, steady, rosterState: rosterState === 'ok' && !blockList.known ? 'loading' : rosterState, ltv, month, payout, unreadNotifications,
     draftsWaiting: queue.length, draftKinds, draftsState, draftsError: drafts.error, draftsRetrying: !!drafts.isFetching, now,
   };
   return {

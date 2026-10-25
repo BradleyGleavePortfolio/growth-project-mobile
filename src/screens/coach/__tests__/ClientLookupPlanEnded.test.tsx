@@ -78,6 +78,7 @@ beforeEach(() => {
 async function mount() {
   const view = await render(<ClientLookupScreen navigation={nav} />);
   await waitFor(() => expect(screen.getByTestId('lookup-count')).toBeTruthy());
+  await waitFor(() => expect(screen.queryByText('Loading')).toBeNull()); // this phone's block list is read first
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return view;
 }
@@ -226,6 +227,18 @@ describe('L2: blocked clients never show (b#1141; owner: hide all messaging)', (
     expect([screen.queryByTestId('lookup-message-maya'), screen.queryByTestId('lookup-roman-maya')]).toEqual([null, null]);
     expect([screen.getByTestId('lookup-message-dev'), screen.getByTestId('lookup-roman-dev')].every(Boolean)).toBe(true);
   });
+  it('on a cold start, leaves out a client GET /users/blocks names before any chat screen has read the list (LO B1)', async () => {
+    await act(() => { useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); }); // app start
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string, cfg: { params: { cursor?: string } }) => (url === '/users/blocks'
+      ? Promise.resolve({ data: { blocked: [{ blockedId: 'maya', displayName: 'Maya Ortiz', blockedAt: '2026-10-21T10:00:00Z' }] } })
+      : base(url, cfg)));
+    await mount();
+    await waitFor(() => expect(screen.getByTestId('lookup-chip-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 6'));
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    expect(rowIds()).toEqual(['lookup-row-dev', 'lookup-row-sam', 'lookup-row-lena']);
+    expect([screen.queryByTestId('lookup-message-maya'), screen.queryByTestId('lookup-roman-maya')]).toEqual([null, null]);
+  });
   it('re-reads when the draft route says the client is gone (404), and sends nothing', async () => {
     await mount();
     await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
@@ -235,6 +248,7 @@ describe('L2: blocked clients never show (b#1141; owner: hide all messaging)', (
     const before = churnReads();
     await act(async () => { fireEvent.press(screen.getByTestId('home-draft-ask')); });
     await waitFor(() => expect(screen.getByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy());
+    expect(screen.queryByTestId('home-draft-ask')).toBeNull(); // only Not now: a second ask gets the same 404 (LO C2)
     await waitFor(() => expect(churnReads()).toBe(before + 1));
     expect(mockApprove).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByTestId('home-draft-close'));

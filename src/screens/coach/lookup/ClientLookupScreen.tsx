@@ -30,13 +30,13 @@ import {
   needsYouSentence, parseLookupQuery, readRecentClientIds, recentFromRoster, rememberRecentClient,
   type LookupAction, type LookupFilter, type LookupReason, type UnreadByClient,
 } from '../../../utils/coach/clientLookup';
-import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { HomeSheet, type DraftAsk } from '../home-v11/DraftSheets';
 import {
   messagedLine, planEndedAsk, planEndedTitle, readPlanEnded, rowLine, rowParts, withoutBlocked, type LineParts, type PlanEndedPage, type PlanEndedRow,
 } from '../home-v11/planEndedData';
 import { KeepTail } from '../home-v11/PlanEnded';
 import { RomanMark } from '../home-v11/RomanMark';
+import { needsYouReason, useCoachBlockList } from '../home-v11/blockList';
 import { useLookupNudge } from './useLookupNudge';
 import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
@@ -148,14 +148,16 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (showEnded && !haveEnded) void loadEnded(); // the roster reached 15 after this focus's read was skipped
   }, [showEnded, haveEnded, loadEnded]);
-  // b#1141's server leaves blocked pairs out; the phone also leaves out clients on the coach's own block list.
-  const blocked = useBlockedUsersStore((st) => st.blocked);
+  // b#1141's server leaves blocked pairs out; the phone also leaves out clients on the coach's own block list, read on
+  // mount (this phone's copy, then GET /users/blocks), and holds the rows until this phone's copy is read (LO B1).
+  const blockList = useCoachBlockList();
+  const blockKnown = !coachId || blockList.known;
   // Owner (b#1141): a blocked pair gets no messaging at all, so no Message, Nudge, Reply or Say hello on any lookup row.
-  const blockedIds = useMemo(() => new Set(blocked.map((b) => b.id)), [blocked]);
+  const blockedIds = useMemo(() => new Set(blockList.blockedIds), [blockList.blockedIds]);
   const canMessage = (c: RosterClient) => !blockedIds.has(c.id);
   const endedPage = useMemo(
-    () => (ended && ended.coach === coachId ? withoutBlocked(ended.page, blocked.map((b) => b.id)) : null),
-    [ended, coachId, blocked],
+    () => (ended && ended.coach === coachId && blockList.known ? withoutBlocked(ended.page, blockList.blockedIds) : null),
+    [ended, coachId, blockList.known, blockList.blockedIds],
   );
   const endedOn = chip === 'ended' && endedPage != null;
   const filters = chip && chip !== 'ended' && !parsed.filters.includes(chip) ? [...parsed.filters, chip] : parsed.filters;
@@ -219,7 +221,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
               </View>
               {messaged ? (
                 <View style={s.messaged}>
-                  <Ionicons name="checkmark" size={16} color={colors.success} />
+                  <Ionicons name="checkmark" size={14} color={colors.success} />
                   <Text style={[s.reason, s.messagedText]}>{messaged}</Text>
                 </View>
               ) : null}
@@ -247,7 +249,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     <>
       {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
       <HapticPressable intent="light" style={s.iconBtn} onPress={() => setAsk({ ...planEndedAsk(r), onGone: () => void loadEnded() })} accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${firstName(c)}`} testID={`lookup-roman-${c.id}`}>
-        <RomanMark size={27} />
+        <RomanMark size={24} r={14} />
       </HapticPressable>
     </>
   ), r.last_coach_message_at && endedPage ? messagedLine(r.last_coach_message_at, endedPage.time_zone) : null, rowParts(r));
@@ -290,16 +292,14 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const sections = searchFirst ? groupByLetter(roster) : [];
   const presentLetters = sections.map((x) => x.letter).filter((l) => LETTERS.includes(l));
   let body: React.ReactNode;
-  if (isLoading) body = <QuietLoading label="Loading clients" rows={5} testID="lookup-loading" />;
+  if (isLoading || !blockKnown) body = <QuietLoading label="Loading clients" rows={5} testID="lookup-loading" />;
   else if (loadError && roster.length === 0) {
     body = <QuietError message={loadError} onRetry={() => coachId && loadClients(coachId, filterStatus)} testID="lookup-error" />;
   } else if (!searchFirst) {
     // Mockup 1's order: last logged first (sortRoster 'recent').
-    // A blocked client's Reply, Nudge or Say hello is no action at all, so the sentence and the Needs you view never count it.
-    const all = sortRoster(roster, 'recent').map((c) => {
-      const r = lookupReason(c, unread, 'needs');
-      return { c, r: r.action && r.action !== 'review' && !canMessage(c) ? { ...r, action: null } : r };
-    });
+    // A blocked client's Reply, Nudge or Say hello is no action at all, so the sentence, the Needs you view and the Home's
+    // tile never count it (one rule: needsYouReason).
+    const all = sortRoster(roster, 'recent').map((c) => ({ c, r: needsYouReason(c, unread, blockedIds) }));
     const rows = needsView ? all.filter((x) => x.r.action) : all;
     const needs = all.filter((x) => x.r.action).length;
     body = (
@@ -463,8 +463,9 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     reasonRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
     reason: { ...typography.bodySmall, color: colors.textMuted, flexShrink: 1 },
     reasonOk: { color: colors.textPrimary },
-    messaged: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-    messagedText: { fontFamily: 'Inter_600SemiBold', color: colors.success },
+    // RENEWAL3 L2 (r3.py `.k4msg`): 13/18 medium, a 14 check, 5 apart (LS B1).
+    messaged: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
+    messagedText: { fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, color: colors.success },
     dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: colors.primary },
     act: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: colors.primary, marginLeft: 8 },
     actText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: colors.primary },
