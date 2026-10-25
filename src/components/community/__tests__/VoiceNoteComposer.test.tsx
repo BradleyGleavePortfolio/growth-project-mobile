@@ -220,7 +220,8 @@ describe('VoiceNoteComposer — loaded faces (LO-848R4 B4)', () => {
 // strip is 30 slots, un-arrived ones are ghost bars, and it is only as tall as its tallest bar; the
 // denied buttons are the .btn 54 pt height.
 describe('VoiceNoteComposer — GOAL sheet rhythm and live strip (FR-848R5)', () => {
-  const flat = (n: { props: { style?: unknown } }) => StyleSheet.flatten(n.props.style) ?? {};
+  const flat = (n: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(n.props.style as never) ?? {}) as Record<string, unknown>;
   const hidden = { includeHiddenElements: true };
 
   it('recording: per-row GOAL margins, 30 slots with ghost bars, a strip that sizes to its bars', async () => {
