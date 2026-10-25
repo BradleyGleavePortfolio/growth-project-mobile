@@ -13,7 +13,7 @@ import { AlertsRow, LinkRow, useCardStyles } from '../screens/coach/home-v11/Hom
 jest.mock('@expo/vector-icons', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  const Icon = ({ name, color }: { name: string; color?: string }) => R.createElement(View, { testID: `icon-${name}`, iconColor: color } as import('react-native').ViewProps);
+  const Icon = ({ name, color }: { name: string; color?: string }) => R.createElement(View, { testID: `icon-${name}`, ...{ iconColor: color } });
   return { Ionicons: Icon, MaterialIcons: Icon, MaterialCommunityIcons: Icon, Feather: Icon };
 });
 
