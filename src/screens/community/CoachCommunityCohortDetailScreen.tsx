@@ -195,6 +195,19 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         </Text>
       </View>
 
+      <HapticPressable
+        intent="medium"
+        onPress={() => setInviteOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Invite a client by email"
+        testID="coach-community-cohort-detail-invite"
+        style={[styles.primaryButton, { backgroundColor: semanticColors.accent }]}
+      >
+        <Text style={[styles.primaryButtonLabel, { color: semanticColors.textOnAccent }]}>
+          Invite client
+        </Text>
+      </HapticPressable>
+
       {detail.isError ? (
         <CoachErrorState
           message="Could not load this cohort. Pull back and open it again."
@@ -216,18 +229,6 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         />
       )}
 
-      <HapticPressable
-        intent="medium"
-        onPress={() => setInviteOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Invite a client by email"
-        testID="coach-community-cohort-detail-invite"
-        style={[styles.fab, { backgroundColor: semanticColors.accent }]}
-      >
-        <Text style={[styles.fabLabel, { color: semanticColors.textOnAccent }]}>
-          Invite client
-        </Text>
-      </HapticPressable>
 
       {/* Invite-by-email modal. */}
       <Modal
@@ -472,18 +473,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  fab: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.xl,
+  // K2 has no floating buttons: the main action sits in the page flow.
+  primaryButton: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
     minHeight: 48,
     paddingHorizontal: spacing.xl,
-    borderRadius: radius.pill,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fabLabel: {
-    fontSize: 15,
+  primaryButtonLabel: {
+    fontSize: 16,
     fontWeight: '600',
   },
   scrim: {

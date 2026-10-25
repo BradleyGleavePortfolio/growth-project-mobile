@@ -27,6 +27,7 @@ import { useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CommunityTermsGate from '../components/community/CommunityTermsGate';
 import { Colors } from '../theme';
+import { colors as tokenColors } from '../theme/tokens';
 import { featureFlags } from '../config/featureFlags';
 import CoachCommunityHomeScreen from '../screens/community/CoachCommunityHomeScreen';
 import CoachCommunityInboxScreen from '../screens/community/CoachCommunityInboxScreen';
@@ -90,7 +91,14 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
       <CoachCommunityStack.Screen
         name="CoachCommunityInbox"
         component={CoachCommunityInboxScreen}
-        options={{ title: 'Inbox' }}
+        // K2: the page draws its own serif title and date line, so the bar
+        // keeps only the back control and blends into the bone page.
+        options={{
+          title: 'Inbox',
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
+        }}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityCohorts"
@@ -131,7 +139,14 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
         <CoachCommunityStack.Screen
           name="CommunityVoiceNoteDetail"
           component={CommunityVoiceNoteDetail}
-          options={{ title: '' }}
+          // One header: the note draws its own "Voice note" title, so the bar
+          // keeps only the back control, in the page colour with no shadow —
+          // no second, empty bar above the title.
+          options={{
+            title: '',
+            headerShadowVisible: false,
+            headerStyle: { backgroundColor: tokenColors.bone },
+          }}
         />
       ) : null}
     </CoachCommunityStack.Navigator>

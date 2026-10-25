@@ -175,3 +175,24 @@ describe('getInbox with the voice flag on', () => {
     expect(res.items[0].voice).toEqual({ note_id: VOICE_ID, duration_ms: 42_000 });
   });
 });
+
+describe('FR-868 round 2 — the voice row is one accessible element', () => {
+  it('no accessible element wraps the pressable voice row, and the strip is hidden from screen readers', async () => {
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    const row = getByTestId(`coach-community-inbox-row-${VOICE_ID}`);
+    let node = row.parent;
+    while (node) {
+      expect(node.props.accessible).not.toBe(true);
+      expect(node.props.accessibilityRole).not.toBe('button');
+      node = node.parent;
+    }
+    const glyph = getByTestId(`coach-community-inbox-voice-${VOICE_ID}`);
+    let hidden = false;
+    let up = glyph.parent;
+    while (up && up !== row) {
+      if (up.props.accessibilityElementsHidden === true) hidden = true;
+      up = up.parent;
+    }
+    expect(hidden).toBe(true);
+  });
+});

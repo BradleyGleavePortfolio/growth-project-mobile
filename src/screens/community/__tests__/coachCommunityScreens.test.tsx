@@ -81,6 +81,7 @@ type QueryStub = {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   fetchNextPage?: () => void;
+  fetchStatus?: 'fetching' | 'paused' | 'idle';
 };
 const mockState: {
   dashboard: QueryStub;
@@ -1260,5 +1261,95 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     fireEvent(view.getByTestId('coach-community-inbox-list'), 'endReached');
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
     expect(view.getByTestId('coach-community-inbox-next-page')).toBeTruthy();
+  });
+});
+
+describe('FR-868 round 2 — inbox ack fallback, a11y, block, destinations, errors', () => {
+  const MID = '11111111-1111-1111-1111-111111111111';
+  const BLOCKED = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  const inboxWith = (items: unknown[], over: Record<string, unknown> = {}) => {
+    mockState.inbox = {
+      data: { items, next_cursor: null },
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+      ...over,
+    };
+  };
+
+  afterEach(async () => {
+    const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+    await useBlockedUsersStore.getState().reset();
+  });
+
+  it('with an empty ack cache, the row summary drives the badge and the label (breached)', async () => {
+    inboxWith([inboxItem({ ack: { state: 'none', sla_state: 'breached' } })]);
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    expect(
+      getByTestId(`coach-community-inbox-ack-badge-${MID}-sla-breached`),
+    ).toBeTruthy();
+    const row = getByTestId(`coach-community-inbox-row-${MID}`);
+    expect(row.props.accessibilityLabel).toContain('Overdue');
+  });
+
+  it('the Acknowledge control is its own accessible element, outside the row label element', async () => {
+    inboxWith([inboxItem({ ack: { state: 'seen', sla_state: 'within' } })]);
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    const row = getByTestId(`coach-community-inbox-row-${MID}`);
+    const button = getByTestId(`coach-community-inbox-mark-acked-${MID}`);
+    // Walk up from the button: no ancestor may be the accessible row element.
+    let node = button.parent;
+    while (node) {
+      expect(node).not.toBe(row);
+      node = node.parent;
+    }
+    expect(row.props.accessible).toBe(true);
+  });
+
+  it('rows from a blocked person never show, and an unblock refetches', async () => {
+    const refetch = jest.fn();
+    inboxWith(
+      [inboxItem(), inboxItem({ id: '22222222-2222-2222-2222-222222222222', client_user_id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', client_name: 'Lee Park' })],
+      { refetch },
+    );
+    const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+    await useBlockedUsersStore.getState().hydrate('me');
+    await useBlockedUsersStore.getState().block({ id: BLOCKED, displayName: 'Dana Cruz', role: 'client' });
+    const view = await render(<CoachCommunityInboxScreen />);
+    expect(view.queryByTestId(`coach-community-inbox-row-${MID}`)).toBeNull();
+    expect(view.getByTestId('coach-community-inbox-row-22222222-2222-2222-2222-222222222222')).toBeTruthy();
+    await act(async () => {
+      await useBlockedUsersStore.getState().unblock(BLOCKED);
+    });
+    expect(refetch).toHaveBeenCalled();
+    expect(view.getByTestId(`coach-community-inbox-row-${MID}`)).toBeTruthy();
+  });
+
+  it('a post row opens the post detail', async () => {
+    inboxWith([inboxItem({ type: 'post', kind: 'text' })]);
+    const navigate = jest.fn();
+    const { getByTestId } = await render(
+      <CoachCommunityInboxScreen navigation={{ navigate } as never} />,
+    );
+    await fireEvent.press(getByTestId(`coach-community-inbox-row-${MID}`));
+    expect(navigate).toHaveBeenCalledWith('CoachCommunityPostDetail', { postId: MID });
+  });
+
+  it('a failed refresh keeps the rows and shows the inline card', async () => {
+    const refetch = jest.fn();
+    inboxWith([inboxItem()], { isError: true, refetch });
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
+    expect(getByTestId(`coach-community-inbox-row-${MID}`)).toBeTruthy();
+    expect(queryByTestId('coach-community-inbox-error')).toBeNull();
+    await fireEvent.press(getByTestId('coach-community-inbox-refresh-error-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('offline with nothing cached shows the offline card, not an endless skeleton', async () => {
+    mockState.inbox = { data: undefined, isLoading: true, isError: false, fetchStatus: 'paused' };
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
+    expect(getByTestId('coach-community-inbox-offline')).toBeTruthy();
+    expect(queryByTestId('coach-community-inbox-loading')).toBeNull();
   });
 });

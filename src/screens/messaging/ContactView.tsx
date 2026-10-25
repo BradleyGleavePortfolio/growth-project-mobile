@@ -24,6 +24,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import { queryClient } from '../../services/queryClient';
+import {
+  coachCommunityKeys,
+  dropAuthorFromCoachInbox,
+} from '../../hooks/useCoachCommunity';
 import { messagesModerationApi } from '../../api/messagesApi';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -83,6 +88,8 @@ export default function ContactView(): React.ReactElement {
             try {
               await messagesModerationApi.block(contactId);
               await blockStore.block({ id: contactId, displayName, role });
+              // Owner rule: a blocked person's rows leave the coach inbox now.
+              dropAuthorFromCoachInbox(queryClient, contactId);
               HapticService.heavyImpact();
               track('dm_user_blocked', { contact_id: contactId, role });
               navigation.goBack();
@@ -111,6 +118,8 @@ export default function ContactView(): React.ReactElement {
           try {
             await messagesModerationApi.unblock(contactId);
             await blockStore.unblock(contactId);
+            // Their rows come back on the next inbox fetch.
+            void queryClient.invalidateQueries({ queryKey: coachCommunityKeys.all });
             track('dm_user_unblocked', { contact_id: contactId, role });
           } catch {
             Alert.alert(
