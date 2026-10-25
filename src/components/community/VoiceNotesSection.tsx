@@ -151,8 +151,8 @@ export default function VoiceNotesSection({
                 <Text style={styles.who} numberOfLines={1}>
                   {name}
                 </Text>
-                {coach ? <Text style={styles.coach}>Coach</Text> : null}
-                {when ? <Text style={styles.when}>{when}</Text> : null}
+                {coach ? <Text style={[styles.coach, styles.keep]} numberOfLines={1}>Coach</Text> : null}
+                {when ? <Text style={[styles.when, styles.keep]} numberOfLines={1}>{when}</Text> : null}
                 <View style={styles.spacer} />
                 {folded ? null : (
                   <SafetyMenu
@@ -344,6 +344,8 @@ const styles = StyleSheet.create({
   coach: { overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.chip,
     backgroundColor: fp.deep, color: fp.gold, fontFamily: voiceFaces.semibold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   when: { fontFamily: voiceFaces.regular, fontSize: 15, color: fp.n700 },
+  // The name gives way first: at 130% text on a 360 pt phone the Inter name, Coach mark and time overflow the row.
+  keep: { flexShrink: 0 },
   spacer: { flex: 1 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 28 },
   wifiOff: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },

@@ -170,6 +170,23 @@ describe('VoiceNotesSection', () => {
     expect(getByText('Coach')).toBeTruthy();
   });
 
+  // FR-848R5 render check: at 130% text on a 360 pt phone the row overflowed and the Coach mark broke over two lines.
+  it('a long name gives way; the Coach mark and the time stay whole on one line', async () => {
+    const { StyleSheet } = jest.requireActual('react-native');
+    const coach = { ...note('vn-c', 'u-coach'), author_name: 'Alexandra Montgomery-Reyes', author_is_coach: true };
+    mockListFeed.mockResolvedValue({ voice_notes: [coach], next_cursor: null });
+    const { findByText, getByText } = await renderSection();
+    const name = await findByText('Alexandra Montgomery-Reyes');
+    expect(name.props.numberOfLines).toBe(1);
+    expect(StyleSheet.flatten(name.props.style).flexShrink).toBe(1);
+    const mark = getByText('Coach');
+    expect(mark.props.numberOfLines).toBe(1);
+    expect(StyleSheet.flatten(mark.props.style).flexShrink).toBe(0);
+    const when = getByText('2h');
+    expect(when.props.numberOfLines).toBe(1);
+    expect(StyleSheet.flatten(when.props.style).flexShrink).toBe(0);
+  });
+
   it('a send that fails online says Not sent and offers Try again and Delete', async () => {
     const { findByTestId, getByTestId, findByText, getByText, queryByText } = await renderSection();
     await findByTestId('vn-player-vn-other');
