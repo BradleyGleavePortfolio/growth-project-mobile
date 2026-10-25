@@ -8,7 +8,7 @@
  * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
@@ -135,9 +135,8 @@ const open = async () => {
 };
 afterEach(() => client?.clear());
 // FlatList viewability does not run in tests: report the rows on screen by hand.
-const see = (r: Awaited<ReturnType<typeof open>>, ...keys: string[]) => act(async () => {
-  r.UNSAFE_getByType(FlatList).props.onViewableItemsChanged({ viewableItems: keys.map((key) => ({ key, isViewable: true, index: null })), changed: [] });
-});
+const see = (r: Awaited<ReturnType<typeof open>>, ...keys: string[]) => fireEvent(r.getByTestId('space-chat-list'), 'viewableItemsChanged',
+  { viewableItems: keys.map((key) => ({ key, isViewable: true, index: null })), changed: [] });
 const readMarks = () => mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/read')).map(([, b]) => b.message_id);
 
 it('member Everyone: header, rows with names as sent, Coach mark, voice row, New messages line, composer', async () => {
@@ -260,8 +259,8 @@ it('Sol B1: more than a page unread, older pages load until the first unread row
     : { data: cfg?.params?.before ? { messages: older, next_before: 'cur-2' } : { messages: page, next_before: 'cur-1' } }));
   const r = await open();
   await r.findByTestId('space-chat-row-m0b');
-  const keys = r.UNSAFE_getByType(FlatList).props.data.map((i: { key: string }) => i.key);
-  expect(keys[keys.indexOf('new-line') - 1]).toBe('m0b');
+  const keys = r.getAllByTestId(/^space-chat-(row-m|new-line)/).map((e) => e.props.testID);
+  expect(keys[keys.indexOf('space-chat-new-line') - 1]).toBe('space-chat-row-m0b');
   expect(mockApi.get).not.toHaveBeenCalledWith('/community/cohorts/c-every/messages', { params: { limit: 30, before: 'cur-2' } });
 });
 
@@ -294,7 +293,7 @@ it('Sol B4: a row being sent keeps its text at 4.5:1 or better on bone (every op
   await fireEvent.press(r.getByTestId('space-chat-composer-send'));
   const body = await r.findByText('Nice work');
   let alpha = 1;
-  for (let n = body as { props: { style?: unknown }; parent: unknown } | null; n; n = n.parent as typeof n) alpha *= StyleSheet.flatten(n.props.style as never)?.opacity ?? 1;
+  for (let n = body as { props: { style?: unknown }; parent: unknown } | null; n; n = n.parent as typeof n) alpha *= (StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1;
   const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   const lum = (c: number[]) => c.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0);
   const bone = rgb('#F7FAF7');
