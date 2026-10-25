@@ -107,7 +107,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           title={participantLabel}
           onBack={() => navigation.goBack()}
           trailing={latestFromOther ? (
-            <View style={styles.infoChip}>
+            <View style={styles.infoSlot}>
+              <View style={styles.infoChip} pointerEvents="none" />
               <SafetyMenu
                 targetType="message"
                 targetId={latestFromOther.id}
@@ -204,6 +205,8 @@ const styles = StyleSheet.create({
   stateText: { textAlign: 'center', paddingHorizontal: 24 },
   retry: { minHeight: 44, justifyContent: 'center' },
   list: { paddingVertical: 8 },
-  infoChip: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: fp.onDeep },
+  // The 36 pt bone circle sits behind the menu's own 44 pt target (Android takes no touches outside a parent's bounds).
+  infoSlot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  infoChip: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: fp.onDeep },
   messageRow: { flexDirection: 'row', alignItems: 'center' },
 });

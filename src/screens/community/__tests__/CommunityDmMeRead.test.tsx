@@ -17,7 +17,10 @@ jest.mock('../../../storage/mmkv', () => ({
     getAllKeys: async () => [],
   },
 }));
-jest.mock('../../../components/community/SafetyMenu', () => () => null);
+jest.mock('../../../components/community/SafetyMenu', () => (p: { testID?: string }) => {
+  const { View } = jest.requireActual('react-native');
+  return jest.requireActual('react').createElement(View, { testID: p.testID, style: { minWidth: 44, minHeight: 44 } });
+});
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
   return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
@@ -161,5 +164,18 @@ describe('frame 05b header', () => {
       expect(u.queryByTestId('community-dmthread-composer')).toBeNull();
       expect(u.queryByLabelText(/voice|record|attach|add/i)).toBeNull();
     }
+  });
+
+  it('open, with a message from them: Report / Block keeps a 44 pt slot on the deep bar (the bone circle sits behind it)', async () => {
+    mockGetMe.mockResolvedValue(ME);
+    mockList.mockResolvedValue([{ id: 'm1', sender_user_id: 'member-2', body: 'See you Saturday?', created_at: '2026-10-25T12:00:00Z', deleted: false }]);
+    const u = await show();
+    const menu = await u.findByTestId('community-dmthread-safety');
+    let at: any = menu.parent; // up to the slot around the menu
+    while (at && StyleSheet.flatten(at.props.style)?.width !== 44) at = at.parent;
+    expect(StyleSheet.flatten(at.props.style)).toMatchObject({ width: 44, height: 44 });
+    const chip = (at.children as any[]).find((n) => typeof n !== 'string' && StyleSheet.flatten(n.props?.style)?.borderRadius === 18);
+    expect(StyleSheet.flatten(chip.props.style)).toMatchObject({ position: 'absolute', width: 36, backgroundColor: forestPop.onDeep });
+    expect(chip.props.pointerEvents).toBe('none');
   });
 });
