@@ -464,7 +464,9 @@ function InboxRow({
   // before that the row's own `ack` summary drives the badge AND the label.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const cached = ACKS_ENABLED ? useCoachAckState(item.id) : undefined;
-  const ack = ACKS_ENABLED ? inboxRowAck(cached, item.ack) : undefined;
+  // Only typed message rows carry coach acks.
+  const acks = ACKS_ENABLED && item.type === 'message' && item.kind === 'text';
+  const ack = acks ? inboxRowAck(cached, item.ack) : undefined;
   const breached = ack != null && resolveAckBadgeVisibility(ack).breached;
   const label = buildRowAccessibilityLabel(item, ack);
   const rowTestID = `coach-community-inbox-row-${item.id}`;
@@ -517,7 +519,7 @@ function InboxRow({
           {content}
         </View>
       )}
-      {ACKS_ENABLED && item.type === 'message' && item.kind === 'text' ? (
+      {acks ? (
         <CoachAckRow item={item} ack={ack} onAcknowledged={onAcknowledged} />
       ) : null}
     </View>

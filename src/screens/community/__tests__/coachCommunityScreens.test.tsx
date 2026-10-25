@@ -1321,11 +1321,10 @@ describe('FR-868 round 2 — inbox ack fallback, a11y, block, destinations, erro
     const row = getByTestId(`coach-community-inbox-row-${MID}`);
     const button = getByTestId(`coach-community-inbox-mark-acked-${MID}`);
     // Walk up from the button: no ancestor may be the accessible row element.
-    let node: { parent: unknown; props: Record<string, unknown> } | null =
-      button.parent as never;
+    let node = button.parent;
     while (node) {
       expect(node).not.toBe(row);
-      node = (node.parent as never) ?? null;
+      node = node.parent;
     }
     expect(row.props.accessible).toBe(true);
   });
