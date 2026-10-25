@@ -21,7 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { typography } from '../../theme/tokens';
+import { forestPop as fp, typography } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
@@ -66,9 +66,10 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
 
   // FR-880R2 (Sol B1, LO-872R4 C2): the DM read waits for /community/me (it is off until the space is known), so a slow,
   // failed or offline me read is this screen's read too: the same two lines, and Try again reads me again.
-  const meFailed = !me.data && me.isError;
-  const reading = messages.isLoading || (!me.data && !me.isError);
-  const failed = meFailed || (messages.isError && !open);
+  // FR-880R3 (Opus C6): Try again shows "Loading messages…" while it reads again (me, or the DM read).
+  const meFailed = !me.data && me.isError && !me.isFetching;
+  const reading = messages.isLoading || (!me.data && !meFailed) || (messages.isError && messages.isFetching && !open);
+  const failed = !reading && (meFailed || (messages.isError && !open));
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
   // Header-level Report / Block acts on the latest message from the other
@@ -92,31 +93,36 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
 
   return (
     <SafeAreaView
-      style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
+      style={[styles.safe, { backgroundColor: fp.deep }]}
       edges={['top']}
       testID="community-dmthread-screen"
     >
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.headerRow}>
-          <View style={styles.flex}>
-            <ThreadHeader title={participantLabel} testID="community-dmthread-header" />
-          </View>
-          {latestFromOther ? (
-            <SafetyMenu
-              targetType="message"
-              targetId={latestFromOther.id}
-              authorUserId={recipientId}
-              authorName={participantLabel}
-              viewerUserId={client?.id}
-              viewerCoachId={client?.coach_id}
-              onBlocked={() => navigation.goBack()}
-              testID="community-dmthread-safety"
-            />
+        {/* FR-880R3 (Sol B2, #172-10): Voice B Studio frame 05b's deep-forest bar, open or closed; a 1:1 DM has no
+            member count. Report / Block keeps a light chip so its grey mark stays readable on the deep bar. */}
+        <ThreadHeader
+          tone="deep"
+          title={participantLabel}
+          onBack={() => navigation.goBack()}
+          trailing={latestFromOther ? (
+            <View style={styles.infoChip}>
+              <SafetyMenu
+                targetType="message"
+                targetId={latestFromOther.id}
+                authorUserId={recipientId}
+                authorName={participantLabel}
+                viewerUserId={client?.id}
+                viewerCoachId={client?.coach_id}
+                onBlocked={() => navigation.goBack()}
+                testID="community-dmthread-safety"
+              />
+            </View>
           ) : null}
-        </View>
+          testID="community-dmthread-header"
+        />
 
         {closed ? (
           <View style={styles.flex} /> /* closed: no message text, no "Start the conversation" */
@@ -199,6 +205,6 @@ const styles = StyleSheet.create({
   stateText: { textAlign: 'center', paddingHorizontal: 24 },
   retry: { minHeight: 44, justifyContent: 'center' },
   list: { paddingVertical: 8 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
+  infoChip: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: fp.onDeep },
   messageRow: { flexDirection: 'row', alignItems: 'center' },
 });

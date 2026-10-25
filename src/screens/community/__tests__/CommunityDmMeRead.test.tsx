@@ -22,8 +22,9 @@ jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
   return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
 });
+const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
+  useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack }),
   useRoute: () => ({ params: { recipientId: 'member-2', participantLabel: 'Jordan' } }),
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana', coach_id: 'coach-7' }) }));
@@ -103,5 +104,61 @@ describe('community DM while the community read is out', () => {
     expect(u.queryByText(FAILED)).toBeNull();
     expect(u.queryByText(LOADING)).toBeNull();
     expect(u.queryByTestId('community-dmthread-composer')).toBeNull();
+  });
+});
+
+// FR-880R3 (Opus C6 on m#880, agent 174): Try again says it is reading again ("Loading messages…", busy), for a failed
+// community read and for a failed DM read alike, instead of leaving the failure line up until the answer.
+describe('Try again shows the read', () => {
+  it('a failed community read: Try again shows "Loading messages…" while it reads again', async () => {
+    mockGetMe.mockRejectedValue(OFFLINE);
+    const u = await show();
+    expect(await u.findByText(FAILED, {}, { timeout: 8000 })).toBeTruthy();
+    mockGetMe.mockReturnValue(new Promise(() => undefined));
+    await act(async () => { await fireEvent.press(u.getByLabelText('Try again')); });
+    expect(u.getByText(LOADING)).toBeTruthy();
+    expect(u.queryByText(FAILED)).toBeNull();
+    expect(u.queryByLabelText('Try again')).toBeNull();
+    expect(u.getByTestId('community-dmthread-state').props.accessibilityState).toEqual({ busy: true });
+  }, 15000);
+
+  it('a failed DM read: Try again shows "Loading messages…" while it reads again', async () => {
+    mockGetMe.mockResolvedValue(ME);
+    mockList.mockRejectedValue(OFFLINE);
+    const u = await show();
+    expect(await u.findByText(FAILED, {}, { timeout: 8000 })).toBeTruthy();
+    mockList.mockReturnValue(new Promise(() => undefined));
+    await act(async () => { await fireEvent.press(u.getByLabelText('Try again')); });
+    expect(u.getByText(LOADING)).toBeTruthy();
+    expect(u.queryByText(FAILED)).toBeNull();
+    expect(u.getByTestId('community-dmthread-state').props.accessibilityState).toEqual({ busy: true });
+  }, 15000);
+});
+
+// FR-880R3 (Sol B2 = Opus C7 on m#880, #172-10): the DM wears Voice B Studio frame 05b's compact deep-forest bar, closed
+// or open: Back in 05b's navigation place, a light title, no member count in a 1:1 chat, and no dead + or mic.
+describe('frame 05b header', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  const { forestPop } = jest.requireActual('../../../theme/tokens');
+  it.each([
+    ['closed (no space)', { ...ME, workspace_id: null }, 'community-dmthread-closed'],
+    ['open', ME, 'community-dmthread-composer'],
+  ])('%s: a deep-forest bar with Back and a light title', async (_l, me, marker) => {
+    mockGoBack.mockClear();
+    mockGetMe.mockResolvedValue(me);
+    const u = await show();
+    expect(await u.findByTestId(marker)).toBeTruthy();
+    expect(StyleSheet.flatten(u.getByTestId('community-dmthread-header').props.style).backgroundColor).toBe(forestPop.deep);
+    expect(forestPop.deep).toBe('#1C3023');
+    const title = u.getByRole('header');
+    expect(title.props.children).toBe('Jordan');
+    expect(StyleSheet.flatten(title.props.style)).toMatchObject({ color: forestPop.onDeep, fontSize: 20 });
+    expect(u.queryByText(/member/i)).toBeNull();
+    await fireEvent.press(u.getByLabelText('Back'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    if (marker === 'community-dmthread-closed') {
+      expect(u.queryByTestId('community-dmthread-composer')).toBeNull();
+      expect(u.queryByLabelText(/voice|record|attach|add/i)).toBeNull();
+    }
   });
 });
