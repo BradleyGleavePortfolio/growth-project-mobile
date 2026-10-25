@@ -43,8 +43,13 @@ jest.mock('../VoiceNotePlayer', () => {
   const { View } = require('react-native');
   return {
     __esModule: true,
-    default: (p: { testID?: string; url: string; trailing?: unknown; footer?: unknown }) =>
-      React.createElement(View, { testID: p.testID, accessibilityHint: p.url }, p.trailing, p.footer),
+    default: (p: { testID?: string; url: string; trailing?: unknown; footer?: unknown; disabled?: boolean }) =>
+      React.createElement(
+        View,
+        { testID: p.testID, accessibilityHint: p.url, accessibilityState: { disabled: p.disabled === true } },
+        p.trailing,
+        p.footer,
+      ),
   };
 });
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
@@ -317,4 +322,21 @@ it('a member gets no Delete on another member’s note', async () => {
   await fireEvent.press(await findByTestId('vn-menu-vn-other'));
   expect(getByTestId('vn-menu-vn-other-report')).toBeTruthy();
   expect(queryByTestId('vn-menu-vn-other-delete')).toBeNull();
+});
+
+// LO-848R4 B8 (GOAL B-03 / B-10a): the viewer's own disc is grey while the note sends or waits,
+// and live again once it has not sent (so they can listen before trying again).
+it('holds the own disc while sending, frees it when the note has not sent', async () => {
+  mockIssue.mockImplementation(() => new Promise(() => undefined)); // still sending
+  const { findByTestId, getByTestId } = await renderSection();
+  await findByTestId('vn-note-vn-other');
+  await fireEvent.press(getByTestId('vn-record'));
+  await act(async () => {
+    fireEvent.press(getByTestId('sheet-send'));
+  });
+  const sending = await findByTestId(/^vn-pending-.*-sending$/);
+  const id = String(sending.props.testID).replace(/^vn-pending-/, '').replace(/-sending$/, '');
+  const held = () =>
+    getByTestId(`vn-pending-${id}`).queryAll((n) => n.props.accessibilityHint === mockRecording.uri && n.props.accessibilityState?.disabled === true);
+  expect(held()).toHaveLength(1);
 });

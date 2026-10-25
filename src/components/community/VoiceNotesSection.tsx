@@ -246,6 +246,8 @@ function OutboxRow({ item, onRetry, onDiscard, testID }: {
         url={item.input.uri}
         durationMs={item.input.durationMs}
         peaks={item.peaks}
+        // GOAL B-03 / B-10a: the sender's own disc is grey while it sends or waits.
+        disabled={!failed}
         trailing={
           failed ? undefined : (
             // Owner: a sending circle, plus a struck-through wifi mark offline.

@@ -13,6 +13,8 @@
  *   - Decorative by default: the strip carries `accessibilityElementsHidden`
  *     so a screen reader announces the parent control's label (duration), not
  *     a meaningless list of bars (DESIGN_INTELLIGENCE — no noise to AT).
+ *   - `barWidth` draws fixed-width bars packed from the left (GOAL B-02 review strip: 34 x 4 pt, 3
+ *     apart); without it the bars share the row (the feed card).
  *   - Style B tones (VOICE-M): `light` (white card / sheet: leaf bars, moss edge, played forest)
  *     and `deep` (the coach card: unplayed voiceShades.barOnDeep, played leaf).
  *   - Tokens only (no raw hex). No emoji, no heavy font weights.
@@ -42,6 +44,8 @@ export interface VoiceNoteWaveformProps {
   tone?: VoiceWaveTone;
   /** Space between bars (GOAL: 2 on the feed card, 3 in the review sheet). */
   gap?: number;
+  /** Fixed bar width, packed from the left (the review sheet); omit to share the row. */
+  barWidth?: number;
   /** Draw the review sheet's 2 pt ink playhead at `progress` (GOAL 02 .bscrub .ph). */
   playhead?: boolean;
   testID?: string;
@@ -58,6 +62,7 @@ export default function VoiceNoteWaveform({
   height = DEFAULT_HEIGHT,
   tone = 'light',
   gap = 3,
+  barWidth,
   playhead = false,
   testID,
 }: VoiceNoteWaveformProps): React.ReactElement {
@@ -71,7 +76,7 @@ export default function VoiceNoteWaveform({
 
   return (
     <View
-      style={[styles.row, { height, gap }]}
+      style={[styles.row, { height, gap }, barWidth ? styles.packed : null]}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       testID={testID ?? 'voice-waveform'}
@@ -84,6 +89,7 @@ export default function VoiceNoteWaveform({
             key={i}
             style={[
               styles.bar,
+              barWidth ? { flex: 0, width: barWidth, maxWidth: barWidth, borderRadius: 2 } : null,
               {
                 height: Math.max(4, Math.round(height * scale)),
                 backgroundColor: played ? t.played : t.unplayed,
@@ -108,6 +114,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 3,
   },
+  packed: { flex: 0, justifyContent: 'flex-start' },
   bar: {
     flex: 1,
     maxWidth: 6,

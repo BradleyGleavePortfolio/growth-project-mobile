@@ -57,6 +57,8 @@ export interface VoiceNoteComposerProps {
 const SHEET_GUTTER = 20;
 const WARN_LEFT_MS = 15_000; // one warning tap and "{time} left" from here
 const HINT_MS = 3_000; // "Records up to 5:00 of audio." for the first seconds
+/** GOAL B-01a: the slots not yet recorded are #E2E6E1 ghost bars 3-10 pt tall, not dots. */
+const GHOST_HEIGHTS = [5, 4, 3, 4, 4, 3, 5, 7, 5, 4, 9, 10, 9, 5, 3, 5, 4, 3, 5, 5, 3, 8, 10, 10, 6, 3, 6, 6, 3, 4];
 
 export default function VoiceNoteComposer({
   target,
@@ -99,7 +101,7 @@ export default function VoiceNoteComposer({
   // ── Unavailable build ───────────────────────────────────────────────────────
   if (rec.status === 'unavailable') {
     return (
-      <View style={styles.container} testID={testID ?? 'voice-composer-unavailable'}>
+      <View style={[styles.container, styles.stacked]} testID={testID ?? 'voice-composer-unavailable'}>
         {/* GOAL 10b: no header; the reason beside a wash circle, then one full-width Close. */}
         <View style={styles.unavailableRow} accessibilityRole="text">
           <View style={styles.wash}>
@@ -129,6 +131,7 @@ export default function VoiceNoteComposer({
           Microphone access is off, so a voice note can’t be recorded. Turn it on
           to record.
         </Text>
+        <View style={styles.deniedActions}>
         <HapticPressable
           intent="medium"
           onPress={() => {
@@ -152,6 +155,7 @@ export default function VoiceNoteComposer({
           testID="voice-composer-not-now" style={styles.quiet}>
           <Text style={[styles.primaryLabel, { color: fp.forest }]}>Not now</Text>
         </HapticPressable>
+        </View>
       </View>
     );
   }
@@ -203,16 +207,18 @@ export default function VoiceNoteComposer({
           {formatDuration(recording.durationMs)}
         </Text>
         <Text style={styles.hint}>Listen back before you send.</Text>
-        <VoiceNotePlayer
-          url={recording.uri}
-          durationMs={recording.durationMs}
-          peaks={recording.peaks}
-          tone="bare"
-          {...(playback ? { playback } : {})}
-          testID="voice-composer-listen"
-        />
+        <View style={styles.reviewRow}>
+          <VoiceNotePlayer
+            url={recording.uri}
+            durationMs={recording.durationMs}
+            peaks={recording.peaks}
+            tone="bare"
+            {...(playback ? { playback } : {})}
+            testID="voice-composer-listen"
+          />
+        </View>
         <VoicePrivacyCopy target={target} />
-        <View style={styles.reviewActions}>
+        <View style={styles.reviewActions} testID="voice-composer-review-actions">
           <View style={styles.fill}>
           <HapticPressable
             intent="light"
@@ -262,11 +268,12 @@ export default function VoiceNoteComposer({
       <Text style={[styles.hint, warn && styles.hintWarn]} accessibilityLiveRegion="polite">
         {hint}
       </Text>
-      <View style={styles.levels} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View style={styles.levels} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+        testID="voice-composer-levels">
         {Array.from({ length: LIVE_LEVEL_BARS }, (_, i) => {
           const v = rec.levels[i];
           return v === undefined ? (
-            <View key={i} style={styles.dot} />
+            <View key={i} style={[styles.ghost, { height: GHOST_HEIGHTS[i % GHOST_HEIGHTS.length] }]} />
           ) : (
             <View key={i} style={[styles.level, { height: 8 + Math.round(v * 56) }]} />
           );
@@ -286,7 +293,9 @@ export default function VoiceNoteComposer({
         onStart={() => void start()}
         onStop={() => void rec.stop()}
       />
-      <VoicePrivacyCopy target={target} />
+      <View style={styles.livePrivacy}>
+        <VoicePrivacyCopy target={target} />
+      </View>
     </View>
   );
 }
@@ -317,12 +326,11 @@ function SheetHeader({ onCancel, cancelLabel = 'Cancel', discard = false }: {
 }
 
 const styles = StyleSheet.create({
-  // GOAL sheet: 20 pt gutters (.bsheet padding 8 20 0).
+  // GOAL sheet: 20 pt gutters (.bsheet padding 8 20 0); each row carries its own GOAL margin, no gap.
   container: {
-    gap: spacing.md,
     paddingHorizontal: SHEET_GUTTER,
-    paddingBottom: spacing.md,
   },
+  stacked: { gap: spacing.md, paddingBottom: spacing.md },
   notice: {
     alignItems: 'center',
     gap: spacing.md,
@@ -336,36 +344,49 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: fp.ink,
   },
-  centered: { paddingHorizontal: spacing.sm },
+  centered: { paddingHorizontal: spacing.sm }, // GOAL B-07 text padding 0 8
   unavailableRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 10 },
   unavailableText: { flex: 1, textAlign: 'left' },
   fill: { flex: 1, alignSelf: 'stretch' },
-  header: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // GOAL .stop: margin -2 -8 0.
+  header: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: -2, marginHorizontal: -8 },
   headerAction: { minWidth: 72, minHeight: 44, justifyContent: 'center' },
   cancel: { fontFamily: voiceFaces.semibold, fontSize: 16, lineHeight: 20, fontWeight: '600', color: fp.forest },
   title: { fontFamily: voiceFaces.semibold, fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
   // GOAL .btime: Cormorant 500 at 56/70 — the loaded Medium face (h3), not a synthesised weight.
   timer: { fontFamily: typography.h3.fontFamily, fontSize: 56, lineHeight: 70, fontWeight: '500', color: fp.ink,
-    textAlign: 'center', fontVariant: ['lining-nums', 'tabular-nums'] },
-  hint: { fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 20, minHeight: 20, color: fp.n700, textAlign: 'center' },
+    textAlign: 'center', fontVariant: ['lining-nums', 'tabular-nums'], marginTop: 4 },
+  // GOAL .bsub: 14/1.4, at least 1.2em tall, straight under the timer.
+  hint: { fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 20, minHeight: 17, color: fp.n700, textAlign: 'center' },
   hintWarn: { color: fp.ink, fontFamily: voiceFaces.semibold, fontWeight: '600' },
-  levels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 64 },
+  // GOAL .blive: margin 12 0 10; only as tall as its tallest bar (10 pt at 0:01, 64 live).
+  levels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 12, marginBottom: 10 },
   level: { width: 5, borderRadius: 3, backgroundColor: fp.leaf, borderWidth: 1, borderColor: fp.moss },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: voiceShades.hairline },
-  line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  ghost: { width: 5, borderRadius: 2, backgroundColor: voiceShades.hairline },
+  // GOAL .bline: margin 4 0 16.
+  line: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 16 },
   lineLabel: { fontFamily: voiceFaces.medium, fontSize: 13, lineHeight: 16, fontWeight: '500', color: fp.n700, fontVariant: ['tabular-nums'] },
   track: { flex: 1, height: 4, borderRadius: 2, backgroundColor: voiceShades.hairline, overflow: 'hidden' },
   trackFill: { height: 4, backgroundColor: fp.forest },
   wash: { width: 56, height: 56, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
     backgroundColor: voiceShades.leafWash, borderWidth: 1, borderColor: voiceShades.washEdge },
-  washLarge: { width: 72, height: 72, alignSelf: 'center', marginTop: 14 },
+  washLarge: { width: 72, height: 72, alignSelf: 'center', marginTop: 14, marginBottom: 12 },
+  // GOAL B-02 .brow margin 14 0 12; .bbtns gap 10, margin 14 0 10.
+  reviewRow: { marginTop: 14, marginBottom: 12 },
   reviewActions: {
     flexDirection: 'row',
     gap: 10,
+    marginTop: 14,
+    marginBottom: 10,
   },
+  // GOAL B-01 privacy wrapper margin 16 0 12.
+  livePrivacy: { marginTop: 16, marginBottom: 12 },
+  // GOAL B-07 .bbtns as a column: gap 10, margin 14 0 10.
+  deniedActions: { gap: 10, marginTop: 14, marginBottom: 10 },
   secondaryAction: {
     alignSelf: 'stretch',
-    minHeight: 56,
+    minHeight: 54, // GOAL .btn 54 (LO-848R4 B6)
     paddingHorizontal: spacing.lg,
     borderRadius: radius.button,
     backgroundColor: fp.forest,
@@ -395,5 +416,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
-  quiet: { alignSelf: 'stretch', minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  // GOAL B-07 Not now: a text button at the .btn 54 pt height (LO-848R4 B6).
+  quiet: { alignSelf: 'stretch', minHeight: 54, alignItems: 'center', justifyContent: 'center' },
 });
