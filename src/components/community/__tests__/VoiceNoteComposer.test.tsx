@@ -261,6 +261,33 @@ describe('VoiceNoteComposer — GOAL sheet rhythm and live strip (FR-848R5)', ()
     expect(flat(getByTestId('voice-composer-review-actions'))).toMatchObject({ gap: 10, marginTop: 14, marginBottom: 10 });
   });
 
+  // FR-848R5 render check (Android 360, 130% text): "Re-record" broke over two lines; GOAL .bbtns wraps the buttons instead.
+  it('review: when Re-record would take two lines the buttons stack full width', async () => {
+    const { findByTestId, getByTestId, getByText } = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={makePort()} />,
+    );
+    await waitFor(() => expect(getByTestId('voice-record-button').props.accessibilityLabel).toMatch(/stop/i));
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-record-button'));
+    });
+    await findByTestId('voice-composer-review');
+    const row = () => flat(getByTestId('voice-composer-review-actions'));
+    // One line each: side by side.
+    await act(async () => {
+      fireEvent(getByText('Re-record'), 'layout', { nativeEvent: { layout: { height: 26 } } });
+      fireEvent(getByText('Send'), 'layout', { nativeEvent: { layout: { height: 26 } } });
+    });
+    expect(row().flexDirection).toBe('row');
+    expect(flat(getByTestId('voice-composer-send').parent!.parent!)).toMatchObject({ flex: 1 });
+    // Re-record wraps to two lines: the pair stacks, each button full width.
+    await act(async () => {
+      fireEvent(getByText('Re-record'), 'layout', { nativeEvent: { layout: { height: 52 } } });
+    });
+    expect(row()).toMatchObject({ flexDirection: 'column', gap: 10 });
+    expect(flat(getByTestId('voice-composer-send').parent!.parent!)).toMatchObject({ alignSelf: 'stretch' });
+    expect(flat(getByTestId('voice-composer-send').parent!.parent!).flex).toBeUndefined();
+  });
+
   it('denied: Open Settings and Not now are both 54 pt', async () => {
     const { getByTestId } = await render(
       <VoiceNoteComposer

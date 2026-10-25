@@ -24,8 +24,8 @@
  *
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
-import React, { useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Linking } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Linking, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
@@ -70,6 +70,15 @@ export default function VoiceNoteComposer({
 }: VoiceNoteComposerProps): React.ReactElement {
   const { semanticColors } = useTheme();
   const rec = useVoiceRecorder(recorder ? { recorder } : {});
+  // GOAL .bbtns wraps rather than break a label: when "Re-record" would take two lines (large text on a narrow
+  // phone) the review buttons stack full width. Compared with the one-word Send label, so no font maths.
+  const [stackReview, setStackReview] = useState(false);
+  const reviewLabels = useRef<{ re?: number; send?: number }>({});
+  const onReviewLabel = (k: 're' | 'send') => (e: LayoutChangeEvent) => {
+    reviewLabels.current[k] = e.nativeEvent.layout.height;
+    const { re, send } = reviewLabels.current;
+    if (re && send && re > send * 1.5) setStackReview(true);
+  };
   const warned = useRef(false);
   const { start, status } = rec;
   // One tap from Record (GOAL 01b): the sheet starts recording as it opens. Once per mount, so a
@@ -218,8 +227,8 @@ export default function VoiceNoteComposer({
           />
         </View>
         <VoicePrivacyCopy target={target} />
-        <View style={styles.reviewActions} testID="voice-composer-review-actions">
-          <View style={styles.fill}>
+        <View style={[styles.reviewActions, stackReview && styles.reviewStacked]} testID="voice-composer-review-actions">
+          <View style={stackReview ? styles.stackCell : styles.fill}>
           <HapticPressable
             intent="light"
             onPress={restart}
@@ -229,10 +238,10 @@ export default function VoiceNoteComposer({
             style={[styles.primaryAction, styles.outlined]}
           >
             <Ionicons name="refresh" size={20} color={fp.forest} />
-            <Text style={[styles.primaryLabel, { color: fp.forest }]}>Re-record</Text>
+            <Text style={[styles.primaryLabel, { color: fp.forest }]} onLayout={onReviewLabel('re')}>Re-record</Text>
           </HapticPressable>
           </View>
-          <View style={styles.fill}>
+          <View style={stackReview ? styles.stackCell : styles.fill}>
           <HapticPressable
             intent="light"
             onPress={() => { onSend(recording); rec.reset(); }}
@@ -242,7 +251,7 @@ export default function VoiceNoteComposer({
             style={[styles.primaryAction, styles.filled]}
           >
             <Ionicons name="arrow-up" size={20} color={fp.onDeep} />
-            <Text style={[styles.primaryLabel, { color: fp.onDeep }]}>Send</Text>
+            <Text style={[styles.primaryLabel, { color: fp.onDeep }]} onLayout={onReviewLabel('send')}>Send</Text>
           </HapticPressable>
           </View>
         </View>
@@ -348,6 +357,8 @@ const styles = StyleSheet.create({
   unavailableRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 10 },
   unavailableText: { flex: 1, textAlign: 'left' },
   fill: { flex: 1, alignSelf: 'stretch' },
+  reviewStacked: { flexDirection: 'column' },
+  stackCell: { alignSelf: 'stretch' },
   // GOAL .stop: margin -2 -8 0.
   header: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginTop: -2, marginHorizontal: -8 },

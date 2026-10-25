@@ -76,7 +76,7 @@ export default function VoiceNoteWaveform({
 
   return (
     <View
-      style={[styles.row, { height, gap }, barWidth ? styles.packed : null]}
+      style={[styles.row, { height, gap }, barWidth ? styles.packed : styles.fill]}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       testID={testID ?? 'voice-waveform'}
@@ -88,8 +88,9 @@ export default function VoiceNoteWaveform({
           <View
             key={i}
             style={[
-              styles.bar,
-              barWidth ? { flex: 0, width: barWidth, maxWidth: barWidth, borderRadius: 2 } : null,
+              // Fixed bars carry no flex at all: on react-native-web `flex: 0` is CSS `0 1 0%`, which drops
+              // the width to the border (a 2 pt bar in the web preview); a plain width holds on both.
+              barWidth ? [styles.fixedBar, { width: barWidth }] : styles.bar,
               {
                 height: Math.max(4, Math.round(height * scale)),
                 backgroundColor: played ? t.played : t.unplayed,
@@ -111,15 +112,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    flex: 1,
     gap: 3,
   },
-  packed: { flex: 0, justifyContent: 'flex-start' },
+  fill: { flex: 1 },
+  packed: { justifyContent: 'flex-start' },
   bar: {
     flex: 1,
     maxWidth: 6,
     borderRadius: 3,
     borderWidth: 1,
   },
+  fixedBar: { borderRadius: 2, borderWidth: 1 },
   playhead: { position: 'absolute', top: -4, bottom: -4, width: 2, marginLeft: -1, borderRadius: 1, backgroundColor: fp.ink },
 });

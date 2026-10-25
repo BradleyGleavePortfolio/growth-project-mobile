@@ -414,10 +414,16 @@ describe('VoiceNotePlayer — GOAL rows, review strip and held disc (FR-848R5)',
       <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9, 0.5]} tone="bare" playback={playback} />,
     );
     const strip = getByTestId('voice-waveform', { includeHiddenElements: true });
-    expect(flat(strip)).toMatchObject({ height: 44, gap: 3, flex: 0, justifyContent: 'flex-start' });
+    expect(flat(strip)).toMatchObject({ height: 44, gap: 3, justifyContent: 'flex-start' });
+    expect(flat(strip).flex).toBeUndefined(); // packed from the left, not stretched
     const bars = strip.props.children[0];
     expect(bars).toHaveLength(34);
-    for (const bar of bars) expect(StyleSheet.flatten(bar.props.style)).toMatchObject({ width: 4, flex: 0 });
+    for (const bar of bars) {
+      const st = StyleSheet.flatten(bar.props.style);
+      expect(st).toMatchObject({ width: 4 });
+      // no flex shorthand: react-native-web reads `flex: 0` as `0 1 0%` and drops the width
+      expect(st.flex).toBeUndefined();
+    }
     const seek = getByTestId('voice-player-seek');
     await fireEvent(seek, 'layout', { nativeEvent: { layout: { width: 300 } } });
     await fireEvent.press(seek, { nativeEvent: { locationX: 117.5 } });
