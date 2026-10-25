@@ -63,8 +63,11 @@ jest.mock('../../../hooks/useCommunity', () => ({
   communityKeys: { cohorts: () => ['community', 'cohorts'], me: () => ['community', 'me'] },
 }));
 jest.mock('../../../components/community/VoiceNotePlayer', () => {
-  const { Text } = jest.requireActual('react-native');
-  return (p: { testID: string; durationMs: number; url: string | null; onPlaybackError?: () => void }) => <Text testID={p.testID} onPress={p.onPlaybackError}>{`player ${p.durationMs} ${p.url}`}</Text>;
+  const { Text, View } = jest.requireActual('react-native');
+  // Draws what SpaceVoiceNote hands the player (m#879): the trailing mark and the footer (send states, Try again).
+  return (p: { testID: string; durationMs: number; url: string | null; onPlaybackError?: () => void; trailing?: import('react').ReactNode; footer?: import('react').ReactNode }) => (
+    <View><Text testID={p.testID} onPress={p.onPlaybackError}>{`player ${p.durationMs} ${p.url}`}</Text>{p.trailing}{p.footer}</View>
+  );
 });
 jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn(async () => ({ url: 'https://x/v.m4a' })), remove: jest.fn(async () => ({ deleted: true })) } }));
 // SC-M2: m#848's voice outbox and record sheet (FX-848) stand in; the space chat only feeds them.
@@ -479,9 +482,9 @@ it('every control has a spoken label and no text is locked to a size', async () 
 it('SC-M2: the mic sits in the composer until there is text and opens the record sheet for this space', async () => {
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
-  fireEvent.press(r.getByTestId('space-chat-mic'));
+  await fireEvent.press(r.getByTestId('space-chat-mic'));
   expect((await r.findByTestId('voice-sheet')).props.children).toBe('Everyone');
-  await act(async () => { fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'hi'); });
+  await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'hi');
   expect(await r.findByTestId('space-chat-composer-send')).toBeTruthy();
   expect(r.queryByTestId('space-chat-mic')).toBeNull();
 });
@@ -503,11 +506,12 @@ it('SC-M2: a voice note on its way to this space shows at the bottom with its st
   await r.findByTestId('space-chat-row-vo-1');
   expect(r.queryByTestId('space-chat-row-vo-2')).toBeNull();
   expect(r.getByTestId('space-chat-failed-vo-1')).toBeTruthy();
+  expect(r.getByTestId('space-chat-voice-failed-vo-1')).toBeTruthy();
   expect(r.getByText('That didn’t send. Your recording is safe — try sending again.')).toBeTruthy();
-  fireEvent.press(r.getByText('Try again'));
+  await fireEvent.press(r.getByText('Try again'));
   expect(mockVoice.retry).toHaveBeenCalledWith('vo-1');
   const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, b) => b?.find((x) => x.text === 'Delete')?.onPress?.());
-  fireEvent.press(r.getByText('Delete'));
+  await fireEvent.press(r.getByText('Delete'));
   expect(alert).toHaveBeenCalledWith('Delete this voice note?', undefined, expect.any(Array));
   expect(mockVoice.discard).toHaveBeenCalledWith('vo-1');
   alert.mockRestore();

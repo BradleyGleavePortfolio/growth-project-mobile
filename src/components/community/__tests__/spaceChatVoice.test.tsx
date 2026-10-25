@@ -78,6 +78,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockOutbox.items = [];
 });
+// RNTL 14: fireEvent, render, rerender and unmount are async and are always awaited (an unawaited one overlaps the next act).
 // The player's own async state updates (VoiceNotePlayer, FX-848) outlive a test: the SpaceVoiceNote cases run last.
 
 describe('SpaceChatMic', () => {
@@ -93,7 +94,7 @@ describe('SpaceChatMic', () => {
     const mic1 = r.getByTestId('space-chat-mic');
     expect(mic1.props.accessibilityLabel).toBe('Record a voice note');
     expect(mockSheet).not.toHaveBeenCalled();
-    await act(async () => { fireEvent.press(mic1); });
+    await fireEvent.press(mic1);
     expect(r.queryByTestId('space-chat-voice-first-use')).toBeNull();
     expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, target: { kind: 'cohort', cohortName: 'Everyone' } }));
     const recording = { uri: 'file:///r.m4a', durationMs: 4000 };
@@ -107,22 +108,22 @@ describe('SpaceChatMic', () => {
     (spaceChatApi.recordVoiceConsent as jest.Mock).mockResolvedValue({ seen: true, seen_at: '2026-10-25T10:00:00.000Z' });
     const r = await mic(wrap().Wrapper);
     await waitFor(() => expect(consent).toHaveBeenCalledTimes(1));
-    await act(async () => { fireEvent.press(r.getByTestId('space-chat-mic')); });
+    await fireEvent.press(r.getByTestId('space-chat-mic'));
     expect(r.getByText('Voice notes')).toBeTruthy();
     expect(r.getByText('Everyone in Everyone can hear this voice note.')).toBeTruthy();
     expect(r.getByText('If someone reports a voice note, your coach and the TGP Fitness team can listen to it.')).toBeTruthy();
     expect(r.getByText('You can delete your voice note at any time.')).toBeTruthy();
-    await act(async () => { fireEvent.press(r.getByLabelText('Not now')); });
+    await fireEvent.press(r.getByLabelText('Not now'));
     expect(r.queryByTestId('space-chat-voice-first-use')).toBeNull();
     expect(sheetOpen()).toBe(false);
     expect(spaceChatApi.recordVoiceConsent).not.toHaveBeenCalled();
-    await act(async () => { fireEvent.press(r.getByTestId('space-chat-mic')); });
-    await act(async () => { fireEvent.press(r.getByTestId('space-chat-voice-first-use-record')); });
+    await fireEvent.press(r.getByTestId('space-chat-mic'));
+    await fireEvent.press(r.getByTestId('space-chat-voice-first-use-record'));
     expect(spaceChatApi.recordVoiceConsent).toHaveBeenCalledTimes(1);
     expect(r.queryByTestId('space-chat-voice-first-use')).toBeNull();
     expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }));
     await act(async () => { (mockSheet.mock.calls[mockSheet.mock.calls.length - 1][0] as { onClose: () => void }).onClose(); });
-    await act(async () => { fireEvent.press(r.getByTestId('space-chat-mic')); });
+    await fireEvent.press(r.getByTestId('space-chat-mic'));
     expect(r.queryByTestId('space-chat-voice-first-use')).toBeNull();
     expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }));
   });
@@ -132,7 +133,7 @@ describe('SpaceChatMic', () => {
     consent.mockImplementationOnce(() => new Promise((res) => { answer = res; }));
     const { Wrapper } = wrap();
     const a = await mic(Wrapper, 'u-1');
-    await act(async () => { fireEvent.press(a.getByTestId('space-chat-mic')); });
+    await fireEvent.press(a.getByTestId('space-chat-mic'));
     expect(sheetOpen()).toBe(false);
     expect(a.queryByTestId('space-chat-voice-first-use')).toBeNull();
     await act(async () => { answer({ seen: true, seen_at: '2026-10-20T10:00:00.000Z' }); });
@@ -141,7 +142,7 @@ describe('SpaceChatMic', () => {
     consent.mockRejectedValueOnce(new Error('HTTP 500'));
     const b = await mic(Wrapper, 'u-2', true);
     await waitFor(() => expect(consent).toHaveBeenCalledTimes(2));
-    await act(async () => { fireEvent.press(b.getByTestId('space-chat-mic')); });
+    await fireEvent.press(b.getByTestId('space-chat-mic'));
     expect(await b.findByTestId('space-chat-voice-first-use')).toBeTruthy();
     expect(b.queryByText(/If someone reports a voice note/)).toBeNull();
   });
@@ -214,12 +215,12 @@ describe('SpaceVoiceNote — New / Played', () => {
     const { Wrapper } = wrap();
     const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} coach={false} mine={false} offline={false} playback={p} /></Wrapper>);
     await r.findByTestId('space-chat-voice-new-v-1');
-    fireEvent.press(r.getByTestId('voice-player-toggle'));
+    await fireEvent.press(r.getByTestId('voice-player-toggle'));
     await waitFor(() => expect(p.load).toHaveBeenLastCalledWith('https://signed.example/old.m4a', expect.any(Object)));
     await act(async () => { events[events.length - 1].onError?.(new Error('403 expired')); });
-    fireEvent.press(await r.findByTestId('space-chat-voice-retry-v-1'));
+    await fireEvent.press(await r.findByTestId('space-chat-voice-retry-v-1'));
     await waitFor(() => expect(communityVoiceApi.getOne).toHaveBeenCalledTimes(3));
-    fireEvent.press(r.getByTestId('voice-player-toggle'));
+    await fireEvent.press(r.getByTestId('voice-player-toggle'));
     await waitFor(() => expect(p.load).toHaveBeenLastCalledWith('https://signed.example/new.m4a', expect.any(Object)));
   });
 
@@ -231,7 +232,7 @@ describe('SpaceVoiceNote — New / Played', () => {
     const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} coach={false} mine={false} offline={false} playback={p} /></Wrapper>);
     expect(await r.findByTestId('space-chat-voice-new-v-1')).toBeTruthy();
     expect(r.getByText('New')).toBeTruthy();
-    fireEvent.press(r.getByTestId('voice-player-toggle'));
+    await fireEvent.press(r.getByTestId('voice-player-toggle'));
     await waitFor(() => expect(events.length).toBe(1));
     await act(async () => { events[0].onEnd?.(); });
     await act(async () => { events[0].onEnd?.(); });
@@ -248,7 +249,7 @@ describe('SpaceVoiceNote — New / Played', () => {
     const { Wrapper } = wrap();
     const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} coach mine={false} offline={false} playback={p} /></Wrapper>);
     expect(await r.findByTestId('space-chat-voice-played-v-1')).toBeTruthy();
-    fireEvent.press(r.getByTestId('voice-player-toggle'));
+    await fireEvent.press(r.getByTestId('voice-player-toggle'));
     await waitFor(() => expect(events.length).toBe(1));
     await act(async () => { events[0].onEnd?.(); });
     expect(spaceChatApi.markHeard).not.toHaveBeenCalled();
@@ -261,7 +262,7 @@ describe('SpaceVoiceNote — New / Played', () => {
     const { Wrapper } = wrap();
     const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} coach={false} mine={false} offline={false} playback={p} /></Wrapper>);
     await r.findByTestId('space-chat-voice-new-v-1');
-    fireEvent.press(r.getByTestId('voice-player-toggle'));
+    await fireEvent.press(r.getByTestId('voice-player-toggle'));
     await waitFor(() => expect(events.length).toBe(1));
     await act(async () => { events[0].onEnd?.(); });
     expect(r.getByTestId('space-chat-voice-new-v-1')).toBeTruthy();
@@ -285,7 +286,7 @@ describe('SpaceVoiceNote — New / Played', () => {
     );
     expect(communityVoiceApi.getOne).not.toHaveBeenCalled();
     expect(local.queryByText('New')).toBeNull();
-    fireEvent.press(local.getByTestId('voice-player-toggle'));
+    await fireEvent.press(local.getByTestId('voice-player-toggle'));
     await waitFor(() => expect(p.load).toHaveBeenLastCalledWith('file:///v-1.m4a', expect.any(Object)));
     await act(async () => { events[events.length - 1].onEnd?.(); });
     expect(spaceChatApi.markHeard).not.toHaveBeenCalled();
@@ -316,9 +317,9 @@ describe('SpaceVoiceNote — outbox states (GOAL 03 / 04 / 10a)', () => {
     const { p } = port();
     const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} send="failed" onRetry={onRetry} onDiscard={onDiscard} playback={p} /></Wrapper>);
     expect(r.getByText('That didn’t send. Your recording is safe — try sending again.')).toBeTruthy();
-    fireEvent.press(r.getByText('Try again'));
+    await fireEvent.press(r.getByText('Try again'));
     expect(onRetry).toHaveBeenCalledTimes(1);
-    fireEvent.press(r.getByText('Delete'));
+    await fireEvent.press(r.getByText('Delete'));
     expect(onDiscard).not.toHaveBeenCalled();
     const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
     expect(alert.mock.calls[0][0]).toBe('Delete this voice note?');

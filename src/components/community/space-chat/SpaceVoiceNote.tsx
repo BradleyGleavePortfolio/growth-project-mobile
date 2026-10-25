@@ -93,7 +93,7 @@ export default function SpaceVoiceNote(p: SpaceVoiceNoteProps): React.ReactEleme
     { text: 'Delete', style: 'destructive', onPress: p.onDiscard },
   ]);
   const footer = send === 'failed' ? (
-    <View style={s.failed} testID={`space-chat-failed-${voice.id}`}>
+    <View style={s.failed} testID={`space-chat-voice-failed-${voice.id}`}>
       <View style={s.failedLine} accessibilityRole="alert">
         <Ionicons name="alert-circle-outline" size={16} color={fp.error} />
         <Text style={s.failedText}>That didn’t send. Your recording is safe — try sending again.</Text>
