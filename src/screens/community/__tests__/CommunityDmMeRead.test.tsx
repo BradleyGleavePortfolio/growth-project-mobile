@@ -108,7 +108,8 @@ describe('community DM while the community read is out', () => {
 });
 
 // FR-880R3 (Opus C6 on m#880, agent 174): Try again says it is reading again ("Loading messages…", busy), for a failed
-// community read and for a failed DM read alike, instead of leaving the failure line up until the answer.
+// community read and for a failed DM read alike. A guard, not a fix: with no data yet TanStack v5 puts a refetched query
+// back to pending (error cleared), so 195b0d43 already did this (red lane 40237486873: both pass there).
 describe('Try again shows the read', () => {
   it('a failed community read: Try again shows "Loading messages…" while it reads again', async () => {
     mockGetMe.mockRejectedValue(OFFLINE);

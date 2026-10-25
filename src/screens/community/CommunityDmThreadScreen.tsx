@@ -66,10 +66,9 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
 
   // FR-880R2 (Sol B1, LO-872R4 C2): the DM read waits for /community/me (it is off until the space is known), so a slow,
   // failed or offline me read is this screen's read too: the same two lines, and Try again reads me again.
-  // FR-880R3 (Opus C6): Try again shows "Loading messages…" while it reads again (me, or the DM read).
-  const meFailed = !me.data && me.isError && !me.isFetching;
-  const reading = messages.isLoading || (!me.data && !meFailed) || (messages.isError && messages.isFetching && !open);
-  const failed = !reading && (meFailed || (messages.isError && !open));
+  const meFailed = !me.data && me.isError;
+  const reading = messages.isLoading || (!me.data && !me.isError);
+  const failed = meFailed || (messages.isError && !open);
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
   // Header-level Report / Block acts on the latest message from the other
