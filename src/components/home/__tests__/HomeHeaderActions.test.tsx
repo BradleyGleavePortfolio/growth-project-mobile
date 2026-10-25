@@ -62,7 +62,7 @@ describe('HomeHeaderActions', () => {
     mockGet.mockResolvedValue({ data: {} });
     const view = await render(<HomeHeaderActions />);
     for (const icon of ['chatbubble-ellipses-outline', 'notifications-outline']) {
-      expect(view.getByTestId(`icon-${icon}`).props.style.fontSize).toBe(24);
+      expect((await view.findByTestId(`icon-${icon}`)).props.style.fontSize).toBe(24);
     }
   });
 
@@ -121,8 +121,8 @@ describe('HomeHeaderActions', () => {
   it('falls back to "Message your coach" when the coach name cannot be read', async () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
     mockGet.mockRejectedValue(new Error('404'));
-    const { getByText } = await render(<HomeHeaderActions />);
-    expect(getByText('Message your coach')).toBeTruthy();
+    const { findByText } = await render(<HomeHeaderActions />);
+    expect(await findByText('Message your coach')).toBeTruthy();
     expect(messageCoachLabel('  ')).toBe('Message your coach');
   });
 
@@ -130,7 +130,7 @@ describe('HomeHeaderActions', () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
     mockGet.mockRejectedValue(new Error('404'));
     const view = await render(<HomeHeaderActions />);
-    const label = view.getByText('Message your coach');
+    const label = await view.findByText('Message your coach');
     expect(label.props.numberOfLines).toBeUndefined();
     expect(label.props.allowFontScaling).not.toBe(false);
   });
@@ -138,8 +138,8 @@ describe('HomeHeaderActions', () => {
   it('message entry opens Messages; bell opens NotificationCenter with unread label', async () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
     mockGet.mockRejectedValue(new Error('404'));
-    const { getByTestId, getByLabelText } = await render(<HomeHeaderActions />);
-    await fireEvent.press(getByTestId('home-message-coach'));
+    const { findByTestId, getByTestId, getByLabelText } = await render(<HomeHeaderActions />);
+    await fireEvent.press(await findByTestId('home-message-coach'));
     expect(mockNavigate).toHaveBeenCalledWith('Messages');
     expect(getByLabelText('Notifications, 3 unread')).toBeTruthy();
     await fireEvent.press(getByTestId('home-notification-bell'));
@@ -223,6 +223,72 @@ describe('HomeHeaderActions', () => {
     });
   });
 
+  // FR-880R3 (agent 174): Sol B1 (a cold start loads the block list saved on this phone), Opus C2 (no "Message {coach}"
+  // until the answer is known) and Opus C1 (Roman stays beside the bell whether or not the coach entry shows).
+  describe('FR-880R3: cold start and a steady header', () => {
+    const { queryClient } = jest.requireActual('../../../services/queryClient');
+    const { useBlockedUsersStore, persistKeyFor } = jest.requireActual('../../../store/blockedUsersStore');
+    const { prefsStorage } = jest.requireActual('../../../storage/mmkv');
+    afterEach(async () => {
+      queryClient.clear();
+      await prefsStorage.delete(persistKeyFor('u1'));
+      useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null });
+    });
+
+    it('Sol B1: a fresh launch with my saved block on the phone and a failed thread read never shows the coach', async () => {
+      mockRomanChat.mockReturnValue(true);
+      mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+      await prefsStorage.set(persistKeyFor('u1'), JSON.stringify([{ id: 'c1', displayName: 'Bradley', role: 'coach', blockedAt: '2026-10-24T00:00:00Z' }]));
+      queryClient.clear();
+      useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); // nothing read yet, as on a cold start
+      mockGet.mockImplementation(async (u: string) => {
+        if (u === '/messages?limit=1') throw new Error('offline');
+        return u === '/messages/unread-count' ? { data: { total: 1 } } : { data: { name: 'Bradley Gleave' } };
+      });
+      const view = await render(<HomeHeaderActions />);
+      expect(view.queryByTestId('home-message-coach')).toBeNull();
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach'));
+      await waitFor(() => expect(queryClient.getQueryState(['messaging', 'coach-chat-closed', 'c1'])?.status).toBe('error'));
+      await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+      expect(useBlockedUsersStore.getState().blocked.map((b: { id: string }) => b.id)).toEqual(['c1']);
+      expect(view.queryByTestId('home-message-coach')).toBeNull();
+      expect(view.queryByText(/Bradley|coach/i)).toBeNull();
+      expect(view.getByTestId('home-leading-empty')).toBeTruthy();
+      expect(view.getByTestId('home-roman-chat')).toBeTruthy(); // Roman's door stays
+    });
+
+    it('Opus C2: no "Message {coach}" before the first thread read answers; an open answer brings it in', async () => {
+      mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+      let answer: (v: unknown) => void = () => undefined;
+      mockGet.mockImplementation((u: string) => {
+        if (u === '/messages?limit=1') return new Promise((r) => { answer = r; });
+        return Promise.resolve({ data: { name: 'Bradley Gleave' } });
+      });
+      const view = await render(<HomeHeaderActions />);
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/messages?limit=1'));
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach'));
+      await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+      expect(view.queryByTestId('home-message-coach')).toBeNull();
+      expect(view.queryByText(/Bradley|coach/i)).toBeNull();
+      expect(view.getByTestId('home-leading-empty')).toBeTruthy();
+      await act(async () => answer({ data: [], headers: {} }));
+      expect(await view.findByLabelText('Message Bradley')).toBeTruthy();
+    });
+
+    it('Opus C1: Roman keeps one place beside the bell, open or closed', async () => {
+      mockRomanChat.mockReturnValue(true);
+      mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+      mockGet.mockImplementation(async (u: string) => (u === '/messages?limit=1' ? { data: [], headers: {} } : { data: { name: 'Bradley Gleave' } }));
+      const view = await render(<HomeHeaderActions />);
+      await view.findByLabelText('Message Bradley');
+      const open = StyleSheet.flatten(view.getByTestId('home-roman-chat').props.style);
+      expect(open).toMatchObject({ width: 44, height: 44, marginLeft: 'auto', marginRight: 8 });
+      await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'c1', displayName: 'Bradley', blockedAt: '2026-10-24T00:00:00Z' }] }));
+      expect(view.queryByTestId('home-message-coach')).toBeNull();
+      expect(StyleSheet.flatten(view.getByTestId('home-roman-chat').props.style)).toEqual(open);
+    });
+  });
+
   // C3B-S2: with Style B and Roman chat on, every message entry opens the Messages list (HomeStack MessagesInbox).
   it('Style B on: the coach entry and the Roman avatar both open the Messages list, labels unchanged', async () => {
     mockStyleB.mockReturnValue(true);
@@ -256,7 +322,7 @@ describe('HomeHeaderActions', () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
     mockGet.mockRejectedValue(new Error('404'));
     const view = await render(<HomeHeaderActions />);
-    await fireEvent.press(view.getByTestId('home-message-coach'));
+    await fireEvent.press(await view.findByTestId('home-message-coach'));
     expect(mockNavigate).toHaveBeenLastCalledWith('Messages');
     expect(view.queryByTestId('home-roman-chat')).toBeNull();
   });

@@ -139,6 +139,7 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
   const hasCoach = !!coachId;
   // FR-880R2 (owner 10-23 "Dissapear"): while the coaching chat is closed (either person's block) Home offers no
   // "Message {coach}"; the slot stays empty (Roman's door stays) and the button comes back on unblock.
+  // FR-880R3 (Opus C2): the slot also stays empty until the answer is known (saved blocks + first read), as SpaceTree.
   const coachChat = useCoachChatClosed(coachId);
   // useCurrentUser reads the cache asynchronously (first render is null): choose
   // coach or Roman only once the user is known, so a coached client never sees
@@ -149,7 +150,7 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
 
   return (
     <View style={[styles.row, rings && styles.ringsRow]}>
-      {hasCoach && coachChat.closed ? (
+      {hasCoach && (coachChat.closed || !coachChat.known) ? (
         <View style={styles.message} testID="home-leading-empty" />
       ) : hasCoach ? (
         <Pressable
@@ -198,7 +199,7 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
           accessibilityRole="button"
           accessibilityLabel="Chat with Roman"
           testID="home-roman-chat"
-          style={styles.bell}
+          style={[styles.bell, styles.besideBell]}
         >
           <RomanAvatar crop="neutral" size={32} testID="home-roman-avatar" />
         </Pressable>
@@ -240,4 +241,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   bell: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  // FR-880R3 (Opus C1): Roman sits beside the bell (clear of its 8 pt hitSlop), so he stays put when the button leaves.
+  besideBell: { marginLeft: 'auto', marginRight: 8 },
 });

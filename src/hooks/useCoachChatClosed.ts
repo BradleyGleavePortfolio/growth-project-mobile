@@ -6,12 +6,19 @@
  * Closed when I blocked my coach (the block cache, at once), a send this session was refused as closed, or the thread
  * read answers with `x-conversation-closed` (b#1141 CONTRACT 6370968268: either person blocks, any messaging version).
  * No answer yet counts as open, and a failed read keeps the last answer. Block and unblock read it again (blockSync).
+ *
+ * FR-880R3 (Sol B1, agent 174): the gate loads the block list saved on this phone itself (useBlockedUsersHydration,
+ * local only), so a cold Home or Community never shows a coach I blocked when the thread read fails. `known` waits
+ * for that saved list as well as the read.
  */
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 import { queryClient } from '../services/queryClient';
 import { useBlockedUsersStore } from '../store/blockedUsersStore';
+import { useBlockedUsersHydration } from './useBlockedUsersHydration';
+import { useCurrentUser } from './useCurrentUser';
+import { readUserCacheSync } from '../lib/userCache';
 import { closedByHeader, closedRefusals } from '../components/messaging/closedRefusal';
 
 export const COACH_CHAT_KEY = ['messaging', 'coach-chat-closed'] as const;
@@ -22,6 +29,10 @@ export async function readCoachChatClosed(): Promise<boolean> {
 }
 
 export function useCoachChatClosed(coachId: string | null | undefined): { closed: boolean; known: boolean } {
+  const currentUser = useCurrentUser();
+  const uid = (readUserCacheSync() ?? currentUser)?.id; // the saved user at once, as RomanCrisisActions reads it
+  useBlockedUsersHydration(coachId ? uid : null, { fetchServer: false }); // the saved list; the server list is the DM screens' job
+  const saved = useBlockedUsersStore((s) => !uid || (s.hydrated && s.userId === uid));
   const mine = useBlockedUsersStore((s) => !!coachId && s.blocked.some((b) => b.id === coachId));
   const refused = useSyncExternalStore(closedRefusals.subscribe, () => closedRefusals.has(coachId));
   const q = useQuery({
@@ -34,5 +45,5 @@ export function useCoachChatClosed(coachId: string | null | undefined): { closed
     queryFn: readCoachChatClosed,
   }, queryClient); // the app's one client (also outside a provider), so blockSync reads it again on block and unblock
   if (!coachId) return { closed: false, known: true };
-  return { closed: mine || refused || q.data === true, known: mine || refused || q.data !== undefined || q.isError };
+  return { closed: mine || refused || q.data === true, known: mine || refused || (saved && (q.data !== undefined || q.isError)) };
 }

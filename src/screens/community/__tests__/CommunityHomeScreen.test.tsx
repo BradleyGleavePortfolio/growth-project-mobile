@@ -40,11 +40,13 @@ jest.mock('../../../ui/haptics/haptics.service', () => ({
 let mockCoach: { name?: unknown } | Error = { name: 'Sam Rivera' };
 let mockUnread = 3;
 let mockCoachClosed = false; // FR-880R2: the coaching thread read's x-conversation-closed header (b#1141), either block
+let mockCoachReadFails = false; // FR-880R3: the coaching thread read fails (offline)
 jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: {
     get: jest.fn(async (url: string) => {
       if (url === '/messages/unread-count') return { data: { total: mockUnread } };
+      if (url === '/messages?limit=1' && mockCoachReadFails) throw new Error('offline');
       if (url === '/messages?limit=1') return { data: [], headers: mockCoachClosed ? { 'x-conversation-closed': 'blocked_by_them' } : {} };
       if (mockCoach instanceof Error) throw mockCoach;
       return { data: mockCoach };
@@ -259,5 +261,28 @@ describe('a closed coaching chat leaves Community Home and the drawer', () => {
     mockCoachClosed = false;
     blockLifted('coach-1');
     expect(await screen.findByLabelText('Sam, Your coach, 3 new')).toBeTruthy();
+  });
+
+  // FR-880R3 (Sol B1 on m#880, agent 174): a fresh launch reads the block list saved on this phone before any row shows.
+  it('cold start, my saved block and a failed thread read: no coach row on Home (never shown first)', async () => {
+    const { persistKeyFor } = jest.requireActual('../../../store/blockedUsersStore');
+    const { prefsStorage } = jest.requireActual('../../../storage/mmkv');
+    await prefsStorage.set(persistKeyFor('me-1'), JSON.stringify([{ id: 'coach-1', displayName: 'Sam', role: 'coach', blockedAt: '2026-10-24T00:00:00Z' }]));
+    useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); // nothing read yet, as on a cold start
+    mockCoachReadFails = true;
+    try {
+      await mount(<CommunityHomeScreen />);
+      expect(screen.getByLabelText('Everyone')).toBeTruthy();
+      gone();
+      await waitFor(() => expect(appClient.getQueryState([...COACH_CHAT, 'coach-1'])?.status).toBe('error'));
+      await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+      expect(useBlockedUsersStore.getState().blocked.map((b: { id: string }) => b.id)).toEqual(['coach-1']);
+      gone();
+      expect(screen.getByLabelText('Everyone')).toBeTruthy(); // the rest of Home stays
+    } finally {
+      mockCoachReadFails = false;
+      await prefsStorage.delete(persistKeyFor('me-1'));
+      useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null });
+    }
   });
 });
