@@ -4,13 +4,14 @@
  * (the Home's ask-first sheet, b#1130's draft route, nothing sent without Send) and "Message" (the chat in Messages).
  */
 import React from 'react';
-import { BackHandler, Platform } from 'react-native';
+import { BackHandler, Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   groupPlanEnded, homeLabel, homeLine, homeParts, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, rowParts, withoutBlocked,
   type PlanEndedRow,
 } from '../screens/coach/home-v11/planEndedData';
 import { useBlockedUsersStore } from '../store/blockedUsersStore';
+import { prefsStorage } from '../storage/mmkv';
 
 const [mockNavigate, mockGet, mockPost, mockApprove, mockReject] = Array.from({ length: 5 }, () => jest.fn());
 const mockFocus = { home: true }; // whether the Home is the screen in front (false: another tab or a pushed screen)
@@ -239,6 +240,7 @@ describe('plan ended: blocked clients never show (b#1141; owner: hide all messag
     const before = churnReads();
     await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
     await waitFor(() => expect(v.getByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy());
+    expect(v.queryByTestId('home-draft-ask')).toBeNull(); // no Try again: a second ask gets the same 404 (LO C2)
     await waitFor(() => expect(churnReads()).toBe(before + 1));
     expect(mockApprove).not.toHaveBeenCalled();
     await press(v, 'home-draft-close');
@@ -298,5 +300,69 @@ describe('plan ended: screen readers stay in the open list (LO C1)', () => {
     await press(v, 'plan-ended-row-c1', 'plan-ended-ask'); // K3's sheet takes the screen reader while it is up
     expect(v.getByTestId('plan-ended-list', { includeHiddenElements: true }).props.accessibilityViewIsModal).toBe(false);
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
+  });
+});
+
+describe('plan ended: a cold start reads the block list before any row shows (LO m#866 B1, m#859 C1)', () => {
+  const MAYA = { id: 'c1', displayName: 'Maya Ortiz', role: 'client', blockedAt: '2026-10-20T10:00:00Z' };
+  const KEY = 'blocked_user_ids_v1:coach-1';
+  const appStart = () => act(() => { useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); }); // nothing read yet
+  beforeEach(appStart);
+  afterEach(async () => { await prefsStorage.delete(KEY); await appStart(); });
+  const blocksAnswer = (answer: () => Promise<unknown>) => {
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string, ...rest: unknown[]) => (url === '/users/blocks' ? answer() : base(url, ...rest)));
+  };
+  const expectNoMaya = async (v: View) => {
+    expect(v.getByTestId('home-plan-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 4. Dev Patel, plan ended today, and 3 more');
+    await press(v, 'home-plan-ended');
+    expect([v.queryByTestId('plan-ended-row-c1'), v.queryByText('Maya Ortiz')]).toEqual([null, null]);
+    expect(v.getByText('TODAY').props.accessibilityLabel).toBe('Today, 1');
+  };
+  it("leaves out a client blocked earlier on this phone, read from the phone's saved list (server down)", async () => {
+    await prefsStorage.set(KEY, JSON.stringify([MAYA]));
+    blocksAnswer(() => Promise.reject(new Error('Network Error')));
+    const v = await renderHome();
+    await expectNoMaya(v);
+  });
+  it("leaves out a client GET /users/blocks names (blocked on another phone; this phone's list is empty)", async () => {
+    blocksAnswer(() => Promise.resolve({ data: { blocked: [{ blockedId: 'c1', displayName: 'Maya Ortiz', blockedAt: MAYA.blockedAt }] } }));
+    const v = await renderHome();
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/users/blocks'));
+    await expectNoMaya(v);
+  });
+  it('shows no row until the list is read: P1 waits while the phone reads it', async () => {
+    let done: (v: string | undefined) => void = () => undefined;
+    const read = prefsStorage.getStringAsync.bind(prefsStorage);
+    const spy = jest.spyOn(prefsStorage, 'getStringAsync').mockImplementation((k: string) => (k === KEY ? new Promise((r) => { done = r; }) : read(k)));
+    try {
+      const v = await renderHome();
+      expect([v.queryByTestId('home-plan-ended'), v.queryByTestId('home-plan-ended-none')]).toEqual([null, null]);
+      await act(async () => { done(JSON.stringify([MAYA])); });
+      await waitFor(() => expect(v.getByTestId('home-plan-ended')).toBeTruthy());
+      await expectNoMaya(v);
+    } finally { spy.mockRestore(); }
+  });
+});
+
+describe('plan ended: RENEWAL3 metrics, not the Home shared rows (LS B1)', () => {
+  const st = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
+  it('draws P1, K1/K2 and K3 at the GOAL sizes', async () => {
+    const v = await renderHome();
+    expect(['fontSize', 'lineHeight'].map((k) => st(v.getByText('Plan ended last 7 days, 5'))[k])).toEqual([15, 20]); // P1 title
+    expect(['minHeight', 'marginTop', 'borderRadius'].map((k) => st(v.getByTestId('home-plan-ended'))[k])).toEqual([60, 12, 12]);
+    await press(v, 'home-plan-ended');
+    expect(['fontSize', 'lineHeight'].map((k) => st(v.getByText('Sam Okafor'))[k])).toEqual([15.5, 20]); // K1 name
+    expect(['fontFamily', 'fontSize', 'lineHeight'].map((k) => st(v.getByText('Messaged Oct 20'))[k])).toEqual(['Inter_500Medium', 13, 18]);
+    expect(['fontSize', 'lineHeight'].map((k) => st(within(v.getByTestId('plan-ended-today')).getByText('2', { includeHiddenElements: true }))[k])).toEqual([12, 16]); // Today's count badge
+    expect(['minHeight', 'paddingHorizontal'].map((k) => st(v.getByTestId('plan-ended-row-c1'))[k])).toEqual([72, 14]);
+    await press(v, 'plan-ended-row-c1');
+    expect(st(v.getByTestId('plan-ended-ask')).minHeight).toBe(48);
+    expect(st(v.getByTestId('roman-mark', { includeHiddenElements: true })).width).toBe(25); // K2's .rmk: a 22 disc and its 1.5 ring
+    await press(v, 'plan-ended-ask');
+    expect(['fontSize', 'lineHeight'].map((k) => st(v.getByText('Ask Roman to write to Maya?'))[k])).toEqual([20, 26]); // K3 title
+    expect(['fontSize', 'lineHeight'].map((k) => st(v.getByText('You read it before it goes. Nothing is sent until you tap Send.'))[k])).toEqual([14.5, 21]);
+    const marks = v.getAllByTestId('roman-mark', { includeHiddenElements: true });
+    expect(st(marks[marks.length - 1]).width).toBe(39); // K3's head: a 32 disc, a 2 deep gap, the 1.5 ring
   });
 });
