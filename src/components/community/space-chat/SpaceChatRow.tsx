@@ -55,7 +55,11 @@ export interface SpaceChatRowProps {
 function MessageBody(p: SpaceChatRowProps): React.ReactElement | null {
   if (p.voice) {
     const mine = !!p.viewerUserId && p.authorId === p.viewerUserId;
-    return <SpaceVoiceNote voice={p.voice} coach={p.isCoach} mine={mine} offline={p.offline} localUri={p.localUri} />;
+    const send = p.state === 'waiting' && !p.offline ? 'sending' : p.state === 'sent' ? undefined : p.state;
+    return (
+      <SpaceVoiceNote voice={p.voice} coach={p.isCoach} mine={mine} offline={p.offline} localUri={p.localUri}
+        send={send} onRetry={p.onRetry} onDiscard={p.onDiscard} />
+    );
   }
   if (p.body) return <Text style={s.body} importantForAccessibility="no" accessibilityElementsHidden>{p.body}</Text>;
   return null;
@@ -66,7 +70,8 @@ const STATE_WORD: Record<'sending' | 'waiting' | 'failed', string> = { sending: 
 export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const local = !!p.state;
   const shown = p.state === 'waiting' && !p.offline ? 'sending' : p.state;
-  const time = shown && shown !== 'sent' ? STATE_WORD[shown] : spaceTime(p.createdAt);
+  // A voice note waiting offline says so in its card (GOAL 10a), so its header carries no word.
+  const time = shown === 'waiting' && p.voice ? '' : shown && shown !== 'sent' ? STATE_WORD[shown] : spaceTime(p.createdAt);
   const initial = p.name.trim().charAt(0).toUpperCase();
   const isOwn = !!p.viewerUserId && p.authorId === p.viewerUserId;
   const tile: Tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
@@ -86,7 +91,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
         <View style={s.who} accessible accessibilityLabel={label} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 24)}>
           <Text style={s.name}>{p.name}</Text>
           {p.isCoach ? <Text style={s.mark}>Coach</Text> : null}
-          {shown === 'waiting' ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
+          {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
         </View>
         {local ? null : (
@@ -97,8 +102,8 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             authorName={p.name}
             viewerUserId={p.viewerUserId}
             viewerCoachId={p.isCoach && !isOwn ? p.authorId : p.viewerCoachId}
-            contentNoun="message"
-            onDelete={isOwn && !p.voice ? p.onDelete : undefined}
+            contentNoun={p.voice ? 'voice note' : 'message'}
+            onDelete={isOwn ? p.onDelete : undefined}
             onBlocked={p.onBlocked}
             testID={`space-chat-menu-${p.id}`}
           />
@@ -106,7 +111,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
       </View>
       <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
         <MessageBody {...p} />
-        {p.state === 'failed' ? (
+        {p.state === 'failed' && !p.voice ? (
           <View style={s.actions}>
             <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
               <Ionicons name="refresh" size={16} color={fp.onDeep} />

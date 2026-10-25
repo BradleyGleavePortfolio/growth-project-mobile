@@ -3,9 +3,10 @@
  * sections, drawn on the Home page or, `deep`, in the space-list drawer. One
  * reader (useSpaceTree) feeds both, so they never disagree.
  *
- * Today's API has no layers (B-LAYERS), no per-space counts (B3) and no
- * threads (B4), so the spaces are one flat Spaces section in the server's
- * order and carry no count; nothing is invented. Section-kind spaces hold
+ * Today's API has no layers (B-LAYERS) and no threads (B4), so the spaces
+ * are one flat Spaces section in the server's order. Each space carries the
+ * server's unread count (SC-BE2 `unread_count`, 99 = "99+"; m#871 Sol B5);
+ * an older server sends none and the row has no badge. Section-kind spaces hold
  * other spaces, so they wait for B-LAYERS. The coach row is the C3 coach
  * thread with its real unread count.
  */
@@ -33,6 +34,8 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 export interface SpaceRow { key: string; label: string; icon: IconName | '#'; meta?: string; chip?: string; badge?: number; target: SpaceTarget }
 export interface SpaceSection { key: string; title: string; rows: SpaceRow[] }
 
+/** SC-BE2 caps a space's count at 99, meaning 99 or more: drawn "99+" like any count over 99. */
+const spaceBadge = (n: number | undefined) => (n != null && n >= 99 ? 100 : n);
 const firstWord = (v: unknown) => (typeof v === 'string' ? (v.trim().split(/\s+/)[0] ?? '') : '');
 
 /** The community name, its sections, and the load state, from today's endpoints. */
@@ -60,7 +63,7 @@ export function useSpaceTree() {
 
   const spaces: SpaceRow[] = (cohorts.data?.cohorts ?? [])
     .filter((c) => c.kind !== 'section')
-    .map((c): SpaceRow => ({ key: c.id, label: c.name, icon: c.kind === 'announcement' ? 'megaphone-outline' : '#', target: { kind: 'space', id: c.id } }));
+    .map((c): SpaceRow => ({ key: c.id, label: c.name, icon: c.kind === 'announcement' ? 'megaphone-outline' : '#', badge: spaceBadge(c.unread_count), target: { kind: 'space', id: c.id } }));
   if (coachId) spaces.push({ key: 'leaderboard', label: 'Leaderboard', icon: 'podium-outline', chip: 'Private', target: { kind: 'route', name: 'Leaderboard' } });
   if (featureFlags.communityClassroom) spaces.push({ key: 'classroom', label: 'Classroom', icon: 'book-outline', target: { kind: 'route', name: 'CommunityClassroom' } });
   const first = firstWord(coachName.data);

@@ -2,34 +2,57 @@
  * SC-M2 (FX-871 PR 2, agent 170): the mic at the right of the space chat's composer (mockup VOICE-B 05b; the send arrow
  * takes its place while there is text). It opens m#848's record sheet (VoiceRecordSheet, FX-848: hold to record,
  * review, the microphone-off state) aimed at this space; Send hands the recording to the space's voice outbox.
+ * FR-871: the first time (the server's voice-consent answer), the 08a card comes first (SpaceVoiceFirstUse); a tap
+ * before the answer is in waits for it rather than opening either sheet.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import VoiceRecordSheet from '../VoiceRecordSheet';
+import SpaceVoiceFirstUse, { useSpaceVoiceConsent } from './SpaceVoiceFirstUse';
 import type { VoiceRecordingResult } from '../../../hooks/voiceRecorderPort';
 import { forestPop as fp } from '../../../theme/tokens';
 
 export interface SpaceChatMicProps {
   cohortName: string;
+  /** The signed-in person: the first-use answer is kept per person. */
+  userId: string;
+  /** A coach's first-use card has no report line. */
+  coach: boolean;
   onSend: (recording: VoiceRecordingResult) => void;
 }
 
-export default function SpaceChatMic({ cohortName, onSend }: SpaceChatMicProps): React.ReactElement {
+export default function SpaceChatMic({ cohortName, userId, coach, onSend }: SpaceChatMicProps): React.ReactElement {
+  const consent = useSpaceVoiceConsent(userId);
   const [open, setOpen] = useState(false);
+  const [card, setCard] = useState(false);
+  const [asked, setAsked] = useState(false);
   // The sheet mounts on the first tap (one Modal less per space chat), then stays so closing still slides.
   const [used, setUsed] = useState(false);
+  useEffect(() => {
+    if (!asked || !consent.known) return;
+    setAsked(false);
+    if (consent.needsCard) setCard(true);
+    else { setUsed(true); setOpen(true); }
+  }, [asked, consent.known, consent.needsCard]);
   return (
     <>
       <TouchableOpacity
         style={s.mic}
-        onPress={() => { setUsed(true); setOpen(true); }}
+        onPress={() => setAsked(true)}
         accessibilityRole="button"
         accessibilityLabel="Record a voice note"
         testID="space-chat-mic"
       >
         <Ionicons name="mic-outline" size={24} color={fp.forest} />
       </TouchableOpacity>
+      <SpaceVoiceFirstUse
+        visible={card}
+        cohortName={cohortName}
+        coach={coach}
+        onRecord={() => { consent.record(); setCard(false); setUsed(true); setOpen(true); }}
+        onClose={() => setCard(false)}
+      />
       {used ? (
         <VoiceRecordSheet
           visible={open}

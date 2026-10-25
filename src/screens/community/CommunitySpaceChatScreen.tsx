@@ -171,7 +171,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         id={m.id} name={m.sender?.name ?? ''} avatarUrl={m.sender?.avatar_url} isCoach={!!m.sender?.is_coach}
         createdAt={m.created_at} body={m.body} voice={m.voice_note} authorId={m.sender_user_id}
         viewerUserId={client?.id} viewerCoachId={client?.coach_id} offline={!isOnline}
-        onDelete={() => chat.remove(m.id)} onBlocked={chat.dropAuthor}
+        onDelete={() => chat.remove(m.id, m.voice_note?.id)} onBlocked={chat.dropAuthor}
       />
     );
   }, [chat, client, isCoachViewer, isOnline, myName, voice]);
@@ -220,6 +220,16 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           ) : null}
         </View>
       </View>
+      {!isOnline && voice.rows.some((r) => r.v.status !== 'failed') ? (
+        // GOAL 10a .offline: a voice note waits on the phone while offline (wifi struck through, leaf).
+        <View style={s.offline} accessibilityRole="alert" testID="space-chat-offline">
+          <View style={s.wifiOff}>
+            <Ionicons name="wifi-outline" size={18} color={fp.leaf} />
+            <View style={s.strike} />
+          </View>
+          <Text style={s.offlineText}>You are offline. Your voice note is saved on this phone and sends when you reconnect.</Text>
+        </View>
+      ) : null}
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {chat.noAccess ? <View style={s.flex} /> : failure ? (
           <View style={s.center} testID="space-chat-error">
@@ -268,7 +278,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           <SpaceChatComposer
             cohortId={cohortId}
             onSend={chat.send}
-            trailing={voiceOn ? <SpaceChatMic cohortName={cohort?.name ?? ''} onSend={voice.send} /> : undefined}
+            trailing={voiceOn ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
           />
         ) : admitted ? (
           <Text style={s.line} testID="space-chat-hint">Only your coach posts here. Press and hold a message to reply.</Text>
@@ -280,6 +290,10 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
 
 const VIEWABLE = { itemVisiblePercentThreshold: 60 };
 const s = StyleSheet.create({
+  offline: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: fp.ink },
+  offlineText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: fp.onDeep },
+  wifiOff: { width: 18, height: 18, marginTop: 1, alignItems: 'center', justifyContent: 'center' },
+  strike: { position: 'absolute', width: 22, height: 2, borderRadius: 1, backgroundColor: fp.leaf, transform: [{ rotate: '45deg' }] },
   safe: { flex: 1, backgroundColor: fp.deep },
   flex: { flex: 1, backgroundColor: colors.bone },
   // 05b .mast: 2 6 10 padding, 2 pt gaps; a 19 pt semibold title after a drawn muted hash, a 13 pt count under it.

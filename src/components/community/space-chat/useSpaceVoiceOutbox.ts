@@ -1,9 +1,9 @@
 /**
  * SC-M2 (FX-871 PR 2, agent 170): the space chat's voice notes on m#848's outbox (useVoiceOutbox, FX-848). Sending
  * passes the space (`cohortId`): the server makes the note a chat message in that space (same id) and pings the
- * stream. This hook keeps the outbox items for this space (and this person), with the time each was first seen so
- * they sit at the newest end of the stream in a stable order, and refreshes the space's messages when an item leaves
- * the outbox (sent: the server row takes its place; discarded: nothing changes).
+ * stream. This hook keeps the outbox items for this space (and this person), with the time each went into the outbox
+ * so they keep their place in the stream across visits and days (FR-871, m#879 Sol B4), and refreshes the space's
+ * messages when an item leaves the outbox (sent: the server row takes its place; discarded: nothing changes).
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,15 @@ import type { VoiceRecordingResult } from '../../../hooks/voiceRecorderPort';
 import { spaceChatKey } from './useSpaceChat';
 
 export interface SpaceVoiceRow { v: VoiceOutboxItem; at: string }
+
+/**
+ * When the outbox took the item. VoiceOutboxItem (m#848) keeps no time of its own, but its id is `local-<ms>-<n>`
+ * (useVoiceOutbox send), stored with it on the phone; an id that does not read that way falls back to `fallback`.
+ */
+export function enqueuedAt(id: string, fallback: string): string {
+  const ms = Number(/^local-(\d+)-/.exec(id)?.[1]);
+  return ms > 0 ? new Date(ms).toISOString() : fallback;
+}
 
 export function useSpaceVoiceOutbox(workspaceId: string | null, userId: string | null, cohortId: string) {
   const qc = useQueryClient();
@@ -22,7 +31,7 @@ export function useSpaceVoiceOutbox(workspaceId: string | null, userId: string |
   // A new array only when an item comes, goes or changes state (the outbox hands back a fresh list each render).
   const sig = mine.map((v) => `${v.id}:${v.status}`).join(',');
   const rows: SpaceVoiceRow[] = useMemo(() => mine.map((v) => {
-    if (!seen.current.has(v.id)) seen.current.set(v.id, new Date().toISOString());
+    if (!seen.current.has(v.id)) seen.current.set(v.id, enqueuedAt(v.id, new Date().toISOString()));
     return { v, at: seen.current.get(v.id) as string };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [sig]);

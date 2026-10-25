@@ -8,7 +8,7 @@
  * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
@@ -60,12 +60,13 @@ jest.mock('../../../hooks/useCommunity', () => ({
     ? { data: undefined, isLoading: false, isError: true, error: Object.assign(new Error('HTTP 500'), { isAxiosError: true, response: { status: 500, data: {} } }), refetch: mockCohorts.refetch }
     : { data: { feature_flag_state: 'on', cohorts: cohorts() }, isLoading: false, isError: false, refetch: mockCohorts.refetch }),
   useCommunityMe: () => ({ dataUpdatedAt: 0 }),
+  communityKeys: { cohorts: () => ['community', 'cohorts'], me: () => ['community', 'me'] },
 }));
 jest.mock('../../../components/community/VoiceNotePlayer', () => {
   const { Text } = jest.requireActual('react-native');
   return (p: { testID: string; durationMs: number; url: string | null; onPlaybackError?: () => void }) => <Text testID={p.testID} onPress={p.onPlaybackError}>{`player ${p.durationMs} ${p.url}`}</Text>;
 });
-jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn(async () => ({ url: 'https://x/v.m4a' })) } }));
+jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn(async () => ({ url: 'https://x/v.m4a' })), remove: jest.fn(async () => ({ deleted: true })) } }));
 // SC-M2: m#848's voice outbox and record sheet (FX-848) stand in; the space chat only feeds them.
 const mockVoice = { items: [] as unknown[], online: true, send: jest.fn(), retry: jest.fn(), discard: jest.fn() };
 jest.mock('../../../hooks/useVoiceOutbox', () => ({ useVoiceOutbox: () => mockVoice }));
@@ -78,7 +79,7 @@ jest.mock('../../../components/community/SafetyMenu', () => {
   return (p: { testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void> }) => (
     <>
       <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
-      {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { void p.onDelete?.(); }}>delete</Text> : null}
+      {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { p.onDelete?.().catch(() => undefined); }}>delete</Text> : null}
     </>
   );
 });
@@ -129,6 +130,7 @@ beforeEach(() => {
       if (readAnswer instanceof Error) throw readAnswer;
       return { data: readAnswer };
     }
+    if (url === '/community/voice-consent') return { data: { seen: true, seen_at: '2026-10-20T10:00:00.000Z' } };
     return { data: { messages: page, next_before: null } };
   });
   mockApi.post.mockReset().mockImplementation(async (url: string) =>
@@ -501,8 +503,52 @@ it('SC-M2: a voice note on its way to this space shows at the bottom with its st
   await r.findByTestId('space-chat-row-vo-1');
   expect(r.queryByTestId('space-chat-row-vo-2')).toBeNull();
   expect(r.getByTestId('space-chat-failed-vo-1')).toBeTruthy();
+  expect(r.getByText('That didn’t send. Your recording is safe — try sending again.')).toBeTruthy();
   fireEvent.press(r.getByText('Try again'));
   expect(mockVoice.retry).toHaveBeenCalledWith('vo-1');
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, b) => b?.find((x) => x.text === 'Delete')?.onPress?.());
   fireEvent.press(r.getByText('Delete'));
+  expect(alert).toHaveBeenCalledWith('Delete this voice note?', undefined, expect.any(Array));
   expect(mockVoice.discard).toHaveBeenCalledWith('vo-1');
+  alert.mockRestore();
+});
+
+it('FR-871: offline with a voice note waiting, the strip says it is saved; the card says Waiting to send, the header nothing', async () => {
+  mockNet.isOnline = false;
+  const note = (id: string, status: string) => ({ id, authorId: 'me-1', workspaceId: 'ws', peaks: [0.4], status, input: { uri: `file:///${id}.m4a`, durationMs: 8000, cohortId: 'c-every' } });
+  mockVoice.items = [note('vo-1', 'waiting')];
+  const r = await open();
+  await r.findByTestId('space-chat-row-vo-1');
+  expect(r.getByText('You are offline. Your voice note is saved on this phone and sends when you reconnect.')).toBeTruthy();
+  expect(StyleSheet.flatten(r.getByTestId('space-chat-offline').props.style)).toMatchObject({ backgroundColor: '#1A1A18', paddingVertical: 10, paddingHorizontal: 16, gap: 10 });
+  expect(r.getByTestId('space-chat-voice-waiting-vo-1')).toBeTruthy();
+  expect(r.getByTestId('space-chat-waiting-vo-1').props.children).toBe('');
+  mockVoice.items = [note('vo-1', 'failed')];
+  await r.rerender(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+  expect(r.queryByTestId('space-chat-offline')).toBeNull();
+});
+
+it('FR-871 (m#879 Opus B1 / Sol B2): your own voice note has Delete, through the voice route; a failed delete keeps the row', async () => {
+  const voiceApi = jest.requireMock('../../../api/communityVoiceApi').communityVoiceApi;
+  page = [msg('m5', '2026-10-22T10:10:00.000Z', ME, { kind: 'voice', body: null, voice_note: { id: 'v5', duration_ms: 9000, waveform_peaks: null, heard_at: null } }), ...page];
+  voiceApi.remove.mockRejectedValueOnce(new Error('HTTP 500'));
+  const r = await open();
+  await r.findByTestId('space-chat-row-m5');
+  expect(r.queryByTestId('space-chat-menu-m3-delete')).toBeNull();
+  await fireEvent.press(r.getByTestId('space-chat-menu-m5-delete'));
+  await waitFor(() => expect(voiceApi.remove).toHaveBeenCalledWith('v5'));
+  expect(r.getByTestId('space-chat-row-m5')).toBeTruthy();
+  await fireEvent.press(r.getByTestId('space-chat-menu-m5-delete'));
+  await waitFor(() => expect(r.queryByTestId('space-chat-row-m5')).toBeNull());
+  expect(voiceApi.remove).toHaveBeenCalledTimes(2);
+  expect(mockApi.delete).not.toHaveBeenCalled();
+});
+
+it('m#871 Sol B5: a read mark that lands refreshes the space badges and the unread total', async () => {
+  const r = await open();
+  await r.findByTestId('space-chat-new-line');
+  const spy = jest.spyOn(client, 'invalidateQueries');
+  await see(r, 'm3', 'm2', 'new-line');
+  await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'cohorts'] }));
+  expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'me'] });
 });
