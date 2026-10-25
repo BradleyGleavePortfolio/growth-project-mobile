@@ -196,6 +196,55 @@ describe('CoachLtvDashboard', () => {
     });
   });
 
+  describe('gold STREAK and gain chips (owner 10-23: "Use the shiny gold on the STREAK and "+$200" chips? yes")', () => {
+    type Node = ReturnType<typeof screen.getByTestId>;
+    const GOLD = JEWEL_GOLD_STOPS.map((s) => ({ offset: s.offset, color: s.color.toUpperCase() }));
+    // react-native-svg hands the native gradient [offset, ARGB, offset, ARGB, ...].
+    const goldIn = (node: Node) =>
+      node.queryAll((n) => Array.isArray(n.props.gradient)).map((g) => {
+        const raw: number[] = g.props.gradient;
+        return raw.flatMap((v, i) =>
+          i % 2 ? [] : [{ offset: v, color: `#${(raw[i + 1] & 0xffffff).toString(16).padStart(6, '0').toUpperCase()}` }],
+        );
+      });
+    const words = (node: Node) => node.queryAll((n) => n.type === 'Text').map((t) => StyleSheet.flatten(t.props.style));
+
+    it('draws the STREAK badge on jewel gold with solid deep-forest words', async () => {
+      await renderDashboard();
+      await waitFor(() => expect(screen.getByTestId('ltv-streak-pill')).toBeTruthy());
+      const pill = screen.getByTestId('ltv-streak-pill');
+      expect(goldIn(pill)).toEqual([GOLD]);
+      expect(StyleSheet.flatten(pill.props.style).backgroundColor).toBeUndefined();
+      const styles = words(pill);
+      expect(styles).toHaveLength(3);
+      for (const s of styles) {
+        expect(s.color).toBe(brand[800]);
+        expect(s.opacity ?? 1).toBe(1);
+      }
+    });
+
+    it('draws the gain chip ("+$200") on jewel gold with deep-forest words and no outline', async () => {
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'up' }));
+      await waitFor(() => expect(screen.getByText('+$200')).toBeTruthy());
+      const chip = screen.getByTestId('ltv-trend-chip');
+      expect(goldIn(chip)).toEqual([GOLD]);
+      expect(StyleSheet.flatten(chip.props.style).borderWidth).toBe(0);
+      expect(words(chip).map((s) => s.color)).toEqual([brand[800], brand[800]]);
+    });
+
+    it.each([
+      ['flat', colors.mutedGold],
+      ['down', colors.error],
+    ] as const)('keeps the %s chip in its outline colours, with no gold', async (trend, color) => {
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: trend }));
+      await waitFor(() => expect(screen.getByTestId('ltv-trend-chip')).toBeTruthy());
+      const chip = screen.getByTestId('ltv-trend-chip');
+      expect(goldIn(chip)).toEqual([]);
+      expect(StyleSheet.flatten(chip.props.style)).toMatchObject({ borderWidth: 1, borderColor: color });
+      expect(words(chip).map((s) => s.color)).toEqual([color, color]);
+    });
+  });
+
   describe('trend colours', () => {
     it('shows "Growing" label for upward trend', async () => {
       await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'up' }));
