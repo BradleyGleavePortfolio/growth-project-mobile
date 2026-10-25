@@ -41,7 +41,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, radius, voiceFaces } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { ThreadHeader } from '../../components/community';
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
   },
-  muted: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  muted: { fontFamily: voiceFaces.regular, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   retry: {
     marginTop: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
@@ -261,12 +261,12 @@ const styles = StyleSheet.create({
     minHeight: 48,
     justifyContent: 'center',
   },
-  retryLabel: { fontSize: 14, fontWeight: '600' },
+  retryLabel: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600' },
   content: { padding: spacing.lg, gap: spacing.md },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  kind: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3, flex: 1 },
-  when: { fontSize: 12 },
+  kind: { fontFamily: voiceFaces.semibold, fontSize: 12, fontWeight: '600', letterSpacing: 0.3, flex: 1 },
+  when: { fontFamily: voiceFaces.regular, fontSize: 12 },
   transcriptWrap: { gap: spacing.xs, marginTop: spacing.sm },
-  transcriptLabel: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
-  transcript: { fontSize: 15, lineHeight: 22 },
+  transcriptLabel: { fontFamily: voiceFaces.semibold, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
+  transcript: { fontFamily: voiceFaces.regular, fontSize: 15, lineHeight: 22 },
 });

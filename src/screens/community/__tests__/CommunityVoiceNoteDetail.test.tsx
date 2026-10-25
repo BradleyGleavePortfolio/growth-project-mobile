@@ -11,9 +11,10 @@ jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
   return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
 });
+const mockParams = { voiceNoteId: 'vn-1', excerpt: '' };
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
-  useRoute: () => ({ params: { voiceNoteId: 'vn-1', excerpt: '' } }),
+  useRoute: () => ({ params: mockParams }),
 }));
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { communitySearch: true } }));
 jest.mock('../../../hooks/useFeatureFlags', () => ({
@@ -58,4 +59,22 @@ it('never saves the note to the phone and draws its real peaks', async () => {
   const query = qc.getQueryCache().find({ queryKey: ['community', 'voice-note', 'vn-1'] });
   expect(query?.meta).toMatchObject({ persist: false });
   expect(mockPlayer.mock.calls.at(-1)?.[0]).toMatchObject({ peaks: [0.2, 0.7, 0.4], durationMs: 42_000 });
+});
+
+// LO-848R4 B4: the detail's words are GOAL Inter too (kind, time, transcript label and excerpt).
+it('every line names a loaded Inter face', async () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  mockGetOne.mockResolvedValue(NOTE);
+  mockParams.excerpt = 'my squat felt strong today';
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { container, findByTestId } = await render(
+    <QueryClientProvider client={qc}>
+      <CommunityVoiceNoteDetail />
+    </QueryClientProvider>,
+  );
+  await findByTestId('community-voice-detail-excerpt');
+  const texts = container.queryAll((n) => n.type === 'Text');
+  expect(texts.length).toBeGreaterThan(2);
+  for (const t of texts) expect(String(StyleSheet.flatten(t.props.style)?.fontFamily)).toMatch(/^(Inter_|ionicons$)/); // ionicons: icon glyphs
+  mockParams.excerpt = '';
 });

@@ -373,3 +373,16 @@ describe('VoiceNotePlayer — GOAL geometry (FR-848R4)', () => {
     expect(StyleSheet.flatten(strip.props.style)).toMatchObject({ height: 44, gap: 3 });
   });
 });
+
+// LO-848R4 B4: the duration and the retry line are Inter (GOAL), not the system face.
+describe('VoiceNotePlayer — loaded faces (LO-848R4 B4)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  it('every line on the card names a loaded Inter face', async () => {
+    const { container } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} playback={makePlayback(true)} />,
+    );
+    const texts = container.queryAll((n) => n.type === 'Text');
+    expect(texts.length).toBeGreaterThan(0);
+    for (const t of texts) expect(String(StyleSheet.flatten(t.props.style)?.fontFamily)).toMatch(/^(Inter_|ionicons$)/); // ionicons: icon glyphs
+  });
+});

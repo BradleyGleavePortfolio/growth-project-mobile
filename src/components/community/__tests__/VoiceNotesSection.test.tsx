@@ -249,3 +249,20 @@ it('a sending note shows the upload progress line', async () => {
   expect(line.props.accessibilityValue).toMatchObject({ min: 0, max: 100, now: 0 });
 });
 
+
+// LO-848R4 B4: every line of the feed (names, Coach mark, times, Not sent copy) is GOAL Inter.
+it('every feed line names a loaded Inter face', async () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  const coach = { ...note('vn-c', 'u-coach'), author_name: 'Sam Ortiz', author_is_coach: true };
+  mockListFeed.mockResolvedValue({ voice_notes: [coach, note('vn-other', 'u-alice')], next_cursor: null });
+  const { container, findByTestId, getByTestId, findByText } = await renderSection();
+  await findByTestId('vn-note-vn-c');
+  await fireEvent.press(getByTestId('vn-record'));
+  await act(async () => {
+    fireEvent.press(getByTestId('sheet-send'));
+  });
+  await findByText('Not sent');
+  const texts = container.queryAll((n) => n.type === 'Text');
+  expect(texts.length).toBeGreaterThan(4);
+  for (const t of texts) expect(String(StyleSheet.flatten(t.props.style)?.fontFamily)).toMatch(/^(Inter_|ionicons$)/); // ionicons: icon glyphs
+});

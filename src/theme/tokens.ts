@@ -549,6 +549,16 @@ export const voiceShades = {
   scrim: 'rgba(26, 26, 24, 0.45)', // the record sheet's scrim (mockup .scrim)
 } as const;
 
+/**
+ * GOAL voice text faces: Inter throughout (loaded in App.tsx). A style sets the
+ * face that matches its fontWeight, so the phone never falls back to the system face.
+ */
+export const voiceFaces = {
+  regular: typography.body.fontFamily, // Inter_400Regular
+  medium: typography.bodyMd.fontFamily, // Inter_500Medium
+  semibold: typography.micro.fontFamily, // Inter_600SemiBold
+} as const;
+
 /** Dark-mode semantic tokens. */
 export const darkTokens: SemanticTokens = {
   bgPrimary:   '#121110',

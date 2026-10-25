@@ -29,7 +29,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
-import { forestPop as fp, neutral, radius, spacing, voiceShades } from '../../theme/tokens';
+import { forestPop as fp, neutral, radius, spacing, voiceFaces, voiceShades } from '../../theme/tokens';
 import { formatDuration } from './voiceFormat';
 import VoiceNoteWaveform from './VoiceNoteWaveform';
 import {
@@ -339,9 +339,10 @@ const styles = StyleSheet.create({
   middle: { flex: 1, gap: 6 },
   seek: { minHeight: 44, flexDirection: 'row', alignItems: 'center', pointerEvents: 'box-only' },
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 24 },
-  duration: { fontSize: 14, lineHeight: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  duration: { fontFamily: voiceFaces.semibold, fontSize: 14, lineHeight: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
   retry: {
     width: '100%',
+    fontFamily: voiceFaces.regular,
     fontSize: 13,
     lineHeight: 18,
   },

@@ -29,7 +29,7 @@ import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
-import { forestPop as fp, neutral, radius, spacing, typography, voiceShades } from '../../theme/tokens';
+import { forestPop as fp, neutral, radius, spacing, typography, voiceFaces, voiceShades } from '../../theme/tokens';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { LIVE_LEVEL_BARS, useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import type { VoiceRecorderPort, VoiceRecordingResult } from '../../hooks/voiceRecorderPort';
@@ -330,6 +330,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SHEET_GUTTER,
   },
   noticeText: {
+    fontFamily: voiceFaces.regular,
     fontSize: 16,
     lineHeight: 24,
     textAlign: 'center',
@@ -341,18 +342,18 @@ const styles = StyleSheet.create({
   fill: { flex: 1, alignSelf: 'stretch' },
   header: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerAction: { minWidth: 72, minHeight: 44, justifyContent: 'center' },
-  cancel: { fontSize: 16, lineHeight: 20, fontWeight: '600', color: fp.forest },
-  title: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
+  cancel: { fontFamily: voiceFaces.semibold, fontSize: 16, lineHeight: 20, fontWeight: '600', color: fp.forest },
+  title: { fontFamily: voiceFaces.semibold, fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
   // GOAL .btime: Cormorant 500 at 56/70 — the loaded Medium face (h3), not a synthesised weight.
   timer: { fontFamily: typography.h3.fontFamily, fontSize: 56, lineHeight: 70, fontWeight: '500', color: fp.ink,
     textAlign: 'center', fontVariant: ['lining-nums', 'tabular-nums'] },
-  hint: { fontSize: 14, lineHeight: 20, minHeight: 20, color: fp.n700, textAlign: 'center' },
-  hintWarn: { color: fp.ink, fontWeight: '600' },
+  hint: { fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 20, minHeight: 20, color: fp.n700, textAlign: 'center' },
+  hintWarn: { color: fp.ink, fontFamily: voiceFaces.semibold, fontWeight: '600' },
   levels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 64 },
   level: { width: 5, borderRadius: 3, backgroundColor: fp.leaf, borderWidth: 1, borderColor: fp.moss },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: voiceShades.hairline },
   line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  lineLabel: { fontSize: 13, lineHeight: 16, fontWeight: '500', color: fp.n700, fontVariant: ['tabular-nums'] },
+  lineLabel: { fontFamily: voiceFaces.medium, fontSize: 13, lineHeight: 16, fontWeight: '500', color: fp.n700, fontVariant: ['tabular-nums'] },
   track: { flex: 1, height: 4, borderRadius: 2, backgroundColor: voiceShades.hairline, overflow: 'hidden' },
   trackFill: { height: 4, backgroundColor: fp.forest },
   wash: { width: 56, height: 56, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
@@ -372,6 +373,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryLabel: {
+    fontFamily: voiceFaces.semibold,
     fontSize: 17,
     fontWeight: '600',
     color: fp.onDeep,
@@ -388,6 +390,7 @@ const styles = StyleSheet.create({
   filled: { backgroundColor: fp.forest },
   outlined: { borderWidth: 1.5, borderColor: fp.forest, backgroundColor: neutral[0] },
   primaryLabel: {
+    fontFamily: voiceFaces.semibold,
     fontSize: 16,
     lineHeight: 20,
     fontWeight: '600',

@@ -172,3 +172,46 @@ describe('VoiceNoteComposer — recorder failure (B-314-7)', () => {
     expect(await findByText(/Microphone access could not be checked on this phone\./)).toBeTruthy();
   });
 });
+
+// LO-848R4 B4: GOAL draws every voice word in Inter (Cormorant only for the big timer). Every host
+// Text in each sheet state must name a loaded face, so the phone never falls back to the system face.
+describe('VoiceNoteComposer — loaded faces (LO-848R4 B4)', () => {
+  const FACE = /^(Inter_|CormorantGaramond_|ionicons$)/; // ionicons: the icon glyph font
+  type Root = Awaited<ReturnType<typeof render>>['container'];
+  const unfaced = (root: Root) =>
+    root
+      .queryAll((n) => n.type === 'Text')
+      .map((n) => ({ text: String(n.props.children), face: StyleSheet.flatten(n.props.style)?.fontFamily }))
+      .filter((t) => !FACE.test(String(t.face ?? '')));
+
+  it('recording, review, denied and unavailable name a loaded face on every line', async () => {
+    const live = await render(<VoiceNoteComposer {...props} target={target} recorder={makePort()} />);
+    await waitFor(() => expect(live.getByTestId('voice-record-button').props.accessibilityLabel).toMatch(/stop/i));
+    expect(unfaced(live.container)).toEqual([]);
+    await act(async () => {
+      fireEvent.press(live.getByTestId('voice-record-button'));
+    });
+    await waitFor(() => expect(live.getByTestId('voice-composer-review')).toBeTruthy());
+    expect(unfaced(live.container)).toEqual([]);
+    await live.unmount();
+
+    const denied = await render(
+      <VoiceNoteComposer
+        {...props}
+        target={target}
+        recorder={makePort({
+          getPermissionStatus: jest.fn().mockResolvedValue('undetermined'),
+          requestPermission: jest.fn().mockResolvedValue('denied'),
+        })}
+      />,
+    );
+    await waitFor(() => expect(denied.getByTestId('voice-composer-denied')).toBeTruthy());
+    expect(unfaced(denied.container)).toEqual([]);
+    await denied.unmount();
+
+    const off = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={makePort({ isAvailable: false })} />,
+    );
+    expect(unfaced(off.container)).toEqual([]);
+  });
+});

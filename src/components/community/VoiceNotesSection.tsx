@@ -28,7 +28,7 @@ import VoiceRecordSheet from './VoiceRecordSheet';
 import SafetyMenu from './SafetyMenu';
 import { formatRelative } from './SearchResultRow';
 import { useTheme } from '../../theme/useTheme';
-import { forestPop as fp, radius, spacing, voiceShades } from '../../theme/tokens';
+import { forestPop as fp, radius, spacing, voiceFaces, voiceShades } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useVoiceFeed } from '../../hooks/useVoiceFeed';
 import { useVoiceOutbox, type VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  heading: { flex: 1, fontSize: 15, fontWeight: '600' },
+  heading: { flex: 1, fontFamily: voiceFaces.semibold, fontSize: 15, fontWeight: '600' },
   record: {
     minHeight: 44,
     minWidth: 44,
@@ -312,23 +312,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recordLabel: { fontSize: 14, fontWeight: '600' },
+  recordLabel: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600' },
   retryLabel: { fontSize: 15 }, // GOAL .btn.sm 0.9375rem
   state: { gap: spacing.sm, alignItems: 'flex-start' },
-  muted: { fontSize: 14, lineHeight: 20 },
+  muted: { fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 20 },
   note: { gap: spacing.sm },
   noteMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
-  who: { fontSize: 17, fontWeight: '600', color: fp.ink, flexShrink: 1 },
+  who: { fontFamily: voiceFaces.semibold, fontSize: 17, fontWeight: '600', color: fp.ink, flexShrink: 1 },
   coach: { overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.chip,
-    backgroundColor: fp.deep, color: fp.gold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
-  when: { fontSize: 15, color: fp.n700 },
+    backgroundColor: fp.deep, color: fp.gold, fontFamily: voiceFaces.semibold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  when: { fontFamily: voiceFaces.regular, fontSize: 15, color: fp.n700 },
   spacer: { flex: 1 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 28 },
   wifiOff: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
   strike: { position: 'absolute', width: 22, height: 2, backgroundColor: fp.n700, transform: [{ rotate: '45deg' }] },
   failed: { gap: spacing.sm },
   failedLine: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
-  failedText: { flex: 1, fontSize: 15, lineHeight: 21, color: fp.error },
+  failedText: { flex: 1, fontFamily: voiceFaces.regular, fontSize: 15, lineHeight: 21, color: fp.error },
   failedActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   retry: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
     paddingHorizontal: spacing.lg, borderRadius: radius.button, backgroundColor: fp.forest },
