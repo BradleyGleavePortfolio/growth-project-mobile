@@ -181,8 +181,9 @@ export const CommunityCohortSummarySchema = z
     member_count: z.number().int().nonnegative(),
     my_role: z.enum(COMMUNITY_MEMBER_ROLES),
     // SC-BE2 (backend#1137): the caller's unread messages in this space, 0..99 (99 means 99 or more). Optional (older
-    // backends do not send it); a bad value is dropped rather than failing the list.
-    unread_count: z.number().int().nonnegative().optional().catch(undefined),
+    // backends do not send it); a bad value is dropped (no badge) rather than failing the list. The cast keeps one
+    // input/output type, which call<T>(z.ZodType<T>) needs; the runtime schema is the .catch one.
+    unread_count: z.number().int().nonnegative().optional().catch(undefined) as unknown as z.ZodOptional<z.ZodNumber>,
   })
   .passthrough();
 export type CommunityCohortSummary = z.infer<

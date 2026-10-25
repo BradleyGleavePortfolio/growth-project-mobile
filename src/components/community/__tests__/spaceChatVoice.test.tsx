@@ -205,8 +205,9 @@ describe('SpaceVoiceNote — outbox states (GOAL 03 / 04 / 10a)', () => {
     await r.rerender(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} offline send="waiting" playback={p} /></Wrapper>);
     expect(r.getByText('Waiting to send')).toBeTruthy();
     expect(r.getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({ disabled: true });
-    let n: { props: { style?: unknown }; parent: unknown } | null = r.getByText('Waiting to send') as never;
-    for (; n; n = n.parent as typeof n) expect((StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1).toBe(1);
+    type Node = { props: { style?: unknown }; parent: Node | null };
+    let n: Node | null = r.getByText('Waiting to send') as unknown as Node;
+    for (; n; n = n.parent) expect((StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1).toBe(1);
   });
 
   it('failed: the red line, Try again, and Delete that asks first', async () => {
