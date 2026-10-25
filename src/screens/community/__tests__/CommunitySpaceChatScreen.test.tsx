@@ -143,7 +143,7 @@ it('member Everyone: header, rows with names as sent, Coach mark, voice row, New
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
   expect(r.getByText('Everyone')).toBeTruthy();
-  expect(r.getByTestId('space-chat-hash')).toBeTruthy();
+  expect(r.getByTestId('space-chat-hash', { includeHiddenElements: true })).toBeTruthy();
   expect(r.getByText('1,000 members')).toBeTruthy();
   expect(r.getByText('jo b.')).toBeTruthy();
   expect(r.getAllByText('Coach')).toHaveLength(2);
@@ -266,6 +266,7 @@ it('Sol B1: more than a page unread, older pages load until the first unread row
 
 it('Sol B1: scrolled up a little, a new row from someone else brings the pill and is not marked read', async () => {
   const r = await open();
+  await r.findByTestId('space-chat-row-m3');
   await see(r, 'm3', 'm2', 'new-line');
   await waitFor(() => expect(readMarks()).toEqual(['m3']));
   await see(r, 'm2', 'new-line');
@@ -289,9 +290,10 @@ it('Sol B2: a failed play (the signed URL ran out) gets a fresh URL; a failed lo
 it('Sol B4: a row being sent keeps its text at 4.5:1 or better on bone (every opacity above it composited)', async () => {
   mockApi.post.mockImplementation(() => new Promise(() => undefined));
   const r = await open();
-  await fireEvent.changeText(await r.findByTestId('space-chat-composer-field'), 'Nice work');
+  await r.findByTestId('space-chat-row-m3');
+  await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Nice work');
   await fireEvent.press(r.getByTestId('space-chat-composer-send'));
-  const body = await r.findByText('Nice work');
+  const body = await r.findByText('Nice work', { includeHiddenElements: true });
   let alpha = 1;
   for (let n = body as { props: { style?: unknown }; parent: unknown } | null; n; n = n.parent as typeof n) alpha *= (StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1;
   const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
