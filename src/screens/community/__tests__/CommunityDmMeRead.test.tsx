@@ -116,7 +116,7 @@ describe('Try again shows the read', () => {
     expect(await u.findByText(FAILED, {}, { timeout: 8000 })).toBeTruthy();
     mockGetMe.mockReturnValue(new Promise(() => undefined));
     await act(async () => { await fireEvent.press(u.getByLabelText('Try again')); });
-    expect(u.getByText(LOADING)).toBeTruthy();
+    expect(await u.findByText(LOADING)).toBeTruthy(); // the query's fetching state reaches the screen on its next tick
     expect(u.queryByText(FAILED)).toBeNull();
     expect(u.queryByLabelText('Try again')).toBeNull();
     expect(u.getByTestId('community-dmthread-state').props.accessibilityState).toEqual({ busy: true });
@@ -129,7 +129,7 @@ describe('Try again shows the read', () => {
     expect(await u.findByText(FAILED, {}, { timeout: 8000 })).toBeTruthy();
     mockList.mockReturnValue(new Promise(() => undefined));
     await act(async () => { await fireEvent.press(u.getByLabelText('Try again')); });
-    expect(u.getByText(LOADING)).toBeTruthy();
+    expect(await u.findByText(LOADING)).toBeTruthy(); // the query's fetching state reaches the screen on its next tick
     expect(u.queryByText(FAILED)).toBeNull();
     expect(u.getByTestId('community-dmthread-state').props.accessibilityState).toEqual({ busy: true });
   }, 15000);

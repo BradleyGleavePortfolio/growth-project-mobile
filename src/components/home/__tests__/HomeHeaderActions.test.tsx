@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import * as fs from 'fs';
 import * as path from 'path';
 import { StyleSheet } from 'react-native';
@@ -230,6 +230,7 @@ describe('HomeHeaderActions', () => {
     const { useBlockedUsersStore, persistKeyFor } = jest.requireActual('../../../store/blockedUsersStore');
     const { prefsStorage } = jest.requireActual('../../../storage/mmkv');
     afterEach(async () => {
+      cleanup(); // unmount first: a mounted header would start a new thread read (this test's mock) once the cache is cleared
       queryClient.clear();
       await prefsStorage.delete(persistKeyFor('u1'));
       useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null });
