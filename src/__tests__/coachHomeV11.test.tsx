@@ -35,7 +35,7 @@ jest.mock('react-native-svg', () => {
 jest.mock('@expo/vector-icons', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  const Icon = ({ name, color }: { name: string; color?: string }) => R.createElement(View, { testID: `icon-${name}`, iconColor: color });
+  const Icon = ({ name, color }: { name: string; color?: string }) => R.createElement(View, { testID: `icon-${name}`, iconColor: color } as import('react-native').ViewProps);
   return { Ionicons: Icon, MaterialIcons: Icon, MaterialCommunityIcons: Icon, Feather: Icon };
 });
 const mockHaptics = { softImpact: jest.fn(), mediumImpact: jest.fn(), selection: jest.fn(), lightImpact: jest.fn() };
