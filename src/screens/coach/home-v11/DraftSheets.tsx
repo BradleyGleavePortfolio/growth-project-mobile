@@ -12,7 +12,7 @@ import HapticPressable from '../../../components/HapticPressable';
 import api from '../../../services/api';
 import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { forestPop, layout, radius, typography } from '../../../theme/tokens';
+import { forestPop, layout, neutral, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietLoading } from '../../../ui/states/QuietStates';
 import type { AtRiskEntry } from '../../../services/commandCenterApi';
@@ -86,7 +86,7 @@ export function HomeSheet({ list, ask, onCloseList, onCloseAsk, onSent }: { list
     <Modal visible transparent animationType="slide" onRequestClose={() => close.current()}>
       <View style={s.scrim}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close.current()} accessibilityRole="button" accessibilityLabel="Close" />
-        <View style={[s.sheet, ask?.look === 'roman' && s.sheetRoman, { paddingBottom: bottom + 16 }]} testID={ask ? 'home-draft-sheet' : 'home-list-sheet'}>
+        <View style={[s.sheet, ask?.look === 'roman' && s.sheetRoman, ask?.look === 'roman' && s.whiteBody, { paddingBottom: bottom + 16 }]} testID={ask ? 'home-draft-sheet' : 'home-list-sheet'}>
           {ask?.look === 'roman' ? null : <View style={s.grab} />}
           {ask ? <DraftSteps ask={ask} s={s} close={close} onClose={onCloseAsk} onSent={onSent} /> : list ? (
             <>
@@ -183,7 +183,7 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
         {step.kind === 'ask' && ask.look !== 'roman' ? <Text style={s.body}>{ask.about}</Text> : null}
         {step.kind === 'ask' && ask.look !== 'roman' ? <Text style={s.muted}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
         {step.kind === 'writing' ? <QuietLoading label="Roman is writing" /> : null}
-        {draft ? <View style={s.draft}><Text style={[s.body, ask.look === 'roman' && s.draftRoman]} testID="home-draft-text">{draft.reply}</Text></View> : null}
+        {draft ? <View style={[s.draft, ask.look === 'roman' && s.draftBoxRoman]} testID="home-draft-box"><Text style={[s.body, ask.look === 'roman' && s.draftRoman]} testID="home-draft-text">{draft.reply}</Text></View> : null}
         {step.kind === 'failed' ? <Text style={s.error} accessibilityLiveRegion="polite">{step.words}</Text> : null}
       </ScrollView>
       <View style={s.actions}>
@@ -210,7 +210,7 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
 /** RENEWAL3 K3's sheet gutter (r2b.py `.dhead`, r2a.py `.ask`): 22 on iPhone, 18 on Android. */
 const ROMAN_GUTTER = Platform.OS === 'android' ? 18 : 22;
 
-const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>) =>
+const makeStyles = ({ colors, semanticColors: sem, colorScheme }: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
     scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: sem.overlay },
     sheet: { maxHeight: '85%', paddingTop: 8, paddingHorizontal: layout.gutter, backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
@@ -227,6 +227,10 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     about: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 8, marginTop: 12, minHeight: 30, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.chip, backgroundColor: forestPop.forest },
     aboutText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, color: forestPop.onDeep, flexShrink: 1 },
     draftRoman: { fontSize: 15.5, lineHeight: 23 },
+    // RENEWAL3 K3a/K3b (r2b.py `.ask`, `.draft`): the sheet's body and Roman's draft box are white (#FFFFFF) under the deep head
+    // in light mode (Sol m#866 B1); dark mode keeps the theme's own surfaces.
+    whiteBody: colorScheme === 'light' ? { backgroundColor: neutral[0] } : {},
+    draftBoxRoman: colorScheme === 'light' ? { backgroundColor: neutral[0] } : {},
     aboutBox: { flexShrink: 1 },
     title: { fontFamily: 'Inter_600SemiBold', fontSize: 20, lineHeight: 26, color: colors.textPrimary, marginBottom: 8 },
     body: { ...typography.body, color: colors.textPrimary },

@@ -187,10 +187,13 @@ describe('plan ended on the coach Home', () => {
     expect(within(v.getByTestId('home-draft-about-line')).getAllByText(/./).map((t) => t.props.children)).toEqual(['Plan ended today ·', '12-week block']);
     const head = within(v.getByTestId('home-draft-head')); // K3a: Roman's deep head with the mark and "Roman" (RN3-33)
     expect([head.getByTestId('roman-mark', { includeHiddenElements: true }), head.getByText('ROMAN', { includeHiddenElements: true }), head.getByText('Ask Roman to write to Maya?')].every(Boolean)).toBe(true);
+    // RENEWAL3 K3a/K3b: white body under the deep head (r2b.py `.ask`), and Roman's draft box white too (`.draft`; Sol m#866 B1)
+    expect(StyleSheet.flatten(v.getByTestId('home-draft-sheet').props.style).backgroundColor).toBe('#FFFFFF');
     expect(mockPost).not.toHaveBeenCalled();
     await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
     expect(mockPost).toHaveBeenCalledWith('/v1/coach/churned-clients/c1/draft', {});
     await waitFor(() => expect(v.getByTestId('home-draft-text').props.children).toBe('Hi Maya, how did the block feel?'));
+    expect(StyleSheet.flatten(v.getByTestId('home-draft-box').props.style).backgroundColor).toBe('#FFFFFF');
     expect(mockApprove).not.toHaveBeenCalled();
     const before = churnReads();
     await act(async () => { fireEvent.press(v.getByTestId('home-draft-send')); });
