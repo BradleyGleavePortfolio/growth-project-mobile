@@ -26,7 +26,6 @@ jest.mock('../../HapticPressable', () => {
 });
 jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn() } }));
 jest.mock('../space-chat/spaceChatApi', () => ({ spaceChatApi: { markHeard: jest.fn(), getVoiceConsent: jest.fn(), recordVoiceConsent: jest.fn() } }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 const mockSheet = jest.fn();
 jest.mock('../VoiceRecordSheet', () => ({
   __esModule: true,
@@ -195,40 +194,7 @@ describe('useSpaceVoiceOutbox', () => {
   });
 });
 
-describe('SpaceVoiceNote — outbox states (GOAL 03 / 04 / 10a)', () => {
-  const LOCAL = { localUri: 'file:///v-1.m4a', mine: true, coach: false, offline: false };
-  it('sending: a circle; waiting: the clock and Waiting to send with the disc greyed, nothing faded', async () => {
-    const { Wrapper } = wrap();
-    const { p } = port();
-    const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} send="sending" playback={p} /></Wrapper>);
-    expect(r.getByTestId('space-chat-voice-sending-v-1')).toBeTruthy();
-    await r.rerender(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} offline send="waiting" playback={p} /></Wrapper>);
-    expect(r.getByText('Waiting to send')).toBeTruthy();
-    expect(r.getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({ disabled: true });
-    type Node = { props: { style?: unknown }; parent: Node | null };
-    let n: Node | null = r.getByText('Waiting to send') as unknown as Node;
-    for (; n; n = n.parent) expect((StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1).toBe(1);
-  });
-
-  it('failed: the red line, Try again, and Delete that asks first', async () => {
-    const onRetry = jest.fn();
-    const onDiscard = jest.fn();
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const { Wrapper } = wrap();
-    const { p } = port();
-    const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} send="failed" onRetry={onRetry} onDiscard={onDiscard} playback={p} /></Wrapper>);
-    expect(r.getByText('That didn’t send. Your recording is safe — try sending again.')).toBeTruthy();
-    fireEvent.press(r.getByText('Try again'));
-    expect(onRetry).toHaveBeenCalledTimes(1);
-    fireEvent.press(r.getByText('Delete'));
-    expect(onDiscard).not.toHaveBeenCalled();
-    const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
-    expect(alert.mock.calls[0][0]).toBe('Delete this voice note?');
-    buttons.find((b) => b.text === 'Delete')?.onPress?.();
-    expect(onDiscard).toHaveBeenCalledTimes(1);
-    alert.mockRestore();
-  });
-
+describe('SpaceVoiceNote — New / Played', () => {
   it('New pill and Played: 05b metrics (4 x 9 inside the moss edge; none on the coach card; 500 13 pt Played)', async () => {
     (communityVoiceApi.getOne as jest.Mock).mockResolvedValue(view(null));
     const { Wrapper } = wrap();
@@ -240,9 +206,7 @@ describe('SpaceVoiceNote — outbox states (GOAL 03 / 04 / 10a)', () => {
     const coach = await render(<Wrapper><SpaceVoiceNote voice={VOICE} coach mine={false} offline={false} playback={p} /></Wrapper>);
     expect(StyleSheet.flatten(coach.getByTestId('space-chat-voice-new-v-1').props.style)).toMatchObject({ borderWidth: 0, paddingHorizontal: 9 });
   });
-});
 
-describe('SpaceVoiceNote — New / Played', () => {
   it('Sol B3: a play that fails (the signed URL ran out) gets a fresh URL; a failed lookup has Try again', async () => {
     (communityVoiceApi.getOne as jest.Mock).mockResolvedValueOnce({ ...view(null), url: 'https://signed.example/old.m4a' })
       .mockRejectedValueOnce(new Error('HTTP 500')).mockResolvedValueOnce({ ...view(null), url: 'https://signed.example/new.m4a' });
@@ -325,5 +289,41 @@ describe('SpaceVoiceNote — New / Played', () => {
     await waitFor(() => expect(p.load).toHaveBeenLastCalledWith('file:///v-1.m4a', expect.any(Object)));
     await act(async () => { events[events.length - 1].onEnd?.(); });
     expect(spaceChatApi.markHeard).not.toHaveBeenCalled();
+  });
+});
+
+// The outbox states render a note still on the phone (its player loads at once): they run last, as above.
+describe('SpaceVoiceNote — outbox states (GOAL 03 / 04 / 10a)', () => {
+  const LOCAL = { localUri: 'file:///v-1.m4a', mine: true, coach: false, offline: false };
+  it('sending: a circle; waiting: the clock and Waiting to send with the disc greyed, nothing faded', async () => {
+    const { Wrapper } = wrap();
+    const { p } = port();
+    const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} send="sending" playback={p} /></Wrapper>);
+    expect(r.getByTestId('space-chat-voice-sending-v-1')).toBeTruthy();
+    await r.rerender(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} offline send="waiting" playback={p} /></Wrapper>);
+    expect(r.getByText('Waiting to send')).toBeTruthy();
+    expect(r.getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({ disabled: true });
+    type Node = { props: { style?: unknown }; parent: Node | null };
+    let n: Node | null = r.getByText('Waiting to send') as unknown as Node;
+    for (; n; n = n.parent) expect((StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1).toBe(1);
+  });
+
+  it('failed: the red line, Try again, and Delete that asks first', async () => {
+    const onRetry = jest.fn();
+    const onDiscard = jest.fn();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { Wrapper } = wrap();
+    const { p } = port();
+    const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} send="failed" onRetry={onRetry} onDiscard={onDiscard} playback={p} /></Wrapper>);
+    expect(r.getByText('That didn’t send. Your recording is safe — try sending again.')).toBeTruthy();
+    fireEvent.press(r.getByText('Try again'));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    fireEvent.press(r.getByText('Delete'));
+    expect(onDiscard).not.toHaveBeenCalled();
+    const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+    expect(alert.mock.calls[0][0]).toBe('Delete this voice note?');
+    buttons.find((b) => b.text === 'Delete')?.onPress?.();
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+    alert.mockRestore();
   });
 });

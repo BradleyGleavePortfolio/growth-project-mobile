@@ -6,9 +6,9 @@
  * phone asks for the microphone; Not now closes it with no phone ask (design training 5.5 anti-pattern 1). A coach's
  * card leaves out the report line (VN-C1, needs owner). Metrics are 08a's CSS (.sheet, .bpts, .bico, .btn).
  */
-import React, { useCallback } from 'react';
+import React, { useCallback, useContext } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { describeVoiceAudience } from '../VoicePrivacyCopy';
@@ -46,7 +46,8 @@ export interface SpaceVoiceFirstUseProps {
 type Icon = React.ComponentProps<typeof Ionicons>['name'];
 
 export default function SpaceVoiceFirstUse({ visible, cohortName, coach, onRecord, onClose }: SpaceVoiceFirstUseProps): React.ReactElement {
-  const insets = useSafeAreaInsets();
+  // As Screen (src/ui) does: read the context, so a tree with no provider gets 0, not a throw.
+  const bottomInset = useContext(SafeAreaInsetsContext)?.bottom ?? 0;
   const lines: [Icon, string][] = [
     ['lock-closed-outline', describeVoiceAudience({ kind: 'cohort', cohortName })],
     ['flag-outline', 'If someone reports a voice note, your coach and the TGP Fitness team can listen to it.'],
@@ -56,7 +57,7 @@ export default function SpaceVoiceFirstUse({ visible, cohortName, coach, onRecor
   return (
     <Modal visible={visible} transparent animationType={useReducedMotion() ? 'none' : 'slide'} onRequestClose={onClose}>
       <View style={s.scrim}>
-        <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 12) }]} accessibilityViewIsModal testID="space-chat-voice-first-use">
+        <View style={[s.sheet, { paddingBottom: Math.max(bottomInset, 12) }]} accessibilityViewIsModal testID="space-chat-voice-first-use">
           <View style={s.grab} />
           <Text style={s.title} accessibilityRole="header">Voice notes</Text>
           <View style={s.points}>
