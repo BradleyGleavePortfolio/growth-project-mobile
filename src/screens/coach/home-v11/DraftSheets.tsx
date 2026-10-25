@@ -6,7 +6,7 @@
  * cannot be closed while Roman writes or the draft sends. HomeSheet is the Home's one sheet (LO B1).
  */
 import React, { useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import api from '../../../services/api';
@@ -42,7 +42,7 @@ type Step =
   | { kind: 'ready'; draftId: string; reply: string }
   | { kind: 'sending'; draftId: string; reply: string }
   | { kind: 'sent' }
-  | { kind: 'failed'; words: string; draft?: { draftId: string; reply: string } };
+  | { kind: 'failed'; words: string; draft?: { draftId: string; reply: string }; gone?: boolean };
 
 interface InvokeAnswer { enabled?: boolean; provider?: string; reply?: string; approval?: { required?: boolean; draft_id?: string | null } }
 
@@ -131,7 +131,7 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
       setStep(d ? { kind: 'ready', ...d } : { kind: 'failed', words: "Roman can't write this right now. Nothing was sent." });
     } catch (err) {
       if (ask.path && (err as { response?: { status?: number } })?.response?.status === 404) {
-        setStep({ kind: 'failed', words: "Roman can't write this right now. Nothing was sent." }); // not "try again": it won't work
+        setStep({ kind: 'failed', words: "Roman can't write this right now. Nothing was sent.", gone: true }); // no Try again: it won't work (LO C2)
         ask.onGone?.();
         return;
       }
@@ -165,7 +165,7 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
         <View style={s.head} testID="home-draft-head">
           <View style={[s.grab, s.grabOnDeep]} />
           <View style={s.headMark}>
-            <RomanMark size={44} />
+            <RomanMark size={32} r={17} gap={2} />
             <Text style={s.headName} accessibilityElementsHidden importantForAccessibility="no">{'Roman'.toUpperCase()}</Text>
           </View>
           <Text style={[s.title, s.titleOnDeep]} accessibilityRole="header">{title}</Text>
@@ -183,11 +183,11 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
         {step.kind === 'ask' && ask.look !== 'roman' ? <Text style={s.body}>{ask.about}</Text> : null}
         {step.kind === 'ask' && ask.look !== 'roman' ? <Text style={s.muted}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
         {step.kind === 'writing' ? <QuietLoading label="Roman is writing" /> : null}
-        {draft ? <View style={s.draft}><Text style={s.body} testID="home-draft-text">{draft.reply}</Text></View> : null}
+        {draft ? <View style={s.draft}><Text style={[s.body, ask.look === 'roman' && s.draftRoman]} testID="home-draft-text">{draft.reply}</Text></View> : null}
         {step.kind === 'failed' ? <Text style={s.error} accessibilityLiveRegion="polite">{step.words}</Text> : null}
       </ScrollView>
       <View style={s.actions}>
-        {step.kind === 'ask' || (step.kind === 'failed' && !step.draft) ? (
+        {step.kind === 'ask' || (step.kind === 'failed' && !step.draft && !step.gone) ? (
           <HapticPressable intent="light" style={s.primary} onPress={write} accessibilityRole="button" accessibilityLabel={step.kind === 'failed' ? 'Try again' : 'Ask Roman'} testID="home-draft-ask">
             <Text style={s.primaryText}>{step.kind === 'failed' ? 'Try again' : 'Ask Roman'}</Text>
           </HapticPressable>
@@ -207,21 +207,26 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
   );
 }
 
+/** RENEWAL3 K3's sheet gutter (r2b.py `.dhead`, r2a.py `.ask`): 22 on iPhone, 18 on Android. */
+const ROMAN_GUTTER = Platform.OS === 'android' ? 18 : 22;
+
 const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
     scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: sem.overlay },
     sheet: { maxHeight: '85%', paddingTop: 8, paddingHorizontal: layout.gutter, backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
     grab: { width: 40, height: 5, borderRadius: radius.chip, backgroundColor: sem.border, alignSelf: 'center', marginBottom: 12 },
-    // RENEWAL3 K3a/K3b: the deep head runs edge to edge over the sheet's top.
-    sheetRoman: { paddingTop: 0, overflow: 'hidden' },
-    head: { marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter, paddingTop: 8, paddingBottom: 16, marginBottom: 16, backgroundColor: forestPop.deep },
+    // RENEWAL3 K3a/K3b (r2b.py `.dhead`, r2a.py `.at`, `.am`, `.ctx`, `.dtx`): the deep head runs edge to edge over the
+    // sheet's top, with K3's own metrics (LS B1).
+    sheetRoman: { paddingTop: 0, paddingHorizontal: ROMAN_GUTTER, overflow: 'hidden' },
+    head: { marginHorizontal: -ROMAN_GUTTER, paddingHorizontal: ROMAN_GUTTER, paddingTop: 8, paddingBottom: 16, marginBottom: 16, backgroundColor: forestPop.deep },
     grabOnDeep: { backgroundColor: forestPop.brand400 },
-    headMark: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+    headMark: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
     headName: { ...typography.caption, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.8, color: forestPop.gold },
-    titleOnDeep: { fontSize: 22, lineHeight: 28, color: forestPop.onDeep },
-    mutedOnDeep: { ...typography.body, marginTop: 0, color: forestPop.onDeepMuted },
-    about: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 8, marginTop: 12, minHeight: 36, paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.chip, backgroundColor: forestPop.forest },
-    aboutText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: forestPop.onDeep, flexShrink: 1 },
+    titleOnDeep: { color: forestPop.onDeep },
+    mutedOnDeep: { ...typography.body, fontSize: 14.5, lineHeight: 21, marginTop: 0, color: forestPop.onDeepMuted },
+    about: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 8, marginTop: 12, minHeight: 30, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.chip, backgroundColor: forestPop.forest },
+    aboutText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, color: forestPop.onDeep, flexShrink: 1 },
+    draftRoman: { fontSize: 15.5, lineHeight: 23 },
     aboutBox: { flexShrink: 1 },
     title: { fontFamily: 'Inter_600SemiBold', fontSize: 20, lineHeight: 26, color: colors.textPrimary, marginBottom: 8 },
     body: { ...typography.body, color: colors.textPrimary },

@@ -8,8 +8,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import api from '../../../services/api';
-import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import type { DraftAsk } from './DraftSheets';
+import { useCoachBlockList } from './blockList';
 
 export interface PlanEndedRow {
   client_id: string;
@@ -166,7 +166,8 @@ export function usePlanEnded() {
     mounted.current = true;
     void reload();
   }, [isFocused, reload]);
-  const blocked = useBlockedUsersStore((s) => s.blocked);
-  const shown = useMemo(() => withoutBlocked(page, blocked.map((b) => b.id)), [page, blocked]);
-  return { page: shown, loading: state.loading, error: state.error, reload };
+  // Held until this phone's block list for the coach is read: a cold start never shows a blocked client (LO C1).
+  const { known, blockedIds } = useCoachBlockList();
+  const shown = useMemo(() => (known ? withoutBlocked(page, blockedIds) : null), [known, page, blockedIds]);
+  return { page: shown, loading: state.loading || !known, error: state.error, reload };
 }
