@@ -110,7 +110,8 @@ describe('CoachCommunityInboxScreen — voice rows (flag on)', () => {
   it('shows the voice row with a mic glyph, its length, name and time', async () => {
     const { getByTestId, getByText } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId(`coach-community-inbox-row-${VOICE_ID}`)).toBeTruthy();
-    expect(getByTestId(`coach-community-inbox-voice-${VOICE_ID}`)).toBeTruthy();
+    // The play disc is drawn inside the row and hidden from screen readers (the row is the one element).
+    expect(getByTestId(`coach-community-inbox-voice-${VOICE_ID}`, { includeHiddenElements: true })).toBeTruthy();
     expect(getByTestId(`coach-community-inbox-mark-acked-${TEXT_ID}`)).toBeTruthy();
     // The mic glyph is an inline icon character at the start of the same line.
     expect(getByText(/^\S? ?Voice note · 0:42$/u)).toBeTruthy();
@@ -186,7 +187,7 @@ describe('FR-868 round 2 — the voice row is one accessible element', () => {
       expect(node.props.accessibilityRole).not.toBe('button');
       node = node.parent;
     }
-    const glyph = getByTestId(`coach-community-inbox-voice-${VOICE_ID}`);
+    const glyph = getByTestId(`coach-community-inbox-voice-${VOICE_ID}`, { includeHiddenElements: true });
     let hidden = false;
     let up = glyph.parent;
     while (up && up !== row) {

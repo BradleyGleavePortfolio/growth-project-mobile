@@ -1254,11 +1254,11 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     const base = { data: { items: [inboxItem()] }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn(), fetchNextPage };
     mockState.inbox = { ...base, hasNextPage: true, isFetchingNextPage: false };
     const view = await render(<CoachCommunityInboxScreen />);
-    fireEvent(view.getByTestId('coach-community-inbox-list'), 'endReached');
+    await fireEvent(view.getByTestId('coach-community-inbox-list'), 'endReached');
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
     mockState.inbox = { ...base, hasNextPage: true, isFetchingNextPage: true };
     await view.rerender(<CoachCommunityInboxScreen />);
-    fireEvent(view.getByTestId('coach-community-inbox-list'), 'endReached');
+    await fireEvent(view.getByTestId('coach-community-inbox-list'), 'endReached');
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
     expect(view.getByTestId('coach-community-inbox-next-page')).toBeTruthy();
   });
