@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import VoiceNotesSection from '../VoiceNotesSection';
 import { resetVoiceOutbox } from '../../../hooks/useVoiceOutbox';
+import { resetReportedVoiceNotes } from '../VoiceReportedFold';
 
 jest.mock('../../../config/featureFlags', () => ({
   featureFlags: { communityVoiceNotes: true },
@@ -47,6 +48,12 @@ jest.mock('../VoiceNotePlayer', () => {
   };
 });
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
+// The viewer's community role (coach / owner may remove any note in their workspace).
+const mockRole = { current: 'client' as string };
+jest.mock('../../../hooks/useCommunity', () => ({
+  ...jest.requireActual('../../../hooks/useCommunity'),
+  useCommunityMe: () => ({ data: { membership: { role: mockRole.current } } }),
+}));
 const mockRecording = { uri: 'file:///r.m4a', durationMs: 3000, bytes: 10, mimeType: 'audio/mp4', peaks: [0.5] };
 jest.mock('../VoiceRecordSheet', () => {
   const React = require('react');
@@ -116,6 +123,8 @@ async function renderSection() {
 let alertSpy: jest.SpyInstance;
 beforeEach(() => {
   resetVoiceOutbox();
+  resetReportedVoiceNotes();
+  mockRole.current = 'client';
   (NetInfo as unknown as { __reset: () => void }).__reset();
   mockListFeed.mockReset().mockResolvedValue({
     voice_notes: [note('vn-other', 'u-alice'), note('vn-mine', 'u-me')],
@@ -265,4 +274,47 @@ it('every feed line names a loaded Inter face', async () => {
   const texts = container.queryAll((n) => n.type === 'Text');
   expect(texts.length).toBeGreaterThan(4);
   for (const t of texts) expect(String(StyleSheet.flatten(t.props.style)?.fontFamily)).toMatch(/^(Inter_|ionicons$)/); // ionicons: icon glyphs
+});
+
+// LO-848R4 B1 (GOAL B-06b): a reported note folds for the reporter; its player is gone.
+it('a reported note folds into the VN-07 row and its player is replaced', async () => {
+  const { findByTestId, getByTestId, queryByTestId, getByText } = await renderSection();
+  await fireEvent.press(await findByTestId('vn-menu-vn-other'));
+  await fireEvent.press(getByTestId('vn-menu-vn-other-report'));
+  // GOAL B-06a: the sheet names the note it is about.
+  expect(getByTestId('vn-menu-vn-other-context')).toBeTruthy();
+  expect(getByText(/voice note · 0:42/)).toBeTruthy();
+  await act(async () => {
+    fireEvent.press(getByTestId('vn-menu-vn-other-reason-spam'));
+  });
+  expect(await findByTestId('vn-reported-vn-other')).toBeTruthy();
+  expect(getByText('You reported this voice note. It is hidden for you.')).toBeTruthy();
+  expect(queryByTestId('vn-player-vn-other')).toBeNull();
+  expect(queryByTestId('vn-menu-vn-other')).toBeNull();
+  // The viewer's own note is untouched.
+  expect(getByTestId('vn-player-vn-mine')).toBeTruthy();
+});
+
+// LO-848R4 B2 (GOAL B-06c): the workspace coach can remove another member's note.
+it('the coach deletes another member’s note after the GOAL confirm', async () => {
+  mockRole.current = 'coach';
+  mockRemove.mockResolvedValue({ id: 'vn-other', deleted: true });
+  const { findByTestId, getByTestId } = await renderSection();
+  await fireEvent.press(await findByTestId('vn-menu-vn-other'));
+  expect(getByTestId('vn-menu-vn-other-report')).toBeTruthy();
+  await fireEvent.press(getByTestId('vn-menu-vn-other-delete'));
+  const [title, message] = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
+  expect(title).toBe('Delete this voice note?');
+  expect(message).toBe('It will be removed for everyone in your community. This cannot be undone.');
+  await act(async () => {
+    await pressAlertButton('Delete');
+  });
+  expect(mockRemove).toHaveBeenCalledWith('vn-other');
+});
+
+it('a member gets no Delete on another member’s note', async () => {
+  const { findByTestId, getByTestId, queryByTestId } = await renderSection();
+  await fireEvent.press(await findByTestId('vn-menu-vn-other'));
+  expect(getByTestId('vn-menu-vn-other-report')).toBeTruthy();
+  expect(queryByTestId('vn-menu-vn-other-delete')).toBeNull();
 });

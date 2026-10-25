@@ -368,3 +368,79 @@ describe('SafetyMenu', () => {
     expect(mockCapture).not.toHaveBeenCalled();
   });
 });
+
+// LO-848R4 B1-B3 (GOAL B-06a..c): the GOAL report sheet, the fold callback and the coach's Delete.
+describe('SafetyMenu — GOAL B-06 sheet (FR-848R5)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  const { COMMUNITY_GUIDELINES } = jest.requireActual('../../../api/communitySafetyApi');
+  const flat = (n: { props: { style?: unknown } }) => StyleSheet.flatten(n.props.style);
+
+  it('draws the GOAL sheet: white, 24 corners, the note card, 18 pt heading and the emergency line', async () => {
+    const { getByTestId, getByText } = await renderMenu({
+      targetType: 'voice_note',
+      context: { name: 'Maya Patel', detail: 'voice note · 0:21' },
+    });
+    await fireEvent.press(getByTestId('sm'));
+    expect(flat(getByTestId('sm-sheet'))).toMatchObject({
+      backgroundColor: '#FFFFFF',
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 20,
+      paddingTop: 8,
+    });
+    await fireEvent.press(getByTestId('sm-report'));
+    expect(flat(getByTestId('sm-context'))).toMatchObject({ borderWidth: 1, borderColor: '#E2E6E1', borderRadius: 16 });
+    expect(getByText('Maya Patel')).toBeTruthy();
+    expect(getByText(/voice note · 0:21/)).toBeTruthy();
+    expect(flat(getByText('Why are you reporting this?'))).toMatchObject({ fontSize: 18, fontWeight: '600' });
+    const emergency = getByTestId('sm-emergency');
+    expect(emergency.props.children).toBe(COMMUNITY_GUIDELINES[COMMUNITY_GUIDELINES.length - 1]);
+    expect(flat(emergency)).toMatchObject({ backgroundColor: '#EEF4E2', borderColor: '#D3E2B8', borderRadius: 16, fontSize: 14 });
+    expect(flat(getByText('Cancel'))).toMatchObject({ fontSize: 16, fontWeight: '600', color: '#2C4A36' });
+  });
+
+  it('calls onReported once the report is sent, and not when it fails', async () => {
+    const onReported = jest.fn();
+    const { getByTestId } = await renderMenu({ onReported });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-report'));
+    await fireEvent.press(getByTestId('sm-reason-spam'));
+    await waitFor(() => expect(onReported).toHaveBeenCalledTimes(1));
+
+    mockReport.mockRejectedValueOnce(new Error('offline'));
+    const failed = jest.fn();
+    const second = await renderMenu({ onReported: failed, testID: 'sm2' });
+    await fireEvent.press(second.getByTestId('sm2'));
+    await fireEvent.press(second.getByTestId('sm2-report'));
+    await fireEvent.press(second.getByTestId('sm2-reason-spam'));
+    await waitFor(() => expect(mockReport).toHaveBeenCalledTimes(2));
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('a coach on another member’s note gets Report, Block and Delete, confirmed first (GOAL B-06c)', async () => {
+    const onDelete = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId } = await renderMenu({ targetType: 'voice_note', contentNoun: 'voice note', onDelete });
+    await fireEvent.press(getByTestId('sm'));
+    expect(getByTestId('sm-report')).toBeTruthy();
+    expect(getByTestId('sm-block')).toBeTruthy();
+    await fireEvent.press(getByTestId('sm-delete'));
+    expect(onDelete).not.toHaveBeenCalled();
+    const [title, message, buttons] = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
+    expect(title).toBe('Delete this voice note?');
+    expect(message).toBe('It will be removed for everyone in your community. This cannot be undone.');
+    expect((buttons as AlertButton[]).map((b) => b.text)).toEqual(['Cancel', 'Delete']);
+    await act(async () => {
+      await pressAlertButton('Delete');
+    });
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('every line of the sheet names a loaded Inter face', async () => {
+    const { getByTestId, container } = await renderMenu({ context: { name: 'Maya', detail: 'voice note · 0:21' } });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-report'));
+    const texts = container.queryAll((n) => n.type === 'Text');
+    expect(texts.length).toBeGreaterThan(10);
+    for (const t of texts) expect(String(flat(t)?.fontFamily)).toMatch(/^Inter_/);
+  });
+});

@@ -4,7 +4,7 @@
  * was banned; and the player draws the note's real waveform peaks.
  */
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('../../../theme/useTheme', () => {
@@ -22,7 +22,19 @@ jest.mock('../../../hooks/useFeatureFlags', () => ({
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'u-viewer' }) }));
 jest.mock('../../../components/community', () => ({ ThreadHeader: () => null }));
-jest.mock('../../../components/community/SafetyMenu', () => ({ __esModule: true, default: () => null }));
+const mockSafety = jest.fn();
+jest.mock('../../../components/community/SafetyMenu', () => ({
+  __esModule: true,
+  default: (p: Record<string, unknown>) => {
+    mockSafety(p);
+    return null;
+  },
+}));
+const mockRole = { current: 'client' as string };
+jest.mock('../../../hooks/useCommunity', () => ({
+  ...jest.requireActual('../../../hooks/useCommunity'),
+  useCommunityMe: () => ({ data: { membership: { role: mockRole.current } } }),
+}));
 const mockPlayer = jest.fn();
 jest.mock('../../../components/community/VoiceNotePlayer', () => ({
   __esModule: true,
@@ -37,6 +49,14 @@ jest.mock('../../../api/communityVoiceApi', () => ({
 }));
 
 import CommunityVoiceNoteDetail from '../CommunityVoiceNoteDetail';
+import { resetReportedVoiceNotes } from '../../../components/community/VoiceReportedFold';
+
+beforeEach(() => {
+  resetReportedVoiceNotes();
+  mockRole.current = 'client';
+  mockSafety.mockReset();
+  mockPlayer.mockReset();
+});
 
 const NOTE = {
   id: 'vn-1',
@@ -77,4 +97,40 @@ it('every line names a loaded Inter face', async () => {
   expect(texts.length).toBeGreaterThan(2);
   for (const t of texts) expect(String(StyleSheet.flatten(t.props.style)?.fontFamily)).toMatch(/^(Inter_|ionicons$)/); // ionicons: icon glyphs
   mockParams.excerpt = '';
+});
+
+async function renderDetail() {
+  mockGetOne.mockResolvedValue(NOTE);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const utils = await render(
+    <QueryClientProvider client={qc}>
+      <CommunityVoiceNoteDetail />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(mockSafety).toHaveBeenCalled());
+  return utils;
+}
+
+// LO-848R4 B1 (GOAL B-06b): once reported, the detail folds the note and drops its player.
+it('a reported note folds into the VN-07 row and the player is gone', async () => {
+  const { findByTestId, getByText } = await renderDetail();
+  const safety = mockSafety.mock.calls.at(-1)?.[0] as { onReported: () => void; context: unknown };
+  expect(safety.context).toEqual({ name: 'Member', detail: 'voice note · 0:42' });
+  mockPlayer.mockReset();
+  await act(async () => {
+    safety.onReported();
+  });
+  expect(await findByTestId('community-voice-detail-reported')).toBeTruthy();
+  expect(getByText('You reported this voice note. It is hidden for you.')).toBeTruthy();
+  expect(mockPlayer).not.toHaveBeenCalled();
+});
+
+// LO-848R4 B2 (GOAL B-06c): the workspace coach gets Delete on another member's note; a member does not.
+it('offers Delete on another member’s note to the coach only', async () => {
+  await renderDetail();
+  expect((mockSafety.mock.calls.at(-1)?.[0] as { onDelete?: unknown }).onDelete).toBeUndefined();
+  mockSafety.mockReset();
+  mockRole.current = 'coach';
+  await renderDetail();
+  expect(typeof (mockSafety.mock.calls.at(-1)?.[0] as { onDelete?: unknown }).onDelete).toBe('function');
 });

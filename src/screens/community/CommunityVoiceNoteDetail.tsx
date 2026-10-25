@@ -23,7 +23,9 @@
  *
  * Safety (Apple 1.2): audio cannot be text-filtered, so the note carries the
  * SafetyMenu: Report (reason list, reviewed within 24 hours) and Block for
- * other members' notes, Delete for the viewer's own note.
+ * other members' notes, Delete for the viewer's own note. The workspace coach (or owner) also gets
+ * Delete on other members' notes (GOAL B-06c). Once reported, the note folds into the VN-07 row for
+ * this viewer and its player unmounts (GOAL B-06b), the same fold as the Hall feed.
  *
  * Tokens only (no raw hex); line Ionicons only (no emoji); fontWeight <= '600'.
  */
@@ -50,6 +52,12 @@ import { formatRelative } from '../../components/community/SearchResultRow';
 import HapticPressable from '../../components/HapticPressable';
 import { communityVoiceApi } from '../../api/communityVoiceApi';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import VoiceReportedFold, {
+  markVoiceNoteReported,
+  useReportedVoiceNotes,
+} from '../../components/community/VoiceReportedFold';
+import { formatDuration } from '../../components/community/voiceFormat';
+import { useCommunityMe } from '../../hooks/useCommunity';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
@@ -62,6 +70,9 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   const viewer = useCurrentUser();
   const voiceNoteId = route.params?.voiceNoteId ?? '';
   const excerpt = route.params?.excerpt ?? '';
+  const reported = useReportedVoiceNotes();
+  const role = useCommunityMe().data?.membership?.role;
+  const viewerModerates = role === 'coach' || role === 'owner';
 
   // Server-evaluated runtime gate (fail-safe OFF). The static flag below still
   // controls route REGISTRATION; this is the inner, server-authoritative gate.
@@ -165,6 +176,8 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
 
   const data = note.data;
   const when = formatRelative(data.created_at);
+  const mine = !!viewer?.id && viewer.id === data.author_id;
+  const folded = reported.has(data.id);
 
   return (
     <SafeAreaView
@@ -193,36 +206,47 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
               {when}
             </Text>
           ) : null}
-          <SafetyMenu
-            targetType="voice_note"
-            targetId={data.id}
-            authorUserId={data.author_id}
-            viewerUserId={viewer?.id}
-            viewerCoachId={viewer?.coach_id}
-            contentNoun="voice note"
-            onDelete={
-              viewer?.id && viewer.id === data.author_id
-                ? async () => {
-                    await communityVoiceApi.remove(data.id);
-                    await qc.invalidateQueries({ queryKey: ['community'] });
-                    navigation.goBack();
-                  }
-                : undefined
-            }
-            onBlocked={() => navigation.goBack()}
-            testID="community-voice-detail-safety"
-          />
+          {folded ? null : (
+            <SafetyMenu
+              targetType="voice_note"
+              targetId={data.id}
+              authorUserId={data.author_id}
+              viewerUserId={viewer?.id}
+              viewerCoachId={viewer?.coach_id}
+              contentNoun="voice note"
+              context={{
+                name: mine ? 'You' : (data.author_name ?? 'Member'),
+                detail: `voice note · ${formatDuration(data.duration_ms)}`,
+              }}
+              onDelete={
+                mine || viewerModerates
+                  ? async () => {
+                      await communityVoiceApi.remove(data.id);
+                      await qc.invalidateQueries({ queryKey: ['community'] });
+                      navigation.goBack();
+                    }
+                  : undefined
+              }
+              onReported={() => markVoiceNoteReported(data.id)}
+              onBlocked={() => navigation.goBack()}
+              testID="community-voice-detail-safety"
+            />
+          )}
         </View>
 
-        <VoiceNotePlayer
-          url={data.url}
-          durationMs={data.duration_ms}
-          peaks={data.waveform_peaks ?? []}
-          onPlaybackError={() => void note.refetch()}
-          testID="community-voice-detail-player"
-        />
+        {folded ? (
+          <VoiceReportedFold testID="community-voice-detail-reported" />
+        ) : (
+          <VoiceNotePlayer
+            url={data.url}
+            durationMs={data.duration_ms}
+            peaks={data.waveform_peaks ?? []}
+            onPlaybackError={() => void note.refetch()}
+            testID="community-voice-detail-player"
+          />
+        )}
 
-        {excerpt.length > 0 ? (
+        {excerpt.length > 0 && !folded ? (
           <View style={styles.transcriptWrap}>
             <Text
               style={[styles.transcriptLabel, { color: semanticColors.textMuted }]}

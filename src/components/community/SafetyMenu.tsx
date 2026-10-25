@@ -14,6 +14,10 @@
  * told. Members cannot block their own coach, so Block is not offered on the
  * coach's content (no dead button); Report always is. "Report sent" after
  * "Self-harm or suicide" leads with 911 and the 988 Lifeline.
+ * The sheet is the GOAL B-06a sheet for every host (white, 24 top corners, grab, reason rows with a
+ * chevron, the approved emergency line, a centred Cancel); a voice note adds the note card on top.
+ * A host that lets a coach remove other members' content passes onDelete for it: the menu then offers
+ * Report, Block and Delete (GOAL B-06c), with the same "Delete this …?" confirm.
  * Failures use describeCommunityFailure: specific copy per server code and
  * status, a support reference (and a Sentry report) for anything unexpected.
  */
@@ -23,13 +27,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, semantic } from '../../theme/tokens';
+import { brand, forestPop as fp, neutral, spacing, semantic, voiceFaces, voiceShades } from '../../theme/tokens';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import {
   communitySafetyApi,
   COMMUNITY_REPORT_REASONS,
   COMMUNITY_REPORT_SENT_TITLE,
   communityReportSentMessage,
+  COMMUNITY_GUIDELINES,
   type CommunityReportTargetType,
 } from '../../api/communitySafetyApi';
 
@@ -49,10 +54,15 @@ export interface SafetyMenuProps {
   /** Called after a successful block (screens refetch / navigate away). */
   onBlocked?: (userId: string) => void;
   /**
-   * Author delete for the viewer's own content. When set, the viewer's own
-   * content gets a menu with Delete (confirmed first); otherwise no menu.
+   * Delete, confirmed first. Hosts pass it for the viewer's own content (own content then gets a
+   * menu with Delete only) and, on voice notes, for the workspace coach on anyone's note (GOAL
+   * B-06c: Report, Block and Delete). Without it own content gets no menu.
    */
   onDelete?: () => Promise<void>;
+  /** Called once a report is sent (the voice feed folds the reported note away, GOAL B-06b). */
+  onReported?: () => void;
+  /** The item the report is about, drawn as a card above the reasons (GOAL B-06a). */
+  context?: { name: string; detail: string };
   /** What is being deleted, for the confirm copy, e.g. "win" or "voice note". */
   contentNoun?: string;
   testID?: string;
@@ -69,10 +79,16 @@ export default function SafetyMenu({
   viewerCoachId,
   onBlocked,
   onDelete,
+  onReported,
+  context,
   contentNoun = 'post',
   testID = 'safety-menu',
 }: SafetyMenuProps): React.ReactElement | null {
-  const { semanticColors } = useTheme();
+  const { semanticColors, colorScheme } = useTheme();
+  // GOAL B-06a draws the light sheet; dark mode keeps the theme's surface and lines.
+  const light = colorScheme !== 'dark';
+  const sheetBg = light ? neutral[0] : semanticColors.bgSurface;
+  const lineColor = light ? voiceShades.hairline : semanticColors.border;
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('menu');
@@ -94,6 +110,7 @@ export default function SafetyMenu({
     try {
       await communitySafetyApi.report({ target_type: targetType, target_id: targetId, reason });
       close();
+      onReported?.();
       Alert.alert(COMMUNITY_REPORT_SENT_TITLE, communityReportSentMessage(reason));
     } catch (err) {
       const failure = describeCommunityFailure(err, 'report');
@@ -177,42 +194,28 @@ export default function SafetyMenu({
       <Modal visible={open} transparent animationType="slide" onRequestClose={close}>
         <View style={[styles.backdrop, { backgroundColor: semanticColors.overlay }]}>
           <View
-            style={[
-              styles.sheet,
-              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border },
-            ]}
+            style={[styles.sheet, { backgroundColor: sheetBg }]}
             testID={`${testID}-sheet`}
           >
+            <View style={[styles.grab, { backgroundColor: light ? voiceShades.track : semanticColors.border }]} />
             {busy ? (
               <ActivityIndicator color={semanticColors.accent} style={styles.busy} />
-            ) : isOwn ? (
-              <HapticPressable
-                intent="warning"
-                onPress={confirmDelete}
-                accessibilityRole="button"
-                accessibilityLabel={`Delete this ${contentNoun}`}
-                style={styles.row}
-                testID={`${testID}-delete`}
-              >
-                <Ionicons name="trash-outline" size={18} color={semantic.danger.fg} />
-                <Text style={[styles.rowText, { color: semantic.danger.fg }]}>
-                  Delete {contentNoun}
-                </Text>
-              </HapticPressable>
             ) : step === 'menu' ? (
               <>
-                <HapticPressable
-                  intent="light"
-                  onPress={() => setStep('reasons')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Report this content"
-                  style={styles.row}
-                  testID={`${testID}-report`}
-                >
-                  <Ionicons name="flag-outline" size={18} color={semanticColors.textPrimary} />
-                  <Text style={[styles.rowText, { color: semanticColors.textPrimary }]}>Report</Text>
-                </HapticPressable>
-                {canBlock ? (
+                {!isOwn ? (
+                  <HapticPressable
+                    intent="light"
+                    onPress={() => setStep('reasons')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Report this content"
+                    style={styles.row}
+                    testID={`${testID}-report`}
+                  >
+                    <Ionicons name="flag-outline" size={18} color={semanticColors.textPrimary} />
+                    <Text style={[styles.rowText, { color: semanticColors.textPrimary }]}>Report</Text>
+                  </HapticPressable>
+                ) : null}
+                {!isOwn && canBlock ? (
                   <HapticPressable
                     intent="warning"
                     onPress={confirmBlock}
@@ -225,27 +228,78 @@ export default function SafetyMenu({
                     <Text style={[styles.rowText, { color: semantic.danger.fg }]}>Block {who}</Text>
                   </HapticPressable>
                 ) : null}
+                {onDelete ? (
+                  <HapticPressable
+                    intent="warning"
+                    onPress={confirmDelete}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete this ${contentNoun}`}
+                    style={styles.row}
+                    testID={`${testID}-delete`}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={semantic.danger.fg} />
+                    <Text style={[styles.rowText, { color: semantic.danger.fg }]}>
+                      Delete {contentNoun}
+                    </Text>
+                  </HapticPressable>
+                ) : null}
               </>
             ) : (
               <>
-                <Text style={[styles.heading, { color: semanticColors.textPrimary }]}>
+                {context ? (
+                  <View
+                    style={[styles.context, { backgroundColor: sheetBg, borderColor: lineColor }]}
+                    testID={`${testID}-context`}
+                  >
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{context.name.trim().charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <Text style={[styles.contextText, { color: semanticColors.textPrimary }]} numberOfLines={2}>
+                      <Text style={styles.contextName}>{context.name}</Text>
+                      {'\n'}
+                      {context.detail}
+                    </Text>
+                  </View>
+                ) : null}
+                <Text style={[styles.heading, { color: semanticColors.textPrimary }]} accessibilityRole="header">
                   Why are you reporting this?
                 </Text>
-                {COMMUNITY_REPORT_REASONS.map((r) => (
+                {COMMUNITY_REPORT_REASONS.map((r, i) => (
                   <HapticPressable
                     key={r.code}
                     intent="light"
                     onPress={() => submitReport(r.code)}
                     accessibilityRole="button"
                     accessibilityLabel={r.label}
-                    style={styles.row}
+                    style={[
+                      styles.reason,
+                      i < COMMUNITY_REPORT_REASONS.length - 1
+                        ? { borderBottomWidth: 1, borderBottomColor: lineColor }
+                        : null,
+                    ]}
                     testID={`${testID}-reason-${r.code}`}
                   >
-                    <Text style={[styles.rowText, { color: semanticColors.textPrimary }]}>
+                    <Text style={[styles.reasonText, { color: semanticColors.textPrimary }]}>
                       {r.label}
                     </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={light ? brand[400] : semanticColors.textMuted}
+                    />
                   </HapticPressable>
                 ))}
+                <Text
+                  style={[
+                    styles.emergency,
+                    light
+                      ? { backgroundColor: voiceShades.leafWash, borderColor: voiceShades.washEdge, color: fp.ink }
+                      : { borderColor: semanticColors.border, color: semanticColors.textPrimary },
+                  ]}
+                  testID={`${testID}-emergency`}
+                >
+                  {EMERGENCY_LINE}
+                </Text>
               </>
             )}
             <HapticPressable
@@ -253,10 +307,12 @@ export default function SafetyMenu({
               onPress={close}
               accessibilityRole="button"
               accessibilityLabel="Close"
-              style={styles.row}
+              style={styles.cancel}
               testID={`${testID}-close`}
             >
-              <Text style={[styles.rowText, { color: semanticColors.textMuted }]}>Cancel</Text>
+              <Text style={[styles.cancelText, { color: light ? fp.forest : semanticColors.accentText }]}>
+                Cancel
+              </Text>
             </HapticPressable>
           </View>
         </View>
@@ -264,6 +320,9 @@ export default function SafetyMenu({
     </>
   );
 }
+
+/** The approved emergency line (COMMUNITY_GUIDELINES, owner-approved 2026-10-01), GOAL B-06a .safety. */
+const EMERGENCY_LINE = COMMUNITY_GUIDELINES[COMMUNITY_GUIDELINES.length - 1];
 
 const styles = StyleSheet.create({
   trigger: {
@@ -276,18 +335,51 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
+  // GOAL .sheet: white, 24 top corners, padding 8 20 0, shadow 0 -4px 12px at 8%.
   sheet: {
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: spacing.xl, // clears the home indicator under Cancel
+    shadowColor: fp.ink,
+    shadowOffset: { width: 0, height: -4 },
+    shadowRadius: 6,
+    shadowOpacity: 0.08,
+    elevation: 8,
   },
+  // GOAL .grab 36 x 5, radius 3, 10 below.
+  grab: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10 },
+  // GOAL .bquote: the note card above the reasons.
+  context: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: brand[500],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600', color: fp.onDeep },
+  contextText: { flex: 1, fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 18 },
+  contextName: { fontFamily: voiceFaces.semibold, fontWeight: '600' },
+  // GOAL .shead 600 18/1.3, margin 4 0 6.
   heading: {
-    fontSize: 15,
+    fontFamily: voiceFaces.semibold,
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: '600',
-    paddingVertical: spacing.sm,
+    marginTop: 4,
+    marginBottom: 6,
   },
   row: {
     minHeight: 48,
@@ -296,8 +388,35 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   rowText: {
+    fontFamily: voiceFaces.regular,
     fontSize: 16,
   },
+  // GOAL .srow: 48 high, 16/1.3, a 1 px line between rows, chevron at the end.
+  reason: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 6,
+  },
+  reasonText: { flex: 1, fontFamily: voiceFaces.regular, fontSize: 16, lineHeight: 21 },
+  // GOAL .safety: leaf wash, 1 px edge, 16 corners, 14/1.45.
+  emergency: {
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 4,
+    fontFamily: voiceFaces.regular,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  // GOAL .btn.t: a centred text button, 600 16, 44 high.
+  cancel: { minHeight: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  cancelText: { fontFamily: voiceFaces.semibold, fontSize: 16, lineHeight: 20, fontWeight: '600' },
   busy: {
     paddingVertical: spacing.xl,
   },

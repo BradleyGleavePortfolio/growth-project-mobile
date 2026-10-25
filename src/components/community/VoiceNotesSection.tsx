@@ -15,6 +15,10 @@
  * ("Member" before backend #1122), a Coach mark and deep card, and the real waveform. Unsent notes wait
  * on top: Sending…, Not sent (Try again, Delete), or offline a spinner and wifi-off ("Waiting to send").
  *
+ * Safety (GOAL B-06a..c): the report sheet shows the note's card; a reported note folds into the VN-07
+ * row for this viewer (its player unmounts); the workspace coach (or owner) also gets Delete on other
+ * members' notes (the server allows the author, the workspace coach and the platform owner).
+ *
  * Copy: plain words, no exclamation marks, no emojis. Failures say what
  * happened and what to do next (describeCommunityFailure).
  */
@@ -26,6 +30,8 @@ import HapticPressable from '../HapticPressable';
 import VoiceNotePlayer from './VoiceNotePlayer';
 import VoiceRecordSheet from './VoiceRecordSheet';
 import SafetyMenu from './SafetyMenu';
+import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from './VoiceReportedFold';
+import { formatDuration } from './voiceFormat';
 import { formatRelative } from './SearchResultRow';
 import { useTheme } from '../../theme/useTheme';
 import { forestPop as fp, radius, spacing, voiceFaces, voiceShades } from '../../theme/tokens';
@@ -35,6 +41,7 @@ import { useVoiceOutbox, type VoiceOutboxItem } from '../../hooks/useVoiceOutbox
 import { voiceKeys } from '../../hooks/voiceQueryKeys';
 import { communityVoiceApi, type VoiceNoteView } from '../../api/communityVoiceApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { useCommunityMe } from '../../hooks/useCommunity';
 
 export interface VoiceNotesSectionProps {
   workspaceId: string | null;
@@ -56,6 +63,9 @@ export default function VoiceNotesSection({
   const feed = useVoiceFeed({ workspaceId });
   const outbox = useVoiceOutbox(workspaceId, viewerUserId ?? null);
   const [recordOpen, setRecordOpen] = useState(false);
+  const reported = useReportedVoiceNotes();
+  const role = useCommunityMe().data?.membership?.role;
+  const viewerModerates = role === 'coach' || role === 'owner';
 
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
@@ -133,45 +143,55 @@ export default function VoiceNotesSection({
           const mine = !!viewerUserId && note.author_id === viewerUserId;
           const coach = note.author_is_coach === true;
           const when = formatRelative(note.created_at);
+          const name = mine ? 'You' : (note.author_name ?? 'Member');
+          const folded = reported.has(note.id);
           return (
             <View key={note.id} style={styles.note} testID={`${testID}-note-${note.id}`}>
               <View style={styles.noteMeta}>
                 <Text style={styles.who} numberOfLines={1}>
-                  {mine ? 'You' : (note.author_name ?? 'Member')}
+                  {name}
                 </Text>
                 {coach ? <Text style={styles.coach}>Coach</Text> : null}
                 {when ? <Text style={styles.when}>{when}</Text> : null}
                 <View style={styles.spacer} />
-                <SafetyMenu
-                  targetType="voice_note"
-                  targetId={note.id}
-                  authorUserId={note.author_id}
-                  viewerUserId={viewerUserId}
-                  viewerCoachId={viewerCoachId}
-                  contentNoun="voice note"
-                  onDelete={
-                    mine
-                      ? async () => {
-                          await communityVoiceApi.remove(note.id);
-                          await refresh();
-                        }
-                      : undefined
-                  }
-                  onBlocked={() => {
-                    void refresh();
-                  }}
-                  testID={`${testID}-menu-${note.id}`}
-                />
+                {folded ? null : (
+                  <SafetyMenu
+                    targetType="voice_note"
+                    targetId={note.id}
+                    authorUserId={note.author_id}
+                    viewerUserId={viewerUserId}
+                    viewerCoachId={viewerCoachId}
+                    contentNoun="voice note"
+                    context={{ name, detail: `voice note · ${formatDuration(note.duration_ms)}` }}
+                    onDelete={
+                      mine || viewerModerates
+                        ? async () => {
+                            await communityVoiceApi.remove(note.id);
+                            await refresh();
+                          }
+                        : undefined
+                    }
+                    onReported={() => markVoiceNoteReported(note.id)}
+                    onBlocked={() => {
+                      void refresh();
+                    }}
+                    testID={`${testID}-menu-${note.id}`}
+                  />
+                )}
               </View>
-              <VoiceNotePlayer
-                url={note.url}
-                durationMs={note.duration_ms}
-                peaks={note.waveform_peaks ?? []}
-                tone={coach ? 'coach' : 'light'}
-                offline={!outbox.online}
-                onPlaybackError={() => void feed.refetch()}
-                testID={`${testID}-player-${note.id}`}
-              />
+              {folded ? (
+                <VoiceReportedFold testID={`${testID}-reported-${note.id}`} />
+              ) : (
+                <VoiceNotePlayer
+                  url={note.url}
+                  durationMs={note.duration_ms}
+                  peaks={note.waveform_peaks ?? []}
+                  tone={coach ? 'coach' : 'light'}
+                  offline={!outbox.online}
+                  onPlaybackError={() => void feed.refetch()}
+                  testID={`${testID}-player-${note.id}`}
+                />
+              )}
             </View>
           );
         })
