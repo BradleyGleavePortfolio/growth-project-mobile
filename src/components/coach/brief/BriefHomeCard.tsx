@@ -33,7 +33,7 @@ export default function BriefHomeCard({ onOpen, look = "card" }: Props) {
       testID="coach-home-brief-card"
     >
       {home ? null : <Ionicons name="sunny-outline" size={22} color={colors.primary} />}
-      <View style={styles.text}>
+      <View style={styles.text} testID="coach-home-brief-text">
         <Text style={styles.title}>Today&apos;s brief</Text>
         <Text style={styles.sub}>Money, messages and check-ins in one read.</Text>
       </View>
@@ -84,7 +84,7 @@ const makeHomeStyles = (colors: ThemeColors, light: boolean) =>
       paddingHorizontal: 16,
       paddingBottom: 14,
     },
-    text: { flex: 1, gap: 2 },
+    text: { flex: 1 }, // A `.grow`: no gap between `.st` and `.ss`
     title: { fontFamily: SEMI, fontSize: 16, lineHeight: 21, color: light ? styleA.ink : colors.textPrimary },
     sub: { fontFamily: "Inter_400Regular", fontSize: 12.5, lineHeight: 17, color: light ? styleA.grey : colors.textSecondary },
   });

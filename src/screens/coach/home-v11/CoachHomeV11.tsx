@@ -247,14 +247,14 @@ export default function CoachHomeV11(p: Props) {
           <View style={cs.card}><QuietLoading label="Loading earnings" rows={1} testID="home-month-loading" /></View>
         ) : monthOk ? (
           <Pressable style={({ pressed }) => [cs.card, s.biz, pressed && s.pressed]} onPress={tap(p.onOpenMoney)} accessibilityRole="button" accessibilityLabel={`Earnings this month, ${heroAmount(monthOk.totals.netCents, monthOk.currency)}`} testID="home-month">
-            <View style={s.bizMark}><Text style={s.bizSign}>$</Text></View>
+            <View style={s.bizMark} testID="home-month-mark"><Text style={s.bizSign} allowFontScaling={false}>$</Text></View>
             <View style={s.grow}>
-              <Text style={cs.body}>Earnings · this month</Text>
+              <Text style={cs.muted}>Earnings · this month</Text>
               <Text style={s.bizAmount} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.15}>{heroAmount(monthOk.totals.netCents, monthOk.currency)}</Text>
-              <Text style={cs.body}>{pace ? `${monthOverline(data.now)} · ${pace}` : hasMonthMoney(monthOk) ? monthOverline(data.now) : 'Nothing earned yet this month.'}</Text>
-              {data.payout ? <Text style={cs.body}>{`Next payout ${heroAmount(data.payout.amountCents, data.payout.currency)} · ${cap(payoutWords(data.payout, data.now))}`}</Text> : null}
+              <Text style={cs.muted}>{pace ? `${monthOverline(data.now)} · ${pace}` : hasMonthMoney(monthOk) ? monthOverline(data.now) : 'Nothing earned yet this month.'}</Text>
+              {data.payout ? <Text style={cs.muted}>{`Next payout ${heroAmount(data.payout.amountCents, data.payout.currency)} · ${cap(payoutWords(data.payout, data.now))}`}</Text> : null}
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={20} color={cs.chevron.color} />
           </Pressable>
         ) : null}
       </View>
@@ -264,7 +264,7 @@ export default function CoachHomeV11(p: Props) {
   const clientsCard = o && roster > 0 ? (
     <View testID="home-clients">
       <Text style={cs.section} accessibilityRole="header">CLIENTS</Text>
-      <View style={[cs.card, s.flush]}>
+      <View style={[cs.card, s.flush]} testID="home-clients-card">
         <LinkRow first title={`All ${rosterN} clients`} line="Open Clients" onPress={tap(p.onOpenClients)} testID="home-row-all" />
         {data.rosterState === 'ok' ? (
           <LinkRow
@@ -315,7 +315,7 @@ export default function CoachHomeV11(p: Props) {
             </View>
           ) : null}
         </View>
-        <View style={s.page}>
+        <View style={s.page} testID="home-page">
           {p.belowHero?.(!!o && roster === 0)}
           {roman}
           {needsTile}
@@ -366,10 +366,12 @@ const s = StyleSheet.create({
   approveBadge: { minWidth: 28, height: 28, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
   approveBadgeText: { ...typography.bodyMd, fontSize: 15, lineHeight: 18, color: forestPop.deep },
   askRoman: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', paddingLeft: 4 },
-  biz: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  bizMark: { width: 52, height: 52, borderRadius: radius.button, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
-  bizSign: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
-  bizAmount: { fontFamily: SEMI, fontSize: 30, lineHeight: 38, color: forestPop.ink },
-  flush: { padding: 0 },
+  // A `.mon`, `.dol`, `.mv2`: the glance card, its 40-point mark and the amount.
+  biz: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  bizMark: { width: 40, height: 40, borderRadius: radius.button, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
+  bizSign: { fontFamily: 'Inter_400Regular', fontSize: 20, lineHeight: 22, color: forestPop.leaf },
+  bizAmount: { fontFamily: SEMI, fontSize: 26, lineHeight: 30, letterSpacing: -0.5, color: styleA.ink },
+  // Longhands: the card's own paddingVertical and paddingHorizontal would beat a `padding` shorthand.
+  flush: { paddingVertical: 0, paddingHorizontal: 0 },
   pressed: { opacity: 0.7 },
 });

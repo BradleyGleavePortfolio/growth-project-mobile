@@ -2,11 +2,20 @@
 // cards: the setup checklist on the hero (white, done bar, tick circles, chevrons), the push ask (a card with a filled
 // Turn on) and today's brief. The old Overview ('all') keeps its hairline looks. Section labels and small grey lines on
 // light grounds are graphite #2C2C2C (owner #168-13, m#875); a screen reader hears the open alerts row's second line.
+// FR-863R6: the open tick circle is A's `.ck` #8A988E, the chevrons on white are `.mut` #4F5D54, the brief's text column
+// has no gap, the Clients rows are `.lrow` / `.lt` / `.ls` / `.lv`, and the section labels sit 22 above and 8 below.
 import React from 'react';
 import { StyleSheet, Text, type TextStyle, type ViewStyle } from 'react-native';
 import { render, within } from '@testing-library/react-native';
 import CoachHomeCards from '../screens/coach/command-center/CoachHomeCards';
-import { AlertsRow, useCardStyles } from '../screens/coach/home-v11/HomeParts';
+import { AlertsRow, LinkRow, useCardStyles } from '../screens/coach/home-v11/HomeParts';
+
+jest.mock('@expo/vector-icons', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  const Icon = ({ name, color }: { name: string; color?: string }) => R.createElement(View, { testID: `icon-${name}`, iconColor: color });
+  return { Ionicons: Icon, MaterialIcons: Icon, MaterialCommunityIcons: Icon, Feather: Icon };
+});
 
 jest.mock('@react-navigation/native', () => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -73,6 +82,39 @@ describe('Style A white cards on the coach Home (FR-863R5)', () => {
     expect(v.queryByTestId('coach-setup-checklist-bar')).toBeNull();
   });
 
+  it("draws the open tick circle in A's #8A988E and the chevrons on white in #4F5D54 (FR-863R6, Opus B2, Sol B2)", async () => {
+    const v = await render(<CoachHomeCards part="setup" />);
+    const card = await v.findByTestId('coach-setup-checklist');
+    expect(flat(within(card).getByTestId('coach-setup-checklist-get_paid-tick'))).toMatchObject({ width: 22, height: 22, borderWidth: 1.5, borderColor: '#8A988E' });
+    expect(flat(within(card).getByTestId('coach-setup-checklist-package-tick')).borderColor).not.toBe('#8A988E');
+    const chevrons = within(card).getAllByTestId('icon-chevron-forward');
+    expect(chevrons.map((c) => c.props.iconColor)).toEqual(chevrons.map(() => '#4F5D54'));
+  });
+
+  it("sets the brief's title and line with no gap between them (FR-863R6, Sol B2)", async () => {
+    const v = await render(<CoachHomeCards part="below" />);
+    const brief = await v.findByTestId('coach-home-brief-card');
+    expect(flat(within(brief).getByTestId('coach-home-brief-text'))).toEqual({ flex: 1 });
+    expect(within(brief).getByTestId('icon-chevron-forward').props.iconColor).toBe('#4F5D54');
+  });
+
+  it("draws a Clients row as A's `.lrow`: 56 high, 8 and 16 inside, 15/20 title, 13/18 graphite line, 18/22 forest count (FR-863R6)", async () => {
+    const v = await render(
+      <>
+        <LinkRow first title="All 30 clients" line="Open Clients" onPress={() => undefined} testID="row-all" />
+        <LinkRow title="Streaks" count={9} onPress={() => undefined} testID="row-streaks" />
+      </>,
+    );
+    const all = v.getByTestId('row-all');
+    expect(flat(all)).toMatchObject({ minHeight: 56, paddingVertical: 8, paddingHorizontal: 16, gap: 12 });
+    expect(flat(all).borderTopWidth).toBeUndefined();
+    expect(flat(v.getByTestId('row-streaks'))).toMatchObject({ borderTopWidth: 0.5, borderTopColor: '#DCE3DB' });
+    expect(flat(within(all).getByText('All 30 clients'))).toMatchObject({ fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 20, color: '#142019' });
+    expect(flat(within(all).getByText('Open Clients'))).toMatchObject({ fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: '#2C2C2C' });
+    expect(flat(within(v.getByTestId('row-streaks')).getByText('9'))).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 18, lineHeight: 22, color: '#2C4A36' });
+    expect(v.getAllByTestId('icon-chevron-forward').map((c) => c.props.iconColor)).toEqual(['#4F5D54', '#4F5D54']);
+  });
+
   it('colours the section labels graphite #2C2C2C on the light page (owner #168-13)', async () => {
     function Labels() {
       const cs = useCardStyles();
@@ -80,6 +122,8 @@ describe('Style A white cards on the coach Home (FR-863R5)', () => {
     }
     const v = await render(<Labels />);
     expect(flat(v.getByTestId('label')).color).toBe('#2C2C2C');
+    // A `.sec` margin 22px 0 8px: the page's gap of 10 plus 12 above, 8 below (FR-863R6, Sol B2).
+    expect(flat(v.getByTestId('label'))).toMatchObject({ marginTop: 12, marginBottom: 8 });
   });
 
   it('says the open row\u2019s second line to a screen reader, and only when it shows', async () => {

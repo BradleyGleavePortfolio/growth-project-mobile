@@ -228,6 +228,7 @@ export default function CoachSetupChecklist({ onOpen, look = "card" }: Props) {
               it.done === true && styles.dotDone,
               it.done === null && styles.dotUnknown,
             ]}
+            testID={`coach-setup-checklist-${it.key}-tick`}
           >
             {home && it.done === true ? <Ionicons name="checkmark" size={14} color={styleA.card} /> : null}
           </View>
@@ -326,7 +327,7 @@ const makeHomeStyles = (colors: ThemeColors, light: boolean) =>
       height: 22,
       borderRadius: radius.chip,
       borderWidth: 1.5,
-      borderColor: light ? styleA.inkMuted : colors.textSecondary,
+      borderColor: light ? styleA.checkLine : colors.textSecondary, // A `.ck` #8A988E
       alignItems: "center",
       justifyContent: "center",
     },

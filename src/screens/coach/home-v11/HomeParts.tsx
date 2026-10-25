@@ -26,7 +26,8 @@ export const styleA = {
   card: '#FFFFFF', // the page cards and the open alerts row
   cardLine: '#DCE3DB', // the card edge and the line between rows
   ink: '#142019', // text on the open alerts row
-  inkMuted: '#4F5D54', // chevrons and check outlines on white
+  inkMuted: '#4F5D54', // chevrons on white (A `.mut`)
+  checkLine: '#8A988E', // the open tick circle on white (A `.ck`)
   grey: brand.graphite, // small grey text on a light ground: #2C2C2C (owner #168-13, after the mockups, wins over A's #4F5D54)
 } as const;
 
@@ -117,14 +118,17 @@ export function useCardStyles() {
     card: { ...CARD_A, ...(light ? null : { backgroundColor: sem.bgSurface, borderColor: sem.border }), paddingVertical: 18, paddingHorizontal: 16 },
     title: { fontFamily: SEMI, fontSize: 16, lineHeight: 21, color: colors.textPrimary },
     body: { ...typography.body, color: colors.textPrimary },
-    // Small grey text on a light ground is graphite #2C2C2C (owner #168-13, m#875); a dark scheme keeps the theme's.
-    muted: { ...typography.bodySmall, color: light ? styleA.grey : colors.textMuted },
+    // A `.ls`, the small lines in Business and Clients: graphite #2C2C2C on a light ground (owner #168-13, m#875).
+    muted: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: light ? styleA.grey : colors.textMuted },
     strong: { ...typography.bodyMd, color: colors.textPrimary },
-    section: { ...EYEBROW, color: light ? styleA.grey : colors.textMuted, marginTop: 10, marginBottom: 2 },
-    row: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
+    // A `.sec`: 22 above (the page's gap of 10 plus 12) and 8 below.
+    section: { ...EYEBROW, color: light ? styleA.grey : colors.textMuted, marginTop: 12, marginBottom: 8 },
+    row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, gap: 12 }, // A `.lrow`
     rowLine: { borderTopWidth: 0.5, borderTopColor: light ? styleA.cardLine : sem.border },
     rowText: { flex: 1, minWidth: 0 },
-    rowCount: { fontFamily: SEMI, fontSize: 20, lineHeight: 26, color: colors.textPrimary },
+    rowTitle: { fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 20, color: light ? styleA.ink : colors.textPrimary }, // A `.lt`
+    rowCount: { fontFamily: SEMI, fontSize: 18, lineHeight: 22, color: light ? forestPop.forest : colors.textPrimary }, // A `.lv`
+    chevron: { color: light ? styleA.inkMuted : colors.textMuted }, // A `.mut` on the white cards
     pressed: { opacity: 0.7 },
   }), [colors, sem, light]);
 }
@@ -134,16 +138,15 @@ export function LinkRow({ title, line, count, first, onPress, testID }: {
   title: string; line?: string | null; count?: number | null; first?: boolean; onPress: () => void; testID: string;
 }) {
   const s = useCardStyles();
-  const { colors } = useTheme();
   const label = [title, line, count != null ? String(count) : null].filter(Boolean).join(', ');
   return (
     <Pressable style={({ pressed }) => [s.row, !first && s.rowLine, pressed && s.pressed]} onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID={testID}>
       <View style={s.rowText}>
-        <Text style={s.strong} numberOfLines={1}>{title}</Text>
+        <Text style={s.rowTitle} numberOfLines={1}>{title}</Text>
         {line ? <Text style={s.muted} numberOfLines={1}>{line}</Text> : null}
       </View>
       {count != null ? <Text style={s.rowCount}>{count}</Text> : null}
-      <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+      <Ionicons name="chevron-forward" size={20} color={s.chevron.color} />
     </Pressable>
   );
 }
