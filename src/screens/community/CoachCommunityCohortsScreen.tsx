@@ -4,7 +4,8 @@
  *
  * Features:
  *   - Pull-to-refresh on the list.
- *   - A floating action button (FAB) opens a create-cohort modal; submitting a
+ *   - An in-flow "New cohort" button (K2: no floating buttons) opens a
+ *     create-cohort modal; submitting a
  *     non-empty name fires an optimistic create (provisional row at the top of
  *     the list) that reconciles with the server row on success.
  *   - Tapping a row routes into CoachCommunityCohortDetail.
@@ -132,6 +133,19 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
       style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
       testID="coach-community-cohorts-screen"
     >
+      <HapticPressable
+        intent="medium"
+        onPress={() => setModalOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Create a new cohort"
+        testID="coach-community-cohorts-fab"
+        style={[styles.primaryButton, { backgroundColor: semanticColors.accent }]}
+      >
+        <Text style={[styles.primaryButtonLabel, { color: semanticColors.textOnAccent }]}>
+          New cohort
+        </Text>
+      </HapticPressable>
+
       {cohorts.isError ? (
         <CoachErrorState
           message="Could not load your cohorts. Pull to retry."
@@ -159,19 +173,6 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
           }
         />
       )}
-
-      <HapticPressable
-        intent="medium"
-        onPress={() => setModalOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Create a new cohort"
-        testID="coach-community-cohorts-fab"
-        style={[styles.fab, { backgroundColor: semanticColors.accent }]}
-      >
-        <Text style={[styles.fabLabel, { color: semanticColors.textOnAccent }]}>
-          New cohort
-        </Text>
-      </HapticPressable>
 
       <Modal
         visible={modalOpen}
@@ -303,18 +304,19 @@ const styles = StyleSheet.create({
   rowMeta: {
     fontSize: 13,
   },
-  fab: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.xl,
+  // K2 has no floating buttons: the main action sits in the page flow.
+  primaryButton: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
     minHeight: 48,
     paddingHorizontal: spacing.xl,
-    borderRadius: radius.pill,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fabLabel: {
-    fontSize: 15,
+  primaryButtonLabel: {
+    fontSize: 16,
     fontWeight: '600',
   },
   scrim: {

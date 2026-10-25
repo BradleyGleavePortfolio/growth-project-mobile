@@ -7,13 +7,17 @@
  * the inbox when the coach replies in that space (the server stamps
  * `coach_replied_at`, and the inbox lists only unanswered items).
  *
- * THREE distinct branches (UX P0.2): a loading spinner; an honest
- * CoachErrorState on failure (never a calm/empty masquerade); and — on a
- * genuinely empty inbox — the operator-locked Roman-voiced empty state whose
- * copy + crop come from the backend voice policy (face + voice contract).
- * Touch targets are >= 44pt.
+ * Styled to K2 Style B (round 2 restyle): bone page, serif page title and
+ * date line, warm cream row cards, filled serif-monogram avatars, clock times,
+ * skeleton loading and a calm inline card for errors. Branches (UX P0.2):
+ * skeleton while loading; an honest error card when nothing has loaded (a
+ * failed refresh keeps the rows already shown); an offline card when the phone
+ * is offline with nothing cached; and — on a genuinely empty inbox — the
+ * operator-locked Roman-voiced empty state whose copy + crop come from the
+ * backend voice policy. Rows from blocked people never show. Touch targets are
+ * >= 44pt.
  */
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,17 +27,19 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, colors, semantic } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
   CoachRomanEmptyState,
-  CoachErrorState,
   MonogramBadge,
-  relativeAge,
 } from '../../components/community/coach';
 import CoachAckBadge, {
   resolveAckBadgeVisibility,
+  inboxRowAck,
+  type AckBadgeInput,
 } from '../../components/community/CoachAckBadge';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import type { CoachCommunityNav } from './coachCommunityNavTypes';
 import CompletionToast, {
   useCompletionToast,
 } from '../../components/community/CompletionToast';
@@ -41,7 +47,6 @@ import {
   useCoachInbox,
   useCoachAckState,
   useCoachEmptyStatePayload,
-  coachCommunityKeys,
 } from '../../hooks/useCoachCommunity';
 import {
   useCoachAckActions,
@@ -51,10 +56,7 @@ import { featureFlags } from '../../config/featureFlags';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
-import type {
-  CoachInboxItem,
-  AckStateDto,
-} from '../../api/coachCommunityApi';
+import type { CoachInboxItem } from '../../api/coachCommunityApi';
 
 // v2-2 kill switch: when OFF the inbox renders exactly as the v1-6 surface
 // (no ack badge, no "Mark acked" quick-action). Read once at module scope —
@@ -111,7 +113,7 @@ function InboxTriageBanner(): React.ReactElement {
  */
 function buildRowAccessibilityLabel(
   item: CoachInboxItem,
-  ack: AckStateDto | undefined,
+  ack: AckBadgeInput | undefined,
 ): string {
   const base = `${item.client_name} in ${item.cohort_name}: ${item.snippet}`;
   if (!ACKS_ENABLED || ack == null) return base;
@@ -143,8 +145,9 @@ function buildRowAccessibilityLabel(
     : base;
 }
 
-export default function CoachCommunityInboxScreen(): React.ReactElement {
-  const { semanticColors } = useTheme();
+export default function CoachCommunityInboxScreen({
+  navigation,
+}: { navigation?: Pick<CoachCommunityNav, 'navigate'> } = {}): React.ReactElement {
   const inbox = useCoachInbox();
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
 
@@ -155,49 +158,92 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
     showToast('Acknowledged.');
   }, [showToast]);
 
+  // Owner rule: a blocked person disappears from the inbox at once. Rows from
+  // anyone in the blocked list are filtered here (defence in depth next to the
+  // server filter). When the list shrinks (an unblock), refetch so rows the
+  // server dropped come back.
+  const blocked = useBlockedUsersStore((s) => s.blocked);
+  const blockedIds = useMemo(() => new Set(blocked.map((b) => b.id)), [blocked]);
+  const blockedCount = blocked.length;
+  const lastBlockedCount = useRef(blockedCount);
+  const { refetch } = inbox;
+  useEffect(() => {
+    if (blockedCount < lastBlockedCount.current) void refetch?.();
+    lastBlockedCount.current = blockedCount;
+  }, [blockedCount, refetch]);
+
   // Memoise the row list so its identity is stable across renders — otherwise
   // the `?? []` fallback allocates a fresh array each render and churns the
   // useCallback deps below (and the FlatList data prop).
-  const items = useMemo(() => inbox.data?.items ?? [], [inbox.data?.items]);
+  const items = useMemo(
+    () =>
+      (inbox.data?.items ?? []).filter((i) => !blockedIds.has(i.client_user_id)),
+    [inbox.data?.items, blockedIds],
+  );
+  const hasItems = items.length > 0;
+  // react-query pauses a fetch while the phone is offline.
+  const offline = inbox.fetchStatus === 'paused';
 
-  const isEmpty = !inbox.isLoading && !inbox.isError && items.length === 0;
+  const openItem = useCallback(
+    (item: CoachInboxItem) => {
+      // Post rows open the post. Message rows have no destination on main yet
+      // (the space chat screen ships separately), so they are not tappable.
+      if (item.type === 'post') {
+        navigation?.navigate('CoachCommunityPostDetail', { postId: item.id });
+      }
+    },
+    [navigation],
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: CoachInboxItem }) => (
       <InboxRow
         item={item}
-        surface={semanticColors.bgSurface}
-        border={semanticColors.border}
-        titleColor={semanticColors.textPrimary}
-        metaColor={semanticColors.textMuted}
+        onOpen={item.type === 'post' ? () => openItem(item) : undefined}
         onAcknowledged={onAcknowledged}
       />
     ),
-    [semanticColors, onAcknowledged],
+    [openItem, onAcknowledged],
   );
 
-  if (inbox.isLoading) {
+  if (!hasItems && offline) {
     return (
-      <View
-        style={[styles.center, { backgroundColor: semanticColors.bgPrimary }]}
-        testID="coach-community-inbox-screen"
-      >
-        <ActivityIndicator
-          color={semanticColors.accent}
-          testID="coach-community-inbox-loading"
+      <View style={styles.page} testID="coach-community-inbox-screen">
+        <InboxTitle />
+        <InboxNoticeCard
+          message="You are offline. Your inbox loads when you reconnect."
+          testID="coach-community-inbox-offline"
         />
       </View>
     );
   }
 
-  if (inbox.isError) {
+  if (inbox.isLoading) {
     return (
-      <View
-        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-        testID="coach-community-inbox-screen"
-      >
-        <CoachErrorState
-          message="Could not load your inbox. Pull to retry."
+      <View style={styles.page} testID="coach-community-inbox-screen">
+        <InboxTitle subtitle="Loading your inbox" />
+        <View
+          accessible
+          accessibilityLabel="Loading your inbox"
+          testID="coach-community-inbox-loading"
+          style={styles.skeletonList}
+        >
+          {[0, 1, 2, 3].map((n) => (
+            <View key={n} style={styles.skeletonCard} />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  // A failed refetch or next page keeps the rows already shown; the full error
+  // shows only when there is nothing to show.
+  if (inbox.isError && !hasItems) {
+    return (
+      <View style={styles.page} testID="coach-community-inbox-screen">
+        <InboxTitle />
+        <InboxNoticeCard
+          message="Your inbox did not load. Check your connection, then try again."
           onRetry={() => inbox.refetch()}
           retrying={inbox.isRefetching}
           testID="coach-community-inbox-error"
@@ -206,12 +252,9 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
     );
   }
 
-  if (isEmpty) {
+  if (!hasItems) {
     return (
-      <View
-        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-        testID="coach-community-inbox-screen"
-      >
+      <View style={styles.page} testID="coach-community-inbox-screen">
         {TRIAGE_ENABLED ? (
           <View style={styles.triageHeader}>
             <InboxTriageBanner />
@@ -226,15 +269,26 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   }
 
   return (
-    <View
-      style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-      testID="coach-community-inbox-screen"
-    >
+    <View style={styles.page} testID="coach-community-inbox-screen">
       <FlatList
         data={items}
         keyExtractor={(i) => i.id}
         renderItem={renderItem}
-        ListHeaderComponent={TRIAGE_ENABLED ? <InboxTriageBanner /> : null}
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <InboxTitle flush />
+            {inbox.isError ? (
+              <InboxNoticeCard
+                message="Your inbox did not refresh. Showing what loaded before."
+                onRetry={() => inbox.refetch()}
+                retrying={inbox.isRefetching}
+                testID="coach-community-inbox-refresh-error"
+                flush
+              />
+            ) : null}
+            {TRIAGE_ENABLED ? <InboxTriageBanner /> : null}
+          </View>
+        }
         contentContainerStyle={styles.listContent}
         onEndReached={() => {
           if (inbox.hasNextPage && !inbox.isFetchingNextPage) void inbox.fetchNextPage();
@@ -244,7 +298,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
         ListFooterComponent={
           inbox.isFetchingNextPage ? (
             <ActivityIndicator
-              color={semanticColors.accent}
+              color={colors.forest}
               style={styles.pageSpinner}
               testID="coach-community-inbox-next-page"
             />
@@ -254,7 +308,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
           <RefreshControl
             refreshing={inbox.isRefetching && !inbox.isFetchingNextPage}
             onRefresh={() => inbox.refetch()}
-            tintColor={semanticColors.accent}
+            tintColor={colors.forest}
           />
         }
       />
@@ -269,75 +323,203 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   );
 }
 
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** "Sunday 25 October" — the K2 date line under the page title. */
+export function inboxDateLine(now: Date = new Date()): string {
+  return `${DAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]}`;
+}
+
+/**
+ * Row time in the K2 style: a clock time for today ("6:41 am"), the weekday
+ * within the last week ("Wed"), else the date ("14 Oct").
+ */
+export function inboxRowTime(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return '';
+  if (then.toDateString() === now.toDateString()) {
+    const h = then.getHours();
+    const mm = String(then.getMinutes()).padStart(2, '0');
+    return `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h < 12 ? 'am' : 'pm'}`;
+  }
+  const days = (now.getTime() - then.getTime()) / 86_400_000;
+  if (days >= 0 && days < 7) return DAYS[then.getDay()].slice(0, 3);
+  return `${then.getDate()} ${MONTHS[then.getMonth()].slice(0, 3)}`;
+}
+
+function InboxTitle({
+  subtitle,
+  flush,
+}: {
+  subtitle?: string;
+  flush?: boolean;
+}): React.ReactElement {
+  return (
+    <View style={flush ? styles.titleBlockFlush : styles.titleBlock}>
+      <Text accessibilityRole="header" style={styles.title}>
+        Inbox
+      </Text>
+      <Text style={styles.dateLine}>{subtitle ?? inboxDateLine()}</Text>
+    </View>
+  );
+}
+
+/** K2 inline card: a calm line and, when there is one, a "Try again" button. */
+function InboxNoticeCard({
+  message,
+  onRetry,
+  retrying,
+  testID,
+  flush,
+}: {
+  message: string;
+  onRetry?: () => void;
+  retrying?: boolean;
+  testID: string;
+  flush?: boolean;
+}): React.ReactElement {
+  return (
+    <View
+      style={[styles.noticeCard, flush ? null : styles.noticeCardInset]}
+      testID={testID}
+    >
+      <Text accessibilityRole="alert" style={styles.noticeText}>
+        {message}
+      </Text>
+      {onRetry ? (
+        <HapticPressable
+          intent="light"
+          onPress={onRetry}
+          disabled={retrying}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+          accessibilityState={{ disabled: !!retrying, busy: !!retrying }}
+          testID={`${testID}-retry`}
+          style={styles.noticeButton}
+        >
+          {retrying ? (
+            <ActivityIndicator color={colors.forest} />
+          ) : (
+            <Text style={styles.noticeButtonLabel}>Try again</Text>
+          )}
+        </HapticPressable>
+      ) : null}
+    </View>
+  );
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+/** Filled forest circle with serif initials (K2); a photo when there is one. */
+function InboxAvatar({
+  item,
+}: {
+  item: CoachInboxItem;
+}): React.ReactElement {
+  const testID = `coach-community-inbox-avatar-${item.id}`;
+  if (item.avatar_url) {
+    return (
+      <MonogramBadge
+        name={item.client_name}
+        avatarUrl={item.avatar_url}
+        size={44}
+        testID={testID}
+      />
+    );
+  }
+  return (
+    <View style={styles.monogram} testID={testID}>
+      <Text style={styles.monogramText} allowFontScaling={false}>
+        {initialsOf(item.client_name)}
+      </Text>
+    </View>
+  );
+}
+
 function InboxRow({
   item,
-  surface,
-  border,
-  titleColor,
-  metaColor,
+  onOpen,
   onAcknowledged,
 }: {
   item: CoachInboxItem;
-  surface: string;
-  border: string;
-  titleColor: string;
-  metaColor: string;
+  onOpen?: () => void;
   onAcknowledged: () => void;
 }): React.ReactElement {
   // ACKS_ENABLED is a build-time constant, so the number/order of hooks is
   // stable for the entire lifetime of a build — a hook guarded by it never
   // changes its called/not-called status at runtime, which keeps the
   // flag-off path (and its invariance test) from touching any ack hook. When
-  // the flag is on we read the per-message ack cache here so the row's
-  // accessibility label can fold in the ack/SLA routine (UX F4). When off,
-  // the label short-circuits to the base.
+  // the flag is on, the per-message ack cache wins once an action fills it;
+  // before that the row's own `ack` summary drives the badge AND the label.
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const ackState = ACKS_ENABLED ? useCoachAckState(item.id) : undefined;
-  return (
-    <View
-      accessible
-      accessibilityLabel={buildRowAccessibilityLabel(item, ackState)}
-      testID={`coach-community-inbox-row-${item.id}`}
-      style={[styles.row, { backgroundColor: surface, borderColor: border }]}
-    >
-      <MonogramBadge
-        name={item.client_name}
-        avatarUrl={item.avatar_url}
-        size={40}
-        testID={`coach-community-inbox-avatar-${item.id}`}
-      />
+  const cached = ACKS_ENABLED ? useCoachAckState(item.id) : undefined;
+  const ack = ACKS_ENABLED ? inboxRowAck(cached, item.ack) : undefined;
+  const breached = ack != null && resolveAckBadgeVisibility(ack).breached;
+  const label = buildRowAccessibilityLabel(item, ack);
+  const rowTestID = `coach-community-inbox-row-${item.id}`;
+
+  const content = (
+    <>
+      <InboxAvatar item={item} />
       <View style={styles.rowBody}>
         <View style={styles.rowHeader}>
-          <Text
-            style={[styles.rowName, { color: titleColor }]}
-            numberOfLines={1}
-          >
+          <Text style={styles.rowName} numberOfLines={1}>
             {item.client_name}
           </Text>
-          <Text style={[styles.rowAge, { color: metaColor }]}>
-            {relativeAge(item.created_at)}
-          </Text>
+          <Text style={styles.rowTime}>{inboxRowTime(item.created_at)}</Text>
         </View>
-        <Text
-          style={[styles.rowCohort, { color: metaColor }]}
-          numberOfLines={1}
-        >
+        <Text style={styles.rowCohort} numberOfLines={1}>
           {item.cohort_name}
         </Text>
-        <Text
-          style={[styles.rowSnippet, { color: titleColor }]}
-          numberOfLines={2}
-        >
+        <Text style={styles.rowSnippet} numberOfLines={2}>
           {item.snippet}
         </Text>
-        {ACKS_ENABLED && item.type === 'message' && item.kind === 'text' ? (
-          <CoachAckRow
-            item={item}
-            ackState={ackState}
-            onAcknowledged={onAcknowledged}
-          />
-        ) : null}
       </View>
+    </>
+  );
+
+  // The row's text is one accessible element; the Acknowledge control sits
+  // beside it as its own element, never inside it.
+  return (
+    <View
+      style={[styles.card, breached ? styles.cardBreached : null]}
+      testID={`coach-community-inbox-card-${item.id}`}
+    >
+      {onOpen ? (
+        <HapticPressable
+          intent="light"
+          onPress={onOpen}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          testID={rowTestID}
+          style={styles.rowMain}
+        >
+          {content}
+        </HapticPressable>
+      ) : (
+        <View
+          accessible
+          accessibilityLabel={label}
+          testID={rowTestID}
+          style={styles.rowMain}
+        >
+          {content}
+        </View>
+      )}
+      {ACKS_ENABLED && item.type === 'message' && item.kind === 'text' ? (
+        <CoachAckRow item={item} ack={ack} onAcknowledged={onAcknowledged} />
+      ) : null}
     </View>
   );
 }
@@ -356,18 +538,18 @@ function InboxRow({
  */
 function CoachAckRow({
   item,
-  ackState,
+  ack,
   onAcknowledged,
 }: {
   item: CoachInboxItem;
-  ackState: AckStateDto | undefined;
+  ack: AckBadgeInput | undefined;
   onAcknowledged: () => void;
 }): React.ReactElement {
   const { semanticColors } = useTheme();
   const actions = useCoachAckActions(item.id);
   const pending = actions.markAcked.isPending;
-  // The row's ack summary covers the time before any action fills the cache.
-  const reached = ackState?.state ?? item.ack?.state;
+  // `ack` is the cache once filled, else the row's own summary.
+  const reached = ack?.state;
   const alreadyAcked = reached === 'acked' || reached === 'replied';
 
   // UX F4: the badge is folded into the row's accessibility label, so hide it
@@ -382,7 +564,7 @@ function CoachAckRow({
   return (
     <View style={styles.ackRow}>
       <CoachAckBadge
-        ack={ackState}
+        ack={ack}
         labelledByRow
         testID={`coach-community-inbox-ack-badge-${item.id}`}
       />
@@ -399,13 +581,13 @@ function CoachAckRow({
         style={[
           styles.markAckedButton,
           {
-            borderColor: semanticColors.accent,
+            borderColor: colors.forest,
             opacity: pending || alreadyAcked ? 0.5 : 1,
           },
         ]}
       >
         <Text
-          style={[styles.markAckedLabel, { color: semanticColors.accent }]}
+          style={styles.markAckedLabel}
         >
           {alreadyAcked ? 'Acknowledged' : 'Acknowledge'}
         </Text>
@@ -424,30 +606,103 @@ function CoachAckRow({
   );
 }
 
+// K2 Style B tokens: bone page (owner #166-2), warm cream cards, forest accent,
+// ink text. Serif roles keep lineHeight >= 1.25 x fontSize (Android descenders).
 const styles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: colors.bone },
   pageSpinner: { paddingVertical: spacing.lg },
-  flex: { flex: 1 },
   triageHeader: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  titleBlock: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
+  titleBlockFlush: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
+  title: {
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 36,
+    lineHeight: 46,
+    color: colors.ink,
+  },
+  dateLine: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.charcoal,
+  },
+  listHeader: { gap: spacing.sm, marginBottom: spacing.xs },
   listContent: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
     gap: spacing.sm,
   },
-  row: {
+  skeletonList: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  skeletonCard: {
+    height: 88,
+    borderRadius: 16,
+    backgroundColor: colors.cream,
+    opacity: 0.7,
+  },
+  noticeCard: {
+    backgroundColor: colors.cream,
+    borderRadius: 16,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  noticeCardInset: { marginHorizontal: spacing.lg },
+  noticeText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.ink,
+  },
+  noticeButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.forest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  noticeButtonLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.forest,
+  },
+  card: {
+    backgroundColor: colors.cream,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  cardBreached: { borderColor: semantic.warning.border },
+  rowMain: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 64,
+    minHeight: 48,
+  },
+  monogram: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.forest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monogramText: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 23,
+    color: colors.bone,
   },
   rowBody: {
     flex: 1,
@@ -459,20 +714,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rowName: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.ink,
     flex: 1,
     marginRight: spacing.sm,
   },
-  rowAge: {
-    fontSize: 12,
+  rowTime: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.charcoal,
   },
   rowCohort: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
+    lineHeight: 16,
+    color: colors.charcoal,
   },
   rowSnippet: {
-    fontSize: 14,
-    lineHeight: 19,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.ink,
   },
   ackRow: {
     flexDirection: 'row',
@@ -480,19 +745,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    paddingLeft: 44 + spacing.md,
   },
   markAckedButton: {
     minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    backgroundColor: colors.bone,
   },
   markAckedLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.forest,
   },
   ackConflict: {
     flexBasis: '100%',
