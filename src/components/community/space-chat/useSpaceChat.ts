@@ -79,9 +79,10 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
   // Block: the blocked person's rows leave the stream and the cache at once (the server list leaves them out after).
   const dropAuthor = useCallback((authorId: string) => dropFromCache((m) => m.sender_user_id !== authorId), [dropFromCache]);
 
-  const markRead = useCallback((messageId: string) => {
-    if (read.isError) return;
-    spaceChatApi.markRead(cohortId, messageId).catch(() => undefined);
+  /** Resolves false when the mark did not land, so the page tries again with the next row seen (FR-871 Sol B1 C). */
+  const markRead = useCallback(async (messageId: string): Promise<boolean> => {
+    if (read.isError) return true;
+    return spaceChatApi.markRead(cohortId, messageId).then(() => true, () => false);
   }, [cohortId, read.isError]);
 
   return {

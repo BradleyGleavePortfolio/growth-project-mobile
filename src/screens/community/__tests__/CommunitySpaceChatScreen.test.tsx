@@ -8,6 +8,7 @@
  * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
+import { FlatList, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
@@ -62,7 +63,7 @@ jest.mock('../../../hooks/useCommunity', () => ({
 }));
 jest.mock('../../../components/community/VoiceNotePlayer', () => {
   const { Text } = jest.requireActual('react-native');
-  return (p: { testID: string; durationMs: number }) => <Text testID={p.testID}>{`player ${p.durationMs}`}</Text>;
+  return (p: { testID: string; durationMs: number; url: string | null; onPlaybackError?: () => void }) => <Text testID={p.testID} onPress={p.onPlaybackError}>{`player ${p.durationMs} ${p.url}`}</Text>;
 });
 jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn(async () => ({ url: 'https://x/v.m4a' })) } }));
 // SC-M2: m#848's voice outbox and record sheet (FX-848) stand in; the space chat only feeds them.
@@ -143,11 +144,17 @@ const open = async () => {
   return r;
 };
 afterEach(() => client?.clear());
+// FlatList viewability does not run in tests: report the rows on screen by hand.
+const see = (r: Awaited<ReturnType<typeof open>>, ...keys: string[]) => act(async () => {
+  r.UNSAFE_getByType(FlatList).props.onViewableItemsChanged({ viewableItems: keys.map((key) => ({ key, isViewable: true, index: null })), changed: [] });
+});
+const readMarks = () => mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/read')).map(([, b]) => b.message_id);
 
 it('member Everyone: header, rows with names as sent, Coach mark, voice row, New messages line, composer', async () => {
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
-  expect(r.getByText('# Everyone')).toBeTruthy();
+  expect(r.getByText('Everyone')).toBeTruthy();
+  expect(r.getByTestId('space-chat-hash')).toBeTruthy();
   expect(r.getByText('1,000 members')).toBeTruthy();
   expect(r.getByText('jo b.')).toBeTruthy();
   expect(r.getAllByText('Coach')).toHaveLength(2);
@@ -157,6 +164,7 @@ it('member Everyone: header, rows with names as sent, Coach mark, voice row, New
   expect(r.queryByTestId('space-chat-hint')).toBeNull();
   // The stream reads the space's own route, newest first, and marks the newest row read (SC-BE2).
   expect(mockApi.get).toHaveBeenCalledWith('/community/cohorts/c-every/messages', { params: { limit: 30 } });
+  await see(r, 'm3', 'm2', 'new-line');
   await waitFor(() => expect(mockApi.post).toHaveBeenCalledWith('/community/cohorts/c-every/read', { message_id: 'm3' }));
 });
 
@@ -230,6 +238,7 @@ it('read marks wait for the read cursor and for the page to be in front', async 
   await r.findByTestId('space-chat-row-m3');
   await act(async () => { answer({ data: readAnswer }); });
   await r.findByTestId('space-chat-new-line');
+  await see(r, 'm3', 'm2', 'new-line');
   expect(mockApi.post).not.toHaveBeenCalledWith('/community/cohorts/c-every/read', expect.anything());
   mockStack.focused = true;
   await r.rerender(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
@@ -247,6 +256,60 @@ it('a linked message on an older page: older pages load until it is found', asyn
   const r = await open();
   expect(await r.findByTestId('space-chat-row-m0')).toBeTruthy();
   expect(mockApi.get).toHaveBeenCalledWith('/community/cohorts/c-every/messages', { params: { limit: 30, before: 'cur-1' } });
+  // Sol B1: opened at an old row, the newer rows are not read until they are on screen.
+  await see(r, 'm0');
+  expect(readMarks()).toEqual([]);
+  await see(r, 'm2', 'm3');
+  await waitFor(() => expect(readMarks()).toEqual(['m3']));
+});
+
+it('Sol B1: more than a page unread, older pages load until the first unread row, and the line sits above it', async () => {
+  readAnswer = { last_read_at: '2026-10-21T00:00:00.000Z', last_read_message_id: 'm0a' };
+  const older = [msg('m0b', '2026-10-21T12:00:00.000Z', JO), msg('m0a', '2026-10-20T12:00:00.000Z', JO)];
+  mockApi.get.mockImplementation(async (url: string, cfg?: { params?: { before?: string } }) => (url.endsWith('/read') ? { data: readAnswer }
+    : { data: cfg?.params?.before ? { messages: older, next_before: 'cur-2' } : { messages: page, next_before: 'cur-1' } }));
+  const r = await open();
+  await r.findByTestId('space-chat-row-m0b');
+  const keys = r.UNSAFE_getByType(FlatList).props.data.map((i: { key: string }) => i.key);
+  expect(keys[keys.indexOf('new-line') - 1]).toBe('m0b');
+  expect(mockApi.get).not.toHaveBeenCalledWith('/community/cohorts/c-every/messages', { params: { limit: 30, before: 'cur-2' } });
+});
+
+it('Sol B1: scrolled up a little, a new row from someone else brings the pill and is not marked read', async () => {
+  const r = await open();
+  await see(r, 'm3', 'm2', 'new-line');
+  await waitFor(() => expect(readMarks()).toEqual(['m3']));
+  await see(r, 'm2', 'new-line');
+  page = [msg('m4', '2026-10-22T10:30:00.000Z', JO), ...page];
+  await act(async () => { await client.refetchQueries(); });
+  expect(await r.findByTestId('space-chat-pill')).toBeTruthy();
+  expect(readMarks()).toEqual(['m3']);
+});
+
+it('Sol B2: a failed play (the signed URL ran out) gets a fresh URL; a failed lookup has Try again', async () => {
+  const getOne = jest.requireMock('../../../api/communityVoiceApi').communityVoiceApi.getOne as jest.Mock;
+  let n = 0;
+  getOne.mockImplementation(async () => { n += 1; if (n > 1 && n < 6) throw new Error('down'); return { url: n === 1 ? 'https://x/old.m4a' : 'https://x/new.m4a' }; });
+  const r = await open();
+  await fireEvent.press(await r.findByText('player 42000 https://x/old.m4a'));
+  await fireEvent.press(await r.findByTestId('space-chat-voice-retry-v1'));
+  expect(await r.findByText('player 42000 https://x/new.m4a')).toBeTruthy();
+  getOne.mockImplementation(async () => ({ url: 'https://x/v.m4a' }));
+});
+
+it('Sol B4: a row being sent keeps its text at 4.5:1 or better on bone (every opacity above it composited)', async () => {
+  mockApi.post.mockImplementation(() => new Promise(() => undefined));
+  const r = await open();
+  await fireEvent.changeText(await r.findByTestId('space-chat-composer-field'), 'Nice work');
+  await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+  const body = await r.findByText('Nice work');
+  let alpha = 1;
+  for (let n = body as { props: { style?: unknown }; parent: unknown } | null; n; n = n.parent as typeof n) alpha *= StyleSheet.flatten(n.props.style as never)?.opacity ?? 1;
+  const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const lum = (c: number[]) => c.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const bone = rgb('#F7FAF7');
+  const seen = rgb(StyleSheet.flatten(body.props.style).color).map((v, i) => v * alpha + bone[i] * (1 - alpha));
+  expect((lum(bone) + 0.05) / (lum(seen) + 0.05)).toBeGreaterThanOrEqual(4.5);
 });
 
 it('own text message: Delete removes it', async () => {

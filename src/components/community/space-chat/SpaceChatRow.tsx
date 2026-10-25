@@ -3,8 +3,9 @@
  * (members on the Studio greens, the coach deep with a gold initial), the name exactly as the server sends it, the Coach
  * mark (VN-M1) on the coach's rows, the time, then the content under the name. Each message kind draws in one place
  * (MessageBody): text unboxed, voice on m#848's player via SpaceVoiceNote (New / Played, SC-M2); a later kind adds a case.
- * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send rows are
- * faded; Not sent has Try again (the same Idempotency-Key) and Delete. Report / Block / Delete go through SafetyMenu.
+ * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send (with a
+ * clock) keep the text at full contrast (FR-871 Sol B4: no fade); Not sent has Try again (the same Idempotency-Key)
+ * and Delete. Report / Block / Delete go through SafetyMenu. Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
  */
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -69,20 +70,20 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const initial = p.name.trim().charAt(0).toUpperCase();
   const isOwn = !!p.viewerUserId && p.authorId === p.viewerUserId;
   const tile: Tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
-  // Name, chip and time wrap to two lines at large text sizes: then the body starts below them, not tucked up.
+  // Name, chip and time grow (large text) or wrap: then the body starts below them, not tucked up.
   const [wrapped, setWrapped] = useState(false);
   const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
   return (
     <View style={s.row} testID={`space-chat-row-${p.id}`}>
       <View style={s.head}>
         {p.avatarUrl ? (
-          <Image source={{ uri: p.avatarUrl }} style={s.avatar} accessibilityIgnoresInvertColors />
+          <Image source={{ uri: p.avatarUrl }} style={[s.avatar, p.voice ? s.avatarSm : null]} accessibilityIgnoresInvertColors />
         ) : (
-          <View style={[s.avatar, { backgroundColor: tile.bg }, tile.edge ? { borderWidth: 1, borderColor: tile.edge } : null]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <View style={[s.avatar, p.voice ? s.avatarSm : null, { backgroundColor: tile.bg }, tile.edge ? { borderWidth: 1, borderColor: tile.edge } : null]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
             <Text style={[p.isCoach ? s.coachInitial : s.initial, { color: tile.fg }]}>{initial}</Text>
           </View>
         )}
-        <View style={s.who} accessible accessibilityLabel={label} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 40)}>
+        <View style={s.who} accessible accessibilityLabel={label} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 24)}>
           <Text style={s.name}>{p.name}</Text>
           {p.isCoach ? <Text style={s.mark}>Coach</Text> : null}
           {shown === 'waiting' ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
@@ -103,7 +104,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           />
         )}
       </View>
-      <View style={[s.content, wrapped ? s.untucked : null, shown === 'sending' || shown === 'waiting' ? s.faded : null]}>
+      <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
         <MessageBody {...p} />
         {p.state === 'failed' ? (
           <View style={s.actions}>
@@ -149,31 +150,51 @@ export function NewMessagesLine(): React.ReactElement {
   );
 }
 
-const AVATAR = 32;
+// 05b (.msg / .av / .bcard): text rows have a 40 pt tile and the text under the name; voice rows a 32 pt tile, the card
+// below the 44 pt head at 62 pt from the edge (16 + 46).
+const AVATAR = 40;
+const GAP = 10;
 const s = StyleSheet.create({
   row: { paddingLeft: spacing.lg, paddingRight: spacing.xs, paddingVertical: spacing.sm },
-  head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
-  avatar: { width: AVATAR, height: AVATAR, borderRadius: radius.control, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  initial: { ...typography.bodyMd },
-  coachInitial: { ...typography.h3, fontFamily: 'CormorantGaramond_500Medium' },
-  who: { flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.sm },
-  name: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: fp.ink, flexShrink: 1 },
-  mark: { ...typography.caption, color: fp.gold, backgroundColor: fp.deep, borderRadius: radius.chip, paddingHorizontal: spacing.sm, paddingVertical: 2, overflow: 'hidden' },
-  time: { ...typography.bodySmall, color: SMALL_GREY },
-  // Up under the name, as in 05b (the head row stays 44 pt for the menu's touch target).
-  content: { marginLeft: AVATAR + spacing.sm, marginRight: spacing.md, marginTop: -12, gap: spacing.xs },
+  head: { flexDirection: 'row', alignItems: 'center', gap: GAP, minHeight: 44 },
+  avatar: { width: AVATAR, height: AVATAR, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarSm: { width: 32, height: 32, borderRadius: 10 },
+  initial: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
+  coachInitial: { ...typography.h3, fontFamily: 'CormorantGaramond_600SemiBold', fontSize: 18 },
+  who: { flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6 },
+  name: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 15, lineHeight: 20, color: fp.ink, flexShrink: 1 },
+  mark: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 11, lineHeight: 13, letterSpacing: 0.22, color: fp.gold, backgroundColor: fp.deep, borderRadius: radius.chip, paddingHorizontal: spacing.sm, paddingVertical: 3, overflow: 'hidden' },
+  time: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: SMALL_GREY },
+  // Text: up under the name, 2 pt below it, as in 05b (the head row stays 44 pt for the menu's touch target).
+  content: { marginLeft: AVATAR + GAP, marginRight: spacing.md, marginTop: -10, gap: spacing.xs },
+  voiceCard: { marginLeft: 46, marginRight: spacing.sm, marginTop: 6 },
   untucked: { marginTop: 0 },
-  faded: { opacity: 0.55 },
-  body: { ...typography.body, lineHeight: 22, color: fp.ink },
+  body: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22, color: fp.ink },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },
   again: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.button, backgroundColor: fp.forest },
   againText: { ...typography.bodyMd, color: fp.onDeep },
   discard: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.sm, justifyContent: 'center' },
   discardText: { ...typography.bodyMd, color: SMALL_GREY },
-  // A small sans day mark ("Thu, Oct 22"), as in the Voice B frames.
-  day: { ...typography.caption, letterSpacing: 0, color: SMALL_GREY, textAlign: 'center', marginVertical: spacing.sm },
-  newLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  newDash: { width: 12, height: 2, backgroundColor: fp.leaf },
-  newText: { ...typography.caption, color: fp.moss },
-  newRule: { flex: 1, height: 2, backgroundColor: fp.leaf },
+  // A small sans day mark ("Thu, Oct 22"), 05b .day: 600 12 pt, 10 pt above, 4 below.
+  day: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: SMALL_GREY, textAlign: 'center', paddingTop: GAP, paddingBottom: spacing.xs },
+  // 05b .newline: an 8 pt lead dash, 10 pt gaps, 600 12 pt brand 400 (#4D7059) words, a leaf rule.
+  newLine: { flexDirection: 'row', alignItems: 'center', gap: GAP, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  newDash: { width: 8, height: 2, borderRadius: 1, backgroundColor: fp.leaf },
+  newText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: fp.brand400 },
+  newRule: { flex: 1, height: 2, borderRadius: 1, backgroundColor: fp.leaf },
+  glyph: { width: 24, height: 24, justifyContent: 'center', gap: 3, paddingLeft: 3 }, bar: { height: 2, borderRadius: 1 },
+  hash: { width: 18, height: 18, marginRight: 6 },
+  hashH: { position: 'absolute', left: 3, width: 12, height: 1.7, borderRadius: 1 },
+  hashV: { position: 'absolute', top: 2.5, width: 1.7, height: 13, borderRadius: 1, transform: [{ rotate: '6deg' }] },
 });
+
+/** 05b's drawer glyph (three round-capped bars, 18 / 18 / 12 pt; Opus B1 f) and the drawn hash before the space name. */
+export const MenuGlyph = ({ color }: { color: string }): React.ReactElement => (
+  <View style={s.glyph} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">{[18, 18, 12].map((w, i) => <View key={i} style={[s.bar, { width: w, backgroundColor: color }]} />)}</View>
+);
+export const HashGlyph = ({ color }: { color: string }): React.ReactElement => (
+  <View style={s.hash} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="space-chat-hash">
+    {[5.9, 10.4].map((top) => <View key={top} style={[s.hashH, { top, backgroundColor: color }]} />)}
+    {[6.1, 10.2].map((left) => <View key={left} style={[s.hashV, { left, backgroundColor: color }]} />)}
+  </View>
+);
