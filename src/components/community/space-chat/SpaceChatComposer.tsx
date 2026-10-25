@@ -9,7 +9,7 @@ import React from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatDraft } from '../../../lib/chatDrafts';
-import { colors, forestPop as fp, neutral, spacing, typography, voiceShades } from '../../../theme/tokens';
+import { forestPop as fp, neutral, spacing, typography, voiceShades } from '../../../theme/tokens';
 import { SPACE_MESSAGE_MAX } from './spaceChatApi';
 
 export interface SpaceChatComposerProps {
@@ -53,14 +53,15 @@ export default function SpaceChatComposer({ cohortId, onSend, leading, trailing 
 }
 
 const s = StyleSheet.create({
+  // 05b .dock / .comp: a white dock (FR-871 Opus B1 a), 6 pt gaps, 8 10 8 6 padding, a 1 pt hairline; 15 pt text.
   bar: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm,
-    backgroundColor: colors.bone, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine,
+    flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingLeft: 6, paddingRight: 10, paddingVertical: spacing.sm,
+    backgroundColor: neutral[0], borderTopWidth: 1, borderTopColor: voiceShades.hairline,
   },
   noLead: { paddingLeft: spacing.lg },
   slot: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   field: {
-    ...typography.body, flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: spacing.lg, paddingTop: 11, paddingBottom: 11,
+    ...typography.body, fontSize: 15, lineHeight: 20, flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: spacing.lg, paddingTop: 11, paddingBottom: 11,
     borderRadius: 22, borderWidth: 1, borderColor: voiceShades.track, backgroundColor: neutral[0], color: fp.ink,
   },
   send: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fp.forest },
