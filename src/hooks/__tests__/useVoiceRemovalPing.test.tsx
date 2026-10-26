@@ -39,13 +39,11 @@ const mockReleased = jest.fn();
 jest.mock('../../components/community/VoiceNotePlayer', () => {
   const React = require('react');
   const { View } = require('react-native');
-  return {
-    __esModule: true,
-    default: (p: { testID?: string; url: string; trailing?: unknown; footer?: unknown }) => {
-      React.useEffect(() => () => mockReleased(p.url), [p.url]);
-      return React.createElement(View, { testID: p.testID, accessibilityHint: p.url }, p.trailing, p.footer);
-    },
-  };
+  function MockPlayer(p: { testID?: string; url: string; trailing?: unknown; footer?: unknown }) {
+    React.useEffect(() => () => mockReleased(p.url), [p.url]);
+    return React.createElement(View, { testID: p.testID, accessibilityHint: p.url }, p.trailing, p.footer);
+  }
+  return { __esModule: true, default: MockPlayer };
 });
 jest.mock('../../components/community/VoiceRecordSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
