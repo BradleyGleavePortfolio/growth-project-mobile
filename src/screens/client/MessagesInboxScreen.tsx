@@ -35,7 +35,8 @@ import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
-import { readCoachChatClosed } from '../../hooks/useCoachChatClosed';
+import { readCoachChatClosed, useCoachChatClosed } from '../../hooks/useCoachChatClosed';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { colors as palette, gold, layout, motion, radius, typography } from '../../theme/tokens';
 
 interface CoachRow {
@@ -72,6 +73,10 @@ const ok = <T,>(r: PromiseSettledResult<T>) => (r.status === 'fulfilled' ? r.val
 function useInbox(coached: boolean) {
   const v2 = useFeatureFlags().flags.messaging_core_v2;
   const blocked = useBlockedUsersStore((st) => st.blocked); // a block or unblock reads the list again
+  // FR-880R4 (Sol B1, agent 174 draft): the shared gate on my signed-in coach (saved block list, refused send, thread
+  // read), so a cold offline list whose reads give no coach id still never shows a coach I blocked.
+  const coachId = useCurrentUser()?.coach_id;
+  const shared = useCoachChatClosed(coached ? coachId : null);
   const [coach, setCoach] = useState<CoachRow | null>(null);
   const [left, setLeft] = useState<number | null>(null);
   useFocusEffect(useCallback(() => {
@@ -113,7 +118,7 @@ function useInbox(coached: boolean) {
     };
   }, [coached, v2, blocked]));
   // My own block hides the card at once; the server's answer covers theirs (and mine, from the next read).
-  const closed = !!coach && (coach.gone || (!!coach.id && blocked.some((b) => b.id === coach.id)));
+  const closed = !!coach && (coach.gone || shared.closed || (!!coach.id && blocked.some((b) => b.id === coach.id)));
   return { coach, left, closed };
 }
 

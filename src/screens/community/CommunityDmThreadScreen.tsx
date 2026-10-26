@@ -36,6 +36,7 @@ import {
   ComposerInput,
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import { ForestStatusBar } from '../../components/StatusBarBand';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
@@ -96,6 +97,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
       edges={['top']}
       testID="community-dmthread-screen"
     >
+      {/* FR-880R4 (Opus B2): the app's status band above takes the same deep forest, light icons, while this DM is in front. */}
+      <ForestStatusBar />
       <KeyboardAvoidingView
         style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
