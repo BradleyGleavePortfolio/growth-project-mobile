@@ -1,6 +1,8 @@
 /**
- * FR-871 (SC-M2): the voice card's outbox states, GOAL 03 / 04 / 10a: the sending circle; the clock and
- * Waiting to send with the disc greyed, nothing faded; the failed card with Try again and Delete that asks first.
+ * FR-871 (SC-M2), FR-871R5: the voice card's outbox states on both cards (member and coach): sending, a circle and the
+ * disc greyed (no play until sent); waiting, the circle and a struck wifi spoken "Waiting to send", no sentence (owner
+ * 10-20 12:25); the failed card with Try again and Delete that asks first; marks on-deep on the coach card. A row still
+ * on the phone has a ••• that deletes it after asking.
  * Their own file: a note still on the phone loads its player at once, and that player's async updates
  * (VoiceNotePlayer, FX-848) must not run into another test (see spaceChatVoice.test.tsx).
  */
@@ -38,6 +40,8 @@ jest.mock('../space-chat/useSpaceChat', () => ({
 
 import SpaceVoiceNote from '../space-chat/SpaceVoiceNote';
 import SpaceChatMic from '../space-chat/SpaceChatMic';
+import SpaceChatRow, { SMALL_GREY } from '../space-chat/SpaceChatRow';
+import { forestPop as fp, semantic } from '../../../theme/tokens';
 import { enqueuedAt, useSpaceVoiceOutbox } from '../space-chat/useSpaceVoiceOutbox';
 import { communityVoiceApi } from '../../../api/communityVoiceApi';
 import { spaceChatApi } from '../space-chat/spaceChatApi';
@@ -77,29 +81,46 @@ beforeEach(() => {
 // RNTL 14: fireEvent, render, rerender and unmount are async and are always awaited (an unawaited one overlaps the next act).
 // The player's own async state updates (VoiceNotePlayer, FX-848) outlive a test: the SpaceVoiceNote cases run last.
 
-describe('SpaceVoiceNote — outbox states (GOAL 03 / 04 / 10a)', () => {
-  const LOCAL = { localUri: 'file:///v-1.m4a', mine: true, coach: false, offline: false };
-  it('sending: a circle; waiting: the clock and Waiting to send with the disc greyed, nothing faded', async () => {
+describe('SpaceVoiceNote — outbox states (GOAL 03 / 04, owner 10-20 12:25)', () => {
+  const LOCAL = { localUri: 'file:///v-1.m4a', mine: true, offline: false };
+  const inks = (r: { getByTestId: (id: string) => { props: { color?: string } } }) => [r.getByTestId('space-chat-voice-circle-v-1').props.color];
+  type Node = { props: { style?: unknown }; parent: Node | null };
+  const unfaded = (node: unknown) => {
+    for (let n = node as Node | null; n; n = n.parent) expect((StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1).toBe(1);
+  };
+  it.each([[false, SMALL_GREY], [true, fp.onDeep]])('coach %s: sending is a circle and does not play; waiting adds a struck wifi, spoken, no sentence', async (coach, ink) => {
     const { Wrapper } = wrap();
     const { p } = port();
-    const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} send="sending" playback={p} /></Wrapper>);
-    expect(r.getByTestId('space-chat-voice-sending-v-1')).toBeTruthy();
-    await r.rerender(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} offline send="waiting" playback={p} /></Wrapper>);
-    expect(r.getByText('Waiting to send')).toBeTruthy();
+    const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} coach={coach} send="sending" playback={p} /></Wrapper>);
+    expect(r.getByTestId('space-chat-voice-sending-v-1').props.accessibilityLabel).toBe('Sending…');
     expect(r.getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({ disabled: true });
-    type Node = { props: { style?: unknown }; parent: Node | null };
-    let n: Node | null = r.getByText('Waiting to send') as unknown as Node;
-    for (; n; n = n.parent) expect((StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1).toBe(1);
+    expect(inks(r)).toContain(ink);
+    await r.rerender(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} coach={coach} offline send="waiting" playback={p} /></Wrapper>);
+    expect(r.getByLabelText('Waiting to send')).toBeTruthy();
+    expect(r.getByTestId('space-chat-voice-wifi-off-v-1')).toBeTruthy();
+    expect(r.queryByText('Waiting to send')).toBeNull();
+    expect(r.queryByText(/You are offline/)).toBeNull();
+    expect(r.getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(inks(r)).toContain(ink);
+    unfaded(r.getByTestId('space-chat-voice-wifi-off-v-1'));
   });
 
-  it('failed: the red line, Try again, and Delete that asks first', async () => {
+  it.each([false, true])('coach %s failed: the red line (on a light strip on the coach card), Try again, and Delete that asks first', async (coach) => {
     const onRetry = jest.fn();
     const onDiscard = jest.fn();
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { Wrapper } = wrap();
     const { p } = port();
-    const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} send="failed" onRetry={onRetry} onDiscard={onDiscard} playback={p} /></Wrapper>);
+    const r = await render(<Wrapper><SpaceVoiceNote voice={VOICE} {...LOCAL} coach={coach} send="failed" onRetry={onRetry} onDiscard={onDiscard} playback={p} /></Wrapper>);
     expect(r.getByText('That didn’t send. Your recording is safe — try sending again.')).toBeTruthy();
+    // The failed note still plays from the phone.
+    expect(r.getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({ disabled: false });
+    type El = { props: { accessibilityRole?: string; style?: unknown }; parent: El | null };
+    let el = r.getByText('That didn’t send. Your recording is safe — try sending again.') as unknown as El | null;
+    while (el && el.props.accessibilityRole !== 'alert') el = el.parent;
+    const line = StyleSheet.flatten(el?.props.style as object) as { backgroundColor?: string };
+    expect(line.backgroundColor).toBe(coach ? semantic.danger.bg : undefined);
+    expect((StyleSheet.flatten(r.getByText('Delete').props.style) as { color: string }).color).toBe(coach ? fp.onDeep : fp.n700);
     await fireEvent.press(r.getByText('Try again'));
     expect(onRetry).toHaveBeenCalledTimes(1);
     await fireEvent.press(r.getByText('Delete'));
@@ -107,6 +128,25 @@ describe('SpaceVoiceNote — outbox states (GOAL 03 / 04 / 10a)', () => {
     const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
     expect(alert.mock.calls[0][0]).toBe('Delete this voice note?');
     buttons.find((b) => b.text === 'Delete')?.onPress?.();
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+    alert.mockRestore();
+  });
+});
+
+describe('SpaceChatRow — a row still on the phone (FR-871R5, m#879 Opus B3 / Sol B4)', () => {
+  it.each([['waiting', 'message'], ['sending', 'message'], ['failed', 'message']] as const)('%s: ••• deletes it from the phone, after asking', async (state, noun) => {
+    const onDiscard = jest.fn();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const r = await render(
+      <SpaceChatRow id="l-1" name="Mia" isCoach={false} createdAt="2026-10-26T10:00:00.000Z" body="Hi" authorId="u-1"
+        viewerUserId="u-1" state={state} offline onRetry={jest.fn()} onDiscard={onDiscard} />,
+    );
+    const more = r.getByTestId('space-chat-local-menu-l-1');
+    expect(more.props.accessibilityLabel).toBe(`Delete this ${noun}`);
+    await fireEvent.press(more);
+    expect(alert.mock.calls[0][0]).toBe(`Delete this ${noun}?`);
+    expect(onDiscard).not.toHaveBeenCalled();
+    (alert.mock.calls[0][2] as { text: string; onPress?: () => void }[]).find((b) => b.text === 'Delete')?.onPress?.();
     expect(onDiscard).toHaveBeenCalledTimes(1);
     alert.mockRestore();
   });

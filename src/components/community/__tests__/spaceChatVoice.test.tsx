@@ -118,9 +118,16 @@ describe('SpaceChatMic', () => {
     expect(sheetOpen()).toBe(false);
     expect(spaceChatApi.recordVoiceConsent).not.toHaveBeenCalled();
     await fireEvent.press(r.getByTestId('space-chat-mic'));
+    type El = { props: { onDismiss?: () => void }; parent: El | null };
+    let modal = r.getByTestId('space-chat-voice-first-use') as unknown as El | null;
+    while (modal && !modal.props.onDismiss) modal = modal.parent;
+    const onDismiss = modal?.props.onDismiss;
     await fireEvent.press(r.getByTestId('space-chat-voice-first-use-record'));
     expect(spaceChatApi.recordVoiceConsent).toHaveBeenCalledTimes(1);
     expect(r.queryByTestId('space-chat-voice-first-use')).toBeNull();
+    // FR-871R5 (Opus C5): iOS shows one Modal at a time, so the record sheet waits until the card has gone.
+    expect(sheetOpen()).toBe(false);
+    await act(async () => { onDismiss?.(); });
     expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }));
     await act(async () => { (mockSheet.mock.calls[mockSheet.mock.calls.length - 1][0] as { onClose: () => void }).onClose(); });
     await fireEvent.press(r.getByTestId('space-chat-mic'));

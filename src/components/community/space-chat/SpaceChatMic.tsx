@@ -3,10 +3,11 @@
  * takes its place while there is text). It opens m#848's record sheet (VoiceRecordSheet, FX-848: hold to record,
  * review, the microphone-off state) aimed at this space; Send hands the recording to the space's voice outbox.
  * FR-871: the first time (the server's voice-consent answer), the 08a card comes first (SpaceVoiceFirstUse); a tap
- * before the answer is in waits for it rather than opening either sheet.
+ * before the answer is in waits for it rather than opening either sheet. On iOS the record sheet opens once the card has
+ * gone (its onDismiss): iOS shows one Modal at a time (FR-871R5, m#879 Opus C5).
  */
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import VoiceRecordSheet from '../VoiceRecordSheet';
 import SpaceVoiceFirstUse, { useSpaceVoiceConsent } from './SpaceVoiceFirstUse';
@@ -29,6 +30,8 @@ export default function SpaceChatMic({ cohortName, userId, coach, onSend }: Spac
   const [asked, setAsked] = useState(false);
   // The sheet mounts on the first tap (one Modal less per space chat), then stays so closing still slides.
   const [used, setUsed] = useState(false);
+  const afterCard = useRef(false);
+  const openSheet = () => { setUsed(true); setOpen(true); };
   useEffect(() => {
     if (!asked || !consent.known) return;
     setAsked(false);
@@ -50,8 +53,9 @@ export default function SpaceChatMic({ cohortName, userId, coach, onSend }: Spac
         visible={card}
         cohortName={cohortName}
         coach={coach}
-        onRecord={() => { consent.record(); setCard(false); setUsed(true); setOpen(true); }}
+        onRecord={() => { consent.record(); setCard(false); if (Platform.OS === 'ios') afterCard.current = true; else openSheet(); }}
         onClose={() => setCard(false)}
+        onDismiss={() => { if (afterCard.current) { afterCard.current = false; openSheet(); } }}
       />
       {used ? (
         <VoiceRecordSheet
