@@ -498,7 +498,7 @@ describe('SafetyMenu — Reported and Remove for everyone (REMOVED-BY-M)', () =>
     expect(queryByTestId('sm-block')).toBeNull();
     expect(queryByTestId('sm-remove')).toBeNull();
     expect(flat(getByText('Remove this voice note for everyone?'))).toMatchObject({ fontSize: 18, fontWeight: '600' });
-    expect(getByText('Everyone in this space will see that you removed it.')).toBeTruthy();
+    expect(getByText('Everyone here will see that you removed it.')).toBeTruthy();
     expect(flat(getByText('Remove for everyone'))).toMatchObject({ fontSize: 16, fontWeight: '600' });
     await act(async () => {
       fireEvent.press(getByTestId('sm-remove-confirm'));

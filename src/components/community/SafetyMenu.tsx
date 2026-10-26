@@ -235,9 +235,13 @@ export default function SafetyMenu({
         intent="light"
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        // #175-W: a viewer who can also remove this (the coach) hears all three actions.
+        // #175-W: a viewer who can also remove this (the coach, the owner) hears all three actions.
         accessibilityLabel={
-          isOwn ? `Options for your ${contentNoun}` : onDelete ? 'Report, block or remove' : `Report or block ${who}`
+          isOwn
+            ? `Options for your ${contentNoun}`
+            : onRemove || onDelete
+              ? 'Report, block or remove'
+              : `Report or block ${who}`
         }
         hitSlop={8}
         style={styles.trigger}
@@ -330,7 +334,7 @@ export default function SafetyMenu({
                   {`Remove this ${contentNoun} for everyone?`}
                 </Text>
                 <Text style={[styles.confirmBody, { color: light ? fp.n700 : semanticColors.textMuted }]}>
-                  Everyone in this space will see that you removed it.
+                  Everyone here will see that you removed it.
                 </Text>
                 <HapticPressable
                   intent="warning"

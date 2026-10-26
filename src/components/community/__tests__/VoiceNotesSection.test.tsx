@@ -367,7 +367,7 @@ it('the coach removes another member’s note after the in-sheet confirm, with n
   expect(queryByTestId('vn-menu-vn-other-report')).toBeNull();
   expect(queryByTestId('vn-menu-vn-other-remove')).toBeNull();
   expect(getByText('Remove this voice note for everyone?')).toBeTruthy();
-  expect(getByText('Everyone in this space will see that you removed it.')).toBeTruthy();
+  expect(getByText('Everyone here will see that you removed it.')).toBeTruthy();
   expect(alertSpy).not.toHaveBeenCalled();
   await act(async () => {
     fireEvent.press(getByTestId('vn-menu-vn-other-remove-confirm'));
