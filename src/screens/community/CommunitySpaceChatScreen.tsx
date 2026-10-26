@@ -13,7 +13,11 @@
  *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route. The page
  *     opens there (or at the message asked for), loading older pages until that row is loaded (FR-871 Sol B1), once the
  *     cursor has answered. Read marks and the pill follow what is on screen (FlatList viewability), not a scroll
- *     distance: the newest row seen is marked, only while the page is in front and after it has opened in place.
+ *     distance: the newest row seen is marked, only while the page is in front and after it has opened in place. A row
+ *     counts as seen when most of it is on screen, or when it fills most of the screen (a message taller than the
+ *     screen; FR-871R5, m#871 Sol B2). Opening in place tries the row again until the rows around it have measured
+ *     (FR-871R5, m#871 Opus B1 / Sol B1).
+ *   - Offline: no line about it; a voice note waiting on the phone says so in its card (owner 10-20 12:25, FR-871R5).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -101,8 +105,24 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   const listRef = useRef<FlatList<Item>>(null);
   const [target, setTarget] = useState<string | null | undefined>(undefined);
   const [placed, setPlaced] = useState(false);
-  const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set());
-  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => setSeen(new Set(viewableItems.map((v) => v.key)))).current;
+  const [seenRows, setSeenRows] = useState<ReadonlySet<string>>(() => new Set());
+  const [seenTall, setSeenTall] = useState<ReadonlySet<string>>(() => new Set());
+  const seen = useMemo(() => new Set([...seenRows, ...seenTall]), [seenRows, seenTall]);
+  const viewPairs = useRef([setSeenRows, setSeenTall].map((set, i) => ({
+    viewabilityConfig: VIEWABLE[i],
+    onViewableItemsChanged: ({ viewableItems }: { viewableItems: ViewToken[] }) => set(new Set(viewableItems.map((v) => v.key))),
+  }))).current;
+  // The row to open at, tried again (a few frames at most) while the rows around it have not measured yet.
+  const tries = useRef(0);
+  const placedRef = useRef(false);
+  placedRef.current = placed;
+  const toRow = useCallback((index: number) => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }), []);
+  const onPlaceFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+    listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    if (tries.current >= 5) return;
+    tries.current += 1;
+    setTimeout(() => { if (!placedRef.current) toRow(info.index); }, 50);
+  }, [toRow]);
   useEffect(() => {
     if (target !== undefined || !chat.readSettled || items.length === 0) return;
     const lastRead = chat.readCursor?.last_read_at;
@@ -115,8 +135,8 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     }
     const index = items.findIndex((i) => (messageId ? i.key === messageId : i.type === 'new'));
     setTarget(index > 0 ? items[index].key : null);
-    if (index > 0) requestAnimationFrame(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }));
-  }, [items, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list]);
+    if (index > 0) requestAnimationFrame(() => toRow(index));
+  }, [items, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list, toRow]);
   // In place once the row it opened at is on screen (or the person scrolls); only then do read marks count.
   useEffect(() => { if (!placed && (target === null || (!!target && seen.has(target)))) setPlaced(true); }, [placed, target, seen]);
 
@@ -220,16 +240,6 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           ) : null}
         </View>
       </View>
-      {!isOnline && voice.rows.some((r) => r.v.status !== 'failed') ? (
-        // GOAL 10a .offline: a voice note waits on the phone while offline (wifi struck through, leaf).
-        <View style={s.offline} accessibilityRole="alert" testID="space-chat-offline">
-          <View style={s.wifiOff}>
-            <Ionicons name="wifi-outline" size={18} color={fp.leaf} />
-            <View style={s.strike} />
-          </View>
-          <Text style={s.offlineText}>You are offline. Your voice note is saved on this phone and sends when you reconnect.</Text>
-        </View>
-      ) : null}
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {chat.noAccess ? <View style={s.flex} /> : failure ? (
           <View style={s.center} testID="space-chat-error">
@@ -252,13 +262,12 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
             data={items}
             keyExtractor={(i) => i.key}
             renderItem={renderItem}
-            onViewableItemsChanged={onViewable}
-            viewabilityConfig={VIEWABLE}
+            viewabilityConfigCallbackPairs={viewPairs}
             onScrollBeginDrag={() => setPlaced(true)}
             keyboardShouldPersistTaps="handled"
             onEndReached={() => { if (chat.list.hasNextPage && !chat.list.isFetchingNextPage) void chat.list.fetchNextPage(); }}
             onEndReachedThreshold={0.4}
-            onScrollToIndexFailed={(info) => listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })}
+            onScrollToIndexFailed={onPlaceFailed}
             contentContainerStyle={s.stream}
             testID="space-chat-list"
           />
@@ -288,12 +297,9 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   );
 }
 
-const VIEWABLE = { itemVisiblePercentThreshold: 60 };
+/** Seen: most of the row is on screen, or the row fills most of the screen (one taller than the screen). */
+const VIEWABLE = [{ itemVisiblePercentThreshold: 60 }, { viewAreaCoveragePercentThreshold: 60 }];
 const s = StyleSheet.create({
-  offline: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: fp.ink },
-  offlineText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: fp.onDeep },
-  wifiOff: { width: 18, height: 18, marginTop: 1, alignItems: 'center', justifyContent: 'center' },
-  strike: { position: 'absolute', width: 22, height: 2, borderRadius: 1, backgroundColor: fp.leaf, transform: [{ rotate: '45deg' }] },
   safe: { flex: 1, backgroundColor: fp.deep },
   flex: { flex: 1, backgroundColor: colors.bone },
   // 05b .mast: 2 6 10 padding, 2 pt gaps; a 19 pt semibold title after a drawn muted hash, a 13 pt count under it.

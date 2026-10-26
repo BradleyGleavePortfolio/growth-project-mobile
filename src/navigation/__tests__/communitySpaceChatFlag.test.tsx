@@ -56,3 +56,11 @@ it('flag on selects the chat-capable Community Home, so no space opens inline or
   expect(lines).toHaveLength(1);
   expect(lines[0]).toContain('component={featureFlags.communityHomeV2 || featureFlags.communitySpaceChat ? CommunityHomeScreen : CommunityTabScreen}');
 });
+
+it('FR-871R5 (m#879 Opus B2): the tab bar steps aside while the space chat is open (full screen, GOAL 05b)', () => {
+  const nav = read('navigation/ClientNavigator.tsx');
+  const tab = nav.slice(nav.indexOf('name="CommunityTab"'), nav.indexOf('</Tab.Navigator>'));
+  expect(tab).toMatch(/options=\{\(\{ route \}\) => \(\{/);
+  expect(tab).toContain("...(getFocusedRouteNameFromRoute(route) === 'CommunitySpaceChat' ? { tabBarStyle: { display: 'none' as const } } : {}),");
+  expect(nav).toContain("import { getFocusedRouteNameFromRoute } from '@react-navigation/native';");
+});

@@ -8,7 +8,7 @@
  * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, FlatList, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
@@ -149,9 +149,15 @@ const open = async () => {
   return r;
 };
 afterEach(() => client?.clear());
-// FlatList viewability does not run in tests: report the rows on screen by hand.
-const see = (r: Awaited<ReturnType<typeof open>>, ...keys: string[]) => fireEvent(r.getByTestId('space-chat-list'), 'viewableItemsChanged',
-  { viewableItems: keys.map((key) => ({ key, isViewable: true, index: null })), changed: [] });
+// FlatList viewability does not run in tests: report the rows on screen by hand. `see`: rows mostly on screen; `cover`:
+// rows filling most of the screen (taller than it; FR-871R5, m#871 Sol B2).
+type Pair = { viewabilityConfig: object; onViewableItemsChanged: (info: unknown) => void };
+const pairs = (r: Awaited<ReturnType<typeof open>>) => r.getByTestId('space-chat-list').props.viewabilityConfigCallbackPairs as Pair[];
+const report = (n: number) => (r: Awaited<ReturnType<typeof open>>, ...keys: string[]) => act(async () => {
+  pairs(r)[n].onViewableItemsChanged({ viewableItems: keys.map((key) => ({ key, isViewable: true, index: null })), changed: [] });
+});
+const see = report(0);
+const cover = report(1);
 const readMarks = () => mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/read')).map(([, b]) => b.message_id);
 
 it('member Everyone: header, rows with names as sent, Coach mark, voice row, New messages line, composer', async () => {
@@ -517,19 +523,49 @@ it('SC-M2: a voice note on its way to this space shows at the bottom with its st
   alert.mockRestore();
 });
 
-it('FR-871: offline with a voice note waiting, the strip says it is saved; the card says Waiting to send, the header nothing', async () => {
+it('FR-871R5 (m#879 Opus B1, owner 10-20 12:25): offline with a voice note waiting, no sentence; the card has the circle and the struck wifi, the header nothing', async () => {
   mockNet.isOnline = false;
   const note = (id: string, status: string) => ({ id, authorId: 'me-1', workspaceId: 'ws', peaks: [0.4], status, input: { uri: `file:///${id}.m4a`, durationMs: 8000, cohortId: 'c-every' } });
   mockVoice.items = [note('vo-1', 'waiting')];
   const r = await open();
   await r.findByTestId('space-chat-row-vo-1');
-  expect(r.getByText('You are offline. Your voice note is saved on this phone and sends when you reconnect.')).toBeTruthy();
-  expect(StyleSheet.flatten(r.getByTestId('space-chat-offline').props.style)).toMatchObject({ backgroundColor: '#1A1A18', paddingVertical: 10, paddingHorizontal: 16, gap: 10 });
-  expect(r.getByTestId('space-chat-voice-waiting-vo-1')).toBeTruthy();
-  expect(r.getByTestId('space-chat-waiting-vo-1').props.children).toBe('');
-  mockVoice.items = [note('vo-1', 'failed')];
-  await r.rerender(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+  expect(r.queryByText(/You are offline/)).toBeNull();
   expect(r.queryByTestId('space-chat-offline')).toBeNull();
+  expect(r.getByTestId('space-chat-voice-waiting-vo-1').props.accessibilityLabel).toBe('Waiting to send');
+  expect(r.getByTestId('space-chat-voice-wifi-off-vo-1')).toBeTruthy();
+  expect(r.getByTestId('space-chat-waiting-vo-1').props.children).toBe('');
+  expect(r.getByTestId('space-chat-local-menu-vo-1').props.accessibilityLabel).toBe('Delete this voice note');
+});
+
+it('FR-871R5 (m#871 Opus B1 / Sol B1): opening at the first unread row tries the row again while it fails, a few times at most, and reads nothing until placed', async () => {
+  const toIndex = jest.spyOn(FlatList.prototype, 'scrollToIndex');
+  const toOffset = jest.spyOn(FlatList.prototype, 'scrollToOffset');
+  const r = await open();
+  await r.findByTestId('space-chat-new-line');
+  await see(r, 'm3', 'm2');
+  // No row is measured in tests, so every try fails: the offset guess, then the row itself again.
+  await waitFor(() => expect(toIndex.mock.calls.length).toBeGreaterThanOrEqual(2));
+  const index = (toIndex.mock.calls[0][0] as { index: number }).index;
+  expect(index).toBeGreaterThan(0);
+  expect(toIndex).toHaveBeenLastCalledWith({ index, viewPosition: 0.5, animated: false });
+  expect(toOffset).toHaveBeenCalledWith(expect.objectContaining({ animated: false }));
+  await act(async () => { await new Promise((res) => setTimeout(res, 500)); });
+  expect(toIndex.mock.calls.length).toBeLessThanOrEqual(6);
+  expect(readMarks()).toEqual([]);
+  await see(r, 'm3', 'm2', 'new-line');
+  await waitFor(() => expect(readMarks()).toEqual(['m3']));
+  toIndex.mockRestore();
+  toOffset.mockRestore();
+});
+
+it('FR-871R5 (m#871 Sol B2): a message taller than the screen counts as seen while it fills the screen', async () => {
+  const r = await open();
+  await r.findByTestId('space-chat-new-line');
+  expect(pairs(r).map((x) => x.viewabilityConfig)).toEqual([{ itemVisiblePercentThreshold: 60 }, { viewAreaCoveragePercentThreshold: 60 }]);
+  await see(r, 'new-line');
+  expect(readMarks()).toEqual([]);
+  await cover(r, 'm3');
+  await waitFor(() => expect(readMarks()).toEqual(['m3']));
 });
 
 it('FR-871 (m#879 Opus B1 / Sol B2): your own voice note has Delete, through the voice route; a failed delete keeps the row', async () => {

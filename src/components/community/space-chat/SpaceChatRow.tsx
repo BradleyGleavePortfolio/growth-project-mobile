@@ -5,10 +5,11 @@
  * (MessageBody): text unboxed, voice on m#848's player via SpaceVoiceNote (New / Played, SC-M2); a later kind adds a case.
  * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send (with a
  * clock) keep the text at full contrast (FR-871 Sol B4: no fade); Not sent has Try again (the same Idempotency-Key)
- * and Delete. Report / Block / Delete go through SafetyMenu. Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
+ * and Delete. Report / Block / Delete go through SafetyMenu; a row still on the phone has its own ••• that only deletes
+ * it from the phone (FR-871R5, m#879 Opus B3 / Sol B4). Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
  */
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SafetyMenu from '../SafetyMenu';
 import SpaceVoiceNote from './SpaceVoiceNote';
@@ -78,6 +79,11 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   // Name, chip and time grow (large text) or wrap: then the body starts below them, not tucked up.
   const [wrapped, setWrapped] = useState(false);
   const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
+  const noun = p.voice ? 'voice note' : 'message';
+  const confirmDiscard = () => Alert.alert(`Delete this ${noun}?`, undefined, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: p.onDiscard },
+  ]);
   return (
     <View style={s.row} testID={`space-chat-row-${p.id}`}>
       <View style={s.head}>
@@ -94,7 +100,11 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
         </View>
-        {local ? null : (
+        {local ? (
+          <TouchableOpacity onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel={`Delete this ${noun}`} hitSlop={8} style={s.more} testID={`space-chat-local-menu-${p.id}`}>
+            <Ionicons name="ellipsis-horizontal" size={18} color={SMALL_GREY} />
+          </TouchableOpacity>
+        ) : (
           <SafetyMenu
             targetType="message"
             targetId={p.id}
@@ -178,6 +188,7 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },
   again: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.button, backgroundColor: fp.forest },
   againText: { ...typography.bodyMd, color: fp.onDeep },
+  more: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   discard: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.sm, justifyContent: 'center' },
   discardText: { ...typography.bodyMd, color: SMALL_GREY },
   // A small sans day mark ("Thu, Oct 22"), 05b .day: 600 12 pt, 10 pt above, 4 below.

@@ -41,11 +41,13 @@ export interface SpaceVoiceFirstUseProps {
   coach: boolean;
   onRecord: () => void;
   onClose: () => void;
+  /** iOS: the card has finished closing. */
+  onDismiss?: () => void;
 }
 
 type Icon = React.ComponentProps<typeof Ionicons>['name'];
 
-export default function SpaceVoiceFirstUse({ visible, cohortName, coach, onRecord, onClose }: SpaceVoiceFirstUseProps): React.ReactElement {
+export default function SpaceVoiceFirstUse({ visible, cohortName, coach, onRecord, onClose, onDismiss }: SpaceVoiceFirstUseProps): React.ReactElement {
   // As Screen (src/ui) does: read the context, so a tree with no provider gets 0, not a throw.
   const bottomInset = useContext(SafeAreaInsetsContext)?.bottom ?? 0;
   const lines: [Icon, string][] = [
@@ -55,7 +57,7 @@ export default function SpaceVoiceFirstUse({ visible, cohortName, coach, onRecor
   ];
   if (coach) lines.splice(1, 1);
   return (
-    <Modal visible={visible} transparent animationType={useReducedMotion() ? 'none' : 'slide'} onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={useReducedMotion() ? 'none' : 'slide'} onRequestClose={onClose} onDismiss={onDismiss}>
       <View style={s.scrim}>
         <View style={[s.sheet, { paddingBottom: Math.max(bottomInset, 12) }]} accessibilityViewIsModal testID="space-chat-voice-first-use">
           <View style={s.grab} />
@@ -87,15 +89,16 @@ const s = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: voiceShades.scrim },
   sheet: { backgroundColor: neutral[0], borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8, paddingHorizontal: 20 },
   grab: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: voiceShades.track, marginBottom: 10 },
-  title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 22, lineHeight: 29, color: fp.ink, marginTop: 12, marginBottom: 6 },
+  title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 22, lineHeight: 29, color: fp.ink, marginTop: 8, marginBottom: 6 },
   points: { gap: 12, marginTop: 10, marginBottom: 6 },
   point: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   wash: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
     backgroundColor: voiceShades.leafWash, borderWidth: 1, borderColor: voiceShades.washEdge },
   text: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22, color: fp.ink },
+  // GOAL 08a .btn { flex: 1 1 130px } in a column: Record and Not now are 130 pt each (FR-871R5, m#879 Sol B3).
   buttons: { gap: 10, marginTop: 14, marginBottom: 10 },
-  record: { minHeight: 54, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, flexDirection: 'row', gap: 8,
+  record: { minHeight: 130, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, flexDirection: 'row', gap: 8,
     alignItems: 'center', justifyContent: 'center', backgroundColor: fp.forest },
-  quiet: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 12 },
+  quiet: { minHeight: 130, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 12 },
   label: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 16, lineHeight: 20 },
 });
