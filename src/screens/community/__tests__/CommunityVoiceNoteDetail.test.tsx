@@ -134,3 +134,20 @@ it('offers Delete on another member’s note to the coach only', async () => {
   await renderDetail();
   expect(typeof (mockSafety.mock.calls.at(-1)?.[0] as { onDelete?: unknown }).onDelete).toBe('function');
 });
+
+// Sol R5-B3: the detail draws a coach's note as the deep coach card, like the Hall; a member's stays light.
+it('a coach-author note plays on the coach card; a member note on the light card', async () => {
+  mockGetOne.mockResolvedValue({ ...NOTE, author_is_coach: true });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await render(
+    <QueryClientProvider client={qc}>
+      <CommunityVoiceNoteDetail />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(mockPlayer).toHaveBeenCalled());
+  expect(mockPlayer.mock.calls.at(-1)?.[0]).toMatchObject({ tone: 'coach' });
+  mockPlayer.mockReset();
+  await renderDetail();
+  await waitFor(() => expect(mockPlayer).toHaveBeenCalled());
+  expect(mockPlayer.mock.calls.at(-1)?.[0]).toMatchObject({ tone: 'light' });
+});

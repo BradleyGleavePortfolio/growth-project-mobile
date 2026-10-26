@@ -372,6 +372,18 @@ describe('VoiceNotePlayer — GOAL geometry (FR-848R4)', () => {
     const strip = getByTestId('voice-waveform', { includeHiddenElements: true });
     expect(StyleSheet.flatten(strip.props.style)).toMatchObject({ height: 44, gap: 3 });
   });
+
+  // Opus R5-B1: the review sheet's bare player sits flush; every padding edge of its root is 0.
+  it('the bare player root has no padding on any edge and no border', async () => {
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} tone="bare" playback={makePlayback(true)} />,
+    );
+    const root = StyleSheet.flatten(getByTestId('voice-player').props.style);
+    for (const edge of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'] as const) {
+      expect(root[edge] ?? root.padding ?? 0).toBe(0);
+    }
+    expect(root.borderWidth).toBe(0);
+  });
 });
 
 // LO-848R4 B4: the duration and the retry line are Inter (GOAL), not the system face.

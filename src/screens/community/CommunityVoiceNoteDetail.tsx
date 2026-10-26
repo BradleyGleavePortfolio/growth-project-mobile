@@ -241,6 +241,8 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
             url={data.url}
             durationMs={data.duration_ms}
             peaks={data.waveform_peaks ?? []}
+            // Sol R5-B3: a coach's note is the deep card here too, as in the Hall (GOAL B-01b).
+            tone={data.author_is_coach === true ? 'coach' : 'light'}
             onPlaybackError={() => void note.refetch()}
             testID="community-voice-detail-player"
           />
