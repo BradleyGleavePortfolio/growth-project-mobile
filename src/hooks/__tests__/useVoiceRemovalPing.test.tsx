@@ -6,7 +6,7 @@
  * The ping stays untrusted: only its event name is read, and an odd ping still re-reads.
  */
 import React from 'react';
-import { Alert, AppState, type AlertButton, type AppStateStatus } from 'react-native';
+import { Alert, AppState, Platform, type AlertButton, type AppStateStatus } from 'react-native';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContext } from '@react-navigation/native';
@@ -363,6 +363,15 @@ describe('the bounded catch-up heals a missed ping', () => {
 });
 
 describe("an author's own delete", () => {
+  // SafetyMenu raises its Delete confirm at once on Android; on iOS it waits for the Modal's
+  // onDismiss (Opus R5-B4, from op174/voice-m-r5, driven in SafetyMenu.test).
+  const realOS = Platform.OS;
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+  });
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => realOS });
+  });
   it('still vanishes from the Hall list, with no placeholder, before and after the ping', async () => {
     mockListFeed
       .mockResolvedValueOnce(page(note('vn-other', 'u-alice'), note('vn-mine', 'u-me')))
