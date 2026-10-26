@@ -6,7 +6,7 @@
  * (SWITCH-CONFIRM-M, owner #166-5), then HouseCoach (H1).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import HapticPressable from '../HapticPressable';
 import { Monogram, renewalTone } from './CoachMonogram';
@@ -48,23 +48,25 @@ function useDetails(on: boolean): { name?: string; pkg?: string } {
   return d;
 }
 
-function Choices({ r, onOwn, onHouse, small }: { r: Ended; onOwn: () => void; onHouse: (c: RenewalCoach, from: RenewalCoach | null) => void; small?: boolean }) {
+function Choices({ r, onOwn, onHouse, banner }: { r: Ended; onOwn: () => void; onHouse: (c: RenewalCoach, from: RenewalCoach | null) => void; banner?: boolean }) {
   const house = r.houseCoach && r.houseCoach.id !== r.coach?.id ? r.houseCoach : null;
+  const v = banner ? b : s; // the banner's own sizes (RENEWAL3 .rbn .lbtn / .dbtn2); the pop-up's (.modal) in s
   return (<>
     {r.coach ? (
-      <HapticPressable intent="medium" style={[s.btn, s.leaf, small && s.bannerBtn]} onPress={onOwn} accessibilityRole="button" testID="renewal-own-coach">
-        <Text style={[s.btnText, { color: fp.ink }]}>{RENEWAL_COPY.ownCoach(r.coach.firstName)}</Text>
+      <HapticPressable intent="medium" style={[v.btn, v.leaf]} onPress={onOwn} accessibilityRole="button" testID="renewal-own-coach">
+        <Text style={[v.btnText, { color: banner ? renewalTone.leafInk : fp.ink }]}>{RENEWAL_COPY.ownCoach(r.coach.firstName)}</Text>
       </HapticPressable>
     ) : null}
     {house ? (
-      <HapticPressable intent="light" style={[s.btn, s.quiet, small && s.bannerBtn, small && s.bannerSecond]} onPress={() => onHouse(house, r.coach)} accessibilityRole="button" testID="renewal-house-coach">
-        <Text style={[s.btnText, { color: fp.onDeep }]}>{RENEWAL_COPY.houseCoach}</Text>
+      <HapticPressable intent="light" style={[v.btn, v.quiet]} onPress={() => onHouse(house, r.coach)} accessibilityRole="button" testID="renewal-house-coach">
+        <Text style={[v.btnText, { color: fp.onDeep }]}>{RENEWAL_COPY.houseCoach}</Text>
       </HapticPressable>
     ) : null}
   </>);
 }
 
-export default function RenewalHome(): React.ReactElement | null {
+/** `style` places the banner in its screen (rings Home sets its own top and bottom); the pop-up ignores it. */
+export default function RenewalHome({ style }: { style?: StyleProp<ViewStyle> } = {}): React.ReactElement | null {
   const { renewal, refreshEntitlement } = useEntitlement();
   const userId = useCurrentUser()?.id;
   const [focused, setFocused] = useState(false);
@@ -108,15 +110,16 @@ export default function RenewalHome(): React.ReactElement | null {
   return (
     <>
       {r.bannerDue && r.coach ? (
-        <View style={s.banner} testID="renewal-banner">
-          <View style={s.bannerHead}>
+        <View style={[s.banner, style]} testID="renewal-banner">
+          <View style={b.head}>
             <Monogram name={name} size={40} ring={1.5} />
             <View style={s.flex}>
-              <Text style={s.bannerTitle} accessibilityRole="header">{RENEWAL_COPY.banner}</Text>
-              <Text style={s.bannerSub}>{[details.pkg, RENEWAL_COPY.ended(ended)].filter(Boolean).join(' · ')}</Text>
+              <Text style={b.title} accessibilityRole="header">{RENEWAL_COPY.banner}</Text>
+              {/* "ended Oct 21" stays on one line (RENEWAL3 .nw): no-break spaces inside it, same words. */}
+              <Text style={b.sub}>{[details.pkg, RENEWAL_COPY.ended(ended).replace(/ /g, '\u00A0')].filter(Boolean).join(' · ')}</Text>
             </View>
           </View>
-          <Choices r={r} onOwn={own} onHouse={house} small />
+          <Choices r={r} onOwn={own} onHouse={house} banner />
         </View>
       ) : null}
       <Modal visible={!!popup} transparent animationType="fade" statusBarTranslucent onRequestClose={() => close()} onDismiss={runNext} testID="renewal-modal">
@@ -148,10 +151,6 @@ const ANDROID = Platform.OS === 'android';
 const s = StyleSheet.create({
   flex: { flex: 1 },
   banner: { backgroundColor: fp.deep, borderRadius: radius.card, padding: 16, marginVertical: 12 },
-  bannerTitle: { ...typography.h1, fontSize: 26, lineHeight: 32, letterSpacing: 0, color: renewalTone.white },
-  bannerHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  bannerSub: { ...typography.body, fontSize: 14, lineHeight: 20, color: fp.onDeepMuted },
-  bannerBtn: { minHeight: 48, paddingVertical: 10, paddingHorizontal: 14, marginTop: 14 }, bannerSecond: { marginTop: 8 },
   scrim: { flex: 1, backgroundColor: lightTokens.overlay, justifyContent: 'center', padding: 20 }, scrimAndroid: { paddingHorizontal: 16 },
   card: { backgroundColor: fp.deep, borderRadius: radius.sheet, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 12, alignItems: 'stretch', ...shadows.lg },
   cardAndroid: { paddingHorizontal: 18, paddingTop: 24, paddingBottom: 10 },
@@ -167,4 +166,16 @@ const s = StyleSheet.create({
   btnText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 16, lineHeight: 21, textAlign: 'center' },
   skip: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 }, skipText: { ...typography.bodyMd, fontSize: 15, lineHeight: 20, color: fp.onDeepMuted },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: fp.leaf },
+});
+
+// The banner (RENEWAL3 r3.py .rbn/.cms/.rbt/.rbs; buttons .rbn .lbtn and .rbn .dbtn2): its own sizes, not the pop-up's.
+const b = StyleSheet.create({
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12 }, // the shared Monogram lays out its 40 pt disc; the ring is painted outside
+  title: { ...typography.h1, fontSize: 26, lineHeight: 32, letterSpacing: 0, color: renewalTone.white },
+  sub: { ...typography.bodySmall, lineHeight: 20, letterSpacing: 0, color: fp.onDeepMuted },
+  btn: { minHeight: 48, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 14, marginTop: 8 },
+  // The own-coach button always leads the banner (no own coach, no banner): 14 pt under the head.
+  leaf: { backgroundColor: fp.leaf, borderWidth: 1.5, borderColor: fp.moss, marginTop: 14 },
+  quiet: { backgroundColor: renewalTone.quiet, borderWidth: 1.5, borderColor: renewalTone.quietLine },
+  btnText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 16, lineHeight: 21, letterSpacing: 0, textAlign: 'center' },
 });

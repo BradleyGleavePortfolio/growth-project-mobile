@@ -14,9 +14,10 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 /**
  * RENEWAL3 style B quiet fills on deep (r2b.py .cm, .plp, .dbtn2; r3.py .okc, .nowc, .cms): no theme token holds them
  * yet (src/theme is the GREY-TEXT lane's this wave), so they live here once. graphite is #168-13's small grey text on
- * light (owner: "use a nice dark grey like #2c2c2c"), colors.graphite once m#875 merges.
+ * light (owner: "use a nice dark grey like #2c2c2c"), colors.graphite once m#875 merges. leafInk is the banner's label on
+ * leaf (r3.py .rbn .lbtn).
  */
-export const renewalTone = { quiet: '#26402F', quietLine: '#4A6553', white: '#FFFFFF', graphite: '#2C2C2C', mute: '#4F5D54' } as const;
+export const renewalTone = { quiet: '#26402F', quietLine: '#4A6553', white: '#FFFFFF', graphite: '#2C2C2C', mute: '#4F5D54', leafInk: '#142019' } as const;
 
 /**
  * The coach's monogram: initials in Cormorant on a quiet fill, a deep gap, then the gold ring outside (r2b.py .cm: 64
