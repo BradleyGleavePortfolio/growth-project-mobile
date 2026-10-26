@@ -41,12 +41,13 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { brand, colors, gold, lightTokens, spacing, typography, radius, shadows } from '../../theme/tokens';
 
 // #168-13 GREY-TEXT (owner: "use a nice dark grey like #2c2c2c"): small grey text on
-// light grounds (11.47:1 on cream, 13.28:1 on bone). Swap for the theme token once it lands.
-const GREY_TEXT = '#2C2C2C';
+// light grounds is the theme token colors.graphite (11.47:1 on cream, 13.28:1 on bone).
+const GREY_TEXT = colors.graphite;
 
-// LTV RECORD badge (OWNER DECISION 6353457652 on tgp-agent-context#185: "op 2 - but with gold
-// buttons as well (shiny jewerly gold)", "LTV badge: deep forest"). Text on it is brand[800];
-// every stop keeps at least 4.5:1 with it: gold[300] 7.32, gold[200] 10.31, darkest gold[400] 5.79.
+// Shiny jewelry gold (OWNER DECISION 6353457652 on tgp-agent-context#185: "op 2 - but with gold
+// buttons as well (shiny jewerly gold)"; owner 10-23 on the STREAK and "+$200" chips: "yes"). The
+// RECORD pill, the STREAK badge and the gain chip share it. Text on it is solid brand[800]; every
+// stop keeps at least 4.5:1 with it: gold[300] 7.32, gold[200] 10.31, darkest gold[400] 5.79.
 export const JEWEL_GOLD_STOPS = [
   { offset: 0, color: gold[300] },
   { offset: 0.4, color: gold[200] },
@@ -252,7 +253,9 @@ function ZeroChurnBadge({ months }: { months: number }) {
       accessible
       accessibilityRole="text"
       accessibilityLabel={`${months}-month zero-churn streak`}
+      testID="ltv-streak-pill"
     >
+      <JewelGoldFill id="ltvJewelGoldStreak" />
       <Text style={badgeStyles.streakLabel}>STREAK</Text>
       <Text style={badgeStyles.count}>{months}</Text>
       <Text style={badgeStyles.label}>mo</Text>
@@ -262,8 +265,8 @@ function ZeroChurnBadge({ months }: { months: number }) {
 
 const badgeStyles = StyleSheet.create({
   container: {
-    backgroundColor: colors.forest,
     borderRadius: radius.pill,
+    overflow: 'hidden',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     flexDirection: 'row',
@@ -273,41 +276,48 @@ const badgeStyles = StyleSheet.create({
   streakLabel: {
     fontSize: 9,
     fontWeight: '600',
-    color: colors.bone,
+    color: brand[800],
     letterSpacing: 1.2,
   },
   count: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.bone,
+    color: brand[800],
   },
+  // Solid, no fade: brand[800] at 85% would drop to 4.47:1 on gold[400].
   label: {
     fontSize: 11,
-    color: colors.bone,
-    opacity: 0.85,
+    color: brand[800],
   },
 });
 
 // ─── Record Badge ──────────────────────────────────────────────────────────────
 
+// The gold ground behind a chip's text; the chip sets overflow hidden and its own radius.
+function JewelGoldFill({ id }: { id: string }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={StyleSheet.absoluteFill}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            {JEWEL_GOLD_STOPS.map((s) => <Stop key={s.offset} offset={s.offset} stopColor={s.color} />)}
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
+    </View>
+  );
+}
+
 function RecordBadge() {
   return (
     <View style={recStyles.container} testID="ltv-record-badge">
-      <View
-        pointerEvents="none"
-        style={StyleSheet.absoluteFill}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        <Svg width="100%" height="100%">
-          <Defs>
-            <LinearGradient id="ltvJewelGold" x1="0" y1="0" x2="1" y2="1">
-              {JEWEL_GOLD_STOPS.map((s) => <Stop key={s.offset} offset={s.offset} stopColor={s.color} />)}
-            </LinearGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#ltvJewelGold)" />
-        </Svg>
-      </View>
+      <JewelGoldFill id="ltvJewelGold" />
       <Text style={recStyles.text}>RECORD</Text>
     </View>
   );
@@ -330,10 +340,16 @@ const recStyles = StyleSheet.create({
 
 // ─── Trend Chip ────────────────────────────────────────────────────────────────
 
+// Only the gain chip turns gold (the owner's yes was for "+$200"); flat and down keep their outline.
 function TrendChip({ trend, deltaLabel }: { trend: 'up' | 'flat' | 'down'; deltaLabel: string }) {
-  const color = TREND_COLOR[trend];
+  const gain = trend === 'up';
+  const color = gain ? brand[800] : TREND_COLOR[trend];
   return (
-    <View style={[trendStyles.chip, { borderColor: color }]}>
+    <View
+      style={[trendStyles.chip, gain ? trendStyles.gold : { borderColor: color }]}
+      testID="ltv-trend-chip"
+    >
+      {gain ? <JewelGoldFill id="ltvJewelGoldTrend" /> : null}
       <Text style={[trendStyles.arrow, { color }]}>{TREND_ARROW[trend]}</Text>
       <Text style={[trendStyles.text, { color }]}>{deltaLabel}</Text>
     </View>
@@ -351,6 +367,7 @@ const trendStyles = StyleSheet.create({
     paddingVertical: 3,
     alignSelf: 'flex-start',
   },
+  gold: { borderWidth: 0, overflow: 'hidden' },
   arrow: { fontSize: 13, fontWeight: '600' },
   text: { fontSize: 12, fontWeight: '600' },
 });

@@ -62,4 +62,11 @@ describe('#168-13 graphite small text', () => {
     expect(hits.filter((hit) => !ALLOWED.some((entry) => allowed(hit, entry)))).toEqual([]);
     expect(ALLOWED.filter((entry) => !hits.some((hit) => allowed(hit, entry)))).toEqual([]);
   });
+
+  // LO-875R C4: the LTV dashboard takes graphite from the theme, not its own hex copy.
+  it('the LTV dashboard uses colors.graphite, with no #2C2C2C literal', () => {
+    const src = fs.readFileSync(path.join(SRC, 'components/command-center/CoachLtvDashboard.tsx'), 'utf8');
+    expect(src).not.toMatch(/['"`]#2C2C2C['"`]/i);
+    expect(src).toMatch(/const GREY_TEXT = colors\.graphite;/);
+  });
 });
