@@ -27,6 +27,7 @@ const mockParams: { current: Record<string, unknown> } = { current: {} };
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
   useRoute: () => ({ params: mockParams.current }),
+  useFocusEffect: () => undefined, // the DM's status band (FR-880R4)
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana' }) }));
 const mockSend = jest.fn();

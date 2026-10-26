@@ -16,10 +16,13 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Text,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
+import { forestPop as fp, typography } from '../../theme/tokens';
+import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   useDmMessages,
@@ -33,6 +36,7 @@ import {
   ComposerInput,
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import { ForestStatusBar } from '../../components/StatusBarBand';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
@@ -61,6 +65,11 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
     noAccess ? true : undefined,
   );
 
+  // FR-880R2 (Sol B1, LO-872R4 C2): the DM read waits for /community/me (it is off until the space is known), so a slow,
+  // failed or offline me read is this screen's read too: the same two lines, and Try again reads me again.
+  const meFailed = !me.data && me.isError;
+  const reading = messages.isLoading || (!me.data && !me.isError);
+  const failed = meFailed || (messages.isError && !open);
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
   // Header-level Report / Block acts on the latest message from the other
@@ -84,34 +93,54 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
 
   return (
     <SafeAreaView
-      style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
+      style={[styles.safe, { backgroundColor: fp.deep }]}
       edges={['top']}
       testID="community-dmthread-screen"
     >
+      {/* FR-880R4 (Opus B2): the app's status band above takes the same deep forest, light icons, while this DM is in front. */}
+      <ForestStatusBar />
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.headerRow}>
-          <View style={styles.flex}>
-            <ThreadHeader title={participantLabel} testID="community-dmthread-header" />
-          </View>
-          {latestFromOther ? (
-            <SafetyMenu
-              targetType="message"
-              targetId={latestFromOther.id}
-              authorUserId={recipientId}
-              authorName={participantLabel}
-              viewerUserId={client?.id}
-              viewerCoachId={client?.coach_id}
-              onBlocked={() => navigation.goBack()}
-              testID="community-dmthread-safety"
-            />
+        {/* FR-880R3 (Sol B2, #172-10): Voice B Studio frame 05b's deep-forest bar, open or closed; a 1:1 DM has no
+            member count. Report / Block keeps a light chip so its grey mark stays readable on the deep bar. */}
+        <ThreadHeader
+          tone="deep"
+          title={participantLabel}
+          onBack={() => navigation.goBack()}
+          trailing={latestFromOther ? (
+            <View style={styles.infoSlot}>
+              <View style={styles.infoChip} pointerEvents="none" />
+              <SafetyMenu
+                targetType="message"
+                targetId={latestFromOther.id}
+                authorUserId={recipientId}
+                authorName={participantLabel}
+                viewerUserId={client?.id}
+                viewerCoachId={client?.coach_id}
+                onBlocked={() => navigation.goBack()}
+                testID="community-dmthread-safety"
+              />
+            </View>
           ) : null}
-        </View>
+          testID="community-dmthread-header"
+        />
 
-        {closed || (isEmpty && !open) ? (
+        {closed ? (
           <View style={styles.flex} /> /* closed: no message text, no "Start the conversation" */
+        ) : reading || failed ? ( /* FR-872 (Opus C2): never blank, never stuck */
+          <View style={styles.center} accessibilityState={{ busy: reading }} testID="community-dmthread-state">
+            <Text style={[typography.bodySmall, styles.stateText, { color: semanticColors.textMuted }]}>
+              {reading ? 'Loading messages…' : 'Messages did not load. Check your connection, then try again.'}
+            </Text>
+            {failed ? <HapticPressable onPress={() => void (meFailed ? me.refetch() : messages.refetch())} accessibilityRole="button"
+              accessibilityLabel="Try again" testID="community-dmthread-retry" style={styles.retry}>
+              <Text style={[typography.bodySmall, styles.stateText, { color: semanticColors.accentText }]}>Try again</Text>
+            </HapticPressable> : null}
+          </View>
+        ) : isEmpty && !open ? (
+          <View style={styles.flex} />
         ) : isEmpty ? (
           <View style={styles.center}>
             <CommunityEmptyState
@@ -176,7 +205,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
   center: { flex: 1, justifyContent: 'center' },
+  stateText: { textAlign: 'center', paddingHorizontal: 24 },
+  retry: { minHeight: 44, justifyContent: 'center' },
   list: { paddingVertical: 8 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
+  // The 36 pt bone circle sits behind the menu's own 44 pt target (Android takes no touches outside a parent's bounds).
+  infoSlot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  infoChip: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: fp.onDeep },
   messageRow: { flexDirection: 'row', alignItems: 'center' },
 });

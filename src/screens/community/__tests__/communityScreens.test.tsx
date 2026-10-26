@@ -55,6 +55,7 @@ const mockRouteParams: { current: Record<string, unknown> } = { current: {} };
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
   useRoute: () => ({ params: mockRouteParams.current }),
+  useFocusEffect: () => undefined, // the DM's status band (FR-880R4)
 }));
 
 // ── Current user ─────────────────────────────────────────────────────────────

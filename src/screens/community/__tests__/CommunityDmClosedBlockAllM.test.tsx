@@ -4,7 +4,8 @@
  * "This conversation is closed"; a refused send keeps the typed text on the device; an unblock opens it again.
  */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockDisk = new Map<string, string>();
@@ -26,7 +27,10 @@ const mockParams: { current: Record<string, unknown> } = { current: {} };
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
   useRoute: () => ({ params: mockParams.current }),
+  useFocusEffect: (cb: () => void | (() => void)) => require('react').useEffect(() => cb(), [cb]), // focused while mounted
 }));
+jest.mock('expo-status-bar', () => ({ StatusBar: ({ style }: { style: string }) =>
+  require('react').createElement(require('react-native').Text, null, `icons-${style}`) }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana', coach_id: 'coach-7' }) }));
 const mockSendAsync = jest.fn();
 const mockSendMutate = jest.fn();
@@ -56,6 +60,8 @@ const CommunityDmThreadScreen = require('../CommunityDmThreadScreen').default;
 const CommunityComposerScreen = require('../CommunityComposerScreen').default;
 const { useBlockedUsersStore } = require('../../../store/blockedUsersStore');
 const { authEvents } = require('../../../utils/authEvents');
+const { StatusBarBand, STATUS_BAR_BONE } = require('../../../components/StatusBarBand');
+const { forestPop } = require('../../../theme/tokens');
 
 const axiosErr = (status: number, data: Record<string, unknown>) => ({ isAxiosError: true, response: { status, data } });
 const BLOCKED_BY_YOU = axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_you', message: 'You blocked this member.' });
@@ -85,6 +91,37 @@ describe('community DM', () => {
     mockParams.current = { recipientId: 'member-2', participantLabel: 'Jordan Lee' };
     return render(<CommunityDmThreadScreen />);
   };
+
+  it('FR-872 (Opus C2): a DM read that is out or failed says so, with Try again on a failure; no box either way', async () => {
+    mockReadPending = true;
+    expect((await open()).getByText('Loading messages…')).toBeTruthy();
+    mockReadPending = false;
+    mockReadError = new Error('Network Error');
+    const view = await open();
+    expect(view.getByTestId('community-dmthread-retry')).toBeTruthy();
+    expect(view.queryByTestId(FIELD)).toBeNull();
+  });
+
+  // FR-880R4 (Opus B2, #172-10 frame 05b): the app's status band (App.tsx, drawn over every screen) takes the DM's deep
+  // forest with light icons while the DM is in front, closed or open, and is bone again once it has gone.
+  it.each([true, false])('the status band above the DM is deep forest with light icons, bone after (closed %s)', async (closed) => {
+    if (closed) block('member-2');
+    mockParams.current = { recipientId: 'member-2', participantLabel: 'Jordan Lee' };
+    const phone = (dm: boolean) => (
+      <SafeAreaInsetsContext.Provider value={{ top: 47, bottom: 34, left: 0, right: 0 }}>
+        {dm ? <CommunityDmThreadScreen /> : null}
+        <StatusBarBand />
+      </SafeAreaInsetsContext.Provider>
+    );
+    const view = await render(phone(true));
+    const band = () => StyleSheet.flatten(view.getByTestId('status-bar-band').props.style).backgroundColor;
+    expect(!!view.queryByTestId('community-dmthread-closed')).toBe(closed);
+    expect(band()).toBe(forestPop.deep);
+    expect(view.getByText('icons-light')).toBeTruthy();
+    await view.rerender(phone(false));
+    expect(band()).toBe(STATUS_BAR_BONE);
+    expect(view.queryByText('icons-light')).toBeNull();
+  });
 
   it('open: the message box is there and the closed line is not', async () => {
     const view = await open();
@@ -179,6 +216,14 @@ describe('New message / New post composer', () => {
     const view = await render(<CommunityComposerScreen />);
     expect(view.queryByTestId('community-composer-body')).toBeNull();
     expect(view.queryByTestId('community-composer-submit')).toBeNull();
+  });
+
+  it('FR-872 (Opus C2): New message with a failed read offers Try again, and no fields', async () => {
+    mockParams.current = { mode: 'dm', recipientId: 'member-2' };
+    mockReadError = new Error('Network Error');
+    const view = await render(<CommunityComposerScreen />);
+    expect(view.getByTestId('community-composer-retry')).toBeTruthy();
+    expect(view.queryByTestId('community-composer-body')).toBeNull();
   });
 
   it.each(['post', 'dm'])('FR-872 (Sol B3): %s, the membership goes after the read answered: the fields go too', async (mode) => {

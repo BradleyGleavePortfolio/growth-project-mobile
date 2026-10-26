@@ -23,7 +23,9 @@ const DM_READS = ['community', 'dm'] as const; // communityKeys.dmMessages(works
 const COACH_INBOX = ['messaging', 'v2', 'coach-inbox'] as const; // CoachInboxV2 coachInboxKey(filter)
 const COACHING_ROW = ['messaging', 'v2', 'coaching-row'] as const; // ConversationClosed coachingRowKey
 const BLOCK_LISTS = [['community', 'safety', 'blocks']] as const; // communitySafetyKeys.blocks (Community safety)
-const BADGES = [['messages', 'unread-count'], ['community', 'me']] as const; // tab badges re-read their counts
+const COACH_CHAT = ['messaging', 'coach-chat-closed'] as const; // useCoachChatClosed COACH_CHAT_KEY (FR-880R2)
+// Tab badges and the coach row's count (SpaceTree, Community Home and the drawer) re-read their counts.
+const BADGES = [['messages', 'unread-count'], ['community', 'me'], ['community', 'home', 'coach-unread']] as const;
 
 type Row = { other_user_id?: unknown; client_id?: unknown; coach_id?: unknown; unread_count?: unknown };
 type Page = { items?: Row[]; total_unread?: unknown };
@@ -57,7 +59,7 @@ export function blockPlaced(userId: string, who: BlockedWho = {}): void {
     }));
     return { ...old, pages };
   });
-  [...BLOCK_LISTS, ...BADGES].forEach((queryKey) => void queryClient.invalidateQueries({ queryKey }));
+  [COACH_CHAT, ...BLOCK_LISTS, ...BADGES].forEach((queryKey) => void queryClient.invalidateQueries({ queryKey }));
 }
 
 /** The server lifted my block on `userId`: the chat opens again everywhere and comes back to the lists. */
@@ -67,7 +69,7 @@ export function blockLifted(userId: string): void {
   closedRefusals.clear(userId);
   const queryClient = client;
   if (!queryClient) return;
-  [DM_LISTS, DM_READS, COACH_INBOX, COACHING_ROW, ...BLOCK_LISTS, ...BADGES].forEach(
+  [DM_LISTS, DM_READS, COACH_INBOX, COACHING_ROW, COACH_CHAT, ...BLOCK_LISTS, ...BADGES].forEach(
     (queryKey) => void queryClient.invalidateQueries({ queryKey }),
   );
 }

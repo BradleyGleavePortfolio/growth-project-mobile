@@ -332,6 +332,17 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
     expect(queryByText('should-be-filtered')).toBeNull();
   });
 
+  it('FR-872 (Opus C3): closed by the header with an empty thread shows no Start a conversation invite', async () => {
+    mockMessagesByClient['client-1'] = [];
+    mockGetClientMessages.mockImplementation(async () => ({
+      data: { messages: [] },
+      headers: { 'x-conversation-closed': 'blocked_by_them' },
+    }));
+    const { findByTestId, queryByText } = await render(<ClientMessagesScreen />);
+    await findByTestId('client-messages-closed');
+    expect(queryByText(/Start a conversation with/)).toBeNull();
+  });
+
   it('FX-872: a thread read with x-conversation-closed (the client blocked me) shows the closed line and no box', async () => {
     mockMessagesByClient['client-1'] = [];
     mockGetClientMessages.mockImplementationOnce(async () => ({
