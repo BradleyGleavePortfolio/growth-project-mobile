@@ -29,6 +29,7 @@ const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack }),
   useRoute: () => ({ params: { recipientId: 'member-2', participantLabel: 'Jordan' } }),
+  useFocusEffect: () => undefined, // the DM's status band (FR-880R4)
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana', coach_id: 'coach-7' }) }));
 jest.mock('../../../api/communityRealtime', () => ({ subscribeToCommunityUser: () => () => undefined }));

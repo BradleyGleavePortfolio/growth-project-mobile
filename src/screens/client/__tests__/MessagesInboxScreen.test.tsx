@@ -29,6 +29,8 @@ const mockFlags = { messaging_core_v2: true };
 jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: mockFlags }) }));
 const mockReduce = jest.fn(() => false);
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => mockReduce() }));
+let mockUser: { id: string; coach_id?: string } | null = null; // the signed-in user (FR-880R4); none unless a test sets one
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 const mockNeedsCoach = jest.fn(() => false);
 jest.mock('../../../components/coachless/JoinCoachState', () => ({
   JOIN_A_COACH: 'Join a coach',
@@ -86,6 +88,7 @@ async function show() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUser = null;
   mockRoman.mockReturnValue(true);
   mockNeedsCoach.mockReturnValue(false);
   mockReduce.mockReturnValue(false);
@@ -238,6 +241,32 @@ describe('Messages list, the coach chat closed', () => {
     await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
     expect(await u.findByLabelText(COACH_LABEL)).toBeTruthy();
     expect(mockInbox).toHaveBeenCalledTimes(reads + 2);
+  });
+
+  // FR-880R4 (Sol B1, agent 174 draft): a cold start offline, with my block of my coach saved on the phone. No read gives
+  // a coach id, so only the signed-in coach id and the saved list can say it; the card stays away until I unblock.
+  it('a cold offline list with my saved block never shows the coach; my unblock brings back the offline card', async () => {
+    const { queryClient } = jest.requireActual('../../../services/queryClient');
+    const { persistKeyFor } = jest.requireActual('../../../store/blockedUsersStore');
+    const { prefsStorage } = jest.requireActual('../../../storage/mmkv');
+    mockUser = { id: 'client-1', coach_id: 'coach-9' };
+    queryClient.clear();
+    await prefsStorage.set(persistKeyFor('client-1'), JSON.stringify([{ ...SAM, role: 'coach' }]));
+    useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); // nothing read yet, as on a cold start
+    mockGet.mockRejectedValue(new Error('offline')); // coach, count, usage and thread reads all fail
+    mockInbox.mockRejectedValue(new Error('offline'));
+    const { u } = await show();
+    expect(await u.findByLabelText('Roman, your assistant')).toBeTruthy();
+    await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+    expect(u.queryByTestId('inbox-coach')).toBeNull();
+    expect(u.queryByText('Your coach')).toBeNull();
+    expect(u.queryByText('Message your coach')).toBeNull();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(await u.findByLabelText('Your coach')).toBeTruthy(); // unblocked: the offline card is back
+    u.unmount();
+    queryClient.clear();
+    await prefsStorage.delete(persistKeyFor('client-1'));
+    useBlockedUsersStore.setState({ hydrated: false, userId: null });
   });
 
   it('without the messaging v2 switch my own block still hides the card, and an unblock brings it back', async () => {

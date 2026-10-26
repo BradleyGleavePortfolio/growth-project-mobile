@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockFlags = { clientTutorial: true, communityTab: true };
 jest.mock('../../../config/featureFlags', () => ({
@@ -30,6 +30,8 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUs
 const mockParentNavigate = jest.fn();
 let mockAssignments: { data?: unknown[]; isLoading: boolean } = { data: [], isLoading: false };
 jest.mock('../../../hooks/useWorkoutBuilder', () => ({ useMyWorkoutAssignments: () => mockAssignments }));
+const mockGet = jest.fn(); // the coaching thread read behind useCoachChatClosed (FR-880R4)
+jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (u: string) => mockGet(u) } }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
@@ -55,6 +57,7 @@ import {
 } from '../../../tutorial/tutorialStore';
 import type { OnboardingCompletePayload, TutorialSignal } from '../../../tutorial/types';
 import { __resetMacroDisplayStoreForTests } from '../../../macros/macroDisplayStore';
+import { TUTORIAL_STEPS } from '../../../tutorial/tutorialSteps';
 
 const PAYLOAD: OnboardingCompletePayload = {
   macros: { calories: 1789, protein_g: 150, carbs_g: 185, fat_g: 50, floor_applied: true },
@@ -77,6 +80,8 @@ beforeEach(async () => {
   __resetMacroDisplayStoreForTests();
   mockFlags.clientTutorial = true;
   mockUser.coach_id = 'c1';
+  mockGet.mockReset();
+  mockGet.mockResolvedValue({ data: [], headers: {} }); // the coaching chat is open
   mockNavigate.mockClear();
   mockParentNavigate.mockClear();
   mockAssignments = { data: [], isLoading: false };
@@ -278,7 +283,7 @@ describe('TutorialHomeSlot', () => {
     await hydrateTutorial('u1', 'Maya');
     startClientTutorial(PAYLOAD);
     await render(<TutorialHomeSlot />);
-    await fireEvent.press(screen.getByLabelText('Message your coach, Bradley'));
+    await fireEvent.press(await screen.findByLabelText('Message your coach, Bradley')); // once the chat is known open
     expect(mockNavigate).toHaveBeenCalledWith('Messages');
   });
 
@@ -293,6 +298,82 @@ describe('TutorialHomeSlot', () => {
     expect(screen.getByText('Pick up the quick tour in Settings, under Tutorial.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('tutorial-reoffer'));
     expect(useTutorialStore.getState().tutorial.status).toBe('active');
+  });
+});
+
+// FR-880R4 B1 (owner 10-23 "Dissapear"): no "Message your coach" row while the coaching chat is closed or not known yet,
+// and the tour's coach-chat step leaves at once (as Later) rather than pointing at a row that is not there.
+describe('TutorialHomeSlot while the coaching chat is closed (FR-880R4)', () => {
+  const { queryClient } = jest.requireActual('../../../services/queryClient');
+  const { useBlockedUsersStore, persistKeyFor } = jest.requireActual('../../../store/blockedUsersStore');
+  const { prefsStorage } = jest.requireActual('../../../storage/mmkv');
+  const MY_BLOCK = [{ id: 'c1', displayName: 'Bradley', role: 'coach', blockedAt: '2026-10-24T00:00:00Z' }];
+  const reset = () => useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null });
+  const serve = (read: 'open' | 'closed' | 'offline' | 'never') => mockGet.mockImplementation((u: string) => {
+    if (u !== '/messages?limit=1') return Promise.reject(new Error(`unexpected ${u}`));
+    if (read === 'never') return new Promise(() => undefined);
+    if (read === 'offline') return Promise.reject(new Error('offline'));
+    return Promise.resolve({ data: [], headers: read === 'closed' ? { 'x-conversation-closed': 'blocked_by_them' } : {} });
+  });
+  const toFirstMessage = async () => {
+    await hydrateTutorial('u1', 'Maya', true);
+    startClientTutorial(PAYLOAD);
+    const stepIndex = TUTORIAL_STEPS.findIndex((st) => st.id === 'first_message');
+    useTutorialStore.setState((s) => ({ tutorial: { ...s.tutorial, stepIndex, gateIndex: 0 } }));
+  };
+  const outcome = () => useTutorialStore.getState().tutorial.outcomes.first_message;
+  beforeEach(() => { queryClient.clear(); reset(); });
+  afterEach(async () => {
+    cleanup(); // unmount first, so a cleared cache does not start a new read
+    queryClient.clear();
+    await prefsStorage.delete(persistKeyFor('u1'));
+    reset();
+  });
+
+  it('only the coach-chat step waits on an open chat', () => {
+    expect(TUTORIAL_STEPS.filter((st) => st.needsOpenCoachChat).map((st) => st.id)).toEqual(['first_message']);
+  });
+
+  it('my block saved on the phone, read offline: no row, and the tour leaves the coach-chat step as Later', async () => {
+    await prefsStorage.set(persistKeyFor('u1'), JSON.stringify(MY_BLOCK));
+    serve('offline');
+    await toFirstMessage();
+    await render(<TutorialHomeSlot />);
+    await waitFor(() => expect(outcome()).toBe('deferred'));
+    expect(screen.queryByTestId('home-message-coach')).toBeNull();
+    expect(screen.queryByText(/Message your coach|Bradley/)).toBeNull();
+    expect(screen.getByTestId('macro-explanation-toggle')).toBeTruthy(); // the macro card stays
+    expect(TUTORIAL_STEPS[useTutorialStore.getState().tutorial.stepIndex].id).toBe('complete');
+  });
+
+  it('my coach blocked me (the read says closed): no row, the step leaves; on the rings Home slot too', async () => {
+    serve('closed');
+    await toFirstMessage();
+    await render(<TutorialHomeSlot part="reoffer" />);
+    await waitFor(() => expect(outcome()).toBe('deferred'));
+    expect(screen.queryByTestId('home-message-coach')).toBeNull();
+  });
+
+  it('before the read answers: no row, and the tour waits on the step', async () => {
+    serve('never');
+    await toFirstMessage();
+    await render(<TutorialHomeSlot />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(screen.queryByTestId('home-message-coach')).toBeNull();
+    expect(outcome()).toBeUndefined();
+    expect(TUTORIAL_STEPS[useTutorialStore.getState().tutorial.stepIndex].id).toBe('first_message');
+  });
+
+  it('unblocking brings the row back', async () => {
+    await prefsStorage.set(persistKeyFor('u1'), JSON.stringify(MY_BLOCK));
+    serve('open');
+    await hydrateTutorial('u1', 'Maya', true);
+    startClientTutorial(PAYLOAD);
+    await render(<TutorialHomeSlot />);
+    await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+    expect(screen.queryByTestId('home-message-coach')).toBeNull();
+    await act(async () => { useBlockedUsersStore.setState({ blocked: [] }); });
+    expect(await screen.findByLabelText('Message your coach, Bradley')).toBeTruthy();
   });
 });
 
