@@ -144,7 +144,7 @@ test('Opus B-878-G2: below 375 wide the masthead uses the 16 gutter and the week
   expect(flat(tile)).toMatchObject({ paddingTop: 12, paddingHorizontal: 10, paddingBottom: 11, borderRadius: 16, borderWidth: 1,
     backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(184,204,191,0.2)' });
   expect(flat(s.getByTestId('copilot-week-checkin-label'))).toMatchObject({ fontSize: 12, lineHeight: 15, color: '#B8CCBF' });
-  expect(flat(s.getByTestId('copilot-week-changed'))).toMatchObject({ backgroundColor: '#A3C46A', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 });
+  expect(flat(s.getByTestId('copilot-week-changed'))).toMatchObject({ backgroundColor: '#A3C46A', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, marginRight: -10 });
   expect(flat(s.getByText(/^Changed /))).toMatchObject({ fontSize: 11, fontWeight: '600', color: '#1A1A18' });
   expect(flat(s.getByTestId('copilot-mast-title'))).toMatchObject({ fontFamily: 'CormorantGaramond_500Medium', fontSize: 34 });
   await at(390);

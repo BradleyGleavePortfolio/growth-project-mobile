@@ -76,5 +76,7 @@ const s = StyleSheet.create({
   stacked: { flexBasis: '100%', minHeight: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, paddingVertical: 10 },
   grow: { flex: 1, minWidth: 120 },
   label: { marginTop: 4 },
-  changed: { alignSelf: 'flex-start', marginTop: 8, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  // The chip may run into the tile's right padding, as style A's nowrap .chg does, so "Changed Mon" is not cut (Opus
+  // B-878R2-G1).
+  changed: { alignSelf: 'flex-start', marginTop: 8, marginRight: -10, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
 });
