@@ -48,6 +48,8 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, voiceFaces } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
+import { useVoiceCatchUp } from '../../hooks/useVoiceFeed';
+import { voiceKeys } from '../../hooks/voiceQueryKeys';
 import { ThreadHeader } from '../../components/community';
 import VoiceNotePlayer from '../../components/community/VoiceNotePlayer';
 import { formatRelative } from '../../components/community/SearchResultRow';
@@ -84,12 +86,15 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   const { flags } = useFeatureFlags();
   const runtimeEnabled = flags.community_search;
 
+  const noteEnabled = !!voiceNoteId && featureFlags.communitySearch && runtimeEnabled;
   const note = useQuery({
-    queryKey: ['community', 'voice-note', voiceNoteId],
+    queryKey: voiceKeys.note(voiceNoteId),
     queryFn: () => communityVoiceApi.getOne(voiceNoteId),
-    enabled: !!voiceNoteId && featureFlags.communitySearch && runtimeEnabled,
+    enabled: noteEnabled,
     meta: { persist: false }, // like the feed: never saved to the phone, so a restart cannot replay a banned author's note
   });
+  // A removal ping re-reads this page (useCommunityBadge); a missed one heals on the way back (#1165).
+  useVoiceCatchUp(note, noteEnabled);
 
   // Announce the surface once metadata loads so a screen-reader user gets a
   // landmark for the detail they navigated into.
@@ -185,7 +190,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   const folded = reported.has(data.id);
   // Owner #174-4: a coach-removed note shows one quiet line, no player, menu or transcript.
   const removedLine = voiceRemovedLine(data, viewer?.id);
-  const noteKey = ['community', 'voice-note', voiceNoteId];
+  const noteKey = voiceKeys.note(voiceNoteId);
   const remove = async () => {
     await communityVoiceApi.remove(data.id);
     await qc.invalidateQueries({ queryKey: ['community'] });

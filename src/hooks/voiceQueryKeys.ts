@@ -7,7 +7,12 @@
  * Key shape mirrors the repo convention `['feature', 'sub', …params]`:
  *   feedRoot(ws)        → ['community', 'voice', 'feed', ws]            (invalidate prefix)
  *   feed(ws, scope, n)  → ['community', 'voice', 'feed', ws, scope, n]  (a specific page set)
+ *   note(id)            → ['community', 'voice-note', id]               (the voice note page)
+ *
+ * refreshVoiceQueries re-reads every voice feed and voice note page on screen (and marks the rest
+ * stale): the answer to a removal ping and to the catch-up in useVoiceFeed (backend #1165).
  */
+import type { QueryClient } from '@tanstack/react-query';
 import { VOICE_PAGE_LIMIT } from '../api/communityVoiceApi';
 
 export type VoiceFeedScope =
@@ -40,4 +45,18 @@ export const voiceKeys = {
   ): readonly unknown[] {
     return ['community', 'voice', 'feed', workspaceId, scopeTag(scope), limit];
   },
+  /** One voice note page (CommunityVoiceNoteDetail). */
+  note(voiceNoteId: string): readonly unknown[] {
+    return ['community', 'voice-note', voiceNoteId];
+  },
 };
+
+/** Every voice query: all feeds (any workspace and scope) and every voice note page. */
+function isVoiceKey(key: readonly unknown[]): boolean {
+  return key[0] === 'community' && (key[1] === 'voice' || key[1] === 'voice-note');
+}
+
+/** Re-read the voice queries on screen over REST; the others are only marked stale. */
+export function refreshVoiceQueries(qc: QueryClient): Promise<void> {
+  return qc.invalidateQueries({ predicate: (q) => isVoiceKey(q.queryKey) });
+}
