@@ -6,12 +6,15 @@
  * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send (with a
  * clock) keep the text at full contrast (FR-871 Sol B4: no fade); Not sent has Try again (the same Idempotency-Key)
  * and Delete. Report / Block / Delete go through SafetyMenu. Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
+ * REMOVED-BY-M2 (agent 175): a row the coach removed keeps its head and draws SpaceRemovedPlaceholder's one line in
+ * place of the content, with no menu (owner #174-4).
  */
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SafetyMenu from '../SafetyMenu';
 import SpaceVoiceNote from './SpaceVoiceNote';
+import SpaceRemovedPlaceholder, { type SpaceRemovedLine } from './removed/SpaceRemovedPlaceholder';
 import { brand, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
 import type { PendingState } from './spaceChatOutbox';
@@ -49,6 +52,10 @@ export interface SpaceChatRowProps {
   offline: boolean;
   onDelete?: () => Promise<void>;
   onBlocked?: (userId: string) => void;
+  /** The coach removed this row (b#1165): its one line for this viewer; no content and no menu are drawn. */
+  removed?: SpaceRemovedLine | null;
+  /** The author's link from a removed row to Community safety (left out where that page is not on the stack). */
+  onSafety?: () => void;
 }
 
 /** One place per message kind: a later kind (photo, reply) adds its case here. */
@@ -77,7 +84,8 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const tile: Tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
   // Name, chip and time grow (large text) or wrap: then the body starts below them, not tucked up.
   const [wrapped, setWrapped] = useState(false);
-  const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
+  const said = p.removed ? p.removed.text : p.body;
+  const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${said ? `. ${said}` : ''}`;
   return (
     <View style={s.row} testID={`space-chat-row-${p.id}`}>
       <View style={s.head}>
@@ -94,7 +102,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
         </View>
-        {local ? null : (
+        {local || p.removed ? null : (
           <SafetyMenu
             targetType="message"
             targetId={p.id}
@@ -109,20 +117,26 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           />
         )}
       </View>
-      <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
-        <MessageBody {...p} />
-        {p.state === 'failed' && !p.voice ? (
-          <View style={s.actions}>
-            <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
-              <Ionicons name="refresh" size={16} color={fp.onDeep} />
-              <Text style={s.againText}>Try again</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={p.onDiscard} accessibilityRole="button" accessibilityLabel="Delete" style={s.discard} testID={`space-chat-discard-${p.id}`}>
-              <Text style={s.discardText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-      </View>
+      {p.removed ? (
+        <View style={[s.content, s.untucked]} testID={`space-chat-content-${p.id}`}>
+          <SpaceRemovedPlaceholder id={p.id} line={p.removed} onSafety={p.onSafety} />
+        </View>
+      ) : (
+        <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
+          <MessageBody {...p} />
+          {p.state === 'failed' && !p.voice ? (
+            <View style={s.actions}>
+              <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
+                <Ionicons name="refresh" size={16} color={fp.onDeep} />
+                <Text style={s.againText}>Try again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={p.onDiscard} accessibilityRole="button" accessibilityLabel="Delete" style={s.discard} testID={`space-chat-discard-${p.id}`}>
+                <Text style={s.discardText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 }

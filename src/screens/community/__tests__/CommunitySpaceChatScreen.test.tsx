@@ -556,3 +556,90 @@ it('m#871 Sol B5: a read mark that lands refreshes the space badges and the unre
   await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'cohorts'] }));
   expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'me'] });
 });
+
+// REMOVED-BY-M2 (owner #174-4, b#1165 CONTRACT 6405215872 section 2): a row the coach removed keeps its place.
+const BY_COACH = { role: 'coach', user_id: 'coach-1', name: 'Sam Okafor' };
+const removed = (id: string, at: string, who: { id: string; name: string }, extra: Record<string, unknown> = {}) =>
+  msg(id, at, who, { deleted: true, body: null, voice_note: null, removed_at: '2026-10-22T11:00:00.000Z', removed_by: BY_COACH, ...extra });
+const order = (r: Awaited<ReturnType<typeof open>>) =>
+  r.getAllByTestId(/^space-chat-(row-|new-line)/).map((n) => String(n.props.testID).replace('space-chat-row-', ''));
+const removedPage = (who: { id: string; name: string }) => [
+  msg('m3', '2026-10-22T10:05:00.000Z', JO),
+  removed('rv', '2026-10-22T09:50:00.000Z', who, { kind: 'voice' }),
+  removed('rt', '2026-10-22T09:40:00.000Z', who),
+  ...page.slice(1),
+];
+
+it('REMOVED-BY-M2: a removed text row and voice row stay in place for everyone else, one line each, no menu or player', async () => {
+  page = removedPage(JO);
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rt');
+  expect(order(r)).toEqual(['m3', 'rv', 'rt', 'm2', 'new-line', 'm1']);
+  expect(r.getAllByText('Removed by Coach Sam Okafor')).toHaveLength(2);
+  expect(r.getByTestId('space-chat-removed-rv')).toBeTruthy();
+  for (const id of ['rt', 'rv']) {
+    expect(r.queryByTestId(`space-chat-menu-${id}`)).toBeNull();
+    expect(r.queryByTestId(`space-chat-removed-safety-${id}`)).toBeNull();
+  }
+  expect(r.getByTestId('space-chat-menu-m3')).toBeTruthy();
+  expect(r.getAllByText(/^player /)).toHaveLength(1);
+  expect(r.getAllByLabelText(/^jo b\., .+\. Removed by Coach Sam Okafor$/)).toHaveLength(2);
+});
+
+it('REMOVED-BY-M2: the coach who removed them reads "You removed this message" / "You removed this voice note"', async () => {
+  mockRole = 'owner';
+  mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+  mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+  page = removedPage(JO);
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rt');
+  expect(r.getByTestId('space-chat-removed-rt')).toHaveTextContent('You removed this message');
+  expect(r.getByTestId('space-chat-removed-rv')).toHaveTextContent('You removed this voice note');
+  expect(r.queryByTestId('space-chat-menu-rt')).toBeNull();
+  expect(r.queryByTestId('space-chat-menu-rv')).toBeNull();
+});
+
+it('REMOVED-BY-M2: the author reads "Your coach removed your message" with a link to Community safety', async () => {
+  mockStack.routes = ['CommunityTab', 'CommunitySpaceChat', 'CommunitySafety'];
+  page = removedPage(ME);
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rt');
+  expect(r.getByTestId('space-chat-removed-rt')).toHaveTextContent('Your coach removed your messageCommunity safety');
+  expect(r.getByTestId('space-chat-removed-rv')).toHaveTextContent('Your coach removed your voice noteCommunity safety');
+  expect(r.queryByTestId('space-chat-menu-rt-delete')).toBeNull();
+  await fireEvent.press(r.getByTestId('space-chat-removed-safety-rt'));
+  expect(mockNavigate).toHaveBeenCalledWith('CommunitySafety');
+});
+
+it('REMOVED-BY-M2: an author\'s own delete and a removal from before b#1165 (no removed_by) still vanish', async () => {
+  page = [msg('own', '2026-10-22T10:10:00.000Z', ME, { deleted: true, body: null }), msg('old', '2026-10-22T09:45:00.000Z', JO, { deleted: true }), ...page];
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  expect(order(r)).toEqual(['m3', 'm2', 'new-line', 'm1']);
+});
+
+it('REMOVED-BY-M2: a removed voice row stays out while communityVoiceNotes is off; the text one stays', async () => {
+  mockFlags.communityVoiceNotes = false;
+  page = removedPage(JO);
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rt');
+  expect(r.queryByTestId('space-chat-row-rv')).toBeNull();
+});
+
+it('REMOVED-BY-M2: the read mark, the New messages line and the pill count only live rows', async () => {
+  page = [removed('rn', '2026-10-22T10:20:00.000Z', JO), msg('m3', '2026-10-22T10:05:00.000Z', JO),
+    removed('ru', '2026-10-22T09:10:00.000Z', JO), ...page.slice(1)];
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rn');
+  // The line sits above the first live unread row, not above the placeholder before it.
+  expect(order(r)).toEqual(['rn', 'm3', 'm2', 'new-line', 'ru', 'm1']);
+  await see(r, 'rn', 'm3', 'm2', 'new-line');
+  await waitFor(() => expect(readMarks()).toEqual(['m3']));
+  // Scrolled up, the newest live row is removed: an older row is newest now, which is no new message.
+  await see(r, 'm2', 'new-line');
+  page = [removed('m3', '2026-10-22T10:05:00.000Z', JO), ...page.filter((m) => (m as { id: string }).id !== 'm3')];
+  await act(async () => { await client.refetchQueries(); });
+  await r.findByTestId('space-chat-removed-m3');
+  expect(r.queryByTestId('space-chat-pill')).toBeNull();
+  expect(readMarks()).toEqual(['m3']);
+});

@@ -1,7 +1,8 @@
 /**
  * SC-M1 (agent 168): the space chat's server calls. Shapes from SC-BE1's CONTRACT (b#1135 @ 81ff66f3, comment
  * 6348434182) and SC-BE2's CONTRACT (b#1137, comment 6352782763: the read line). Paths have no /api prefix (services/api adds the base).
- *   GET  community/cohorts/:id/messages?before=&limit=  newest first, deleted and blocked (either way) left out; 404/403 = no access
+ *   GET  community/cohorts/:id/messages?before=&limit=  newest first, deleted and blocked (either way) left out, except a
+ *                                                       coach's removal (b#1165: deleted + removed_by); 404/403 = no access
  *   POST community/cohorts/:id/messages { body }        Idempotency-Key reused on every retry and Try again; FX-IDEM (b#1144,
  *                                                       CONTRACT 6370303541) answers a resend with the first message
  *   DELETE community/messages/:id                       own text message
@@ -25,6 +26,8 @@ const VoiceSchema = z
     waveform_peaks: z.array(z.number()).nullable().optional(),
   })
   .passthrough();
+/** b#1165 CONTRACT 6405215872 section 2: who removed a row (the space's coach, or the platform owner shown as the coach). */
+const RemovedBySchema = z.object({ role: z.string(), user_id: z.string(), name: z.string() }).passthrough();
 export const SpaceMessageSchema = z
   .object({
     id: z.string(),
@@ -38,6 +41,10 @@ export const SpaceMessageSchema = z
     parent_message_id: z.string().nullable().optional(),
     voice_note: VoiceSchema.nullable().optional(),
     sender: SenderSchema.optional(),
+    // Only on a row the coach removed (deleted: true): it keeps its place as a placeholder. Absent on live rows and on an
+    // author's own delete; an older server that never sends them keeps today's behaviour (the row is left out).
+    removed_at: z.string().nullish(),
+    removed_by: RemovedBySchema.nullish(),
   })
   .passthrough();
 export type SpaceMessage = z.infer<typeof SpaceMessageSchema>;
