@@ -562,7 +562,9 @@ const BY_COACH = { role: 'coach', user_id: 'coach-1', name: 'Sam Okafor' };
 const removed = (id: string, at: string, who: { id: string; name: string }, extra: Record<string, unknown> = {}) =>
   msg(id, at, who, { deleted: true, body: null, voice_note: null, removed_at: '2026-10-22T11:00:00.000Z', removed_by: BY_COACH, ...extra });
 const order = (r: Awaited<ReturnType<typeof open>>) =>
-  r.getAllByTestId(/^space-chat-(row-|new-line)/).map((n) => String(n.props.testID).replace('space-chat-row-', ''));
+  r.getAllByTestId(/^space-chat-(row-|new-line)/).map((n) => String(n.props.testID).replace(/^space-chat-(row-)?/, ''));
+// The line is read once, by the row's head with the name and time; the drawn line itself is hidden from a screen reader.
+const line = (r: Awaited<ReturnType<typeof open>>, text: string) => r.getAllByText(text, { includeHiddenElements: true });
 const removedPage = (who: { id: string; name: string }) => [
   msg('m3', '2026-10-22T10:05:00.000Z', JO),
   removed('rv', '2026-10-22T09:50:00.000Z', who, { kind: 'voice' }),
@@ -575,7 +577,7 @@ it('REMOVED-BY-M2: a removed text row and voice row stay in place for everyone e
   const r = await open();
   await r.findByTestId('space-chat-removed-rt');
   expect(order(r)).toEqual(['m3', 'rv', 'rt', 'm2', 'new-line', 'm1']);
-  expect(r.getAllByText('Removed by Coach Sam Okafor')).toHaveLength(2);
+  expect(line(r, 'Removed by Coach Sam Okafor')).toHaveLength(2);
   expect(r.getByTestId('space-chat-removed-rv')).toBeTruthy();
   for (const id of ['rt', 'rv']) {
     expect(r.queryByTestId(`space-chat-menu-${id}`)).toBeNull();
@@ -593,8 +595,10 @@ it('REMOVED-BY-M2: the coach who removed them reads "You removed this message" /
   page = removedPage(JO);
   const r = await open();
   await r.findByTestId('space-chat-removed-rt');
-  expect(r.getByTestId('space-chat-removed-rt')).toHaveTextContent('You removed this message');
-  expect(r.getByTestId('space-chat-removed-rv')).toHaveTextContent('You removed this voice note');
+  expect(line(r, 'You removed this message')).toHaveLength(1);
+  expect(line(r, 'You removed this voice note')).toHaveLength(1);
+  expect(r.getByLabelText(/^jo b\., .+\. You removed this message$/)).toBeTruthy();
+  expect(r.queryByText(/Removed by Coach/, { includeHiddenElements: true })).toBeNull();
   expect(r.queryByTestId('space-chat-menu-rt')).toBeNull();
   expect(r.queryByTestId('space-chat-menu-rv')).toBeNull();
 });
@@ -604,8 +608,10 @@ it('REMOVED-BY-M2: the author reads "Your coach removed your message" with a lin
   page = removedPage(ME);
   const r = await open();
   await r.findByTestId('space-chat-removed-rt');
-  expect(r.getByTestId('space-chat-removed-rt')).toHaveTextContent('Your coach removed your messageCommunity safety');
-  expect(r.getByTestId('space-chat-removed-rv')).toHaveTextContent('Your coach removed your voice noteCommunity safety');
+  expect(line(r, 'Your coach removed your message')).toHaveLength(1);
+  expect(line(r, 'Your coach removed your voice note')).toHaveLength(1);
+  expect(r.getAllByLabelText(/^Dana Reyes, .+\. Your coach removed your (message|voice note)$/)).toHaveLength(2);
+  expect(r.getByTestId('space-chat-removed-safety-rv')).toBeTruthy();
   expect(r.queryByTestId('space-chat-menu-rt-delete')).toBeNull();
   await fireEvent.press(r.getByTestId('space-chat-removed-safety-rt'));
   expect(mockNavigate).toHaveBeenCalledWith('CommunitySafety');
