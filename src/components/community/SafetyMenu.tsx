@@ -18,6 +18,11 @@
  * chevron, the approved emergency line, a centred Cancel); a voice note adds the note card on top.
  * A host that lets a coach remove other members' content passes onDelete for it: the menu then offers
  * Report, Block and Delete (GOAL B-06c), with the same "Delete this …?" confirm.
+ * Owner #174-4 (voice notes): a host passes `reported` once the viewer reported the item, so the menu keeps
+ * Block and shows Report as done ("Reported", RB-W7); and passes onRemove for the space's coach or the
+ * platform owner on someone else's item: "Remove for everyone" (RB-W1) asks in this same sheet (RB-W2,
+ * RB-W3), so the menu rows are gone before the question shows and no alert is raised over, or while
+ * closing, the menu (iOS can drop an Alert raised while a Modal is closing).
  * Failures use describeCommunityFailure: specific copy per server code and
  * status, a support reference (and a Sentry report) for anything unexpected.
  */
@@ -61,6 +66,13 @@ export interface SafetyMenuProps {
   onDelete?: () => Promise<void>;
   /** Called once a report is sent (the voice feed folds the reported note away, GOAL B-06b). */
   onReported?: () => void;
+  /** The viewer already reported this: Report shows as done ("Reported"); Block and Remove stay. */
+  reported?: boolean;
+  /**
+   * Remove for everyone (owner #174-4): the space's coach or the platform owner on someone else's
+   * content. Confirmed in this sheet; everyone then sees that it was removed.
+   */
+  onRemove?: () => Promise<void>;
   /** The item the report is about, drawn as a card above the reasons (GOAL B-06a). */
   context?: { name: string; detail: string };
   /** What is being deleted, for the confirm copy, e.g. "win" or "voice note". */
@@ -68,7 +80,7 @@ export interface SafetyMenuProps {
   testID?: string;
 }
 
-type Step = 'menu' | 'reasons';
+type Step = 'menu' | 'reasons' | 'confirm-remove';
 
 export default function SafetyMenu({
   targetType,
@@ -80,6 +92,8 @@ export default function SafetyMenu({
   onBlocked,
   onDelete,
   onReported,
+  reported = false,
+  onRemove,
   context,
   contentNoun = 'post',
   testID = 'safety-menu',
@@ -147,6 +161,20 @@ export default function SafetyMenu({
     );
   };
 
+  const submitRemove = async () => {
+    if (!onRemove) return;
+    setBusy(true);
+    try {
+      await onRemove();
+      close();
+    } catch (err) {
+      const failure = describeCommunityFailure(err, 'delete');
+      Alert.alert(failure.title, failure.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const confirmBlock = () => {
     if (!authorUserId) return;
     Alert.alert(
@@ -202,7 +230,19 @@ export default function SafetyMenu({
               <ActivityIndicator color={semanticColors.accent} style={styles.busy} />
             ) : step === 'menu' ? (
               <>
-                {!isOwn ? (
+                {!isOwn && reported ? (
+                  // Done, not a button: the report is in; Block (and Remove) stay below.
+                  <View
+                    accessible
+                    accessibilityLabel="Reported"
+                    accessibilityState={{ disabled: true }}
+                    style={styles.row}
+                    testID={`${testID}-reported`}
+                  >
+                    <Ionicons name="checkmark" size={18} color={light ? fp.n700 : semanticColors.textMuted} />
+                    <Text style={[styles.rowText, { color: light ? fp.n700 : semanticColors.textMuted }]}>Reported</Text>
+                  </View>
+                ) : !isOwn ? (
                   <HapticPressable
                     intent="light"
                     onPress={() => setStep('reasons')}
@@ -228,6 +268,19 @@ export default function SafetyMenu({
                     <Text style={[styles.rowText, { color: semantic.danger.fg }]}>Block {who}</Text>
                   </HapticPressable>
                 ) : null}
+                {!isOwn && onRemove ? (
+                  <HapticPressable
+                    intent="warning"
+                    onPress={() => setStep('confirm-remove')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove for everyone"
+                    style={styles.row}
+                    testID={`${testID}-remove`}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={semantic.danger.fg} />
+                    <Text style={[styles.rowText, { color: semantic.danger.fg }]}>Remove for everyone</Text>
+                  </HapticPressable>
+                ) : null}
                 {onDelete ? (
                   <HapticPressable
                     intent="warning"
@@ -244,6 +297,25 @@ export default function SafetyMenu({
                   </HapticPressable>
                 ) : null}
               </>
+            ) : step === 'confirm-remove' ? (
+              <View style={styles.confirm} testID={`${testID}-confirm-remove`}>
+                <Text style={[styles.heading, { color: semanticColors.textPrimary }]} accessibilityRole="header">
+                  {`Remove this ${contentNoun} for everyone?`}
+                </Text>
+                <Text style={[styles.confirmBody, { color: light ? fp.n700 : semanticColors.textMuted }]}>
+                  Everyone in this space will see that you removed it.
+                </Text>
+                <HapticPressable
+                  intent="warning"
+                  onPress={() => void submitRemove()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove for everyone"
+                  style={styles.removeBtn}
+                  testID={`${testID}-remove-confirm`}
+                >
+                  <Text style={styles.removeBtnText}>Remove for everyone</Text>
+                </HapticPressable>
+              </View>
             ) : (
               <>
                 {context ? (
@@ -420,4 +492,18 @@ const styles = StyleSheet.create({
   busy: {
     paddingVertical: spacing.xl,
   },
+  // The remove question (RB-W2, RB-W3) in the GOAL sheet: .shead, a 16/1.4 line, one GOAL .btn (54 high,
+  // 12 corners, 600 16) in the error red, then the sheet's Cancel.
+  confirm: { gap: 6, paddingBottom: 4 },
+  confirmBody: { fontFamily: voiceFaces.regular, fontSize: 16, lineHeight: 22, marginBottom: 10 },
+  removeBtn: {
+    minHeight: 54,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: fp.error,
+  },
+  removeBtnText: { fontFamily: voiceFaces.semibold, fontSize: 16, lineHeight: 20, fontWeight: '600', color: fp.onDeep },
 });

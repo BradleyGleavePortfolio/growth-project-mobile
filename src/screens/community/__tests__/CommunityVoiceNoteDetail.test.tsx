@@ -4,7 +4,7 @@
  * was banned; and the player draws the note's real waveform peaks.
  */
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('../../../theme/useTheme', () => {
@@ -12,8 +12,10 @@ jest.mock('../../../theme/useTheme', () => {
   return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
 });
 const mockParams = { voiceNoteId: 'vn-1', excerpt: '' };
+const mockNavigate = jest.fn();
+const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
   useRoute: () => ({ params: mockParams }),
 }));
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { communitySearch: true } }));
@@ -44,8 +46,12 @@ jest.mock('../../../components/community/VoiceNotePlayer', () => ({
   },
 }));
 const mockGetOne = jest.fn();
+const mockRemoveNote = jest.fn();
 jest.mock('../../../api/communityVoiceApi', () => ({
-  communityVoiceApi: { getOne: (...a: unknown[]) => mockGetOne(...a) },
+  communityVoiceApi: {
+    getOne: (...a: unknown[]) => mockGetOne(...a),
+    remove: (...a: unknown[]) => mockRemoveNote(...a),
+  },
 }));
 
 import CommunityVoiceNoteDetail from '../CommunityVoiceNoteDetail';
@@ -56,6 +62,9 @@ beforeEach(() => {
   mockRole.current = 'client';
   mockSafety.mockReset();
   mockPlayer.mockReset();
+  mockNavigate.mockReset();
+  mockGoBack.mockReset();
+  mockRemoveNote.mockReset().mockResolvedValue({ deleted: true });
 });
 
 const NOTE = {
@@ -123,14 +132,82 @@ it('a reported note folds into the VN-07 row and the player is gone', async () =
   expect(await findByTestId('community-voice-detail-reported')).toBeTruthy();
   expect(getByText('You reported this voice note. It is hidden for you.')).toBeTruthy();
   expect(mockPlayer).not.toHaveBeenCalled();
+  // REMOVED-BY-M item 1 (owner #174-4): the folded note keeps its menu, told it was reported.
+  expect(mockSafety.mock.calls.at(-1)?.[0]).toMatchObject({ targetId: 'vn-1', reported: true });
 });
 
-// LO-848R4 B2 (GOAL B-06c): the workspace coach gets Delete on another member's note; a member does not.
-it('offers Delete on another member’s note to the coach only', async () => {
+// REMOVED-BY-M item 2 (owner #174-4): the coach and the platform owner get Remove for everyone on another
+// member's note (asked in the menu's sheet), not the author's Delete; a member gets neither.
+it('offers Remove for everyone on another member’s note to the coach and the owner only', async () => {
+  type P = { onDelete?: unknown; onRemove?: unknown; reported?: boolean };
   await renderDetail();
-  expect((mockSafety.mock.calls.at(-1)?.[0] as { onDelete?: unknown }).onDelete).toBeUndefined();
-  mockSafety.mockReset();
-  mockRole.current = 'coach';
-  await renderDetail();
-  expect(typeof (mockSafety.mock.calls.at(-1)?.[0] as { onDelete?: unknown }).onDelete).toBe('function');
+  expect(mockSafety.mock.calls.at(-1)?.[0] as P).toMatchObject({ onDelete: undefined, onRemove: undefined, reported: false });
+  for (const role of ['coach', 'owner']) {
+    mockSafety.mockReset();
+    mockRole.current = role;
+    await renderDetail();
+    const p = mockSafety.mock.calls.at(-1)?.[0] as P;
+    expect(typeof p.onRemove).toBe('function');
+    expect(p.onDelete).toBeUndefined();
+  }
+});
+
+// REMOVED-BY-M item 3 (owner #174-4; backend #1165 CONTRACT §1): the page of a coach-removed note shows one
+// quiet line in place of the player: no menu, no player, no transcript.
+describe('a coach-removed note on its page (REMOVED-BY-M)', () => {
+  const REMOVED = {
+    ...NOTE,
+    url: null,
+    duration_ms: 0,
+    waveform_peaks: null,
+    removed_at: '2026-10-25T23:40:00Z',
+    removed_by: { role: 'coach', user_id: 'u-coach', name: 'Sam' },
+  };
+  const renderPage = async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const utils = await render(
+      <QueryClientProvider client={qc}>
+        <CommunityVoiceNoteDetail />
+      </QueryClientProvider>,
+    );
+    return { ...utils, qc };
+  };
+
+  it('everyone else reads Removed by Coach {name}; no menu, player or transcript', async () => {
+    mockParams.excerpt = 'my squat felt strong today';
+    mockGetOne.mockResolvedValue(REMOVED);
+    const { findByTestId, getByText, queryByTestId } = await renderPage();
+    expect(await findByTestId('community-voice-detail-removed')).toBeTruthy();
+    expect(getByText('Removed by Coach Sam')).toBeTruthy();
+    expect(mockSafety).not.toHaveBeenCalled();
+    expect(mockPlayer).not.toHaveBeenCalled();
+    expect(queryByTestId('community-voice-detail-excerpt')).toBeNull();
+    expect(queryByTestId('community-voice-detail-removed-safety')).toBeNull();
+    mockParams.excerpt = '';
+  });
+
+  it('the author reads Your coach removed your voice note and can open Community safety', async () => {
+    mockGetOne.mockResolvedValue({ ...REMOVED, author_id: 'u-viewer' });
+    const { findByText, getByTestId } = await renderPage();
+    expect(await findByText('Your coach removed your voice note')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(getByTestId('community-voice-detail-removed-safety'));
+    });
+    expect(mockNavigate).toHaveBeenCalledWith('CommunitySafety');
+  });
+
+  it('the coach removes it from the page and stays, reading You removed this voice note', async () => {
+    mockRole.current = 'coach';
+    mockGetOne.mockResolvedValue(NOTE);
+    const { findByText } = await renderPage();
+    await waitFor(() => expect(mockSafety).toHaveBeenCalled());
+    const { onRemove } = mockSafety.mock.calls.at(-1)?.[0] as { onRemove: () => Promise<void> };
+    mockGetOne.mockResolvedValue({ ...REMOVED, removed_by: { role: 'coach', user_id: 'u-viewer', name: 'Sam' } });
+    await act(async () => {
+      await onRemove();
+    });
+    expect(mockRemoveNote).toHaveBeenCalledWith('vn-1');
+    expect(await findByText('You removed this voice note')).toBeTruthy();
+    expect(mockGoBack).not.toHaveBeenCalled();
+  });
 });

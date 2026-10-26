@@ -444,3 +444,92 @@ describe('SafetyMenu — GOAL B-06 sheet (FR-848R5)', () => {
     for (const t of texts) expect(String(flat(t)?.fontFamily)).toMatch(/^Inter_/);
   });
 });
+
+// REMOVED-BY-M (owner #174-4): a reported item keeps its menu; the coach's Remove is asked in the same sheet.
+describe('SafetyMenu — Reported and Remove for everyone (REMOVED-BY-M)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  const flat = (n: { props: { style?: unknown } }) => StyleSheet.flatten(n.props.style);
+
+  it('a reported item shows Report as done (not a button) and keeps Block', async () => {
+    const { getByTestId, queryByTestId, getByText } = await renderMenu({ targetType: 'voice_note', reported: true });
+    await fireEvent.press(getByTestId('sm'));
+    const done = getByTestId('sm-reported');
+    expect(done.props.accessibilityState).toEqual({ disabled: true });
+    expect(done.props.accessibilityLabel).toBe('Reported');
+    expect(getByText('Reported')).toBeTruthy();
+    expect(flat(getByText('Reported'))).toMatchObject({ color: '#5A5A56' });
+    expect(queryByTestId('sm-report')).toBeNull();
+    expect(getByTestId('sm-block')).toBeTruthy();
+  });
+
+  it('Remove for everyone swaps the menu for the question in the same sheet; no alert', async () => {
+    const onRemove = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId, queryByTestId, getByText } = await renderMenu({
+      targetType: 'voice_note',
+      contentNoun: 'voice note',
+      onRemove,
+    });
+    await fireEvent.press(getByTestId('sm'));
+    expect(getByTestId('sm-report')).toBeTruthy();
+    expect(getByTestId('sm-block')).toBeTruthy();
+    await fireEvent.press(getByTestId('sm-remove'));
+    expect(onRemove).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(getByTestId('sm-confirm-remove')).toBeTruthy();
+    expect(queryByTestId('sm-report')).toBeNull();
+    expect(queryByTestId('sm-block')).toBeNull();
+    expect(queryByTestId('sm-remove')).toBeNull();
+    expect(flat(getByText('Remove this voice note for everyone?'))).toMatchObject({ fontSize: 18, fontWeight: '600' });
+    expect(getByText('Everyone in this space will see that you removed it.')).toBeTruthy();
+    expect(flat(getByText('Remove for everyone'))).toMatchObject({ fontSize: 16, fontWeight: '600' });
+    await act(async () => {
+      fireEvent.press(getByTestId('sm-remove-confirm'));
+    });
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(alertSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(queryByTestId('sm-confirm-remove')).toBeNull());
+  });
+
+  it('Cancel on the question removes nothing and the next open starts at the menu', async () => {
+    const onRemove = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId, queryByTestId } = await renderMenu({ onRemove });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-remove'));
+    await fireEvent.press(getByTestId('sm-close'));
+    expect(onRemove).not.toHaveBeenCalled();
+    await fireEvent.press(getByTestId('sm'));
+    expect(getByTestId('sm-remove')).toBeTruthy();
+    expect(queryByTestId('sm-confirm-remove')).toBeNull();
+  });
+
+  it('a failed remove says what happened and keeps the sheet open', async () => {
+    const onRemove = jest.fn().mockRejectedValue(new Error('offline'));
+    const { getByTestId } = await renderMenu({ onRemove });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-remove'));
+    await act(async () => {
+      fireEvent.press(getByTestId('sm-remove-confirm'));
+    });
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(getByTestId('sm-confirm-remove')).toBeTruthy();
+  });
+
+  it('own content never gets Remove; it keeps Delete', async () => {
+    const onRemove = jest.fn().mockResolvedValue(undefined);
+    const onDelete = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId, queryByTestId } = await renderMenu({ authorUserId: ME, onRemove, onDelete });
+    await fireEvent.press(getByTestId('sm'));
+    expect(queryByTestId('sm-remove')).toBeNull();
+    expect(queryByTestId('sm-reported')).toBeNull();
+    expect(getByTestId('sm-delete')).toBeTruthy();
+  });
+
+  it('every line of the question names a loaded Inter face', async () => {
+    const { getByTestId, container } = await renderMenu({ onRemove: jest.fn().mockResolvedValue(undefined) });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-remove'));
+    const texts = container.queryAll((n) => n.type === 'Text');
+    expect(texts.length).toBeGreaterThan(3);
+    for (const t of texts) expect(String(flat(t)?.fontFamily)).toMatch(/^Inter_/);
+  });
+});
