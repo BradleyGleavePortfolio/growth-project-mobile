@@ -10,6 +10,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { COMMUNITY_REPORT_CRISIS_LINE } from '../../../api/communitySafetyApi';
 import type { InboxThread } from '../../../api/messagingV2Api';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 
 const mockRoman = jest.fn(() => true);
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { get romanChat() { return mockRoman(); } } }));
@@ -28,6 +29,8 @@ const mockFlags = { messaging_core_v2: true };
 jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: mockFlags }) }));
 const mockReduce = jest.fn(() => false);
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => mockReduce() }));
+let mockUser: { id: string; coach_id?: string } | null = null; // the signed-in user (FR-880R4); none unless a test sets one
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 const mockNeedsCoach = jest.fn(() => false);
 jest.mock('../../../components/coachless/JoinCoachState', () => ({
   JOIN_A_COACH: 'Join a coach',
@@ -65,7 +68,7 @@ const thread = (o: Partial<InboxThread> = {}): InboxThread => ({
 });
 const USAGE = { day: '2026-10-15', used: { messages: 64, files: 1, changes: 0 }, limits: { messages: 100, files: 3, changes: 5 }, resets_at: '2026-10-16T07:00:00.000Z' };
 const ROUTES: Record<string, unknown> = {
-  '/v1/clients/me/coach': { name: 'Sam Carter' },
+  '/v1/clients/me/coach': { id: 'coach-9', name: 'Sam Carter' },
   '/messages/unread-count': { total: 2 },
   '/me/roman/usage': USAGE,
 };
@@ -85,6 +88,7 @@ async function show() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUser = null;
   mockRoman.mockReturnValue(true);
   mockNeedsCoach.mockReturnValue(false);
   mockReduce.mockReturnValue(false);
@@ -198,6 +202,126 @@ describe('Messages list, client with a coach', () => {
     await act(async () => mockRefocus());
     expect(await u.findByText('No messages yet')).toBeTruthy();
     expect(u.queryByTestId('inbox-loading')).toBeNull();
+  });
+});
+
+// FR-880 (owner 10-23, "Dissapear"; LO-1153 N4): a closed coach chat leaves the list (no card, no name, no unread) and
+// comes back on unblock. The server's inbox leaves the coach row out while either person blocks (b#1141).
+describe('Messages list, the coach chat closed', () => {
+  const SAM = { id: 'coach-9', displayName: 'Sam Carter', blockedAt: '2026-10-24T00:00:00Z' };
+  const expectGone = (u: Awaited<ReturnType<typeof show>>['u']) => {
+    expect(u.queryByTestId('inbox-coach')).toBeNull();
+    expect(u.queryByTestId('inbox-unread')).toBeNull();
+    expect(u.queryAllByText(/Sam/)).toHaveLength(0);
+    expect(u.queryAllByLabelText(/Sam/)).toHaveLength(0);
+    expect(u.getByLabelText('Your coach never sees this chat, with one safety exception.')).toBeTruthy();
+  };
+  afterEach(() => useBlockedUsersStore.setState({ blocked: [] }));
+
+  it('the coach blocked me (the inbox leaves the row out): the card is gone; when the row is back, so is the card', async () => {
+    mockInbox.mockResolvedValue({ items: [], next_cursor: null, total_unread: 0 });
+    const { u } = await show();
+    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    expectGone(u);
+    mockInbox.mockResolvedValue({ items: [thread()], next_cursor: null, total_unread: 2 });
+    await act(async () => mockRefocus());
+    expect(await u.findByLabelText(COACH_LABEL)).toBeTruthy();
+    expect(u.getByLabelText('Sam never sees this chat, with one safety exception.')).toBeTruthy();
+  });
+
+  it('I block my coach: the card leaves at once and the list reads again; my unblock reads again and it comes back', async () => {
+    const { u } = await show();
+    expect(await u.findByLabelText(COACH_LABEL)).toBeTruthy();
+    const reads = mockInbox.mock.calls.length;
+    mockInbox.mockResolvedValue({ items: [], next_cursor: null, total_unread: 0 });
+    await act(async () => useBlockedUsersStore.setState({ blocked: [SAM] }));
+    expectGone(u);
+    await waitFor(() => expect(mockInbox).toHaveBeenCalledTimes(reads + 1));
+    mockInbox.mockResolvedValue({ items: [thread()], next_cursor: null, total_unread: 2 });
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(await u.findByLabelText(COACH_LABEL)).toBeTruthy();
+    expect(mockInbox).toHaveBeenCalledTimes(reads + 2);
+  });
+
+  // FR-880R4 (Sol B1, agent 174 draft): a cold start offline, with my block of my coach saved on the phone. No read gives
+  // a coach id, so only the signed-in coach id and the saved list can say it; the card stays away until I unblock.
+  it('a cold offline list with my saved block never shows the coach; my unblock brings back the offline card', async () => {
+    const { queryClient } = jest.requireActual('../../../services/queryClient');
+    mockUser = { id: 'client-1', coach_id: 'coach-9' };
+    queryClient.clear();
+    // my saved block of my coach, as Home's header read it from the phone before Roman's shortcut opened this list
+    useBlockedUsersStore.setState({ blocked: [{ ...SAM, role: 'coach' }], hydrated: true, userId: 'client-1' });
+    mockGet.mockRejectedValue(new Error('offline')); // coach, count, usage and thread reads all fail
+    mockInbox.mockRejectedValue(new Error('offline'));
+    const { u } = await show();
+    expect(await u.findByLabelText('Roman, your assistant')).toBeTruthy();
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(u.queryByTestId('inbox-coach')).toBeNull();
+    expect(u.queryByText('Your coach')).toBeNull();
+    expect(u.queryByText('Message your coach')).toBeNull();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(await u.findByLabelText('Your coach')).toBeTruthy(); // unblocked: the offline card is back
+    u.unmount();
+    queryClient.clear();
+    useBlockedUsersStore.setState({ hydrated: false, userId: null });
+  });
+
+  it('without the messaging v2 switch my own block still hides the card, and an unblock brings it back', async () => {
+    mockFlags.messaging_core_v2 = false;
+    const { u } = await show();
+    expect(await u.findByLabelText('Sam, your coach, 2 unread')).toBeTruthy();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [SAM] }));
+    expectGone(u);
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(await u.findByLabelText('Sam, your coach, 2 unread')).toBeTruthy();
+  });
+
+  // FR-880R2 (Sol B2): with messaging v2 off there is no inbox read; the thread read (GET /messages) answers 200 [] with
+  // x-conversation-closed while either person blocks (b#1141 CONTRACT 6370968268), any messaging version.
+  it('without the messaging v2 switch the coach blocked me: no card, never shown first; a read that says open brings it back', async () => {
+    mockFlags.messaging_core_v2 = false;
+    let closed = true;
+    mockGet.mockImplementation(async (url: string) => {
+      if (url === '/messages?limit=1') return { data: [], headers: closed ? { 'x-conversation-closed': 'blocked_by_them' } : {} };
+      if (url === '/messages/unread-count') return { data: { total: closed ? 0 : 2 } };
+      if (!(url in ROUTES)) throw Object.assign(new Error(`GET ${url} failed`), { response: { status: 404 } });
+      return { data: ROUTES[url] };
+    });
+    const { u } = await show();
+    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    expectGone(u);
+    expect(mockInbox).not.toHaveBeenCalled();
+    const offline = mockGet.getMockImplementation();
+    mockGet.mockImplementation(async (url: string) => {
+      if (url === '/messages?limit=1') throw new Error('offline');
+      return offline?.(url);
+    });
+    await act(async () => mockRefocus());
+    await waitFor(() => expect(mockGet.mock.calls.filter(([url]) => url === '/messages?limit=1')).toHaveLength(2));
+    expectGone(u); // a failed read keeps the last answer
+    mockGet.mockImplementation(offline as never);
+    closed = false;
+    await act(async () => mockRefocus());
+    expect(await u.findByLabelText('Sam, your coach, 2 unread')).toBeTruthy();
+    expect(u.getByLabelText('Sam never sees this chat, with one safety exception.')).toBeTruthy();
+  });
+
+  it.each<[string, Partial<InboxThread>]>([['closed', { closed: true }], ['blocked by me', { blocked_by_me: true }]])('a row the server marks %s leaves the list too', async (_, o) => {
+    mockInbox.mockResolvedValue({ items: [thread(o)], next_cursor: null, total_unread: 0 });
+    const { u } = await show();
+    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    expectGone(u);
+  });
+
+  it('a failed inbox read keeps a closed chat closed (the last good answer stays)', async () => {
+    mockInbox.mockResolvedValue({ items: [], next_cursor: null, total_unread: 0 });
+    const { u } = await show();
+    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    expectGone(u);
+    mockInbox.mockRejectedValue(new Error('offline'));
+    await act(async () => mockRefocus());
+    await waitFor(() => expect(mockInbox).toHaveBeenCalledTimes(2));
+    expectGone(u);
   });
 });
 

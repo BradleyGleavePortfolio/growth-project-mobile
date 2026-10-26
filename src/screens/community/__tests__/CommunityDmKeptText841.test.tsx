@@ -27,13 +27,20 @@ const mockParams: { current: Record<string, unknown> } = { current: {} };
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
   useRoute: () => ({ params: mockParams.current }),
+  useFocusEffect: () => undefined, // the DM's status band (FR-880R4)
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana' }) }));
 const mockSend = jest.fn();
 let mockWorkspace: string | null = 'ws-1';
 jest.mock('../../../hooks/useCommunity', () => ({
-  useCommunityMe: () => ({ data: mockWorkspace ? { workspace_id: mockWorkspace } : undefined, isLoading: false, isError: false }),
-  useDmMessages: () => ({ data: [], isLoading: false, isError: false }),
+  // No workspace yet = /community/me still loading (FX-872: the DM read waits for it, so nothing is answered yet).
+  useCommunityMe: () => (mockWorkspace
+    ? { data: { workspace_id: mockWorkspace }, isLoading: false, isError: false, isSuccess: true }
+    : { data: undefined, isLoading: true, isError: false, isSuccess: false }),
+  useDmMessages: (ws: string) => (ws
+    ? { data: [], isLoading: false, isError: false, isSuccess: true, isFetchedAfterMount: true, isStale: false }
+    : { data: undefined, isLoading: true, isError: false, isSuccess: false, isFetchedAfterMount: false, isStale: true }),
+  usePosts: () => ({ data: [], isLoading: false, isError: false, isSuccess: true, isFetchedAfterMount: true, isStale: false }),
   useSendDm: () => ({ mutateAsync: mockSend, isPending: false }),
 }));
 
@@ -75,10 +82,13 @@ it('after the app closed (memory empty), the device copy fills the box', async (
   await waitFor(() => expect(boxOf(r)).toBe('See you at the 6am cl'));
 });
 
-it('text typed before the community workspace loads stays with the DM (Opus C4)', async () => {
+it('no box while the community workspace loads; the kept text is there once it opens (Opus C4, FX-872)', async () => {
+  const a = await open('coach-1');
+  await fireEvent.changeText(a.getByTestId(FIELD), 'Quick q');
+  await a.unmount();
   mockWorkspace = null;
   const r = await open('coach-1');
-  await fireEvent.changeText(r.getByTestId(FIELD), 'Quick q');
+  expect(r.queryByTestId(FIELD)).toBeNull(); // closed until the server says open
   mockWorkspace = 'ws-1';
   await r.rerender(<CommunityDmThreadScreen />);
   expect(boxOf(r)).toBe('Quick q');
