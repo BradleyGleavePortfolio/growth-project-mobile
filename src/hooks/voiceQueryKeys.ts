@@ -9,11 +9,12 @@
  *   feed(ws, scope, n)  → ['community', 'voice', 'feed', ws, scope, n]  (a specific page set)
  *   note(id)            → ['community', 'voice-note', id]               (the voice note page)
  *
- * refreshVoiceQueries re-reads every voice feed and voice note page on screen (and marks the rest
- * stale): the answer to a removal ping and to the catch-up in useVoiceFeed (backend #1165).
+ * refreshVoiceQueries re-reads every voice feed, voice note page and voice-bearing Find search on
+ * screen (and marks the rest stale): the answer to a removal ping (backend #1165).
  */
 import type { QueryClient } from '@tanstack/react-query';
 import { VOICE_PAGE_LIMIT } from '../api/communityVoiceApi';
+import { communitySearchKeys } from './useCommunitySearch';
 
 export type VoiceFeedScope =
   | { kind: 'all' }
@@ -56,7 +57,25 @@ function isVoiceKey(key: readonly unknown[]): boolean {
   return key[0] === 'community' && (key[1] === 'voice' || key[1] === 'voice-note');
 }
 
-/** Re-read the voice queries on screen over REST; the others are only marked stale. */
+/**
+ * A Find search whose pages can hold a voice transcript excerpt: all kinds ('∅') or voice only.
+ * Same test as purgeSavedVoiceSearches; post, lesson and event searches never match (LS-881R6 B1).
+ */
+function isVoiceSearchKey(key: readonly unknown[]): boolean {
+  const root = communitySearchKeys.all;
+  if (key[0] !== root[0] || key[1] !== root[1]) return false;
+  const kind = key[root.length + 2];
+  return kind === '∅' || kind === 'voice_note_transcript';
+}
+
+/**
+ * Re-read the voice queries on screen over REST, open Find searches included, so the server's answer
+ * drops a removed note's excerpt; the others are only marked stale. A closed Find search is dropped
+ * so reopening it cannot show the removed words before the new answer lands.
+ */
 export function refreshVoiceQueries(qc: QueryClient): Promise<void> {
-  return qc.invalidateQueries({ predicate: (q) => isVoiceKey(q.queryKey) });
+  qc.removeQueries({ type: 'inactive', predicate: (q) => isVoiceSearchKey(q.queryKey) });
+  return qc.invalidateQueries({
+    predicate: (q) => isVoiceKey(q.queryKey) || isVoiceSearchKey(q.queryKey),
+  });
 }

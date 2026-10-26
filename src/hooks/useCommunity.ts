@@ -354,9 +354,10 @@ export function useCommunityBadge(
     const unsubscribe = subscribeToCommunityUser(userId, (ping?: CommunityPing) => {
       // Untrusted ping → refetch authoritative unread counts over REST.
       qc.invalidateQueries({ queryKey: communityKeys.me() });
-      // A coach's removal arrives as message.updated (backend #1165): re-read the voice feeds and voice
-      // note pages on screen too, so a removed note turns into its placeholder with no tap. Only the
-      // event name is read; a missing or unknown one re-reads them as well.
+      // A coach's removal arrives as message.updated (backend #1165): re-read the voice feeds, voice
+      // note pages and open voice-bearing Find searches too, so a removed note turns into its
+      // placeholder, or leaves Find, with no tap. Only the event name is read; a missing or unknown
+      // one re-reads them as well. Other known events re-read none of them.
       const event: unknown = ping?.event;
       const known: readonly unknown[] = Object.values(COMMUNITY_BROADCAST_EVENTS);
       if (event === COMMUNITY_BROADCAST_EVENTS.messageUpdated || !known.includes(event)) {

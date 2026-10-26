@@ -85,14 +85,22 @@ jest.mock('../../api/communityVoiceApi', () => {
     },
   };
 });
+const mockSearch = jest.fn();
+jest.mock('../../api/communitySearchApi', () => {
+  const actual = jest.requireActual('../../api/communitySearchApi');
+  return { ...actual, communitySearchApi: { search: (...a: unknown[]) => mockSearch(...a) } };
+});
+jest.mock('../../analytics/posthog.service', () => ({ track: jest.fn() }));
 
 import VoiceNotesSection from '../../components/community/VoiceNotesSection';
+import CommunityFindScreen from '../../screens/community/CommunityFindScreen';
 import CommunityVoiceNoteDetail from '../../screens/community/CommunityVoiceNoteDetail';
 import { voiceRemovedLine } from '../../components/community/removed/VoiceRemovedPlaceholder';
 import { resetReportedVoiceNotes } from '../../components/community/VoiceReportedFold';
 import { resetVoiceOutbox } from '../useVoiceOutbox';
 import { useCommunityBadge } from '../useCommunity';
 import { VOICE_CATCH_UP_MS, useVoiceFeed } from '../useVoiceFeed';
+import { communitySearchKeys, useCommunitySearch } from '../useCommunitySearch';
 
 const UPDATED = 'community.message.updated';
 const note = (id: string, author: string) => ({
@@ -359,6 +367,101 @@ describe('the bounded catch-up heals a missed ping', () => {
     await app('active');
     expect(await findByTestId('community-voice-detail-removed')).toBeTruthy();
     expect(mockGetOne).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('an open Find result (LS-881R6 B1)', () => {
+  // The transcript words of the note Coach Sam removes, and a post that stays.
+  const SPOKEN = 'keep your elbows in on the press';
+  const hit = (id: string, kind: string, excerpt: string) => ({
+    id: `res-${id}`,
+    kind,
+    targetId: id,
+    cohortId: null,
+    authorId: 'u-alice',
+    excerpt,
+    createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+  });
+  const results = (...rows: unknown[]) => ({ version: 1, query: 'press', results: rows, nextCursor: null, tookMs: 3 });
+  const kinds = () => mockSearch.mock.calls.map((c) => (c[1] as { kind?: string }).kind ?? 'all');
+  beforeEach(() => {
+    mockGetMe.mockResolvedValue({
+      workspace_id: 'ws-1',
+      membership: { role: 'client' },
+      unread: { cohort_messages: 0, dm_messages: 0, mentions: 0 },
+    });
+    mockSearch.mockReset();
+  });
+
+  it('drops the removed note from the screen and from what it reads aloud, with no tap', async () => {
+    mockSearch
+      .mockResolvedValueOnce(results(hit('vn-other', 'voice_note_transcript', SPOKEN), hit('p-1', 'post', 'Bench day notes')))
+      .mockResolvedValue(results(hit('p-1', 'post', 'Bench day notes'))); // the server no longer finds it
+    const { findByText, findByLabelText, findByTestId, getByTestId, queryByText, queryByLabelText, queryByTestId } = await render(
+      <QueryClientProvider client={newClient()}>
+        <Badge />
+        <CommunityFindScreen />
+      </QueryClientProvider>,
+    );
+    await fireEvent.changeText(await findByTestId('community-search-input'), 'press');
+    expect(await findByText(SPOKEN, {}, { timeout: 2_000 })).toBeTruthy();
+    expect(await findByLabelText(`Voice note. ${SPOKEN}`)).toBeTruthy();
+    await waitFor(() => expect(mockPing.current).not.toBeNull());
+
+    await ping(removalPing(null));
+
+    await waitFor(() => expect(queryByText(SPOKEN)).toBeNull());
+    expect(queryByLabelText(new RegExp(SPOKEN))).toBeNull();
+    expect(queryByTestId('community-search-result-res-vn-other')).toBeNull();
+    expect(getByTestId('community-search-result-res-p-1')).toBeTruthy(); // the rest of the results stay
+    expect(mockSearch).toHaveBeenCalledTimes(2);
+    expect(mockSearch.mock.calls[1][1]).toMatchObject({ q: 'press' });
+  });
+
+  it('re-reads only searches that can hold a voice note, only on a removal or odd ping, and drops closed ones', async () => {
+    mockSearch.mockImplementation(async (_ws: string, o: { kind?: string }) =>
+      o.kind === 'post' ? results(hit('p-1', 'post', 'Bench day notes')) : results(hit('vn-other', 'voice_note_transcript', SPOKEN)),
+    );
+    const qc = newClient();
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const open = await renderHook(
+      () => {
+        useCommunityBadge('u-me');
+        return [
+          useCommunitySearch({ workspaceId: 'ws-1', term: 'press' }),
+          useCommunitySearch({ workspaceId: 'ws-1', term: 'press', kind: 'voice_note_transcript' }),
+          useCommunitySearch({ workspaceId: 'ws-1', term: 'press', kind: 'post' }),
+        ];
+      },
+      { wrapper },
+    );
+    const closed = await renderHook(() => useCommunitySearch({ workspaceId: 'ws-1', term: 'elbows' }), { wrapper });
+    await waitFor(() => expect(open.result.current.every((q) => q.isSuccess)).toBe(true));
+    await waitFor(() => expect(closed.result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(mockPing.current).not.toBeNull());
+    await closed.unmount(); // Find was closed: its pages sit in memory with no screen
+    const closedKey = communitySearchKeys.query('ws-1', 'elbows');
+    expect(qc.getQueryData(closedKey)).toBeDefined();
+    expect(kinds().sort()).toEqual(['all', 'all', 'post', 'voice_note_transcript']);
+
+    // A known event that cannot remove a note re-reads no search.
+    await ping({ event: 'community.message.created' });
+    await ping({ event: 'community.reaction.changed' });
+    await act(async () => {});
+    expect(mockSearch).toHaveBeenCalledTimes(4);
+
+    // The removal ping re-reads the open all-kinds and voice-only searches, not the post-only one.
+    await ping(removalPing(null));
+    await waitFor(() => expect(mockSearch).toHaveBeenCalledTimes(6));
+    expect(kinds().slice(4).sort()).toEqual(['all', 'voice_note_transcript']);
+    expect(qc.getQueryData(closedKey)).toBeUndefined(); // the closed search kept no excerpt to show again
+
+    // An odd ping is treated like a removal.
+    await ping({ event: 'community.voice.gone' });
+    await waitFor(() => expect(mockSearch).toHaveBeenCalledTimes(8));
+    expect(kinds().slice(6).sort()).toEqual(['all', 'voice_note_transcript']);
   });
 });
 
