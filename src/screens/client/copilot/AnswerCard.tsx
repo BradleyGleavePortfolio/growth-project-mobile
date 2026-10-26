@@ -44,7 +44,7 @@ export function AnswerCard({ text, reply, safety, compact = false }: {
     <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]} testID="copilot-answer">
       <View style={s.pad}>
         <View style={s.who} accessible accessibilityLabel={A.roman}>
-          <RomanAvatar crop="neutral" size={24} />
+          <RomanAvatar crop="neutral" size={24} testID="copilot-answer-roman" />
           <Text style={[ledgerType.head, { color: forestPop.forest }]}>{A.roman}</Text>
         </View>
         {lead ? <Text style={[ledgerType.lead, { color: sc.textPrimary }]} testID="copilot-lead">{lead}</Text> : null}

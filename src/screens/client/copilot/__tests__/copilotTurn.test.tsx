@@ -33,7 +33,7 @@ jest.mock('../../../../components/roman/RomanTypingIndicator', () => ({ __esModu
 jest.mock('../../../../components/roman/RomanCrisisActions', () => ({ __esModule: true, default: () => mockText('crisis buttons') }));
 jest.mock('../../../../components/coachless/JoinCoachState', () => ({
   __esModule: true, default: ({ title }: { title: string }) => mockText(title), useClientNeedsCoach: () => mockNeedsCoach,
-  ROMAN_LOCK_TITLE: 'Roman works with a coach', ROMAN_LOCK_BODY: 'lock body',
+  ROMAN_LOCK_TITLE: 'Roman works with a coach', ROMAN_LOCK_BODY: 'lock body', JOIN_A_COACH: 'Join a coach',
 }));
 jest.mock('../../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-1', role: 'student' }) }));
 jest.mock('../../../../theme/ThemeProvider', () => {
