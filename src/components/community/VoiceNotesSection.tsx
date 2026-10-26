@@ -229,6 +229,9 @@ function OutboxRow({ item, onRetry, onDiscard, testID }: {
 }): React.ReactElement {
   const failed = item.status === 'failed';
   const waiting = item.status === 'waiting';
+  // Opus R5-B2: the sender's ··· on every unsent row. While an attempt runs it is held (the upload
+  // cannot be called back from here), so a Delete never races a note that is about to post.
+  const sending = item.status === 'sending';
   const confirmDiscard = () =>
     Alert.alert('Delete this voice note?', undefined, [
       { text: 'Cancel', style: 'cancel' },
@@ -241,6 +244,20 @@ function OutboxRow({ item, onRetry, onDiscard, testID }: {
         <Text style={styles.when} testID={`${testID}-status`}>
           {item.status === 'sending' ? 'Sending…' : failed ? 'Not sent' : ''}
         </Text>
+        <View style={styles.spacer} />
+        <HapticPressable
+          intent="light"
+          onPress={confirmDiscard}
+          disabled={sending}
+          accessibilityRole="button"
+          accessibilityLabel="Delete voice note"
+          accessibilityState={{ disabled: sending }}
+          hitSlop={8}
+          style={[styles.ownMenu, sending ? styles.held : null]}
+          testID={`${testID}-menu`}
+        >
+          <Ionicons name="ellipsis-horizontal" size={18} color={fp.n700} />
+        </HapticPressable>
       </View>
       <VoiceNotePlayer
         url={item.input.uri}
@@ -347,6 +364,8 @@ const styles = StyleSheet.create({
   // The name gives way first: at 130% text on a 360 pt phone the Inter name, Coach mark and time overflow the row.
   keep: { flexShrink: 0 },
   spacer: { flex: 1 },
+  ownMenu: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  held: { opacity: 0.4 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 28 },
   wifiOff: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
   strike: { position: 'absolute', width: 22, height: 2, backgroundColor: fp.n700, transform: [{ rotate: '45deg' }] },

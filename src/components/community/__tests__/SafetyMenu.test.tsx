@@ -2,7 +2,7 @@
  * SafetyMenu — Report (with reason) and Block on community content (Apple 1.2).
  */
 import React from 'react';
-import { Alert, type AlertButton } from 'react-native';
+import { Alert, Platform, type AlertButton } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SafetyMenu from '../SafetyMenu';
@@ -72,13 +72,31 @@ async function renderMenu(props: Partial<React.ComponentProps<typeof SafetyMenu>
 }
 
 let alertSpy: jest.SpyInstance;
+const realOS = Platform.OS;
+const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
 beforeEach(() => {
   mockReport.mockReset().mockResolvedValue(undefined);
   mockBlock.mockReset().mockResolvedValue(undefined);
   mockCapture.mockReset();
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  // Android raises a follow-up Alert as soon as the sheet closes; the iOS path (wait for the Modal's
+  // onDismiss) has its own block below (Opus R5-B4).
+  setOS('android');
 });
-afterEach(() => alertSpy.mockRestore());
+afterEach(() => {
+  alertSpy.mockRestore();
+  setOS(realOS);
+});
+
+/** The Modal's onDismiss, read while the sheet is up (the jest Modal renders nothing once closed). */
+function sheetDismiss(getByTestId: (id: string) => { props: Record<string, unknown>; parent: unknown }, id = 'sm') {
+  let node = getByTestId(`${id}-sheet`) as { props: Record<string, unknown>; parent: unknown } | null;
+  while (node && typeof node.props.onDismiss !== 'function') {
+    node = node.parent as typeof node;
+  }
+  if (!node) throw new Error('no Modal onDismiss');
+  return node.props.onDismiss as () => void;
+}
 
 function pressAlertButton(text: string) {
   const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
@@ -442,5 +460,104 @@ describe('SafetyMenu — GOAL B-06 sheet (FR-848R5)', () => {
     const texts = container.queryAll((n) => n.type === 'Text');
     expect(texts.length).toBeGreaterThan(10);
     for (const t of texts) expect(String(flat(t)?.fontFamily)).toMatch(/^Inter_/);
+  });
+});
+
+// Opus R5-B4: on iOS an Alert raised over the open sheet, or while it closes, can be dropped. Every
+// Alert that follows the sheet (the Delete and Block confirms, "Report sent") waits for the Modal's
+// onDismiss: the sheet is gone first, then the Alert, then the action.
+describe('SafetyMenu — iOS: the sheet closes before its Alert (Opus R5-B4)', () => {
+  beforeEach(() => setOS('ios'));
+
+  it('Delete: the sheet closes, the confirm comes after onDismiss, and Delete runs from it', async () => {
+    const onDelete = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId, queryByTestId } = await renderMenu({ authorUserId: ME, onDelete, contentNoun: 'voice note' });
+    await fireEvent.press(getByTestId('sm'));
+    const dismiss = sheetDismiss(getByTestId);
+    await fireEvent.press(getByTestId('sm-delete'));
+    expect(queryByTestId('sm-sheet')).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalled();
+    await act(async () => dismiss());
+    expect(alertSpy).toHaveBeenCalledWith('Delete this voice note?', expect.any(String), expect.any(Array));
+    await act(async () => {
+      await pressAlertButton('Delete');
+    });
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('Block: the confirm comes only once the sheet is gone', async () => {
+    const onBlocked = jest.fn();
+    const { getByTestId, queryByTestId } = await renderMenu({ onBlocked });
+    await fireEvent.press(getByTestId('sm'));
+    const dismiss = sheetDismiss(getByTestId);
+    await fireEvent.press(getByTestId('sm-block'));
+    expect(queryByTestId('sm-sheet')).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalled();
+    await act(async () => dismiss());
+    expect(alertSpy).toHaveBeenCalledWith('Block Sam?', expect.any(String), expect.any(Array));
+    await act(async () => {
+      await pressAlertButton('Block');
+    });
+    expect(mockBlock).toHaveBeenCalledWith(OTHER);
+    expect(onBlocked).toHaveBeenCalledWith(OTHER);
+  });
+
+  it('Report sent (with the 911 / 988 line) shows after onDismiss, then the note folds', async () => {
+    const onReported = jest.fn();
+    const { getByTestId, queryByTestId } = await renderMenu({ targetType: 'voice_note', onReported });
+    await fireEvent.press(getByTestId('sm'));
+    const dismiss = sheetDismiss(getByTestId);
+    await fireEvent.press(getByTestId('sm-report'));
+    await act(async () => {
+      await fireEvent.press(getByTestId('sm-reason-self_harm'));
+    });
+    expect(mockReport).toHaveBeenCalled();
+    expect(queryByTestId('sm-sheet')).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(onReported).not.toHaveBeenCalled();
+    await act(async () => dismiss());
+    const [title, message] = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
+    expect(title).toBe('Report sent');
+    expect(message).toMatch(/911/);
+    expect(message).toMatch(/988/);
+    expect(onReported).toHaveBeenCalledTimes(1);
+  });
+
+  it('a menu unmounted mid-close still shows what was waiting', async () => {
+    const onReported = jest.fn();
+    const { getByTestId, unmount } = await renderMenu({ onReported });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-report'));
+    await act(async () => {
+      await fireEvent.press(getByTestId('sm-reason-spam'));
+    });
+    expect(alertSpy).not.toHaveBeenCalled();
+    await act(async () => unmount());
+    expect(alertSpy).toHaveBeenCalledWith('Report sent', expect.any(String));
+    expect(onReported).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Sol R5-B2: the report sheet is capped at 90% of the screen and its steps scroll above Cancel.
+describe('SafetyMenu — the sheet scrolls when it is taller than the screen (Sol R5-B2)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  it('caps the sheet and scrolls the note card, reasons and emergency line; Cancel stays outside', async () => {
+    const { getByTestId } = await renderMenu({
+      targetType: 'voice_note',
+      context: { name: 'Maya', detail: 'voice note · 0:21' },
+    });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-report'));
+    expect(StyleSheet.flatten(getByTestId('sm-sheet').props.style).maxHeight).toBe('90%');
+    const scroll = getByTestId('sm-scroll');
+    const inside = (id: string) => {
+      let n = getByTestId(id) as { parent: unknown } | null;
+      while (n && n !== scroll) n = n.parent as typeof n;
+      return n === scroll;
+    };
+    expect(inside('sm-context')).toBe(true);
+    expect(inside('sm-reason-harassment')).toBe(true);
+    expect(inside('sm-emergency')).toBe(true);
+    expect(inside('sm-close')).toBe(false);
   });
 });

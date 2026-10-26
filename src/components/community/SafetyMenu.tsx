@@ -20,9 +20,14 @@
  * Report, Block and Delete (GOAL B-06c), with the same "Delete this …?" confirm.
  * Failures use describeCommunityFailure: specific copy per server code and
  * status, a support reference (and a Sentry report) for anything unexpected.
+ * Opus R5-B4: an Alert that follows the sheet (the Delete and Block confirms, "Report sent") is raised
+ * only once the sheet has gone: from the Modal's onDismiss on iOS (an Alert raised while a Modal is
+ * up or closing can be dropped there), right after closing elsewhere.
+ * Sol R5-B2: the sheet is at most 90% of the screen and its steps scroll above a fixed Cancel, so the
+ * note card and the first reasons stay reachable on a 360-wide phone at 130% text.
  */
-import React, { useState } from 'react';
-import { Alert, Modal, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Modal, Platform, ScrollView, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import HapticPressable from '../HapticPressable';
@@ -93,6 +98,22 @@ export default function SafetyMenu({
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('menu');
   const [busy, setBusy] = useState(false);
+  // Opus R5-B4: what to run once the sheet has finished closing (see afterClose).
+  const afterCloseRef = useRef<(() => void) | null>(null);
+  const runAfterClose = () => {
+    const next = afterCloseRef.current;
+    afterCloseRef.current = null;
+    next?.();
+  };
+  // If the host unmounts the menu mid-close (a refetch drops the row), still show what was waiting.
+  useEffect(
+    () => () => {
+      const next = afterCloseRef.current;
+      afterCloseRef.current = null;
+      next?.();
+    },
+    [],
+  );
 
   const isOwn = !!viewerUserId && !!authorUserId && viewerUserId === authorUserId;
   if (!targetId || (isOwn && !onDelete)) return null;
@@ -105,13 +126,23 @@ export default function SafetyMenu({
     setStep('menu');
   };
 
+  /** Close the sheet, then run `next` once it is gone (iOS: the Modal's onDismiss). */
+  const afterClose = (next: () => void) => {
+    close();
+    if (Platform.OS === 'ios') afterCloseRef.current = next;
+    else next();
+  };
+
   const submitReport = async (reason: string) => {
     setBusy(true);
     try {
       await communitySafetyApi.report({ target_type: targetType, target_id: targetId, reason });
-      close();
-      onReported?.();
-      Alert.alert(COMMUNITY_REPORT_SENT_TITLE, communityReportSentMessage(reason));
+      // "Report sent" carries the 911 / 988 line after Self-harm: raise it once the sheet is gone, then
+      // fold the note (a host may unmount this menu when it folds).
+      afterClose(() => {
+        Alert.alert(COMMUNITY_REPORT_SENT_TITLE, communityReportSentMessage(reason));
+        onReported?.();
+      });
     } catch (err) {
       const failure = describeCommunityFailure(err, 'report');
       Alert.alert(failure.title, failure.message);
@@ -122,7 +153,7 @@ export default function SafetyMenu({
 
   const confirmDelete = () => {
     if (!onDelete) return;
-    Alert.alert(
+    afterClose(() => Alert.alert(
       `Delete this ${contentNoun}?`,
       `It will be removed for everyone in your community. This cannot be undone.`,
       [
@@ -131,25 +162,21 @@ export default function SafetyMenu({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            setBusy(true);
             try {
               await onDelete();
-              close();
             } catch (err) {
               const failure = describeCommunityFailure(err, 'delete');
               Alert.alert(failure.title, failure.message);
-            } finally {
-              setBusy(false);
             }
           },
         },
       ],
-    );
+    ));
   };
 
   const confirmBlock = () => {
     if (!authorUserId) return;
-    Alert.alert(
+    afterClose(() => Alert.alert(
       `Block ${who}?`,
       `You and ${who} will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. They are not told. You can unblock them from Community safety.`,
       [
@@ -158,10 +185,8 @@ export default function SafetyMenu({
           text: 'Block',
           style: 'destructive',
           onPress: async () => {
-            setBusy(true);
             try {
               await communitySafetyApi.block(authorUserId);
-              close();
               // Refetch every community surface so the blocked person's content
               // disappears everywhere at once.
               await qc.invalidateQueries({ queryKey: ['community'] });
@@ -169,13 +194,11 @@ export default function SafetyMenu({
             } catch (err) {
               const failure = describeCommunityFailure(err, 'block');
               Alert.alert(failure.title, failure.message);
-            } finally {
-              setBusy(false);
             }
           },
         },
       ],
-    );
+    ));
   };
 
   return (
@@ -184,20 +207,24 @@ export default function SafetyMenu({
         intent="light"
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={isOwn ? `Options for your ${contentNoun}` : `Report or block ${who}`}
+        // #175-W: a viewer who can also remove this (the coach) hears all three actions.
+        accessibilityLabel={
+          isOwn ? `Options for your ${contentNoun}` : onDelete ? 'Report, block or remove' : `Report or block ${who}`
+        }
         hitSlop={8}
         style={styles.trigger}
         testID={testID}
       >
         <Ionicons name="ellipsis-horizontal" size={18} color={semanticColors.textMuted} />
       </HapticPressable>
-      <Modal visible={open} transparent animationType="slide" onRequestClose={close}>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={close} onDismiss={runAfterClose}>
         <View style={[styles.backdrop, { backgroundColor: semanticColors.overlay }]}>
           <View
             style={[styles.sheet, { backgroundColor: sheetBg }]}
             testID={`${testID}-sheet`}
           >
             <View style={[styles.grab, { backgroundColor: light ? voiceShades.track : semanticColors.border }]} />
+            <ScrollView style={styles.body} bounces={false} testID={`${testID}-scroll`}>
             {busy ? (
               <ActivityIndicator color={semanticColors.accent} style={styles.busy} />
             ) : step === 'menu' ? (
@@ -302,6 +329,7 @@ export default function SafetyMenu({
                 </Text>
               </>
             )}
+            </ScrollView>
             <HapticPressable
               intent="light"
               onPress={close}
@@ -342,12 +370,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: spacing.xl, // clears the home indicator under Cancel
+    maxHeight: '90%', // Sol R5-B2: never taller than the screen; the steps scroll inside
     shadowColor: fp.ink,
     shadowOffset: { width: 0, height: -4 },
     shadowRadius: 6,
     shadowOpacity: 0.08,
     elevation: 8,
   },
+  // The steps shrink and scroll inside the capped sheet; Cancel stays put below them.
+  body: { flexGrow: 0, flexShrink: 1 },
   // GOAL .grab 36 x 5, radius 3, 10 below.
   grab: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10 },
   // GOAL .bquote: the note card above the reasons.
