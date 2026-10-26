@@ -12,7 +12,7 @@ import RomanCrisisActions from '../../../components/roman/RomanCrisisActions';
 import type { RomanSafetyAction } from '../../../api/romanSafetyActions';
 import type { CopilotReply, SourceKind } from '../../../api/copilotApi';
 import { ASK_COPY as A, SOURCE_TAG, leadAndRest, withoutCites, withoutEmphasis } from './askWords';
-import { ledger } from './ledger';
+import { ledger, ledgerType } from './ledger';
 
 const TAG: Record<SourceKind, { bg: string; ink: string }> = {
   plan: { bg: forestPop.forest, ink: forestPop.onDeep },
@@ -37,11 +37,11 @@ export function AnswerCard({ text, reply, safety }: { text: string; reply: Copil
     <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]} testID="copilot-answer">
       <View style={s.pad}>
         <View style={s.who} accessible accessibilityLabel={A.roman}>
-          <RomanAvatar crop="neutral" size={28} />
+          <RomanAvatar crop="neutral" size={24} testID="copilot-answer-roman" />
           <Text style={[typography.bodySmall, s.name, { color: sc.textPrimary }]}>{A.roman}</Text>
         </View>
         {lead ? <Text style={[typography.h2, { color: sc.textPrimary }]} testID="copilot-lead">{lead}</Text> : null}
-        {rest ? <Text style={[typography.body, { color: sc.textPrimary }]}>{rest}</Text> : null}
+        {rest ? <Text style={[ledgerType.body, { color: ledger.ink }]} testID="copilot-answer-body">{rest}</Text> : null}
         {safety?.length ? <RomanCrisisActions actions={safety} testID="copilot-crisis" /> : null}
       </View>
       {reply && reply.sources.length > 0 ? (

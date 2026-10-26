@@ -12,6 +12,7 @@
  * erases the chat the turns came from, they go (useCopilotAsk) and so does a question put back in the composer.
  */
 import React, { useEffect, useRef, useState } from 'react';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CommonActions, useNavigation, useRoute, type ParamListBase, type RouteProp } from '@react-navigation/native';
@@ -20,7 +21,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { forestPop, layout, pathTint, typography, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import EmptyState from '../../components/EmptyState';
-import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
+import AiRefusalNotice, { AI_REFUSAL_ACTIONS } from '../../components/ai/AiRefusalNotice';
 import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import RomanComposer from '../../components/roman/RomanComposer';
@@ -30,12 +31,15 @@ import {
   ROMAN_STORED_NO_REPLY, romanPoolEmpty, romanRateLimited,
 } from '../../components/roman/romanVoice';
 import { ForestStatusBar } from '../../components/StatusBarBand';
-import { PrimaryButton, Screen, useScreenInsets } from '../../ui';
-import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
+import { Headline, PrimaryButton, Screen, TextLink, useScreenInsets } from '../../ui';
+import { loadFailureMessage } from '../../ui/states/QuietStates';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
 import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
-import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
+import { JOIN_A_COACH, ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
+import { useOpenSupport } from '../../components/ai/useOpenSupport';
+import { COMMUNITY_REPORT_CRISIS_LINE } from '../../api/communitySafetyApi';
 import type { RomanApiError } from '../../api/romanApi';
 import { copilotApi, copilotErrorOf, type CopilotSuggestion, type PastQuestion } from '../../api/copilotApi';
 import { romanChatsEvents } from '../settings/romanChatsEvents';
@@ -71,9 +75,68 @@ export default function ClientPathCopilotScreen() {
   return <PathCopilot />;
 }
 
+/**
+ * Roman's lock for a client with no coach, drawn as style A frame 12 (Opus B-878R2-G3, Sol B-R2-FALLBACK): Back to
+ * You, Roman at 72, today's lock words (JoinCoachState) with the line in the ledger's #5A5A56, and "Join a coach" (the
+ * same EntitlementProvider.messageCoach join) under the text, not in a footer. The crisis line and Contact support stay
+ * under it (b#900: never only a join wall).
+ */
 function CoachLock() {
   const navigation = useNavigation();
-  return <JoinCoachState roman title={ROMAN_LOCK_TITLE} body={ROMAN_LOCK_BODY} onBack={() => navigation.goBack()} testID="copilot-coach-lock" />;
+  const { messageCoach } = useEntitlement();
+  const openSupport = useOpenSupport();
+  const id = 'copilot-coach-lock';
+  const back = (
+    <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel={`Back to ${C.back}`} style={[s.back, s.lockBack]} testID={`${id}-back`}>
+      <Ionicons name="chevron-back" size={22} color={forestPop.forest} />
+      <Text style={[ledgerType.nav, { color: forestPop.forest }]}>{C.back}</Text>
+    </Pressable>
+  );
+  return (
+    <Screen header={back} centerContent contentStyle={s.lock} testID={id}>
+      <RomanAvatar crop="neutral" size={72} testID={`${id}-roman`} />
+      <Headline style={s.lockTitle} testID={`${id}-title`}>{ROMAN_LOCK_TITLE}</Headline>
+      <Text style={[s.lockBody, { color: ledger.muted }]} testID={`${id}-body`}>{ROMAN_LOCK_BODY}</Text>
+      <PrimaryButton label={JOIN_A_COACH} onPress={messageCoach} wrap style={s.lockJoin} testID={`${id}-join`} />
+      <Text style={[s.lockHelp, { color: ledger.muted }]} testID={`${id}-crisis`}>{COMMUNITY_REPORT_CRISIS_LINE}</Text>
+      {openSupport ? <TextLink label={AI_REFUSAL_ACTIONS.contactSupport} onPress={() => void openSupport()} size="small" align="start" tone="accent" testID={`${id}-support`} /> : null}
+    </Screen>
+  );
+}
+
+/**
+ * A Copilot read on its way: the ledger's own placeholder, a white card with cool grey bars, not the app's warm cream
+ * skeleton (Sol B-R2-FALLBACK). Screen readers hear `label`; under Reduce Motion the bars hold still.
+ */
+function LedgerLoading({ label, rows, testID }: { label: string; rows: number; testID: string }) {
+  // The Skeleton's Reduce Motion rule on the ledger's palette: a gentle 0.7 to 1 pulse over 1.5 s once the probe says
+  // motion is fine (or the probe fails), a steady 0.7 when Reduce Motion is on.
+  const [still, setStill] = useState<boolean | null>(null);
+  const pulse = useSharedValue(0.7);
+  useEffect(() => {
+    let live = true;
+    // Only a plain "no" from the probe starts the pulse; a probe that throws keeps motion on, as the Skeleton does.
+    Promise.resolve(AccessibilityInfo.isReduceMotionEnabled?.()).then((on) => { if (live) setStill(on !== false); }, () => { if (live) setStill(false); });
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (on) => { if (live) setStill(on); });
+    return () => { live = false; sub?.remove(); };
+  }, []);
+  useEffect(() => {
+    if (still === null) return;
+    pulse.value = still ? 0.7 : withRepeat(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }), -1, true);
+  }, [pulse, still]);
+  const fade = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  return (
+    <View accessible accessibilityLabel={label} testID={testID}
+      style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]}>
+      {Array.from({ length: rows }, (_, i) => (
+        <Animated.View key={i} style={[s.bones, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line }, fade]}
+          testID={`${testID}-row`}>
+          <View style={[s.bone, s.boneLong, { backgroundColor: ledger.line }]} testID={`${testID}-bar`} />
+          <View style={[s.bone, s.boneShort, { backgroundColor: ledger.line }]} testID={`${testID}-bar`} />
+        </Animated.View>
+      ))}
+    </View>
+  );
 }
 
 function PathCopilot() {
@@ -113,6 +176,7 @@ function PathView() {
   const past = usePastQuestions();
   const { turns, busy, ask, erased } = useCopilotAsk();
   const [draft, setDraft] = useState('');
+  const [sent, setSent] = useState<ReadonlySet<string>>(() => new Set());
   const refilled = useRef('');
   useEffect(() => { if (erased) setDraft((d) => (d === refilled.current ? '' : d)); }, [erased]);
   const refusal = q.error ? aiRefusalOf(q.error) : null;
@@ -133,8 +197,9 @@ function PathView() {
   });
   const starters: string[] = [ROMAN_QUICK_STARTS[0], ROMAN_QUICK_STARTS[3]];
   if (targetChangedOn(week?.target ?? null)) starters.unshift(A.whyCalories);
-  // A suggestion already shown under an answer is not listed a second time below.
-  const underAnswers = new Set(turns.map((t) => t.answer?.reply?.suggestion?.id));
+  // A change still shown under its answer (its card, or its status) is not listed a second time below. Once it is sent
+  // from that card the card keeps only "Sent", so its status shows here, then Approved or Not approved (Sol B-R2-SEND).
+  const underAnswers = new Set(turns.map((t) => t.answer?.reply?.suggestion?.id).filter((id) => id && !sent.has(id)));
   const listed = items.filter((i) => !underAnswers.has(i.id));
   const composer = (
     <RomanComposer value={draft} onChangeText={setDraft} sending={busy} footer={ROMAN_ROOM_FOOTER} testID="copilot-composer"
@@ -152,14 +217,14 @@ function PathView() {
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={refresh} tintColor={sc.textMuted} />}>
           <Mast back={C.back} title={C.title} compact={asked}>{week ? <WeekBlock week={week} compact={asked} /> : null}</Mast>
           <View style={s.body} onLayout={(e) => reveal.body(e.nativeEvent.layout.y)}>
-            {q.isPending ? <QuietLoading label="Loading your path" rows={2} testID="copilot-loading" /> : null}
+            {q.isPending ? <LedgerLoading label="Loading your path" rows={2} testID="copilot-loading" /> : null}
             {refusal ? <AiRefusalNotice refusal={refusal} audience="client" surface="roman" onRetry={() => void q.refetch()} /> : null}
             {q.error && !refusal ? (
-              <QuietError message={loadFailureMessage(q.error, 'Your path')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-error" />
+              <LedgerRetry message={loadFailureMessage(q.error, 'Your path')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-error" />
             ) : null}
             {turns.map((t, i) => (
               <View key={t.id} onLayout={(e) => reveal.turn(i, e.nativeEvent.layout.y)}>
-                <Turn turn={t} coach={coach} onRetry={() => onAsk(t.question, t.id)} onSent={refresh} />
+                <Turn turn={t} coach={coach} onRetry={() => onAsk(t.question, t.id)} onSent={(sid) => { setSent((p) => new Set(p).add(sid)); refresh(); }} />
               </View>
             ))}
             {asked ? null : (
@@ -244,7 +309,7 @@ function SuggestionSlot({ suggestion, coach, onSent, onDismiss }: {
     : <SuggestionStatusList items={[suggestion]} coach={coach} />;
 }
 
-function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: string; onRetry: () => void; onSent: () => void }) {
+function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: string; onRetry: () => void; onSent: (id: string) => void }) {
   const a = turn.answer;
   const [dismissed, setDismissed] = useState(false);
   // The answer is read out when it arrives, as the error card is (accessibilityRole alert).
@@ -254,7 +319,7 @@ function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: stri
       <Asked question={turn.question} at={turn.askedAt} />
       {a ? <AnswerCard text={a.text} reply={a.reply} safety={a.safety} /> : null}
       {a && !dismissed ? (
-        <SuggestionSlot suggestion={a.reply?.suggestion ?? null} coach={coach} onSent={onSent} onDismiss={() => setDismissed(true)} />
+        <SuggestionSlot suggestion={a.reply?.suggestion ?? null} coach={coach} onSent={() => a.reply?.suggestion && onSent(a.reply.suggestion.id)} onDismiss={() => setDismissed(true)} />
       ) : null}
       {turn.error ? <TurnError error={turn.error} onRetry={onRetry} /> : null}
       {!a && !turn.error ? <RomanTypingIndicator testID="copilot-typing" /> : null}
@@ -322,7 +387,7 @@ function QuestionsView() {
           ) : null}
         </Mast>
         <View style={[s.body, s.histBody]}>
-          {q.isPending ? <QuietLoading label="Loading past questions" rows={4} testID="copilot-past-loading" /> : null}
+          {q.isPending ? <LedgerLoading label="Loading past questions" rows={4} testID="copilot-past-loading" /> : null}
           {older ? null : failed}
           <PastQuestionsList items={items} more={q.hasNextPage && !older} loadingMore={q.isFetchingNextPage}
             onMore={() => void q.fetchNextPage()} onOpen={(item) => navigation.push('Copilot', { view: 'answer', item })} />
@@ -387,7 +452,7 @@ function AnswerView({ item }: { item: PastQuestion }) {
         <Mast back={A.past} title={C.title} compact />
         <View style={[s.body, s.turn]}>
           <Asked question={item.question ?? ''} at={new Date(item.askedAt)} day={shortDay(item.askedAt)} />
-          {q.isPending ? <QuietLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
+          {q.isPending ? <LedgerLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
           {q.error || missing ? <LedgerRetry message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
           {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} /> : null}
           {/* A decided change was decided by whoever coached then; only an unsent one goes to today's coach (C1). */}
@@ -422,4 +487,15 @@ const s = StyleSheet.create({
   pad: { padding: 16, gap: 12 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  bones: { minHeight: 52, justifyContent: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 14 },
+  bone: { height: 12, borderRadius: 6 },
+  boneLong: { width: '72%' },
+  boneShort: { width: '44%', height: 10 },
+  // Style A frame 12 (.lockp): Roman, the serif headline 32, the line 16/1.5, the button 24 under it.
+  lockBack: { marginLeft: layout.gutter - 4, marginTop: 4 },
+  lock: { paddingHorizontal: 28, alignItems: 'flex-start' },
+  lockTitle: { fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', fontSize: 32, lineHeight: 40, letterSpacing: 0, marginTop: 20 },
+  lockBody: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24, marginTop: 10 },
+  lockJoin: { alignSelf: 'stretch', marginTop: 24 },
+  lockHelp: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21, marginTop: 20 },
 });

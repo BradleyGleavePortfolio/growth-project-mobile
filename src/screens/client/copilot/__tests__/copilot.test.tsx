@@ -15,17 +15,17 @@ jest.mock('../../../../config/featureFlags', () => ({ featureFlags: { clientPath
 const mockFlags: { clientPathCopilot: boolean } = jest.requireMock('../../../../config/featureFlags').featureFlags;
 jest.mock('../../../../api/schedulingApi', () => ({ resolveClientTimezone: () => 'UTC' }));
 jest.mock('../../../../hooks/useCalendar', () => ({ useMyCoaches: () => ({ data: mockCoaches }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack }), useRoute: () => ({ params: undefined }) }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack }), useRoute: () => ({ params: undefined }),
+  NavigationContext: jest.requireActual('react').createContext(null) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
 jest.mock('../../../../api/romanApi', () => ({ ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError: class extends Error {}, RomanWireError: class extends Error {}, openOrResumeSession: jest.fn(), sendMessage: jest.fn() }));
-jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off') }));
+jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off'), AI_REFUSAL_ACTIONS: { contactSupport: 'Contact support' } }));
 const mockText = (t: string) => <Text>{t}</Text>;
 let mockNeedsCoach = false;
 jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, ROMAN_LOCK_TITLE: 'Roman works with a coach',
-  default: ({ title, testID }: { title: string; testID: string }) => mockLock(title, testID), useClientNeedsCoach: () => mockNeedsCoach }));
-const mockLock = (title: string, testID: string) => <Text testID={testID}>{title}</Text>;
+  ROMAN_LOCK_BODY: 'lock body', JOIN_A_COACH: 'Join a coach', useClientNeedsCoach: () => mockNeedsCoach }));
 jest.mock('../../../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../../../theme/tokens');
   return { useTheme: () => ({ colors: t.colors, semanticColors: t.lightTokens }) };
@@ -132,7 +132,7 @@ test('a server without Copilot (404) still lets the client ask Roman, with no we
 test('a client with no coach gets the existing Roman lock page and no read; Not now waits while Send is in flight', async () => {
   mockNeedsCoach = true;
   const a = await render(wrap(<ClientPathCopilotScreen />));
-  expect([a.getByTestId('copilot-coach-lock').props.children, get.mock.calls.length]).toEqual(['Roman works with a coach', 0]);
+  expect([a.getByTestId('copilot-coach-lock-title').props.children, a.getByText('Join a coach') && get.mock.calls.length]).toEqual(['Roman works with a coach', 0]);
   await a.unmount();
   mockNeedsCoach = false;
   get.mockRejectedValueOnce(Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403, data: { code: 'ROMAN_REQUIRES_COACH' } } }));
