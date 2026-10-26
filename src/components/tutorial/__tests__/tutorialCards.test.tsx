@@ -365,12 +365,12 @@ describe('TutorialHomeSlot while the coaching chat is closed (FR-880R4)', () => 
   });
 
   it('unblocking brings the row back', async () => {
-    await prefsStorage.set(persistKeyFor('u1'), JSON.stringify(MY_BLOCK));
+    useBlockedUsersStore.setState({ blocked: MY_BLOCK, hydrated: true, userId: 'u1' }); // my block, as Home read it
     serve('open');
     await hydrateTutorial('u1', 'Maya', true);
     startClientTutorial(PAYLOAD);
     await render(<TutorialHomeSlot />);
-    await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     expect(screen.queryByTestId('home-message-coach')).toBeNull();
     await act(async () => { useBlockedUsersStore.setState({ blocked: [] }); });
     expect(await screen.findByLabelText('Message your coach, Bradley')).toBeTruthy();

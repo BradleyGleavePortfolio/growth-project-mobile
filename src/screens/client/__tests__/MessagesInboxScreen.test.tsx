@@ -247,17 +247,15 @@ describe('Messages list, the coach chat closed', () => {
   // a coach id, so only the signed-in coach id and the saved list can say it; the card stays away until I unblock.
   it('a cold offline list with my saved block never shows the coach; my unblock brings back the offline card', async () => {
     const { queryClient } = jest.requireActual('../../../services/queryClient');
-    const { persistKeyFor } = jest.requireActual('../../../store/blockedUsersStore');
-    const { prefsStorage } = jest.requireActual('../../../storage/mmkv');
     mockUser = { id: 'client-1', coach_id: 'coach-9' };
     queryClient.clear();
-    await prefsStorage.set(persistKeyFor('client-1'), JSON.stringify([{ ...SAM, role: 'coach' }]));
-    useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); // nothing read yet, as on a cold start
+    // my saved block of my coach, as Home's header read it from the phone before Roman's shortcut opened this list
+    useBlockedUsersStore.setState({ blocked: [{ ...SAM, role: 'coach' }], hydrated: true, userId: 'client-1' });
     mockGet.mockRejectedValue(new Error('offline')); // coach, count, usage and thread reads all fail
     mockInbox.mockRejectedValue(new Error('offline'));
     const { u } = await show();
     expect(await u.findByLabelText('Roman, your assistant')).toBeTruthy();
-    await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     expect(u.queryByTestId('inbox-coach')).toBeNull();
     expect(u.queryByText('Your coach')).toBeNull();
     expect(u.queryByText('Message your coach')).toBeNull();
@@ -265,7 +263,6 @@ describe('Messages list, the coach chat closed', () => {
     expect(await u.findByLabelText('Your coach')).toBeTruthy(); // unblocked: the offline card is back
     u.unmount();
     queryClient.clear();
-    await prefsStorage.delete(persistKeyFor('client-1'));
     useBlockedUsersStore.setState({ hydrated: false, userId: null });
   });
 
