@@ -65,6 +65,17 @@ async function renderDashboard(apiGet = makeApiGet(), inlineMode = true) {
   );
 }
 
+  // WCAG 2.x contrast ratio.
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a: string, b: string) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('CoachLtvDashboard', () => {
@@ -162,16 +173,6 @@ describe('CoachLtvDashboard', () => {
   });
 
   describe('RECORD badge colours (owner #185 option 2, jewelry gold)', () => {
-    // WCAG 2.x contrast ratio.
-    const lum = (hex: string) => {
-      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-        .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    };
-    const ratio = (a: string, b: string) => {
-      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
-      return (hi + 0.05) / (lo + 0.05);
-    };
     const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
     const textColor = (text: string) => StyleSheet.flatten(screen.getByText(text).props.style).color;
 
@@ -233,7 +234,7 @@ describe('CoachLtvDashboard', () => {
     });
 
     it.each([
-      ['flat', colors.mutedGold],
+      ['flat', colors.warningInk],
       ['down', colors.error],
     ] as const)('keeps the %s chip in its outline colours, with no gold', async (trend, color) => {
       await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: trend }));
@@ -242,6 +243,40 @@ describe('CoachLtvDashboard', () => {
       expect(goldIn(chip)).toEqual([]);
       expect(StyleSheet.flatten(chip.props.style)).toMatchObject({ borderWidth: 1, borderColor: color });
       expect(words(chip).map((s) => s.color)).toEqual([color, color]);
+    });
+  });
+
+  describe('readable flat chip, and a minus on the falling chip (owner D5 - A)', () => {
+    const chipWords = () =>
+      screen.getByTestId('ltv-trend-chip').queryAll((n) => n.type === 'Text').map((t) => StyleSheet.flatten(t.props.style).color);
+
+    it.each(['flat', 'down'] as const)('draws the %s chip words at 4.5:1 or more on the bone screen', async (trend) => {
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: trend }));
+      await waitFor(() => expect(screen.getByTestId('ltv-trend-chip')).toBeTruthy());
+      const [arrow, label] = chipWords();
+      expect(arrow).toBe(label);
+      expect(ratio(label, lightTokens.bgPrimary)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('no longer draws the flat chip in muted gold (2.3:1 on bone)', async () => {
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'flat' }));
+      await waitFor(() => expect(screen.getByTestId('ltv-trend-chip')).toBeTruthy());
+      expect(chipWords()).not.toContain(colors.mutedGold);
+      expect(ratio(colors.mutedGold, lightTokens.bgPrimary)).toBeLessThan(4.5);
+    });
+
+    it.each([
+      ['falling', 'down', 230000, 250000, '−$200'],
+      ['rising', 'up', 250000, 230000, '+$200'],
+      ['flat, no change', 'flat', 250000, 250000, '+$0'],
+      ['flat, a small fall', 'flat', 245000, 250000, '−$50'],
+      ['a fall under 50 cents', 'flat', 249960, 250000, '$0'],
+    ] as const)('puts the sign before the dollars when %s', async (_name, trend, now, ago, label) => {
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: trend, mrr_cents: now, mrr_30d_ago_cents: ago }));
+      await waitFor(() => expect(screen.getByTestId('ltv-trend-chip')).toBeTruthy());
+      const chip = screen.getByTestId('ltv-trend-chip');
+      const texts = chip.queryAll((n) => n.type === 'Text').map((t) => t.props.children);
+      expect(texts[1]).toBe(label);
     });
   });
 
