@@ -9,10 +9,11 @@
  */
 import React from 'react';
 import { Alert, FlatList, StyleSheet } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { authEvents } from '../../../utils/authEvents';
+import { forestPop as fp } from '../../../theme/tokens';
 
 const mockDisk = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
@@ -170,6 +171,13 @@ it('member Everyone: header, rows with names as sent, Coach mark, voice row, New
   expect(r.getAllByText('Coach')).toHaveLength(2);
   expect(r.getByTestId('space-chat-voice-v1')).toBeTruthy();
   expect(r.getByTestId('space-chat-new-line')).toBeTruthy();
+  // 05b: the New messages line is moss-green words on a leaf rule, never gold (FR-871R5, m#879 Opus C8).
+  const newLine = r.getByTestId('space-chat-new-line');
+  expect(StyleSheet.flatten(within(newLine).getByText('New messages').props.style)).toMatchObject({ color: fp.brand400 });
+  const kids = newLine.children as ReadonlyArray<string | { props: { style?: unknown } }>;
+  const fills = kids.map((c) => (typeof c === 'string' ? undefined : (StyleSheet.flatten(c.props.style as never) as { backgroundColor?: string } | undefined)?.backgroundColor));
+  expect(fills.filter(Boolean)).toEqual([fp.leaf, fp.leaf]);
+  expect(JSON.stringify(StyleSheet.flatten(newLine.props.style))).not.toContain(fp.goldInk);
   expect(r.getByTestId('space-chat-composer-field')).toBeTruthy();
   expect(r.queryByTestId('space-chat-hint')).toBeNull();
   // The stream reads the space's own route, newest first, and marks the newest row read (SC-BE2).
