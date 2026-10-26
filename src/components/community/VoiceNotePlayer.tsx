@@ -341,7 +341,8 @@ const styles = StyleSheet.create({
   },
   // GOAL .bcard box-shadow 0 2px 8px rgba(26,26,24,.05)
   card: { shadowColor: fp.ink, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, shadowOpacity: 0.05, elevation: 1 },
-  bare: { padding: 0, borderWidth: 0 },
+  // Opus R5-B1: zero each edge `box` sets (a `padding: 0` shorthand does not undo the longhands above).
+  bare: { paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, borderWidth: 0 },
   control: {
     width: 52,
     height: 52,

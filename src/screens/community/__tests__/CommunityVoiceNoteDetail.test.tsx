@@ -56,8 +56,13 @@ jest.mock('../../../api/communityVoiceApi', () => ({
 
 import CommunityVoiceNoteDetail from '../CommunityVoiceNoteDetail';
 import { resetReportedVoiceNotes } from '../../../components/community/VoiceReportedFold';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearUserCache, setUserCache } from '../../../lib/userCache';
 
-beforeEach(() => {
+beforeEach(async () => {
+  // The reported store saves per signed-in account: start each test signed out with nothing saved.
+  await clearUserCache();
+  await AsyncStorage.clear();
   resetReportedVoiceNotes();
   mockRole.current = 'client';
   mockSafety.mockReset();
@@ -136,6 +141,34 @@ it('a reported note folds into the VN-07 row and the player is gone', async () =
   expect(mockSafety.mock.calls.at(-1)?.[0]).toMatchObject({ targetId: 'vn-1', reported: true });
 });
 
+// Opus R5-B3: the fold outlives the app session — report, drop the memory (a cold start), open again.
+it('a reported note is still folded, with no player, after a restart', async () => {
+  await setUserCache({ id: 'u-viewer', email: 'v@example.invalid' });
+  const first = await renderDetail();
+  const safety = mockSafety.mock.calls.at(-1)?.[0] as { onReported: () => void };
+  await act(async () => {
+    safety.onReported();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  // Cold start: memory is gone, and the screen mounts afresh (a new key) on a new query client.
+  resetReportedVoiceNotes();
+  mockPlayer.mockReset();
+  mockSafety.mockReset();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await first.rerender(
+    <QueryClientProvider client={qc}>
+      <CommunityVoiceNoteDetail key="after-restart" />
+    </QueryClientProvider>,
+  );
+  const { findByTestId } = first;
+  expect(await findByTestId('community-voice-detail-reported')).toBeTruthy();
+  mockPlayer.mockReset();
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  expect(mockPlayer).not.toHaveBeenCalled();
+});
+
 // REMOVED-BY-M item 2 (owner #174-4): the coach and the platform owner get Remove for everyone on another
 // member's note (asked in the menu's sheet), not the author's Delete; a member gets neither.
 it('offers Remove for everyone on another member’s note to the coach and the owner only', async () => {
@@ -210,4 +243,21 @@ describe('a coach-removed note on its page (REMOVED-BY-M)', () => {
     expect(await findByText('You removed this voice note')).toBeTruthy();
     expect(mockGoBack).not.toHaveBeenCalled();
   });
+});
+
+// Sol R5-B3: the detail draws a coach's note as the deep coach card, like the Hall; a member's stays light.
+it('a coach-author note plays on the coach card; a member note on the light card', async () => {
+  mockGetOne.mockResolvedValue({ ...NOTE, author_is_coach: true });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await render(
+    <QueryClientProvider client={qc}>
+      <CommunityVoiceNoteDetail />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(mockPlayer).toHaveBeenCalled());
+  expect(mockPlayer.mock.calls.at(-1)?.[0]).toMatchObject({ tone: 'coach' });
+  mockPlayer.mockReset();
+  await renderDetail();
+  await waitFor(() => expect(mockPlayer).toHaveBeenCalled());
+  expect(mockPlayer.mock.calls.at(-1)?.[0]).toMatchObject({ tone: 'light' });
 });

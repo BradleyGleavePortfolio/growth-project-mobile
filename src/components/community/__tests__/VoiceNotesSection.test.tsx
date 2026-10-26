@@ -4,7 +4,7 @@
  * note) and Block, and the author can delete their own note.
  */
 import React from 'react';
-import { Alert, type AlertButton } from 'react-native';
+import { Alert, Platform, type AlertButton } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
@@ -32,12 +32,16 @@ jest.mock('../../HapticPressable', () => {
       onPress,
       testID,
       accessibilityRole,
+      disabled,
+      accessibilityLabel,
     }: {
       children: React.ReactNode;
       onPress?: () => void;
       testID?: string;
       accessibilityRole?: string;
-    }) => React.createElement(Pressable, { onPress, testID, accessibilityRole }, children),
+      disabled?: boolean;
+      accessibilityLabel?: string;
+    }) => React.createElement(Pressable, { onPress, testID, accessibilityRole, disabled, accessibilityLabel }, children),
   };
 });
 jest.mock('../VoiceNotePlayer', () => {
@@ -149,8 +153,15 @@ beforeEach(() => {
   mockReport.mockReset().mockResolvedValue(undefined);
   mockBlock.mockReset().mockResolvedValue(undefined);
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  // SafetyMenu raises its follow-up Alerts at once on Android; its iOS path (after the Modal's
+  // onDismiss) is driven in SafetyMenu.test (Opus R5-B4).
+  Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
 });
-afterEach(() => alertSpy.mockRestore());
+const realOS = Platform.OS;
+afterEach(() => {
+  alertSpy.mockRestore();
+  Object.defineProperty(Platform, 'OS', { configurable: true, get: () => realOS });
+});
 
 function pressAlertButton(text: string) {
   const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
@@ -376,6 +387,21 @@ it('the platform owner also gets Remove for everyone; the coach still deletes th
   expect(getByTestId('vn-menu-vn-mine-delete')).toBeTruthy();
 });
 
+// #175-W (approved): the coach, who can also remove another member's note, hears all three actions on
+// its ···; a member hears "Report or block {name}".
+it('the coach’s ··· on another member’s note says Report, block or remove', async () => {
+  mockRole.current = 'coach';
+  const { findByLabelText, getByTestId } = await renderSection();
+  expect(await findByLabelText('Report, block or remove')).toBe(getByTestId('vn-menu-vn-other'));
+});
+
+it('a member’s ··· on another member’s note says Report or block', async () => {
+  const { findByTestId, queryByLabelText } = await renderSection();
+  const menu = await findByTestId('vn-menu-vn-other');
+  expect(queryByLabelText('Report, block or remove')).toBeNull();
+  expect(menu).toHaveAccessibleName(/^Report or block /);
+});
+
 it('a member gets no Delete or Remove on another member’s note', async () => {
   const { findByTestId, getByTestId, queryByTestId } = await renderSection();
   await fireEvent.press(await findByTestId('vn-menu-vn-other'));
@@ -478,4 +504,44 @@ describe('a coach-removed note (REMOVED-BY-M)', () => {
     expect(await findByTestId('vn-removed-vn-other')).toBeTruthy();
     expect(queryByTestId('vn-reported-vn-other')).toBeNull();
   });
+});
+
+// Opus R5-B2 (GOAL B-03 / B-10a): every unsent row carries the sender's ···. Waiting or not sent, its
+// one action deletes the recording from the outbox after the confirm; while a send runs it is held.
+it('a waiting note has a ··· whose Delete removes it from the outbox', async () => {
+  (NetInfo as unknown as { __setState: (s: object) => void }).__setState({ isConnected: false });
+  const { findByTestId, getByTestId, queryByTestId, findByLabelText } = await renderSection();
+  await findByTestId('vn-note-vn-other');
+  await fireEvent.press(getByTestId('vn-record'));
+  await act(async () => {
+    fireEvent.press(getByTestId('sheet-send'));
+  });
+  await findByLabelText('Waiting to send');
+  const waiting = await findByTestId(/^vn-pending-.*-waiting$/);
+  const row = String(waiting.props.testID).replace(/-waiting$/, '');
+  const menu = getByTestId(`${row}-menu`);
+  expect(menu).toBeEnabled();
+  expect(menu).toHaveAccessibleName('Delete voice note');
+  await fireEvent.press(menu);
+  expect(alertSpy).toHaveBeenLastCalledWith('Delete this voice note?', undefined, expect.any(Array));
+  await act(async () => {
+    await pressAlertButton('Delete');
+  });
+  expect(queryByTestId(row)).toBeNull();
+});
+
+it('a sending note shows the ··· held until the attempt ends', async () => {
+  mockIssue.mockImplementation(() => new Promise(() => undefined)); // still sending
+  const { findByTestId, getByTestId } = await renderSection();
+  await findByTestId('vn-note-vn-other');
+  await fireEvent.press(getByTestId('vn-record'));
+  await act(async () => {
+    fireEvent.press(getByTestId('sheet-send'));
+  });
+  const sending = await findByTestId(/^vn-pending-.*-sending$/);
+  const row = String(sending.props.testID).replace(/-sending$/, '');
+  const menu = getByTestId(`${row}-menu`);
+  expect(menu).toBeDisabled();
+  await fireEvent.press(menu);
+  expect(alertSpy).not.toHaveBeenCalledWith('Delete this voice note?', undefined, expect.any(Array));
 });
