@@ -50,8 +50,13 @@ jest.mock('../../../api/communityVoiceApi', () => ({
 
 import CommunityVoiceNoteDetail from '../CommunityVoiceNoteDetail';
 import { resetReportedVoiceNotes } from '../../../components/community/VoiceReportedFold';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearUserCache, setUserCache } from '../../../lib/userCache';
 
-beforeEach(() => {
+beforeEach(async () => {
+  // The reported store saves per signed-in account: start each test signed out with nothing saved.
+  await clearUserCache();
+  await AsyncStorage.clear();
   resetReportedVoiceNotes();
   mockRole.current = 'client';
   mockSafety.mockReset();
@@ -122,6 +127,34 @@ it('a reported note folds into the VN-07 row and the player is gone', async () =
   });
   expect(await findByTestId('community-voice-detail-reported')).toBeTruthy();
   expect(getByText('You reported this voice note. It is hidden for you.')).toBeTruthy();
+  expect(mockPlayer).not.toHaveBeenCalled();
+});
+
+// Opus R5-B3: the fold outlives the app session — report, drop the memory (a cold start), open again.
+it('a reported note is still folded, with no player, after a restart', async () => {
+  await setUserCache({ id: 'u-viewer', email: 'v@example.invalid' });
+  const first = await renderDetail();
+  const safety = mockSafety.mock.calls.at(-1)?.[0] as { onReported: () => void };
+  await act(async () => {
+    safety.onReported();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  // Cold start: memory is gone, and the screen mounts afresh (a new key) on a new query client.
+  resetReportedVoiceNotes();
+  mockPlayer.mockReset();
+  mockSafety.mockReset();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await first.rerender(
+    <QueryClientProvider client={qc}>
+      <CommunityVoiceNoteDetail key="after-restart" />
+    </QueryClientProvider>,
+  );
+  const { findByTestId } = first;
+  expect(await findByTestId('community-voice-detail-reported')).toBeTruthy();
+  mockPlayer.mockReset();
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
   expect(mockPlayer).not.toHaveBeenCalled();
 });
 
