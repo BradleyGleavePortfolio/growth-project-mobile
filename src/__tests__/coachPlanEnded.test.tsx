@@ -369,6 +369,9 @@ describe('plan ended: RENEWAL3 metrics, not the Home shared rows (LS B1)', () =>
     expect(['fontFamily', 'fontSize', 'lineHeight'].map((k) => st(v.getByText('Messaged Oct 20'))[k])).toEqual(['Inter_500Medium', 13, 18]);
     expect(['fontSize', 'lineHeight'].map((k) => st(within(v.getByTestId('plan-ended-today')).getByText('2', { includeHiddenElements: true }))[k])).toEqual([12, 16]); // Today's count badge
     expect(['minHeight', 'paddingHorizontal'].map((k) => st(v.getByTestId('plan-ended-row-c1'))[k])).toEqual([72, 14]);
+    // The card is flush, its rows meeting its edges (r2a.py `.pgcard`), though the shared card pads with
+    // paddingVertical/paddingHorizontal since main's Style A cards (FX4-859).
+    expect(['paddingVertical', 'paddingHorizontal'].map((k) => st(v.getByTestId('plan-ended-today-card'))[k])).toEqual([0, 0]);
     await press(v, 'plan-ended-row-c1');
     expect(st(v.getByTestId('plan-ended-ask')).minHeight).toBe(48);
     expect(st(v.getByTestId('roman-mark', { includeHiddenElements: true })).width).toBe(25); // K2's .rmk: a 22 disc and its 1.5 ring
