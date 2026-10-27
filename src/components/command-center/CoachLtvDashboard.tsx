@@ -155,7 +155,7 @@ const TREND_ARROW: Record<'up' | 'flat' | 'down', string> = {
 
 const TREND_COLOR: Record<'up' | 'flat' | 'down', string> = {
   up: colors.forest,    // #2C4A36
-  flat: colors.mutedGold, // #C5A253
+  flat: gold[800],      // #6B4F1A, 7.24:1 on bone (owner "Darker gold"; was warningInk 4.78:1)
   down: colors.error,   // #B91C1C
 };
 
@@ -539,13 +539,13 @@ export default function CoachLtvDashboard({
     load(true);
   }, [load]);
 
-  // Delta label for trend chip (e.g. "+$200" or "-$100")
+  // Delta label for trend chip (e.g. "+$200" or "−$100"): the minus sits where the plus does.
   const deltaLabel = useMemo(() => {
     if (!metrics) return '';
     const delta = metrics.mrr_cents - metrics.mrr_30d_ago_cents;
-    const sign = delta >= 0 ? '+' : '';
-    const dollars = Math.abs(delta) / 100;
-    return `${sign}$${Math.round(dollars)}`;
+    const dollars = Math.round(Math.abs(delta) / 100);
+    const sign = delta >= 0 ? '+' : dollars > 0 ? '−' : '';
+    return `${sign}$${dollars}`;
   }, [metrics]);
 
   const content = loading ? (
