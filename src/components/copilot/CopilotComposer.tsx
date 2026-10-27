@@ -62,7 +62,7 @@ export default function CopilotComposer({ value, onChangeText, onSend, sending, 
             scrollEnabled={contentHeight >= maxHeight}
             editable={!sending}
             placeholder={ROMAN_COMPOSER_PLACEHOLDER}
-            placeholderTextColor={c.textMuted}
+            placeholderTextColor={ledger.muted}
             multiline
             maxLength={ROMAN_MESSAGE_MAX_LENGTH + 1}
             accessibilityLabel="Message Roman"
@@ -82,7 +82,7 @@ export default function CopilotComposer({ value, onChangeText, onSend, sending, 
           {sending ? (
             <ActivityIndicator color={forestPop.moss} testID="roman-composer-spinner" />
           ) : (
-            <Ionicons name="arrow-up" size={20} color={forestPop.moss} style={canSend ? undefined : s.idle} accessible={false} />
+            <Ionicons name="arrow-up" size={22} color={forestPop.moss} style={canSend ? undefined : s.idle} accessible={false} />
           )}
         </TouchableOpacity>
       </View>

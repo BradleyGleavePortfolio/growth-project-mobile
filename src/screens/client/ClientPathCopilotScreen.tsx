@@ -30,7 +30,8 @@ import {
   ROMAN_STORED_NO_REPLY, romanPoolEmpty, romanRateLimited,
 } from '../../components/roman/romanVoice';
 import { ForestStatusBar } from '../../components/StatusBarBand';
-import { Headline, PrimaryButton, Screen, TextLink, useScreenInsets } from '../../ui';
+import { Headline, Screen, TextLink, useScreenInsets } from '../../ui';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import { loadFailureMessage } from '../../ui/states/QuietStates';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
 import { AI_DAILY_CAP_TITLE, aiDailyCapBody } from '../../lib/ai/aiDailyCap';
@@ -53,7 +54,7 @@ import { LedgerRetry, PastQuestionsList, PastQuestionsRow, usePastQuestions } fr
 import { copilotAnswerKey } from './copilot/copilotErasure';
 import { useCopilotAsk, type CopilotTurn } from './copilot/useCopilotAsk';
 import { ledger, ledgerGutter, ledgerType } from './copilot/ledger';
-import { CopilotRefusal, RomanNotice } from './copilot/RomanNotice';
+import { CalmIn, CopilotRefusal, LedgerButton, RomanNotice } from './copilot/RomanNotice';
 
 export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
 type Params = { view?: 'questions' | 'answer'; item?: PastQuestion };
@@ -98,7 +99,7 @@ function CoachLock() {
       <RomanAvatar crop="neutral" size={72} testID={`${id}-roman`} />
       <Headline style={s.lockTitle} testID={`${id}-title`}>{ROMAN_LOCK_TITLE}</Headline>
       <Text style={[s.lockBody, { color: ledger.muted }]} testID={`${id}-body`}>{ROMAN_LOCK_BODY}</Text>
-      <PrimaryButton label={JOIN_A_COACH} onPress={messageCoach} wrap style={s.lockJoin} testID={`${id}-join`} />
+      <LedgerButton label={JOIN_A_COACH} onPress={messageCoach} style={s.lockJoin} testID={`${id}-join`} />
       <Text style={[s.lockHelp, { color: ledger.muted }]} testID={`${id}-crisis`}>{COMMUNITY_REPORT_CRISIS_LINE}</Text>
       {openSupport ? <TextLink label={AI_REFUSAL_ACTIONS.contactSupport} onPress={() => void openSupport()} size="small" align="start" tone="accent" testID={`${id}-support`} /> : null}
     </Screen>
@@ -162,7 +163,7 @@ function Mast({ back, title, compact, children }: { back: string; title: string;
         <Ionicons name="chevron-back" size={22} color={ledger.nav} />
         <Text style={[ledgerType.nav, { color: ledger.nav }]}>{back}</Text>
       </Pressable>
-      <Text style={[compact ? ledgerType.mastSmall : ledgerType.mast, light]} accessibilityRole="header" testID="copilot-mast-title">{title}</Text>
+      <Text style={[compact ? ledgerType.mastSmall : [ledgerType.mast, s.mastTitle], light]} accessibilityRole="header" testID="copilot-mast-title">{title}</Text>
       {children}
     </View>
   );
@@ -213,7 +214,9 @@ function PathView() {
   const last = turns[turns.length - 1];
   // None under any turn that ended in a failure card (offline, rate limit, stored, the limits) or a crisis reply
   // either (Opus B-878-G3): the card's own action is the only next step there.
-  const more = asked && !busy && !last?.error && !last?.answer?.safety?.length ? starters.filter((q) => !turns.some((t) => t.question === q)) : [];
+  // None under a proposal either (frames 04, 05; Sol B-878-G): the change, then its Sent line and status, is the turn.
+  const more = asked && !busy && !last?.error && !last?.answer?.safety?.length && !last?.answer?.reply?.suggestion
+    ? starters.filter((q) => !turns.some((t) => t.question === q)) : [];
   const listed = items.filter((i) => !underAnswers.has(i.id));
   const composer = (
     <CopilotComposer value={draft} onChangeText={setDraft} sending={busy} gutter={g} testID="copilot-composer"
@@ -238,7 +241,8 @@ function PathView() {
             ) : null}
             {turns.map((t, i) => (
               <View key={t.id} onLayout={(e) => reveal.turn(i, e.nativeEvent.layout.y)}>
-                <Turn turn={t} coach={coach} onRetry={() => onAsk(t.question, t.id)} onSent={(sid) => { setSent((p) => new Set(p).add(sid)); refresh(); }} />
+                <Turn turn={t} coach={coach} onRetry={() => onAsk(t.question, t.id)} onSent={(sid) => { setSent((p) => new Set(p).add(sid)); refresh(); }}
+                  folded={i === turns.length - 1 && sent.has(t.answer?.reply?.suggestion?.id ?? '')} />
               </View>
             ))}
             {asked ? null : (
@@ -246,22 +250,22 @@ function PathView() {
                 <Text style={[ledgerType.section, { color: sc.textPrimary }]} accessibilityRole="header">{A.askHeading}</Text>
                 <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]}>
                   {starters.map((label, i) => (
-                    <Pressable key={label} onPress={() => onAsk(label)} disabled={busy} accessibilityRole="button" accessibilityLabel={label}
+                    <Pressable key={label} onPress={() => { void HapticService.selection(); onAsk(label); }} disabled={busy} accessibilityRole="button" accessibilityLabel={label}
                       accessibilityState={{ disabled: busy }} testID={`copilot-starter-${i}`}
                       style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line },
                         (pressed || label === A.whyCalories) && { backgroundColor: pathTint.leaf }]}>
                       <Text style={[ledgerType.ask, s.grow, { color: sc.textPrimary }, label === A.whyCalories && s.strong]}>{label}</Text>
-                      <Ionicons name="chevron-forward" size={18} color={forestPop.forest} />
+                      <Ionicons name="chevron-forward" size={18} color={forestPop.moss} testID={`copilot-starter-${i}-chevron`} />
                     </Pressable>
                   ))}
                 </View>
-                <Text style={[ledgerType.privacy, { color: ledger.muted }]}>{A.hint(coach)}</Text>
+                <Text style={[ledgerType.privacy, s.hint, { color: ledger.muted }]} testID="copilot-hint">{A.hint(coach)}</Text>
               </View>
             )}
             {more.length > 0 ? (
               <View style={s.chips} testID="copilot-more">
                 {more.map((label, i) => (
-                  <Pressable key={label} onPress={() => onAsk(label)} accessibilityRole="button" accessibilityLabel={label} testID={`copilot-more-${i}`}
+                  <Pressable key={label} onPress={() => { void HapticService.selection(); onAsk(label); }} accessibilityRole="button" accessibilityLabel={label} testID={`copilot-more-${i}`}
                     style={({ pressed }) => [s.more, { backgroundColor: pressed ? pathTint.leaf : ledger.card, borderColor: ledger.chip }]}>
                     <Text style={[ledgerType.chip, { color: forestPop.forest, flexShrink: 1 }]}>{label}</Text>
                   </Pressable>
@@ -334,7 +338,14 @@ function SuggestionSlot({ suggestion, coach, onSent, onDismiss }: {
     : <SuggestionStatusList items={[suggestion]} coach={coach} />;
 }
 
-function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: string; onRetry: () => void; onSent: (id: string) => void }) {
+/**
+ * One question and Roman's answer. Once its change is sent from the newest turn, that turn folds to the question and
+ * its Sent line (frame 05, Sol B-878-G); the status follows under Suggestions, and the answer stays in Past questions
+ * and comes back here once another question is asked. A new answer fades in (CalmIn).
+ */
+function Turn({ turn, coach, onRetry, onSent, folded = false }: {
+  turn: CopilotTurn; coach: string; onRetry: () => void; onSent: (id: string) => void; folded?: boolean;
+}) {
   const a = turn.answer;
   const [dismissed, setDismissed] = useState(false);
   // The answer is read out when it arrives, as the error card is (accessibilityRole alert).
@@ -342,7 +353,7 @@ function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: stri
   return (
     <View style={s.turn} testID="copilot-turn">
       <Asked question={turn.question} at={turn.askedAt} />
-      {a ? <AnswerCard text={a.text} reply={a.reply} safety={a.safety} compact={!!a.reply?.suggestion} /> : null}
+      {a && !folded ? <CalmIn><AnswerCard text={a.text} reply={a.reply} safety={a.safety} compact={!!a.reply?.suggestion} /></CalmIn> : null}
       {a && !dismissed ? (
         <SuggestionSlot suggestion={a.reply?.suggestion ?? null} coach={coach} onSent={() => a.reply?.suggestion && onSent(a.reply.suggestion.id)} onDismiss={() => setDismissed(true)} />
       ) : null}
@@ -374,7 +385,7 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
     : [ROMAN_ERROR_TRANSIENT, '', true];
   return (
     <RomanNotice title={title || undefined} body={body || undefined} testID={`copilot-turn-${error.kind}`}>
-      {retry ? <PrimaryButton label="Try again" onPress={onRetry} testID="copilot-retry" /> : null}
+      {retry ? <LedgerButton label="Try again" onPress={onRetry} testID="copilot-retry" /> : null}
     </RomanNotice>
   );
 }
@@ -474,12 +485,14 @@ function AnswerView({ item }: { item: PastQuestion }) {
           {q.isPending ? <LedgerLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
           {q.error || missing ? <LedgerRetry message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
           {/* Folded under a change as a turn's answer is (Sol B-G3): the change, not the facts, is the next step. */}
-          {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} compact={!!sug} /> : null}
+          {q.data ? <CalmIn><AnswerCard text={q.data.text} reply={q.data.reply} compact={!!sug} /></CalmIn> : null}
           {/* A decided change was decided by whoever coached then; only an unsent one goes to today's coach (C1). */}
           {/* Sent from here, Your path's lists and this answer read the server again (as a turn's Send does). */}
           {q.data ? (
             <SuggestionSlot suggestion={sug} coach={sug?.status === 'suggested' ? coach : C.yourCoach} onSent={() => void qc.invalidateQueries({ queryKey: ['copilot'] })} />
           ) : null}
+          {/* The room's line under a saved answer too (Sol B-S2): it is still Roman's guidance. */}
+          {q.data ? <Text style={[ledgerType.foot, s.footer, s.savedFoot, { color: ledger.muted }]} testID="copilot-answer-footer">{ROMAN_ROOM_FOOTER}</Text> : null}
         </View>
       </Screen>
     </>
@@ -491,23 +504,29 @@ const s = StyleSheet.create({
   page: { paddingHorizontal: 0, paddingBottom: 0 },
   list: { paddingHorizontal: 0 },
   scroll: { flexGrow: 1, paddingBottom: layout.gutter },
-  mast: { paddingHorizontal: 20, paddingBottom: 24, gap: 8, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
-  // Style A compact masthead (.mhs, .nav, .mhs .mini span; #852 round 3 B-H1).
+  // Style A's masthead (.mh, .nav, .mh h1; Opus B-878-G): Back 44 tall, the title 4 under it, 20 under the week.
+  mast: { paddingHorizontal: 20, paddingBottom: 20, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
+  mastTitle: { marginTop: 4, letterSpacing: 0.2 },
+  // Style A compact masthead (.mhs, .nav, .mhs .mini span; #852 round 3 B-H1): the title right under Back.
   mastSmall: { paddingBottom: 14 },
   histBody: { paddingTop: 18 },
   back: { minWidth: 44, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start' },
-  mini: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: 'rgba(255,255,255,0.08)' },
+  mini: { alignSelf: 'flex-start', marginTop: 8, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: 'rgba(255,255,255,0.08)' },
   body: { paddingHorizontal: 20, paddingTop: 24, gap: 16 },
   section: { gap: 10 },
+  // .trust 12 under the card (the section's gap is 10).
+  hint: { marginTop: 2 },
   turn: { gap: 12 },
   asked: { gap: 3 },
   strong: { fontWeight: '600' },
   grow: { flex: 1 },
   card: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
-  row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  // .chips 14 under the answer (the page's gap is 16).
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: -2 },
   more: { maxWidth: '100%', minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: radius.button, paddingHorizontal: 14, paddingVertical: 8 },
   footer: { textAlign: 'center', paddingTop: 0, paddingBottom: 2 },
+  savedFoot: { marginTop: 4 },
   bones: { minHeight: 52, justifyContent: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 14 },
   bone: { height: 12, borderRadius: 6 },
   boneLong: { width: '72%' },

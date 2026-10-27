@@ -16,6 +16,8 @@ export const ledger = {
   chip: '#D2E2B4',
   /** A declined change's chip (GOAL .ot.no). */
   still: '#F2F2EE',
+  /** An awaiting change's chip and status tile (GOAL .ot.wait, .stl .d.wait; Sol C-852R3-2). */
+  wait: '#F7EFD6',
   /** Dates, month headings and fact labels (GOAL #5A5A56). */
   muted: '#5A5A56',
   /** Answer and notice body text (GOAL .ans .body, .stc p). */
@@ -91,6 +93,8 @@ export const ledgerType = StyleSheet.create({
   privacy: sans(13, 1.45),
   link: sans(15, 1.35, '500'),
   sent: sans(13.5, 1.35, '600'),
+  /** Style A's one forest button (.btn: 16/600, min 52; Sol B-878-G). */
+  button: sans(16, 1.35, '600'),
   /** A section heading (.sec h2) and a status row (.stl .t, .stl .s, .stl .d). */
   section: sans(15, 1.35, '600'),
   statusTitle: sans(15, 1.3, '600'),
@@ -98,5 +102,7 @@ export const ledgerType = StyleSheet.create({
   meta: sans(12.5, 1.35),
   /** Ask rows on Your path (.qrow) and the footer (.foot). */
   ask: sans(16, 1.3),
+  /** The asked count beside Past questions (.qrow span, 14 #5A5A56; Opus B-852R3-1). */
+  count: sans(14, 1.3),
   foot: sans(12, 1.4),
 });

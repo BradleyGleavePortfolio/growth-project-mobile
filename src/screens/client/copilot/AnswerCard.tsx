@@ -6,7 +6,7 @@
  * the suggestion card under it carries the source tags, so its Send stays in the first screenful.
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, radius } from '../../../theme/tokens';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
@@ -23,10 +23,14 @@ const TAG: Record<SourceKind, { bg: string; ink: string }> = {
   workout_log: { bg: forestPop.moss, ink: forestPop.onDeep },
 };
 
+/** Style A's tag is 74 wide at least, in text units (.tag min-width §74), so it grows with the label (Opus C-878R3-2). */
+const TAG_TEXT_MAX = 1.3;
+
 export function SourceTag({ kind }: { kind: SourceKind }) {
+  const { fontScale } = useWindowDimensions();
   return (
-    <View style={[s.tag, { backgroundColor: TAG[kind].bg }]}>
-      <Text style={[ledgerType.tag, { color: TAG[kind].ink }]} maxFontSizeMultiplier={1.3}>{SOURCE_TAG[kind]}</Text>
+    <View style={[s.tag, { minWidth: 74 * Math.min(Math.max(fontScale, 1), TAG_TEXT_MAX), backgroundColor: TAG[kind].bg }]} testID={`copilot-tag-${kind}`}>
+      <Text style={[ledgerType.tag, { color: TAG[kind].ink }]} maxFontSizeMultiplier={TAG_TEXT_MAX}>{SOURCE_TAG[kind]}</Text>
     </View>
   );
 }
@@ -80,5 +84,5 @@ const s = StyleSheet.create({
   fact: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 9, minHeight: 56 },
   factText: { flex: 1 },
   detail: { marginTop: 1 },
-  tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, minWidth: 74, alignItems: 'center' },
+  tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },
 });
