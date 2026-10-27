@@ -1,10 +1,10 @@
 /**
  * The rings Home's notice slot and refresh on open (agent 155/156 findings before the flag goes on):
- * today's Home notices, one at a time at the foot (the failed payment alone under the dials); every read again on a refocus and on a return
+ * today's Home notices, one at a time at the foot (the failed payment alone under the dials, the renewal banner above them); every read again on a refocus and on a return
  * to the foreground; Health on this phone on first open and on each return to the app.
  */
 import React from 'react';
-import { AppState, Text, type AppStateStatus } from 'react-native';
+import { AppState, StyleSheet, Text, type AppStateStatus } from 'react-native';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 
 let mockFocused = true;
@@ -62,11 +62,11 @@ jest.mock('../../../store/clientStore', () => ({ useClientStore: () => ({ logWat
 jest.mock('../../../components/home/HomeHeaderActions', () => () => null);
 jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 jest.mock('../../../components/home/rings/HomeRomanLine', () => () => null);
-jest.mock('../../../components/renewal/RenewalHome', () => () =>
-  jest.requireActual('react').createElement(jest.requireActual('react-native').View, { testID: 'renewal-home' }));
+jest.mock('../../../components/renewal/RenewalHome', () => (p: { style?: unknown }) => (mockDue.has('renewal')
+  ? jest.requireActual('react').createElement(jest.requireActual('react-native').View, { testID: 'renewal-home', style: p.style }) : null)); // outside the slot
 
 // Each of today's notices as a stand-in that asks the slot (due while its id is in mockDue) and prints its props.
-const mockDue = new Set<NoticeId | 'dunning'>();
+const mockDue = new Set<NoticeId | 'dunning' | 'renewal'>();
 function MockNotice({ id, ...props }: { id: NoticeId }) {
   const shown = useNoticeSlot(id, mockDue.has(id));
   return shown ? <Text>{`${id} ${JSON.stringify(props)}`}</Text> : null;
@@ -130,16 +130,38 @@ it.each<[NoticeId, string]>([
 });
 
 it('with every notice due, the failed payment shows alone under the dials and the invite in the slot at the foot (#RINGS-PAY-SLOT)', async () => {
-  ['dunning' as const, ...NOTICE_RANK].reverse().forEach((id) => mockDue.add(id));
+  ['renewal' as const, 'dunning' as const, ...NOTICE_RANK].reverse().forEach((id) => mockDue.add(id));
   await render(<RingsHomeScreen {...props} />);
   expect(await screen.findByText(/^invite /)).toBeTruthy();
   expect(screen.getAllByText(/^\w+ \{/).map((t) => String(t.props.children).split(' ')[0])).toEqual(['dunning', 'invite']);
   const tree = JSON.stringify(screen.toJSON(), (k, v) => (k === 'refreshControl' ? undefined : v));
   const at = ['"home-dials"', '"dunning {', '"home-tiles"', '"home-notice-slot"', '"invite {'].map((id) => tree.indexOf(id));
   expect(at.every((i, n) => i > (n ? at[n - 1] : 0))).toBe(true); // the dials, the payment, the tiles, then the slot with the invite
-  const renewal = tree.indexOf('"renewal-home"'); // RENEWAL-M C3: the renewal banner beside the payment, under the dials
-  expect(renewal > at[1] && renewal < at[2]).toBe(true);
+  const renewal = tree.indexOf('"renewal-home"'); // RENEWAL3 B1: the renewal banner above the dials, never beside the payment
+  expect(renewal > tree.indexOf('"home-date"') && renewal < at[0]).toBe(true);
   expect(screen.getByText(/^dunning /).props.children).toContain('"surface":"HomeScreen","presentation":"section"');
+});
+
+it.each<[string, Array<'renewal' | 'dunning'>]>([
+  ['neither', []],
+  ['renewal only', ['renewal']],
+  ['failed payment only', ['dunning']],
+  ['both', ['renewal', 'dunning']],
+])('%s: the renewal banner sits above the dials and the failed payment alone under them (RENEWAL3 B1, #RINGS-PAY-SLOT)', async (_, due) => {
+  due.forEach((id) => mockDue.add(id));
+  await render(<RingsHomeScreen {...props} />);
+  await screen.findByTestId('home-dials');
+  const tree = JSON.stringify(screen.toJSON(), (k, v) => (k === 'refreshControl' ? undefined : v));
+  const [date, renewal, dials, pay, tiles] = ['"home-date"', '"renewal-home"', '"home-dials"', '"dunning {', '"home-tiles"'].map((id) => tree.indexOf(id));
+  expect(renewal >= 0).toBe(due.includes('renewal'));
+  expect(pay >= 0).toBe(due.includes('dunning'));
+  if (renewal >= 0) expect(date < renewal && renewal < dials).toBe(true);
+  if (pay >= 0) expect(dials < pay && pay < tiles).toBe(true);
+  expect(screen.queryAllByTestId('renewal-home')).toHaveLength(due.includes('renewal') ? 1 : 0); // one banner, one place
+  const sp = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+  expect(sp('home-date').marginBottom + sp('home-dials').marginTop).toBe(18); // no banner: the date to the dials as before
+  // RENEWAL3 B1 gap: 14 under the date, and 11 over the dials (about 14 to the ring itself), not 12 + 18.
+  if (renewal >= 0) expect([sp('home-date').marginBottom + sp('renewal-home').marginTop, sp('renewal-home').marginBottom + sp('home-dials').marginTop]).toEqual([14, 11]);
 });
 
 it('Finish joining shows ahead of the notifications ask, and Finish your profile waits behind both (#RINGS-JOIN-FIRST)', async () => {

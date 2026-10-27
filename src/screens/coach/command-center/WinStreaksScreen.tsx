@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   },
   streakDaysUnit: {
     ...typography.eyebrow,
-    color: colors.stone,
+    color: colors.graphite,
   },
   rowContent: {
     flex: 1,
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   },
   streakType: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colors.graphite,
   },
   emptyWrapper: {
     alignItems: 'center',
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   },
   emptyBody: {
     ...typography.body,
-    color: colors.stone,
+    color: colors.graphite,
     textAlign: 'center',
   },
 });

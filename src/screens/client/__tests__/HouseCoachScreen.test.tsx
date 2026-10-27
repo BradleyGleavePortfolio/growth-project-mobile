@@ -1,61 +1,84 @@
-/** RENEWAL-M H1-H3 (RENEWAL3): the house coach's packages; a package opens #836's sheet under his name; paid → his. */
+/** RENEWAL-M H1 (RENEWAL3), after SWITCH-CONFIRM-M's confirm page: his full name, what joining includes, his packages; a package opens its page. */
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { fireEvent, render } from '@testing-library/react-native';
+import { forestPop as fp } from '../../../theme/tokens';
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+const mockBand = jest.fn();
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: (c: string) => mockBand(c) }));
 const mockRefresh = jest.fn(async () => undefined);
 jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ refreshEntitlement: mockRefresh }) }));
-const mockPatch = jest.fn(async (..._a: unknown[]) => undefined);
-jest.mock('../../../lib/userCache', () => ({ patchUserCache: (...a: unknown[]) => mockPatch(...a) }));
-const mockEmit = jest.fn();
-jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: (...a: unknown[]) => mockEmit(...a) } }));
-let mockPaid = true; // the sheet's Continue after a confirmed payment, or after a slow / pending one
 let mockRead: () => Promise<unknown>;
 const mockGet = jest.fn((..._a: unknown[]) => mockRead());
-jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (...a: unknown[]) => mockGet(...a) } }));
-jest.mock('../../../components/PackageSelectionSheet', () => (p: { house?: { id: string; name: string }; initialPackageId?: string; skipSnoozeCheck?: boolean; onPaymentSuccess: (paid: boolean) => void }) =>
-  jest.requireActual('react').createElement(jest.requireActual('react-native').Pressable,
-    { testID: 'package-sheet', accessibilityLabel: `${p.house?.id}|${p.house?.name}|${p.initialPackageId}|${p.skipSnoozeCheck}`, onPress: () => p.onPaymentSuccess(mockPaid) }));
+const mockPost = jest.fn();
+jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (...a: unknown[]) => mockGet(...a), post: (...a: unknown[]) => mockPost(...a) } }));
 
 const Screen: typeof import('../HouseCoachScreen').default = require('../HouseCoachScreen').default;
 const ROWS = [{ id: 'h-1', name: '12-week strength block', price_cents: 29900, currency: 'usd', billing_type: 'one_time' },
   { id: 'h-2', name: 'Monthly coaching', amount_cents: 14900, currency: 'usd', billing_type: 'recurring', interval: 'month' }];
-const nav = { goBack: jest.fn(), popToTop: jest.fn() };
+const nav = { goBack: jest.fn(), navigate: jest.fn() };
+const HOUSE = { id: 'house-1', firstName: 'Bradley', fullName: 'Bradley Gleave' };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mount = () => render(<Screen route={{ key: 'h', name: 'HouseCoach', params: { coach: { id: 'house-1', firstName: 'Bradley' } } } as any} navigation={nav as any} />);
+const mount = (coach: { id: string; firstName: string; fullName?: string } = HOUSE) => render(<Screen route={{ key: 'h', name: 'HouseCoach', params: { coach } } as any} navigation={nav as any} />);
 
-beforeEach(() => { jest.clearAllMocks(); mockPaid = true; mockRead = async () => ({ data: { packages: ROWS } }); });
+/** Every string the screen draws, top to bottom. */
+const textsOf = (n: unknown): string[] =>
+  !n ? [] : typeof n === 'string' ? [n] : Array.isArray(n) ? n.flatMap(textsOf) : textsOf((n as { children?: unknown }).children);
 
-it('H1-H3: his name and packages; a package opens the sheet under his name; paid → coach saved, Home re-reads the account, plan re-read, Home', async () => {
+beforeEach(() => { jest.clearAllMocks(); mockRead = async () => ({ data: { packages: ROWS } }); });
+
+it('H1 (W-168-HC): his full name and monogram, then Includes (HC-2 to HC-7), then his packages, in that order', async () => {
+  const s = await mount();
+  await s.findByTestId('house-package-h-1');
+  const texts = textsOf(s.toJSON());
+  const order = ['BG', "TGP's Top Rated Coach", 'Bradley Gleave', 'Includes', 'Personalized workout plans', '1:1 check-ins',
+    'Direct access to Bradley', 'Customized meal plans', 'Advanced AI usage', '1:1 coaching with Bradley Gleave', '12-week strength block', 'Monthly coaching'];
+  expect(order.map((t) => texts.indexOf(t))).toEqual(order.map((t) => texts.indexOf(t)).sort((a, b) => a - b));
+  expect(order.every((t) => texts.includes(t))).toBe(true);
+  expect(s.getByText('Includes').props.accessibilityRole).toBe('header');
+});
+
+it('m#860 FIX R2 (Opus B1, B2; Sol B2) + R3 (Sol B1, Opus C1): the gold ring outside a deep gap, 72 painted, 64 laid out; the eyebrow and status bar on deep', async () => {
+  const s = await mount();
+  await s.findByTestId('house-package-h-1');
+  const ring = StyleSheet.flatten(s.getByTestId('coach-monogram', { includeHiddenElements: true }).props.style);
+  expect(ring).toMatchObject({ width: 72, height: 72, borderWidth: 2, borderColor: fp.gold, backgroundColor: fp.deep, margin: -4 });
+  expect(Number(ring.width) + 2 * Number(ring.margin)).toBe(64); // the masthead counts the 64 disc, as r2b.py .cm does
+  const fill = StyleSheet.flatten(s.getByTestId('coach-monogram', { includeHiddenElements: true }).props.children.props.style);
+  expect(fill).toMatchObject({ width: 64, height: 64, backgroundColor: '#26402F' });
+  expect(fill.borderWidth).toBeUndefined();
+  expect(StyleSheet.flatten(s.getByText("TGP's Top Rated Coach").props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 11, lineHeight: 14, letterSpacing: 1.6 });
+  expect(mockBand).toHaveBeenCalledWith(fp.deep);
+  const drawn = JSON.stringify(s.toJSON()); // the package chevrons in r3.py .mut, not the old grey (Sol C1)
+  expect(drawn.match(/"fontSize":20,"color":"#4F5D54"/g)).toHaveLength(2);
+  expect(drawn).not.toContain('#5A5A56');
+});
+
+it('a server without full_name (before backend #1142): the first name and monogram, as before', async () => {
+  const s = await mount({ id: 'house-1', firstName: 'Bradley' });
+  await s.findByTestId('house-package-h-1');
+  expect(s.getByText('B', { includeHiddenElements: true })).toBeTruthy(); // the monogram is hidden from screen readers
+  for (const t of ['Bradley', '1:1 coaching with Bradley', 'Direct access to Bradley']) expect(s.getByText(t)).toBeTruthy();
+});
+
+it('H1: a package opens its own page (no sheet, no checkout here); Back goes back', async () => {
   const s = await mount();
   await fireEvent.press(await s.findByTestId('house-package-h-2'));
   expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach/packages?coach_id=house-1');
-  expect(s.getByText("TGP's Top Rated Coach")).toBeTruthy();
-  expect(s.getByText('1:1 coaching with Bradley')).toBeTruthy();
   expect(s.getByTestId('house-package-h-1')).toBeTruthy();
-  expect(s.getByTestId('package-sheet').props.accessibilityLabel).toBe('house-1|Bradley|h-2|true');
-  await fireEvent.press(s.getByTestId('package-sheet'));
-  expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'house-1' });
-  await waitFor(() => expect(mockEmit).toHaveBeenCalledWith('login'));
-  expect(mockEmit).toHaveBeenCalledTimes(1);
-  expect(mockEmit.mock.invocationCallOrder[0]).toBeGreaterThan(mockPatch.mock.invocationCallOrder[0]); // after the cache changes
-  expect(mockRefresh).toHaveBeenCalledTimes(1);
-  expect(nav.popToTop).toHaveBeenCalledTimes(1);
-  expect(s.queryByTestId('package-sheet')).toBeNull();
+  expect(nav.navigate).toHaveBeenCalledWith('HousePackage', { coach: HOUSE, pkg: expect.objectContaining({ id: 'h-2', description: null, weeks: null }) });
+  expect(mockPost).not.toHaveBeenCalled();
   await fireEvent.press(s.getByTestId('house-coach-back'));
   expect(nav.goBack).toHaveBeenCalledTimes(1);
 });
 
-it('B3: Continue after a slow or pending confirmation: no coach change on the phone yet (the server moves him), plan re-read, Home', async () => {
-  mockPaid = false;
+it('no free trial from the house (#166-6): a trial row is not listed', async () => {
+  mockRead = async () => ({ data: [...ROWS, { id: 'h-t', name: 'Try it', amount_cents: 9900, currency: 'usd', billing_type: 'recurring', interval: 'month', trial_days: 7 }] });
   const s = await mount();
-  await fireEvent.press(await s.findByTestId('house-package-h-1'));
-  await fireEvent.press(s.getByTestId('package-sheet'));
-  await act(async () => undefined);
-  expect(mockPatch).not.toHaveBeenCalled();
-  expect(mockEmit).not.toHaveBeenCalled();
-  expect(mockRefresh).toHaveBeenCalledTimes(1);
-  expect(nav.popToTop).toHaveBeenCalledTimes(1);
+  await s.findByTestId('house-package-h-1');
+  expect(s.queryByTestId('house-package-h-t')).toBeNull();
+  expect(s.queryByText(/trial/i)).toBeNull();
 });
 
 it('C1: the server closed the house offer (404): the quiet error, and the plan is re-read so Home drops the choice', async () => {
@@ -73,7 +96,8 @@ it.each([
   mockRead = read;
   const s = await mount();
   await s.findByTestId('house-coach-error');
-  expect(s.getByText('Bradley')).toBeTruthy();
+  expect(s.getByText('Bradley Gleave')).toBeTruthy();
+  expect(s.getByTestId('house-coach-includes')).toBeTruthy();
   mockRead = async () => ({ data: ROWS });
   await fireEvent.press(s.getByTestId('house-coach-error-retry'));
   await s.findByTestId('house-package-h-1');
