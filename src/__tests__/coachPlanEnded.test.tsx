@@ -10,6 +10,7 @@ import {
   groupPlanEnded, homeLabel, homeLine, homeParts, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, rowParts, withoutBlocked,
   type PlanEndedRow,
 } from '../screens/coach/home-v11/planEndedData';
+import { KeepTail } from '../screens/coach/home-v11/KeepTail';
 import { useBlockedUsersStore } from '../store/blockedUsersStore';
 import { prefsStorage } from '../storage/mmkv';
 
@@ -94,6 +95,9 @@ async function renderHome() {
 type View = Awaited<ReturnType<typeof renderHome>>;
 const press = (v: View, ...ids: string[]) => ids.reduce((p, id) => p.then(() => fireEvent.press(v.getByTestId(id))), Promise.resolve());
 const churnReads = () => mockGet.mock.calls.filter(([url]) => url === '/v1/coach/churned-clients').length;
+/** KeepTail's pieces: the lead, then the dot and the tail in their own row (the dot is only drawn, so it is hidden). */
+const drawn = (el: ReturnType<View['getByTestId']>) => within(el).getAllByText(/./, { includeHiddenElements: true }).map((t) => t.props.children as string);
+const keepTail = (v: View, id: string) => [drawn(v.getByTestId(id))[0], drawn(v.getByTestId(`${id}-tail`))];
 
 describe('plan ended: the read and its words', () => {
   it('reads every page, newest first, and is off on a 404 or an answer that is not the list', async () => {
@@ -132,11 +136,9 @@ describe('plan ended on the coach Home', () => {
   it('shows P1 under the rings with the newest client and opens the grouped list', async () => {
     const v = await renderHome();
     expect(v.getByTestId('home-plan-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 5. Maya Ortiz, plan ended today, and 4 more');
-    const line = within(v.getByTestId('home-plan-ended-line'));
-    expect([line.getByText('Maya Ortiz ·'), line.getByText('ended today')].every(Boolean)).toBe(true); // "ended today" stays whole
+    expect(keepTail(v, 'home-plan-ended-line')).toEqual(['Maya Ortiz', ['·', 'ended today']]); // "ended today" stays whole, the dot with it
     await press(v, 'home-plan-ended');
-    const k2 = within(v.getByTestId('plan-ended-line-c1'));
-    expect([k2.getByText('Plan ended today ·'), k2.getByText('12-week block')].every(Boolean)).toBe(true); // the package stays whole
+    expect(keepTail(v, 'plan-ended-line-c1')).toEqual(['Plan ended today', ['·', '12-week block']]); // the package stays whole, the dot with it
     expect(v.getByTestId('plan-ended-row-c1').props.accessibilityLabel).toBe('Maya Ortiz. Plan ended today · 12-week block');
     expect(v.getByTestId('plan-ended-list')).toBeTruthy();
     expect(v.getByText('NEWEST FIRST')).toBeTruthy();
@@ -188,8 +190,8 @@ describe('plan ended on the coach Home', () => {
     expect([mark.props.importantForAccessibility, within(mark).getByText('R', { includeHiddenElements: true }).props.style]).toEqual(['no-hide-descendants', expect.arrayContaining([expect.objectContaining({ fontFamily: 'CormorantGaramond_500Medium', color: '#D4B96B' })])]);
     await press(v, 'plan-ended-ask');
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
-    // the K3 context chip: RN3-34 in two pieces, so "12-week block" moves down whole at large text (KeepTail, as on P1/K2)
-    expect(within(v.getByTestId('home-draft-about-line')).getAllByText(/./).map((t) => t.props.children)).toEqual(['Plan ended today ·', '12-week block']);
+    // the K3 context chip: RN3-34 in two pieces, so "· 12-week block" moves down whole at large text (KeepTail, as on P1/K2)
+    expect(keepTail(v, 'home-draft-about-line')).toEqual(['Plan ended today', ['·', '12-week block']]);
     const head = within(v.getByTestId('home-draft-head')); // K3a: Roman's deep head with the mark and "Roman" (RN3-33)
     expect([head.getByTestId('roman-mark', { includeHiddenElements: true }), head.getByText('ROMAN', { includeHiddenElements: true }), head.getByText('Ask Roman to write to Maya?')].every(Boolean)).toBe(true);
     // RENEWAL3 K3a/K3b: white body under the deep head (r2b.py `.ask`), and Roman's draft box white too (`.draft`; Sol m#866 B1)
@@ -375,5 +377,23 @@ describe('plan ended: RENEWAL3 metrics, not the Home shared rows (LS B1)', () =>
     expect(['fontSize', 'lineHeight'].map((k) => st(v.getByText('You read it before it goes. Nothing is sent until you tap Send.'))[k])).toEqual([14.5, 21]);
     const marks = v.getAllByTestId('roman-mark', { includeHiddenElements: true });
     expect(st(marks[marks.length - 1]).width).toBe(39); // K3's head: a 32 disc, a 2 deep gap, the 1.5 ring
+  });
+});
+
+describe('plan ended: the dot travels with the tail, never alone on a line (FX4-859, m#866 B2)', () => {
+  const st = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
+  it('draws the lead, then the dot and the tail in one row that never wraps; the dot is only drawn', async () => {
+    const v = await render(<KeepTail parts={{ lead: 'Plan ended 3 days ago', tail: '12-week block' }} style={{ fontSize: 13, lineHeight: 18 }} testID="kt" />);
+    expect(keepTail(v, 'kt')).toEqual(['Plan ended 3 days ago', ['·', '12-week block']]);
+    // the line can break only before the dot: the dot's row does not wrap, so the dot always sits beside the tail
+    expect([st(v.getByTestId('kt')).flexWrap, st(v.getByTestId('kt-tail')).flexDirection, st(v.getByTestId('kt-tail')).flexWrap]).toEqual(['wrap', 'row', undefined]);
+    const gaps = [st(v.getByTestId('kt')).columnGap, st(v.getByTestId('kt-tail')).columnGap];
+    expect([gaps[0], (gaps[0] as number) > 0]).toEqual([gaps[1], true]); // one space wide on each side of the dot
+    // a screen reader reads the words, with no stop on the dot
+    expect(within(v.getByTestId('kt')).getAllByText(/./).map((t) => t.props.children)).toEqual(['Plan ended 3 days ago', '12-week block']);
+  });
+  it('draws no dot when there is no tail', async () => {
+    const v = await render(<KeepTail parts={{ lead: 'Plan ended 2 days ago', tail: '' }} style={{ fontSize: 13 }} testID="kt" />);
+    expect([v.getByTestId('kt').props.children, v.queryByText('·', { includeHiddenElements: true })]).toEqual(['Plan ended 2 days ago', null]);
   });
 });
