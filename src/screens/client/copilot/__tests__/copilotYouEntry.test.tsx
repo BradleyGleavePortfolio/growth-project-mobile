@@ -64,7 +64,7 @@ test('every switch on: Your path on You is the leaf new row with the forest tile
   expect(screen.getAllByTestId('you-row-new-icon')).toHaveLength(1);
   expect(rowEl.props.accessibilityHint).toBe('Opens Your path');
   // Leads its group: Your path, then Roman, then the plan rows as before.
-  const rows = screen.getAllByTestId(/^you-row-/).map((r) => r.props.accessibilityLabel.split(',')[0]);
+  const rows = screen.getAllByTestId(/^you-row-/).filter((r) => r.props.accessibilityRole === 'button').map((r) => String(r.props.accessibilityLabel).split(',')[0]);
   const at = rows.indexOf('Your path');
   expect(rows.slice(at, at + 3)).toEqual(['Your path', 'Roman', 'Meal plan']);
   await fireEvent.press(rowEl);
@@ -76,7 +76,7 @@ test('with the Copilot switch off, You has no Your path row and Roman still lead
   await draw();
   expect(screen.queryByTestId('you-row-Copilot')).toBeNull();
   expect(screen.queryByTestId('you-row-new-icon')).toBeNull();
-  const rows = screen.getAllByTestId(/^you-row-/).map((r) => r.props.accessibilityLabel.split(',')[0]);
+  const rows = screen.getAllByTestId(/^you-row-/).filter((r) => r.props.accessibilityRole === 'button').map((r) => String(r.props.accessibilityLabel).split(',')[0]);
   const at = rows.indexOf('Roman');
   expect(rows.slice(at, at + 2)).toEqual(['Roman', 'Meal plan']);
 });
