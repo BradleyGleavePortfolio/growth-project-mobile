@@ -1,0 +1,6 @@
+src/screens/community
+src/api/__tests__/coachCommunityApi.test.ts
+src/navigation
+src/components/community
+src/hooks
+src/screens/messaging
