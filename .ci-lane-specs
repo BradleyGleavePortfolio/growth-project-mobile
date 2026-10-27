@@ -1,0 +1,10 @@
+src/api
+src/screens/community
+src/components/community
+src/hooks
+src/navigation
+src/screens/messaging
+src/__tests__/c6Copy
+src/__tests__/copyVoice.guard
+src/__tests__/truthfulCopy.guard
+src/__tests__/boneSwapGuard
