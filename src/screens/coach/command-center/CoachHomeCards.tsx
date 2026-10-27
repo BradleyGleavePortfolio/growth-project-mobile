@@ -20,7 +20,8 @@ import type { CoachTabParamList } from "../../../navigation/CoachNavigator";
 
 /**
  * `part` (spec #688 6295886580, the new Home): 'setup' is the checklist alone, for the Home's hero; 'below'
- * is the push ask and today's brief, under it (the Home's Business glance stands for the Money card).
+ * is the push ask and today's brief, under it (the Home's Business glance stands for the Money card). Both parts draw
+ * the Home's Style A white cards (HOME3 A, FR-863R5); 'all' (the old Overview) keeps the hairline looks.
  */
 export type CoachHomeCardsPart = "all" | "setup" | "below";
 
@@ -83,16 +84,16 @@ export default function CoachHomeCards({ part = "all", brief = true }: { part?: 
     [navigation],
   );
   if (part === "setup") {
-    return <CoachSetupChecklist onOpen={open} />;
+    return <CoachSetupChecklist onOpen={open} look="home" />;
   }
   if (part === "below") {
     const push = coachLandingTab() === "CommandCenter";
     const showBrief = featureFlags.coachBrief && brief;
     if (!push && !showBrief) return null;
     return (
-      <View testID="coach-home-cards-below">
-        {push ? <PushPermissionCard audience="coach" presentation="section" /> : null}
-        {showBrief ? <BriefHomeCard onOpen={openBrief} /> : null}
+      <View testID="coach-home-cards-below" style={{ gap: 10 }}>
+        {push ? <PushPermissionCard audience="coach" presentation="home" /> : null}
+        {showBrief ? <BriefHomeCard onOpen={openBrief} look="home" /> : null}
       </View>
     );
   }

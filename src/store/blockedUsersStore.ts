@@ -52,7 +52,7 @@ interface BlockedUsersState {
   block: (user: Omit<BlockedUser, 'blockedAt'>) => Promise<void>;
   /** Merge rows fetched from GET /users/blocks. Preserves the server-provided
    *  blockedAt timestamp instead of stamping new Date() locally. */
-  addFromServer: (rows: ReadonlyArray<ServerBlockedRow>) => Promise<void>;
+  addFromServer: (rows: ReadonlyArray<ServerBlockedRow>, opts?: { replace?: boolean }) => Promise<void>;
   unblock: (id: string) => Promise<void>;
   isBlocked: (id: string) => boolean;
   /** Wipe all in-memory state and the persisted entry for the active user. */
@@ -132,15 +132,18 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
     });
   },
 
-  addFromServer: async (rows) => {
-    if (!rows.length) return;
+  addFromServer: async (rows, opts) => {
+    // FX-872: `replace` makes the server's list the whole answer, so an unblock made on another device or screen
+    // drops here too instead of keeping a stale local block that closes a chat the server has opened.
+    if (!rows.length && !opts?.replace) return;
     const uid = get().userId;
     set((s) => {
-      const byId = new Map<string, BlockedUser>();
-      s.blocked.forEach((b) => byId.set(b.id, b));
+      const known = new Map<string, BlockedUser>();
+      s.blocked.forEach((b) => known.set(b.id, b));
+      const byId = opts?.replace ? new Map<string, BlockedUser>() : new Map(known);
       for (const row of rows) {
         if (!row.blockedId) continue;
-        const existing = byId.get(row.blockedId);
+        const existing = known.get(row.blockedId);
         byId.set(row.blockedId, {
           id: row.blockedId,
           displayName: row.displayName || existing?.displayName || 'Blocked user',

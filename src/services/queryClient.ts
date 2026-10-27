@@ -31,6 +31,8 @@ import { persistQueryClientSubscribe } from '@tanstack/react-query-persist-clien
 import type { PersistedClient } from '@tanstack/react-query-persist-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSealedCacheValue, openCacheValue, sealCacheValue } from './queryCacheCrypto';
+import { isClosedRefusal } from '../components/messaging/closedRefusal';
+import { registerBlockSyncClient } from '../lib/blockSync';
 
 function getHttpStatus(err: unknown): number | undefined {
   return (err as { response?: { status?: number } })?.response?.status;
@@ -51,6 +53,8 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       retry: (failureCount: number, error: unknown) => {
         if (getHttpStatus(error) === 402) return false;
+        // FX-872: "closed to you" (a block or a ban) is a final answer. Retrying it only kept the box up for seconds.
+        if (isClosedRefusal(error)) return false;
         return failureCount < 2;
       },
       retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
@@ -63,6 +67,7 @@ export const queryClient = new QueryClient({
     },
   },
 });
+registerBlockSyncClient(queryClient); // FX-872: blocking and unblocking update this cache (src/lib/blockSync.ts)
 
 /**
  * Persisted React Query cache — identity-bound (S6-P1).

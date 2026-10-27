@@ -19,6 +19,7 @@ import { z } from 'zod';
 import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { call } from './apiCall';
+import { blockPlaced, blockLifted } from '../lib/blockSync';
 import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from './communityErrors';
 
 /**
@@ -176,7 +177,7 @@ export const communitySafetyApi = {
       BlockResultSchema,
       () => api.post<unknown>('/community/blocks', { user_id: userId }, idempotentHeaders()),
       'community block',
-    ).then(() => undefined);
+    ).then(() => blockPlaced(userId)); // FX-872: the same block cache the coaching chat and Settings read
   },
 
   unblock(userId: string): Promise<void> {
@@ -184,7 +185,7 @@ export const communitySafetyApi = {
       BlockResultSchema,
       () => api.delete<unknown>(`/community/blocks/${userId}`),
       'community unblock',
-    ).then(() => undefined);
+    ).then(() => blockLifted(userId));
   },
 
   /** GET /community/safety/notices — the member's own moderation notices, newest first. */

@@ -223,7 +223,7 @@ function PackageRow({
   const archived = pkg.status === 'archived';
   return (
     <TouchableOpacity
-      style={[styles.card, archived && styles.cardArchived]}
+      style={styles.card}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Edit ${pkg.title}`}
@@ -337,7 +337,6 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       borderRadius: radius.card,
       padding: 16,
     },
-    cardArchived: { opacity: 0.6 },
     cardHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
