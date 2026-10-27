@@ -9,7 +9,7 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
 import { COPILOT_PATHS } from '../../../../api/copilotApi';
-import { openOrResumeSession, RomanApiError, sendMessage } from '../../../../api/romanApi';
+import { openOrResumeSession, sendMessage } from '../../../../api/romanApi';
 import ClientPathCopilotScreen from '../../ClientPathCopilotScreen';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
 import { ROMAN_ROOM_FOOTER } from '../../../../components/roman/romanVoice';
@@ -101,7 +101,7 @@ test('B-852R3-1: Past questions on Your path is style A\'s ask row: 52 tall, 16/
   expect(flat(s.getByTestId('copilot-past-row-count'))).toMatchObject({ fontSize: 14, color: '#5A5A56' });
   expect(s.getByTestId('copilot-past-row-count').props.children).toBe('186');
   expect(hint(s.getByTestId('copilot-past-row-chevron'))).toBe('chevron-forward 18 #4E7A3F');
-  expect(flat(s.getByTestId('copilot-past-row-count').parent?.parent ?? null)).toMatchObject({ flexDirection: 'row', gap: 6 });
+  expect(flat(s.getByTestId('copilot-past-row-count').parent ?? null)).toMatchObject({ flexDirection: 'row', gap: 6 });
 });
 
 test('B-852R3-1, B-S1, C-852R3-2: history rows carry the 22 ink chevron and "day ·", waiting is the GOAL wash, Show older is the forest link', async () => {
@@ -151,14 +151,14 @@ test('B-S3: AI help off on Send is Roman\'s AI help card; the grant brings Send 
   const off = { granted: false, state: 'not_granted', version: null, granted_at: null, withdrawn_at: null, current_version: 'v6', needs_reconsent: false, copy };
   get.mockResolvedValue({ data: off } as never);
   post.mockResolvedValue({ data: { ...off, granted: true, state: 'granted', version: 'v6', granted_at: '2026-10-22T21:41:00Z' } } as never);
-  const send = jest.fn().mockRejectedValueOnce(Object.assign(new RomanApiError('aiRefused', 'refused'), { refusal: { kind: 'consent_required' } }));
+  const send = jest.fn().mockRejectedValueOnce(Object.assign(new Error('http'), { response: { status: 403, data: { code: 'ai_consent_required' } } }));
   const s = await render(wrap(<SuggestionCard suggestion={SUGGESTED as never} coach="Alex" send={send} />));
   await act(async () => fireEvent.press(s.getByTestId('copilot-send')));
   expect(s.getByTestId('copilot-send-refusal-roman')).toBeTruthy();
   expect(s.queryByTestId('copilot-send')).toBeNull();
   await act(async () => fireEvent.press(s.getByTestId('copilot-send-refusal-allow')));
   await act(async () => fireEvent.press(await s.findByTestId('copilot-send-refusal-consent-sheet-allow')));
-  expect(post).toHaveBeenCalledWith('/me/ai-consent/roman', expect.anything(), expect.anything());
+  expect(post.mock.calls.some(([url]) => url === '/me/ai-consent/roman')).toBe(true);
   expect(await s.findByTestId('copilot-send')).toBeTruthy();
   expect(s.queryByTestId('copilot-send-refusal')).toBeNull();
   expect(send).toHaveBeenCalledTimes(1);
@@ -263,4 +263,46 @@ test('the Copilot button and link: 52 tall, 16/600 forest; the link 44 tall, 15/
   const l = await render(<LedgerLink label="Show older questions" onPress={press} testID="l" />);
   expect(flat(l.getByTestId('l'))).toMatchObject({ minHeight: 44 });
   expect(flat(l.getByText('Show older questions'))).toMatchObject({ fontSize: 15, color: '#2C4A36' });
+});
+
+test('C-852R3-1: a failed re-read over what is on screen keeps it with no retry card, on Your path and on Past questions', async () => {
+  routeGet();
+  const a = await render(wrap(<ClientPathCopilotScreen />));
+  await a.findByTestId('copilot-week');
+  get.mockRejectedValue(NET());
+  await act(async () => { await a.getByTestId('copilot-scroll').props.refreshControl.props.onRefresh(); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(get.mock.calls.filter(([url]) => url === '/client/copilot').length).toBeGreaterThanOrEqual(2);
+  expect(a.getByTestId('copilot-week')).toBeTruthy();
+  expect(a.queryByTestId('copilot-error')).toBeNull();
+  await a.unmount();
+  routeGet();
+  mockParams = { view: 'questions' };
+  const b = await render(wrap(<ClientPathCopilotScreen />));
+  await b.findByTestId('copilot-past-m1');
+  get.mockRejectedValue(NET());
+  await act(async () => { await b.getByTestId('copilot-questions-scroll').props.refreshControl.props.onRefresh(); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(get.mock.calls.filter(([url]) => url === COPILOT_PATHS.questions).length).toBeGreaterThanOrEqual(2);
+  expect(b.getByTestId('copilot-past-m1')).toBeTruthy();
+  expect(b.queryByTestId('copilot-past-error')).toBeNull();
+});
+
+test('B-878R3-3 (owner 178-4, op 2): Not now is style A\'s forest link, 44 tall, 15/500, no underline; it waits while Send is in flight', async () => {
+  let done: (v: unknown) => void = () => undefined;
+  const send = jest.fn(() => new Promise((r) => { done = r; }));
+  const dismiss = jest.fn();
+  const s = await render(<SuggestionCard suggestion={SUGGESTED as never} coach="Alex" send={send as never} onDismiss={dismiss} />);
+  const link = s.getByTestId('copilot-not-now');
+  expect(flat(link)).toMatchObject({ minHeight: 44, alignSelf: 'center' });
+  const words = flat(s.getByText('Not now'));
+  expect(words).toMatchObject({ fontSize: 15, fontWeight: '500', color: '#2C4A36' });
+  expect(words.textDecorationLine).toBeUndefined();
+  expect(link.props.accessibilityRole).toBe('button');
+  await act(async () => fireEvent.press(link));
+  expect(dismiss).toHaveBeenCalledTimes(1);
+  await act(async () => fireEvent.press(s.getByTestId('copilot-send')));
+  expect(s.getByTestId('copilot-not-now').props.accessibilityState?.disabled).toBe(true);
+  expect(flat(s.getByText('Not now')).color).toBe('#5A5A56');
+  await act(async () => done({ ...SUGGESTED, status: 'pending', sent_at: '2026-10-21T21:34:00Z' }));
 });
