@@ -1,7 +1,8 @@
 /**
  * FR-868 round 2: the coach community stack shows ONE header per screen.
- * Screens that draw their own title (the K2 inbox page title) keep only the
- * back control in the bar, in the page colour with no shadow.
+ * Screens that draw their own title (the K2 inbox, Cohorts and cohort page
+ * titles) keep only the back control in the bar, in the page colour with no
+ * shadow.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -19,8 +20,15 @@ function screenBlock(name: string): string {
 }
 
 describe('coach community headers (FR-868)', () => {
-  it('the inbox bar keeps only the back control and blends into the bone page', () => {
-    const block = screenBlock('CoachCommunityInbox');
+  // FX4-868: Cohorts and a cohort draw their own serif title too (K2, #172-10).
+  it.each([
+    ['CoachCommunityInbox', 'Inbox'],
+    ['CoachCommunityCohorts', 'Cohorts'],
+    ['CoachCommunityCohortDetail', 'Cohort'],
+  ])('the %s bar keeps only the back control and blends into the bone page', (name, title) => {
+    const block = screenBlock(name);
+    // The title stays for the back button and screen readers; the bar draws none.
+    expect(block).toMatch(new RegExp(`title: '${title}'`));
     expect(block).toMatch(/headerTitle: ''/);
     expect(block).toMatch(/headerShadowVisible: false/);
     expect(block).toMatch(/headerStyle: \{ backgroundColor: tokenColors\.bone \}/);

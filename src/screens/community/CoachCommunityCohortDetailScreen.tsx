@@ -13,10 +13,13 @@
  *     §2.3 — no one-tap destructive actions); confirming fires an optimistic
  *     remove with rollback.
  *
- * THREE distinct branches (UX P0.2): a loading spinner; an honest
- * CoachErrorState on failure (never a calm/empty masquerade); and — on a
- * cohort with no members — the operator-locked Roman-voiced empty state whose
- * copy + crop come from the backend voice policy (face + voice contract).
+ * K2 Style B (#172-10, as the inbox): bone page, the cohort's name as a serif
+ * page title, warm cream member cards with filled serif monograms, 24pt
+ * gutters. THREE distinct branches (UX P0.2): skeleton cards while loading;
+ * an honest inline error card on failure (never a calm/empty masquerade); and
+ * — on a cohort with no members — the operator-locked Roman-voiced empty state
+ * whose copy + crop come from the backend voice policy (face + voice
+ * contract).
  *
  * Destructive Remove is demoted (UX P1.1): it is NOT a button on every row.
  * Each client row carries an overflow (kebab) affordance that opens a small
@@ -35,16 +38,16 @@ import {
   FlatList,
   ActivityIndicator,
   Modal,
+  RefreshControl,
+  ScrollView,
   TextInput,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, withAlpha, semantic } from '../../theme/tokens';
+import { spacing, radius, withAlpha, semantic, colors, layout } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
   CoachRomanEmptyState,
-  CoachErrorState,
-  MonogramBadge,
   ConfirmModal,
 } from '../../components/community/coach';
 import CompletionToast, {
@@ -75,6 +78,16 @@ function alertMemberFailure(err: unknown): void {
       ? 'No client of yours has that email. Check it and try again.'
       : f.message,
   );
+}
+
+/** Up to two initials for a member's filled monogram (as the inbox's rows). */
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .join('');
 }
 
 /** Minimal, intentionally permissive email shape check (server is the gate). */
@@ -139,32 +152,26 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
   const renderMember = useCallback(
     ({ item }: { item: CoachCohortMember }) => (
       <View
-        style={[
-          styles.memberRow,
-          {
-            backgroundColor: semanticColors.bgSurface,
-            borderColor: semanticColors.border,
-          },
-        ]}
+        style={styles.memberRow}
         testID={`coach-community-member-row-${item.user_id}`}
       >
-        <MonogramBadge
-          name={item.name}
-          avatarUrl={item.avatar_url}
-          size={40}
+        {/* The roster has no photos (avatar_url is always null): K2 filled
+            serif monogram, as the inbox's rows. */}
+        <View
+          style={styles.monogram}
           testID={`coach-community-member-avatar-${item.user_id}`}
-        />
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Text style={styles.monogramText} allowFontScaling={false}>
+            {initialsOf(item.name)}
+          </Text>
+        </View>
         <View style={styles.memberBody}>
-          <Text
-            style={[styles.memberName, { color: semanticColors.textPrimary }]}
-            numberOfLines={1}
-          >
+          <Text style={styles.memberName} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text
-            style={[styles.memberMeta, { color: semanticColors.textMuted }]}
-            numberOfLines={2}
-          >
+          <Text style={styles.memberMeta} numberOfLines={2}>
             {item.role}
             {item.email ? ` · ${item.email}` : ''}
           </Text>
@@ -180,43 +187,44 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
             testID={`coach-community-member-menu-${item.user_id}`}
             style={styles.kebab}
           >
-            <Text style={[styles.kebabGlyph, { color: semanticColors.textMuted }]}>
-              ⋯
-            </Text>
+            <Text style={styles.kebabGlyph}>⋯</Text>
           </HapticPressable>
         ) : null}
       </View>
     ),
-    [semanticColors, setMenuMember],
+    [setMenuMember],
   );
 
   if (detail.isLoading) {
     return (
-      <View
-        style={[styles.center, { backgroundColor: semanticColors.bgPrimary }]}
-        testID="coach-community-cohort-detail-screen"
-      >
-        <ActivityIndicator
-          color={semanticColors.accent}
+      <View style={styles.page} testID="coach-community-cohort-detail-screen">
+        <View style={styles.header}>
+          <Text accessibilityRole="header" style={styles.headerName}>
+            {cohortName}
+          </Text>
+        </View>
+        <View
+          accessible
+          accessibilityLabel="Loading this cohort"
           testID="coach-community-cohort-detail-loading"
-        />
+          style={styles.skeletonList}
+        >
+          {[0, 1, 2].map((n) => (
+            <View key={n} style={styles.skeletonCard} />
+          ))}
+        </View>
       </View>
     );
   }
 
   return (
-    <View
-      style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-      testID="coach-community-cohort-detail-screen"
-    >
+    <View style={styles.page} testID="coach-community-cohort-detail-screen">
       <View style={styles.header}>
-        <Text style={[styles.headerName, { color: semanticColors.textPrimary }]}>
+        <Text accessibilityRole="header" style={styles.headerName}>
           {cohortName}
         </Text>
         {data ? (
-          <Text style={[styles.headerMeta, { color: semanticColors.textMuted }]}>
-            {memberCount} members
-          </Text>
+          <Text style={styles.headerMeta}>{memberCount} members</Text>
         ) : null}
       </View>
 
@@ -226,20 +234,47 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         accessibilityRole="button"
         accessibilityLabel="Invite a client by email"
         testID="coach-community-cohort-detail-invite"
-        style={[styles.primaryButton, { backgroundColor: semanticColors.accent }]}
+        style={styles.primaryButton}
       >
-        <Text style={[styles.primaryButtonLabel, { color: semanticColors.textOnAccent }]}>
-          Invite client
-        </Text>
+        <Text style={styles.primaryButtonLabel}>Invite client</Text>
       </HapticPressable>
 
       {detail.isError ? (
-        <CoachErrorState
-          message="Could not load this cohort. Pull back and open it again."
-          onRetry={() => detail.refetch()}
-          retrying={detail.isRefetching}
-          testID="coach-community-cohort-detail-error"
-        />
+        <ScrollView
+          contentContainerStyle={styles.noticeScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={detail.isRefetching}
+              onRefresh={() => detail.refetch()}
+              tintColor={colors.forest}
+            />
+          }
+        >
+          <View style={styles.noticeCard} testID="coach-community-cohort-detail-error">
+            <Text style={styles.noticeText}>
+              Could not load this cohort. Pull back and open it again.
+            </Text>
+            <HapticPressable
+              intent="light"
+              onPress={() => detail.refetch()}
+              disabled={detail.isRefetching}
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
+              accessibilityState={{
+                disabled: detail.isRefetching,
+                busy: detail.isRefetching,
+              }}
+              testID="coach-community-cohort-detail-error-retry"
+              style={styles.noticeButton}
+            >
+              {detail.isRefetching ? (
+                <ActivityIndicator color={colors.bone} />
+              ) : (
+                <Text style={styles.noticeButtonLabel}>Try again</Text>
+              )}
+            </HapticPressable>
+          </View>
+        </ScrollView>
       ) : isEmptyMembers ? (
         <CoachRomanEmptyState
           result={emptyState}
@@ -269,18 +304,8 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
             { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
           ]}
         >
-          <View
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: semanticColors.bgSurface,
-                borderColor: semanticColors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: semanticColors.textPrimary }]}>
-              Invite a client
-            </Text>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Invite a client</Text>
             <TextInput
               value={email}
               onChangeText={setEmail}
@@ -288,18 +313,11 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
               autoCapitalize="none"
               keyboardType="email-address"
               placeholder="client@example.com"
-              placeholderTextColor={semanticColors.textMuted}
+              placeholderTextColor={colors.graphite}
               accessibilityLabel="Client email"
               testID="coach-community-cohort-detail-email-input"
               onSubmitEditing={onInvite}
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: semanticColors.bgPrimary,
-                  borderColor: semanticColors.border,
-                  color: semanticColors.textPrimary,
-                },
-              ]}
+              style={styles.modalInput}
             />
             <View style={styles.modalActions}>
               <HapticPressable
@@ -311,11 +329,9 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
                 testID="coach-community-cohort-detail-invite-cancel"
-                style={[styles.modalButton, styles.modalCancel, { borderColor: semanticColors.border }]}
+                style={[styles.modalButton, styles.modalCancel]}
               >
-                <Text style={[styles.modalCancelLabel, { color: semanticColors.textPrimary }]}>
-                  Cancel
-                </Text>
+                <Text style={styles.modalCancelLabel}>Cancel</Text>
               </HapticPressable>
               <HapticPressable
                 intent="success"
@@ -329,7 +345,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
                   styles.modalButton,
                   {
                     backgroundColor: canInvite
-                      ? semanticColors.accent
+                      ? colors.forest
                       : semanticColors.disabledBg,
                   },
                 ]}
@@ -339,7 +355,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
                     styles.modalSubmitLabel,
                     {
                       color: canInvite
-                        ? semanticColors.textOnAccent
+                        ? colors.bone
                         : semanticColors.textOnDisabled,
                     },
                   ]}
@@ -370,15 +386,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
             { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
           ]}
         >
-          <View
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: semanticColors.bgSurface,
-                borderColor: semanticColors.border,
-              },
-            ]}
-          >
+          <View style={styles.sheet}>
             <HapticPressable
               intent="warning"
               onPress={() => {
@@ -422,28 +430,31 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
   );
 }
 
+// K2 Style B, as the inbox: bone page (#166-2), cream cards, forest accent,
+// ink text, graphite small text (#168-13), 24pt gutters, semantic radii.
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  page: { flex: 1, backgroundColor: colors.bone },
   header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     gap: 2,
   },
   headerName: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 34,
+    lineHeight: 43,
+    color: colors.ink,
   },
   headerMeta: {
-    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.graphite,
   },
   listContent: {
-    padding: spacing.lg,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.xs,
     gap: spacing.sm,
     paddingBottom: 96,
   },
@@ -451,92 +462,154 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.sm,
+    borderRadius: radius.card,
+    backgroundColor: colors.cream,
     minHeight: 64,
+  },
+  monogram: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.chip,
+    backgroundColor: colors.forest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monogramText: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 23,
+    color: colors.bone,
   },
   memberBody: {
     flex: 1,
     gap: 2,
   },
   memberName: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    lineHeight: 21,
+    color: colors.ink,
   },
   memberMeta: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
+    lineHeight: 18,
+    color: colors.graphite,
   },
   kebab: {
     minHeight: 44,
     minWidth: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: radius.md,
+    borderRadius: radius.button,
   },
   kebabGlyph: {
     fontSize: 22,
     fontWeight: '600',
     lineHeight: 24,
+    color: colors.ink,
+  },
+  skeletonList: { paddingHorizontal: layout.gutter, gap: spacing.sm },
+  skeletonCard: {
+    height: 72,
+    borderRadius: radius.card,
+    backgroundColor: colors.cream,
+  },
+  noticeScroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xs },
+  noticeCard: {
+    backgroundColor: colors.cream,
+    borderRadius: radius.card,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  noticeText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.ink,
+  },
+  noticeButton: {
+    minHeight: 48,
+    borderRadius: radius.button,
+    backgroundColor: colors.forest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    alignSelf: 'flex-start',
+  },
+  noticeButtonLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.bone,
   },
   sheetScrim: {
     flex: 1,
     justifyContent: 'flex-end',
-    padding: spacing.lg,
+    padding: layout.gutter,
   },
   sheet: {
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sheet,
+    backgroundColor: colors.bone,
     overflow: 'hidden',
   },
   sheetItem: {
-    minHeight: 52,
-    paddingHorizontal: spacing.lg,
+    minHeight: 56,
+    paddingHorizontal: spacing.xl,
     justifyContent: 'center',
   },
   sheetItemLabel: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
-    fontWeight: '600',
   },
   // K2 has no floating buttons: the main action sits in the page flow.
   primaryButton: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    marginHorizontal: layout.gutter,
+    marginBottom: spacing.md,
     minHeight: 48,
     paddingHorizontal: spacing.xl,
-    borderRadius: 12,
+    borderRadius: radius.button,
+    backgroundColor: colors.forest,
     justifyContent: 'center',
     alignItems: 'center',
   },
   primaryButtonLabel: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
-    fontWeight: '600',
+    lineHeight: 21,
+    color: colors.bone,
   },
   scrim: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    padding: layout.gutter,
   },
   modalCard: {
     width: '100%',
     maxWidth: 360,
     padding: spacing.xl,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sheet,
+    backgroundColor: colors.bone,
     gap: spacing.md,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 26,
+    lineHeight: 33,
+    color: colors.ink,
   },
   modalInput: {
     minHeight: 48,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.button,
+    backgroundColor: colors.cream,
     paddingHorizontal: spacing.md,
+    fontFamily: 'Inter_400Regular',
     fontSize: 16,
+    color: colors.ink,
   },
   modalActions: {
     flexDirection: 'row',
@@ -549,17 +622,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: radius.md,
+    borderRadius: radius.button,
   },
   modalCancel: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1.5,
+    borderColor: colors.forest,
   },
   modalCancelLabel: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
+    color: colors.forest,
   },
   modalSubmitLabel: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
   },
 });
