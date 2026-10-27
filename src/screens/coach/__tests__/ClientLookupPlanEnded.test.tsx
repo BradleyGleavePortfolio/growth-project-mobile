@@ -86,6 +86,9 @@ const refresh = () => act(async () => { await screen.getByTestId('lookup-scroll'
 const ids = (re: RegExp) => screen.getAllByTestId(re).map((n) => n.props.testID as string).filter((id, i, all) => all.indexOf(id) === i);
 const chipIds = () => ids(/^lookup-chip-/);
 const rowIds = () => ids(/^lookup-row-/);
+/** KeepTail's pieces: the lead, then the dot and the tail in their own row (the dot is only drawn, so it is hidden). */
+const drawn = (id: string) => within(screen.getByTestId(id)).getAllByText(/./, { includeHiddenElements: true }).map((t) => t.props.children as string);
+const keepTail = (id: string) => [drawn(id)[0], drawn(`${id}-tail`)];
 
 describe('L1: the chip', () => {
   it("sits before Archived and counts the server's total, never one page's rows", async () => {
@@ -140,10 +143,10 @@ describe('L2: picked', () => {
     expect(screen.getByTestId('lookup-chip-ended').props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText('4 results')).toBeTruthy();
     expect(rowIds()).toEqual(['lookup-row-maya', 'lookup-row-dev', 'lookup-row-sam', 'lookup-row-lena']); // not "gone"
-    // RN3-30 in two pieces: the package moves to the next line whole, never split inside "12-week" (RENEWAL3 L2's nowrap span).
-    const line = (id: string) => within(screen.getByTestId(`lookup-line-${id}`)).getAllByText(/./).map((t) => t.props.children);
-    expect([line('maya'), line('sam'), line('lena')]).toEqual([
-      ['Plan ended today ·', '12-week block'], ['Plan ended 1 day ago ·', 'Monthly coaching'], ['Plan ended 3 days ago ·', '12-week block'],
+    // RN3-30 in two pieces: "· {package}" moves to the next line whole, never split inside "12-week" (RENEWAL3 L2's nowrap
+    // span), and the dot goes with it, so it never sits alone on a line (FX4-859, Opus B2).
+    expect(['maya', 'sam', 'lena'].map((id) => keepTail(`lookup-line-${id}`))).toEqual([
+      ['Plan ended today', ['·', '12-week block']], ['Plan ended 1 day ago', ['·', 'Monthly coaching']], ['Plan ended 3 days ago', ['·', '12-week block']],
     ]);
     expect(screen.getAllByText(/^Messaged /).map((t) => t.props.children)).toEqual(['Messaged Oct 20']); // only where the server says so
     expect(screen.getByTestId('lookup-row-sam').props.accessibilityLabel).toBe('Sam Okafor, Plan ended 1 day ago · Monthly coaching, Messaged Oct 20');
@@ -170,7 +173,7 @@ describe('L2: picked', () => {
     await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
     await fireEvent.press(screen.getByTestId('lookup-roman-maya'));
     expect(screen.getByText('Ask Roman to write to Maya?')).toBeTruthy();
-    expect(within(screen.getByTestId('home-draft-about-line')).getAllByText(/./).map((t) => t.props.children)).toEqual(['Plan ended today ·', '12-week block']); // RN3-34, package kept whole
+    expect(keepTail('home-draft-about-line')).toEqual(['Plan ended today', ['·', '12-week block']]); // RN3-34, package kept whole, the dot with it
     expect(mockPost).not.toHaveBeenCalled();
     await act(async () => { fireEvent.press(screen.getByTestId('home-draft-ask')); });
     expect(mockPost).toHaveBeenCalledWith('/v1/coach/churned-clients/maya/draft', {});
