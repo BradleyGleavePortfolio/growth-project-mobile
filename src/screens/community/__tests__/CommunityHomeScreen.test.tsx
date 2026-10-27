@@ -67,6 +67,7 @@ jest.mock('../../../hooks/useCommunity', () => ({
   useCommunityMe: () => mockMe,
   useCommunityCohorts: () => mockCohorts,
   useCommunityWorkspace: (id: string | null) => ({ data: id ? { name: "Sam's Strength Club" } : undefined }),
+  communityKeys: { cohorts: () => ['community', 'cohorts'], me: () => ['community', 'me'] },
 }));
 jest.mock('../CommunityChallengesScreen', () => {
   const { Text } = require('react-native');
@@ -228,6 +229,21 @@ describe('m#871 Sol B5: per-space unread counts (SC-BE2 unread_count)', () => {
     expect(CommunityCohortSummarySchema.parse({ ...row, unread_count: -1 }).unread_count).toBeUndefined();
     expect(CommunityCohortSummarySchema.parse({ ...row, unread_count: 'x' }).unread_count).toBeUndefined();
     expect(CommunityCohortSummarySchema.parse(row).unread_count).toBeUndefined();
+  });
+
+  it('FR-871R6 (Sol B879-6): a live ping that moves the space total reads the per-space counts again; the first answer and an unchanged total do not', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = jest.spyOn(qc, 'invalidateQueries');
+    const ui = () => <QueryClientProvider client={qc}><CommunityHomeScreen /></QueryClientProvider>;
+    const counts = () => spy.mock.calls.filter(([f]) => JSON.stringify(f) === JSON.stringify({ queryKey: ['community', 'cohorts'] })).length;
+    const view = await render(ui());
+    expect(counts()).toBe(0);
+    mockMe = query({ feature_flag_state: 'enabled', workspace_id: 'ws-1', unread: { cohort_messages: 4, dm_messages: 1, mentions: 0 } });
+    await view.rerender(ui());
+    expect(counts()).toBe(0);
+    mockMe = query({ feature_flag_state: 'enabled', workspace_id: 'ws-1', unread: { cohort_messages: 5, dm_messages: 1, mentions: 0 } });
+    await view.rerender(ui());
+    await waitFor(() => expect(counts()).toBe(1));
   });
 });
 

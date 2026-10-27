@@ -134,7 +134,7 @@ describe('SpaceVoiceNote — outbox states (GOAL 03 / 04, owner 10-20 12:25)', (
 });
 
 describe('SpaceChatRow — a row still on the phone (FR-871R5, m#879 Opus B3 / Sol B4)', () => {
-  it.each([['waiting', 'message'], ['sending', 'message'], ['failed', 'message']] as const)('%s: ••• deletes it from the phone, after asking', async (state, noun) => {
+  it.each([['waiting', 'message'], ['failed', 'message']] as const)('%s: ••• deletes it from the phone, after asking', async (state, noun) => {
     const onDiscard = jest.fn();
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const r = await render(
@@ -149,5 +149,14 @@ describe('SpaceChatRow — a row still on the phone (FR-871R5, m#879 Opus B3 / S
     (alert.mock.calls[0][2] as { text: string; onPress?: () => void }[]).find((b) => b.text === 'Delete')?.onPress?.();
     expect(onDiscard).toHaveBeenCalledTimes(1);
     alert.mockRestore();
+  });
+
+  it('FR-871R6 (m#879 Opus B3 / Sol B879-3): sending: no •••, its send cannot be called back; the row keeps its place', async () => {
+    const r = await render(
+      <SpaceChatRow id="l-1" name="Mia" isCoach={false} createdAt="2026-10-26T10:00:00.000Z" body="Hi" authorId="u-1"
+        viewerUserId="u-1" state="sending" onRetry={jest.fn()} onDiscard={jest.fn()} />,
+    );
+    expect(r.queryByTestId('space-chat-local-menu-l-1')).toBeNull();
+    expect(StyleSheet.flatten(r.getByTestId('space-chat-local-busy-l-1').props.style)).toMatchObject({ minWidth: 44, minHeight: 44 });
   });
 });

@@ -17,10 +17,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import VoiceNotePlayer from '../VoiceNotePlayer';
 import { resolveVoicePlayback, type VoicePlaybackPort } from '../voicePlaybackPort';
 import { communityVoiceApi, type VoiceNoteView } from '../../../api/communityVoiceApi';
-import { forestPop as fp, radius, semantic, spacing } from '../../../theme/tokens';
+import { colors, forestPop as fp, radius, semantic, spacing } from '../../../theme/tokens';
 import { spaceChatApi, type SpaceMessage } from './spaceChatApi';
 
-const SMALL_GREY = '#2C2C2C';
+const SMALL_GREY = colors.graphite;
 
 export const spaceVoiceKey = (voiceNoteId: string) => ['community', 'space-chat-voice', voiceNoteId] as const;
 

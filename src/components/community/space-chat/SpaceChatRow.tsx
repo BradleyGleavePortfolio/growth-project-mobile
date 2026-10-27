@@ -12,6 +12,8 @@ import React, { useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SafetyMenu from '../SafetyMenu';
+import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from '../VoiceReportedFold';
+import { formatDuration } from '../voiceFormat';
 import SpaceVoiceNote from './SpaceVoiceNote';
 import { brand, colors, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
@@ -55,7 +57,9 @@ export interface SpaceChatRowProps {
 }
 
 /** One place per message kind: a later kind (photo, reply) adds its case here. */
-function MessageBody(p: SpaceChatRowProps): React.ReactElement | null {
+function MessageBody(p: SpaceChatRowProps & { folded: boolean }): React.ReactElement | null {
+  // GOAL B-06b / VN-07: a voice note this viewer reported folds to one line; the player goes.
+  if (p.voice && p.folded) return <VoiceReportedFold testID={`space-chat-reported-${p.id}`} />;
   if (p.voice) {
     const mine = !!p.viewerUserId && p.authorId === p.viewerUserId;
     const send = p.state === 'waiting' && !p.offline ? 'sending' : p.state === 'sent' ? undefined : p.state;
@@ -80,6 +84,12 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const tile: Tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
   // Name, chip and time grow (large text) or wrap: then the body starts below them, not tucked up.
   const [wrapped, setWrapped] = useState(false);
+  // FR-871R6 (m#879 Opus B4 / Sol B879-4): the report sheet shows what is reported (GOAL B-06a), and a report stays
+  // done for this viewer (per account, across restarts: the voice unit's store, which keeps ids only). A reported
+  // voice note folds (B-06b); a reported text keeps its place (a text fold needs words from the owner).
+  const reportedIds = useReportedVoiceNotes();
+  const reportId = p.voice ? p.voice.id : p.id;
+  const reported = reportedIds.has(reportId);
   const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
   const noun = p.voice ? 'voice note' : 'message';
   const confirmDiscard = () => Alert.alert(`Delete this ${noun}?`, undefined, [
@@ -102,7 +112,10 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
         </View>
-        {local ? (
+        {/* FR-871R6 (m#879 Opus B3 / Sol B879-3): no Delete while a row reads Sending…: its send cannot be called back. */}
+        {local && shown === 'sending' ? (
+          <View style={s.more} testID={`space-chat-local-busy-${p.id}`} />
+        ) : local ? (
           <TouchableOpacity onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel={`Delete this ${noun}`} hitSlop={8} style={s.more} testID={`space-chat-local-menu-${p.id}`}>
             <Ionicons name="ellipsis-horizontal" size={18} color={SMALL_GREY} />
           </TouchableOpacity>
@@ -115,6 +128,9 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             viewerUserId={p.viewerUserId}
             viewerCoachId={p.isCoach && !isOwn ? p.authorId : p.viewerCoachId}
             contentNoun={p.voice ? 'voice note' : 'message'}
+            context={{ name: p.name, detail: p.voice ? `voice note · ${formatDuration(p.voice.duration_ms)}` : (p.body ?? '') }}
+            reported={reported}
+            onReported={() => markVoiceNoteReported(reportId)}
             onDelete={isOwn ? p.onDelete : undefined}
             onBlocked={p.onBlocked}
             testID={`space-chat-menu-${p.id}`}
@@ -122,7 +138,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
         )}
       </View>
       <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
-        <MessageBody {...p} />
+        <MessageBody {...p} folded={reported && !local} />
         {p.state === 'failed' && p.rejected ? (
           <Text style={s.reason} testID={`space-chat-rejected-${p.id}`}>{REJECTED_WORDS.message}</Text>
         ) : null}

@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { communityKeys, useCommunityMe } from '../../../hooks/useCommunity';
+import { coachCommunityKeys } from '../../../hooks/useCoachCommunity';
 import { communityVoiceApi } from '../../../api/communityVoiceApi';
 import { isNoAccess, spaceChatApi, type SpaceMessage, type SpaceMessagePage } from './spaceChatApi';
 import { setSpaceOutboxOnline, spaceOutbox, startSpaceOutbox, useSpaceOutbox, type PendingRow } from './spaceChatOutbox';
@@ -96,6 +97,8 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     return spaceChatApi.markRead(cohortId, messageId).then(() => {
       void qc.invalidateQueries({ queryKey: communityKeys.cohorts() });
       void qc.invalidateQueries({ queryKey: communityKeys.me() });
+      // FR-871R6 (Sol B879-6): the coach's space list reads its own cache; its count drops with the read too.
+      void qc.invalidateQueries({ queryKey: coachCommunityKeys.cohorts() });
       return true;
     }, () => false);
   }, [cohortId, read.isError, qc]);

@@ -8,12 +8,12 @@
  * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
-import { Alert, FlatList, StyleSheet } from 'react-native';
+import { Alert, FlatList, Keyboard, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { authEvents } from '../../../utils/authEvents';
-import { forestPop as fp } from '../../../theme/tokens';
+import { forestPop as fp, spacing } from '../../../theme/tokens';
 
 const mockDisk = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
@@ -47,10 +47,11 @@ let mockUser = { id: 'me-1', name: 'Dana Reyes', coach_id: 'coach-1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 const mockInsets = { top: 47, right: 0, bottom: 34, left: 0 }; // an iPhone with a home indicator
 jest.mock('react-native-safe-area-context', () => {
-  const { createElement } = require('react');
+  const { createContext, createElement } = require('react');
   const { View } = require('react-native');
   return {
     SafeAreaView: ({ children, style, testID }: { children?: unknown; style?: unknown; testID?: string }) => createElement(View, { style, testID }, children),
+    SafeAreaInsetsContext: createContext(mockInsets),
     useSafeAreaInsets: () => mockInsets,
   };
 });
@@ -89,10 +90,17 @@ jest.mock('../../../components/community/VoiceRecordSheet', () => {
 });
 jest.mock('../../../components/community/SafetyMenu', () => {
   const { Text } = jest.requireActual('react-native');
-  return (p: { testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void> }) => (
+  type MockMenuProps = {
+    testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void>;
+    context?: { name: string; detail: string }; reported?: boolean; onReported?: () => void;
+  };
+  return (p: MockMenuProps) => (
     <>
       <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
       {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { p.onDelete?.().catch(() => undefined); }}>delete</Text> : null}
+      {/* FR-871R6 (m#879 B4): the card the report sheet draws above the reasons, and Report, done once sent. */}
+      {p.context ? <Text testID={`${p.testID}-context`}>{`${p.context.name} | ${p.context.detail}`}</Text> : null}
+      {p.onReported ? <Text testID={`${p.testID}-report`} onPress={p.onReported}>{p.reported ? 'Reported' : 'Report'}</Text> : null}
     </>
   );
 });
@@ -100,6 +108,9 @@ const mockApi = { get: jest.fn(), post: jest.fn(), delete: jest.fn() };
 jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi }));
 
 const Screen = require('../CommunitySpaceChatScreen').default;
+// Required here, after the stand-ins above exist (both reach services/api or the device cache when loaded).
+const { resetReportedVoiceNotes } = require('../../../components/community/VoiceReportedFold');
+const { coachCommunityKeys } = require('../../../hooks/useCoachCommunity');
 
 const msg = (id: string, at: string, who: { id: string; name: string; is_coach?: boolean }, extra: Record<string, unknown> = {}) => ({
   id, cohort_id: 'c-every', sender_user_id: who.id, body: `body ${id}`, kind: 'text', created_at: at, updated_at: at,
@@ -762,5 +773,102 @@ describe('FR-871R6 (m#871): member Space info, the hint, the server answer on th
     const row = JSON.parse(mockDisk.get('space_outbox_me-1') ?? '[]')[0];
     await act(async () => { spaceOutbox.discard(row.localId); });
     expect(r.getByLabelText('Dana Reyes, Sending…. On its way')).toBeTruthy();
+  });
+});
+
+describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card and fold, the coach list count', () => {
+  afterEach(async () => {
+    (Keyboard.addListener as unknown as { mockRestore?: () => void }).mockRestore?.();
+    await act(async () => { resetReportedVoiceNotes(); });
+  });
+  const pad = (r: Awaited<ReturnType<typeof open>>, id: string) => (StyleSheet.flatten(r.getByTestId(id).props.style) as { paddingBottom?: number }).paddingBottom;
+  const keyboard = () => {
+    const on: Record<string, () => void> = {};
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((e: string, h: () => void) => { on[e] = h; return { remove: () => undefined }; }) as never);
+    return on;
+  };
+
+  it('Opus B1 / Sol B879-1: with no tab bar below, the composer keeps clear of the home indicator; with the keyboard up it does not', async () => {
+    const on = keyboard();
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(pad(r, 'space-chat-composer')).toBe(spacing.sm + 34);
+    await act(async () => { on.keyboardWillShow(); });
+    expect(pad(r, 'space-chat-composer')).toBeUndefined();
+    await act(async () => { on.keyboardWillHide(); });
+    expect(pad(r, 'space-chat-composer')).toBe(spacing.sm + 34);
+  });
+
+  it('Opus B1 / Sol B879-1: the hint line under announcements keeps clear of it too; the coach (tab bar below) adds nothing', async () => {
+    mockParams.current = { cohortId: 'c-ann' };
+    const a = await open();
+    await a.findByTestId('space-chat-hint');
+    expect(pad(a, 'space-chat-hint')).toBe(spacing.lg + 34);
+    await a.unmount();
+    mockRole = 'owner';
+    mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+    mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+    const b = await open();
+    await b.findByTestId('space-chat-composer');
+    expect(pad(b, 'space-chat-composer')).toBeUndefined();
+  });
+
+  it('Opus B3 / Sol B879-3: a row that reads Sending… has no Delete (text and voice); Waiting to send keeps it', async () => {
+    mockApi.post.mockImplementation((url: string) => (String(url).endsWith('/read') ? Promise.resolve({ data: { ok: true } }) : new Promise(() => undefined)));
+    mockVoice.items = [{ id: 'vo-3', authorId: 'me-1', workspaceId: 'ws', peaks: [0.4], status: 'sending', input: { uri: 'file:///vo-3.m4a', durationMs: 8000, cohortId: 'c-every' } }];
+    const a = await open();
+    await a.findByTestId('space-chat-row-vo-3');
+    expect(a.getByTestId('space-chat-local-busy-vo-3')).toBeTruthy();
+    expect(a.queryByTestId('space-chat-local-menu-vo-3')).toBeNull();
+    await fireEvent.changeText(a.getByTestId('space-chat-composer-field'), 'Nice work');
+    await fireEvent.press(a.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(a.getAllByText('Sending…')).toHaveLength(2));
+    expect(a.getAllByTestId(/^space-chat-local-busy-/)).toHaveLength(2);
+    expect(a.queryAllByTestId(/^space-chat-local-menu-/)).toHaveLength(0);
+    await a.unmount();
+    mockVoice.items = [];
+    mockNet.isOnline = false;
+    const b = await open();
+    await b.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(b.getByTestId('space-chat-composer-field'), 'On the train');
+    await fireEvent.press(b.getByTestId('space-chat-composer-send'));
+    expect(await b.findByText('Waiting to send')).toBeTruthy();
+    expect(b.getAllByTestId(/^space-chat-local-menu-/).map((x) => x.props.accessibilityLabel)).toEqual(['Delete this message']);
+  });
+
+  it('Opus B4 / Sol B879-4: the report sheet gets the card; a reported voice note folds (its player goes) and stays folded; a text keeps its place, Reported', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(r.getByTestId('space-chat-menu-m2-context').props.children).toBe('Sam Okafor | voice note · 0:42');
+    expect(r.getByTestId('space-chat-menu-m3-context').props.children).toBe('jo b. | body m3');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m2-report'));
+    expect(r.getByText('You reported this voice note. It is hidden for you.')).toBeTruthy();
+    expect(r.getByTestId('space-chat-reported-m2')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-voice-v1')).toBeNull();
+    expect(r.getByTestId('space-chat-menu-m2-report').props.children).toBe('Reported');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3-report'));
+    expect(r.getByTestId('space-chat-menu-m3-report').props.children).toBe('Reported');
+    expect(r.getByLabelText(/^jo b\., .*\. body m3$/)).toBeTruthy();
+    expect(r.getByTestId('space-chat-menu-m1-report').props.children).toBe('Report');
+    await r.unmount();
+    const again = await open();
+    await again.findByTestId('space-chat-row-m3');
+    expect(again.getByTestId('space-chat-reported-m2')).toBeTruthy();
+    expect(again.queryByTestId('space-chat-voice-v1')).toBeNull();
+    expect(again.getByTestId('space-chat-menu-m3-report').props.children).toBe('Reported');
+    await again.unmount();
+    authEvents.emit('logout');
+    const next = await open();
+    await next.findByTestId('space-chat-row-m3');
+    expect(next.getByTestId('space-chat-voice-v1')).toBeTruthy();
+    expect(next.getByTestId('space-chat-menu-m3-report').props.children).toBe('Report');
+  });
+
+  it('Sol B879-6: a read mark that lands refreshes the coach\'s space list too', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-new-line');
+    const spy = jest.spyOn(client, 'invalidateQueries');
+    await see(r, 'm3', 'm2', 'new-line');
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: coachCommunityKeys.cohorts() }));
   });
 });

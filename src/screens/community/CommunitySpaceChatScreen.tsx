@@ -24,7 +24,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View,
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -219,6 +219,18 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   };
   const members = cohort ? `${cohort.member_count.toLocaleString('en-US')} ${cohort.member_count === 1 ? 'member' : 'members'}` : '';
   const [info, setInfo] = useState(false);
+  // FR-871R6 (m#879 Opus B1 / Sol B879-1): the member's tab bar steps aside here (ClientNavigator), so the dock and its
+  // lines keep clear of the home indicator / Android navigation bar themselves, in their own colour; with the keyboard
+  // up the dock sits on the keyboard (no double gap). The coach's tab bar still fills the inset (Found: CoachNavigator).
+  const insets = useSafeAreaInsets();
+  const [keyboardUp, setKeyboardUp] = useState(false);
+  useEffect(() => {
+    const up = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardUp(true));
+    const down = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardUp(false));
+    return () => { up.remove(); down.remove(); };
+  }, []);
+  const dockInset = coachStack || keyboardUp ? 0 : insets.bottom;
+  const lineInset = dockInset ? { paddingBottom: spacing.lg + dockInset } : null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
@@ -292,15 +304,16 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           </TouchableOpacity>
         ) : null}
         {chat.noAccess ? (
-          <Text style={s.line} testID="space-chat-no-access">This conversation is closed</Text>
+          <Text style={[s.line, lineInset]} testID="space-chat-no-access">This conversation is closed</Text>
         ) : canPost ? (
           <SpaceChatComposer
             cohortId={cohortId}
             onSend={chat.send}
+            bottomInset={dockInset}
             trailing={voiceOn ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
           />
         ) : admitted ? (
-          <Text style={s.line} testID="space-chat-hint">Only your coach posts here.</Text>
+          <Text style={[s.line, lineInset]} testID="space-chat-hint">Only your coach posts here.</Text>
         ) : null}
       </KeyboardAvoidingView>
       {info && cohort && !coachStack ? <SpaceInfoSheet name={cohort.name} members={members} onClose={() => setInfo(false)} /> : null}

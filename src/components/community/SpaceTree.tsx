@@ -10,17 +10,17 @@
  * other spaces, so they wait for B-LAYERS. The coach row is the C3 coach
  * thread with its real unread count.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
 import HapticPressable from '../HapticPressable';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
-import { useCommunityCohorts, useCommunityMe, useCommunityWorkspace } from '../../hooks/useCommunity';
+import { communityKeys, useCommunityCohorts, useCommunityMe, useCommunityWorkspace } from '../../hooks/useCommunity';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { startSpaceOutbox } from './space-chat/spaceChatOutbox';
 import { forestPop as fp, layout, typography } from '../../theme/tokens';
@@ -48,6 +48,17 @@ export function useSpaceTree() {
   const me = useCommunityMe();
   const workspaceId = me.data?.feature_flag_state === 'enabled' ? (me.data.workspace_id ?? null) : null;
   const cohorts = useCommunityCohorts(workspaceId != null);
+  // FR-871R6 (Sol B879-6): a live ping re-reads only community/me (useCommunityBadge). When its space count moves,
+  // the per-space counts are read again too, so an open Home or drawer shows the new numbers with no pull.
+  const qc = useQueryClient();
+  const spaceUnread = me.data?.unread?.cohort_messages;
+  const seenUnread = useRef(spaceUnread);
+  useEffect(() => {
+    if (spaceUnread === undefined || spaceUnread === seenUnread.current) return;
+    const first = seenUnread.current === undefined;
+    seenUnread.current = spaceUnread;
+    if (!first) void qc.invalidateQueries({ queryKey: communityKeys.cohorts() });
+  }, [qc, spaceUnread]);
   const workspace = useCommunityWorkspace(workspaceId);
   const coachName = useQuery({
     queryKey: ['community', 'home', 'coach-name', coachId],
