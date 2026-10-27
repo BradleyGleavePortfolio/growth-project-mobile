@@ -159,7 +159,7 @@ export default function FlaggedPhoto({
       >
         <Image
           source={{ uri: url }}
-          style={styles.fill}
+          style={StyleSheet.absoluteFill}
           resizeMode="cover"
           onError={onLoadError}
           accessibilityIgnoresInvertColors
@@ -203,20 +203,20 @@ export default function FlaggedPhoto({
               testID={`${testID}-full`}
             />
           </ScrollView>
-          <HapticPressable
-            intent="light"
-            onPress={close}
-            accessibilityRole="button"
-            accessibilityLabel="Close photo"
-            hitSlop={8}
-            testID={`${testID}-close`}
-            style={[
-              styles.close,
-              { top: insets.top + spacing.sm, backgroundColor: withAlpha(colors.ink, 0.72) },
-            ]}
-          >
-            <Ionicons name="close" size={24} color={colors.bone} />
-          </HapticPressable>
+          {/* HapticPressable wraps its Pressable in a view: the wrapper is what sits over the photo. */}
+          <View style={[styles.closeWrap, { top: insets.top + spacing.sm }]}>
+            <HapticPressable
+              intent="light"
+              onPress={close}
+              accessibilityRole="button"
+              accessibilityLabel="Close photo"
+              hitSlop={8}
+              testID={`${testID}-close`}
+              style={[styles.close, { backgroundColor: withAlpha(colors.bone, 0.16) }]}
+            >
+              <Ionicons name="close" size={24} color={colors.bone} />
+            </HapticPressable>
+          </View>
         </View>
       </Modal>
     </View>
@@ -233,9 +233,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.input,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-  },
-  fill: {
-    ...StyleSheet.absoluteFillObject,
   },
   expand: {
     position: 'absolute',
@@ -275,9 +272,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  close: {
+  closeWrap: {
     position: 'absolute',
     right: spacing.lg,
+  },
+  close: {
     width: 44,
     height: 44,
     borderRadius: radius.chip,
