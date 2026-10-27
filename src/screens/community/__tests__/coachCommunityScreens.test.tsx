@@ -1425,7 +1425,10 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
     expect(getByTestId('coach-community-inbox-empty')).toBeTruthy();
     expect(getByTestId('coach-community-inbox-empty-avatar')).toBeTruthy();
     expect(getByText('TEST_EMPTY_INBOX_COPY')).toBeTruthy();
-    const serialised = JSON.stringify(toJSON());
+    // The page pulls to refresh: leave its RefreshControl element (circular) out of the dump.
+    const serialised = JSON.stringify(toJSON(), (key, value) =>
+      key === 'refreshControl' ? undefined : value,
+    );
     expect(serialised.indexOf('coach-community-inbox-empty-avatar')).toBeLessThan(
       serialised.indexOf('TEST_EMPTY_INBOX_COPY'),
     );
