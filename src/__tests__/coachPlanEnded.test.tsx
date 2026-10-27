@@ -66,14 +66,19 @@ const ROWS = [row('c1', 'Maya Ortiz', 0), row('c2', 'Dev Patel', 0, 'Monthly coa
 const page = (items: unknown[], extra: Record<string, unknown> = {}) => ({ time_zone: 'America/Los_Angeles', today: '2026-10-21', total: items.length, today_count: 0, items, next_cursor: null, ...extra });
 let churned: () => Promise<unknown>;
 let rosterSize = 30;
+/** GET /users/blocks: the server's block list. On main its answer replaces this phone's copy (FX-872), so every
+ *  fixture that blocks a client names the block here too, as the server does once Block is tapped. */
+let serverBlocks: { blockedId: string; displayName: string; blockedAt: string }[] = [];
 const http404 = () => Promise.reject(Object.assign(new Error('404'), { response: { status: 404, data: { code: 'PLAN_RENEWAL_OFF' } } }));
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockFocus.home = true;
   rosterSize = 30;
+  serverBlocks = [];
   churned = () => Promise.resolve({ data: page(ROWS) });
   mockGet.mockImplementation((url: string) => (url === '/v1/coach/churned-clients' ? churned()
+    : url === '/users/blocks' ? Promise.resolve({ data: { blocked: serverBlocks } })
     : Promise.resolve({ data: { roster_size: rosterSize, active_today: 21, check_in_rate_7day: 0.82, open_alerts: 0, at_risk_count: 0, win_streak_count: 0, unread_messages: 0, pending_actions: 0 } })));
   mockPost.mockResolvedValue({ data: { enabled: true, provider: 'anthropic', reply: 'Hi Maya, how did the block feel?', approval: { required: true, status: 'pending', draft_id: 'dr-9' }, reason: { kind: 'plan_ended' } } });
   mockApprove.mockResolvedValue({ ok: true });
@@ -215,6 +220,7 @@ describe('plan ended on the coach Home', () => {
 describe('plan ended: blocked clients never show (b#1141; owner: hide all messaging)', () => {
   afterEach(() => act(() => { useBlockedUsersStore.setState({ blocked: [] }); }));
   const block = (id: string, displayName: string) => act(() => {
+    serverBlocks = [{ blockedId: id, displayName, blockedAt: '2026-10-23T10:00:00Z' }]; // the server knows it too
     useBlockedUsersStore.setState({ blocked: [{ id, displayName, role: 'client', blockedAt: '2026-10-23T10:00:00Z' }] });
   });
   it('drops a client this coach blocked from P1, the list and the counts; the others stay (control)', async () => {
@@ -308,6 +314,7 @@ describe('plan ended: screen readers stay in the open list (LO C1)', () => {
 
 describe('plan ended: a cold start reads the block list before any row shows (LO m#866 B1, m#859 C1)', () => {
   const MAYA = { id: 'c1', displayName: 'Maya Ortiz', role: 'client', blockedAt: '2026-10-20T10:00:00Z' };
+  const MAYA_ON_SERVER = { blockedId: 'c1', displayName: 'Maya Ortiz', blockedAt: MAYA.blockedAt };
   const KEY = 'blocked_user_ids_v1:coach-1';
   const appStart = () => act(() => { useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); }); // nothing read yet
   beforeEach(appStart);
@@ -329,12 +336,13 @@ describe('plan ended: a cold start reads the block list before any row shows (LO
     await expectNoMaya(v);
   });
   it("leaves out a client GET /users/blocks names (blocked on another phone; this phone's list is empty)", async () => {
-    blocksAnswer(() => Promise.resolve({ data: { blocked: [{ blockedId: 'c1', displayName: 'Maya Ortiz', blockedAt: MAYA.blockedAt }] } }));
+    blocksAnswer(() => Promise.resolve({ data: { blocked: [MAYA_ON_SERVER] } }));
     const v = await renderHome();
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/users/blocks'));
     await expectNoMaya(v);
   });
   it('shows no row until the list is read: P1 waits while the phone reads it', async () => {
+    serverBlocks = [MAYA_ON_SERVER]; // blocked earlier on this phone: the server's list names her too (its answer replaces the copy)
     let done: (v: string | undefined) => void = () => undefined;
     const read = prefsStorage.getStringAsync.bind(prefsStorage);
     const spy = jest.spyOn(prefsStorage, 'getStringAsync').mockImplementation((k: string) => (k === KEY ? new Promise((r) => { done = r; }) : read(k)));
