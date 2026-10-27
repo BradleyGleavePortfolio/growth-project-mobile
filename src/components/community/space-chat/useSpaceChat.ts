@@ -5,9 +5,10 @@
  * is in front (`focused`) plus a refetch whenever the realtime ping refreshes community/me; the realtime payload is never
  * drawn (the server list already leaves out deleted rows and blocked people either way).
  */
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { communityKeys, useCommunityMe } from '../../../hooks/useCommunity';
+import { coachCommunityKeys } from '../../../hooks/useCoachCommunity';
 import { communityVoiceApi } from '../../../api/communityVoiceApi';
 import { isNoAccess, spaceChatApi, type SpaceMessage, type SpaceMessagePage } from './spaceChatApi';
 import { setSpaceOutboxOnline, spaceOutbox, startSpaceOutbox, useSpaceOutbox, type PendingRow } from './spaceChatOutbox';
@@ -50,6 +51,13 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
   useEffect(() => startSpaceOutbox(userId), [userId]);
   useEffect(() => setSpaceOutboxOnline(isOnline), [isOnline]);
   useEffect(() => spaceOutbox.onSent((id) => { void qc.invalidateQueries({ queryKey: spaceChatKey(uid, id) }); }), [qc, uid]);
+  // FR-871R6 (Opus B3): a send refused with 403 / 404 closes this space for the visit, like a refused read.
+  const [refusedIn, setRefusedIn] = useState<string | null>(null);
+  useEffect(() => spaceOutbox.onRefused((id) => {
+    if (id !== cohortId) return;
+    setRefusedIn(id);
+    void qc.invalidateQueries({ queryKey: spaceChatKey(uid, id) });
+  }), [qc, uid, cohortId]);
   const pending = useSpaceOutbox(cohortId);
   const send = useCallback((body: string) => spaceOutbox.add(cohortId, body), [cohortId]);
 
@@ -89,6 +97,8 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     return spaceChatApi.markRead(cohortId, messageId).then(() => {
       void qc.invalidateQueries({ queryKey: communityKeys.cohorts() });
       void qc.invalidateQueries({ queryKey: communityKeys.me() });
+      // FR-871R6 (Sol B879-6): the coach's space list reads its own cache; its count drops with the read too.
+      void qc.invalidateQueries({ queryKey: coachCommunityKeys.cohorts() });
       return true;
     }, () => false);
   }, [cohortId, read.isError, qc]);
@@ -97,7 +107,7 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     list,
     messages,
     pending,
-    noAccess: list.isError && isNoAccess(list.error),
+    noAccess: refusedIn === cohortId || (list.isError && isNoAccess(list.error)),
     // Hidden whenever the server has no read route (404) or the read failed.
     readCursor: read.isSuccess ? read.data : null,
     /** The read cursor answered or failed: the opening position and read marks wait for it. */

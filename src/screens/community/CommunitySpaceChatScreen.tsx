@@ -3,13 +3,16 @@
  * stream per space, newest at the bottom, for members and the coach. Registered only behind `communitySpaceChat` (off by
  * default); with the flag off SpaceTree and the coach space list open today's screens.
  *   - Header (mockup VOICE-B 05b): the space list on the left (members: the space drawer; the coach: the coach's space
- *     list), `# name` and the member count, and on the coach's side the info button (members, invites, removals).
+ *     list), `# name` and the member count, and the info button: the coach's opens the space's page (members, invites,
+ *     removals); a member's opens a read-only sheet with the space's name and member count (FR-871R6, Opus B1).
  *   - Rows: Studio rows (SpaceChatRow), day lines (Style B's day format), voice rows when communityVoiceNotes is on.
- *   - Composer: SpaceChatComposer (pill field, slots for SC-M4's "+" and SC-M2's mic), shown only once the space has
- *     loaded and the server let this person in, so a banned member never gets a box to type in (owner 10-22 ban ruling).
- *   - Announcements (a coach-posting space): members get no composer, only SC-W03; the coach posts as usual.
- *   - No access (the server answers 404 or 403: not a member, or banned): no space content and no composer, one line
- *     where the composer was: "This conversation is closed" (BAM-1, owner #169-5).
+ *   - Composer: SpaceChatComposer (pill field, slots for SC-M4's "+" and SC-M2's mic), shown only once the server let
+ *     this person in on this visit (useServerAnswered: a page restored from the saved cache at a cold start does not
+ *     count, FR-871R6 Opus B3), so a banned member never gets a box to type in (owner 10-22 ban ruling).
+ *   - Announcements (a coach-posting space): members get no composer, only "Only your coach posts here."; the coach
+ *     posts as usual.
+ *   - No access (the server answers a read or a send with 404 or 403: not a member, or banned): no space content and no
+ *     composer, one line where the composer was: "This conversation is closed" (BAM-1, owner #169-5).
  *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route. The page
  *     opens there (or at the message asked for), loading older pages until that row is loaded (FR-871 Sol B1), once the
  *     cursor has answered. Read marks and the pill follow what is on screen (FlatList viewability), not a scroll
@@ -24,9 +27,10 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View, type ViewToken,
+  ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View,
+  type ViewToken,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, useRoute, type NavigationProp, type ParamListBase, type RouteProp } from '@react-navigation/native';
 import { SpaceListButton } from '../../components/community/SpaceDrawer';
@@ -38,13 +42,14 @@ import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, SMALL_GRE
 import { isCoachRemoved, spaceRemovedLine } from '../../components/community/space-chat/removed/SpaceRemovedPlaceholder';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
 import { type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
+import { useServerAnswered } from '../../components/messaging/ConversationClosed';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { CommunityApiError } from '../../api/apiCall';
 import { useCommunityCohorts } from '../../hooks/useCommunity';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { featureFlags } from '../../config/featureFlags';
-import { colors, forestPop as fp, radius, spacing, typography } from '../../theme/tokens';
+import { colors, forestPop as fp, neutral, radius, spacing, typography, withAlpha } from '../../theme/tokens';
 
 type Params = { CommunitySpaceChat: { cohortId: string; messageId?: string } };
 type Item =
@@ -75,8 +80,10 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   const chat = useSpaceChat(cohortId, client?.id ?? null, isOnline, focused);
   const isCoachViewer = cohort?.my_role === 'coach' || cohort?.my_role === 'owner';
   const coachOnly = cohort?.kind === 'announcement' || (cohort as { posting_policy?: string } | undefined)?.posting_policy === 'coach';
-  // Only once the server has let this person in (a loaded page, no 404 / 403): never while loading or offline cold.
-  const admitted = !!cohort && !!chat.list.data && !chat.noAccess;
+  // Only once the server has let this person in on this visit (no 404 / 403): never while loading, never on a page
+  // restored from the saved cache at a cold start (online until the read answers, or offline), FR-871R6 Opus B3.
+  const answered = useServerAnswered(chat.list);
+  const admitted = !!cohort && answered && !chat.noAccess;
   const canPost = admitted && (isCoachViewer || !coachOnly);
   // SC-M2: voice notes into this space (m#848's outbox, sent with this space's id) while communityVoiceNotes is on.
   const voiceOn = featureFlags.communityVoiceNotes && !!cohort?.workspace_id && !!client?.id;
@@ -180,7 +187,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         <SpaceChatRow
           id={r.localId} name={myName} isCoach={isCoachViewer} createdAt={r.createdAt} body={r.body}
           authorId={client?.id ?? ''} state={r.state} onRetry={() => chat.retry(r)} onDiscard={() => chat.removeLocal(r.localId)}
-          viewerUserId={client?.id} offline={!isOnline}
+          viewerUserId={client?.id} offline={!isOnline} rejected={r.reason === 'rejected'}
         />
       );
     }
@@ -222,6 +229,19 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     void chat.list.refetch();
   };
   const members = cohort ? `${cohort.member_count.toLocaleString('en-US')} ${cohort.member_count === 1 ? 'member' : 'members'}` : '';
+  const [info, setInfo] = useState(false);
+  // FR-871R6 (m#879 Opus B1 / Sol B879-1): the member's tab bar steps aside here (ClientNavigator), so the dock and its
+  // lines keep clear of the home indicator / Android navigation bar themselves, in their own colour; with the keyboard
+  // up the dock sits on the keyboard (no double gap). The coach's tab bar still fills the inset (Found: CoachNavigator).
+  const insets = useSafeAreaInsets();
+  const [keyboardUp, setKeyboardUp] = useState(false);
+  useEffect(() => {
+    const up = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardUp(true));
+    const down = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardUp(false));
+    return () => { up.remove(); down.remove(); };
+  }, []);
+  const dockInset = coachStack || keyboardUp ? 0 : insets.bottom;
+  const lineInset = dockInset ? { paddingBottom: spacing.lg + dockInset } : null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
@@ -241,9 +261,11 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           {cohort ? <Text style={s.sub}>{members}</Text> : null}
         </View>
         <View style={s.icon}>
-          {coachStack && cohort ? (
+          {cohort ? (
             <TouchableOpacity
-              onPress={() => navigation.navigate('CoachCommunityCohortDetail', { cohortId, cohortName: cohort.name })}
+              onPress={() => (coachStack
+                ? navigation.navigate('CoachCommunityCohortDetail', { cohortId, cohortName: cohort.name })
+                : setInfo(true))}
               accessibilityRole="button" accessibilityLabel="Space info" style={s.icon} testID="space-chat-info"
             >
               <Ionicons name="information-circle-outline" size={24} color={fp.onDeep} />
@@ -293,18 +315,44 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           </TouchableOpacity>
         ) : null}
         {chat.noAccess ? (
-          <Text style={s.line} testID="space-chat-no-access">This conversation is closed</Text>
+          <Text style={[s.line, lineInset]} testID="space-chat-no-access">This conversation is closed</Text>
         ) : canPost ? (
           <SpaceChatComposer
             cohortId={cohortId}
             onSend={chat.send}
+            bottomInset={dockInset}
             trailing={voiceOn ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
           />
         ) : admitted ? (
-          <Text style={s.line} testID="space-chat-hint">Only your coach posts here. Press and hold a message to reply.</Text>
+          <Text style={[s.line, lineInset]} testID="space-chat-hint">Only your coach posts here.</Text>
         ) : null}
       </KeyboardAvoidingView>
+      {info && cohort && !coachStack ? <SpaceInfoSheet name={cohort.name} members={members} onClose={() => setInfo(false)} /> : null}
     </SafeAreaView>
+  );
+}
+
+/**
+ * FR-871R6 (Opus B1 / Sol B871-1): a member's Space info, read only: the space's name and member count, nothing a
+ * member cannot already see in the header. The space's purpose and its people wait for the API (Found, not fixed).
+ * A tap on the scrim, the system Back or the screen reader's escape closes it (the space drawer's pattern).
+ */
+function SpaceInfoSheet({ name, members, onClose }: { name: string; members: string; onClose: () => void }): React.ReactElement {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+      <View style={s.scrim}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" testID="space-info-scrim" />
+        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.xl }]} accessibilityViewIsModal onAccessibilityEscape={onClose} testID="space-info-sheet">
+          <View style={s.grab} />
+          <View style={s.titleRow} accessible accessibilityRole="header">
+            <HashGlyph color={SMALL_GREY} />
+            <Text style={s.sheetTitle} numberOfLines={2}>{name}</Text>
+          </View>
+          <Text style={s.sheetSub}>{members}</Text>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -331,4 +379,10 @@ const s = StyleSheet.create({
   },
   pillText: { ...typography.bodyMd, color: fp.onDeep },
   line: { ...typography.bodySmall, color: SMALL_GREY, textAlign: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
+  // Space info (members): the safety sheet's look (white, 24 top corners, grab), the header's title and count in ink.
+  scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: withAlpha(colors.ink, 0.4) },
+  sheet: { backgroundColor: neutral[0], borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, gap: 2 },
+  grab: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10, backgroundColor: fp.sageLine },
+  sheetTitle: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 19, lineHeight: 24, color: fp.ink, flexShrink: 1 },
+  sheetSub: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: SMALL_GREY },
 });

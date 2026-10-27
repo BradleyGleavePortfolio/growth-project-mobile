@@ -4,13 +4,18 @@
  * is empty; until then the left slot is empty and the right one shows Send only once there is text (no dead buttons),
  * and adding either control moves nothing. The text is this space's draft, kept on the device (owner chat-discard op 1);
  * Send hands it to the outbox, which keeps it until it is sent, so the field empties at once.
+ * FR-871R6 (Sol B871-2): a text the server refused for its words (422 community.content.rejected) comes back into the
+ * field to rephrase, with the thread's and the DMs' reason ("Please rephrase"), as soon as the field is empty: a newer
+ * draft is never overwritten (the row keeps the text and the reason until then). Sent again it is a new message with
+ * a new key; Try again on any other failure resends the same text with the same key.
  */
-import React from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Alert, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatDraft } from '../../../lib/chatDrafts';
 import { forestPop as fp, neutral, spacing, typography, voiceShades } from '../../../theme/tokens';
 import { SPACE_MESSAGE_MAX } from './spaceChatApi';
+import { REJECTED_WORDS, spaceOutbox, useSpaceOutbox } from './spaceChatOutbox';
 
 export interface SpaceChatComposerProps {
   cohortId: string;
@@ -19,13 +24,22 @@ export interface SpaceChatComposerProps {
   leading?: React.ReactNode;
   /** SC-M2: the mic, shown while the field is empty. */
   trailing?: React.ReactNode;
+  /** FR-871R6 (m#879 Opus B1): the bottom safe area to keep clear while no tab bar is under the dock (0 otherwise). */
+  bottomInset?: number;
 }
 
-export default function SpaceChatComposer({ cohortId, onSend, leading, trailing }: SpaceChatComposerProps): React.ReactElement {
+export default function SpaceChatComposer({ cohortId, onSend, leading, trailing, bottomInset = 0 }: SpaceChatComposerProps): React.ReactElement {
   const [text, setText] = useChatDraft(`space:${cohortId}`);
   const body = text.trim();
+  const rejected = useSpaceOutbox(cohortId).find((r) => r.state === 'failed' && r.reason === 'rejected');
+  useEffect(() => {
+    if (!rejected || text.trim() !== '') return;
+    setText(rejected.body);
+    spaceOutbox.discard(rejected.localId);
+    Alert.alert(REJECTED_WORDS.title, REJECTED_WORDS.message);
+  }, [rejected, text, setText]);
   return (
-    <View style={[s.bar, leading ? null : s.noLead]} testID="space-chat-composer">
+    <View style={[s.bar, leading ? null : s.noLead, bottomInset ? { paddingBottom: spacing.sm + bottomInset } : null]} testID="space-chat-composer">
       {leading ? <View style={s.slot}>{leading}</View> : null}
       <TextInput
         value={text}

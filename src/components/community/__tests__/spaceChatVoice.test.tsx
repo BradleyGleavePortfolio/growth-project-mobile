@@ -12,6 +12,7 @@ import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
@@ -27,11 +28,15 @@ jest.mock('../../HapticPressable', () => {
 jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn() } }));
 jest.mock('../space-chat/spaceChatApi', () => ({ spaceChatApi: { markHeard: jest.fn(), getVoiceConsent: jest.fn(), recordVoiceConsent: jest.fn() } }));
 const mockSheet = jest.fn();
+// FR-871R6 (m#879 Opus B5): one case draws the real sheet with a stand-in microphone, to see the recording start.
+const mockRealSheet: { recorder: unknown } = { recorder: null };
 jest.mock('../VoiceRecordSheet', () => ({
   __esModule: true,
   default: (props: Record<string, unknown>) => {
     mockSheet(props);
-    return null;
+    if (!mockRealSheet.recorder) return null;
+    const Real = jest.requireActual('../VoiceRecordSheet').default;
+    return jest.requireActual('react').createElement(Real, { ...props, recorder: mockRealSheet.recorder });
   },
 }));
 const mockOutbox = { items: [] as unknown[], online: true, send: jest.fn(), retry: jest.fn(), discard: jest.fn() };
@@ -152,6 +157,39 @@ describe('SpaceChatMic', () => {
     await fireEvent.press(b.getByTestId('space-chat-mic'));
     expect(await b.findByTestId('space-chat-voice-first-use')).toBeTruthy();
     expect(b.queryByText(/If someone reports a voice note/)).toBeNull();
+  });
+
+  it('FR-871R6 (m#879 Opus B5 / Sol B879-5): Record on the 08a card starts the microphone once, with no second tap', async () => {
+    consent.mockResolvedValue({ seen: false, seen_at: null });
+    (spaceChatApi.recordVoiceConsent as jest.Mock).mockResolvedValue({ seen: true, seen_at: '2026-10-25T10:00:00.000Z' });
+    const start = jest.fn().mockResolvedValue(undefined);
+    mockRealSheet.recorder = {
+      isAvailable: true,
+      getPermissionStatus: jest.fn().mockResolvedValue('granted'),
+      requestPermission: jest.fn().mockResolvedValue('granted'),
+      start,
+      stop: jest.fn().mockResolvedValue({ uri: 'file:///r.m4a', durationMs: 4000 }),
+      cancel: jest.fn().mockResolvedValue(undefined),
+    };
+    try {
+      const { Wrapper } = wrap();
+      const Insets = ({ children }: { children: React.ReactNode }) => (
+        <SafeAreaInsetsContext.Provider value={{ top: 0, right: 0, bottom: 34, left: 0 }}><Wrapper>{children}</Wrapper></SafeAreaInsetsContext.Provider>
+      );
+      const r = await mic(Insets);
+      await waitFor(() => expect(consent).toHaveBeenCalledTimes(1));
+      await fireEvent.press(r.getByTestId('space-chat-mic'));
+      type El = { props: { onDismiss?: () => void }; parent: El | null };
+      let modal = r.getByTestId('space-chat-voice-first-use') as unknown as El | null;
+      while (modal && !modal.props.onDismiss) modal = modal.parent;
+      await fireEvent.press(r.getByTestId('space-chat-voice-first-use-record'));
+      expect(start).not.toHaveBeenCalled();
+      await act(async () => { modal?.props.onDismiss?.(); });
+      await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+      expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }));
+    } finally {
+      mockRealSheet.recorder = null;
+    }
   });
 });
 

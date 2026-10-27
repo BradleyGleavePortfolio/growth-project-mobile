@@ -14,14 +14,16 @@ import React, { useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SafetyMenu from '../SafetyMenu';
+import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from '../VoiceReportedFold';
+import { formatDuration } from '../voiceFormat';
 import SpaceVoiceNote from './SpaceVoiceNote';
 import SpaceRemovedPlaceholder, { type SpaceRemovedLine } from './removed/SpaceRemovedPlaceholder';
-import { brand, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
+import { brand, colors, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
-import type { PendingState } from './spaceChatOutbox';
+import { REJECTED_WORDS, type PendingState } from './spaceChatOutbox';
 
 /** Owner #168-13 GREY-TEXT op 1: every small grey text on this page is #2C2C2C (13.4:1 on bone #F7FAF7). */
-export const SMALL_GREY = '#2C2C2C';
+export const SMALL_GREY = colors.graphite;
 /** Member tiles on the Studio greens (mockup 05b), picked per person; light initials, except ink on leaf with a moss edge. */
 type Tile = { bg: string; fg: string; edge?: string };
 const TILES: readonly Tile[] = [
@@ -46,6 +48,8 @@ export interface SpaceChatRowProps {
   authorId: string;
   /** Local rows only ('waiting' is drawn as sending while the phone is online: it is next in the queue). */
   state?: PendingState;
+  /** FR-871R6 (Sol B871-2): the server refused this text for its words; no Try again (it cannot pass), the reason. */
+  rejected?: boolean;
   onRetry?: () => void;
   onDiscard?: () => void;
   viewerUserId?: string | null;
@@ -60,7 +64,9 @@ export interface SpaceChatRowProps {
 }
 
 /** One place per message kind: a later kind (photo, reply) adds its case here. */
-function MessageBody(p: SpaceChatRowProps): React.ReactElement | null {
+function MessageBody(p: SpaceChatRowProps & { folded: boolean }): React.ReactElement | null {
+  // GOAL B-06b / VN-07: a voice note this viewer reported folds to one line; the player goes.
+  if (p.voice && p.folded) return <VoiceReportedFold testID={`space-chat-reported-${p.id}`} />;
   if (p.voice) {
     const mine = !!p.viewerUserId && p.authorId === p.viewerUserId;
     const send = p.state === 'waiting' && !p.offline ? 'sending' : p.state === 'sent' ? undefined : p.state;
@@ -85,6 +91,12 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const tile: Tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
   // Name, chip and time grow (large text) or wrap: then the body starts below them, not tucked up.
   const [wrapped, setWrapped] = useState(false);
+  // FR-871R6 (m#879 Opus B4 / Sol B879-4): the report sheet shows what is reported (GOAL B-06a), and a report stays
+  // done for this viewer (per account, across restarts: the voice unit's store, which keeps ids only). A reported
+  // voice note folds (B-06b); a reported text keeps its place (a text fold needs words from the owner).
+  const reportedIds = useReportedVoiceNotes();
+  const reportId = p.voice ? p.voice.id : p.id;
+  const reported = reportedIds.has(reportId);
   const said = p.removed ? p.removed.text : p.body;
   const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${said ? `. ${said}` : ''}`;
   const noun = p.voice ? 'voice note' : 'message';
@@ -108,7 +120,10 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
         </View>
-        {local ? (
+        {/* FR-871R6 (m#879 Opus B3 / Sol B879-3): no Delete while a row reads Sending…: its send cannot be called back. */}
+        {local && shown === 'sending' ? (
+          <View style={s.more} testID={`space-chat-local-busy-${p.id}`} />
+        ) : local ? (
           <TouchableOpacity onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel={`Delete this ${noun}`} hitSlop={8} style={s.more} testID={`space-chat-local-menu-${p.id}`}>
             <Ionicons name="ellipsis-horizontal" size={18} color={SMALL_GREY} />
           </TouchableOpacity>
@@ -121,6 +136,9 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             viewerUserId={p.viewerUserId}
             viewerCoachId={p.isCoach && !isOwn ? p.authorId : p.viewerCoachId}
             contentNoun={p.voice ? 'voice note' : 'message'}
+            context={{ name: p.name, detail: p.voice ? `voice note · ${formatDuration(p.voice.duration_ms)}` : (p.body ?? '') }}
+            reported={reported}
+            onReported={() => markVoiceNoteReported(reportId)}
             onDelete={isOwn ? p.onDelete : undefined}
             onBlocked={p.onBlocked}
             testID={`space-chat-menu-${p.id}`}
@@ -133,13 +151,18 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
         </View>
       ) : (
         <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
-          <MessageBody {...p} />
+          <MessageBody {...p} folded={reported && !local} />
+          {p.state === 'failed' && p.rejected ? (
+            <Text style={s.reason} testID={`space-chat-rejected-${p.id}`}>{REJECTED_WORDS.message}</Text>
+          ) : null}
           {p.state === 'failed' && !p.voice ? (
             <View style={s.actions}>
-              <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
-                <Ionicons name="refresh" size={16} color={fp.onDeep} />
-                <Text style={s.againText}>Try again</Text>
-              </TouchableOpacity>
+              {p.rejected ? null : (
+                <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
+                  <Ionicons name="refresh" size={16} color={fp.onDeep} />
+                  <Text style={s.againText}>Try again</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity onPress={p.onDiscard} accessibilityRole="button" accessibilityLabel="Delete" style={s.discard} testID={`space-chat-discard-${p.id}`}>
                 <Text style={s.discardText}>Delete</Text>
               </TouchableOpacity>
@@ -205,6 +228,7 @@ const s = StyleSheet.create({
   more: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   discard: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.sm, justifyContent: 'center' },
   discardText: { ...typography.bodyMd, color: SMALL_GREY },
+  reason: { ...typography.bodySmall, color: SMALL_GREY, marginTop: spacing.xs },
   // A small sans day mark ("Thu, Oct 22"), 05b .day: 600 12 pt, 10 pt above, 4 below.
   day: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: SMALL_GREY, textAlign: 'center', paddingTop: GAP, paddingBottom: spacing.xs },
   // 05b .newline: an 8 pt lead dash, 10 pt gaps, 600 12 pt brand 400 (#4D7059) words, a leaf rule.

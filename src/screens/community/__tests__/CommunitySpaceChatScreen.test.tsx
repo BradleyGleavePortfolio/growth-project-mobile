@@ -8,12 +8,12 @@
  * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
-import { Alert, FlatList, StyleSheet } from 'react-native';
+import { Alert, FlatList, Keyboard, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { authEvents } from '../../../utils/authEvents';
-import { forestPop as fp } from '../../../theme/tokens';
+import { forestPop as fp, spacing } from '../../../theme/tokens';
 
 const mockDisk = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
@@ -45,6 +45,16 @@ jest.mock('../../../components/community/SpaceDrawer', () => {
 });
 let mockUser = { id: 'me-1', name: 'Dana Reyes', coach_id: 'coach-1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+const mockInsets = { top: 47, right: 0, bottom: 34, left: 0 }; // an iPhone with a home indicator
+jest.mock('react-native-safe-area-context', () => {
+  const { createContext, createElement } = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: ({ children, style, testID }: { children?: unknown; style?: unknown; testID?: string }) => createElement(View, { style, testID }, children),
+    SafeAreaInsetsContext: createContext(mockInsets),
+    useSafeAreaInsets: () => mockInsets,
+  };
+});
 const mockNet: { isOnline: boolean; reachable: boolean | null } = { isOnline: true, reachable: null };
 jest.mock('../../../hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ isOnline: mockNet.isOnline, isInternetReachable: mockNet.reachable }),
@@ -80,10 +90,17 @@ jest.mock('../../../components/community/VoiceRecordSheet', () => {
 });
 jest.mock('../../../components/community/SafetyMenu', () => {
   const { Text } = jest.requireActual('react-native');
-  return (p: { testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void> }) => (
+  type MockMenuProps = {
+    testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void>;
+    context?: { name: string; detail: string }; reported?: boolean; onReported?: () => void;
+  };
+  return (p: MockMenuProps) => (
     <>
       <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
       {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { p.onDelete?.().catch(() => undefined); }}>delete</Text> : null}
+      {/* FR-871R6 (m#879 B4): the card the report sheet draws above the reasons, and Report, done once sent. */}
+      {p.context ? <Text testID={`${p.testID}-context`}>{`${p.context.name} | ${p.context.detail}`}</Text> : null}
+      {p.onReported ? <Text testID={`${p.testID}-report`} onPress={p.onReported}>{p.reported ? 'Reported' : 'Report'}</Text> : null}
     </>
   );
 });
@@ -91,6 +108,9 @@ const mockApi = { get: jest.fn(), post: jest.fn(), delete: jest.fn() };
 jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi }));
 
 const Screen = require('../CommunitySpaceChatScreen').default;
+// Required here, after the stand-ins above exist (both reach services/api or the device cache when loaded).
+const { resetReportedVoiceNotes } = require('../../../components/community/VoiceReportedFold');
+const { coachCommunityKeys } = require('../../../hooks/useCoachCommunity');
 
 const msg = (id: string, at: string, who: { id: string; name: string; is_coach?: boolean }, extra: Record<string, unknown> = {}) => ({
   id, cohort_id: 'c-every', sender_user_id: who.id, body: `body ${id}`, kind: 'text', created_at: at, updated_at: at,
@@ -204,7 +224,7 @@ it('member Announcements: no composer, only the hint', async () => {
   mockParams.current = { cohortId: 'c-ann' };
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
-  expect(r.getByText('Only your coach posts here. Press and hold a message to reply.')).toBeTruthy();
+  expect(r.getByText('Only your coach posts here.')).toBeTruthy(); // FR-871R6 (Opus B2): no press and hold promise
   expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
 });
 
@@ -480,7 +500,7 @@ it('every control has a spoken label and no text is locked to a size', async () 
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
   expect(r.getByLabelText('Open space list')).toBeTruthy();
-  expect(r.queryByLabelText('Space info')).toBeNull();
+  expect(r.getByLabelText('Space info')).toBeTruthy(); // FR-871R6 (Opus B1): members have it too
   expect(r.getByLabelText(/^jo b\., .*\. body m3$/)).toBeTruthy();
   expect(r.getByLabelText(/^Sam Okafor, Coach, .*\. body m1$/)).toBeTruthy();
   expect(r.getByLabelText('New messages')).toBeTruthy();
@@ -692,4 +712,256 @@ it('REMOVED-BY-M2: the read mark, the New messages line and the pill count only 
   await r.findByTestId('space-chat-removed-m3');
   expect(r.queryByTestId('space-chat-pill')).toBeNull();
   expect(readMarks()).toEqual(['m3']);
+});
+
+describe('FR-871R6 (m#871): member Space info, the hint, the server answer on this visit, refused sends', () => {
+  const rejected = () => Object.assign(new Error('HTTP 422'), {
+    isAxiosError: true, response: { status: 422, data: { code: 'community.content.rejected', message: 'Server words' } },
+  });
+  const REASON = 'This was not posted because it appears to contain abusive or explicit language. Your draft is kept so you can rephrase it.';
+  const field = (r: Awaited<ReturnType<typeof open>>) => r.getByTestId('space-chat-composer-field');
+  let alert: jest.SpyInstance;
+  beforeEach(() => { alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); });
+  afterEach(() => { alert.mockRestore(); });
+  // A cold start: the page saved on the device is in the cache before the screen mounts (stale, not read this visit).
+  const openSaved = async () => {
+    client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-every'], { pages: [{ messages: page, next_before: null }], pageParams: [null] });
+    return render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+  };
+
+  it('Opus B1: a member\'s Space info opens a read-only sheet with # name and the member count; the scrim closes it', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    const sheet = r.getByTestId('space-info-sheet');
+    expect(within(sheet).getByText('Everyone')).toBeTruthy();
+    expect(within(sheet).getByTestId('space-chat-hash', { includeHiddenElements: true })).toBeTruthy();
+    expect(within(sheet).getByText('1,000 members')).toBeTruthy();
+    expect(within(sheet).queryAllByRole('button')).toHaveLength(0); // read only: nothing to change
+    expect(mockNavigate).not.toHaveBeenCalled();
+    // The scrim (the drawer's "Close"; screen readers use the escape gesture or Back, the sheet being modal for them).
+    await fireEvent.press(r.getByTestId('space-info-scrim', { includeHiddenElements: true }));
+    expect(r.queryByTestId('space-info-sheet')).toBeNull();
+  });
+
+  it('Opus B2: the announcements page has no press and hold anywhere, so the hint promises none', async () => {
+    mockParams.current = { cohortId: 'c-ann' };
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(r.getByTestId('space-chat-hint').props.children).toBe('Only your coach posts here.');
+    expect(r.queryByText(/press and hold/i)).toBeNull();
+  });
+
+  it('Opus B3: a saved page at a cold start draws without a composer until the read answers; a 403 then closes it', async () => {
+    let answer: (e: unknown) => void = () => undefined;
+    mockApi.get.mockImplementation((url: string) => (url.endsWith('/read')
+      ? Promise.resolve({ data: readAnswer })
+      : new Promise((_res, rej) => { answer = rej; })));
+    const r = await openSaved();
+    expect(await r.findByTestId('space-chat-row-m3')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+    expect(r.queryByTestId('space-chat-hint')).toBeNull();
+    await act(async () => { answer(fail(403)); });
+    expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+  });
+
+  it('Opus B3: the same saved page offline (no answer): the rows and no composer; the answer brings the composer', async () => {
+    mockNet.isOnline = false;
+    let answer: (v: unknown) => void = () => undefined;
+    mockApi.get.mockImplementation((url: string) => (url.endsWith('/read')
+      ? Promise.resolve({ data: readAnswer })
+      : new Promise((res) => { answer = res; })));
+    const r = await openSaved();
+    expect(await r.findByTestId('space-chat-row-m3')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+    await act(async () => { answer({ data: { messages: page, next_before: null } }); });
+    expect(await r.findByTestId('space-chat-composer-field')).toBeTruthy();
+  });
+
+  it('Opus B3: a send refused with 403 closes the page; the text stays on the device, not sent again', async () => {
+    mockApi.post.mockImplementation(async (url: string) => { if (url.endsWith('/messages')) throw fail(403); return { data: { ok: true } }; });
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(field(r), 'Still here?');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('"reason":"closed"'));
+    expect(mockDisk.get('space_outbox_me-1')).not.toMatch(/Error|headers|response/);
+    expect(sends()).toHaveLength(1);
+  });
+
+  it('Sol B871-2: a text refused for its words comes back into the empty field with the reason; the changed text is a new key', async () => {
+    const ok = mockApi.post.getMockImplementation()!;
+    mockApi.post.mockImplementation(async (url: string, body: { body: string }, ...rest: unknown[]) => {
+      if (url.endsWith('/messages') && body.body === 'You absolute clown') throw rejected();
+      return ok(url, body, ...rest);
+    });
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(field(r), 'You absolute clown');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(field(r).props.value).toBe('You absolute clown'));
+    expect(alert).toHaveBeenCalledWith('Please rephrase', REASON);
+    expect(r.queryByText('Not sent')).toBeNull();
+    expect(r.queryByLabelText('Try again')).toBeNull();
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1') ?? '[]').not.toContain('You absolute clown'));
+    await fireEvent.changeText(field(r), 'You absolute star');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    expect(sends()[1][1]).toEqual({ body: 'You absolute star' });
+    expect(sends()[1][2].headers['Idempotency-Key']).not.toBe(sends()[0][2].headers['Idempotency-Key']);
+  });
+
+  it('Sol B871-2: a newer draft is never overwritten; the row keeps the text and the reason (no Try again) until the field is empty', async () => {
+    let refuse: () => void = () => undefined;
+    mockApi.post.mockImplementation((url: string) => (url.endsWith('/messages')
+      ? new Promise((_res, rej) => { refuse = () => rej(rejected()); })
+      : Promise.resolve({ data: { ok: true } })));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(field(r), 'You absolute clown');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    await fireEvent.changeText(field(r), 'A newer draft');
+    await act(async () => { refuse(); });
+    expect(await r.findByText(REASON)).toBeTruthy();
+    expect(field(r).props.value).toBe('A newer draft');
+    expect(r.getByLabelText('Dana Reyes, Not sent. You absolute clown')).toBeTruthy();
+    expect(r.queryByLabelText('Try again')).toBeNull();
+    expect(r.getByLabelText('Delete')).toBeTruthy();
+    expect(alert).not.toHaveBeenCalled();
+    await fireEvent.changeText(field(r), '');
+    await waitFor(() => expect(field(r).props.value).toBe('You absolute clown'));
+    expect(alert).toHaveBeenCalledWith('Please rephrase', REASON);
+    expect(r.queryByText(REASON)).toBeNull();
+  });
+
+  it('Sol B871-2: after an app restart a refused text kept on the device comes back into the field; sign-out clears it', async () => {
+    const kept = { localId: 'k1', key: 'k1', cohortId: 'c-every', body: 'Kept and refused', createdAt: '2026-10-22T10:20:00.000Z', state: 'failed', reason: 'rejected' };
+    mockDisk.set('space_outbox_me-1', JSON.stringify([kept]));
+    const r = await open();
+    await waitFor(() => expect(field(r).props.value).toBe('Kept and refused'));
+    expect(alert).toHaveBeenCalledWith('Please rephrase', REASON);
+    expect(sends()).toHaveLength(0);
+    await r.unmount();
+    await act(async () => { authEvents.emit('logout'); });
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1') ?? '[]').not.toContain('Kept and refused'));
+    const again = await open();
+    await again.findByTestId('space-chat-row-m3');
+    expect(field(again).props.value).toBe('');
+  });
+
+  it('m#879 Opus B3 guard: a row already on its way cannot be dropped from the phone (its send cannot be called back)', async () => {
+    const { spaceOutbox } = require('../../../components/community/space-chat/spaceChatOutbox');
+    mockApi.post.mockImplementation((url: string) => (url.endsWith('/messages') ? new Promise(() => undefined) : Promise.resolve({ data: { ok: true } })));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(field(r), 'On its way');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    expect(await r.findByText('Sending…')).toBeTruthy();
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('On its way'));
+    const row = JSON.parse(mockDisk.get('space_outbox_me-1') ?? '[]')[0];
+    await act(async () => { spaceOutbox.discard(row.localId); });
+    expect(r.getByLabelText('Dana Reyes, Sending…. On its way')).toBeTruthy();
+  });
+});
+
+describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card and fold, the coach list count', () => {
+  afterEach(async () => {
+    (Keyboard.addListener as unknown as { mockRestore?: () => void }).mockRestore?.();
+    await act(async () => { resetReportedVoiceNotes(); });
+  });
+  const pad = (r: Awaited<ReturnType<typeof open>>, id: string) => (StyleSheet.flatten(r.getByTestId(id).props.style) as { paddingBottom?: number }).paddingBottom;
+  const keyboard = () => {
+    const on: Record<string, () => void> = {};
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((e: string, h: () => void) => { on[e] = h; return { remove: () => undefined }; }) as never);
+    return on;
+  };
+
+  it('Opus B1 / Sol B879-1: with no tab bar below, the composer keeps clear of the home indicator; with the keyboard up it does not', async () => {
+    const on = keyboard();
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(pad(r, 'space-chat-composer')).toBe(spacing.sm + 34);
+    await act(async () => { on.keyboardWillShow(); });
+    expect(pad(r, 'space-chat-composer')).toBeUndefined();
+    await act(async () => { on.keyboardWillHide(); });
+    expect(pad(r, 'space-chat-composer')).toBe(spacing.sm + 34);
+  });
+
+  it('Opus B1 / Sol B879-1: the hint line under announcements keeps clear of it too; the coach (tab bar below) adds nothing', async () => {
+    mockParams.current = { cohortId: 'c-ann' };
+    const a = await open();
+    await a.findByTestId('space-chat-hint');
+    expect(pad(a, 'space-chat-hint')).toBe(spacing.lg + 34);
+    await a.unmount();
+    mockRole = 'owner';
+    mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+    mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+    const b = await open();
+    await b.findByTestId('space-chat-composer');
+    expect(pad(b, 'space-chat-composer')).toBeUndefined();
+  });
+
+  it('Opus B3 / Sol B879-3: a row that reads Sending… has no Delete (text and voice); Waiting to send keeps it', async () => {
+    mockApi.post.mockImplementation((url: string) => (String(url).endsWith('/read') ? Promise.resolve({ data: { ok: true } }) : new Promise(() => undefined)));
+    mockVoice.items = [{ id: 'vo-3', authorId: 'me-1', workspaceId: 'ws', peaks: [0.4], status: 'sending', input: { uri: 'file:///vo-3.m4a', durationMs: 8000, cohortId: 'c-every' } }];
+    const a = await open();
+    await a.findByTestId('space-chat-row-vo-3');
+    expect(a.getByTestId('space-chat-local-busy-vo-3')).toBeTruthy();
+    expect(a.queryByTestId('space-chat-local-menu-vo-3')).toBeNull();
+    await fireEvent.changeText(a.getByTestId('space-chat-composer-field'), 'Nice work');
+    await fireEvent.press(a.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(a.getAllByText('Sending…')).toHaveLength(2));
+    expect(a.getAllByTestId(/^space-chat-local-busy-/)).toHaveLength(2);
+    expect(a.queryAllByTestId(/^space-chat-local-menu-/)).toHaveLength(0);
+    await a.unmount();
+    mockVoice.items = [];
+    mockNet.isOnline = false;
+    const b = await open();
+    await b.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(b.getByTestId('space-chat-composer-field'), 'On the train');
+    await fireEvent.press(b.getByTestId('space-chat-composer-send'));
+    expect(await b.findByText('Waiting to send')).toBeTruthy();
+    expect(b.getAllByTestId(/^space-chat-local-menu-/).map((x) => x.props.accessibilityLabel)).toEqual(['Delete this message']);
+  });
+
+  it('Opus B4 / Sol B879-4: the report sheet gets the card; a reported voice note folds (its player goes) and stays folded; a text keeps its place, Reported', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(r.getByTestId('space-chat-menu-m2-context').props.children).toBe('Sam Okafor | voice note · 0:42');
+    expect(r.getByTestId('space-chat-menu-m3-context').props.children).toBe('jo b. | body m3');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m2-report'));
+    expect(r.getByText('You reported this voice note. It is hidden for you.')).toBeTruthy();
+    expect(r.getByTestId('space-chat-reported-m2')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-voice-v1')).toBeNull();
+    expect(r.getByTestId('space-chat-menu-m2-report').props.children).toBe('Reported');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3-report'));
+    expect(r.getByTestId('space-chat-menu-m3-report').props.children).toBe('Reported');
+    expect(r.getByLabelText(/^jo b\., .*\. body m3$/)).toBeTruthy();
+    expect(r.getByTestId('space-chat-menu-m1-report').props.children).toBe('Report');
+    await r.unmount();
+    const again = await open();
+    await again.findByTestId('space-chat-row-m3');
+    expect(again.getByTestId('space-chat-reported-m2')).toBeTruthy();
+    expect(again.queryByTestId('space-chat-voice-v1')).toBeNull();
+    expect(again.getByTestId('space-chat-menu-m3-report').props.children).toBe('Reported');
+    await again.unmount();
+    authEvents.emit('logout');
+    const next = await open();
+    await next.findByTestId('space-chat-row-m3');
+    expect(next.getByTestId('space-chat-voice-v1')).toBeTruthy();
+    expect(next.getByTestId('space-chat-menu-m3-report').props.children).toBe('Report');
+  });
+
+  it('Sol B879-6: a read mark that lands refreshes the coach\'s space list too', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-new-line');
+    const spy = jest.spyOn(client, 'invalidateQueries');
+    await see(r, 'm3', 'm2', 'new-line');
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: coachCommunityKeys.cohorts() }));
+  });
 });
