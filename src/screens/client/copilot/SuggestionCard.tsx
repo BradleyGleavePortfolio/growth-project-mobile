@@ -78,7 +78,7 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
   // A refused or failed Send is Roman's notice under the card, the one way forward in it (GOAL index 2.2, Sol B-S3):
   // AI help off asks for AI help and Send comes back after the grant, never sent by itself; a failure's Try again
   // sends once more; a lapsed change keeps its words with no Send. One forest button on the screen at a time.
-  const send = refusal || line ? null : gone ? null : (
+  const sendButton = refusal || line || gone ? null : (
     <LedgerButton label={C.send(coach)} onPress={() => void onSend()} loading={busy} style={s.send} testID="copilot-send" />
   );
   return (
@@ -95,7 +95,7 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
         <View style={s.next}><ChangeTiles from={d.from} to={d.to} /></View>
         {kinds.length ? <View style={[s.tags, s.next]} testID="copilot-suggestion-tags">{kinds.map((k) => <SourceTag key={k} kind={k} />)}</View> : null}
         <Text style={[ledgerType.privacy, s.next, { color: ledger.muted }]}>{`${C.nothingYet(coach)} ${C.privacy(coach)}`}</Text>
-        {send}
+        {sendButton}
         {onDismiss ? <TextLink label={C.notNow} onPress={onDismiss} tone="muted" align="center" disabled={busy} testID="copilot-not-now" /> : null}
       </View>
       {refusal ? <CopilotRefusal refusal={refusal} onRetry={() => setRefusal(null)} testID="copilot-send-refusal" /> : null}
