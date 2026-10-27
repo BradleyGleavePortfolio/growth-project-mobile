@@ -236,7 +236,8 @@ function PathView() {
           <View style={[s.body, { paddingHorizontal: g, paddingTop: asked ? 18 : 22 }]} onLayout={(e) => reveal.body(e.nativeEvent.layout.y)} testID="copilot-body">
             {q.isPending ? <LedgerLoading label="Loading your path" rows={2} testID="copilot-loading" /> : null}
             {refusal ? <CopilotRefusal refusal={refusal} onRetry={() => void q.refetch()} testID="copilot-load-refusal" /> : null}
-            {q.error && !refusal ? (
+            {/* A failed re-read over what is on screen keeps it there; the card is for a first read that failed (C-852R3-1). */}
+            {q.error && !refusal && !q.data ? (
               <LedgerRetry message={loadFailureMessage(q.error, 'Your path')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-error" />
             ) : null}
             {turns.map((t, i) => (
@@ -399,7 +400,8 @@ function QuestionsView() {
   const items = (q.data?.pages ?? []).flatMap((pg) => pg?.items ?? []);
   // A failed "Show older questions" says so where the link is, and its Try again reads that page again (Opus C1).
   const older = q.isFetchNextPageError;
-  const failed = q.error ? (
+  // A failed re-read over loaded pages keeps them, with no card (C-852R3-1).
+  const failed = q.error && (older || !q.data) ? (
     <LedgerRetry message={loadFailureMessage(q.error, A.past)} onRetry={() => void (older ? q.fetchNextPage() : q.refetch())}
       retrying={older ? q.isFetchingNextPage : q.isRefetching} testID="copilot-past-error" />
   ) : null;
@@ -483,7 +485,7 @@ function AnswerView({ item }: { item: PastQuestion }) {
         <View style={[s.body, s.turn, { paddingHorizontal: g, paddingTop: 18 }]}>
           <Asked question={item.question ?? ''} at={new Date(item.askedAt)} day={shortDay(item.askedAt)} />
           {q.isPending ? <LedgerLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
-          {q.error || missing ? <LedgerRetry message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
+          {(q.error && !q.data) || missing ? <LedgerRetry message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
           {/* Folded under a change as a turn's answer is (Sol B-G3): the change, not the facts, is the next step. */}
           {q.data ? <CalmIn><AnswerCard text={q.data.text} reply={q.data.reply} compact={!!sug} /></CalmIn> : null}
           {/* A decided change was decided by whoever coached then; only an unsent one goes to today's coach (C1). */}

@@ -10,7 +10,6 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, pathTint, radius } from '../../../theme/tokens';
-import { TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { aiRefusalOf, type AiRefusal } from '../../../lib/ai/aiRefusal';
 import { copilotApi, copilotErrorOf, type CopilotSuggestion } from '../../../api/copilotApi';
@@ -18,7 +17,7 @@ import { COPILOT_COPY as C, describeChange, when } from './pathChangeWords';
 import { ChangeTiles } from './ChangeTiles';
 import { SourceTag } from './AnswerCard';
 import { ledger, ledgerType } from './ledger';
-import { CalmIn, CopilotRefusal, LedgerButton, RomanNotice, useSayOnChange } from './RomanNotice';
+import { CalmIn, CopilotRefusal, LedgerButton, LedgerLink, RomanNotice, useSayOnChange } from './RomanNotice';
 
 export interface SuggestionCardProps {
   suggestion: CopilotSuggestion;
@@ -96,7 +95,8 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
         {kinds.length ? <View style={[s.tags, s.next]} testID="copilot-suggestion-tags">{kinds.map((k) => <SourceTag key={k} kind={k} />)}</View> : null}
         <Text style={[ledgerType.privacy, s.next, { color: ledger.muted }]}>{`${C.nothingYet(coach)} ${C.privacy(coach)}`}</Text>
         {sendButton}
-        {onDismiss ? <TextLink label={C.notNow} onPress={onDismiss} tone="muted" align="center" disabled={busy} testID="copilot-not-now" /> : null}
+        {/* Style A's forest link (.lnk), as Show older questions is (owner decision 178-4, op 2; B-878R3-3). */}
+        {onDismiss ? <LedgerLink label={C.notNow} onPress={onDismiss} disabled={busy} testID="copilot-not-now" /> : null}
       </View>
       {refusal ? <CopilotRefusal refusal={refusal} onRetry={() => setRefusal(null)} testID="copilot-send-refusal" /> : null}
       {line ? (
