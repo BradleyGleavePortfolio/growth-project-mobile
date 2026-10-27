@@ -7,8 +7,11 @@
  *   - a "Message your coach" row into the real coach thread (HomeStack
  *     `Messages`), which the tutorial spotlights for both messaging steps.
  * `part="reoffer"` is the re-offer line alone, for the rings Home's notice slot.
+ * FR-880R4 (owner 10-23 "Dissapear"): the row shows only once the coaching chat is known open (useCoachChatClosed, as
+ * Home's header); while it is closed the tour's coach-chat step leaves at once, as Later, so it never points at a row
+ * that is not there or opens a closed chat.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
@@ -16,6 +19,8 @@ import { radius, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
 import { dispatchTutorial, useTutorialStore } from '../../tutorial/tutorialStore';
+import { TUTORIAL_STEPS } from '../../tutorial/tutorialSteps';
+import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import MacroExplanationCard from './MacroExplanationCard';
 import TutorialTarget from './TutorialTarget';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -26,7 +31,13 @@ export default function TutorialHomeSlot({ part }: { part?: 'reoffer' }): React.
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const status = useTutorialStore((s) => s.tutorial.status);
   const coachName = useTutorialStore((s) => s.payload?.coach?.display_name ?? null);
-  const coachLinked = !!useCurrentUser()?.coach_id;
+  const coachId = useCurrentUser()?.coach_id;
+  const coachChat = useCoachChatClosed(coachId);
+  const chatOpen = !!coachId && coachChat.known && !coachChat.closed;
+  const needsChat = useTutorialStore((s) => s.tutorial.status === 'active' && !!TUTORIAL_STEPS[s.tutorial.stepIndex]?.needsOpenCoachChat);
+  useEffect(() => {
+    if (featureFlags.clientTutorial && needsChat && !!coachId && coachChat.closed) dispatchTutorial({ type: 'DEFER' });
+  }, [needsChat, coachId, coachChat.closed]);
   const reoffer = useNoticeSlot('tourReoffer', featureFlags.clientTutorial && status === 'paused'); // one notice at a time on the rings Home
   if (!featureFlags.clientTutorial || (part === 'reoffer' && !reoffer)) return null;
   return (
@@ -46,7 +57,7 @@ export default function TutorialHomeSlot({ part }: { part?: 'reoffer' }): React.
         </Pressable>
       ) : null}
       {part === 'reoffer' ? null : <MacroExplanationCard />}
-      {coachLinked && part !== 'reoffer' ? <TutorialTarget id="home-message-coach">
+      {chatOpen && part !== 'reoffer' ? <TutorialTarget id="home-message-coach">
         <Pressable
           onPress={() => navigation.navigate('Messages')}
           accessibilityRole="button"

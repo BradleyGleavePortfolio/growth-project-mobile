@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { Alert, Platform, StyleSheet, Text } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, cleanup } from '@testing-library/react-native';
 import api from '../../../services/api';
 import * as Clipboard from 'expo-clipboard';
 
@@ -279,5 +279,128 @@ describe('client MessagesScreen with messaging_core_v2 ON', () => {
     expect((sends[1][1] as { client_message_id: string }).client_message_id).toBe(key);
     expect(utils.getAllByLabelText(/Message: running late/)).toHaveLength(1);
     expect(mockLegacySend).not.toHaveBeenCalled();
+  });
+});
+
+// BLOCK-ALL-M (owner 10-22 "dont even let the banned person type!"; #168-4 op 1: a block closes the coaching chat both ways).
+describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
+  const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+  const { closedRefusals } = jest.requireActual('../../../components/messaging/closedRefusal');
+  const { queryClient } = jest.requireActual('../../../services/queryClient');
+  afterEach(async () => {
+    await cleanup(); // unmount first, so no screen reads the inbox again into the cleared cache
+    useBlockedUsersStore.setState({ blocked: [] });
+    closedRefusals.clear('coach-9');
+    queryClient.clear();
+  });
+
+  // FX-872 (Opus B4, Sol B1): the person blocked learns it from the inbox row, before they type anything.
+  it('my coach blocked me: the inbox row says closed, so there is never a box and no message text', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url === '/messages/inbox') {
+        const r = inbox(false);
+        return { data: { ...r.data, items: r.data.items.map((i) => ({ ...i, closed: true })) } };
+      }
+      return { data: { items: [] } };
+    });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByLabelText(/Message: from the coach/)).toBeNull();
+  });
+
+  it('FR-872 (Opus C3): closed by the header with an empty thread shows no Start a conversation invite', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValue({ data: [], headers: { 'x-conversation-closed': 'blocked_by_them' } });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByText('Start a conversation with your coach')).toBeNull();
+  });
+
+  it('FR-872 (Opus C3) control: open with an empty thread shows the invite', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValue({ data: [], headers: {} });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByText('Start a conversation with your coach')).toBeTruthy();
+  });
+
+  it('FX-872 (b#1141 CONTRACT 6370968268): the inbox is empty and the thread read carries x-conversation-closed: closed, no box', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValueOnce({ data: [], headers: { 'x-conversation-closed': 'blocked_by_them' } });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+  });
+
+  it('FX-872: nothing to type until the server answered (the inbox read is still out)', async () => {
+    getMock.mockImplementation(async (url: string) => (url === '/messages/inbox' ? new Promise(() => undefined) : { data: { items: [] } }));
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await waitFor(() => expect(mockList).toHaveBeenCalled());
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByLabelText('Send message')).toBeNull();
+  });
+
+  it('open: the message box is there and the closed line is not', async () => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText(/Message: from the coach/);
+    expect(await u.findByLabelText('Message text')).toBeTruthy(); // once the inbox row answered too
+    expect(u.queryByTestId('messages-closed')).toBeNull();
+  });
+
+  it('FR-872 (Sol B2): a failed first read leaves no box; a retry that answers without the header opens it', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } })); // inbox empty
+    mockList.mockRejectedValueOnce(new Error('offline'));
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText('Retry loading messages');
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    await fireEvent.press(u.getByLabelText('Retry loading messages'));
+    expect(await u.findByLabelText('Message text')).toBeTruthy();
+  });
+
+  it('FR-872 (Sol B5): an edit sheet already open goes when the chat closes; nothing left to save', async () => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await fireEvent(await u.findByLabelText(/Message: answer/), 'longPress');
+    await fireEvent.press(await waitFor(() => u.getByLabelText('Edit')));
+    expect(u.getByLabelText('Edited message text')).toBeTruthy();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'coach-9', displayName: 'Sam', blockedAt: recent }] }));
+    expect(u.queryByLabelText('Edited message text')).toBeNull();
+    expect(u.queryByLabelText('Save edit')).toBeNull();
+  });
+
+  it('I blocked my coach: no message box, only the closed line; an unblock opens it again', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'coach-9', displayName: 'Sam', blockedAt: recent }] });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByLabelText('Send message')).toBeNull();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(u.getByLabelText('Message text')).toBeTruthy();
+    expect(u.queryByTestId('messages-closed')).toBeNull();
+  });
+
+  it('my coach blocked me (server 403 BLOCKED on send): closed at once, nothing sent twice, no "Not sent" bubble', async () => {
+    postMock.mockImplementation(async (url: string) => {
+      if (url !== '/messages') return { data: {} };
+      throw axiosErr({ response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } });
+    });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText(/Message: from the coach/);
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'running late');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.getByText('This conversation is closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByText('Not sent. Long press to send again')).toBeNull();
+    expect(postMock.mock.calls.filter(([url]) => url === '/messages')).toHaveLength(1);
   });
 });

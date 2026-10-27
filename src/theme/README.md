@@ -13,7 +13,7 @@ Single source of truth for colour, typography, spacing, radius, and shadow. Impo
 
 | File | What it does |
 | --- | --- |
-| `tokens.ts` | Canonical palette (`bone`, `cream`, `ink`, `charcoal`, `stone`, `forest`, `mutedGold`, `camel`, `oxblood`), neutrals 0–1000, brand scale, semantic colours, gold scale, typography scale, spacing, radius, shadows, motion easings. WCAG matrix in the header. |
+| `tokens.ts` | Canonical palette (`bone`, `cream`, `ink`, `charcoal`, `graphite`, `stone`, `forest`, `mutedGold`, `camel`, `oxblood`), neutrals 0–1000, brand scale, semantic colours, gold scale, typography scale, spacing, radius, shadows, motion easings. WCAG matrix in the header. |
 | `index.ts` | Re-exports the tokens and the legacy named exports (`Colors`, `Typography`, `Spacing`, `Radius`, `Shadow`, `colors`). New code should import from here or directly from `tokens`. |
 | `ThemeProvider.tsx` | React context that exposes the resolved tokens to consumers via `useTheme()`. Used sparingly — most components import the tokens directly. |
 
@@ -87,7 +87,9 @@ Reproduced from the header of `tokens.ts`. Required ratios: 4.5:1 body, 3:1 larg
 | ink on cream | ≈ 15.2 | pass | pass |
 | charcoal on bone | ≈ 8.0 | pass | pass |
 | forest on bone | ≈ 7.4 | pass | pass |
-| stone on bone | ≈ 2.3 | **fail** | pass — caption / meta only ≥ 18 pt |
+| graphite on bone | ≈ 13.3 | pass | pass — small grey text on light grounds (owner #168-13) |
+| graphite on cream | ≈ 11.5 | pass | pass |
+| stone on bone | ≈ 2.2 | **fail** | **fail** — hairlines, icons and disabled marks only, never text |
 | mutedGold on bone | ≈ 2.9 | **fail** | pass — badge label ≥ 14 pt bold only |
 
 ## Style C v2 surfaces and chart marks (MOCK-C1V2)
