@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
 import { Linking, StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { TestInstance } from 'test-renderer';
 import { NavigationContext } from '@react-navigation/native';
 import RomanMessageBubble from '../RomanMessageBubble';
@@ -158,4 +158,49 @@ it('the coach chat route the Message button opens is registered (Home tab > Mess
   const home = navSrc.slice(navSrc.indexOf('<HomeStackNav.Navigator'), navSrc.indexOf('</HomeStackNav.Navigator>'));
   expect(home).toMatch(/<HomeStackNav\.Screen name="Messages"\s+component=\{MessagesScreen\} \/>/);
   expect(navSrc).toMatch(/<Tab\.Screen\s+name="Home"/);
+});
+
+// FR-880R3 (operator ruling, agent 173, two-way; owner 10-23 "Dissapear"): while the coaching chat is closed (either
+// person's block) the crisis card offers no "Message {coach}"; every number action stays, and an open chat brings it back.
+describe('a closed coaching chat', () => {
+  const { queryClient } = jest.requireActual('../../../services/queryClient');
+  const { COACH_CHAT_KEY } = jest.requireActual('../../../hooks/useCoachChatClosed');
+  const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+  const thread = { closed: true };
+  beforeEach(() => {
+    queryClient.clear();
+    thread.closed = true;
+    mockGet.mockImplementation(async (u: string) =>
+      u === '/messages?limit=1' ? { data: [], headers: thread.closed ? { 'x-conversation-closed': 'blocked_by_them' } : {} } : { data: { name: 'Sam Rivera' } });
+  });
+  afterEach(() => { queryClient.clear(); useBlockedUsersStore.setState({ blocked: [] }); });
+
+  it.each([
+    ['emergency', EMERGENCY, ['Call 9 1 1', 'Call 988', 'Text 988']],
+    ['self-harm', SELF_HARM, ['Call 988', 'Text 988', 'Call 9 1 1']],
+  ])('the coach blocked me (%s): the numbers only, never the coach first; a read that says open brings it back', async (_l, actions, calls) => {
+    const s = await render(inNav(<RomanMessageBubble message={reply(actions)} testID="t" />));
+    expect(s.queryByText(/^Message/)).toBeNull();
+    await waitFor(() => expect(queryClient.getQueryData([...COACH_CHAT_KEY, 'c1'])).toBe(true));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach'));
+    expect(spoken(s.getAllByRole('button'))).toEqual(calls);
+    expect(s.queryByText(/^Message|Sam/)).toBeNull();
+    const [first] = s.getAllByRole('button');
+    expect(flat(first)).toMatchObject({ minHeight: 54 }); // the first number is still the forest button
+    thread.closed = false;
+    await act(async () => { await queryClient.invalidateQueries({ queryKey: COACH_CHAT_KEY }); });
+    expect(await s.findByRole('button', { name: 'Message Sam' })).toBeTruthy();
+    expect(spoken(s.getAllByRole('button'))).toEqual([...calls, 'Message Sam']);
+  });
+
+  it('I block my coach: the button leaves at once; my unblock brings it back', async () => {
+    thread.closed = false;
+    const s = await render(inNav(<RomanMessageBubble message={reply(EMERGENCY)} />));
+    expect(await s.findByRole('button', { name: 'Message Sam' })).toBeTruthy();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'c1', displayName: 'Sam', blockedAt: '2026-10-24T00:00:00Z' }] }));
+    expect(s.queryByText(/^Message/)).toBeNull();
+    expect(spoken(s.getAllByRole('button'))).toEqual(['Call 9 1 1', 'Call 988', 'Text 988']);
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(await s.findByRole('button', { name: 'Message Sam' })).toBeTruthy();
+  });
 });

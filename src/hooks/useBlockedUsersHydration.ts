@@ -62,9 +62,8 @@ export function useBlockedUsersHydration(
       try {
         const res = await messagesModerationApi.listBlocked();
         if (cancelled) return;
-        if (res.blocked.length > 0) {
-          await useBlockedUsersStore.getState().addFromServer(res.blocked);
-        }
+        // FX-872: the server's list replaces the local one (one block cache; an unblock elsewhere reopens here).
+        await useBlockedUsersStore.getState().addFromServer(res.blocked, { replace: true });
       } catch {
         // Non-fatal — local cache + server-side enforcement still apply.
         // Fail open: we still flip serverHydrationComplete to true so the DM
