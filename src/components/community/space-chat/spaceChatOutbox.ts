@@ -4,6 +4,8 @@
  * Delete drops it). The rows are kept on the device per signed-in user (cacheStorage, so a sign-out wipes them), and the
  * outbox runs from the first space chat or Community Home of the session until sign-out: back online, waiting rows go
  * out one at a time, oldest first, whichever page is open. After an app restart they go out once the outbox starts again.
+ * A refusal keeps only its class on the row, never the error (FR-871R6, m#871 Sol B871-2 / Opus B3): `rejected` (422
+ * community.content.rejected: the composer takes the text back to rephrase) or `closed` (403 / 404: the page closes).
  */
 import { useMemo, useSyncExternalStore } from 'react';
 import NetInfo from '@react-native-community/netinfo';
@@ -11,11 +13,16 @@ import { cacheStorage } from '../../../storage/mmkv';
 import { authEvents } from '../../../utils/authEvents';
 import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { isEffectivelyOnline } from '../../../hooks/useNetworkStatus';
-import { spaceChatApi } from './spaceChatApi';
+import { describeCommunityFailure } from '../../../api/communityErrors';
+import { CONTENT_REJECTED_CODE, communityErrorCode } from '../../../api/communitySafetyApi';
+import { isNoAccess, spaceChatApi } from './spaceChatApi';
 
 export type PendingState = 'sending' | 'waiting' | 'failed' | 'sent';
+/** Why the server refused a send: its words (422 content rejected), or the person is no longer let in (403 / 404). */
+export type Refusal = 'rejected' | 'closed';
 export interface PendingRow {
   localId: string; key: string; cohortId: string; body: string; createdAt: string; state: PendingState; serverId?: string;
+  reason?: Refusal;
 }
 
 export const SPACE_OUTBOX_PREFIX = 'space_outbox_';
@@ -28,6 +35,11 @@ let running = -1;
 let stopNet: (() => void) | null = null;
 const subs = new Set<() => void>();
 const onSent = new Set<(cohortId: string) => void>();
+const onRefused = new Set<(cohortId: string) => void>();
+/** The approved words for a text refused for its words: the thread's and the DMs' (communityErrors, by code). */
+export const REJECTED_WORDS = describeCommunityFailure({ response: { status: 422, data: { code: CONTENT_REJECTED_CODE } } }, 'send_message');
+const refusal = (err: unknown): Refusal | undefined =>
+  (communityErrorCode(err) === CONTENT_REJECTED_CODE ? 'rejected' : isNoAccess(err) ? 'closed' : undefined);
 
 function set(next: PendingRow[]): void {
   rows = next;
@@ -62,7 +74,9 @@ async function flush(): Promise<void> {
         if (gen !== g) break;
         // Lost the connection on the way: it waits for the next reconnect; any answer from the server is a failure.
         const dropped = (err as { kind?: string })?.kind === 'network' && !online;
-        patch(next.localId, { state: dropped ? 'waiting' : 'failed' });
+        const reason = dropped ? undefined : refusal(err);
+        patch(next.localId, { state: dropped ? 'waiting' : 'failed', reason });
+        if (reason === 'closed') onRefused.forEach((fn) => fn(next.cohortId));
       }
     }
   } finally {
@@ -94,6 +108,7 @@ try {
 const valid = (r: Partial<PendingRow>): r is PendingRow =>
   typeof r?.localId === 'string' && typeof r.key === 'string' && typeof r.cohortId === 'string' &&
   typeof r.body === 'string' && typeof r.createdAt === 'string';
+const REFUSALS: readonly unknown[] = ['rejected', 'closed'];
 
 /** Starts (or keeps) the outbox for the signed-in user: reads the kept rows and follows the connection. */
 export function startSpaceOutbox(userId: string | null): void {
@@ -106,7 +121,9 @@ export function startSpaceOutbox(userId: string | null): void {
   void cacheStorage.getStringAsync(`${SPACE_OUTBOX_PREFIX}${userId}`).then((raw) => {
     if (gen !== g || !raw) return;
     const kept = (JSON.parse(raw) as Partial<PendingRow>[]).filter(valid)
-      .map((r): PendingRow => (r.state === 'failed' ? r : { ...r, state: 'waiting', serverId: undefined }));
+      .map((r): PendingRow => (r.state === 'failed'
+        ? { ...r, reason: REFUSALS.includes(r.reason) ? r.reason : undefined }
+        : { ...r, state: 'waiting', serverId: undefined, reason: undefined }));
     set([...kept, ...rows.filter((r) => !kept.some((k) => k.localId === r.localId))]);
     void flush();
   }).catch(() => undefined);
@@ -123,11 +140,12 @@ export const spaceOutbox = {
     void flush();
   },
   retry(localId: string): void {
-    patch(localId, { state: 'waiting' });
+    patch(localId, { state: 'waiting', reason: undefined });
     void flush();
   },
+  /** A row already on its way stays (its send cannot be called back; the server list carries it once it lands). */
   discard(localId: string): void {
-    set(rows.filter((r) => r.localId !== localId));
+    set(rows.filter((r) => r.localId !== localId || r.state === 'sending'));
   },
   /** A sent row leaves once the server list carries it. */
   settle(serverIds: Set<string>): void {
@@ -136,6 +154,11 @@ export const spaceOutbox = {
   onSent(fn: (cohortId: string) => void): () => void {
     onSent.add(fn);
     return () => { onSent.delete(fn); };
+  },
+  /** A send the server refused with 403 / 404: the person is no longer let into that space. */
+  onRefused(fn: (cohortId: string) => void): () => void {
+    onRefused.add(fn);
+    return () => { onRefused.delete(fn); };
   },
 };
 
