@@ -66,6 +66,7 @@ import SafetyMenu from '../../components/community/SafetyMenu';
 import { dedupeById } from '../../utils/dedupeById';
 import type { CommunityRoute } from './communityNavTypes';
 import { describeCommunityFailure, type CommunityAction } from '../../api/communityErrors';
+import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 
 const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
 
@@ -150,6 +151,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: !!challengeId && featureFlags.communityChallenges,
   });
+  // BLOCK-ALL-M: banned from the space -> no note box and no "Leave the first note".
+  // FX-872: the note box draws only once the notes read came back (closed until the server says open).
+  const { closed, open, close } = useConversationClosed(null, [comments.error], useServerAnswered(comments));
 
   const commentData = useMemo(
     // Dedupe across pages: an overlapping/replayed cursor page must not feed a
@@ -377,7 +381,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         queryKey: ['community', 'challenge', challengeId, 'comments'],
       });
     },
-    onError: (err: unknown) => setActionError(describeError(err)),
+    onError: (err: unknown) => {
+      if (!close(err)) setActionError(describeError(err));
+    },
   });
 
   const handleSubmitProgress = useCallback(
@@ -788,9 +794,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   );
 
   // The footer below the comments list has four states: load error (calm
-  // retry, composer stays usable), true-empty (neutral empty state + focus
+  // retry; FX-872: no note box until a read succeeds), true-empty (neutral empty state + focus
   // CTA), a load-more spinner while paging, or nothing.
-  const commentsFooter = commentsLoadError ? (
+  const commentsFooter = closed ? null : commentsLoadError ? (
     <View style={styles.emptyComments} testID="community-challenge-comments-load-error">
       <Ionicons
         name="cloud-offline-outline"
@@ -798,7 +804,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         color={semanticColors.textMuted}
       />
       <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-        Encouragement notes did not load. You can still try sending a note.
+        Encouragement notes did not load.
       </Text>
       <HapticPressable
         intent="light"
@@ -861,7 +867,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       ) : null}
 
       <FlatList
-        data={hasComments ? commentData : []}
+        data={hasComments && !closed ? commentData : []}
         accessibilityRole="list"
         accessibilityLabel={
           commentData.length > 0
@@ -881,7 +887,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         testID="community-challenge-comments"
       />
 
-      <ComposerInput
+      {closed ? <ConversationClosedLine testID="community-challenge-closed" /> : !open ? null : <ComposerInput
         ref={composerRef}
         onSubmit={async (body) => {
           await commentMutation.mutateAsync(body);
@@ -890,7 +896,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         sending={commentMutation.isPending}
         placeholder="Send a word of encouragement…"
         testID="community-challenge-composer"
-      />
+      />}
 
       <ChallengeProgressSheet
         visible={sheetOpen}

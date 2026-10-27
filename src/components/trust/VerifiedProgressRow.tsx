@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   metaText: {
     fontFamily: typography.bodySmall.fontFamily,
     fontSize: 12,
-    color: tokens.stone,
+    color: tokens.graphite,
   },
   aiSummary: {
     fontFamily: typography.bodySmall.fontFamily,
