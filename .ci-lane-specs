@@ -1,0 +1,10 @@
+src/screens/community
+src/components/community
+src/components/messaging
+src/hooks
+src/api
+src/navigation
+src/theme
+src/__tests__/copyVoice.guard.test.ts
+src/__tests__/truthfulCopy.guard.test.ts
+src/__tests__/c6Copy.test.tsx
