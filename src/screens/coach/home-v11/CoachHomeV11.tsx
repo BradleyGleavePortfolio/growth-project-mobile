@@ -265,7 +265,7 @@ export default function CoachHomeV11(p: Props) {
     <View testID="home-clients">
       <Text style={cs.section} accessibilityRole="header">CLIENTS</Text>
       <View style={[cs.card, s.flush]} testID="home-clients-card">
-        <LinkRow first title={`All ${rosterN} clients`} line="Open Clients" onPress={tap(p.onOpenClients)} testID="home-row-all" />
+        <LinkRow first title={roster === 1 ? 'Your 1 client' : `All ${rosterN} clients`} line="Open Clients" onPress={tap(p.onOpenClients)} testID="home-row-all" />
         {data.rosterState === 'ok' ? (
           <LinkRow
             title={`Steady, ${data.steady.count}`} line={data.steady.loggedToday !== null ? `${data.steady.loggedToday} logged today` : null}
