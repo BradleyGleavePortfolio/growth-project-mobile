@@ -1,0 +1,13 @@
+src/screens/client/copilot
+src/screens/client/__tests__
+src/screens/client/learn
+src/navigation
+src/screens/roman/__tests__/romanA11yR3.test.tsx
+src/components/__tests__/HapticPressable.reducedMotion.test.tsx
+src/__tests__/renewalLineYourPlans144.test.tsx
+src/__tests__/safeAreaInsets133.test.ts
+src/__tests__/copyVoice.guard.test.ts
+src/__tests__/quietLuxuryDoctrine.test.ts
+src/__tests__/truthfulCopy.guard.test.ts
+src/__tests__/wave11Doctrine.test.ts
+src/__tests__/boneSwapGuard.test.ts
