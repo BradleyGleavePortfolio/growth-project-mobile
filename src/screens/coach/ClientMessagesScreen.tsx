@@ -32,6 +32,8 @@ import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
+import { useConversationClosed, useCoachingRow, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { closedByHeader } from '../../components/messaging/closedRefusal';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import { track } from '../../lib/analytics';
 import { MuteBell, PinnedBar, ThreadV2Menus, jumpToMessage } from '../../components/messaging/ThreadV2Parts';
@@ -78,6 +80,18 @@ export default function ClientMessagesScreen() {
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   // A reply typed and not sent stays with this client's chat on the device (COACH-CHAT-KEEP, CHAT-DISCARD).
   const [inputText, setInputText, sendKey] = useUnsentReply(clientId, initialDraft);
+  // BLOCK-ALL-M: a block either way closes the chat; a refused send keeps its text in this client's unsent reply.
+  // FX-872: nothing to type until the server answered: this client's inbox row (v2; `closed` is the only way the coach
+  // learns the client blocked them) and the first thread read. A refused send stays closed for the session.
+  const [answered, setAnswered] = useState(false);
+  const [threadClosed, setThreadClosed] = useState(false); // the last thread read carried x-conversation-closed
+  const coachingRow = useCoachingRow('coach', clientId);
+  const { closed, open, close } = useConversationClosed(
+    clientId,
+    [],
+    answered && coachingRow.settled,
+    threadClosed || coachingRow.row?.closed,
+  );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
@@ -109,6 +123,8 @@ export default function ClientMessagesScreen() {
   const loadInitial = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await coachApi.getClientMessages(clientId, { limit: PAGE_LIMIT });
+      setThreadClosed(closedByHeader(res)); // same batch as `answered`: never a render with a box first
+      setAnswered(true); // FR-872 (Sol B2): only a read that came back answers; a failed first read leaves no box
       const list: Message[] = normalizeList(res.data, clientId);
       setMessages(list);
       setHasMoreOlder(list.length >= PAGE_LIMIT);
@@ -151,6 +167,8 @@ export default function ClientMessagesScreen() {
   const loadSinceNewest = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await coachApi.getClientMessages(clientId, { limit: 100 });
+      setThreadClosed(closedByHeader(res)); // closed until a read answers without the header
+      setAnswered(true);
       const list: Message[] = normalizeList(res.data, clientId);
       setMessages((prev) => mergeById(prev, list));
       return list;
@@ -237,7 +255,7 @@ export default function ClientMessagesScreen() {
           void loadSinceNewest();
         } else {
           if (e.kind === 'network' || e.status >= 500 || e.status === 429) sendKey.keepFailed(text, key);
-          thread.report('Message not sent', err);
+          if (!close(err)) thread.report('Message not sent', err);
         }
       } finally {
         setSending(false);
@@ -258,7 +276,7 @@ export default function ClientMessagesScreen() {
       setMessages((prev) => mergeById(prev, [created]));
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (err) {
-      Alert.alert('Failed to send', errorMessage(err, 'Message could not be sent.'));
+      if (!close(err)) Alert.alert('Failed to send', errorMessage(err, 'Message could not be sent.'));
     } finally {
       setSending(false);
     }
@@ -370,7 +388,7 @@ export default function ClientMessagesScreen() {
         {thread.enabled ? <MuteBell muted={thread.muted} onPress={() => setMuteMenu(true)} /> : <View style={{ width: 24 }} />}
       </View>
 
-      {thread.enabled ? (
+      {thread.enabled && !closed ? (
         <PinnedBar pins={thread.pins} onOpen={(id) => jumpToMessage(flatListRef.current, visibleMessages, id)} />
       ) : null}
 
@@ -382,7 +400,7 @@ export default function ClientMessagesScreen() {
 
       <FlatList
         ref={flatListRef}
-        data={visibleMessages}
+        data={closed ? [] : visibleMessages /* FX-872: a closed chat shows no message text */}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
@@ -410,7 +428,7 @@ export default function ClientMessagesScreen() {
           ) : null
         }
         ListEmptyComponent={
-          <View style={styles.chatEmpty}>
+          !open ? null : <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
             <Text style={styles.chatEmptyText}>
               Start a conversation with {clientName.split(' ')[0]}
@@ -463,6 +481,7 @@ export default function ClientMessagesScreen() {
         }}
       />
 
+      {closed ? <ConversationClosedLine style={styles.closedBar} testID="client-messages-closed" /> : !open ? null : <>
       <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
 
       <View style={styles.inputBar}>
@@ -491,11 +510,12 @@ export default function ClientMessagesScreen() {
           />
         </TouchableOpacity>
       </View>
+      </>}
 
       {thread.enabled ? (
         <ThreadV2Menus
-          thread={thread}
-          target={actionTarget}
+          thread={open ? thread : { ...thread, editing: null } /* FR-872 (Sol B5): no edit sheet once closed */}
+          target={open ? actionTarget : null}
           isMine={!!currentUser?.id && actionTarget?.sender_id === currentUser.id}
           onClose={() => setActionTarget(null)}
           onReply={handleReply}
@@ -504,7 +524,8 @@ export default function ClientMessagesScreen() {
           muteOpen={muteMenu}
           onMuteClose={() => setMuteMenu(false)}
         />
-      ) : (
+      ) : null}
+      {!thread.enabled || !open ? ( // closed or not yet open: Copy and Report only (no reply, edit or pin)
         <MessageActionSheet
           visible={!!actionTarget}
           messagePreview={actionTarget?.body}
@@ -515,7 +536,7 @@ export default function ClientMessagesScreen() {
           canReport={!!actionTarget && actionTarget.sender_role !== 'coach'}
           canReply={false}
         />
-      )}
+      ) : null}
 
       <ReportMessageSheet
         visible={!!reportTarget}
@@ -598,6 +619,7 @@ const makeStyles = (colors: ThemeColors) =>
   chatEmptyText: { fontSize: 14, color: colors.textMuted },
   dateSep: { alignItems: 'center', marginVertical: 16 },
   dateSepText: { fontSize: 12, color: colors.textMuted, backgroundColor: colors.background, paddingHorizontal: 12 },
+  closedBar: { paddingBottom: 36 },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',

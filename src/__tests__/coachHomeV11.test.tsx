@@ -6,7 +6,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   parseHomeDay, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin,
 } from '../screens/coach/home-v11/homeDay';
@@ -32,6 +33,12 @@ jest.mock('react-native-svg', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   const El = ({ children, testID }: { children?: React.ReactNode; testID?: string }) => R.createElement(View, { testID }, children);
   return { __esModule: true, default: El, Circle: El };
+});
+jest.mock('@expo/vector-icons', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  const Icon = ({ name, color }: { name: string; color?: string }) => R.createElement(View, { testID: `icon-${name}`, ...{ iconColor: color } });
+  return { Ionicons: Icon, MaterialIcons: Icon, MaterialCommunityIcons: Icon, Feather: Icon };
 });
 const mockHaptics = { softImpact: jest.fn(), mediumImpact: jest.fn(), selection: jest.fn(), lightImpact: jest.fn() };
 jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: mockHaptics }));
@@ -152,7 +159,7 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     expect(['w1', 'w2', 'w3', 'w4'].map((w) => !!v.queryByTestId(`home-win-${w}`))).toEqual([true, false, false, false]);
     expect(Object.fromEntries(['home-tile-active', 'home-tile-checkins', 'home-tile-stayed', 'home-alerts', 'home-ring-check_ins', 'home-ring-replies', 'home-ring-reach_outs', 'home-wins-all'].map((id) => [id, label(v, id)]))).toEqual({
       'home-tile-active': '21 of 30 active today', 'home-tile-checkins': '82% check-ins · last 7 days', 'home-tile-stayed': '95% stayed · this month',
-      'home-alerts': 'Open alerts, 3', 'home-ring-check_ins': 'Check-ins, 5 of 9', 'home-ring-replies': 'Replies, 1 of 1',
+      'home-alerts': 'Open alerts, 3, Waiting in Actions', 'home-ring-check_ins': 'Check-ins, 5 of 9', 'home-ring-replies': 'Replies, 1 of 1',
       'home-ring-reach_outs': 'Reach-outs, 2 of 5', 'home-wins-all': '12 wins this week. See all',
     });
     expect([!!v.getByText('The day is in motion. Close the rings as you go.'), v.getByText('5/9').props]).toEqual([true, expect.objectContaining({ adjustsFontSizeToFit: true, minimumFontScale: 0.5, maxFontSizeMultiplier: 1 })]); // 112/140 fits (LO B2)
@@ -333,6 +340,23 @@ describe('coach Home at zero clients, at 1,000 and on failures', () => {
     const v = await renderHome();
     expect([label(v, 'home-tile-active'), label(v, 'home-row-all')]).toEqual(['1,000 of 1,000 active today', 'All 1,000 clients, Open Clients']);
   });
+  // Owner 10-26 13:5x "4.) approve all wording": "Your 1 client" for one client only; every other count keeps "All {n} clients".
+  it.each([
+    [0, null],
+    [1, 'Your 1 client, Open Clients'],
+    [2, 'All 2 clients, Open Clients'],
+  ] as const)('names the clients row for %i clients', async (n, want) => {
+    mockGet.mockResolvedValue({ data: { ...overview(n), active_today: n, home: home(n ? [win(1)] : [], n ? 1 : 0) } });
+    const v = await renderHome();
+    if (want === null) {
+      expect(v.queryByTestId('home-clients')).toBeNull();
+      expect(v.queryByText(/All 0 clients|Your 0 client/)).toBeNull();
+      return;
+    }
+    expect(label(v, 'home-row-all')).toBe(want);
+    expect(within(v.getByTestId('home-row-all')).getByText(want.replace(', Open Clients', ''))).toBeTruthy();
+    expect(v.queryByText(n === 1 ? 'All 1 clients' : 'Your 2 client')).toBeNull();
+  });
   it('says so with Try again when the overview cannot load', async () => {
     mockGet.mockRejectedValue(new Error('down'));
     const v = await render(<CommandCenterScreen />);
@@ -430,5 +454,30 @@ describe('coach Home flag wiring', () => {
     expect(read('src', 'config', 'featureFlags.ts')).toMatch(/coachHomeV11: readFlag\('EXPO_PUBLIC_FF_COACH_HOME_V11', false\)/);
     const eas = JSON.parse(read('eas.json')) as { build: Record<string, { env?: Record<string, string> }> };
     for (const [name, profile] of Object.entries(eas.build)) expect(`${name}:${profile.env?.EXPO_PUBLIC_FF_COACH_HOME_V11}`).toBe(`${name}:undefined`);
+  });
+});
+
+describe("coach Home's Business glance and Clients card in Style A (FR-863R6; a.py `.sec`, `.mon`, `.dol`, `.mv2`, `.ls`)", () => {
+  const flat = (node: { props: { style?: unknown } }): ViewStyle & TextStyle => StyleSheet.flatten(node.props.style as ViewStyle) ?? {};
+  it('draws the Clients card flush, so its rows keep their own 16 at the sides (Opus B1)', async () => {
+    const v = await renderHome();
+    expect(flat(v.getByTestId('home-clients-card'))).toMatchObject({ paddingVertical: 0, paddingHorizontal: 0 });
+    for (const id of ['home-row-all', 'home-row-steady', 'home-row-streaks']) expect(flat(v.getByTestId(id))).toMatchObject({ paddingHorizontal: 16, paddingVertical: 8, minHeight: 56 });
+  });
+  it('draws the glance as A: 14 and 16 inside, gap 12, a 40-point deep mark, a 26/30 amount and three 13/18 graphite lines', async () => {
+    const v = await renderHome();
+    const card = v.getByTestId('home-month');
+    expect(flat(card)).toMatchObject({ paddingVertical: 14, paddingHorizontal: 16, gap: 12 });
+    expect(flat(within(card).getByTestId('home-month-mark'))).toMatchObject({ width: 40, height: 40, borderRadius: 12, backgroundColor: '#1C3023' });
+    expect(flat(within(card).getByText('$')).color).toBe('#A3C46A');
+    expect(flat(within(card).getByText(/^\$2,140/))).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 26, lineHeight: 30, letterSpacing: -0.5, color: '#142019' });
+    const lines = [within(card).getByText('Earnings · this month'), within(card).getByText(/ so far · /), within(card).getByText(/^Next payout /)];
+    for (const line of lines) expect(flat(line)).toMatchObject({ fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: '#2C2C2C' });
+    expect(within(card).getByTestId('icon-chevron-forward').props.iconColor).toBe('#4F5D54');
+  });
+  it('sets BUSINESS and CLIENTS 22 under the card above (page gap 10 + 12) and 8 over their own card', async () => {
+    const v = await renderHome();
+    expect(flat(v.getByTestId('home-page')).gap).toBe(10);
+    for (const t of ['BUSINESS', 'CLIENTS']) expect(flat(v.getByText(t))).toMatchObject({ marginTop: 12, marginBottom: 8 });
   });
 });

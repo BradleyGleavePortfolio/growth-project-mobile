@@ -112,6 +112,7 @@ When the toggle changes:
 | `copilot/SuggestionCard` (Path Copilot) | `success()` / `error()` | The change reached the coach, or did not |
 | `coach/copilot/PathChangeDraftCard` | `success()` / `error()` / `selection()` | Approve, Edit or Decline saved, or refused; each day step in Edit |
 | `renewal/RenewalHome`, `HouseCoachScreen` (RENEWAL-M, `FEATURE_PLAN_RENEWAL`) | `mediumImpact()` / `lightImpact()` | "View Coach {N}'s packages" (the one filled choice) / "Join TGP's Top Rated Coach", "Skip for now", Back and a house package row |
+| `HouseCoachConfirmScreen`, `HousePackageScreen` (SWITCH-CONFIRM-M) | `mediumImpact()` / `softImpact()` (HapticPressable `light`) | "Continue" and "Select this plan" (each page's one filled action) / "Not now" and Back |
 
 ## Architecture
 

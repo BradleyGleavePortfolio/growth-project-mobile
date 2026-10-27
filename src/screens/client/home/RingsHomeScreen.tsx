@@ -5,7 +5,8 @@
  * locked), the date, three dials (each its own number and screen), Join a coach for a
  * coachless client (m#654), Roman's line (coachless: locked), the day's one forest
  * button, the tiles and the one notice slot (today's Home notices, most urgent first, one at
- * a time); a failed payment shows alone under the dials. Every read refreshes on open: focus
+ * a time); an ended plan's "Renew now" banner sits above the dials (RENEWAL3 B1) and a failed
+ * payment shows alone under them (#RINGS-PAY-SLOT). Every read refreshes on open: focus
  * and a return to the foreground. Edit tiles follows in the next UI-1 pull request.
  */
 import React, { useCallback } from 'react';
@@ -123,7 +124,10 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
         {day.error ? (
           <QuietError layout="inline" message={day.error} onRetry={() => void refresh()} retrying={day.retrying} testID="home-day-data-error" />
         ) : null}
-        <Text testID="home-date" style={[typography.eyebrow, { color: sc.textMuted }]}>{homeDateLine(new Date())}</Text>
+        <Text testID="home-date" style={[typography.eyebrow, styles.date, { color: sc.textMuted }]}>{homeDateLine(new Date())}</Text>
+        {/* RENEWAL3 B1: the ended plan's "Renew now" banner (and its Day 0/1/7 pop-up) above the dials, as the GOAL draws it:
+            14 pt under the date and about 14 pt over the rings (11 here plus the ring's own inset). */}
+        <RenewalHome style={styles.renew} />
         <View style={styles.dials} testID="home-dials">
           <HomeDial label="Food" view={food} testID="home-dial-food" accessibilityLabel={dialLabel('Food', food)}
             onPress={() => navigation.navigate('Log')} />
@@ -133,10 +137,8 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
             accessibilityLabel={dialLabel('Sleep', sleep)}
             onPress={() => (noSource && sleep.source !== 'health' ? navigation.navigate('Connections') : navigation.navigate('Health', { bucket: 'recovery' }))} />
         </View>
-        {/* #RINGS-PAY-SLOT: the failed payment alone, up under the dials; every other notice waits in the slot. */}
+        {/* #RINGS-PAY-SLOT: the failed payment alone, up under the dials (renewal is above them); every other notice waits in the slot. */}
         <DunningBanner surface="HomeScreen" presentation="section" style={styles.pay} />
-        {/* RENEWAL-M (C3): the ended plan's renewal banner sits with the payment banner, under the dials. */}
-        <RenewalHome />
         <CoachlessHomeSlot part="join" />
         {/* Once the user is known, so a coached client never sees Roman locked first. */}
         {currentUser ? <HomeRomanLine coached={!!currentUser.coach_id} /> : null}
@@ -168,7 +170,9 @@ export default function RingsHomeScreen({ day, workout, refreshing, onRefresh }:
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: layout.gutter, paddingTop: 6, paddingBottom: 48 },
-  dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
+  date: { marginBottom: 7 }, // with the dials' 11: 18 from the date to the dials when there is no banner
+  renew: { marginTop: 7, marginBottom: 0 },
+  dials: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 11 },
   cta: { marginTop: 20 },
   pay: { marginTop: 20, marginBottom: 0, paddingBottom: 0 }, // the Roman line or the button below brings its own gap
   notices: { marginTop: layout.sectionGap },
