@@ -74,6 +74,19 @@ export const VoiceUploadTargetSchema = z
   .strict();
 export type VoiceUploadTarget = z.infer<typeof VoiceUploadTargetSchema>;
 
+/**
+ * Who removed a voice note for everyone: the space's coach or the platform owner (always shown as the
+ * coach). `name` is the name this viewer sees for that coach here (the author_name rule).
+ */
+export const VoiceRemovedBySchema = z
+  .object({
+    role: z.literal('coach'),
+    user_id: z.string(),
+    name: z.string(),
+  })
+  .strict();
+export type VoiceRemovedBy = z.infer<typeof VoiceRemovedBySchema>;
+
 export const VoiceNoteViewSchema = z
   .object({
     id: z.string(),
@@ -100,6 +113,10 @@ export const VoiceNoteViewSchema = z
     heard_at: z.string().nullable().optional(),
     message_id: z.string().nullable().optional(),
     parent_message_id: z.string().nullable().optional(),
+    // A coach removal (backend #1165 CONTRACT 6405215872): the note keeps its place with every audio
+    // field emptied and these two keys; live rows never carry them (absent, not null).
+    removed_at: z.string().optional(),
+    removed_by: VoiceRemovedBySchema.optional(),
   })
   .strict();
 export type VoiceNoteView = z.infer<typeof VoiceNoteViewSchema>;
@@ -262,6 +279,7 @@ export const communityVoiceApi = {
     uploadUrl: string,
     body: Blob | ArrayBuffer,
     mimeType: VoiceNoteMimeType,
+    onProgress?: (fraction: number) => void,
   ): Promise<void> {
     try {
       // The signed URL is an absolute storage endpoint, not an API route, so
@@ -269,6 +287,9 @@ export const communityVoiceApi = {
       await axios.put(uploadUrl, body, {
         headers: { 'Content-Type': mimeType },
         signal: AbortSignal.timeout(VOICE_UPLOAD_TIMEOUT_MS),
+        ...(onProgress
+          ? { onUploadProgress: (e: { loaded: number; total?: number }) => { if (e.total) onProgress(e.loaded / e.total); } }
+          : {}),
       });
     } catch (err) {
       if (axios.isAxiosError(err)) {

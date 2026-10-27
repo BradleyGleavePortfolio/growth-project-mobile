@@ -18,6 +18,7 @@ import { useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import { JOIN_COACH_BODY, JOIN_COACH_TITLE } from '../../components/coachless/JoinCoachBanner';
 import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { messageCoachLabel } from '../../components/home/HomeHeaderActions';
+import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
 import { YOUR_PLANS_COPY, planPrice } from '../../components/purchase/YourPlansPanel';
@@ -169,6 +170,8 @@ export default function YouScreen() {
     // Another tab's screen: keep that stack's first screen underneath, so Back works.
     (navigation.getParent() ?? navigation).navigate(item.target.tab, { screen: item.target.screen, initial: false });
   };
+  // FR-880R3 (operator ruling, agent 173; owner 10-23): no "Message {coach}" while the coaching chat is closed.
+  const coachChat = useCoachChatClosed(coachId);
   // The coach thread lives on the Home stack (as from Home's Message {coach}).
   const openCoachThread = () => (navigation.getParent() ?? navigation).navigate('Home', { screen: 'Messages', initial: false });
 
@@ -253,7 +256,9 @@ export default function YouScreen() {
           )}
           <Text style={styles.coachName}>{coach.data.name}</Text>
         </View>
-        <PrimaryButton label={messageCoachLabel(coach.data.name)} onPress={openCoachThread} style={styles.cardButton} testID="you-message-coach" />
+        {coachChat.known && !coachChat.closed ? ( /* FR-880R3 (operator ruling): the same rule as Home's button */
+          <PrimaryButton label={messageCoachLabel(coach.data.name)} onPress={openCoachThread} style={styles.cardButton} testID="you-message-coach" />
+        ) : null}
       </View>
     );
   } else if (coachId) {

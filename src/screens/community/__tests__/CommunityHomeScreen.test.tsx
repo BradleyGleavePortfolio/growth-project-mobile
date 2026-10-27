@@ -39,11 +39,15 @@ jest.mock('../../../ui/haptics/haptics.service', () => ({
 
 let mockCoach: { name?: unknown } | Error = { name: 'Sam Rivera' };
 let mockUnread = 3;
+let mockCoachClosed = false; // FR-880R2: the coaching thread read's x-conversation-closed header (b#1141), either block
+let mockCoachReadFails = false; // FR-880R3: the coaching thread read fails (offline)
 jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: {
     get: jest.fn(async (url: string) => {
       if (url === '/messages/unread-count') return { data: { total: mockUnread } };
+      if (url === '/messages?limit=1' && mockCoachReadFails) throw new Error('offline');
+      if (url === '/messages?limit=1') return { data: [], headers: mockCoachClosed ? { 'x-conversation-closed': 'blocked_by_them' } : {} };
       if (mockCoach instanceof Error) throw mockCoach;
       return { data: mockCoach };
     }),
@@ -120,7 +124,7 @@ describe('Community Home', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('Leaderboard');
     await fireEvent.press(screen.getByTestId('space-row-classroom'));
     expect(mockNavigate).toHaveBeenLastCalledWith('CommunityClassroom');
-    await fireEvent.press(screen.getByTestId('space-row-coach'));
+    await fireEvent.press(await screen.findByTestId('space-row-coach'));
     expect(mockNavigate).toHaveBeenLastCalledWith('Home', { screen: 'Messages' });
     await fireEvent.press(screen.getByTestId('community-home-search'));
     expect(mockNavigate).toHaveBeenLastCalledWith('CommunityFind');
@@ -166,7 +170,7 @@ describe('Community Home', () => {
     expect(screen.getByText('Community')).toBeTruthy();
     expect(screen.queryByTestId('space-row-c-ann')).toBeNull();
     expect(screen.getByTestId('space-row-leaderboard')).toBeTruthy();
-    expect(screen.getByTestId('space-row-coach')).toBeTruthy();
+    expect(await screen.findByTestId('space-row-coach')).toBeTruthy();
   });
 
   it('loading is a still skeleton; a failed read offers Try again and ticks an error when it fails again', async () => {
@@ -224,5 +228,85 @@ describe('m#871 Sol B5: per-space unread counts (SC-BE2 unread_count)', () => {
     expect(CommunityCohortSummarySchema.parse({ ...row, unread_count: -1 }).unread_count).toBeUndefined();
     expect(CommunityCohortSummarySchema.parse({ ...row, unread_count: 'x' }).unread_count).toBeUndefined();
     expect(CommunityCohortSummarySchema.parse(row).unread_count).toBeUndefined();
+  });
+});
+
+// FR-880R2 (owner 10-23 "Dissapear"; Sol B2 on m#880): a closed coaching chat, either person's block, leaves Community
+// Home and the drawer after a fresh read: no row, no name, no count; my unblock or a read that says open brings it back.
+describe('a closed coaching chat leaves Community Home and the drawer', () => {
+  const { queryClient: appClient } = jest.requireActual('../../../services/queryClient');
+  const { blockPlaced, blockLifted } = jest.requireActual('../../../lib/blockSync');
+  const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+  const COACH_CHAT = ['messaging', 'coach-chat-closed'];
+  beforeEach(() => appClient.clear());
+  afterEach(() => {
+    mockCoachClosed = false;
+    useBlockedUsersStore.setState({ blocked: [] });
+    appClient.clear();
+  });
+  const gone = () => {
+    expect(screen.queryByTestId('space-row-coach')).toBeNull();
+    expect(screen.queryByTestId('space-row-coach-badge')).toBeNull();
+    expect(screen.queryByText('Sam')).toBeNull(); // the coach's name ("Sam's Strength Club" is the space, not the coach)
+    expect(screen.queryByText(/Your coach|new$/)).toBeNull();
+    expect(screen.queryByLabelText(/Your coach/)).toBeNull();
+  };
+
+  it('the coach blocked me: no coach row on Home (never shown first); a read that says open brings it back', async () => {
+    mockCoachClosed = true;
+    await mount(<CommunityHomeScreen />);
+    expect(screen.getByLabelText('Everyone')).toBeTruthy();
+    gone();
+    await waitFor(() => expect(appClient.getQueryData([...COACH_CHAT, 'coach-1'])).toBe(true));
+    gone();
+    mockCoachClosed = false;
+    await appClient.invalidateQueries({ queryKey: COACH_CHAT });
+    expect(await screen.findByLabelText('Sam, Your coach, 3 new')).toBeTruthy();
+  });
+
+  it('the coach blocked me: the drawer has no coach row either, also when filtered by their name', async () => {
+    mockCoachClosed = true;
+    await mount(<SpaceListButton />);
+    await fireEvent.press(screen.getByLabelText('Open space list'));
+    await waitFor(() => expect(appClient.getQueryData([...COACH_CHAT, 'coach-1'])).toBe(true));
+    expect(screen.getByTestId('space-row-c-ann')).toBeTruthy();
+    gone();
+    await fireEvent.changeText(screen.getByLabelText('Jump to a space or person'), 'sam');
+    gone();
+  });
+
+  it('I block my coach: the row leaves Home at once; my unblock brings it back with its count', async () => {
+    await mount(<CommunityHomeScreen />);
+    expect(await screen.findByLabelText('Sam, Your coach, 3 new')).toBeTruthy();
+    mockCoachClosed = true; // the server's answer while my block stands
+    blockPlaced('coach-1', { displayName: 'Sam' });
+    await waitFor(() => expect(screen.queryByTestId('space-row-coach')).toBeNull());
+    gone();
+    mockCoachClosed = false;
+    blockLifted('coach-1');
+    expect(await screen.findByLabelText('Sam, Your coach, 3 new')).toBeTruthy();
+  });
+
+  // FR-880R3 (Sol B1 on m#880, agent 174): a fresh launch reads the block list saved on this phone before any row shows.
+  it('cold start, my saved block and a failed thread read: no coach row on Home (never shown first)', async () => {
+    const { persistKeyFor } = jest.requireActual('../../../store/blockedUsersStore');
+    const { prefsStorage } = jest.requireActual('../../../storage/mmkv');
+    await prefsStorage.set(persistKeyFor('me-1'), JSON.stringify([{ id: 'coach-1', displayName: 'Sam', role: 'coach', blockedAt: '2026-10-24T00:00:00Z' }]));
+    useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); // nothing read yet, as on a cold start
+    mockCoachReadFails = true;
+    try {
+      await mount(<CommunityHomeScreen />);
+      expect(screen.getByLabelText('Everyone')).toBeTruthy();
+      gone();
+      await waitFor(() => expect(appClient.getQueryState([...COACH_CHAT, 'coach-1'])?.status).toBe('error'));
+      await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+      expect(useBlockedUsersStore.getState().blocked.map((b: { id: string }) => b.id)).toEqual(['coach-1']);
+      gone();
+      expect(screen.getByLabelText('Everyone')).toBeTruthy(); // the rest of Home stays
+    } finally {
+      mockCoachReadFails = false;
+      await prefsStorage.delete(persistKeyFor('me-1'));
+      useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null });
+    }
   });
 });

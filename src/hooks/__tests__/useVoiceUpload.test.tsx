@@ -100,6 +100,7 @@ describe('useVoiceUpload — three-hop publish', () => {
       target.upload_url,
       expect.any(ArrayBuffer),
       'audio/mp4',
+      undefined,
     );
     expect(api.create).toHaveBeenCalledWith(WS, {
       storage_key: target.storage_key,

@@ -24,6 +24,7 @@
 import api from '../services/api';
 import type { AxiosResponse } from 'axios';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
+import { blockPlaced, blockLifted } from '../lib/blockSync';
 
 /**
  * The categories the report sheet offers. The backend DTO
@@ -145,12 +146,14 @@ async function report(
 async function block(userId: string): Promise<BlockUserResponse> {
   if (!userId) throw new Error('userId required');
   await api.post(`/users/${encodeURIComponent(userId)}/block`);
+  blockPlaced(userId); // FX-872: one block cache, every screen and list at once
   return { ok: true };
 }
 
 async function unblock(userId: string): Promise<BlockUserResponse> {
   if (!userId) throw new Error('userId required');
   await api.delete(`/users/${encodeURIComponent(userId)}/block`);
+  blockLifted(userId);
   return { ok: true };
 }
 

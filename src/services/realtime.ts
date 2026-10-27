@@ -22,6 +22,9 @@
 //   expired) are removed silently. The screens' 60 s poll and focus refresh
 //   carry on, and the next screen or token refresh joins again. A joined
 //   channel that drops with the network rejoins by itself.
+// - One client, one socket: the community pings (api/communityRealtime.ts)
+//   join their own private topic on this client and re-join from
+//   onRealtimeAuthRefresh after a token refresh.
 
 import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
@@ -31,7 +34,8 @@ export const PING_DEBOUNCE_MS = 1000;
 
 let client: SupabaseClient | null = null;
 
-function getClient(): SupabaseClient {
+/** The app's one Realtime client (signed-in token from secure storage), shared by every private topic. */
+export function getRealtimeClient(): SupabaseClient {
   if (!client) {
     client = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
       // The app keeps its own session (services/api.ts); this client only joins Realtime.
@@ -83,18 +87,18 @@ function drop(ch: RealtimeChannel | null): void {
   if (!ch || ch !== channel) return;
   channel = null;
   // Awaited by the next join: realtime-js would hand back a channel still leaving.
-  leaving = getClient().removeChannel(ch).catch(() => undefined);
+  leaving = getRealtimeClient().removeChannel(ch).catch(() => undefined);
 }
 
 async function join(myTopic: string): Promise<void> {
   await leaving;
-  const { realtime } = getClient();
+  const { realtime } = getRealtimeClient();
   await realtime.setAuth();
   // Signed out, another person meanwhile, or already joined: nothing to do.
   const token = realtime.accessTokenValue;
   if (topic !== myTopic || channel || !token) return;
   let joined = false;
-  const ch = getClient()
+  const ch = getRealtimeClient()
     .channel(myTopic, { config: { private: true, broadcast: { self: false } } })
     .on('broadcast', { event: 'new-message' }, newMessage.ping)
     .on('broadcast', { event: 'thread-updated' }, threadUpdated.ping);
@@ -109,11 +113,25 @@ async function join(myTopic: string): Promise<void> {
   });
 }
 
+const authRefreshHooks = new Set<() => void>();
+
+/** Another topic on this client (community pings) runs `hook` after every token refresh. */
+export function onRealtimeAuthRefresh(hook: () => void): void {
+  authRefreshHooks.add(hook);
+}
+
 /** After a token refresh: the open channel gets the new token, or a lost one joins again. */
 export function refreshRealtimeAuth(): void {
   if (!client) return;
   if (topic && !channel) void join(topic).catch(() => undefined);
   else void client.realtime.setAuth().catch(() => undefined);
+  for (const hook of authRefreshHooks) {
+    try {
+      hook();
+    } catch {
+      // A hook failure never reaches the token refresh.
+    }
+  }
 }
 
 function leaveAll(): void {
