@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { Alert, Platform } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor, cleanup } from '@testing-library/react-native';
 import ClientMessagesScreen from '../ClientMessagesScreen';
 import api from '../../../services/api';
 import { featureFlags } from '../../../config/featureFlags';
@@ -309,5 +309,110 @@ describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
     await waitFor(() => expect(queryByTestId('thread-mute-button')).toBeNull());
     await fireEvent.press(getByLabelText('Send message'));
     await waitFor(() => expect(mockLegacySend).toHaveBeenCalledWith('client-1', 'hello'));
+  });
+});
+
+// BLOCK-ALL-M (owner 10-22 "dont even let the banned person type!"; #168-4 op 1: a block closes the coaching chat both ways).
+describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
+  const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+  const { closedRefusals } = jest.requireActual('../../../components/messaging/closedRefusal');
+  const { queryClient } = jest.requireActual('../../../services/queryClient');
+  afterEach(async () => {
+    await cleanup(); // unmount first, so no screen reads the inbox again into the cleared cache
+    useBlockedUsersStore.setState({ blocked: [] });
+    closedRefusals.clear('client-1');
+    queryClient.clear();
+  });
+  const inboxWith = (closed: boolean) => ({
+    data: {
+      items: [{
+        thread_id: 't', kind: 'coach_client', coach_id: 'coach-1', client_id: 'client-1',
+        counterpart: { user_id: 'client-1', display_name: 'Alice Smith' }, last_message: null, unread_count: 0,
+        muted: false, muted_until: null, pinned: false, blocked_by_me: false, closed, last_activity_at: null,
+      }],
+      next_cursor: null,
+      total_unread: 0,
+    },
+  });
+
+  // FX-872 (Opus B4, Sol B1): the coach the client blocked never gets a box, not only after a refused send.
+  it('the client blocked me: the inbox row says closed, so there is never a box', async () => {
+    getMock.mockImplementation(async (url: string) =>
+      url.startsWith('/coach/messages/inbox') ? inboxWith(true) : { data: { items: [] } });
+    const u = await render(<ClientMessagesScreen />);
+    expect(await u.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(u.queryByLabelText(/Message: from the client/)).toBeNull();
+  });
+
+  it('FX-872: a refused send stays closed after leaving and coming back', async () => {
+    postMock.mockImplementation(async (url: string) => {
+      if (url !== BASE) return { data: {} };
+      throw axiosErr({ response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } });
+    });
+    const first = await render(<ClientMessagesScreen />);
+    await first.findByLabelText(/Message: from the client/);
+    await fireEvent.changeText(first.getByLabelText('Message text'), 'see you at 6');
+    await fireEvent.press(first.getByLabelText('Send message'));
+    expect(await first.findByTestId('client-messages-closed')).toBeTruthy();
+    await first.unmount();
+    const again = await render(<ClientMessagesScreen />);
+    expect(await again.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(again.queryByLabelText('Message text')).toBeNull();
+  });
+
+  it('open: the message box is there and the closed line is not', async () => {
+    const u = await render(<ClientMessagesScreen />);
+    await u.findByLabelText(/Message: from the client/);
+    expect(await u.findByLabelText('Message text')).toBeTruthy(); // once the inbox row answered too
+    expect(u.queryByTestId('client-messages-closed')).toBeNull();
+  });
+
+  it('FR-872 (Sol B2): a failed first read leaves no box; a retry that answers without the header opens it', async () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } })); // inbox empty
+    mockGetClientMessages.mockRejectedValueOnce(new Error('offline'));
+    const u = await render(<ClientMessagesScreen />);
+    const retry = await u.findByText('Could not load messages. Pull to retry.');
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    await fireEvent.press(retry);
+    expect(await u.findByLabelText('Message text')).toBeTruthy();
+    spy.mockRestore();
+  });
+
+  it('FR-872 (Sol B5): an edit sheet already open goes when a read says the client blocked me; nothing to save', async () => {
+    const u = await render(<ClientMessagesScreen />);
+    await fireEvent(await u.findByLabelText(/Message: from the coach/), 'longPress');
+    await fireEvent.press(await waitFor(() => u.getByLabelText('Edit')));
+    expect(u.getByLabelText('Edited message text')).toBeTruthy();
+    mockGetClientMessages.mockResolvedValueOnce({ data: { messages: [] }, headers: { 'x-conversation-closed': 'blocked_by_them' } } as never);
+    await act(async () => mockSubs[mockSubs.length - 1].onPing());
+    expect(await u.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Edited message text')).toBeNull();
+    expect(u.queryByLabelText('Save edit')).toBeNull();
+  });
+
+  it('I blocked this client: no message box, only the closed line; an unblock opens it again', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Alice', blockedAt: recent }] });
+    const u = await render(<ClientMessagesScreen />);
+    expect(await u.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(u.getByLabelText('Message text')).toBeTruthy();
+  });
+
+  it('the client blocked me (server 403 BLOCKED on send): closed at once, no "Message not sent" box', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    postMock.mockImplementation(async (url: string) => {
+      if (url !== BASE) return { data: {} };
+      throw axiosErr({ response: { status: 403, data: { error: 'BLOCKED', message: 'Messages cannot be sent to blocked users' } } });
+    });
+    const u = await render(<ClientMessagesScreen />);
+    await u.findByLabelText(/Message: from the client/);
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'see you at 6');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    expect(await u.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalledWith('Message not sent', expect.anything());
   });
 });

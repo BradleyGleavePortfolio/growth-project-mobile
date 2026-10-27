@@ -161,7 +161,7 @@ describe('You home', () => {
 
     expect(await screen.findByText('Sam Rivera')).toBeTruthy();
     expect(screen.getByText('Your coach')).toBeTruthy();
-    await fireEvent.press(screen.getByText('Message Sam'));
+    await fireEvent.press(await screen.findByText('Message Sam'));
     expect(mockParentNavigate).toHaveBeenLastCalledWith('Home', { screen: 'Messages', initial: false });
 
     const plansLabel = `Your plans, ${RENEWS}, Active`;
@@ -230,7 +230,7 @@ describe('You home', () => {
     expect(await screen.findByText('Your coach did not load. Check the connection and try again.')).toBeTruthy();
     await fireEvent.press(screen.getByText('Try again'));
     expect(await screen.findByText('Sam Rivera')).toBeTruthy();
-    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(mockGet.mock.calls.filter(([u]) => u !== '/messages?limit=1')).toHaveLength(2); // FR-880R3: not the chat read
   });
 
   it('loading: the identity and coach wait, the rows are already there', async () => {
@@ -261,6 +261,47 @@ describe('You home', () => {
     buttons[1].onPress?.();
     expect(mockSignOut).toHaveBeenCalled();
     expect(screen.getByText('TGP Fitness v1.0.0')).toBeTruthy();
+  });
+});
+
+// FR-880R3 (operator ruling, agent 173, two-way; Opus C3): You follows Home's rule. While the coaching chat is closed
+// (either person's block) the coach card offers no "Message {coach}", and it waits for the answer, as Home does.
+describe('a closed coaching chat', () => {
+  const { COACH_CHAT_KEY } = jest.requireActual('../../../hooks/useCoachChatClosed');
+  const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+  const thread = { closed: true };
+  beforeEach(() => {
+    thread.closed = true;
+    mockGet.mockImplementation(async (u: string) =>
+      u === '/messages?limit=1'
+        ? { data: [], headers: thread.closed ? { 'x-conversation-closed': 'blocked_by_them' } : {} }
+        : { data: { id: 'c1', name: 'Sam Rivera', avatar_url: null } });
+  });
+  afterEach(() => useBlockedUsersStore.setState({ blocked: [] }));
+
+  it('the coach blocked me: the card keeps the coach, no Message button; a read that says open brings it back', async () => {
+    await draw();
+    expect(await screen.findByText('Sam Rivera')).toBeTruthy();
+    expect(screen.queryByText('Message Sam')).toBeNull();
+    await waitFor(() => expect(client.getQueryData([...COACH_CHAT_KEY, 'c1'])).toBe(true));
+    expect(screen.queryByText('Message Sam')).toBeNull();
+    expect(screen.queryByTestId('you-message-coach')).toBeNull();
+    expect(screen.getByText('Your coach')).toBeTruthy();
+    thread.closed = false;
+    await act(async () => { await client.invalidateQueries({ queryKey: COACH_CHAT_KEY }); });
+    await fireEvent.press(await screen.findByText('Message Sam'));
+    expect(mockParentNavigate).toHaveBeenLastCalledWith('Home', { screen: 'Messages', initial: false });
+  });
+
+  it('I block my coach: the button leaves at once; my unblock brings it back', async () => {
+    thread.closed = false;
+    await draw();
+    expect(await screen.findByText('Message Sam')).toBeTruthy();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'c1', displayName: 'Sam', blockedAt: '2026-10-24T00:00:00Z' }] }));
+    expect(screen.queryByTestId('you-message-coach')).toBeNull();
+    expect(screen.getByText('Sam Rivera')).toBeTruthy();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(await screen.findByText('Message Sam')).toBeTruthy();
   });
 });
 

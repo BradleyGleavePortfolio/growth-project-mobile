@@ -51,6 +51,7 @@ Screen ──► api.<surface>.<method>(...)
 Realtime:
   subscribeToMessages(userId, refetch) ─► private channel `messages:user:<userId>` (signed-in token)
                                        └─► ping (debounced 1 s) ─► caller refetches via REST
+  subscribeToCommunityUser(userId, onPing) ─► private channel `community:user:<userId>` on the same client (api/communityRealtime.ts; one ping per event name)
 
 Food log offline:
   enqueueSearchLog / enqueueManualLog ─► AsyncStorage('pending_food_logs')

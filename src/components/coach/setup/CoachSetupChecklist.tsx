@@ -22,6 +22,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
 import { radius, typography } from "../../../theme/tokens";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
@@ -31,6 +32,7 @@ import {
 } from "../../../lib/coachSetup/setupStatus";
 import { describeError } from "../../../lib/coachSetup/errors";
 import SetupNotice from "./SetupNotice";
+import { CARD_A, SEMI, styleA } from "../../../screens/coach/home-v11/HomeParts";
 
 export {
   INVITE_SHARED_KEY_BASE,
@@ -128,11 +130,17 @@ export function buildChecklist(s: ChecklistStatus): ChecklistItem[] {
 interface Props {
   /** `done` lets the host send a finished item somewhere useful. */
   onOpen: (target: ChecklistTarget, done: boolean | null) => void;
+  /** "home": the coach Home's Style A card on the hero (HOME3 A `.setup`): white, a done bar, a tick circle and chevron per row. */
+  look?: "card" | "home";
 }
 
-export default function CoachSetupChecklist({ onOpen }: Props) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+export default function CoachSetupChecklist({ onOpen, look = "card" }: Props) {
+  const { colors, colorScheme } = useTheme();
+  const home = look === "home";
+  const light = colorScheme !== "dark";
+  const base = useMemo(() => makeStyles(colors), [colors]);
+  const hl = useMemo(() => makeHomeStyles(colors, light), [colors, light]);
+  const styles = home ? hl : base;
   const user = useCurrentUser();
   const coachId = user?.id ?? null;
   const [snap, setSnap] = useState<SetupSnapshot | null>(null);
@@ -180,12 +188,22 @@ export default function CoachSetupChecklist({ onOpen }: Props) {
   const items = buildChecklist(toChecklistStatus(snap));
   const doneCount = items.filter((i) => i.done === true).length;
   if (doneCount === items.length) return null;
+  const count = <Text style={styles.sub}>{`${doneCount} of ${items.length} done`}</Text>;
   return (
     <View style={styles.card} testID="coach-setup-checklist">
-      <Text style={styles.title} accessibilityRole="header">
-        Finish setting up
-      </Text>
-      <Text style={styles.sub}>{`${doneCount} of ${items.length} done`}</Text>
+      <View style={home ? hl.head : undefined}>
+        <Text style={styles.title} accessibilityRole="header">
+          Finish setting up
+        </Text>
+        {home ? count : null}
+      </View>
+      {home ? (
+        <View style={hl.bar} testID="coach-setup-checklist-bar">
+          <View style={[hl.barFill, { width: `${(doneCount / items.length) * 100}%` }]} testID="coach-setup-checklist-bar-fill" />
+        </View>
+      ) : (
+        count
+      )}
       {snap.errors.length > 0 ? (
         <SetupNotice
           error={snap.errors[0]}
@@ -210,13 +228,17 @@ export default function CoachSetupChecklist({ onOpen }: Props) {
               it.done === true && styles.dotDone,
               it.done === null && styles.dotUnknown,
             ]}
-          />
+            testID={`coach-setup-checklist-${it.key}-tick`}
+          >
+            {home && it.done === true ? <Ionicons name="checkmark" size={14} color={styleA.card} /> : null}
+          </View>
           <View style={styles.rowText}>
-            <Text style={[styles.label, it.done === true && styles.labelDone]}>
+            <Text style={[styles.label, it.done === true && !home && styles.labelDone]}>
               {it.label}
             </Text>
             <Text style={styles.detail}>{it.detail}</Text>
           </View>
+          {home ? <Ionicons name="chevron-forward" size={18} color={hl.chevron.color} /> : null}
         </TouchableOpacity>
       ))}
     </View>
@@ -273,4 +295,47 @@ const makeStyles = (colors: ThemeColors) =>
       lineHeight: 18,
       color: colors.textSecondary,
     },
+  });
+
+/** HOME3 A's setup card (a.py `.setup`, `.st`, `.pbar`, `.step`, `.ck`, `.sl`, `.ss`); a dark scheme keeps the theme's surface and text. */
+const makeHomeStyles = (colors: ThemeColors, light: boolean) =>
+  StyleSheet.create({
+    card: {
+      ...CARD_A,
+      ...(light ? null : { backgroundColor: colors.surface, borderColor: colors.border }),
+      paddingTop: 14,
+      paddingHorizontal: 16,
+      paddingBottom: 4,
+      marginBottom: 8,
+    },
+    head: { flexDirection: "row", alignItems: "baseline", gap: 8 },
+    title: { fontFamily: SEMI, fontSize: 16, lineHeight: 21, color: light ? styleA.ink : colors.textPrimary, flex: 1 },
+    sub: { fontFamily: "Inter_400Regular", fontSize: 12.5, lineHeight: 17, color: light ? styleA.grey : colors.textSecondary },
+    bar: { height: 6, borderRadius: radius.chip, backgroundColor: light ? styleA.cardLine : colors.border, overflow: "hidden", marginTop: 10, marginBottom: 6 },
+    barFill: { height: 6, borderRadius: radius.chip, backgroundColor: colors.primary },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      minHeight: 50,
+      paddingVertical: 5,
+      borderTopWidth: 0.5,
+      borderTopColor: light ? styleA.cardLine : colors.border,
+    },
+    dot: {
+      width: 22,
+      height: 22,
+      borderRadius: radius.chip,
+      borderWidth: 1.5,
+      borderColor: light ? styleA.checkLine : colors.textSecondary, // A `.ck` #8A988E
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    dotDone: { backgroundColor: colors.primary, borderColor: colors.primary },
+    dotUnknown: { borderStyle: "dashed" },
+    rowText: { flex: 1 },
+    labelDone: {},
+    label: { fontFamily: "Inter_500Medium", fontSize: 14.5, lineHeight: 19, color: light ? styleA.ink : colors.textPrimary },
+    detail: { fontFamily: "Inter_400Regular", fontSize: 12.5, lineHeight: 17, color: light ? styleA.grey : colors.textSecondary },
+    chevron: { color: light ? styleA.inkMuted : colors.textSecondary },
   });

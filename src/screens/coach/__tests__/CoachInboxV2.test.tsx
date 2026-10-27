@@ -164,6 +164,29 @@ describe('CoachInboxV2', () => {
     expect(mockSubscribe).toHaveBeenCalledWith('coach-1', expect.any(Function), expect.any(Function));
   });
 
+  // FX-872 (owner 10-23 "Dissapear"): a chat closed by a block either way is not a row, and is not offered again below.
+  it('closed and blocked chats are not rows, and those clients are not offered as "Start a conversation"', async () => {
+    const { useBlockedUsersStore } = jest.requireActual('../../../store/blockedUsersStore');
+    useBlockedUsersStore.setState({ blocked: [{ id: 'client-3', displayName: 'Cy Lowe', blockedAt: '2026-10-22T00:00:00Z' }] });
+    http.get.mockResolvedValue(page([pinnedBen, { ...mutedAna, closed: true }]));
+    const utils = await renderInbox();
+    await utils.findByText('Ben Ode');
+    expect(utils.queryByText('Ana Ruiz')).toBeNull();
+    expect(utils.queryByText('Cy Lowe')).toBeNull();
+    useBlockedUsersStore.setState({ blocked: [] });
+  });
+
+  // FR-872 (Opus B1, Sol B1; b#1153): a client who blocked me has no row and is listed in closed_client_ids instead.
+  it('a client in closed_client_ids is not offered "Start a conversation"; once the server stops listing her, she is', async () => {
+    http.get.mockResolvedValue({ data: { ...page([pinnedBen]).data, closed_client_ids: ['client-1'] } });
+    const closed = await renderInbox();
+    await closed.findByText('Ben Ode');
+    expect(closed.queryByTestId('inbox-client-client-1')).toBeNull();
+    await closed.unmount();
+    http.get.mockResolvedValue(page([pinnedBen])); // unblocked (or an older server without the field)
+    expect(await (await renderInbox()).findByTestId('inbox-client-client-1')).toBeTruthy();
+  });
+
   it('Unread is a server filter and does not list clients without messages', async () => {
     http.get.mockResolvedValue(page([pinnedBen]));
     const utils = await renderInbox();

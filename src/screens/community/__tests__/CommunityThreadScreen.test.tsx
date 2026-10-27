@@ -219,3 +219,61 @@ describe('CommunityThreadScreen own post, Back and refresh (U3, U5, U6)', () => 
     expect(mockApi.listComments).toHaveBeenCalledTimes(2);
   });
 });
+
+// BLOCK-ALL-M (#168-4 op 1): banned from the space, or the post is gone behind a block -> no reply box.
+describe('CommunityThreadScreen closed (BLOCK-ALL-M)', () => {
+  // The community API rejects with CommunityApiError, keeping the axios error as its cause.
+  const { CommunityApiError } = jest.requireActual('../../../api/apiCall');
+  const notFound = new CommunityApiError('unknown', 404, 'community request failed (404)',
+    { isAxiosError: true, response: { status: 404, data: { code: 'community.post.not_found' } } });
+  const renderBare = async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
+    });
+    return render(<QueryClientProvider client={qc}><CommunityThreadScreen /></QueryClientProvider>);
+  };
+
+  it('open: the reply box and "Be the first to reply" are there', async () => {
+    const view = await renderThread();
+    await waitFor(() => expect(view.getByTestId('community-thread-empty-action')).toBeTruthy());
+    expect(view.getByTestId('community-thread-composer-field')).toBeTruthy();
+    expect(view.queryByTestId('community-thread-closed')).toBeNull();
+  });
+
+  it('banned: the post and replies are refused -> the closed line, no reply box, no "Be the first to reply", no Try again', async () => {
+    mockApi.getPost.mockRejectedValue(notFound);
+    mockApi.listComments.mockRejectedValue(notFound);
+    const view = await renderBare();
+    await waitFor(() => expect(view.getByTestId('community-thread-closed')).toBeTruthy());
+    expect(view.queryByTestId('community-thread-composer-field')).toBeNull();
+    expect(view.queryByText('Be the first to reply')).toBeNull();
+    expect(view.queryByTestId('community-thread-retry')).toBeNull();
+  });
+
+  it('FR-872 (Opus C3): shown, then a closed refetch hides the post words, reactions and the reply box', async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
+    });
+    const view = await render(<QueryClientProvider client={qc}><CommunityThreadScreen /></QueryClientProvider>);
+    await waitFor(() => expect(view.getByText('World')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId(`reaction-${E0}`)).toBeTruthy());
+    expect(view.getByTestId('community-thread-composer-field')).toBeTruthy();
+    mockApi.getPost.mockRejectedValue(notFound);
+    mockApi.listComments.mockRejectedValue(notFound);
+    await act(async () => { await qc.refetchQueries().catch(() => undefined); });
+    await waitFor(() => expect(view.getByTestId('community-thread-closed')).toBeTruthy());
+    expect(view.queryByText('World')).toBeNull();
+    expect(view.queryByTestId(`reaction-${E0}`)).toBeNull();
+    expect(view.queryByTestId('community-thread-composer-field')).toBeNull();
+  });
+
+  it('a reply refused by a ban closes at once with no error box', async () => {
+    mockApi.addComment.mockRejectedValue({ isAxiosError: true, response: { status: 403, data: { code: 'community.workspace.no_access' } } });
+    const view = await renderThread();
+    await fireEvent.changeText(view.getByTestId('community-thread-composer-field'), 'Nice one');
+    await act(async () => { fireEvent.press(view.getByTestId('community-thread-composer-send')); });
+    await waitFor(() => expect(view.getByTestId('community-thread-closed')).toBeTruthy());
+    expect(view.queryByTestId('community-thread-composer-field')).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+});
