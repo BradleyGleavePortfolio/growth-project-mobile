@@ -7,17 +7,17 @@
  * kind (text today, photo when it lands) says "message" (RB-W8).
  *
  * No GOAL frame draws this state (#172-10): it matches m#886's VoiceRemovedPlaceholder (ctx#266), a dashed track line,
- * 16 pt corners, 12 pt padding, a 16 pt mark and 13/18 text. The text and mark are this page's small grey #2C2C2C
- * (owner #168-13, SpaceChatRow's SMALL_GREY) where m#886 uses neutral 700.
+ * 16 pt corners, 12 pt padding, a 16 pt mark and 13/18 text. The text and mark are this page's small grey, the
+ * colors.graphite token (#2C2C2C, owner #168-13, SpaceChatRow's SMALL_GREY) where m#886 uses neutral 700.
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../HapticPressable';
-import { forestPop as fp, voiceShades } from '../../../../theme/tokens';
+import { colors, forestPop as fp, voiceShades } from '../../../../theme/tokens';
 import type { SpaceMessage } from '../spaceChatApi';
 
-const GREY = '#2C2C2C';
+const GREY = colors.graphite;
 
 export type SpaceRemovedLine = { who: 'remover' | 'author' | 'other'; text: string };
 type Removable = Pick<SpaceMessage, 'kind' | 'sender_user_id' | 'deleted' | 'removed_by'>;

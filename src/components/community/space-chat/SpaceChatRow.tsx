@@ -56,6 +56,8 @@ export interface SpaceChatRowProps {
   viewerCoachId?: string | null;
   offline: boolean;
   onDelete?: () => Promise<void>;
+  /** FR-871R6 (m#887 Opus B1): Remove for everyone, for the space's coach on someone else's row (owner #174-4). */
+  onRemove?: () => Promise<void>;
   onBlocked?: (userId: string) => void;
   /** The coach removed this row (b#1165): its one line for this viewer; no content and no menu are drawn. */
   removed?: SpaceRemovedLine | null;
@@ -140,6 +142,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             reported={reported}
             onReported={() => markVoiceNoteReported(reportId)}
             onDelete={isOwn ? p.onDelete : undefined}
+            onRemove={isOwn ? undefined : p.onRemove}
             onBlocked={p.onBlocked}
             testID={`space-chat-menu-${p.id}`}
           />

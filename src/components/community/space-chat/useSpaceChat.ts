@@ -3,7 +3,8 @@
  * first), keyed by the signed-in user and the space. Rows the viewer sends live in the outbox (spaceChatOutbox: kept on
  * the device, sent one at a time) until the server list carries them. New rows come from a 10 s poll floor while the page
  * is in front (`focused`) plus a refetch whenever the realtime ping refreshes community/me; the realtime payload is never
- * drawn (the server list already leaves out deleted rows and blocked people either way).
+ * drawn. The server list leaves out blocked people and an author's own deletes; a row the coach removed comes back as a
+ * removal (deleted with removed_by) and keeps its place (REMOVED-BY-M2).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
@@ -87,6 +88,22 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     dropFromCache((m) => m.id !== id);
   }, [dropFromCache]);
 
+  // FR-871R6 (m#887 Opus B1 / Sol B887-1, owner #174-4): the space's coach removes someone else's message or voice note
+  // for everyone, through the same routes (the server lets the author, the workspace's coach or the platform owner
+  // delete). Unlike an own delete the row keeps its place: it turns into the removal at once (no words, no player; the
+  // coach reads "You removed this ...") and the list is read again for the server's copy.
+  const removeForEveryone = useCallback(async (id: string, voiceNoteId?: string) => {
+    await (voiceNoteId ? communityVoiceApi.remove(voiceNoteId) : spaceChatApi.remove(id));
+    const removedAt = new Date().toISOString();
+    qc.setQueryData<InfiniteData<SpaceMessagePage>>(key, (data) => data && {
+      ...data,
+      pages: data.pages.map((p) => ({ ...p, messages: p.messages.map((m) => (m.id !== id ? m : {
+        ...m, body: null, voice_note: null, deleted: true, removed_at: removedAt, removed_by: { role: 'coach', user_id: uid, name: '' },
+      })) })),
+    });
+    void qc.invalidateQueries({ queryKey: key });
+  }, [qc, key, uid]);
+
   // Block: the blocked person's rows leave the stream and the cache at once (the server list leaves them out after).
   const dropAuthor = useCallback((authorId: string) => dropFromCache((m) => m.sender_user_id !== authorId), [dropFromCache]);
 
@@ -116,6 +133,7 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     retry: (r: PendingRow) => spaceOutbox.retry(r.localId),
     removeLocal: (localId: string) => spaceOutbox.discard(localId),
     remove,
+    removeForEveryone,
     dropAuthor,
     markRead,
   };

@@ -209,6 +209,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         createdAt={m.created_at} body={m.body} voice={m.voice_note} authorId={m.sender_user_id}
         viewerUserId={client?.id} viewerCoachId={client?.coach_id} offline={!isOnline}
         onDelete={() => chat.remove(m.id, m.voice_note?.id)} onBlocked={chat.dropAuthor}
+        onRemove={isCoachViewer ? () => chat.removeForEveryone(m.id, m.voice_note?.id) : undefined}
         removed={spaceRemovedLine(m, client?.id)} onSafety={safetyRoute ? () => navigation.navigate('CommunitySafety') : undefined}
       />
     );
