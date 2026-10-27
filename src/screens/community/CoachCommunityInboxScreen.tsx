@@ -32,6 +32,7 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../../theme/useTheme';
@@ -291,6 +292,12 @@ export default function CoachCommunityInboxScreen({
   }
 
   if (!hasItems) {
+    // The empty inbox pulls to refresh, as the list does. When Roman's words
+    // failed to load (their card says "Pull to retry"), the pull retries them.
+    const onEmptyRefresh = (): void => {
+      void inbox.refetch();
+      if (emptyState.status === 'error') emptyState.retry();
+    };
     if (caughtUp && emptyState.status === 'ready') {
       const canGoBack =
         navigation?.goBack != null && navigation.canGoBack?.() !== false;
@@ -298,6 +305,8 @@ export default function CoachCommunityInboxScreen({
         <InboxCaughtUp
           payload={emptyState.payload}
           onBack={canGoBack ? () => navigation?.goBack?.() : undefined}
+          onRefresh={onEmptyRefresh}
+          refreshing={inbox.isRefetching}
         />
       );
     }
@@ -305,16 +314,28 @@ export default function CoachCommunityInboxScreen({
     // Roman's words without his face.
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
-        <InboxTitle />
-        {TRIAGE_ENABLED ? (
-          <View style={styles.triageHeader}>
-            <InboxTriageBanner />
-          </View>
-        ) : null}
-        <CoachRomanEmptyState
-          result={emptyState}
-          testID="coach-community-inbox-empty"
-        />
+        <ScrollView
+          testID="coach-community-inbox-empty-scroll"
+          contentContainerStyle={styles.emptyScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={inbox.isRefetching}
+              onRefresh={onEmptyRefresh}
+              tintColor={colors.forest}
+            />
+          }
+        >
+          <InboxTitle />
+          {TRIAGE_ENABLED ? (
+            <View style={styles.triageHeader}>
+              <InboxTriageBanner />
+            </View>
+          ) : null}
+          <CoachRomanEmptyState
+            result={emptyState}
+            testID="coach-community-inbox-empty"
+          />
+        </ScrollView>
       </View>
     );
   }
@@ -435,30 +456,46 @@ function InboxTitle({
 function InboxCaughtUp({
   payload,
   onBack,
+  onRefresh,
+  refreshing,
 }: {
   payload: RomanCopyPayload;
   onBack?: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
 }): React.ReactElement {
   const crop = payload.avatar_crop === 'smile' ? 'smile' : 'neutral';
   return (
     <View style={styles.caughtUpPage} testID="coach-community-inbox-screen">
       <StatusBar style="light" />
-      <InboxTitle onDark />
-      {TRIAGE_ENABLED ? (
-        <View style={styles.triageHeader}>
-          <InboxTriageBanner />
-        </View>
-      ) : null}
-      <View style={styles.caughtUpBody} testID="coach-community-inbox-empty">
-        <View style={styles.caughtUpRing}>
-          <RomanAvatar
-            crop={crop}
-            size={64}
-            testID="coach-community-inbox-empty-avatar"
+      <ScrollView
+        testID="coach-community-inbox-empty-scroll"
+        contentContainerStyle={styles.emptyScroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.bone}
           />
+        }
+      >
+        <InboxTitle onDark />
+        {TRIAGE_ENABLED ? (
+          <View style={styles.triageHeader}>
+            <InboxTriageBanner />
+          </View>
+        ) : null}
+        <View style={styles.caughtUpBody} testID="coach-community-inbox-empty">
+          <View style={styles.caughtUpRing}>
+            <RomanAvatar
+              crop={crop}
+              size={64}
+              testID="coach-community-inbox-empty-avatar"
+            />
+          </View>
+          <Text style={styles.caughtUpText}>{payload.text}</Text>
         </View>
-        <Text style={styles.caughtUpText}>{payload.text}</Text>
-      </View>
+      </ScrollView>
       {onBack ? (
         <HapticPressable
           intent="light"
@@ -889,8 +926,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: layout.gutter,
     paddingTop: spacing['2xl'],
+    paddingBottom: spacing.xl,
     gap: spacing.xl,
   },
+  emptyScroll: { flexGrow: 1 },
   caughtUpRing: {
     width: 80,
     height: 80,

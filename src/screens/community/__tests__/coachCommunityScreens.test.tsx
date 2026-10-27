@@ -33,7 +33,8 @@
  */
 import React from 'react';
 import { render, fireEvent, configure, act } from '@testing-library/react-native';
-import { Alert, RefreshControl } from 'react-native';
+import { Alert, RefreshControl, StyleSheet } from 'react-native';
+import { colors } from '../../../theme/tokens';
 import {
   CoachCommunityApiError,
   ACK_ILLEGAL_TRANSITION_CODE,
@@ -1584,5 +1585,100 @@ describe('FX4-868 round 4 — Cohorts and a cohort in K2 Style B (#172-10)', () 
     expect(scroll.props.refreshControl.type).toBe(RefreshControl);
     await scroll.props.refreshControl.props.onRefresh();
     expect(refetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('FX4-868 round 4 — pull to retry on the empty pages, the member sheet at the foot, one inline card', () => {
+  const COHORT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+  it('the empty inbox whose words failed pulls to retry them and the inbox ("Pull to retry" is true)', async () => {
+    const refetch = jest.fn();
+    const retry = jest.fn();
+    mockState.inbox = { data: { items: [], next_cursor: null }, isLoading: false, isError: false, isRefetching: false, refetch };
+    mockEmptyResultOverride.current = {
+      coach_community_inbox_empty: { status: 'error', kind: 'network', retry },
+    };
+    const { getByTestId, getByText } = await render(<CoachCommunityInboxScreen />);
+    expect(getByText('Could not reach the server. Pull to retry.')).toBeTruthy();
+    const scroll = getByTestId('coach-community-inbox-empty-scroll');
+    expect(scroll.props.refreshControl.type).toBe(RefreshControl);
+    await scroll.props.refreshControl.props.onRefresh();
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('the dark caught-up page pulls to refresh the inbox, with a bone spinner', async () => {
+    const refetch = jest.fn();
+    mockState.inbox = { data: { items: [], next_cursor: null }, isLoading: false, isError: false, isRefetching: false, refetch };
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    expect(getByTestId('coach-community-inbox-empty-avatar')).toBeTruthy();
+    const control = getByTestId('coach-community-inbox-empty-scroll').props.refreshControl;
+    expect(control.props.tintColor).toBe(colors.bone);
+    await control.props.onRefresh();
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('Cohorts with no cohorts and failed words pulls to retry both', async () => {
+    const refetch = jest.fn();
+    const retry = jest.fn();
+    mockState.cohorts = { data: [], isLoading: false, isError: false, isRefetching: false, refetch };
+    mockEmptyResultOverride.current = {
+      coach_community_cohorts_empty: { status: 'error', kind: 'network', retry },
+    };
+    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
+    await getByTestId('coach-community-cohorts-empty-scroll').props.refreshControl.props.onRefresh();
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('a cohort with no members and failed words pulls to retry both', async () => {
+    const refetch = jest.fn();
+    const retry = jest.fn();
+    mockRouteParams.current = { cohortId: COHORT };
+    mockState.cohortDetail = { data: { cohort: cohort(), members: [] }, isLoading: false, isError: false, isRefetching: false, refetch };
+    mockEmptyResultOverride.current = {
+      coach_community_cohort_members_empty: { status: 'error', kind: 'network', retry },
+    };
+    const { getByTestId } = await render(<CoachCommunityCohortDetailScreen />);
+    await getByTestId('coach-community-cohort-detail-empty-scroll').props.refreshControl.props.onRefresh();
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('the member sheet sits at the foot over a full-screen scrim, and the scrim closes it', async () => {
+    mockRouteParams.current = { cohortId: COHORT };
+    mockState.cohortDetail = { data: { cohort: cohort(), members: [member()] }, isLoading: false, isError: false };
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityCohortDetailScreen />);
+    await fireEvent.press(getByTestId('coach-community-member-menu-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'));
+    const scrim = getByTestId('coach-community-member-menu-dismiss');
+    expect(StyleSheet.flatten(scrim.props.style)).toMatchObject({ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 });
+    expect(StyleSheet.flatten(getByTestId('coach-community-member-menu-root').props.style)).toMatchObject({ flex: 1, justifyContent: 'flex-end' });
+    expect(getByTestId('coach-community-member-menu-remove')).toBeTruthy();
+    await fireEvent.press(scrim);
+    expect(queryByTestId('coach-community-member-menu-remove')).toBeNull();
+  });
+
+  it('a long member name may take two lines (130% text), never cut to one', async () => {
+    mockRouteParams.current = { cohortId: COHORT };
+    mockState.cohortDetail = { data: { cohort: cohort(), members: [member({ name: 'Morgan Featherstonehaugh' })] }, isLoading: false, isError: false };
+    const { getByText } = await render(<CoachCommunityCohortDetailScreen />);
+    expect(getByText('Morgan Featherstonehaugh').props.numberOfLines).toBe(2);
+  });
+
+  it('the Cohorts and cohort error cards use the inbox card: an outlined forest Try again, so the page keeps one filled button', async () => {
+    mockState.cohorts = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch: jest.fn() };
+    const cohortsView = await render(<CoachCommunityCohortsScreen />);
+    const cohortsRetry = StyleSheet.flatten(cohortsView.getByTestId('coach-community-cohorts-error-retry').props.style);
+    expect(cohortsRetry).toMatchObject({ borderColor: colors.forest, borderWidth: 1.5 });
+    expect(cohortsRetry.backgroundColor).toBeUndefined();
+    expect(cohortsView.getByRole('alert')).toBeTruthy();
+    await cohortsView.unmount();
+
+    mockRouteParams.current = { cohortId: COHORT };
+    mockState.cohortDetail = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch: jest.fn() };
+    const detailView = await render(<CoachCommunityCohortDetailScreen />);
+    const detailRetry = StyleSheet.flatten(detailView.getByTestId('coach-community-cohort-detail-error-retry').props.style);
+    expect(detailRetry).toMatchObject({ borderColor: colors.forest, borderWidth: 1.5 });
+    expect(detailRetry.backgroundColor).toBeUndefined();
   });
 });

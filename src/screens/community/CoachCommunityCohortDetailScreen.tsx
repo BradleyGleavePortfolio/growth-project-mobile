@@ -38,11 +38,13 @@ import {
   FlatList,
   ActivityIndicator,
   Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   TextInput,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, withAlpha, semantic, colors, layout } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
@@ -97,6 +99,7 @@ function looksLikeEmail(value: string): boolean {
 
 export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
+  const insets = useSafeAreaInsets();
   const route = useRoute<CoachCommunityRoute<'CoachCommunityCohortDetail'>>();
   const cohortId = route.params?.cohortId ?? '';
   const fallbackName = route.params?.cohortName ?? 'Cohort';
@@ -168,7 +171,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           </Text>
         </View>
         <View style={styles.memberBody}>
-          <Text style={styles.memberName} numberOfLines={1}>
+          <Text style={styles.memberName} numberOfLines={2}>
             {item.name}
           </Text>
           <Text style={styles.memberMeta} numberOfLines={2}>
@@ -252,7 +255,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           }
         >
           <View style={styles.noticeCard} testID="coach-community-cohort-detail-error">
-            <Text style={styles.noticeText}>
+            <Text accessibilityRole="alert" style={styles.noticeText}>
               Could not load this cohort. Pull back and open it again.
             </Text>
             <HapticPressable
@@ -269,7 +272,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
               style={styles.noticeButton}
             >
               {detail.isRefetching ? (
-                <ActivityIndicator color={colors.bone} />
+                <ActivityIndicator color={colors.forest} />
               ) : (
                 <Text style={styles.noticeButtonLabel}>Try again</Text>
               )}
@@ -277,10 +280,27 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           </View>
         </ScrollView>
       ) : isEmptyMembers ? (
-        <CoachRomanEmptyState
-          result={emptyState}
-          testID="coach-community-cohort-detail-empty"
-        />
+        // Roman's words say "Pull to retry" when they fail to load: the pull
+        // retries them and the roster.
+        <ScrollView
+          testID="coach-community-cohort-detail-empty-scroll"
+          contentContainerStyle={styles.emptyScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={detail.isRefetching}
+              onRefresh={() => {
+                void detail.refetch();
+                if (emptyState.status === 'error') emptyState.retry();
+              }}
+              tintColor={colors.forest}
+            />
+          }
+        >
+          <CoachRomanEmptyState
+            result={emptyState}
+            testID="coach-community-cohort-detail-empty"
+          />
+        </ScrollView>
       ) : (
         <FlatList
           data={members}
@@ -369,7 +389,11 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Overflow action sheet (UX P1.1 — Remove lives here, not on the row). */}
+      {/* Overflow action sheet (UX P1.1: Remove lives here, not on the row).
+          The sheet sits at the foot of the screen over a full-screen scrim.
+          The scrim is a plain Pressable filling the modal: HapticPressable
+          wraps its target in an unsized view, so as the root it shrank to the
+          sheet's height at the top of the screen. */}
       <Modal
         visible={menuMember != null}
         transparent
@@ -377,16 +401,23 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         onRequestClose={() => setMenuMember(null)}
         testID="coach-community-member-menu-sheet"
       >
-        <HapticPressable
-          intent="light"
-          onPress={() => setMenuMember(null)}
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss"
+        <View
           style={[
-            styles.sheetScrim,
-            { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
+            styles.sheetRoot,
+            { paddingBottom: layout.gutter + insets.bottom },
           ]}
+          testID="coach-community-member-menu-root"
         >
+          <Pressable
+            onPress={() => setMenuMember(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss"
+            testID="coach-community-member-menu-dismiss"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
+            ]}
+          />
           <View style={styles.sheet}>
             <HapticPressable
               intent="warning"
@@ -406,7 +437,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
               </Text>
             </HapticPressable>
           </View>
-        </HapticPressable>
+        </View>
       </Modal>
 
       {/* Remove-member confirmation (hard gate: no one-tap destructive). */}
@@ -442,9 +473,9 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   headerName: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 34,
-    lineHeight: 43,
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 36,
+    lineHeight: 46,
     color: colors.ink,
   },
   headerMeta: {
@@ -520,37 +551,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cream,
   },
   noticeScroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xs },
+  emptyScroll: { flexGrow: 1 },
   noticeCard: {
     backgroundColor: colors.cream,
     borderRadius: radius.card,
     padding: spacing.lg,
     gap: spacing.md,
   },
+  // The inbox's inline card (GOAL B error frame): ink line, outlined forest
+  // Try again across the card, so the page keeps one filled button.
   noticeText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 24,
     color: colors.ink,
   },
   noticeButton: {
     minHeight: 48,
     borderRadius: radius.button,
-    backgroundColor: colors.forest,
+    borderWidth: 1.5,
+    borderColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    alignSelf: 'flex-start',
   },
   noticeButtonLabel: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    lineHeight: 20,
-    color: colors.bone,
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.forest,
   },
-  sheetScrim: {
+  sheetRoot: {
     flex: 1,
     justifyContent: 'flex-end',
-    padding: layout.gutter,
+    paddingHorizontal: layout.gutter,
+    paddingTop: layout.gutter,
   },
   sheet: {
     borderRadius: radius.sheet,

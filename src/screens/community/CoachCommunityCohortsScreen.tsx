@@ -184,7 +184,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
           }
         >
           <View style={styles.noticeCard} testID="coach-community-cohorts-error">
-            <Text style={styles.noticeText}>
+            <Text accessibilityRole="alert" style={styles.noticeText}>
               Could not load your cohorts. Pull to retry.
             </Text>
             <HapticPressable
@@ -201,7 +201,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
               style={styles.noticeButton}
             >
               {cohorts.isRefetching ? (
-                <ActivityIndicator color={colors.bone} />
+                <ActivityIndicator color={colors.forest} />
               ) : (
                 <Text style={styles.noticeButtonLabel}>Try again</Text>
               )}
@@ -209,10 +209,27 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
           </View>
         </ScrollView>
       ) : isEmpty ? (
-        <CoachRomanEmptyState
-          result={emptyState}
-          testID="coach-community-cohorts-empty"
-        />
+        // Roman's words say "Pull to retry" when they fail to load: the pull
+        // retries them and the list.
+        <ScrollView
+          testID="coach-community-cohorts-empty-scroll"
+          contentContainerStyle={styles.emptyScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={cohorts.isRefetching}
+              onRefresh={() => {
+                void cohorts.refetch();
+                if (emptyState.status === 'error') emptyState.retry();
+              }}
+              tintColor={colors.forest}
+            />
+          }
+        >
+          <CoachRomanEmptyState
+            result={emptyState}
+            testID="coach-community-cohorts-empty"
+          />
+        </ScrollView>
       ) : (
         <FlatList
           data={data}
@@ -319,9 +336,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   title: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 34,
-    lineHeight: 43,
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 36,
+    lineHeight: 46,
     color: colors.ink,
   },
   listContent: {
@@ -376,32 +393,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cream,
   },
   noticeScroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xs },
+  emptyScroll: { flexGrow: 1 },
   noticeCard: {
     backgroundColor: colors.cream,
     borderRadius: radius.card,
     padding: spacing.lg,
     gap: spacing.md,
   },
+  // The inbox's inline card (GOAL B error frame): ink line, outlined forest
+  // Try again across the card, so the page keeps one filled button.
   noticeText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 24,
     color: colors.ink,
   },
   noticeButton: {
     minHeight: 48,
     borderRadius: radius.button,
-    backgroundColor: colors.forest,
+    borderWidth: 1.5,
+    borderColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    alignSelf: 'flex-start',
   },
   noticeButtonLabel: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    lineHeight: 20,
-    color: colors.bone,
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.forest,
   },
   // K2 has no floating buttons: the main action sits in the page flow.
   primaryButton: {
