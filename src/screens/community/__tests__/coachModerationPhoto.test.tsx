@@ -11,7 +11,7 @@
  * tile and reads "Removed"; text, voice and post rows are unchanged.
  */
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
@@ -124,7 +124,7 @@ describe('PHOTO-MOD-M — a reported photo in the report queue', () => {
     queue([item()]);
     const first = await render(<CoachCommunityModerationScreen />);
     expect(first.queryByTestId(`coach-community-flagged-content-${ID}`)).toBeNull();
-    first.unmount();
+    await first.unmount();
 
     queue([item({ content: 'Look at this' })]);
     const second = await render(<CoachCommunityModerationScreen />);
@@ -172,10 +172,8 @@ describe('PHOTO-MOD-M — a reported photo in the report queue', () => {
     queue([item()]);
     const refetch = mockFlagged.current.refetch;
     const view = await render(<CoachCommunityModerationScreen />);
-    await act(async () => {
-      fireEvent(view.getByTestId(`coach-community-flagged-photo-${ID}-image`), 'error', {
-        nativeEvent: { error: 'expired' },
-      });
+    await fireEvent(view.getByTestId(`coach-community-flagged-photo-${ID}-image`), 'error', {
+      nativeEvent: { error: 'expired' },
     });
     expect(view.getByTestId(`coach-community-flagged-photo-${ID}-failed`)).toBeTruthy();
     expect(refetch).not.toHaveBeenCalled();
@@ -192,10 +190,8 @@ describe('PHOTO-MOD-M — a reported photo in the report queue', () => {
     queue([item()]);
     const { getByTestId, queryByTestId } = await render(<CoachCommunityModerationScreen />);
     await fireEvent.press(getByTestId(`coach-community-flagged-photo-${ID}-thumb`));
-    await act(async () => {
-      fireEvent(getByTestId(`coach-community-flagged-photo-${ID}-full`), 'error', {
-        nativeEvent: { error: 'expired' },
-      });
+    await fireEvent(getByTestId(`coach-community-flagged-photo-${ID}-full`), 'error', {
+      nativeEvent: { error: 'expired' },
     });
     expect(queryByTestId(`coach-community-flagged-photo-${ID}-full`)).toBeNull();
     expect(getByTestId(`coach-community-flagged-photo-${ID}-failed`)).toBeTruthy();
