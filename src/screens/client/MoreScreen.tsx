@@ -106,7 +106,7 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
  * Roman's lock there, as the Roman row does.
  */
 /** Style A's new-row colours (GOAL .lrow.new: #EEF4E0 row, #1C3023 tile, #A3C46A icon, #5A5A56 line). */
-const NEW_ROW = { bg: '#EEF4E0', tile: '#1C3023', icon: '#A3C46A', muted: '#5A5A56' } as const;
+export const NEW_ROW = { bg: '#EEF4E0', tile: '#1C3023', icon: '#A3C46A', muted: '#5A5A56' } as const;
 
 export const COPILOT_MORE_ITEM: MoreItem = {
   icon: 'sparkles-outline',
