@@ -324,6 +324,23 @@ describe('coach Home at zero clients, at 1,000 and on failures', () => {
     const v = await renderHome();
     expect([label(v, 'home-tile-active'), label(v, 'home-row-all')]).toEqual(['1,000 of 1,000 active today', 'All 1,000 clients, Open Clients']);
   });
+  // Owner 10-26 13:5x "4.) approve all wording": "Your 1 client" for one client only; every other count keeps "All {n} clients".
+  it.each([
+    [0, null],
+    [1, 'Your 1 client, Open Clients'],
+    [2, 'All 2 clients, Open Clients'],
+  ] as const)('names the clients row for %i clients', async (n, want) => {
+    mockGet.mockResolvedValue({ data: { ...overview(n), active_today: n, home: home(n ? [win(1)] : [], n ? 1 : 0) } });
+    const v = await renderHome();
+    if (want === null) {
+      expect(v.queryByTestId('home-clients')).toBeNull();
+      expect(v.queryByText(/All 0 clients|Your 0 client/)).toBeNull();
+      return;
+    }
+    expect(label(v, 'home-row-all')).toBe(want);
+    expect(within(v.getByTestId('home-row-all')).getByText(want.replace(', Open Clients', ''))).toBeTruthy();
+    expect(v.queryByText(n === 1 ? 'All 1 clients' : 'Your 2 client')).toBeNull();
+  });
   it('says so with Try again when the overview cannot load', async () => {
     mockGet.mockRejectedValue(new Error('down'));
     const v = await render(<CommandCenterScreen />);
