@@ -28,6 +28,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/client/HomeScreen';
 import HouseCoachScreen from '../screens/client/HouseCoachScreen';
+import HouseCoachConfirmScreen from '../screens/client/HouseCoachConfirmScreen';
+import HousePackageScreen from '../screens/client/HousePackageScreen';
+import type { HousePackage, RenewalCoach } from '../lib/planRenewal';
 import HabitsScreen from '../screens/client/HabitsScreen';
 import LogScreen from '../screens/client/LogScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
@@ -218,7 +221,9 @@ const TAB_BUTTON_PADDING = 5;
 export type HomeStackParamList = {
   HomeMain: undefined;
   /** RENEWAL-M H1: the house coach's page, from the renewal pop-up or the Home banner. */
-  HouseCoach: { coach: { id: string; firstName: string } };
+  HouseCoach: { coach: RenewalCoach };
+  HouseCoachConfirm: { coach: RenewalCoach; from: RenewalCoach | null };
+  HousePackage: { coach: RenewalCoach; pkg: HousePackage };
   Habits: { initialTab?: 'checkin' } | undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
@@ -472,6 +477,8 @@ function HomeStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="HouseCoach"            component={HouseCoachScreen} />
+      <HomeStackNav.Screen name="HouseCoachConfirm"     component={HouseCoachConfirmScreen} />
+      <HomeStackNav.Screen name="HousePackage"          component={HousePackageScreen} />
       <HomeStackNav.Screen name="Habits" options={backOnlyHeader()}>
         {({ navigation, route }) => <ProtectedHabitsScreen key={route.params?.initialTab ?? 'habits'} initialTab={route.params?.initialTab} onSaved={() => {
           if (navigation.isFocused()) onDay1Saved?.('first_checkin');
