@@ -1,0 +1,14 @@
+src/api
+src/components
+src/screens/client/copilot
+src/screens/coach/copilot
+src/navigation
+src/__tests__/wave11Screens
+src/__tests__/qaCoachStates131
+copyVoice.guard
+quietLuxuryDoctrine
+truthfulCopy.guard
+wave11Doctrine
+boneSwapGuard
+aiClientCopy.guard
+supportEmail.guard
