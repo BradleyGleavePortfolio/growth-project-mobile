@@ -102,9 +102,12 @@ beforeEach(() => {
   jest.clearAllMocks(); mockCache.clear(); useCoachStore.getState().reset(); focused = true; mockRole = 'coach'; onTabBlur = undefined;
   mockListBlocked.mockResolvedValue({ blocked: [] });
 });
-// The store as the app leaves it once this coach's list is read (a block made a moment ago is in it).
-const blockedNow = (id: string, displayName: string) =>
+// The store as the app leaves it once this coach's list is read (a block made a moment ago is in it), and the server's
+// list, which names the block too: Block posts it first, and GET /users/blocks's answer replaces this phone's copy (FX-872).
+const blockedNow = (id: string, displayName: string) => {
+  mockListBlocked.mockResolvedValue({ blocked: [{ blockedId: id, displayName, blockedAt: '2026-10-20T10:00:00Z' }] });
   useBlockedUsersStore.setState({ blocked: [{ id, displayName, role: 'client', blockedAt: '2026-10-20T10:00:00Z' }], hydrated: true, userId: 'coach-1' });
+};
 
 describe('UI-4 helpers', () => {
   it('reads typed filter words and writes the Needs you sentence with number words', () => {
@@ -328,6 +331,7 @@ describe('UI-4 Search first (15 or more)', () => {
       expect([!!screen.getByTestId('lookup-row-m2'), screen.queryByTestId('lookup-nudge-m2')]).toEqual([true, null]);
     });
     it('shows no row with an action until the saved list is read', async () => {
+      mockListBlocked.mockResolvedValue({ blocked: [{ blockedId: 'c3', displayName: 'Priya Nair', blockedAt: PRIYA.blockedAt }] }); // the server's list names her too
       let done: (v: string | undefined) => void = () => undefined;
       const read = jest.requireMock('../../../storage/mmkv').prefsStorage;
       const was = read.getStringAsync;

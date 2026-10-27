@@ -180,6 +180,10 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     const KEY = 'blocked_user_ids_v1:coach-1';
     useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); // app start: nothing read yet
     await prefsStorage.set(KEY, JSON.stringify([{ id: 'c1', displayName: 'Maya Ortiz', role: 'client', blockedAt: '2026-10-20T10:00:00Z' }]));
+    // The server's list names her too: GET /users/blocks's answer replaces this phone's copy (FX-872).
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string, ...rest: unknown[]) => (url === '/users/blocks'
+      ? Promise.resolve({ data: { blocked: [{ blockedId: 'c1', displayName: 'Maya Ortiz', blockedAt: '2026-10-20T10:00:00Z' }] } }) : base(url, ...rest)));
     try {
       const v = await renderHome();
       // Maya would get Nudge (8 days quiet); blocked, she has no action, so she is steady, as on the Needs you list.
