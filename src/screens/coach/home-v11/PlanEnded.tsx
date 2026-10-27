@@ -135,7 +135,7 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk, 
             <Text style={[cs.section, ls.sectionText]} accessibilityRole="header" accessibilityLabel={`${g.label}, ${g.rows.length}`}>{g.label.toUpperCase()}</Text>
             <View style={ls.badge} importantForAccessibility="no-hide-descendants"><Text style={ls.badgeText} maxFontSizeMultiplier={1.2}>{g.rows.length}</Text></View>
           </View>
-          <View style={[cs.card, ls.flush, colorScheme === 'light' && ls.cardLight]}>
+          <View style={[cs.card, ls.flush, colorScheme === 'light' && ls.cardLight]} testID={`plan-ended-${g.key}-card`}>
             {g.rows.map((r, i) => {
               const open = openId === r.client_id;
               const messaged = r.last_coach_message_at ? messagedLine(r.last_coach_message_at, page.time_zone) : null;
@@ -249,7 +249,9 @@ const ls = StyleSheet.create({
   line: { ...typography.bodySmall, fontSize: 13, lineHeight: 18 },
   messaged: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   messagedText: { fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, flexShrink: 1 },
-  flush: { padding: 0, overflow: 'hidden', borderRadius: radius.card },
+  // The shared card pads with paddingVertical/paddingHorizontal (Style A, main de460a24), which a plain `padding: 0`
+  // does not undo; zero both, as the Home's own Clients card does (FX4-859).
+  flush: { paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden', borderRadius: radius.card },
   cardLight: { backgroundColor: neutral[0] },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 14, paddingBottom: 14 },
   button: { minHeight: 48, flexGrow: 1, borderRadius: radius.button, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
