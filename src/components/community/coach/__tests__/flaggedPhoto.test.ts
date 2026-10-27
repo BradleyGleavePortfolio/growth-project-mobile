@@ -3,6 +3,7 @@
  * and sizing the thumbnail.
  */
 import { readFlaggedPhoto, thumbnailSize, THUMB_HEIGHT } from '../FlaggedPhoto';
+import { CoachFlaggedListSchema } from '../../../../api/coachCommunityApi';
 
 const image = { url: 'https://storage.example.test/p', width: 800, height: 600, expires_at: 'x' };
 
@@ -61,5 +62,25 @@ describe('thumbnailSize', () => {
 
   it('a missing size draws a square', () => {
     expect(thumbnailSize({ width: 0, height: 0 })).toEqual({ width: 200, height: THUMB_HEIGHT });
+  });
+});
+
+describe('the queue parse keeps image', () => {
+  it('CoachFlaggedListSchema passes image through to the screen (no client field needed)', () => {
+    const row = {
+      id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      target_type: 'message',
+      target_id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+      content: '',
+      author_name: 'Maya Patel',
+      cohort_name: null,
+      reason: 'spam',
+      created_at: '2026-10-27T10:00:00.000Z',
+    };
+    const parsed = CoachFlaggedListSchema.parse({
+      items: [{ ...row, image }, { ...row, image: null, removed: true }],
+    });
+    expect(readFlaggedPhoto(parsed.items[0])).toEqual({ kind: 'photo', image });
+    expect(readFlaggedPhoto(parsed.items[1])).toEqual({ kind: 'removed' });
   });
 });
