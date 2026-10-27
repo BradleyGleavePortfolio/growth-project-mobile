@@ -8,7 +8,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import CoachLtvDashboard, { JEWEL_GOLD_STOPS, LtvMetrics } from '../components/command-center/CoachLtvDashboard';
-import { brand, colors, lightTokens } from '../theme/tokens';
+import { brand, colors, gold, lightTokens } from '../theme/tokens';
 
 // Force mock mode for all tests
 jest.mock('../services/api', () => ({
@@ -234,7 +234,7 @@ describe('CoachLtvDashboard', () => {
     });
 
     it.each([
-      ['flat', colors.warningInk],
+      ['flat', gold[800]],
       ['down', colors.error],
     ] as const)('keeps the %s chip in its outline colours, with no gold', async (trend, color) => {
       await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: trend }));
@@ -263,6 +263,17 @@ describe('CoachLtvDashboard', () => {
       await waitFor(() => expect(screen.getByTestId('ltv-trend-chip')).toBeTruthy());
       expect(chipWords()).not.toContain(colors.mutedGold);
       expect(ratio(colors.mutedGold, lightTokens.bgPrimary)).toBeLessThan(4.5);
+    });
+
+    // Owner 10-26 13:5x: "2.) Darker gold" -> gold[800] #6B4F1A, 7.24:1 on bone (warningInk #8A6A2A was 4.78:1).
+    it('draws the flat chip in the darker gold, at 7:1 or more on the bone screen', async () => {
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'flat' }));
+      await waitFor(() => expect(screen.getByTestId('ltv-trend-chip')).toBeTruthy());
+      expect(gold[800]).toBe('#6B4F1A');
+      expect(chipWords()).toEqual([gold[800], gold[800]]);
+      expect(chipWords()).not.toContain(colors.warningInk);
+      expect(ratio(gold[800], lightTokens.bgPrimary)).toBeGreaterThanOrEqual(7);
+      expect(ratio(gold[800], lightTokens.bgPrimary)).toBeCloseTo(7.24, 2);
     });
 
     it.each([
