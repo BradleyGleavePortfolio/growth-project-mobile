@@ -59,6 +59,7 @@ describe('useVoiceOutbox', () => {
     expect(mockPublish).toHaveBeenCalledWith(
       'ws-1',
       expect.objectContaining({ uri: 'file:///docs/voice-outbox/r.m4a', waveformPeaks: REC.peaks }),
+      expect.objectContaining({ onProgress: expect.any(Function) }),
     );
     expect(mockMove).toHaveBeenCalledWith(REC.uri, 'file:///docs/voice-outbox/r.m4a');
   });
@@ -121,8 +122,30 @@ describe('useVoiceOutbox', () => {
     await act(async () => net.__setState({ isConnected: true }));
     const after = await setup();
     await waitFor(() => expect(mockPublish).toHaveBeenCalledTimes(1));
-    expect(mockPublish).toHaveBeenCalledWith('ws-1', expect.objectContaining({ uri: 'file:///docs/voice-outbox/r.m4a' }));
+    expect(mockPublish).toHaveBeenCalledWith('ws-1', expect.objectContaining({ uri: 'file:///docs/voice-outbox/r.m4a' }),
+      expect.objectContaining({ onProgress: expect.any(Function) }));
     await waitFor(() => expect(after.result.current.items).toHaveLength(0));
     await after.unmount();
   });
 });
+
+describe('useVoiceOutbox — upload progress (GOAL 03)', () => {
+  it('the sending row carries the upload share, and it is not written to the phone', async () => {
+    let report: (f: number) => void = () => undefined;
+    let finish: () => void = () => undefined;
+    mockPublish.mockImplementationOnce((_ws: string, _in: unknown, o: { onProgress: (f: number) => void }) => {
+      report = o.onProgress;
+      return new Promise((r) => { finish = () => r({ id: 'vn-1' }); });
+    });
+    const { result } = await setup();
+    await act(async () => result.current.send(REC));
+    await waitFor(() => expect(result.current.items[0]?.status).toBe('sending'));
+    await act(async () => report(0.64));
+    expect(result.current.items[0]?.progress).toBeCloseTo(0.64);
+    const saved = JSON.parse((await AsyncStorage.getItem('tgp.voiceOutbox.v1')) ?? '[]');
+    expect(saved[0]?.progress ?? 0).toBe(0);
+    await act(async () => finish());
+    await waitFor(() => expect(result.current.items).toHaveLength(0));
+  });
+});
+

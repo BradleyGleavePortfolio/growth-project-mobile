@@ -55,6 +55,8 @@ export interface VoiceUploadInput {
 export interface UseVoiceUploadOptions {
   /** Inject a byte reader for tests; defaults to fetch(uri) → arrayBuffer. */
   readBytes?: (uri: string) => Promise<ArrayBuffer>;
+  /** Upload share in [0,1] as the audio bytes go up (the outbox row's line). */
+  onProgress?: (fraction: number) => void;
 }
 
 export type VoiceUploadMutation = UseMutationResult<
@@ -107,7 +109,7 @@ export async function publishVoiceNote(
 
   // Hop 2 — PUT the raw audio bytes to storage.
   const body = await readBytes(input.uri);
-  await communityVoiceApi.uploadBytes(target.upload_url, body, input.mimeType);
+  await communityVoiceApi.uploadBytes(target.upload_url, body, input.mimeType, options.onProgress);
 
   // Hop 3 — durably record the note (server re-asserts the bucket binding).
   return communityVoiceApi.create(workspaceId, {

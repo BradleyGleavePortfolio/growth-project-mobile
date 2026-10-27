@@ -4,8 +4,8 @@
  * Open alerts, the day's rings. Page: push ask and brief, Roman, one Needs you tile, Business, Clients rows. Only real
  * numbers: a server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
  */
-import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
@@ -18,14 +18,14 @@ import { formatCount } from '../../../components/home/rings/homeRings';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
-import { AlertsRow, DayRing, LinkRow, MiniTile, SEMI, useCardStyles } from './HomeParts';
+import { AlertsRow, DayRing, EYEBROW, LinkRow, MiniTile, SEMI, styleA, useCardStyles } from './HomeParts';
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
 import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
+import { WinTurn, useWinFade, useWinTurn } from './WinTurn';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
 const REACH_ROWS = 5;
-const WIN_TURN_MS = 6000;
 
 type Go = () => void;
 interface Props {
@@ -41,25 +41,6 @@ interface Props {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** One win at a time (LS B2); with more, the next every few seconds unless motion or a screen reader is off-limits or the Home is not in front. */
-function useWinTurn(n: number) {
-  const [turn, setTurn] = useState(0);
-  const [still, setStill] = useState(true);
-  useEffect(() => {
-    let live = true;
-    void Promise.all([AccessibilityInfo.isReduceMotionEnabled(), AccessibilityInfo.isScreenReaderEnabled()])
-      .then(([rm, sr]) => { if (live) setStill(rm || sr); })
-      .catch(() => undefined);
-    return () => { live = false; };
-  }, []);
-  useEffect(() => {
-    if (still || n <= 1) return undefined;
-    const t = setInterval(() => setTurn((x) => x + 1), WIN_TURN_MS);
-    return () => clearInterval(t);
-  }, [still, n]);
-  return turn;
-}
-
 export default function CoachHomeV11(p: Props) {
   const { colors, semanticColors: sc } = useTheme();
   const cs = useCardStyles();
@@ -73,8 +54,15 @@ export default function CoachHomeV11(p: Props) {
   const roster = o?.roster_size ?? 0;
   const rosterN = formatCount(roster);
   const items = home?.wins.items ?? [];
-  const turn = useWinTurn(focused ? items.length : 0); // paused while another tab is in front (LO C2)
-  const win = items.length > 0 ? items[turn % Math.min(3, items.length)] : undefined; // the newest three take turns (spec item 2)
+  // Paused while another tab is in front (LO C2), and at 130 % text, where no win line is drawn.
+  const { turn, still, calm } = useWinTurn(focused && !bigText ? items.length : 0);
+  const newest = items.slice(0, 3); // the newest three take turns (spec item 2), each a cross-fade (#167-1)
+  const win = newest.length > 0 ? newest[turn % newest.length] : undefined;
+  // What the win line draws: nothing until the wins hero is up (Loading, an error, no clients) or for a win at 130 %.
+  const line = !o || roster === 0 || !home || (win && bigText) ? undefined : win ?? null;
+  const fade = useWinFade(line, focused, calm, (
+    <Text style={s.onDeepMuted}>{(home?.wins.count ?? 0) === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>
+  ));
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
@@ -127,9 +115,10 @@ export default function CoachHomeV11(p: Props) {
             <Text style={s.heroValue} maxFontSizeMultiplier={1.15}>{h.value}</Text><Text style={s.heroUnit}>{h.unit}</Text>
             {win ? <Ionicons name="chevron-forward" size={22} color={forestPop.onDeepMuted} /> : null}
           </View>
-          {win && bigText ? null : win ? (
-            <View style={s.win}><View style={s.winDot} /><Text style={s.winText} numberOfLines={2} testID={`home-win-${win.id}`}>{winLine(win)}</Text></View>
-          ) : <Text style={s.onDeepMuted}>{home.wins.count === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>}
+          <WinTurn
+            wins={still && win ? [win] : newest} fade={fade} // nothing turns: the row fits the one win (LO C2)
+            line={(w, id) => <Text style={s.winText} numberOfLines={2} testID={id}>{winLine(w)}</Text>}
+          />
         </Pressable>
       );
     }
@@ -258,14 +247,14 @@ export default function CoachHomeV11(p: Props) {
           <View style={cs.card}><QuietLoading label="Loading earnings" rows={1} testID="home-month-loading" /></View>
         ) : monthOk ? (
           <Pressable style={({ pressed }) => [cs.card, s.biz, pressed && s.pressed]} onPress={tap(p.onOpenMoney)} accessibilityRole="button" accessibilityLabel={`Earnings this month, ${heroAmount(monthOk.totals.netCents, monthOk.currency)}`} testID="home-month">
-            <View style={s.bizMark}><Text style={s.bizSign}>$</Text></View>
+            <View style={s.bizMark} testID="home-month-mark"><Text style={s.bizSign} allowFontScaling={false}>$</Text></View>
             <View style={s.grow}>
-              <Text style={cs.body}>Earnings · this month</Text>
+              <Text style={cs.muted}>Earnings · this month</Text>
               <Text style={s.bizAmount} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.15}>{heroAmount(monthOk.totals.netCents, monthOk.currency)}</Text>
-              <Text style={cs.body}>{pace ? `${monthOverline(data.now)} · ${pace}` : hasMonthMoney(monthOk) ? monthOverline(data.now) : 'Nothing earned yet this month.'}</Text>
-              {data.payout ? <Text style={cs.body}>{`Next payout ${heroAmount(data.payout.amountCents, data.payout.currency)} · ${cap(payoutWords(data.payout, data.now))}`}</Text> : null}
+              <Text style={cs.muted}>{pace ? `${monthOverline(data.now)} · ${pace}` : hasMonthMoney(monthOk) ? monthOverline(data.now) : 'Nothing earned yet this month.'}</Text>
+              {data.payout ? <Text style={cs.muted}>{`Next payout ${heroAmount(data.payout.amountCents, data.payout.currency)} · ${cap(payoutWords(data.payout, data.now))}`}</Text> : null}
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={20} color={cs.chevron.color} />
           </Pressable>
         ) : null}
       </View>
@@ -275,8 +264,8 @@ export default function CoachHomeV11(p: Props) {
   const clientsCard = o && roster > 0 ? (
     <View testID="home-clients">
       <Text style={cs.section} accessibilityRole="header">CLIENTS</Text>
-      <View style={[cs.card, s.flush]}>
-        <LinkRow first title={`All ${rosterN} clients`} line="Open Clients" onPress={tap(p.onOpenClients)} testID="home-row-all" />
+      <View style={[cs.card, s.flush]} testID="home-clients-card">
+        <LinkRow first title={roster === 1 ? 'Your 1 client' : `All ${rosterN} clients`} line="Open Clients" onPress={tap(p.onOpenClients)} testID="home-row-all" />
         {data.rosterState === 'ok' ? (
           <LinkRow
             title={`Steady, ${data.steady.count}`} line={data.steady.loggedToday !== null ? `${data.steady.loggedToday} logged today` : null}
@@ -301,11 +290,11 @@ export default function CoachHomeV11(p: Props) {
               onPress={tap(p.onOpenNotifications)} hitSlop={8} style={s.icon} testID="home-bell"
               accessibilityRole="button" accessibilityLabel={bell > 0 ? `Notifications, ${bell > 99 ? '99+' : bell} unread` : 'Notifications'}
             >
-              <Ionicons name="notifications-outline" size={26} color={forestPop.onDeep} />
+              <Ionicons name="notifications-outline" size={26} color={styleA.onDeep} />
               {bell > 0 ? <View style={s.bellBadge}><Text style={s.bellBadgeText} maxFontSizeMultiplier={1.2}>{bell > 99 ? '99+' : bell}</Text></View> : null}
             </Pressable>
             <Pressable onPress={tap(p.onOpenSettings)} hitSlop={8} style={s.icon} accessibilityRole="button" accessibilityLabel="Settings" testID="home-gear">
-              <Ionicons name="settings-outline" size={26} color={forestPop.onDeep} />
+              <Ionicons name="settings-outline" size={26} color={styleA.onDeep} />
             </Pressable>
           </View>
           {/* The checklist hides itself once setup is done. */}
@@ -326,7 +315,7 @@ export default function CoachHomeV11(p: Props) {
             </View>
           ) : null}
         </View>
-        <View style={s.page}>
+        <View style={s.page} testID="home-page">
           {p.belowHero?.(!!o && roster === 0)}
           {roman}
           {needsTile}
@@ -343,26 +332,24 @@ const s = StyleSheet.create({
   fill: { flex: 1 },
   hero: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 12, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet, gap: 6 },
   topRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 },
-  date: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, flex: 1 },
+  date: { ...EYEBROW, color: forestPop.onDeepMuted, flex: 1 },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   bellBadge: { position: 'absolute', top: -2, right: -10, minWidth: 22, height: 22, borderRadius: radius.chip, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
   bellBadgeText: { ...typography.caption, fontSize: 12, lineHeight: 15, letterSpacing: 0, fontFamily: SEMI, color: forestPop.deep },
   heroBlock: { gap: 0 },
   heroLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  heroValue: { fontFamily: SEMI, fontSize: 48, lineHeight: 56, letterSpacing: -1, color: forestPop.onDeep },
-  heroUnit: { ...typography.body, fontSize: 20, lineHeight: 26, color: forestPop.onDeep, flexShrink: 1 },
-  heroRight: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted, marginLeft: 'auto' },
-  bar: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.forest, overflow: 'hidden' },
+  heroValue: { fontFamily: SEMI, fontSize: 48, lineHeight: 56, letterSpacing: -1, color: styleA.figure },
+  heroUnit: { ...typography.body, fontSize: 20, lineHeight: 26, color: forestPop.onDeepMuted, flexShrink: 1 },
+  heroRight: { ...EYEBROW, color: forestPop.onDeepMuted, marginLeft: 'auto' },
+  bar: { height: 8, borderRadius: radius.chip, backgroundColor: styleA.track, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: radius.chip, backgroundColor: forestPop.leaf },
-  win: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  winDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: forestPop.leaf },
-  winText: { ...typography.body, color: forestPop.onDeep, flex: 1 },
-  onDeep: { ...typography.body, color: forestPop.onDeep },
+  winText: { ...typography.body, color: styleA.onDeep },
+  onDeep: { ...typography.body, color: styleA.onDeep },
   onDeepMuted: { ...typography.bodySmall, color: forestPop.onDeepMuted },
-  retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: forestPop.brand400 },
-  retryText: { ...typography.bodyMd, color: forestPop.onDeep },
+  retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.button, borderWidth: 1, borderColor: styleA.line },
+  retryText: { ...typography.bodyMd, color: styleA.onDeep },
   tiles: { flexDirection: 'row', gap: 10 },
-  dayLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.gold, marginBottom: 2 },
+  dayLabel: { ...EYEBROW, color: forestPop.gold, marginBottom: 2 },
   rings: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 2 },
   page: { paddingHorizontal: layout.gutter, paddingTop: 10, gap: 10 },
   grow: { flex: 1, minWidth: 0 },
@@ -379,10 +366,12 @@ const s = StyleSheet.create({
   approveBadge: { minWidth: 28, height: 28, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
   approveBadgeText: { ...typography.bodyMd, fontSize: 15, lineHeight: 18, color: forestPop.deep },
   askRoman: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', paddingLeft: 4 },
-  biz: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  bizMark: { width: 52, height: 52, borderRadius: radius.button, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
-  bizSign: { fontFamily: SEMI, fontSize: 24, lineHeight: 30, color: forestPop.leaf },
-  bizAmount: { fontFamily: SEMI, fontSize: 30, lineHeight: 38, color: forestPop.ink },
-  flush: { padding: 0 },
+  // A `.mon`, `.dol`, `.mv2`: the glance card, its 40-point mark and the amount.
+  biz: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  bizMark: { width: 40, height: 40, borderRadius: radius.button, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
+  bizSign: { fontFamily: 'Inter_400Regular', fontSize: 20, lineHeight: 22, color: forestPop.leaf },
+  bizAmount: { fontFamily: SEMI, fontSize: 26, lineHeight: 30, letterSpacing: -0.5, color: styleA.ink },
+  // Longhands: the card's own paddingVertical and paddingHorizontal would beat a `padding` shorthand.
+  flush: { paddingVertical: 0, paddingHorizontal: 0 },
   pressed: { opacity: 0.7 },
 });

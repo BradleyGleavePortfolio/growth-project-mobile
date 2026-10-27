@@ -783,3 +783,35 @@ describe('CommunityChallengeDetailScreen — one report entry per comment (C-314
     expect(api.reportComment).not.toHaveBeenCalled();
   });
 });
+
+// BLOCK-ALL-M (#168-4 op 1): banned from the space -> no note box and no "Leave the first note".
+describe('challenge notes closed (BLOCK-ALL-M)', () => {
+  const notFound = { isAxiosError: true, response: { status: 404, data: { code: 'community.challenge.not_found' } } };
+
+  it('open: the note box is there', async () => {
+    api.getChallenge.mockResolvedValue({ challenge: challenge(), participation: participation() });
+    await renderScreen();
+    expect(await screen.findByTestId('community-challenge-composer-field')).toBeTruthy();
+    expect(screen.queryByTestId('community-challenge-closed')).toBeNull();
+  });
+
+  it('notes refused after a ban: the closed line, no note box, no first-note button, no Try again', async () => {
+    api.getChallenge.mockResolvedValue({ challenge: challenge(), participation: participation() });
+    api.listComments.mockRejectedValue(notFound);
+    await renderScreen();
+    expect(await screen.findByTestId('community-challenge-closed')).toBeTruthy();
+    expect(screen.queryByTestId('community-challenge-composer-field')).toBeNull();
+    expect(screen.queryByText('Leave the first note')).toBeNull();
+    expect(screen.queryByTestId('community-challenge-comments-retry')).toBeNull();
+  });
+
+  it('a note refused by a ban closes at once with no error banner', async () => {
+    api.getChallenge.mockResolvedValue({ challenge: challenge(), participation: participation() });
+    api.addComment.mockRejectedValue({ isAxiosError: true, response: { status: 403, data: { code: 'community.workspace.no_access' } } });
+    await renderScreen();
+    await fireEvent.changeText(await screen.findByTestId('community-challenge-composer-field'), 'Keep going');
+    await act(async () => { fireEvent.press(screen.getByTestId('community-challenge-composer-send')); });
+    await waitFor(() => expect(screen.getByTestId('community-challenge-closed')).toBeTruthy());
+    expect(screen.queryByTestId('community-challenge-action-error')).toBeNull();
+  });
+});
