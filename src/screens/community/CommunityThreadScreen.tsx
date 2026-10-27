@@ -47,6 +47,7 @@ import {
 } from '../../api/communityApi';
 import { useQuery } from '@tanstack/react-query';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import { formatRelative } from '../../components/community/SearchResultRow';
 import {
@@ -118,11 +119,19 @@ export default function CommunityThreadScreen(): React.ReactElement {
   const react = useReactToPost(workspaceId);
   const deletePost = useDeletePost(workspaceId);
   const composerRef = useRef<ComposerInputHandle>(null);
+  // BLOCK-ALL-M: banned from the space (or the post is gone behind a block) -> no reply box, no "Be the first to reply".
+  // FX-872: the reply box, react and "Be the first to reply" draw only once both reads came back (closed until open);
+  // closed shows none of the post's words either.
+  const { closed, open, close } = useConversationClosed(
+    null,
+    [post.error, comments.error],
+    useServerAnswered(post, comments),
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   const data = comments.data ?? [];
   const isEmpty = !comments.isLoading && !comments.isError && data.length === 0;
-  const p = post.data;
+  const p = closed ? undefined : post.data;
   const isOwnPost = !!p && !!client?.id && p.author_user_id === client.id;
   const pendingTap =
     react.isPending && react.variables?.postId === postId ? react.variables : null;
@@ -206,23 +215,23 @@ export default function CommunityThreadScreen(): React.ReactElement {
           </Text>
         ) : null}
 
-        <ReactionBar
+        {open ? <ReactionBar
           reactions={reactions}
           onToggle={(emoji, active) =>
             react.mutate({ postId, emoji, active })
           }
           testID="community-thread-reactions"
-        />
+        /> : null}
 
         <FlatList
           testID="community-thread-replies"
-          data={data}
+          data={closed ? [] : data}
           keyExtractor={(c) => c.id}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
               tintColor={semanticColors.textMuted} colors={[semanticColors.accent]} />
           }
-          ListEmptyComponent={comments.isLoading || comments.isError ? (
+          ListEmptyComponent={closed ? null : comments.isLoading || comments.isError ? (
             <View style={styles.center} accessibilityState={{ busy: comments.isLoading }}>
               <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>
                 {comments.isLoading ? 'Loading replies…' : 'Replies did not load. Check your connection, then try again.'}
@@ -232,7 +241,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
                 <Text style={[typography.bodySmall, { color: semanticColors.accentText }]}>Try again</Text>
               </HapticPressable> : null}
             </View>
-          ) : isEmpty ? (
+          ) : isEmpty && open ? (
             <View style={styles.center}>
               <Text testID="community-thread-empty" style={[typography.bodySmall, { color: semanticColors.textMuted }]}>No replies yet</Text>
               <HapticPressable onPress={() => composerRef.current?.focus()} style={styles.replyAction}
@@ -278,7 +287,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
           style={styles.flex}
         />
 
-        <ComposerInput
+        {closed ? <ConversationClosedLine testID="community-thread-closed" /> : !open ? null : <ComposerInput
           ref={composerRef}
           placeholder="Add a reply"
           maxLength={COMMENT_MAX}
@@ -290,14 +299,16 @@ export default function CommunityThreadScreen(): React.ReactElement {
                 // Apple 1.2 content filter: keep the draft (the composer
                 // restores it on rejection) and say why. Every other failure
                 // gets specific copy or a support reference.
-                const failure = describeCommunityFailure(err, 'send_reply');
-                Alert.alert(failure.title, failure.message);
+                if (!close(err)) {
+                  const failure = describeCommunityFailure(err, 'send_reply');
+                  Alert.alert(failure.title, failure.message);
+                }
                 throw err;
               },
             )
           }
           testID="community-thread-composer"
-        />
+        />}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

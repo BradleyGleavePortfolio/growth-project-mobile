@@ -55,6 +55,7 @@ const mockRouteParams: { current: Record<string, unknown> } = { current: {} };
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
   useRoute: () => ({ params: mockRouteParams.current }),
+  useFocusEffect: () => undefined, // the DM's status band (FR-880R4)
 }));
 
 // ── Current user ─────────────────────────────────────────────────────────────
@@ -83,10 +84,10 @@ const mockHooks = {
     },
   },
   today: { data: null, isLoading: false, isError: false },
-  posts: { data: [] as { id: string; title: string; body: string; scope: string }[], isLoading: false, isError: false },
-  comments: { data: [] as { id: string; body: string; author_user_id: string }[], isLoading: false, isError: false, refetch: jest.fn() },
+  posts: { data: [] as { id: string; title: string; body: string; scope: string }[], isLoading: false, isError: false, isSuccess: true, isFetchedAfterMount: true, isStale: false },
+  comments: { data: [] as { id: string; body: string; author_user_id: string }[], isLoading: false, isError: false, refetch: jest.fn(), isSuccess: true, isFetchedAfterMount: true, isStale: false },
   dmThreads: { data: [], isLoading: false, isError: false },
-  dmMessages: { data: [], isLoading: false, isError: false },
+  dmMessages: { data: [], isLoading: false, isError: false, isSuccess: true, isFetchedAfterMount: true, isStale: false },
   badge: { total: 0, cohortMessages: 0, dmMessages: 0, mentions: 0 },
 };
 const mockMutate = jest.fn();
@@ -111,7 +112,7 @@ jest.mock('../../../hooks/useCommunity', () => ({
 // stub the post query by mocking @tanstack/react-query useQuery for that screen.
 jest.mock('@tanstack/react-query', () => {
   const actual = jest.requireActual('@tanstack/react-query');
-  return { ...actual, useQuery: () => ({ data: { title: 'A post', body: 'Body' } }) };
+  return { ...actual, useQuery: () => ({ data: { title: 'A post', body: 'Body' }, isSuccess: true, isFetchedAfterMount: true, isStale: false }) };
 });
 
 import { COMMUNITY_REACTION_EMOJI } from '../../../api/communityApi';
@@ -318,10 +319,9 @@ describe('Composer — submit wiring', () => {
     };
     try {
       mockRouteParams.current = { mode: 'post' };
-      const { getByTestId } = await render(<CommunityComposerScreen />);
-      await fireEvent.changeText(getByTestId('community-composer-title'), 'My title');
-      await fireEvent.changeText(getByTestId('community-composer-body'), 'My body');
-      await fireEvent.press(getByTestId('community-composer-submit'));
+      const { getByTestId, queryByTestId } = await render(<CommunityComposerScreen />);
+      expect(queryByTestId('community-composer-title')).toBeNull(); // FR-872 (Sol B3): no space, nothing to type
+      expect(queryByTestId('community-composer-submit')).toBeNull();
       expect(mockMutate).not.toHaveBeenCalled();
       expect(getByTestId('community-composer-no-workspace')).toBeTruthy();
     } finally {

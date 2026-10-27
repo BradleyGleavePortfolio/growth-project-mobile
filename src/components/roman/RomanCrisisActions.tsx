@@ -11,7 +11,10 @@
  *   Message <first name>   opens the chat with the client's current coach
  *                          (Home > Messages); shown only when the server
  *                          offers it AND this signed-in client has a coach,
- *                          so a coachless client sees the number actions
+ *                          so a coachless client sees the number actions;
+ *                          FR-880R3 (operator ruling, agent 173): hidden
+ *                          while the coaching chat is closed or not yet
+ *                          known (useCoachChatClosed); the numbers stay
  *
  * 12 pt corners (radius.button), every target 48 pt or taller, stacked so
  * 130% text and long names never clip. A soft tap haptic on each press and
@@ -25,6 +28,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { messageCoachLabel } from '../home/HomeHeaderActions';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import { readUserCacheSync } from '../../lib/userCache';
 import { useTheme } from '../../theme/ThemeProvider';
 import { layout, radius, spacing, typography } from '../../theme/tokens';
@@ -59,11 +63,13 @@ export default function RomanCrisisActions({ actions, testID = 'roman-crisis' }:
   const currentUser = useCurrentUser();
   const user = readUserCacheSync() ?? currentUser;
   const coached = user?.role === 'student' && Boolean(user.coach_id);
-  const showCoach = actions.includes('message_coach') && coached && navigation != null;
+  const offered = actions.includes('message_coach') && coached && navigation != null;
+  const coachChat = useCoachChatClosed(offered ? user?.coach_id : null);
+  const showCoach = offered && coachChat.known && !coachChat.closed;
   const [coachName, setCoachName] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!showCoach) return undefined;
+    if (!offered) return undefined;
     let mounted = true;
     api
       .get<{ name?: unknown }>('/v1/clients/me/coach')
@@ -74,7 +80,7 @@ export default function RomanCrisisActions({ actions, testID = 'roman-crisis' }:
     return () => {
       mounted = false;
     };
-  }, [showCoach]);
+  }, [offered]);
 
   const item = (code: RomanSafetyAction) => {
     if (code !== 'message_coach') {

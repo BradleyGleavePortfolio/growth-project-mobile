@@ -1,5 +1,24 @@
 > SUPERSEDED — see [NORTH_STAR.md](docs/importer/NORTH_STAR.md) and canonical AGENT_RULES G01–G22 ([tgp-agent-context/AGENT_RULES.md](https://github.com/BradleyGleavePortfolio/tgp-agent-context/blob/main/AGENT_RULES.md)).
 
+BINDING OWNER RULE A1.11 (2026-10-27): never throttle or cancel agents' work on your own. It overrides anything
+below that says otherwise. Owner, verbatim:
+
+```text
+ORCHESTRATORS DO NOT DECIDE WHEN TO THROTTLE AGENTS OR CANCEL WORK MID FLIGHT WITHOUT;
+
+1.) SAVING THE AGENTS WORK SO-FAR IN A SAFE SPACE
+2.) LETTING THE AGENT WRITE A REPORT HANDOFF
+3.) THE OWNERS WORDS ON WHAT TO CANCEL/HOW MANY/WHY AND HOW AND WHEN
+
+UNLESS ALL THREE HAVE BEEN MET, DONT DECIDE YOURSELF TO CANCEL AGENTS JOBS, EVER
+```
+
+Meaning: no orchestrator stops, pauses, throttles or cancels a working agent on its own judgment, credits included,
+until all three are true: the agent's work so far is saved in a safe place, the agent has written its report and
+handoff, and the owner has said what to cancel, how many, why, how and when. A cancelled agent keeps its memory:
+resume it, never relaunch it fresh.
+Full text: the Source of Truth in the tgp-agent-context repo, section A1.11.
+
 # TGP Standing Rules (read at the start of every session)
 
 1. EVERYTHING MUST BE BUILT TO DECACORN QUALITY.
