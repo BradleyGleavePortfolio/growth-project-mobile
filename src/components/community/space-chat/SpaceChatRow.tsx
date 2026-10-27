@@ -14,12 +14,12 @@ import { useQuery } from '@tanstack/react-query';
 import SafetyMenu from '../SafetyMenu';
 import VoiceNotePlayer from '../VoiceNotePlayer';
 import { communityVoiceApi } from '../../../api/communityVoiceApi';
-import { brand, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
+import { brand, colors, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
-import type { PendingState } from './spaceChatOutbox';
+import { REJECTED_WORDS, type PendingState } from './spaceChatOutbox';
 
 /** Owner #168-13 GREY-TEXT op 1: every small grey text on this page is #2C2C2C (13.4:1 on bone #F7FAF7). */
-export const SMALL_GREY = '#2C2C2C';
+export const SMALL_GREY = colors.graphite;
 /** Member tiles on the Studio greens (mockup 05b), picked per person; light initials, except ink on leaf with a moss edge. */
 type Tile = { bg: string; fg: string; edge?: string };
 const TILES: readonly Tile[] = [
@@ -42,6 +42,8 @@ export interface SpaceChatRowProps {
   authorId: string;
   /** Local rows only ('waiting' is drawn as sending while the phone is online: it is next in the queue). */
   state?: PendingState;
+  /** FR-871R6 (Sol B871-2): the server refused this text for its words; no Try again (it cannot pass), the reason. */
+  rejected?: boolean;
   onRetry?: () => void;
   onDiscard?: () => void;
   viewerUserId?: string | null;
@@ -131,12 +133,17 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
       </View>
       <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
         <MessageBody {...p} />
+        {p.state === 'failed' && p.rejected ? (
+          <Text style={s.reason} testID={`space-chat-rejected-${p.id}`}>{REJECTED_WORDS.message}</Text>
+        ) : null}
         {p.state === 'failed' ? (
           <View style={s.actions}>
-            <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
-              <Ionicons name="refresh" size={16} color={fp.onDeep} />
-              <Text style={s.againText}>Try again</Text>
-            </TouchableOpacity>
+            {p.rejected ? null : (
+              <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
+                <Ionicons name="refresh" size={16} color={fp.onDeep} />
+                <Text style={s.againText}>Try again</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={p.onDiscard} accessibilityRole="button" accessibilityLabel="Delete" style={s.discard} testID={`space-chat-discard-${p.id}`}>
               <Text style={s.discardText}>Delete</Text>
             </TouchableOpacity>
@@ -200,6 +207,7 @@ const s = StyleSheet.create({
   againText: { ...typography.bodyMd, color: fp.onDeep },
   discard: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.sm, justifyContent: 'center' },
   discardText: { ...typography.bodyMd, color: SMALL_GREY },
+  reason: { ...typography.bodySmall, color: SMALL_GREY, marginTop: spacing.xs },
   // A small sans day mark ("Thu, Oct 22"), 05b .day: 600 12 pt, 10 pt above, 4 below.
   day: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: SMALL_GREY, textAlign: 'center', paddingTop: GAP, paddingBottom: spacing.xs },
   // 05b .newline: an 8 pt lead dash, 10 pt gaps, 600 12 pt brand 400 (#4D7059) words, a leaf rule.

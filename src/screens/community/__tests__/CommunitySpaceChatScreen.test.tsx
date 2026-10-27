@@ -8,8 +8,8 @@
  * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { authEvents } from '../../../utils/authEvents';
@@ -44,6 +44,15 @@ jest.mock('../../../components/community/SpaceDrawer', () => {
 });
 let mockUser = { id: 'me-1', name: 'Dana Reyes', coach_id: 'coach-1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+const mockInsets = { top: 47, right: 0, bottom: 34, left: 0 }; // an iPhone with a home indicator
+jest.mock('react-native-safe-area-context', () => {
+  const { createElement } = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: ({ children, style, testID }: { children?: unknown; style?: unknown; testID?: string }) => createElement(View, { style, testID }, children),
+    useSafeAreaInsets: () => mockInsets,
+  };
+});
 const mockNet: { isOnline: boolean; reachable: boolean | null } = { isOnline: true, reachable: null };
 jest.mock('../../../hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ isOnline: mockNet.isOnline, isInternetReachable: mockNet.reachable }),
@@ -175,7 +184,7 @@ it('member Announcements: no composer, only the hint', async () => {
   mockParams.current = { cohortId: 'c-ann' };
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
-  expect(r.getByText('Only your coach posts here. Press and hold a message to reply.')).toBeTruthy();
+  expect(r.getByText('Only your coach posts here.')).toBeTruthy(); // FR-871R6 (Opus B2): no press and hold promise
   expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
 });
 
@@ -451,7 +460,7 @@ it('every control has a spoken label and no text is locked to a size', async () 
   const r = await open();
   await r.findByTestId('space-chat-row-m3');
   expect(r.getByLabelText('Open space list')).toBeTruthy();
-  expect(r.queryByLabelText('Space info')).toBeNull();
+  expect(r.getByLabelText('Space info')).toBeTruthy(); // FR-871R6 (Opus B1): members have it too
   expect(r.getByLabelText(/^jo b\., .*\. body m3$/)).toBeTruthy();
   expect(r.getByLabelText(/^Sam Okafor, Coach, .*\. body m1$/)).toBeTruthy();
   expect(r.getByLabelText('New messages')).toBeTruthy();
@@ -462,4 +471,159 @@ it('every control has a spoken label and no text is locked to a size', async () 
   const locked = walk(r.toJSON()).filter((n) => !JSON.stringify(n.props.style ?? '').includes('ionicons')
     && (n.props.allowFontScaling === false || n.props.maxFontSizeMultiplier != null));
   expect(locked).toHaveLength(0);
+});
+
+describe('FR-871R6 (m#871): member Space info, the hint, the server answer on this visit, refused sends', () => {
+  const rejected = () => Object.assign(new Error('HTTP 422'), {
+    isAxiosError: true, response: { status: 422, data: { code: 'community.content.rejected', message: 'Server words' } },
+  });
+  const REASON = 'This was not posted because it appears to contain abusive or explicit language. Your draft is kept so you can rephrase it.';
+  const field = (r: Awaited<ReturnType<typeof open>>) => r.getByTestId('space-chat-composer-field');
+  let alert: jest.SpyInstance;
+  beforeEach(() => { alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); });
+  afterEach(() => { alert.mockRestore(); });
+  // A cold start: the page saved on the device is in the cache before the screen mounts (stale, not read this visit).
+  const openSaved = async () => {
+    client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-every'], { pages: [{ messages: page, next_before: null }], pageParams: [null] });
+    return render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+  };
+
+  it('Opus B1: a member\'s Space info opens a read-only sheet with # name and the member count; the scrim closes it', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    const sheet = r.getByTestId('space-info-sheet');
+    expect(within(sheet).getByText('Everyone')).toBeTruthy();
+    expect(within(sheet).getByTestId('space-chat-hash', { includeHiddenElements: true })).toBeTruthy();
+    expect(within(sheet).getByText('1,000 members')).toBeTruthy();
+    expect(within(sheet).queryAllByRole('button')).toHaveLength(0); // read only: nothing to change
+    expect(mockNavigate).not.toHaveBeenCalled();
+    // The scrim (the drawer's "Close"; screen readers use the escape gesture or Back, the sheet being modal for them).
+    await fireEvent.press(r.getByTestId('space-info-scrim', { includeHiddenElements: true }));
+    expect(r.queryByTestId('space-info-sheet')).toBeNull();
+  });
+
+  it('Opus B2: the announcements page has no press and hold anywhere, so the hint promises none', async () => {
+    mockParams.current = { cohortId: 'c-ann' };
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(r.getByTestId('space-chat-hint').props.children).toBe('Only your coach posts here.');
+    expect(r.queryByText(/press and hold/i)).toBeNull();
+  });
+
+  it('Opus B3: a saved page at a cold start draws without a composer until the read answers; a 403 then closes it', async () => {
+    let answer: (e: unknown) => void = () => undefined;
+    mockApi.get.mockImplementation((url: string) => (url.endsWith('/read')
+      ? Promise.resolve({ data: readAnswer })
+      : new Promise((_res, rej) => { answer = rej; })));
+    const r = await openSaved();
+    expect(await r.findByTestId('space-chat-row-m3')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+    expect(r.queryByTestId('space-chat-hint')).toBeNull();
+    await act(async () => { answer(fail(403)); });
+    expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+  });
+
+  it('Opus B3: the same saved page offline (no answer): the rows and no composer; the answer brings the composer', async () => {
+    mockNet.isOnline = false;
+    let answer: (v: unknown) => void = () => undefined;
+    mockApi.get.mockImplementation((url: string) => (url.endsWith('/read')
+      ? Promise.resolve({ data: readAnswer })
+      : new Promise((res) => { answer = res; })));
+    const r = await openSaved();
+    expect(await r.findByTestId('space-chat-row-m3')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+    await act(async () => { answer({ data: { messages: page, next_before: null } }); });
+    expect(await r.findByTestId('space-chat-composer-field')).toBeTruthy();
+  });
+
+  it('Opus B3: a send refused with 403 closes the page; the text stays on the device, not sent again', async () => {
+    mockApi.post.mockImplementation(async (url: string) => { if (url.endsWith('/messages')) throw fail(403); return { data: { ok: true } }; });
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(field(r), 'Still here?');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('"reason":"closed"'));
+    expect(mockDisk.get('space_outbox_me-1')).not.toMatch(/Error|headers|response/);
+    expect(sends()).toHaveLength(1);
+  });
+
+  it('Sol B871-2: a text refused for its words comes back into the empty field with the reason; the changed text is a new key', async () => {
+    const ok = mockApi.post.getMockImplementation()!;
+    mockApi.post.mockImplementation(async (url: string, body: { body: string }, ...rest: unknown[]) => {
+      if (url.endsWith('/messages') && body.body === 'You absolute clown') throw rejected();
+      return ok(url, body, ...rest);
+    });
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(field(r), 'You absolute clown');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(field(r).props.value).toBe('You absolute clown'));
+    expect(alert).toHaveBeenCalledWith('Please rephrase', REASON);
+    expect(r.queryByText('Not sent')).toBeNull();
+    expect(r.queryByLabelText('Try again')).toBeNull();
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1') ?? '[]').not.toContain('You absolute clown'));
+    await fireEvent.changeText(field(r), 'You absolute star');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    expect(sends()[1][1]).toEqual({ body: 'You absolute star' });
+    expect(sends()[1][2].headers['Idempotency-Key']).not.toBe(sends()[0][2].headers['Idempotency-Key']);
+  });
+
+  it('Sol B871-2: a newer draft is never overwritten; the row keeps the text and the reason (no Try again) until the field is empty', async () => {
+    let refuse: () => void = () => undefined;
+    mockApi.post.mockImplementation((url: string) => (url.endsWith('/messages')
+      ? new Promise((_res, rej) => { refuse = () => rej(rejected()); })
+      : Promise.resolve({ data: { ok: true } })));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(field(r), 'You absolute clown');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    await fireEvent.changeText(field(r), 'A newer draft');
+    await act(async () => { refuse(); });
+    expect(await r.findByText(REASON)).toBeTruthy();
+    expect(field(r).props.value).toBe('A newer draft');
+    expect(r.getByLabelText('Dana Reyes, Not sent. You absolute clown')).toBeTruthy();
+    expect(r.queryByLabelText('Try again')).toBeNull();
+    expect(r.getByLabelText('Delete')).toBeTruthy();
+    expect(alert).not.toHaveBeenCalled();
+    await fireEvent.changeText(field(r), '');
+    await waitFor(() => expect(field(r).props.value).toBe('You absolute clown'));
+    expect(alert).toHaveBeenCalledWith('Please rephrase', REASON);
+    expect(r.queryByText(REASON)).toBeNull();
+  });
+
+  it('Sol B871-2: after an app restart a refused text kept on the device comes back into the field; sign-out clears it', async () => {
+    const kept = { localId: 'k1', key: 'k1', cohortId: 'c-every', body: 'Kept and refused', createdAt: '2026-10-22T10:20:00.000Z', state: 'failed', reason: 'rejected' };
+    mockDisk.set('space_outbox_me-1', JSON.stringify([kept]));
+    const r = await open();
+    await waitFor(() => expect(field(r).props.value).toBe('Kept and refused'));
+    expect(alert).toHaveBeenCalledWith('Please rephrase', REASON);
+    expect(sends()).toHaveLength(0);
+    await r.unmount();
+    await act(async () => { authEvents.emit('logout'); });
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1') ?? '[]').not.toContain('Kept and refused'));
+    const again = await open();
+    await again.findByTestId('space-chat-row-m3');
+    expect(field(again).props.value).toBe('');
+  });
+
+  it('m#879 Opus B3 guard: a row already on its way cannot be dropped from the phone (its send cannot be called back)', async () => {
+    const { spaceOutbox } = require('../../../components/community/space-chat/spaceChatOutbox');
+    mockApi.post.mockImplementation((url: string) => (url.endsWith('/messages') ? new Promise(() => undefined) : Promise.resolve({ data: { ok: true } })));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(field(r), 'On its way');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    expect(await r.findByText('Sending…')).toBeTruthy();
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('On its way'));
+    const row = JSON.parse(mockDisk.get('space_outbox_me-1') ?? '[]')[0];
+    await act(async () => { spaceOutbox.discard(row.localId); });
+    expect(r.getByLabelText('Dana Reyes, Sending…. On its way')).toBeTruthy();
+  });
 });
