@@ -975,6 +975,8 @@ describe('FR-871R6 (m#887): the space\'s coach removes someone else\'s message o
     mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
   };
   const voiceApi = () => jest.requireMock('../../../api/communityVoiceApi').communityVoiceApi as { remove: jest.Mock };
+  // The file's earlier removal cases call this mock too; count only this block's calls.
+  beforeEach(() => { voiceApi().remove.mockClear(); });
   // The server's answer after a removal: the row comes back deleted with removed_by (b#1165 CONTRACT section 2).
   const serverRemoves = (id: string) => { page = page.map((m) => ((m as { id: string }).id === id ? removed(id, (m as { created_at: string }).created_at, JO, { kind: (m as { kind: string }).kind }) : m)); };
 
