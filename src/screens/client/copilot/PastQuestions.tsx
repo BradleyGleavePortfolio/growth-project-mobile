@@ -8,13 +8,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { forestPop, pathTint, radius, typography } from '../../../theme/tokens';
-import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
-import RomanAvatar from '../../../components/roman/RomanAvatar';
+import { forestPop, pathTint, radius } from '../../../theme/tokens';
 import { copilotApi, type PastQuestion } from '../../../api/copilotApi';
 import { COPILOT_COPY as C, shortDay } from './pathChangeWords';
 import { ASK_COPY as A, monthYear } from './askWords';
 import { ledger, ledgerType } from './ledger';
+import { LedgerButton, LedgerLink, RomanNotice } from './RomanNotice';
 
 export const COPILOT_QUESTIONS_KEY = ['copilot', 'questions'] as const;
 
@@ -29,15 +28,20 @@ export function usePastQuestions() {
   });
 }
 
-/** "Past questions · 186" on Your path (CP-A-44). Hidden until there is one. */
+/**
+ * "Past questions · 186" on Your path (CP-A-44), style A's ask row (frame 13 .qrow: 52 tall, 16/1.3, the count 14 in
+ * the muted grey with the moss chevron 6 beside it; Opus B-852R3-1), 14 under what is above it. Hidden until there is one.
+ */
 export function PastQuestionsRow({ total, onPress }: { total: number; onPress: () => void }) {
   const { semanticColors: sc } = useTheme();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${A.past}, ${total}`} testID="copilot-past-row"
-      style={({ pressed }) => [s.card, s.row, { backgroundColor: pressed ? sc.bgPrimary : ledger.card, borderColor: ledger.line }]}>
-      <Text style={[typography.body, s.grow, { color: sc.textPrimary }]}>{A.past}</Text>
-      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{total.toLocaleString('en-US')}</Text>
-      <Ionicons name="chevron-forward" size={18} color={sc.textMuted} />
+      style={({ pressed }) => [s.card, s.entry, { backgroundColor: pressed ? pathTint.leaf : ledger.card, borderColor: ledger.line }]}>
+      <Text style={[ledgerType.ask, s.grow, { color: sc.textPrimary }]}>{A.past}</Text>
+      <View style={s.count}>
+        <Text style={[ledgerType.count, { color: ledger.muted }]} testID="copilot-past-row-count">{total.toLocaleString('en-US')}</Text>
+        <Ionicons name="chevron-forward" size={18} color={forestPop.moss} testID="copilot-past-row-chevron" />
+      </View>
     </Pressable>
   );
 }
@@ -49,7 +53,7 @@ export function PastQuestionsRow({ total, onPress }: { total: number; onPress: (
 function outcomeOf(q: PastQuestion): { text: string; bg: string; ink: string } | null {
   if (q.outcome === 'approved') return { text: C.approved, bg: pathTint.leaf, ink: forestPop.forest };
   if (q.outcome === 'rejected') return { text: C.declined(C.yourCoach), bg: ledger.still, ink: ledger.muted };
-  if (q.outcome === 'pending') return { text: C.waiting, bg: pathTint.gold, ink: forestPop.goldInk };
+  if (q.outcome === 'pending') return { text: C.waiting, bg: ledger.wait, ink: forestPop.goldInk };
   return null;
 }
 
@@ -81,36 +85,34 @@ export function PastQuestionsList({ items, onOpen, more, loadingMore, onMore }: 
                   <View style={s.grow}>
                     <Text style={[ledgerType.row, { color: sc.textPrimary }]}>{q.question}</Text>
                     <View style={s.meta}>
-                      <Text style={[ledgerType.small, { color: ledger.muted }]}>{day}</Text>
+                      {/* "Sun 18 Oct · Approved by your coach" (frame 14 .hrow small; Opus B-852R3-1). */}
+                      <Text style={[ledgerType.small, { color: ledger.muted }]}>{out ? `${day} \u00B7` : day}</Text>
                       {out ? <Text style={[ledgerType.outcome, s.pill, { backgroundColor: out.bg, color: out.ink }]} testID={`copilot-past-${q.messageId}-outcome`}>{out.text}</Text> : null}
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={sc.textMuted} />
+                  {/* .hrow's chevron: 22, the row's ink (frame 14). */}
+                  <Ionicons name="chevron-forward" size={22} color={sc.textPrimary} testID={`copilot-past-${q.messageId}-chevron`} />
                 </Pressable>
               );
             })}
           </View>
         </View>
       ))}
-      {more ? <TextLink label={A.older} onPress={onMore} disabled={loadingMore} align="center" testID="copilot-past-more" style={s.older} /> : null}
+      {more ? <View style={s.older}><LedgerLink label={A.older} onPress={onMore} disabled={loadingMore} testID="copilot-past-more" /></View> : null}
     </View>
   );
 }
 
 /**
- * A history read that failed (the list, a page of older questions, or one answer): Roman's white ledger notice with
- * the approved words and a filled Try again (style A .stc, #852 round 3 B-H2), not the app's plain quiet line. The
- * words and what Try again reads are the caller's.
+ * A history read that failed (the list, a page of older questions, or one answer): Roman's notice with the approved
+ * words and Try again (style A .stc, #852 round 3 B-H2), the one notice every Copilot failure uses. The words and what
+ * Try again reads are the caller's.
  */
 export function LedgerRetry({ message, onRetry, retrying, testID }: { message: string; onRetry: () => void; retrying: boolean; testID: string }) {
   return (
-    <View style={[s.notice, { backgroundColor: ledger.card, borderColor: ledger.line }]} accessibilityRole="alert" accessibilityLiveRegion="polite" testID={testID}>
-      <View style={s.noticeHead}>
-        <RomanAvatar crop="neutral" size={40} testID={`${testID}-roman`} />
-        <Text style={[ledgerType.body, s.grow, { color: ledger.ink }]}>{message}</Text>
-      </View>
-      <PrimaryButton label="Try again" onPress={onRetry} disabled={retrying} haptic={false} wrap testID={`${testID}-retry`} />
-    </View>
+    <RomanNotice body={message} testID={testID}>
+      <LedgerButton label="Try again" onPress={onRetry} disabled={retrying} haptic={false} testID={`${testID}-retry`} />
+    </RomanNotice>
   );
 }
 
@@ -122,9 +124,9 @@ const s = StyleSheet.create({
   older: { marginTop: 8 },
   card: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
   row: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 11 },
+  entry: { minHeight: 52, marginTop: -2, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  count: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   grow: { flex: 1, gap: 2 },
   meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   pill: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
-  notice: { borderWidth: 1, borderRadius: radius.card, paddingVertical: 20, paddingHorizontal: 18, gap: 14 },
-  noticeHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
 });

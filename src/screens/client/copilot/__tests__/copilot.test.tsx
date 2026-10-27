@@ -91,10 +91,15 @@ test('Send refusals are told truthfully: lapsed, AI help off, and a failed conne
   post.mockRejectedValueOnce(fail(403, { code: 'ai_consent_required' }));
   await act(async () => fireEvent.press(s.getByText('Send to Alex')));
   expect(s.getByText('AI help is off')).toBeTruthy();
+  // One forest button at a time (FR-852X, Sol B-S3): Allow AI help, and Send comes back after the grant.
+  expect(s.queryByText('Send to Alex')).toBeNull();
+  await s.unmount();
+  const net = await render(<SuggestionCard suggestion={row({ status: 'suggested' })} coach="Alex" onDismiss={jest.fn()} />);
   post.mockRejectedValueOnce(new Error('Network Error'));
-  await act(async () => fireEvent.press(s.getByText('Send to Alex')));
-  expect(s.getByText('That did not go through. Try again.')).toBeTruthy();
-  expect(s.getByText('Not now')).toBeTruthy();
+  await act(async () => fireEvent.press(net.getByText('Send to Alex')));
+  expect(net.getByText('That did not go through. Try again.')).toBeTruthy();
+  expect(net.getByTestId('copilot-send-retry')).toBeTruthy();
+  expect(net.getByText('Not now')).toBeTruthy();
 });
 
 test('Your path lists sent suggestions with where each stands and the coach note', async () => {

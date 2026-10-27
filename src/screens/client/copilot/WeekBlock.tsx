@@ -67,8 +67,9 @@ export function WeekBlock({ week, compact, now }: { week: CopilotWeek; compact: 
 const s = StyleSheet.create({
   // Style A's week (.mh .sub, .stats, .stat, .chg, .mhs .mini; Opus B-878-G2): tiles padded 12/10/11 so three fit
   // on one line each at 360 wide; the changed chip never wraps.
-  wrap: { gap: 14 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  // .mh .sub 5 under the title, .stats 16 under it; folded, .mhs .mini 8 under the title (Opus B-878-G).
+  wrap: { marginTop: 5, gap: 16 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   tile: { flex: 1, minWidth: 96, borderWidth: 1, borderRadius: radius.card, paddingTop: 12, paddingHorizontal: 10, paddingBottom: 11 },
