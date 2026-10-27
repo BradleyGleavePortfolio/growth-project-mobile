@@ -1542,12 +1542,16 @@ describe('FX4-868 round 4 — Cohorts and a cohort in K2 Style B (#172-10)', () 
   it('Cohorts error is an inline card: its Try again refetches, and the page can be pulled', async () => {
     const refetch = jest.fn();
     mockState.cohorts = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch };
-    const { getByTestId, getByText, UNSAFE_getAllByType } = await render(<CoachCommunityCohortsScreen />);
+    const { getByTestId, getByText } = await render(<CoachCommunityCohortsScreen />);
     expect(getByText('Could not load your cohorts. Pull to retry.')).toBeTruthy();
     expect(getByTestId('coach-community-cohorts-fab')).toBeTruthy();
     await fireEvent.press(getByTestId('coach-community-cohorts-error-retry'));
     expect(refetch).toHaveBeenCalledTimes(1);
-    expect(UNSAFE_getAllByType(RefreshControl).length).toBeGreaterThan(0);
+    // Pull-to-retry is real: the error card sits in a ScrollView whose RefreshControl refetches.
+    const scroll = getByTestId('coach-community-cohorts-error-scroll');
+    expect(scroll.props.refreshControl.type).toBe(RefreshControl);
+    await scroll.props.refreshControl.props.onRefresh();
+    expect(refetch).toHaveBeenCalledTimes(2);
   });
 
   it('a cohort row carries its filled monogram, hidden from screen readers (the row label says it all)', async () => {
@@ -1576,5 +1580,9 @@ describe('FX4-868 round 4 — Cohorts and a cohort in K2 Style B (#172-10)', () 
     expect(getByText('Could not load this cohort. Pull back and open it again.')).toBeTruthy();
     await fireEvent.press(getByTestId('coach-community-cohort-detail-error-retry'));
     expect(refetch).toHaveBeenCalledTimes(1);
+    const scroll = getByTestId('coach-community-cohort-detail-error-scroll');
+    expect(scroll.props.refreshControl.type).toBe(RefreshControl);
+    await scroll.props.refreshControl.props.onRefresh();
+    expect(refetch).toHaveBeenCalledTimes(2);
   });
 });

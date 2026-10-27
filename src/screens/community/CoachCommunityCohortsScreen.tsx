@@ -173,6 +173,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
 
       {cohorts.isError ? (
         <ScrollView
+          testID="coach-community-cohorts-error-scroll"
           contentContainerStyle={styles.noticeScroll}
           refreshControl={
             <RefreshControl
