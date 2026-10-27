@@ -13,18 +13,17 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CommonActions, useNavigation, useRoute, type ParamListBase, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { forestPop, layout, pathTint, typography, radius } from '../../theme/tokens';
+import { forestPop, layout, pathTint, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import EmptyState from '../../components/EmptyState';
-import AiRefusalNotice, { AI_REFUSAL_ACTIONS } from '../../components/ai/AiRefusalNotice';
-import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
+import { AI_REFUSAL_ACTIONS } from '../../components/ai/AiRefusalNotice';
+import CopilotComposer from '../../components/copilot/CopilotComposer';
 import RomanAvatar from '../../components/roman/RomanAvatar';
-import RomanComposer from '../../components/roman/RomanComposer';
 import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
 import {
   ROMAN_AI_ON_ASK_AGAIN, ROMAN_ERROR_TRANSIENT, ROMAN_OFFLINE_BODY, ROMAN_OFFLINE_TITLE, ROMAN_QUICK_STARTS, ROMAN_ROOM_FOOTER,
@@ -34,6 +33,7 @@ import { ForestStatusBar } from '../../components/StatusBarBand';
 import { Headline, PrimaryButton, Screen, TextLink, useScreenInsets } from '../../ui';
 import { loadFailureMessage } from '../../ui/states/QuietStates';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
+import { AI_DAILY_CAP_TITLE, aiDailyCapBody } from '../../lib/ai/aiDailyCap';
 import { featureFlags } from '../../config/featureFlags';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import { JOIN_A_COACH, ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
@@ -52,7 +52,8 @@ import { WeekBlock } from './copilot/WeekBlock';
 import { LedgerRetry, PastQuestionsList, PastQuestionsRow, usePastQuestions } from './copilot/PastQuestions';
 import { copilotAnswerKey } from './copilot/copilotErasure';
 import { useCopilotAsk, type CopilotTurn } from './copilot/useCopilotAsk';
-import { ledger, ledgerType } from './copilot/ledger';
+import { ledger, ledgerGutter, ledgerType } from './copilot/ledger';
+import { CopilotRefusal, RomanNotice } from './copilot/RomanNotice';
 
 export const COPILOT_RECENT_KEY = ['copilot', 'recent'] as const;
 type Params = { view?: 'questions' | 'answer'; item?: PastQuestion };
@@ -153,21 +154,28 @@ function Mast({ back, title, compact, children }: { back: string; title: string;
   const { semanticColors: sc } = useTheme();
   const insets = useScreenInsets();
   const navigation = useNavigation();
+  const g = useGutter();
   const light = { color: sc.textOnAccent };
   return (
-    <View style={[s.mast, compact && s.mastSmall, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + 12 }]} testID="copilot-mast">
+    <View style={[s.mast, compact && s.mastSmall, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + 12, paddingHorizontal: g }]} testID="copilot-mast">
       <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel={`Back to ${back}`} style={s.back} testID="copilot-back">
         <Ionicons name="chevron-back" size={22} color={ledger.nav} />
         <Text style={[ledgerType.nav, { color: ledger.nav }]}>{back}</Text>
       </Pressable>
-      <Text style={[compact ? ledgerType.mastSmall : typography.h1, light]} accessibilityRole="header" testID="copilot-mast-title">{title}</Text>
+      <Text style={[compact ? ledgerType.mastSmall : ledgerType.mast, light]} accessibilityRole="header" testID="copilot-mast-title">{title}</Text>
       {children}
     </View>
   );
 }
 
+/** Style A's gutter (--g) for this screen's masthead and body: 16 on a phone under 375 wide (Opus B-878-G2). */
+function useGutter() {
+  return ledgerGutter(useWindowDimensions().width);
+}
+
 function PathView() {
   const { semanticColors: sc } = useTheme();
+  const g = useGutter();
   const navigation = useNavigation<Nav>();
   const qc = useQueryClient();
   const coach = useCoachFirstName();
@@ -200,9 +208,15 @@ function PathView() {
   // A change still shown under its answer (its card, or its status) is not listed a second time below. Once it is sent
   // from that card the card keeps only "Sent", so its status shows here, then Approved or Not approved (Sol B-R2-SEND).
   const underAnswers = new Set(turns.map((t) => t.answer?.reply?.suggestion?.id).filter((id) => id && !sent.has(id)));
+  // After an answer, the starters not asked yet stay as quick chips under the last turn (frame 03, Opus B-G1); none
+  // while Roman answers, and none while AI help is off, credits are out or the daily cap holds (frames 07, 08, 09).
+  const last = turns[turns.length - 1];
+  // None under any turn that ended in a failure card (offline, rate limit, stored, the limits) or a crisis reply
+  // either (Opus B-878-G3): the card's own action is the only next step there.
+  const more = asked && !busy && !last?.error && !last?.answer?.safety?.length ? starters.filter((q) => !turns.some((t) => t.question === q)) : [];
   const listed = items.filter((i) => !underAnswers.has(i.id));
   const composer = (
-    <RomanComposer value={draft} onChangeText={setDraft} sending={busy} footer={ROMAN_ROOM_FOOTER} testID="copilot-composer"
+    <CopilotComposer value={draft} onChangeText={setDraft} sending={busy} gutter={g} testID="copilot-composer"
       onSend={() => { const t = draft; setDraft(''); onAsk(t); }} />
   );
 
@@ -216,9 +230,9 @@ function PathView() {
           onScrollBeginDrag={reveal.stop}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={refresh} tintColor={sc.textMuted} />}>
           <Mast back={C.back} title={C.title} compact={asked}>{week ? <WeekBlock week={week} compact={asked} /> : null}</Mast>
-          <View style={s.body} onLayout={(e) => reveal.body(e.nativeEvent.layout.y)}>
+          <View style={[s.body, { paddingHorizontal: g, paddingTop: asked ? 18 : 22 }]} onLayout={(e) => reveal.body(e.nativeEvent.layout.y)} testID="copilot-body">
             {q.isPending ? <LedgerLoading label="Loading your path" rows={2} testID="copilot-loading" /> : null}
-            {refusal ? <AiRefusalNotice refusal={refusal} audience="client" surface="roman" onRetry={() => void q.refetch()} /> : null}
+            {refusal ? <CopilotRefusal refusal={refusal} onRetry={() => void q.refetch()} testID="copilot-load-refusal" /> : null}
             {q.error && !refusal ? (
               <LedgerRetry message={loadFailureMessage(q.error, 'Your path')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-error" />
             ) : null}
@@ -229,23 +243,34 @@ function PathView() {
             ))}
             {asked ? null : (
               <View style={s.section} testID="copilot-ask">
-                <Text style={[typography.bodyMd, s.strong, { color: sc.textPrimary }]} accessibilityRole="header">{A.askHeading}</Text>
+                <Text style={[ledgerType.section, { color: sc.textPrimary }]} accessibilityRole="header">{A.askHeading}</Text>
                 <View style={[s.card, { backgroundColor: ledger.card, borderColor: ledger.line }]}>
                   {starters.map((label, i) => (
                     <Pressable key={label} onPress={() => onAsk(label)} disabled={busy} accessibilityRole="button" accessibilityLabel={label}
                       accessibilityState={{ disabled: busy }} testID={`copilot-starter-${i}`}
                       style={({ pressed }) => [s.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ledger.line },
                         (pressed || label === A.whyCalories) && { backgroundColor: pathTint.leaf }]}>
-                      <Text style={[typography.body, s.grow, { color: sc.textPrimary }, label === A.whyCalories && s.strong]}>{label}</Text>
+                      <Text style={[ledgerType.ask, s.grow, { color: sc.textPrimary }, label === A.whyCalories && s.strong]}>{label}</Text>
                       <Ionicons name="chevron-forward" size={18} color={forestPop.forest} />
                     </Pressable>
                   ))}
                 </View>
-                <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{A.hint(coach)}</Text>
+                <Text style={[ledgerType.privacy, { color: ledger.muted }]}>{A.hint(coach)}</Text>
               </View>
             )}
+            {more.length > 0 ? (
+              <View style={s.chips} testID="copilot-more">
+                {more.map((label, i) => (
+                  <Pressable key={label} onPress={() => onAsk(label)} accessibilityRole="button" accessibilityLabel={label} testID={`copilot-more-${i}`}
+                    style={({ pressed }) => [s.more, { backgroundColor: pressed ? pathTint.leaf : ledger.card, borderColor: ledger.chip }]}>
+                    <Text style={[ledgerType.chip, { color: forestPop.forest, flexShrink: 1 }]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             {listed.length > 0 ? <SuggestionStatusList items={listed} coach={coach} /> : null}
             {total > 0 ? <PastQuestionsRow total={total} onPress={() => navigation.push('Copilot', { view: 'questions' })} /> : null}
+            <Text style={[ledgerType.foot, s.footer, { color: ledger.muted }]} testID="copilot-footer">{ROMAN_ROOM_FOOTER}</Text>
           </View>
         </ScrollView>
       </Screen>
@@ -293,8 +318,8 @@ function Asked({ question, at, day }: { question: string; at: Date; day?: string
   const { semanticColors: sc } = useTheme();
   return (
     <View style={s.asked}>
-      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{A.youAsked(day ? `${day}, ${timeOf(at)}` : timeOf(at))}</Text>
-      <Text style={[typography.h4, s.strong, { color: sc.textPrimary }]} accessibilityRole="header">{question}</Text>
+      <Text style={[ledgerType.who, { color: ledger.muted }]}>{A.youAsked(day ? `${day}, ${timeOf(at)}` : timeOf(at))}</Text>
+      <Text style={[ledgerType.question, { color: sc.textPrimary }]} accessibilityRole="header" testID="copilot-asked">{question}</Text>
     </View>
   );
 }
@@ -317,7 +342,7 @@ function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: stri
   return (
     <View style={s.turn} testID="copilot-turn">
       <Asked question={turn.question} at={turn.askedAt} />
-      {a ? <AnswerCard text={a.text} reply={a.reply} safety={a.safety} /> : null}
+      {a ? <AnswerCard text={a.text} reply={a.reply} safety={a.safety} compact={!!a.reply?.suggestion} /> : null}
       {a && !dismissed ? (
         <SuggestionSlot suggestion={a.reply?.suggestion ?? null} coach={coach} onSent={() => a.reply?.suggestion && onSent(a.reply.suggestion.id)} onDismiss={() => setDismissed(true)} />
       ) : null}
@@ -333,32 +358,24 @@ function Turn({ turn, coach, onRetry, onSent }: { turn: CopilotTurn; coach: stri
  * grant main's "ask again" line (RomanChatScreen, Sol B-326-3). Sending again is the client's call, from the composer.
  */
 function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => void }) {
-  const { semanticColors: sc } = useTheme();
-  const [capOpen, setCapOpen] = useState(true);
   const [granted, setGranted] = useState(false);
   const stored = error.turnStored === true;
   if (error.kind === 'aiRefused' && error.refusal && !granted) {
-    return <AiRefusalNotice refusal={error.refusal} audience="client" surface="roman" onRetry={stored ? () => setGranted(true) : onRetry} testID="copilot-ai-refusal" />;
+    return <CopilotRefusal refusal={error.refusal} onRetry={stored ? () => setGranted(true) : onRetry} testID="copilot-ai-refusal" />;
   }
-  if (error.kind === 'dailyCap') {
-    return <AiDailyCapModal cap={capOpen ? (error.dailyCap ?? null) : null} audience="client" onClose={() => setCapOpen(false)} testID="copilot-daily-cap" />;
-  }
+  // Style A draws the daily cap inline with main's words (frame 09, CP-A-40), not main's pop-up (style B, CP-B-23).
   const [title, body, retry]: [string, string, boolean] =
-    error.kind === 'poolEmpty' ? [romanPoolEmpty('client'), '', false]
+    error.kind === 'dailyCap' ? [AI_DAILY_CAP_TITLE, error.dailyCap ? aiDailyCapBody(error.dailyCap, 'client') : '', false]
+    : error.kind === 'poolEmpty' ? ['', romanPoolEmpty('client'), false]
     : granted ? [ROMAN_AI_ON_ASK_AGAIN, '', false]
     : error.kind === 'rateLimited' ? [romanRateLimited(error.retryAfterSeconds), '', false]
     : stored ? [ROMAN_STORED_NO_REPLY, '', false]
     : error.kind === 'offline' ? [ROMAN_OFFLINE_TITLE, ROMAN_OFFLINE_BODY, true]
     : [ROMAN_ERROR_TRANSIENT, '', true];
   return (
-    <View style={[s.card, s.pad, { backgroundColor: ledger.card, borderColor: ledger.line }]} accessibilityRole="alert" testID={`copilot-turn-${error.kind}`}>
-      <View style={s.who}>
-        <RomanAvatar crop="neutral" size={28} />
-        <Text style={[typography.bodyMd, s.strong, s.grow, { color: sc.textPrimary }]}>{title}</Text>
-      </View>
-      {body ? <Text style={[typography.bodySmall, { color: sc.textPrimary }]}>{body}</Text> : null}
+    <RomanNotice title={title || undefined} body={body || undefined} testID={`copilot-turn-${error.kind}`}>
       {retry ? <PrimaryButton label="Try again" onPress={onRetry} testID="copilot-retry" /> : null}
-    </View>
+    </RomanNotice>
   );
 }
 
@@ -366,6 +383,7 @@ function QuestionsView() {
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<Nav>();
   const q = usePastQuestions();
+  const g = useGutter();
   const first = q.data?.pages[0] ?? null;
   const items = (q.data?.pages ?? []).flatMap((pg) => pg?.items ?? []);
   // A failed "Show older questions" says so where the link is, and its Try again reads that page again (Opus C1).
@@ -386,7 +404,7 @@ function QuestionsView() {
             </View>
           ) : null}
         </Mast>
-        <View style={[s.body, s.histBody]}>
+        <View style={[s.body, s.histBody, { paddingHorizontal: g }]}>
           {q.isPending ? <LedgerLoading label="Loading past questions" rows={4} testID="copilot-past-loading" /> : null}
           {older ? null : failed}
           <PastQuestionsList items={items} more={q.hasNextPage && !older} loadingMore={q.isFetchingNextPage}
@@ -445,16 +463,18 @@ function AnswerView({ item }: { item: PastQuestion }) {
   });
   const sug = q.data?.reply?.suggestion ?? null;
   const missing = q.isSuccess && !q.data;
+  const g = useGutter();
   return (
     <>
       <ForestStatusBar />
       <Screen edges={['bottom']} testID="copilot-past-answer" contentStyle={s.list}>
         <Mast back={A.past} title={C.title} compact />
-        <View style={[s.body, s.turn]}>
+        <View style={[s.body, s.turn, { paddingHorizontal: g, paddingTop: 18 }]}>
           <Asked question={item.question ?? ''} at={new Date(item.askedAt)} day={shortDay(item.askedAt)} />
           {q.isPending ? <LedgerLoading label="Loading the answer" rows={3} testID="copilot-answer-loading" /> : null}
           {q.error || missing ? <LedgerRetry message={loadFailureMessage(q.error, 'This answer')} onRetry={() => void q.refetch()} retrying={q.isRefetching} testID="copilot-answer-error" /> : null}
-          {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} /> : null}
+          {/* Folded under a change as a turn's answer is (Sol B-G3): the change, not the facts, is the next step. */}
+          {q.data ? <AnswerCard text={q.data.text} reply={q.data.reply} compact={!!sug} /> : null}
           {/* A decided change was decided by whoever coached then; only an unsent one goes to today's coach (C1). */}
           {/* Sent from here, Your path's lists and this answer read the server again (as a turn's Send does). */}
           {q.data ? (
@@ -480,13 +500,14 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: 20, paddingTop: 24, gap: 16 },
   section: { gap: 10 },
   turn: { gap: 12 },
-  asked: { gap: 2 },
+  asked: { gap: 3 },
   strong: { fontWeight: '600' },
   grow: { flex: 1 },
   card: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
-  pad: { padding: 16, gap: 12 },
-  who: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  more: { maxWidth: '100%', minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: radius.button, paddingHorizontal: 14, paddingVertical: 8 },
+  footer: { textAlign: 'center', paddingTop: 0, paddingBottom: 2 },
   bones: { minHeight: 52, justifyContent: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 14 },
   bone: { height: 12, borderRadius: 6 },
   boneLong: { width: '72%' },
