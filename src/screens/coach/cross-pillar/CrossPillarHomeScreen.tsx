@@ -297,7 +297,7 @@ function StatTile({
   return (
     <View style={[styles.statTile, degraded && styles.statTileDegraded]}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+      <Text style={[styles.statValue, degraded && styles.statValueDegraded]}>{value}</Text>
       <Text style={styles.statHint}>{hint}</Text>
     </View>
   );
@@ -395,7 +395,9 @@ const makeStyles = (colors: ThemeColors) =>
       padding: 14,
       gap: 4,
     },
-    statTileDegraded: { opacity: 0.5 },
+    // Unavailable data: the tile drops its fill and the number mutes; the words stay opaque and readable (#168-13).
+    statTileDegraded: { backgroundColor: 'transparent' },
+    statValueDegraded: { color: colors.textMuted },
     statLabel: { ...Typography.label, color: colors.textMuted, fontSize: 10, letterSpacing: 1.6 },
     statValue: {
       fontFamily: 'CormorantGaramond_500Medium',

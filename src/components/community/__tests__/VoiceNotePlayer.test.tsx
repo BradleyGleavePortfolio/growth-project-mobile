@@ -260,7 +260,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     expect(handles[0].unload).toHaveBeenCalledTimes(1);
   });
 
-  it('the control is disabled while loading', async () => {
+  it('the control is disabled while loading and shows a spinner in the disc', async () => {
     const { port } = heldPlayback();
     const { getByTestId } = await render(
       <VoiceNotePlayer url={URL} durationMs={4000} playback={port} />,
@@ -272,6 +272,13 @@ describe('B-314-8: one native player per control, never orphaned', () => {
         busy: true,
       }),
     );
+    expect(getByTestId('voice-player-loading')).toBeTruthy();
+  });
+
+  it('no spinner before the first tap', async () => {
+    const { port } = heldPlayback();
+    const { queryByTestId } = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
+    expect(queryByTestId('voice-player-loading')).toBeNull();
   });
 
   it('a URL change while loading releases the stale load; the new URL loads on the next tap', async () => {
@@ -334,5 +341,123 @@ describe('VoiceNotePlayer — seek (B-LS848-3)', () => {
       await fireEvent.press(getByTestId('voice-player-seek'), { nativeEvent: { locationX: x } });
       expect(playback.handle.seek).toHaveBeenLastCalledWith(ms);
     }
+  });
+});
+
+// LS-848 B4: the GOAL geometry — a 52 pt disc and a 48-bar, 34-high strip on the card; the review
+// sheet (tone bare) draws 44-high bars with a playhead and no second duration under them.
+describe('VoiceNotePlayer — GOAL geometry (FR-848R4)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  it('the feed card has a 52 pt disc, 48 bars 34 high and the duration under the bars', async () => {
+    const { getByTestId, getAllByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9, 0.4]} playback={makePlayback(true)} />,
+    );
+    const disc = StyleSheet.flatten(getByTestId('voice-player-toggle').props.style);
+    expect([disc.width, disc.height]).toEqual([52, 52]);
+    const strip = getAllByTestId('voice-waveform', { includeHiddenElements: true })[0];
+    expect(StyleSheet.flatten(strip.props.style)).toMatchObject({ height: 34, gap: 2 });
+    expect(strip.props.children[0]).toHaveLength(48);
+    const duration = getByTestId('voice-player-duration', { includeHiddenElements: true });
+    expect(StyleSheet.flatten(duration.props.style)).toMatchObject({ fontSize: 14, fontWeight: '600' });
+    // GOAL .bcard: the card's subtle shadow (0 2px 8px at 5%).
+    expect(StyleSheet.flatten(getByTestId('voice-player').props.style)).toMatchObject({ shadowOpacity: 0.05, shadowRadius: 4 });
+  });
+
+  it('the review sheet (bare) shows a playhead and no duration under the bars', async () => {
+    const { queryByTestId, getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} tone="bare" playback={makePlayback(true)} />,
+    );
+    expect(getByTestId('voice-waveform-playhead', { includeHiddenElements: true })).toBeTruthy();
+    expect(queryByTestId('voice-player-duration', { includeHiddenElements: true })).toBeNull();
+    const strip = getByTestId('voice-waveform', { includeHiddenElements: true });
+    expect(StyleSheet.flatten(strip.props.style)).toMatchObject({ height: 44, gap: 3 });
+  });
+
+  // Opus R5-B1: the review sheet's bare player sits flush; every padding edge of its root is 0.
+  it('the bare player root has no padding on any edge and no border', async () => {
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} tone="bare" playback={makePlayback(true)} />,
+    );
+    const root = StyleSheet.flatten(getByTestId('voice-player').props.style);
+    for (const edge of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'] as const) {
+      expect(root[edge] ?? root.padding ?? 0).toBe(0);
+    }
+    expect(root.borderWidth).toBe(0);
+  });
+});
+
+// LO-848R4 B4: the duration and the retry line are Inter (GOAL), not the system face.
+describe('VoiceNotePlayer — loaded faces (LO-848R4 B4)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  it('every line on the card names a loaded Inter face', async () => {
+    const { container } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} playback={makePlayback(true)} />,
+    );
+    const texts = container.queryAll((n) => n.type === 'Text');
+    expect(texts.length).toBeGreaterThan(0);
+    for (const t of texts) expect(String(StyleSheet.flatten(t.props.style)?.fontFamily)).toMatch(/^(Inter_|ionicons$)/); // ionicons: icon glyphs
+  });
+});
+
+// LO-848R4 B6-B8: the disc sits on the bars' row (GOAL .brow) with the time under the bars
+// (GOAL .bfoot, 64 in); the review strip is 34 bars 4 pt wide, 3 apart, packed from the left
+// (235 pt); `disabled` greys the disc while the viewer's own note sends or waits.
+describe('VoiceNotePlayer — GOAL rows, review strip and held disc (FR-848R5)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  const flat = (n: { props: { style?: unknown } }) => StyleSheet.flatten(n.props.style);
+
+  it('puts the disc and the bars on one centred row and the time under the bars', async () => {
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} playback={makePlayback(true)} />,
+    );
+    const toggle = getByTestId('voice-player-toggle');
+    const seek = getByTestId('voice-player-seek');
+    const row = toggle.parent!;
+    expect(row).toBe(seek.parent);
+    expect(flat(row)).toMatchObject({ flexDirection: 'row', alignItems: 'center', gap: 12 });
+    const foot = getByTestId('voice-player-duration', { includeHiddenElements: true }).parent!;
+    expect(foot).not.toBe(row);
+    expect(flat(foot)).toMatchObject({ marginTop: 6, paddingLeft: 64, justifyContent: 'space-between' });
+  });
+
+  it('draws the review strip as 34 bars, 4 pt wide, 3 apart, from the left; a tap past its end is the end', async () => {
+    const playback = makePlayback(true);
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9, 0.5]} tone="bare" playback={playback} />,
+    );
+    const strip = getByTestId('voice-waveform', { includeHiddenElements: true });
+    expect(flat(strip)).toMatchObject({ height: 44, gap: 3, justifyContent: 'flex-start' });
+    expect(flat(strip).flex).toBeUndefined(); // packed from the left, not stretched
+    const bars = strip.props.children[0];
+    expect(bars).toHaveLength(34);
+    for (const bar of bars) {
+      const st = StyleSheet.flatten(bar.props.style);
+      expect(st).toMatchObject({ width: 4 });
+      // no flex shorthand: react-native-web reads `flex: 0` as `0 1 0%` and drops the width
+      expect(st.flex).toBeUndefined();
+    }
+    const seek = getByTestId('voice-player-seek');
+    await fireEvent(seek, 'layout', { nativeEvent: { layout: { width: 300 } } });
+    await fireEvent.press(seek, { nativeEvent: { locationX: 117.5 } });
+    expect(getByTestId('voice-player-seek').props.accessibilityValue).toEqual({ text: '0:21 of 0:42' });
+    await fireEvent.press(seek, { nativeEvent: { locationX: 290 } });
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(playback.handle.play).toHaveBeenCalled());
+    // 117.5 of the 235 pt strip is the middle; 290 is past the end, so the end.
+    expect(playback.handle.seek).toHaveBeenCalledWith(42_000);
+  });
+
+  it('a held note has a grey disc that does not play, but keeps its Play label', async () => {
+    const playback = makePlayback(true);
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2]} disabled playback={playback} />,
+    );
+    const toggle = getByTestId('voice-player-toggle');
+    expect(flat(toggle)).toMatchObject({ backgroundColor: '#E2E6E1' });
+    expect(toggle.props.accessibilityLabel).toBe('Play voice note, 0:42');
+    expect(toggle.props.accessibilityState).toMatchObject({ disabled: true });
+    fireEvent.press(toggle);
+    await act(async () => undefined);
+    expect(playback.load).not.toHaveBeenCalled();
   });
 });

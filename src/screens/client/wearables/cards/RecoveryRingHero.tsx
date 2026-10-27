@@ -32,6 +32,7 @@ export interface RecoveryRingHeroProps {
 export function RecoveryRingHero({ score, colors, size = 220, testID }: RecoveryRingHeroProps) {
   const stateView = resolveRecoveryState(score);
   const ringColor = stateView.color(RECOVERY_PALETTE);
+  const labelColor = stateView.labelColor(RECOVERY_PALETTE);
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const strokeWidth = Math.max(12, Math.round(size * 0.07));
@@ -110,7 +111,7 @@ export function RecoveryRingHero({ score, colors, size = 220, testID }: Recovery
             {score !== null ? <Text style={styles.percentUnit}>%</Text> : null}
           </Text>
           {/* Plain-language label — the number is NEVER shown without this. */}
-          <Text style={[styles.stateLabel, { color: ringColor }]} testID="recovery-state-label">
+          <Text style={[styles.stateLabel, { color: labelColor }]} testID="recovery-state-label">
             {stateView.label}
           </Text>
         </View>
