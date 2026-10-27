@@ -12,12 +12,19 @@
  * skeleton loading and a calm inline card for errors. Branches (UX P0.2):
  * skeleton while loading; an honest error card when nothing has loaded (a
  * failed refresh keeps the rows already shown); an offline card when the phone
- * is offline with nothing cached; and — on a genuinely empty inbox — the
- * operator-locked Roman-voiced empty state whose copy + crop come from the
- * backend voice policy. Rows from blocked people never show. Touch targets are
- * >= 44pt.
+ * is offline (the app's network hook) with nothing cached; and — on a
+ * genuinely empty inbox — the K2 dark caught-up page: Roman's face in a gold
+ * ring above his line, whose copy + crop come from the backend voice policy,
+ * and a way back to Community. Rows from blocked people never show. Touch
+ * targets are >= 44pt; page gutters are 24pt (layout.gutter).
  */
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   View,
   Text,
@@ -26,13 +33,16 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, colors, semantic } from '../../theme/tokens';
+import { spacing, colors, semantic, layout, radius } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
+import RomanAvatar from '../../components/roman/RomanAvatar';
 import {
   CoachRomanEmptyState,
   MonogramBadge,
 } from '../../components/community/coach';
+import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
 import CoachAckBadge, {
   resolveAckBadgeVisibility,
   inboxRowAck,
@@ -56,7 +66,17 @@ import { featureFlags } from '../../config/featureFlags';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
-import type { CoachInboxItem } from '../../api/coachCommunityApi';
+import type { CoachInboxItem, RomanCopyPayload } from '../../api/coachCommunityApi';
+
+/** What the inbox uses from navigation; tests pass only `navigate`. */
+type InboxNav = Pick<CoachCommunityNav, 'navigate'> & {
+  goBack?: () => void;
+  canGoBack?: () => boolean;
+  setOptions?: (options: {
+    headerStyle?: { backgroundColor: string };
+    headerTintColor?: string;
+  }) => void;
+};
 
 // v2-2 kill switch: when OFF the inbox renders exactly as the v1-6 surface
 // (no ack badge, no "Mark acked" quick-action). Read once at module scope —
@@ -147,9 +167,10 @@ function buildRowAccessibilityLabel(
 
 export default function CoachCommunityInboxScreen({
   navigation,
-}: { navigation?: Pick<CoachCommunityNav, 'navigate'> } = {}): React.ReactElement {
+}: { navigation?: InboxNav } = {}): React.ReactElement {
   const inbox = useCoachInbox();
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
+  const network = useNetworkStatus();
 
   // UX F6: a subtle, proportionate closure moment on a successful acknowledge,
   // reusing the established CompletionToast pattern (no new infrastructure).
@@ -181,8 +202,25 @@ export default function CoachCommunityInboxScreen({
     [inbox.data?.items, blockedIds],
   );
   const hasItems = items.length > 0;
-  // react-query pauses a fetch while the phone is offline.
-  const offline = inbox.fetchStatus === 'paused';
+  // Offline: the phone's own network state (NetInfo), or react-query pausing
+  // a fetch while it thinks the phone is offline.
+  const offline = inbox.fetchStatus === 'paused' || !isEffectivelyOnline(network);
+
+  // K2: the caught-up page is dark, so the bar above it turns forest with a
+  // bone back arrow; every other state keeps the bone bar.
+  const caughtUp =
+    !hasItems &&
+    !offline &&
+    !inbox.isLoading &&
+    !inbox.isError &&
+    emptyState.status === 'ready';
+  const setOptions = navigation?.setOptions;
+  useLayoutEffect(() => {
+    setOptions?.({
+      headerStyle: { backgroundColor: caughtUp ? colors.forest : colors.bone },
+      headerTintColor: caughtUp ? colors.bone : colors.ink,
+    });
+  }, [caughtUp, setOptions]);
 
   const openItem = useCallback(
     (item: CoachInboxItem) => {
@@ -253,8 +291,21 @@ export default function CoachCommunityInboxScreen({
   }
 
   if (!hasItems) {
+    if (caughtUp && emptyState.status === 'ready') {
+      const canGoBack =
+        navigation?.goBack != null && navigation.canGoBack?.() !== false;
+      return (
+        <InboxCaughtUp
+          payload={emptyState.payload}
+          onBack={canGoBack ? () => navigation?.goBack?.() : undefined}
+        />
+      );
+    }
+    // The voice policy is still loading or failed: the light page, never
+    // Roman's words without his face.
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
+        <InboxTitle />
         {TRIAGE_ENABLED ? (
           <View style={styles.triageHeader}>
             <InboxTriageBanner />
@@ -354,16 +405,72 @@ export function inboxRowTime(iso: string, now: Date = new Date()): string {
 function InboxTitle({
   subtitle,
   flush,
+  onDark,
 }: {
   subtitle?: string;
   flush?: boolean;
+  onDark?: boolean;
 }): React.ReactElement {
   return (
     <View style={flush ? styles.titleBlockFlush : styles.titleBlock}>
-      <Text accessibilityRole="header" style={styles.title}>
+      <Text
+        accessibilityRole="header"
+        style={[styles.title, onDark ? styles.titleOnDark : null]}
+      >
         Inbox
       </Text>
-      <Text style={styles.dateLine}>{subtitle ?? inboxDateLine()}</Text>
+      <Text style={[styles.dateLine, onDark ? styles.dateLineOnDark : null]}>
+        {subtitle ?? inboxDateLine()}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * K2 closure (DESIGN_TRAINING 7.7): the dark caught-up page. Roman's face
+ * (crop from the voice policy) sits in his gold ring above his line, set large
+ * in the serif — his voice is never shown without his face. A cream button
+ * goes back to Community, the only way into the inbox.
+ */
+function InboxCaughtUp({
+  payload,
+  onBack,
+}: {
+  payload: RomanCopyPayload;
+  onBack?: () => void;
+}): React.ReactElement {
+  const crop = payload.avatar_crop === 'smile' ? 'smile' : 'neutral';
+  return (
+    <View style={styles.caughtUpPage} testID="coach-community-inbox-screen">
+      <StatusBar style="light" />
+      <InboxTitle onDark />
+      {TRIAGE_ENABLED ? (
+        <View style={styles.triageHeader}>
+          <InboxTriageBanner />
+        </View>
+      ) : null}
+      <View style={styles.caughtUpBody} testID="coach-community-inbox-empty">
+        <View style={styles.caughtUpRing}>
+          <RomanAvatar
+            crop={crop}
+            size={64}
+            testID="coach-community-inbox-empty-avatar"
+          />
+        </View>
+        <Text style={styles.caughtUpText}>{payload.text}</Text>
+      </View>
+      {onBack ? (
+        <HapticPressable
+          intent="light"
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Community"
+          testID="coach-community-inbox-empty-back"
+          style={styles.caughtUpButton}
+        >
+          <Text style={styles.caughtUpButtonLabel}>Back to Community</Text>
+        </HapticPressable>
+      ) : null}
     </View>
   );
 }
@@ -464,8 +571,9 @@ function InboxRow({
   // before that the row's own `ack` summary drives the badge AND the label.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const cached = ACKS_ENABLED ? useCoachAckState(item.id) : undefined;
-  // Only typed message rows carry coach acks.
-  const acks = ACKS_ENABLED && item.type === 'message' && item.kind === 'text';
+  // Coach acks are per message: typed and photo rows carry them; a voice
+  // row's id is the note's id, and posts have none.
+  const acks = ACKS_ENABLED && item.type === 'message' && item.kind !== 'voice';
   const ack = acks ? inboxRowAck(cached, item.ack) : undefined;
   const breached = ack != null && resolveAckBadgeVisibility(ack).breached;
   const label = buildRowAccessibilityLabel(item, ack);
@@ -484,7 +592,9 @@ function InboxRow({
         <Text style={styles.rowCohort} numberOfLines={1}>
           {item.cohort_name}
         </Text>
-        <Text style={styles.rowSnippet} numberOfLines={2}>
+        {/* A row that opens (a post) clamps to two lines; a message row has
+            nowhere to open yet, so it shows the whole text (at most 200). */}
+        <Text style={styles.rowSnippet} numberOfLines={onOpen ? 2 : undefined}>
           {item.snippet}
         </Text>
       </View>
@@ -563,6 +673,8 @@ function CoachAckRow({
   // message rather than an actionable error.
   const conflict = isIllegalAckTransition(actions.markAcked.error);
 
+  // Once acknowledged (or replied) the badge already says so, so the button
+  // goes: the word never shows twice and no disabled button is left behind.
   return (
     <View style={styles.ackRow}>
       <CoachAckBadge
@@ -570,30 +682,22 @@ function CoachAckRow({
         labelledByRow
         testID={`coach-community-inbox-ack-badge-${item.id}`}
       />
-      <HapticPressable
-        intent="light"
-        onPress={() =>
-          actions.markAcked.mutate(undefined, { onSuccess: onAcknowledged })
-        }
-        disabled={pending || alreadyAcked}
-        accessibilityRole="button"
-        accessibilityLabel={`Acknowledge message from ${item.client_name}`}
-        accessibilityState={{ disabled: pending || alreadyAcked }}
-        testID={`coach-community-inbox-mark-acked-${item.id}`}
-        style={[
-          styles.markAckedButton,
-          {
-            borderColor: colors.forest,
-            opacity: pending || alreadyAcked ? 0.5 : 1,
-          },
-        ]}
-      >
-        <Text
-          style={styles.markAckedLabel}
+      {alreadyAcked ? null : (
+        <HapticPressable
+          intent="light"
+          onPress={() =>
+            actions.markAcked.mutate(undefined, { onSuccess: onAcknowledged })
+          }
+          disabled={pending}
+          accessibilityRole="button"
+          accessibilityLabel={`Acknowledge message from ${item.client_name}`}
+          accessibilityState={{ disabled: pending, busy: pending }}
+          testID={`coach-community-inbox-mark-acked-${item.id}`}
+          style={[styles.markAckedButton, pending ? styles.markAckedPending : null]}
         >
-          {alreadyAcked ? 'Acknowledged' : 'Acknowledge'}
-        </Text>
-      </HapticPressable>
+          <Text style={styles.markAckedLabel}>Acknowledge</Text>
+        </HapticPressable>
+      )}
       {conflict ? (
         <Text
           accessibilityRole="alert"
@@ -609,16 +713,17 @@ function CoachAckRow({
 }
 
 // K2 Style B tokens: bone page (owner #166-2), warm cream cards, forest accent,
-// ink text. Serif roles keep lineHeight >= 1.25 x fontSize (Android descenders).
+// ink text, graphite small grey text (owner #168-13), 24pt gutters, semantic
+// radii. Serif roles keep lineHeight >= 1.25 x fontSize (Android descenders).
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bone },
   pageSpinner: { paddingVertical: spacing.lg },
   triageHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingHorizontal: layout.gutter,
+    paddingBottom: spacing.md,
   },
   titleBlock: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: layout.gutter,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
@@ -629,32 +734,34 @@ const styles = StyleSheet.create({
     lineHeight: 46,
     color: colors.ink,
   },
+  titleOnDark: { color: colors.bone },
   dateLine: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
     lineHeight: 21,
-    color: colors.charcoal,
+    color: colors.graphite,
   },
+  dateLineOnDark: { color: colors.cream },
   listHeader: { gap: spacing.sm, marginBottom: spacing.xs },
   listContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: layout.gutter,
     paddingBottom: spacing.xl,
     gap: spacing.sm,
   },
-  skeletonList: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  skeletonList: { paddingHorizontal: layout.gutter, gap: spacing.sm },
   skeletonCard: {
     height: 88,
-    borderRadius: 16,
+    borderRadius: radius.card,
     backgroundColor: colors.cream,
     opacity: 0.7,
   },
   noticeCard: {
     backgroundColor: colors.cream,
-    borderRadius: 16,
+    borderRadius: radius.card,
     padding: spacing.lg,
     gap: spacing.md,
   },
-  noticeCardInset: { marginHorizontal: spacing.lg },
+  noticeCardInset: { marginHorizontal: layout.gutter },
   noticeText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 16,
@@ -663,7 +770,7 @@ const styles = StyleSheet.create({
   },
   noticeButton: {
     minHeight: 48,
-    borderRadius: 12,
+    borderRadius: radius.button,
     borderWidth: 1.5,
     borderColor: colors.forest,
     alignItems: 'center',
@@ -678,7 +785,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.cream,
-    borderRadius: 16,
+    borderRadius: radius.card,
     borderWidth: 1.5,
     borderColor: 'transparent',
     paddingVertical: spacing.md,
@@ -695,7 +802,7 @@ const styles = StyleSheet.create({
   monogram: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.chip,
     backgroundColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
@@ -727,13 +834,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
     lineHeight: 18,
-    color: colors.charcoal,
+    color: colors.graphite,
   },
   rowCohort: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     lineHeight: 16,
-    color: colors.charcoal,
+    color: colors.graphite,
   },
   rowSnippet: {
     fontFamily: 'Inter_400Regular',
@@ -754,10 +861,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    borderRadius: 12,
+    borderRadius: radius.button,
     borderWidth: 1.5,
+    borderColor: colors.forest,
     backgroundColor: colors.bone,
   },
+  markAckedPending: { opacity: 0.5 },
   markAckedLabel: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
@@ -768,5 +877,48 @@ const styles = StyleSheet.create({
     flexBasis: '100%',
     fontSize: 12,
     lineHeight: 16,
+  },
+  // K2 caught-up page: forest page, Roman's face in his gold ring, his line
+  // large in the serif (bone), a cream button at the foot.
+  caughtUpPage: {
+    flex: 1,
+    backgroundColor: colors.forest,
+    paddingBottom: spacing.xl,
+  },
+  caughtUpBody: {
+    flex: 1,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing['2xl'],
+    gap: spacing.xl,
+  },
+  caughtUpRing: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.chip,
+    borderWidth: 2,
+    borderColor: colors.romanAccent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  caughtUpText: {
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 40,
+    color: colors.bone,
+  },
+  caughtUpButton: {
+    marginHorizontal: layout.gutter,
+    minHeight: 54,
+    borderRadius: radius.button,
+    backgroundColor: colors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  caughtUpButtonLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 17,
+    lineHeight: 22,
+    color: colors.forest,
   },
 });

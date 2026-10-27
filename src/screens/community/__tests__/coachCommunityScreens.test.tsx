@@ -1166,7 +1166,7 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     seedInbox();
     // Not-yet-acked: the action button reads "Acknowledge".
     mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'warning');
-    const { getByTestId, queryByText, rerender } = await render(
+    const { getByTestId, queryByTestId, getAllByText, queryByText, rerender } = await render(
       <CoachCommunityInboxScreen />,
     );
     const button = getByTestId(`coach-community-inbox-mark-acked-${MID}`);
@@ -1175,12 +1175,12 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     expect(queryByText('Mark acked')).toBeNull();
     expect(queryByText('Acked')).toBeNull();
 
-    // Already acked: the action button reads the settled "Acknowledged".
+    // Already acked: the badge says "Acknowledged" once and the button goes
+    // (FX4-868 C1: the word never shows twice, no disabled button left).
     mockAckStateByMessage.current[MID] = ackEnvelope('acked', 'within');
     await rerender(<CoachCommunityInboxScreen />);
-    expect(
-      getByTestId(`coach-community-inbox-mark-acked-${MID}`),
-    ).toHaveTextContent('Acknowledged');
+    expect(queryByTestId(`coach-community-inbox-mark-acked-${MID}`)).toBeNull();
+    expect(getAllByText('Acknowledged')).toHaveLength(1);
   });
 
   it('the row owns the ack accessibility summary, Overdue-first (badge hidden from a11y)', async () => {
@@ -1255,20 +1255,24 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     ).toBeNull();
   });
 
-  it('only message text rows get ack controls; a summary ack shows as done', async () => {
+  it('only message text and photo rows get ack controls; a summary ack shows as done', async () => {
     const POST = '22222222-2222-2222-2222-222222222222';
     const VOICE = '33333333-3333-3333-3333-333333333333';
+    const PHOTO = '44444444-4444-4444-4444-444444444444';
     const items = [
       inboxItem({ ack: { state: 'acked', sla_state: 'within' } }),
       inboxItem({ id: POST, type: 'post' }),
       inboxItem({ id: VOICE, kind: 'voice' }),
+      inboxItem({ id: PHOTO, kind: 'photo', snippet: 'Photo', ack: { state: 'none', sla_state: 'within' } }),
     ];
     mockState.inbox = { data: { items }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
     const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
-    const mark = getByTestId(`coach-community-inbox-mark-acked-${MID}`);
-    expect(mark.props.accessibilityState).toEqual({ disabled: true });
+    // Done: the badge says so and no disabled button is left behind.
+    expect(getByTestId(`coach-community-inbox-ack-badge-${MID}-state-acked`)).toBeTruthy();
+    expect(queryByTestId(`coach-community-inbox-mark-acked-${MID}`)).toBeNull();
     expect(queryByTestId(`coach-community-inbox-mark-acked-${POST}`)).toBeNull();
     expect(queryByTestId(`coach-community-inbox-mark-acked-${VOICE}`)).toBeNull();
+    expect(getByTestId(`coach-community-inbox-mark-acked-${PHOTO}`)).toBeTruthy();
   });
 
   it('loads the next inbox page at the end of the list, once at a time', async () => {
@@ -1373,5 +1377,152 @@ describe('FR-868 round 2 — inbox ack fallback, a11y, block, destinations, erro
     const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId('coach-community-inbox-offline')).toBeTruthy();
     expect(queryByTestId('coach-community-inbox-loading')).toBeNull();
+  });
+});
+
+describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole typed rows, photo rows', () => {
+  const MID = '11111111-1111-1111-1111-111111111111';
+  const POST = '22222222-2222-2222-2222-222222222222';
+  const PHOTO = '44444444-4444-4444-4444-444444444444';
+  const PHOTO_BARE = '55555555-5555-5555-5555-555555555555';
+  // jest.setup.js mocks NetInfo with a settable state.
+  const netinfo = jest.requireMock('@react-native-community/netinfo') as {
+    __setState: (s: Record<string, unknown>) => void;
+  };
+  const caughtUpNav = () => ({
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+    canGoBack: () => true,
+    setOptions: jest.fn(),
+  });
+  afterEach(() => {
+    netinfo.__setState({ isConnected: true, isInternetReachable: true });
+  });
+
+  it('B1: the phone offline (NetInfo) with nothing loaded shows the offline card, even when the fetch is not paused', async () => {
+    netinfo.__setState({ isConnected: false, isInternetReachable: false });
+    mockState.inbox = { data: undefined, isLoading: true, isError: false, isRefetching: false, refetch: jest.fn(), fetchStatus: 'fetching' };
+    const { findByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
+    expect(await findByTestId('coach-community-inbox-offline')).toBeTruthy();
+    expect(queryByTestId('coach-community-inbox-loading')).toBeNull();
+  });
+
+  it('B1: a failed load while the phone is offline says offline, not a generic error', async () => {
+    netinfo.__setState({ isConnected: false, isInternetReachable: false });
+    mockState.inbox = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch: jest.fn(), fetchStatus: 'idle' };
+    const { findByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
+    expect(await findByTestId('coach-community-inbox-offline')).toBeTruthy();
+    expect(queryByTestId('coach-community-inbox-error')).toBeNull();
+  });
+
+  it('B2/B4: a clear inbox is the dark caught-up page — title, Roman in his ring above his line, a way back', async () => {
+    const nav = caughtUpNav();
+    const { getByTestId, getByText, getByRole, toJSON } = await render(
+      <CoachCommunityInboxScreen navigation={nav} />,
+    );
+    expect(getByRole('header', { name: 'Inbox' })).toBeTruthy();
+    expect(getByTestId('coach-community-inbox-empty')).toBeTruthy();
+    expect(getByTestId('coach-community-inbox-empty-avatar')).toBeTruthy();
+    expect(getByText('TEST_EMPTY_INBOX_COPY')).toBeTruthy();
+    const serialised = JSON.stringify(toJSON());
+    expect(serialised.indexOf('coach-community-inbox-empty-avatar')).toBeLessThan(
+      serialised.indexOf('TEST_EMPTY_INBOX_COPY'),
+    );
+    // The bar above the dark page turns forest with a bone back arrow.
+    expect(nav.setOptions).toHaveBeenLastCalledWith({
+      headerStyle: { backgroundColor: '#2C4A36' },
+      headerTintColor: '#F7FAF7',
+    });
+    const back = getByTestId('coach-community-inbox-empty-back');
+    expect(back.props.accessibilityLabel).toBe('Back to Community');
+    await fireEvent.press(back);
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('the caught-up page shows no back button when there is nowhere to go back to', async () => {
+    const nav = { ...caughtUpNav(), canGoBack: () => false };
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen navigation={nav} />);
+    expect(getByTestId('coach-community-inbox-empty')).toBeTruthy();
+    expect(queryByTestId('coach-community-inbox-empty-back')).toBeNull();
+  });
+
+  it("while the voice policy loads, the light page keeps the title and the bone bar, and Roman's line waits", async () => {
+    mockEmptyResultOverride.current = { coach_community_inbox_empty: { status: 'loading' } };
+    const nav = caughtUpNav();
+    const { getByRole, getByTestId, queryByTestId, queryByText } = await render(
+      <CoachCommunityInboxScreen navigation={nav} />,
+    );
+    expect(getByRole('header', { name: 'Inbox' })).toBeTruthy();
+    expect(getByTestId('coach-community-inbox-empty-loading')).toBeTruthy();
+    expect(queryByTestId('coach-community-inbox-empty-back')).toBeNull();
+    expect(queryByText('TEST_EMPTY_INBOX_COPY')).toBeNull();
+    expect(nav.setOptions).toHaveBeenLastCalledWith({
+      headerStyle: { backgroundColor: '#F7FAF7' },
+      headerTintColor: '#1A1A18',
+    });
+  });
+
+  it('rows on the page keep the bone bar', async () => {
+    mockState.inbox = { data: { items: [inboxItem()] }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
+    const nav = caughtUpNav();
+    await render(<CoachCommunityInboxScreen navigation={nav} />);
+    expect(nav.setOptions).toHaveBeenLastCalledWith({
+      headerStyle: { backgroundColor: '#F7FAF7' },
+      headerTintColor: '#1A1A18',
+    });
+  });
+
+  it('B3: a message row shows its whole text; a post row, which opens, clamps to two lines', async () => {
+    const LONG =
+      'Coach, my knee felt tight on the last two sets of squats today and I stopped early. Should I swap tomorrow for the bike?';
+    mockState.inbox = {
+      data: {
+        items: [
+          inboxItem({ snippet: LONG }),
+          inboxItem({ id: POST, type: 'post', snippet: 'Post text' }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+    };
+    const { getByText } = await render(<CoachCommunityInboxScreen />);
+    expect(getByText(LONG).props.numberOfLines).toBeUndefined();
+    expect(getByText('Post text').props.numberOfLines).toBe(2);
+  });
+
+  it('a photo row shows its caption, or "Photo" with none, and can be acknowledged', async () => {
+    mockState.inbox = {
+      data: {
+        items: [
+          inboxItem({ id: PHOTO, kind: 'photo', snippet: 'New squat best', ack: { state: 'none', sla_state: 'within' } }),
+          inboxItem({ id: PHOTO_BARE, kind: 'photo', snippet: 'Photo', ack: { state: 'none', sla_state: 'within' } }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+    };
+    const { getByText, getByTestId } = await render(<CoachCommunityInboxScreen />);
+    expect(getByText('New squat best')).toBeTruthy();
+    expect(getByText('Photo')).toBeTruthy();
+    expect(getByTestId(`coach-community-inbox-row-${PHOTO_BARE}`).props.accessibilityLabel).toContain(': Photo');
+    expect(getByTestId(`coach-community-inbox-mark-acked-${PHOTO}`)).toBeTruthy();
+    expect(getByTestId(`coach-community-inbox-mark-acked-${PHOTO_BARE}`)).toBeTruthy();
+  });
+
+  it('C1: an acknowledged row says "Acknowledged" once', async () => {
+    mockState.inbox = {
+      data: { items: [inboxItem({ id: MID, ack: { state: 'acked', sla_state: 'within' } })] },
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+    };
+    const { getAllByText, queryByTestId } = await render(<CoachCommunityInboxScreen />);
+    expect(getAllByText('Acknowledged')).toHaveLength(1);
+    expect(queryByTestId(`coach-community-inbox-mark-acked-${MID}`)).toBeNull();
   });
 });

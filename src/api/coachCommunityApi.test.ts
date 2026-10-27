@@ -23,6 +23,7 @@ import {
   type CoachEmptyStatesResponse,
 } from './coachCommunityApi';
 import { getCoachEmptyStateFallback } from '../components/community/coach/coachVoice';
+import { featureFlags } from '../config/featureFlags';
 
 jest.mock('../services/api', () => ({
   __esModule: true,
@@ -854,5 +855,135 @@ describe('coachCommunityApi — v2-2 ack DTO strict drift contract', () => {
         message_id: 'not-a-uuid',
       }),
     ).toThrow();
+  });
+});
+
+/**
+ * FX4-868: the inbox route and row are pinned to the server's controller and
+ * DTO (growth-project-backend src/community/inbox/): controller
+ * community-coach-inbox.controller.ts:21 @Controller('community') + :25
+ * @Get('me/coach-inbox'); dto InboxItemSchema :34-53 on main 03d51758 (strict,
+ * kind text | voice) and :34-54 on b#1172 c7d4aa2f (kind text | voice | photo;
+ * a photo's preview is its caption, or "Photo"). b#1173 keeps that row shape.
+ */
+describe('coachCommunityApi — FX4-868 inbox route + row pinned to the server DTO', () => {
+  // Every key the server's strict InboxItemSchema can send, in DTO order.
+  const SERVER_ROW_KEYS = [
+    'id',
+    'type',
+    'cohort_id',
+    'cohort_name',
+    'author_user_id',
+    'author_display_name',
+    'preview',
+    'created_at',
+    'item_url_path',
+    'kind',
+    'voice',
+    'ack',
+  ];
+  const NOTE_ID = '66666666-6666-4666-8666-666666666666';
+  const ROW_3 = '33333333-3333-4333-8333-333333333333';
+  const POST_ID = '77777777-7777-4777-8777-777777777777';
+  const flags = featureFlags as { communityVoiceNotes: boolean };
+  const voiceBefore = flags.communityVoiceNotes;
+  afterEach(() => {
+    flags.communityVoiceNotes = voiceBefore;
+  });
+
+  it('reads the controller route, community + me/coach-inbox, with limit and cursor', async () => {
+    serveGets({ '/community/me/coach-inbox': { items: [], next_cursor: null } });
+    await coachCommunityApi.getInbox({ cursor: 'c-1', limit: 20 });
+    expect(api.get).toHaveBeenCalledWith(['', 'community', 'me/coach-inbox'].join('/'), {
+      params: { limit: '20', cursor: 'c-1' },
+    });
+  });
+
+  it('a row carrying every server DTO key parses, for every kind the server sends', async () => {
+    flags.communityVoiceNotes = true;
+    const ack = { state: 'none', sla_state: 'within' };
+    const full = serverInboxRow(ROW_1, { kind: 'text', ack });
+    expect(Object.keys(full).sort()).toEqual(
+      SERVER_ROW_KEYS.filter((k) => k !== 'voice').sort(),
+    );
+    const voice = serverInboxRow(ROW_2, {
+      kind: 'voice',
+      preview: 'Voice note',
+      voice: { note_id: NOTE_ID, duration_ms: 4000 },
+      ack,
+    });
+    expect(Object.keys(voice).sort()).toEqual([...SERVER_ROW_KEYS].sort());
+    const photo = serverInboxRow(ROW_3, { kind: 'photo', preview: 'Front squat, 3 x 5', ack });
+    const post = serverInboxRow(POST_ID, {
+      type: 'post',
+      kind: 'text',
+      item_url_path: `/community/cohorts/${COHORT_ID}/posts/${POST_ID}`,
+    });
+    serveGets({
+      '/community/me/coach-inbox': { items: [full, voice, photo, post], next_cursor: null },
+    });
+    const res = await coachCommunityApi.getInbox();
+    expect(res.items.map((i) => [i.type, i.kind])).toEqual([
+      ['message', 'text'],
+      ['message', 'voice'],
+      ['message', 'photo'],
+      ['post', 'text'],
+    ]);
+    expect(res.items[1].voice).toEqual({ note_id: NOTE_ID, duration_ms: 4000 });
+    expect(res.items[2]).toMatchObject({ snippet: 'Front squat, 3 x 5', ack });
+  });
+
+  it('a photo row shows its caption, or the word "Photo" when the caption is empty', async () => {
+    serveGets({
+      '/community/me/coach-inbox': {
+        items: [
+          serverInboxRow(ROW_1, { kind: 'photo', preview: 'New squat best' }),
+          serverInboxRow(ROW_2, { kind: 'photo', preview: 'Photo' }),
+          serverInboxRow(ROW_3, { kind: 'photo', preview: '   ' }),
+        ],
+        next_cursor: null,
+      },
+    });
+    const res = await coachCommunityApi.getInbox();
+    expect(res.items.map((i) => [i.kind, i.snippet])).toEqual([
+      ['photo', 'New squat best'],
+      ['photo', 'Photo'],
+      ['photo', 'Photo'],
+    ]);
+  });
+
+  it('photo rows draw with voice notes off; voice rows only with them on', async () => {
+    flags.communityVoiceNotes = false;
+    serveGets({
+      '/community/me/coach-inbox': {
+        items: [
+          serverInboxRow(ROW_1, { kind: 'photo', preview: 'Photo' }),
+          serverInboxRow(ROW_2, {
+            kind: 'voice',
+            preview: 'Voice note',
+            voice: { note_id: NOTE_ID, duration_ms: 4000 },
+          }),
+        ],
+        next_cursor: null,
+      },
+    });
+    const res = await coachCommunityApi.getInbox();
+    expect(res.items.map((i) => i.kind)).toEqual(['photo']);
+  });
+
+  it('an unknown future kind is skipped: no crash and no empty row', async () => {
+    serveGets({
+      '/community/me/coach-inbox': {
+        items: [
+          serverInboxRow(ROW_1, { kind: 'gif', preview: '' }),
+          serverInboxRow(ROW_2),
+        ],
+        next_cursor: 'next',
+      },
+    });
+    const res = await coachCommunityApi.getInbox();
+    expect(res.items.map((i) => i.id)).toEqual([ROW_2]);
+    expect(res.items.every((i) => i.snippet.trim().length > 0)).toBe(true);
+    expect(res.next_cursor).toBe('next');
   });
 });
