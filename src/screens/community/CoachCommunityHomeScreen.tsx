@@ -1,16 +1,16 @@
 /**
  * CoachCommunityHomeScreen — the top-level coach community landing (v1-6).
  *
- * Composes the dashboard envelope (`GET /community/coach/dashboard`) into three
+ * Composes the dashboard counts (built in coachCommunityApi.getDashboard) into three
  * at-a-glance cards: unread inbox count, active cohort count, and today's
  * flagged moderation items. Each card routes into the matching surface.
  *
- * The screen has THREE distinct branches (UX P0.2): a loading spinner; an
+ * K2 Style B (#172-10, as the inbox). THREE distinct branches (UX P0.2): skeleton cards; an
  * honest CoachErrorState on a load failure (never a calm/empty masquerade); and
  * — when the dashboard is genuinely quiet (no unread, no cohorts, nothing
  * flagged) — the operator-locked Roman-voiced empty state. The empty-state copy
  * and avatar crop come from the backend voice policy (face + voice contract),
- * resolved via useCoachEmptyStatePayload. Colours come from semanticColors;
+ * resolved via useCoachEmptyStatePayload. Every branch pulls to refresh;
  * touch targets are >= 44pt.
  *
  * Card hierarchy (UX-05 fix): when at least one card has a non-zero count, the
@@ -21,10 +21,9 @@
  * (and in practice the quiet branch above renders the empty state instead).
  */
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, withAlpha } from '../../theme/tokens';
+import { spacing, radius, withAlpha, colors, layout } from '../../theme/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../components/HapticPressable';
 import { featureFlags } from '../../config/featureFlags';
@@ -35,8 +34,26 @@ import {
 } from '../../hooks/useCoachCommunity';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
 
+// K2 Style B: one light palette in both themes, named by role.
+const semanticColors = {
+  bgPrimary: colors.bone,
+  bgSurface: colors.cream,
+  border: 'transparent',
+  accent: colors.forest,
+  textPrimary: colors.ink,
+  textMuted: colors.graphite,
+};
+
+/** The serif page title (K2), on every branch. */
+function HomeTitle(): React.ReactElement {
+  return (
+    <Text accessibilityRole="header" style={styles.heading}>
+      Community
+    </Text>
+  );
+}
+
 export default function CoachCommunityHomeScreen(): React.ReactElement {
-  const { semanticColors } = useTheme();
   const navigation = useNavigation<CoachCommunityNav>();
   const dashboard = useCoachDashboard();
   const emptyState = useCoachEmptyStatePayload('coach_community_home_empty');
@@ -50,43 +67,67 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
     data.active_cohort_count === 0 &&
     data.flagged_today_count === 0;
 
+  // The pull also retries Roman's words when they failed ("Pull to retry").
+  const pull = (
+    <RefreshControl
+      refreshing={dashboard.isRefetching}
+      onRefresh={() => {
+        void dashboard.refetch();
+        if (emptyState.status === 'error') emptyState.retry();
+      }}
+      tintColor={colors.forest}
+    />
+  );
+
   if (dashboard.isLoading) {
     return (
       <View
-        style={[styles.center, { backgroundColor: semanticColors.bgPrimary }]}
+        style={[styles.flex, styles.content, { backgroundColor: semanticColors.bgPrimary }]}
         testID="coach-community-home-screen"
       >
-        <ActivityIndicator
-          color={semanticColors.accent}
+        <HomeTitle />
+        <View
+          accessible
+          accessibilityLabel="Loading your community summary"
           testID="coach-community-home-loading"
-        />
+          style={styles.skeletons}
+        >
+          {[0, 1, 2].map((n) => (
+            <View key={n} style={styles.skeletonCard} />
+          ))}
+        </View>
       </View>
     );
   }
 
   if (dashboard.isError) {
     return (
-      <View
+      <ScrollView
         style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
+        contentContainerStyle={[styles.content, styles.grow]}
+        refreshControl={pull}
         testID="coach-community-home-screen"
       >
+        <HomeTitle />
         <CoachErrorState
           message="Could not load your community summary. Pull to retry."
           onRetry={() => dashboard.refetch()}
           retrying={dashboard.isRefetching}
           testID="coach-community-home-error"
         />
-      </View>
+      </ScrollView>
     );
   }
 
   if (isQuiet) {
     return (
       <ScrollView
-        contentContainerStyle={styles.center}
+        contentContainerStyle={[styles.content, styles.grow]}
         style={{ backgroundColor: semanticColors.bgPrimary }}
+        refreshControl={pull}
         testID="coach-community-home-screen"
       >
+        <HomeTitle />
         <CoachRomanEmptyState
           result={emptyState}
           testID="coach-community-home-empty"
@@ -143,11 +184,10 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
     <ScrollView
       contentContainerStyle={styles.content}
       style={{ backgroundColor: semanticColors.bgPrimary }}
+      refreshControl={pull}
       testID="coach-community-home-screen"
     >
-      <Text style={[styles.heading, { color: semanticColors.textPrimary }]}>
-        Community
-      </Text>
+      <HomeTitle />
 
       {ordered.map((card) => (
         <StatCard
@@ -289,18 +329,25 @@ function StatCard({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
     gap: spacing.md,
   },
-  center: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  grow: { flexGrow: 1 },
   heading: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 36,
+    lineHeight: 46,
+    color: colors.ink,
     marginBottom: spacing.sm,
+  },
+  skeletons: { gap: spacing.sm },
+  skeletonCard: {
+    height: 88,
+    borderRadius: radius.lg,
+    backgroundColor: colors.cream,
+    opacity: 0.7,
   },
   card: {
     minHeight: 88,
@@ -314,20 +361,24 @@ const styles = StyleSheet.create({
     minHeight: 108,
   },
   cardEyebrow: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 1.5,
     marginBottom: 2,
   },
   cardValue: {
-    fontSize: 32,
-    fontWeight: '600',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 36,
+    lineHeight: 46,
   },
   cardValuePromoted: {
-    fontSize: 40,
+    fontSize: 44,
+    lineHeight: 56,
   },
   cardLabel: {
-    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    lineHeight: 21,
   },
   navCard: {
     minHeight: 64,
@@ -343,10 +394,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   navCardTitle: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
-    fontWeight: '600',
   },
   navCardSub: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
   },
 });

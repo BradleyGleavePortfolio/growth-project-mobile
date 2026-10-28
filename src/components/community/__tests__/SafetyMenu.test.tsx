@@ -196,6 +196,7 @@ describe('SafetyMenu', () => {
     });
     expect(mockBlock).toHaveBeenCalledWith(OTHER);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['community'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['coachCommunity'] });
     expect(onBlocked).toHaveBeenCalledWith(OTHER);
   });
 
