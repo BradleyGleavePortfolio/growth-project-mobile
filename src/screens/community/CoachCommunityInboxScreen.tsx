@@ -99,7 +99,11 @@ const TRIAGE_ENABLED = featureFlags.communityAiTriage;
  * any HTTP failure, or a Zod drift surfaces as the card's calm, typed error
  * state; the human inbox below is always unaffected.
  */
-function InboxTriageBanner(): React.ReactElement {
+function InboxTriageBanner({
+  clearInbox = false,
+}: {
+  clearInbox?: boolean;
+}): React.ReactElement | null {
   const triage = useInboxTriage();
   // Typed state machine: loading | error | empty | ready. `empty` is derived
   // explicitly here from the server's `is_empty` flag so the card never has to
@@ -112,7 +116,7 @@ function InboxTriageBanner(): React.ReactElement {
       : triage.data?.is_empty === true
         ? 'empty'
         : 'ready';
-  return (
+  const card = (
     <AiTriageCard
       status={status}
       triage={triage.data}
@@ -122,6 +126,10 @@ function InboxTriageBanner(): React.ReactElement {
       testID="coach-community-inbox-ai-triage"
     />
   );
+  if (!clearInbox) return card;
+  // A clear inbox stays one calm page (K2 B_caught_up): the card shows there
+  // only when the triage has items, never its empty, loading or error card.
+  return status === 'ready' ? <View style={styles.triageHeader}>{card}</View> : null;
 }
 
 /**
@@ -326,11 +334,7 @@ export default function CoachCommunityInboxScreen({
           }
         >
           <InboxTitle />
-          {TRIAGE_ENABLED ? (
-            <View style={styles.triageHeader}>
-              <InboxTriageBanner />
-            </View>
-          ) : null}
+          {TRIAGE_ENABLED ? <InboxTriageBanner clearInbox /> : null}
           <CoachRomanEmptyState
             result={emptyState}
             testID="coach-community-inbox-empty"
@@ -480,11 +484,7 @@ function InboxCaughtUp({
         }
       >
         <InboxTitle onDark />
-        {TRIAGE_ENABLED ? (
-          <View style={styles.triageHeader}>
-            <InboxTriageBanner />
-          </View>
-        ) : null}
+        {TRIAGE_ENABLED ? <InboxTriageBanner clearInbox /> : null}
         <View style={styles.caughtUpBody} testID="coach-community-inbox-empty">
           <View style={styles.caughtUpRing}>
             <RomanAvatar
