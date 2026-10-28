@@ -61,8 +61,11 @@ jest.mock('../../../hooks/useNetworkStatus', () => ({
   isEffectivelyOnline: jest.requireActual('../../../hooks/useNetworkStatus').isEffectivelyOnline,
 }));
 let mockRole = 'client';
+// FR-871R7: the space's purpose on the member-readable list (SC-PURPOSE-BE, backend#1178); undefined = the field is absent.
+let mockPurpose: unknown;
 const cohorts = () => [
-  { id: 'c-every', workspace_id: 'ws', name: 'Everyone', is_default: true, kind: 'default', member_count: 1000, my_role: mockRole },
+  { id: 'c-every', workspace_id: 'ws', name: 'Everyone', is_default: true, kind: 'default', member_count: 1000, my_role: mockRole,
+    ...(mockPurpose === undefined ? {} : { description: mockPurpose }) },
   { id: 'c-ann', workspace_id: 'ws', name: 'Announcements', is_default: false, kind: 'announcement', posting_policy: 'coach', member_count: 24, my_role: mockRole },
 ];
 const mockCohorts = { failed: false, refetch: jest.fn() };
@@ -125,6 +128,9 @@ const ME = { id: 'me-1', name: 'Dana Reyes' };
 const fail = (status: number) => Object.assign(new Error(`HTTP ${status}`), { isAxiosError: true, response: { status, data: {} } });
 let page: unknown[] = [];
 let readAnswer: unknown = { last_read_at: '2026-10-22T09:00:00.000Z', last_read_message_id: 'm1' };
+// FR-871R7: GET community/cohorts/:id/members (the member view: name and role, nothing else drawn).
+const person = (user_id: string, display_name: string, role = 'student') => ({ id: null, user_id, display_name, role, status: null, email: null, joined_at: null, access: null });
+let membersAnswer: unknown = { members: [], next_cursor: null };
 
 const sends = () => mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/messages'));
 
@@ -151,10 +157,16 @@ beforeEach(() => {
     msg('m1', '2026-10-22T08:00:00.000Z', COACH),
   ];
   readAnswer = { last_read_at: '2026-10-22T09:00:00.000Z', last_read_message_id: 'm1' };
+  mockPurpose = undefined;
+  membersAnswer = { members: [person('coach-1', 'Sam', 'coach'), person('u-2', 'Jo'), person('me-1', 'Dana')], next_cursor: null };
   mockApi.get.mockReset().mockImplementation(async (url: string) => {
     if (url.endsWith('/read')) {
       if (readAnswer instanceof Error) throw readAnswer;
       return { data: readAnswer };
+    }
+    if (url.endsWith('/members')) {
+      if (membersAnswer instanceof Error) throw membersAnswer;
+      return { data: membersAnswer };
     }
     if (url === '/community/voice-consent') return { data: { seen: true, seen_at: '2026-10-20T10:00:00.000Z' } };
     return { data: { messages: page, next_before: null } };
@@ -1032,5 +1044,186 @@ describe('FR-871R6 (m#887): the space\'s coach removes someone else\'s message o
     await waitFor(() => expect(mockApi.delete).toHaveBeenCalledTimes(1));
     expect(r.queryByTestId('space-chat-removed-m3')).toBeNull();
     expect(r.getByLabelText(/body m3$/)).toBeTruthy();
+  });
+});
+
+describe('FR-871R7 (m#871 Sol B871-1 / Opus B1): a member\'s Space info: what the space is for and who is in it', () => {
+  const PURPOSE = 'Daily check-ins and wins. Post your training, ask questions, cheer each other on.';
+  const memberCalls = () => mockApi.get.mock.calls.filter(([u]) => String(u).endsWith('/members'));
+  const sheetOpen = async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    return r;
+  };
+  const failure = (status?: number) => Object.assign(new Error(status ? `HTTP ${status}` : 'Network Error'), {
+    isAxiosError: true, ...(status ? { response: { status, data: {} } } : {}),
+  });
+
+  it('B-TEST: the purpose the coach wrote, then the people: Coach, Team, Members with the viewer first ("You"); nothing to change', async () => {
+    mockPurpose = PURPOSE;
+    membersAnswer = {
+      members: [person('u-2', 'Jo'), person('coach-1', 'Sam', 'coach'), person('u-3', 'Casey', 'co_coach'), person('me-1', 'Dana'), person('u-4', 'Avery')],
+      next_cursor: null,
+    };
+    const r = await sheetOpen();
+    const sheet = r.getByTestId('space-info-sheet');
+    expect(within(sheet).getByTestId('space-info-purpose').props.children).toBe(PURPOSE);
+    const people = await within(sheet).findByTestId('space-info-people');
+    expect(memberCalls()).toEqual([['/community/cohorts/c-every/members', { params: { limit: 50 } }]]);
+    expect(within(people).getAllByTestId(/^space-info-person-/).map((n) => n.props.testID)).toEqual([
+      'space-info-person-coach-1', 'space-info-person-u-3', 'space-info-person-me-1', 'space-info-person-u-2', 'space-info-person-u-4',
+    ]);
+    expect(within(people).getAllByRole('header').map((h) => h.props.children)).toEqual(['Coach', 'Team', 'Members']);
+    expect(within(people).getByLabelText('Dana, you')).toBeTruthy();
+    expect(StyleSheet.flatten(within(people).getByText('You').props.style)).toMatchObject({ color: '#2C2C2C' }); // graphite, owner #168-13
+    // The coach on the space chat's coach tile: deep, with a gold initial.
+    const coachTile = within(people).getByTestId('space-info-person-coach-1').children[0] as { props: { style: unknown } };
+    expect(StyleSheet.flatten(coachTile.props.style)).toMatchObject({ backgroundColor: fp.deep, borderRadius: 12 });
+    expect(within(sheet).queryAllByRole('button')).toHaveLength(0); // no coach controls, nothing to change
+    expect(within(sheet).queryByTestId('space-info-alone')).toBeNull();
+    expect(StyleSheet.flatten(sheet.props.style)).toMatchObject({ borderTopLeftRadius: 24, borderTopRightRadius: 24 });
+  });
+
+  it.each([['absent (before backend#1178)', undefined], ['null', null], ['only spaces', '   ']])('no purpose line when the space has none: %s', async (_, value) => {
+    mockPurpose = value;
+    const r = await sheetOpen();
+    await r.findByTestId('space-info-people');
+    expect(r.queryByTestId('space-info-purpose')).toBeNull();
+  });
+
+  it('the space list reads the purpose strictly: a string or null; absent or a bad value is no purpose, and the list still loads', () => {
+    const { CommunityCohortSummarySchema } = require('../../../api/communityApi');
+    const row = {
+      id: '00000000-0000-4000-8000-000000000001', workspace_id: '00000000-0000-4000-8000-000000000002', name: 'Everyone',
+      is_default: true, member_count: 3, my_role: 'client',
+    };
+    expect(CommunityCohortSummarySchema.parse({ ...row, description: PURPOSE }).description).toBe(PURPOSE);
+    expect(CommunityCohortSummarySchema.parse({ ...row, description: null }).description).toBeNull();
+    expect(CommunityCohortSummarySchema.parse(row).description).toBeUndefined();
+    expect(CommunityCohortSummarySchema.parse({ ...row, description: 42 }).description).toBeUndefined();
+  });
+
+  it('loading: quiet rows, spoken "Loading people", while the members read is out', async () => {
+    let release: (() => void) | undefined;
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    mockApi.get.mockImplementation((url: string) => (String(url).endsWith('/members')
+      ? new Promise((done) => { release = () => done(answer(url)); })
+      : answer(url)));
+    const r = await sheetOpen();
+    expect(r.getByTestId('space-info-people-loading').props.accessibilityLabel).toBe('Loading people');
+    await waitFor(() => expect(release).toBeDefined());
+    await act(async () => release?.());
+    await r.findByTestId('space-info-people');
+    expect(r.queryByTestId('space-info-people-loading')).toBeNull();
+  });
+
+  it('could not load: one calm line and Try again, which asks again and lists the people', async () => {
+    membersAnswer = failure(500);
+    const r = await sheetOpen();
+    const err = await r.findByTestId('space-info-people-error');
+    expect(within(err).getByText('People could not load. Try again in a moment.')).toBeTruthy();
+    membersAnswer = { members: [person('me-1', 'Dana'), person('u-2', 'Jo')], next_cursor: null };
+    await fireEvent.press(r.getByTestId('space-info-people-error-retry'));
+    await r.findByTestId('space-info-people');
+    expect(memberCalls()).toHaveLength(2);
+  });
+
+  it('offline: the connection line, and Try again lists them once the line is back', async () => {
+    mockNet.isOnline = false;
+    membersAnswer = failure();
+    const r = await sheetOpen();
+    const err = await r.findByTestId('space-info-people-error');
+    expect(within(err).getByText('People could not load. Check your connection, then try again.')).toBeTruthy();
+    mockNet.isOnline = true;
+    membersAnswer = { members: [person('me-1', 'Dana'), person('u-2', 'Jo')], next_cursor: null };
+    await fireEvent.press(r.getByTestId('space-info-people-error-retry'));
+    expect(await r.findByTestId('space-info-person-u-2')).toBeTruthy();
+  });
+
+  it('the server no longer lets them read the space (404 on the people): no one listed, no error', async () => {
+    membersAnswer = failure(404);
+    const r = await sheetOpen();
+    await waitFor(() => expect(memberCalls()).toHaveLength(1));
+    await waitFor(() => expect(r.queryByTestId('space-info-people-loading')).toBeNull());
+    expect(r.queryByTestId('space-info-people-error')).toBeNull();
+    expect(r.queryByTestId('space-info-people')).toBeNull();
+  });
+
+  it('a page from the saved cache before the server answers this visit: people wait and are not asked for', async () => {
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    mockApi.get.mockImplementation((url: string) => (String(url).endsWith('/messages') ? new Promise(() => undefined) : answer(url)));
+    client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-every'], { pages: [{ messages: page, next_before: null }], pageParams: [null] });
+    const r = await render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    expect(r.getByTestId('space-info-people-loading')).toBeTruthy();
+    expect(memberCalls()).toHaveLength(0);
+  });
+
+  it('offline on the saved page at a cold start: the connection line with no button, no loading rows, no request', async () => {
+    mockNet.isOnline = false;
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    mockApi.get.mockImplementation((url: string) => (String(url).endsWith('/messages') ? new Promise(() => undefined) : answer(url)));
+    client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-every'], { pages: [{ messages: page, next_before: null }], pageParams: [null] });
+    const r = await render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    const line = r.getByTestId('space-info-people-offline');
+    expect(within(line).getByText('People could not load. Check your connection, then try again.')).toBeTruthy();
+    expect(r.queryByTestId('space-info-people-offline-retry')).toBeNull();
+    expect(r.queryByTestId('space-info-people-loading')).toBeNull();
+    expect(memberCalls()).toHaveLength(0);
+  });
+
+  it('a space closed to them (403 on the chat): the sheet asks for no people and lists none', async () => {
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    mockApi.get.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/messages')) throw failure(403);
+      return answer(url);
+    });
+    const r = await open();
+    await r.findByTestId('space-chat-no-access');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    expect(r.getByTestId('space-info-sheet')).toBeTruthy();
+    expect(r.queryByTestId('space-info-people-loading')).toBeNull();
+    expect(r.queryByTestId('space-info-people')).toBeNull();
+    expect(memberCalls()).toHaveLength(0);
+  });
+
+  it('Show more asks for the next 50 with the cursor and adds them once; at the end it goes away', async () => {
+    const first = [person('me-1', 'Dana'), ...Array.from({ length: 49 }, (_, i) => person(`u-${100 + i}`, `Member ${i}`))];
+    const second = [person('u-148', 'Member 48'), person('u-200', 'Riley')];
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    mockApi.get.mockImplementation(async (url: string, cfg?: { params?: { cursor?: string } }) => {
+      if (!String(url).endsWith('/members')) return answer(url);
+      return { data: cfg?.params?.cursor === 'u-148' ? { members: second, next_cursor: null } : { members: first, next_cursor: 'u-148' } };
+    });
+    const r = await sheetOpen();
+    const more = await r.findByTestId('space-info-more');
+    expect(within(more).getByText('Show more')).toBeTruthy();
+    expect(more.props.accessibilityLabel).toBe('Show more people');
+    expect(StyleSheet.flatten(more.props.style)).toMatchObject({ minHeight: 44, borderRadius: 12 });
+    await fireEvent.press(more);
+    expect(await r.findByTestId('space-info-person-u-200')).toBeTruthy();
+    expect(memberCalls()[1]).toEqual(['/community/cohorts/c-every/members', { params: { limit: 50, cursor: 'u-148' } }]);
+    expect(r.getAllByTestId('space-info-person-u-148')).toHaveLength(1);
+    expect(r.queryByTestId('space-info-more')).toBeNull();
+  });
+
+  it('empty: nobody but the viewer: "You" and one line that no one else is here yet', async () => {
+    membersAnswer = { members: [person('me-1', 'Dana')], next_cursor: null };
+    const r = await sheetOpen();
+    await r.findByTestId('space-info-people');
+    expect(r.getByLabelText('Dana, you')).toBeTruthy();
+    expect(r.getByTestId('space-info-alone').props.children).toBe('No one else is here yet.');
+  });
+
+  it('the people stay off the disk: the members query is kept in memory only', async () => {
+    const r = await sheetOpen();
+    await r.findByTestId('space-info-people');
+    expect(client.getQueryCache().find({ queryKey: ['community', 'space-members', 'c-every'] })?.meta).toEqual({ persist: false });
   });
 });
