@@ -29,6 +29,7 @@ import CommunityTermsGate from '../components/community/CommunityTermsGate';
 import { Colors } from '../theme';
 import { colors as tokenColors } from '../theme/tokens';
 import { featureFlags } from '../config/featureFlags';
+import { LightTheme } from '../theme/ThemeProvider';
 import CoachCommunityHomeScreen from '../screens/community/CoachCommunityHomeScreen';
 import CoachCommunityInboxScreen from '../screens/community/CoachCommunityInboxScreen';
 import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCohortsScreen';
@@ -41,6 +42,24 @@ import type { CoachCommunityStackParamList } from '../screens/community/coachCom
 
 const CoachCommunityStack =
   createNativeStackNavigator<CoachCommunityStackParamList>();
+
+/** The K2 pages are drawn light (bone, cream): their themed parts stay light on a dark phone. */
+const K2_ROUTES: ReadonlySet<string> = new Set([
+  'CoachCommunityHome',
+  'CoachCommunityInbox',
+  'CoachCommunityCohorts',
+  'CoachCommunityCohortDetail',
+]);
+
+export function coachCommunityScreenLayout({
+  route,
+  children,
+}: {
+  route: { name: string };
+  children: React.ReactElement;
+}): React.ReactElement {
+  return K2_ROUTES.has(route.name) ? <LightTheme>{children}</LightTheme> : children;
+}
 
 /**
  * Apple 1.2 (B-IOSREV-2): the whole stack sits behind the one-time community
@@ -58,6 +77,7 @@ export default function CoachCommunityNavigator(): React.ReactElement {
 function CoachCommunityNavigatorStack(): React.ReactElement {
   return (
     <CoachCommunityStack.Navigator
+      screenLayout={coachCommunityScreenLayout}
       screenOptions={{
         headerShown: true,
         headerTintColor: Colors.textPrimary,
