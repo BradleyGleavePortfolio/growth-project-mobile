@@ -70,6 +70,10 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
         component={CoachCommunityHomeScreen}
         options={({ navigation }) => ({
           title: 'Community',
+          // K2: the page draws its serif title; the bar keeps only the back control.
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
           // COACHTABS: with the six tabs Community opens from Messages, so its
           // first page has a Back (44 pt) to the tab the coach came from.
           ...(featureFlags.coachTabsV2 ? {
