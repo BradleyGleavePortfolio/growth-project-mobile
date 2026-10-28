@@ -57,15 +57,15 @@ export interface AIGatewayFlags {
 }
 
 export const aiGatewayFlags: AIGatewayFlags = {
-  aiGatewayEnabled: envBool('EXPO_PUBLIC_FF_AI_GATEWAY', isDev),
+  aiGatewayEnabled: envBool('EXPO_PUBLIC_FF_AI_GATEWAY', true),
   capabilities: {
-    coach_brief_draft: envBool('EXPO_PUBLIC_FF_AI_COACH_BRIEF_DRAFT', false),
+    coach_brief_draft: envBool('EXPO_PUBLIC_FF_AI_COACH_BRIEF_DRAFT', true),
     client_path_summary: envBool(
       'EXPO_PUBLIC_FF_AI_CLIENT_PATH_SUMMARY',
-      false,
+      true,
     ),
-    check_in_summary: envBool('EXPO_PUBLIC_FF_AI_CHECK_IN_SUMMARY', false),
-    food_log_explain: envBool('EXPO_PUBLIC_FF_AI_FOOD_LOG_EXPLAIN', false),
+    check_in_summary: envBool('EXPO_PUBLIC_FF_AI_CHECK_IN_SUMMARY', true),
+    food_log_explain: envBool('EXPO_PUBLIC_FF_AI_FOOD_LOG_EXPLAIN', true),
   },
   showSourceBadge: envBool('EXPO_PUBLIC_FF_AI_SOURCE_BADGE', true),
 };

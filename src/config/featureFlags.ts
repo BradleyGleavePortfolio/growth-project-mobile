@@ -114,19 +114,19 @@ function readFlag(key: PublicEnvKey, fallback: boolean): boolean {
 /** Centralised, typed flag map. Add new flags here as new surfaces land. */
 export const featureFlags = {
   /** C8 v2 chart parts; off in every build until the Progress page is ready. */
-  clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', false),
+  clientProgressV2: readFlag('EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2', true),
   /** TIMELINE: the Style C Timeline page, its door on Progress and its push route; off in every build. */
-  clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', false),
+  clientTimelineV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TIMELINE_V2', true),
   /** C1-TRAIN-TAB: the Style C v2 top of the Train tab (week masthead, coach note, today's workout); off in every build. */
-  clientTrainV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TRAIN_V2', false),
+  clientTrainV2: readFlag('EXPO_PUBLIC_FF_CLIENT_TRAIN_V2', true),
   /** C5: the Style C buying pages (slice 2: the success moment and what unlocks); off in every build. */
-  clientBillingV2: readFlag('EXPO_PUBLIC_FF_CLIENT_BILLING_V2', false),
+  clientBillingV2: readFlag('EXPO_PUBLIC_FF_CLIENT_BILLING_V2', true),
   /** ROMANMARK: off by default in every build; the operator switches it on once the backend gates in m#731 hold. */
-  romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', false),
+  romanDraftMark: readFlag('EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK', true),
   /** Team management stays hidden for launch, including in development. */
-  teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', false),
+  teamMode: readFlag('EXPO_PUBLIC_FF_TEAM_MODE', true),
   /** The coach Home (spec m#688), only with coachTabsV2 (PK-2a); off, no eas.json line. env: EXPO_PUBLIC_FF_COACH_HOME_V11 */
-  coachHomeV11: readFlag('EXPO_PUBLIC_FF_COACH_HOME_V11', false),
+  coachHomeV11: readFlag('EXPO_PUBLIC_FF_COACH_HOME_V11', true),
 
   /**
    * COACHTABS: the coach bar becomes Overview, Programs, Money, Calendar,
@@ -135,7 +135,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_COACH_TABS_V2
    */
-  coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', false),
+  coachTabsV2: readFlag('EXPO_PUBLIC_FF_COACH_TABS_V2', true),
 
   /**
    * LEARN-B (#LEARN-LESSONS op 1): the coach's Lessons editor in Programs
@@ -144,7 +144,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_COACH_LESSONS
    */
-  coachLessons: readFlag('EXPO_PUBLIC_FF_COACH_LESSONS', false),
+  coachLessons: readFlag('EXPO_PUBLIC_FF_COACH_LESSONS', true),
 
   /**
    * CRISIS-BTN (owner "#CRISIS-2B - all 3 buttons"): Call 911, Call 988, Text
@@ -153,7 +153,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_CRISIS_ACTIONS
    */
-  crisisActions: readFlag('EXPO_PUBLIC_FF_CRISIS_ACTIONS', false),
+  crisisActions: readFlag('EXPO_PUBLIC_FF_CRISIS_ACTIONS', true),
 
   // ─── Bloodwork ────────────────────────────────────────────────────────────
   /**
@@ -163,7 +163,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FEATURE_BLOODWORK
    */
-  bloodwork: readFlag('EXPO_PUBLIC_FEATURE_BLOODWORK', false),
+  bloodwork: readFlag('EXPO_PUBLIC_FEATURE_BLOODWORK', true),
 
   // ─── Consultation onboarding (consult-v1) ────────────────────────────────
   /**
@@ -175,7 +175,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING
    */
-  consultationOnboarding: readFlag('EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', false),
+  consultationOnboarding: readFlag('EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', true),
 
   // ─── Launch — Roman-led client tutorial (C08 + C09) ──────────────────────
   /**
@@ -191,7 +191,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_CLIENT_TUTORIAL
    */
-  clientTutorial: readFlag('EXPO_PUBLIC_FF_CLIENT_TUTORIAL', false),
+  clientTutorial: readFlag('EXPO_PUBLIC_FF_CLIENT_TUTORIAL', true),
 
   // ─── S-SCHED — client Calendar tab (native scheduling) ───────────────────
   /**
@@ -206,32 +206,32 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_CLIENT_CALENDAR
    */
-  clientCalendar: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR', false),
+  clientCalendar: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR', true),
   /** C4 Style C week. Independent rollout; off in every build unless explicitly enabled. */
-  clientCalendarV2: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2', false),
+  clientCalendarV2: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR_V2', true),
 
   // ─── Wave 11 — runtime scaffolding ───────────────────────────────────────
   /** Client Path Copilot — AI summaries + drafts on the client home tab. */
-  clientPathCopilot: readFlag('EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT', isDev),
+  clientPathCopilot: readFlag('EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT', true),
   /** Coach Brief — daily morning brief on the coach home tab. */
-  coachBrief: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF', isDev),
+  coachBrief: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF', true),
   /** BRIEFA: today's brief as Concept A, "Roman in the light" (full screen,
    *  at most two suggested actions, list rows for busy kinds). Needs coachBrief
    *  too. Off in every profile; off shows today's brief screen unchanged. */
-  coachBriefGate: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF_GATE', false),
+  coachBriefGate: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF_GATE', true),
   /** Admin Control Room — governance view, gated to admin role. */
-  adminControlRoom: readFlag('EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM', isDev),
+  adminControlRoom: readFlag('EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM', true),
   /** Private community hub — rooms, cohorts, announcements, coach-led threads. */
-  privateCommunityHub: readFlag('EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB', isDev),
+  privateCommunityHub: readFlag('EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB', true),
   /** Voice-note attachment surfaces inside the community hub. Stays OFF
    *  even in dev until the upload pipeline ships, to avoid suggesting the
    *  feature is available. */
-  communityVoiceNotes: readFlag('EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES', false),
+  communityVoiceNotes: readFlag('EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES', true),
   /** Verified-progress signoff surfaces. Coach + client see status chips
    *  and submission flow even before the backend signoff endpoints land. */
   verifiedProgressSignoff: readFlag(
     'EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF',
-    isDev,
+    true,
   ),
 
   // ─── PR-13 / PR-15B — Buyer-facing Deliverables timeline + Purchase unpack ─
@@ -262,7 +262,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_DELIVERABLES
    */
-  deliverables: readFlag('EXPO_PUBLIC_FF_DELIVERABLES', isDev),
+  deliverables: readFlag('EXPO_PUBLIC_FF_DELIVERABLES', true),
 
   // ─── Community v1-5 — mobile client tab ──────────────────────────────────
   // The v1-4 backend (realtime / push / telemetry) is merged; v1-5 is the
@@ -274,13 +274,13 @@ export const featureFlags = {
   // flips these on still degrades gracefully to a calm empty state.
 
   /** Master Community tab on/off. OFF → no tab, no deep-link route. */
-  communityTab: readFlag('EXPO_PUBLIC_FF_COMMUNITY_TAB', false),
+  communityTab: readFlag('EXPO_PUBLIC_FF_COMMUNITY_TAB', true),
   /** Hall space type (coach-wide announcements + cohort posts). */
-  communityHall: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HALL', false),
+  communityHall: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HALL', true),
   /** Cohort spaces (coach-defined groups / training blocks). */
-  communityCohorts: readFlag('EXPO_PUBLIC_FF_COMMUNITY_COHORTS', false),
+  communityCohorts: readFlag('EXPO_PUBLIC_FF_COMMUNITY_COHORTS', true),
   /** Direct messages (client↔coach and client↔client per §2.10 gates). */
-  communityDm: readFlag('EXPO_PUBLIC_FF_COMMUNITY_DM', false),
+  communityDm: readFlag('EXPO_PUBLIC_FF_COMMUNITY_DM', true),
   /**
    * C6-M1S (C6CHAT-S-V2 c01 and x1, MOCK-COMMX2): the Community tab opens on
    * the Forest Pop Community Home (masthead, segment, spaces, Direct messages)
@@ -289,7 +289,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_COMMUNITY_HOME_V2
    */
-  communityHomeV2: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HOME_V2', false),
+  communityHomeV2: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HOME_V2', true),
 
   // ─── Community v1-6 — mobile coach surface ───────────────────────────────
   // The v1-6 backend (community-cohort-write, community-cohort-members,
@@ -305,7 +305,7 @@ export const featureFlags = {
   // degrades gracefully to a calm Roman-voiced empty state.
   //
   // env: EXPO_PUBLIC_FF_COACH_COMMUNITY
-  coachCommunity: readFlag('EXPO_PUBLIC_FF_COACH_COMMUNITY', false),
+  coachCommunity: readFlag('EXPO_PUBLIC_FF_COACH_COMMUNITY', true),
 
   // ─── Community v2-2 — coach ack signals + inbox SLA ──────────────────────
   // The v2-2 backend (FEATURE_COMMUNITY_ACKS) adds explicit coach ack-signal
@@ -319,7 +319,7 @@ export const featureFlags = {
   // flips this on still degrades gracefully.
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
-  communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
+  communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', true),
 
   // ─── Community v2-4 — AI inbox triage ──────────────────────────
   // The v2-4 backend (FEATURE_COMMUNITY_AI_TRIAGE) adds a read-only AI
@@ -335,7 +335,7 @@ export const featureFlags = {
   // on still degrades gracefully to a calm, typed state.
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE
-  communityAiTriage: readFlag('EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE', false),
+  communityAiTriage: readFlag('EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE', true),
 
   // ─── Community v2-3 — event objects (client RSVP + coach lifecycle) ───────
   // The v2-3 backend (community/events controller — create / list / detail /
@@ -354,8 +354,8 @@ export const featureFlags = {
   // link only (Step 0).
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_EVENTS
-  communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
-  romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
+  communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', true),
+  romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', true),
   /**
    * Roman P4 / ED.3 — First Payment Wow Screen (coach app). Mobile mirror of
    * the backend's FEATURE_ROMAN_FIRST_PAYMENT gate (Option C —
@@ -370,7 +370,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW
    */
-  romanFirstPaymentWow: readFlag('EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW', false),
+  romanFirstPaymentWow: readFlag('EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW', true),
   /**
    * Roman P4 / ED.4 — Bodyweight progress chart polish (client app). When ON,
    * the client ProgressScreen mounts the ED.4 `ProgressChartCard` (the SVG +
@@ -384,7 +384,7 @@ export const featureFlags = {
    */
   romanFirstPaymentBodyweightPolish: readFlag(
     'EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH',
-    false,
+    true,
   ),
   // NOTE (roman-p4 / Option C): the former
   // `romanFirstPaymentRequireBackendHistory` forward-hook flag
@@ -401,7 +401,7 @@ export const featureFlags = {
   // is also OFF in prod, so a dev build that flips this on degrades gracefully.
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES
-  communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', false),
+  communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', true),
 
   // ─── Community v3-2 — classroom posts (media-backed lessons) ─────────────
   // Coach-authored, media-backed lessons (video/audio/pdf/image) with a
@@ -416,7 +416,7 @@ export const featureFlags = {
   // env: EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS
   communityClassroom: readFlag(
     'EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS',
-    false,
+    true,
   ),
 
   // ─── Community v3-4 — search + wearable-aware coaching prompts ───────────
@@ -433,11 +433,11 @@ export const featureFlags = {
   // gracefully to a calm empty / not-available state.
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_SEARCH
-  communitySearch: readFlag('EXPO_PUBLIC_FF_COMMUNITY_SEARCH', false),
+  communitySearch: readFlag('EXPO_PUBLIC_FF_COMMUNITY_SEARCH', true),
   // env: EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS
   communityWearablePrompts: readFlag(
     'EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS',
-    false,
+    true,
   ),
   // ─── MWB-4 — workout-builder autosave (Google-Docs-style save) ───────────
   // The MWB-3 backend (PATCH /workout-plans/:planId/autosave + POST .../undo,
@@ -455,7 +455,7 @@ export const featureFlags = {
   // degrades to a calm offline/`gone` state rather than an error banner.
   //
   // env: EXPO_PUBLIC_FF_MWB_AUTOSAVE
-  mwbAutosave: readFlag('EXPO_PUBLIC_FF_MWB_AUTOSAVE', false),
+  mwbAutosave: readFlag('EXPO_PUBLIC_FF_MWB_AUTOSAVE', true),
   // ─── S-MWB — coach Programs library (master workout builder) ────────────
   // ON: the coach "Programs" tab (library, week x day grid that opens the
   // workout builder for each day, saved workouts, bulk assign, add to package,
@@ -466,14 +466,14 @@ export const featureFlags = {
   // Templates tab, unchanged.
   //
   // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
-  mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
+  mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', true),
   // UI-4 (V1_1_UI_SPEC, owner 2026-10-09): the Clients tab becomes the client
   // lookup (Needs you under 15 clients, Search first with A to Z at 15 or
   // more). OFF (default, and in every eas.json profile): today's Clients list,
   // unchanged. Switching it on is its own one-line PR.
   //
   // env: EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP
-  coachClientLookup: readFlag('EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP', false),
+  coachClientLookup: readFlag('EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP', true),
   // ─── UI-3 food logging (V1_1_UI_SPEC UI-3, owner 2026-10-09) ─────────────
   // ON: a coached client's Food tab opens on the day's plan as a checklist:
   // the coach's meals in order, "Ate it as planned" logs one in a tap. No plan
@@ -481,13 +481,13 @@ export const featureFlags = {
   // profile): today's Food log, unchanged. The switch-on is its own PR.
   //
   // env: EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST
-  foodPlanChecklist: readFlag('EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST', false),
+  foodPlanChecklist: readFlag('EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST', true),
   // UI-1 (owner 10-09, V1_1_UI_SPEC; v1 since owner 10-17 "home-v1"): the rings
   // and tiles client Home. Default off and set by no eas.json profile until the
   // owner switches it on in its own PR; off renders today's Home unchanged.
   //
   // env: EXPO_PUBLIC_FF_CLIENT_HOME_RINGS
-  clientHomeRings: readFlag('EXPO_PUBLIC_FF_CLIENT_HOME_RINGS', false),
+  clientHomeRings: readFlag('EXPO_PUBLIC_FF_CLIENT_HOME_RINGS', true),
   // ─── Roman P3 — backend-authority gates ──────────────────────────────────
   // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
   // expose authoritatively, so each is held behind its own backend-live gate
@@ -507,7 +507,7 @@ export const featureFlags = {
    */
   romanCheckInBackendLive: readFlag(
     'EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE',
-    false,
+    true,
   ),
   /**
    * §2.7 client streak milestone card. The host currently derives the
@@ -520,7 +520,7 @@ export const featureFlags = {
    */
   romanStreakBackendLive: readFlag(
     'EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE',
-    false,
+    true,
   ),
 
   // ─── Roman ED.6 — coach-is-watching competence pill ──────────────────────
@@ -535,7 +535,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL
    */
-  romanCompetencePill: readFlag('EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL', false),
+  romanCompetencePill: readFlag('EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL', true),
 
   // ─── Roman ED.2 — three-arc check-in / brief / review router ─────────
   /**
@@ -551,7 +551,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER
    */
-  romanThreeArcRouter: readFlag('EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER', false),
+  romanThreeArcRouter: readFlag('EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER', true),
   // ─── Roman ED.5 — onboarding polish pass (mobile-only) ───────────────────
   /**
    * ED.5 onboarding polish layer over the existing onboarding flow. When ON,
@@ -574,7 +574,7 @@ export const featureFlags = {
    */
   romanOnboardingPolish: readFlag(
     'EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH',
-    false,
+    true,
   ),
 
   // ─── Importer v0.3 — coach-facing extension import entry ─────────────────
@@ -585,7 +585,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_EXTENSION_IMPORT
    */
-  extensionImport: readFlag('EXPO_PUBLIC_FF_EXTENSION_IMPORT', false),
+  extensionImport: readFlag('EXPO_PUBLIC_FF_EXTENSION_IMPORT', true),
   /**
    * Reconstruction-review READ surface (GET /api/scout/reconstruct/entities).
    * A SEPARATE kill switch from `extensionImport`, because the two gate
@@ -599,7 +599,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_IMPORT_REVIEW
    */
-  importReview: readFlag('EXPO_PUBLIC_FF_IMPORT_REVIEW', false),
+  importReview: readFlag('EXPO_PUBLIC_FF_IMPORT_REVIEW', true),
 
   // ─── Store launch (C11) — App Review 3.1 risk removal ────────────────────
   /**
@@ -617,7 +617,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES
    */
-  iosHideNonP2PPurchases: readFlag('EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES', !isDev),
+  iosHideNonP2PPurchases: readFlag('EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES', true),
 
   /**
    * Owner decision 10 fallback (09-30): on an iOS store build offered only on
@@ -633,7 +633,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK
    */
-  iosUsCreditPackLink: readFlag('EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK', false),
+  iosUsCreditPackLink: readFlag('EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK', true),
 
   /**
    * PACKS-BOTH-131 (owner 10-08: AI packs must be purchasable on Android and
@@ -648,7 +648,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK
    */
-  androidCreditPackLink: readFlag('EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK', false),
+  androidCreditPackLink: readFlag('EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK', true),
 
   // ─── CREDITBUILD-143 — coach AI credit pool screens (CREDIT-1/W/S/SW) ─────
   /**
@@ -662,7 +662,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_COACH_AI_CREDITS
    */
-  coachAiCredits: readFlag('EXPO_PUBLIC_FF_COACH_AI_CREDITS', false),
+  coachAiCredits: readFlag('EXPO_PUBLIC_FF_COACH_AI_CREDITS', true),
   /**
    * Roman's line N7 ("Ask me as often as you like. Every conversation uses
    * your AI credits.") on the AI credit screens. It is true only once
@@ -671,7 +671,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT
    */
-  coachRomanNoDailyLimit: readFlag('EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT', false),
+  coachRomanNoDailyLimit: readFlag('EXPO_PUBLIC_FF_COACH_ROMAN_NO_DAILY_LIMIT', true),
 
   // ─── S14 — client AI wearable insight panel ──────────────────────────────
   /**
@@ -688,7 +688,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS
    */
-  wearableAiInsights: readFlag('EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS', false),
+  wearableAiInsights: readFlag('EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS', true),
 
   // ─── C3B-THREAD — client coach thread in Style B "Focus" ─────────────────
   /**
@@ -699,7 +699,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_C3_STYLE_B
    */
-  c3StyleB: readFlag('EXPO_PUBLIC_FF_C3_STYLE_B', false),
+  c3StyleB: readFlag('EXPO_PUBLIC_FF_C3_STYLE_B', true),
 
   // ─── ONBQ-TILES — consultation questions in Quiet Tiles ──────────────────
   /**
@@ -710,25 +710,25 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_CONSULT_TILES_V2
    */
-  consultTilesV2: readFlag('EXPO_PUBLIC_FF_CONSULT_TILES_V2', false),
+  consultTilesV2: readFlag('EXPO_PUBLIC_FF_CONSULT_TILES_V2', true),
   /**
    * HEALTH-1 (owner 10-17 #HEALTH-PAGES op 1, #SLEEP-PLACE op 2): the You row
    * Sleep and recovery opens Health and sleep on Recovery; the Fitness tab gets
    * the forest masthead. Off in every build; off, both are main's.
    * env: EXPO_PUBLIC_FF_HEALTH_PAGES
    */
-  healthPages: readFlag('EXPO_PUBLIC_FF_HEALTH_PAGES', false),
+  healthPages: readFlag('EXPO_PUBLIC_FF_HEALTH_PAGES', true),
   /** HB-B1 (#HABITS-CONCEPT, concept B): Habits opens on the ring, the week strip and tiles.
    * Off in every build; off, Habits is main's list. env: EXPO_PUBLIC_FF_HABITS_RING */
-  habitsRing: readFlag('EXPO_PUBLIC_FF_HABITS_RING', false),
+  habitsRing: readFlag('EXPO_PUBLIC_FF_HABITS_RING', true),
   /**
    * SHARE-A (#SHARE-SEND op 1): Share on Progress and the Session summary opens
    * one ShareSheet over the screen; no ShareCard route. Off in every build.
    * env: EXPO_PUBLIC_FF_SHARE_SHEET_V2
    */
-  shareSheetV2: readFlag('EXPO_PUBLIC_FF_SHARE_SHEET_V2', false),
+  shareSheetV2: readFlag('EXPO_PUBLIC_FF_SHARE_SHEET_V2', true),
   /** SHARE-A: Send to {coach} on the ShareSheet (backend SHARE-BE). Off in every build. env: EXPO_PUBLIC_FF_SHARE_SEND_V1 */
-  shareSendV1: readFlag('EXPO_PUBLIC_FF_SHARE_SEND_V1', false),
+  shareSendV1: readFlag('EXPO_PUBLIC_FF_SHARE_SEND_V1', true),
 
   // ─── C7 Style B — sign-in and first run (MOCKUP3/C7, index-b-join) ───────
   /**
@@ -741,7 +741,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_FIRST_RUN_V2
    */
-  firstRunV2: readFlag('EXPO_PUBLIC_FF_FIRST_RUN_V2', false),
+  firstRunV2: readFlag('EXPO_PUBLIC_FF_FIRST_RUN_V2', true),
 
   // ─── LEARN-A — Learn: the coach's guidelines and lessons (MOCK-LEARN) ───
   /**
@@ -752,11 +752,11 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_LEARN_HUB
    */
-  learnHub: readFlag('EXPO_PUBLIC_FF_LEARN_HUB', false),
+  learnHub: readFlag('EXPO_PUBLIC_FF_LEARN_HUB', true),
   /** LEARN-M5 (MOCK-LEARN2 A): Train's course banner and the course home, week and lesson. Off; off, Train is main's. env: EXPO_PUBLIC_FF_LEARN_COURSES */
-  learnCourses: readFlag('EXPO_PUBLIC_FF_LEARN_COURSES', false),
+  learnCourses: readFlag('EXPO_PUBLIC_FF_LEARN_COURSES', true),
   /** MEALBUILD (MOCK-K5 C): Programs > Meal plans and Meals. Off; off, Programs is main's. env: EXPO_PUBLIC_FF_MEAL_PLANS_V2 */
-  mealPlansV2: readFlag('EXPO_PUBLIC_FF_MEAL_PLANS_V2', false),
+  mealPlansV2: readFlag('EXPO_PUBLIC_FF_MEAL_PLANS_V2', true),
 
   // ─── C9-S1 — the You tab home in Style C (MOCK-C9) ──────────────────────
   /**
@@ -765,7 +765,7 @@ export const featureFlags = {
    *
    * env: EXPO_PUBLIC_FF_YOU_TAB_V2
    */
-  youTabV2: readFlag('EXPO_PUBLIC_FF_YOU_TAB_V2', false),
+  youTabV2: readFlag('EXPO_PUBLIC_FF_YOU_TAB_V2', true),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
