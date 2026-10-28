@@ -1,0 +1,7 @@
+src/screens/community
+src/components/community
+src/hooks
+src/api
+src/__tests__/copyVoice.guard.test.ts
+src/__tests__/truthfulCopy.guard.test.ts
+src/__tests__/c6Copy.test.tsx
