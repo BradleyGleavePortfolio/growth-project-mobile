@@ -270,7 +270,7 @@ export default function CoachCommunityInboxScreen({
   if (inbox.isLoading) {
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
-        <InboxTitle subtitle="Loading your inbox" />
+        <InboxTitle subtitle="Loading your inbox" unspokenSubtitle />
         <View
           accessible
           accessibilityLabel="Loading your inbox"
@@ -436,10 +436,13 @@ function InboxTitle({
   subtitle,
   flush,
   onDark,
+  unspokenSubtitle,
 }: {
   subtitle?: string;
   flush?: boolean;
   onDark?: boolean;
+  /** C7: shown but not spoken, when the content below says the same words. */
+  unspokenSubtitle?: boolean;
 }): React.ReactElement {
   return (
     <View style={flush ? styles.titleBlockFlush : styles.titleBlock}>
@@ -449,7 +452,11 @@ function InboxTitle({
       >
         Inbox
       </Text>
-      <Text style={[styles.dateLine, onDark ? styles.dateLineOnDark : null]}>
+      <Text
+        style={[styles.dateLine, onDark ? styles.dateLineOnDark : null]}
+        accessibilityElementsHidden={unspokenSubtitle}
+        importantForAccessibility={unspokenSubtitle ? 'no-hide-descendants' : 'auto'}
+      >
         {subtitle ?? inboxDateLine()}
       </Text>
     </View>
