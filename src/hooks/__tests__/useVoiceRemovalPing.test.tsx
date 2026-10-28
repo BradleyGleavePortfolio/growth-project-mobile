@@ -15,8 +15,9 @@ import NetInfo from '@react-native-community/netinfo';
 jest.mock('../../config/featureFlags', () => ({
   featureFlags: { communityVoiceNotes: true, communitySearch: true },
 }));
+const mockSearchFlags = { community_search: true };
 jest.mock('../useFeatureFlags', () => ({
-  useFeatureFlags: () => ({ flags: { community_search: true }, isLoading: false, isError: false }),
+  useFeatureFlags: () => ({ flags: mockSearchFlags, isLoading: false, isError: false }),
 }));
 jest.mock('../useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'u-me' }) }));
 jest.mock('../../theme/useTheme', () => {
@@ -298,6 +299,8 @@ describe('the bounded catch-up heals a missed ping', () => {
   beforeEach(() => {
     appListeners = [];
     focusListeners = [];
+    mockSearch.mockReset();
+    mockSearchFlags.community_search = true;
     AppState.addEventListener = ((type: string, cb: (s: AppStateStatus) => void) => {
       if (type === 'change') appListeners.push(cb);
       return { remove: () => (appListeners = appListeners.filter((x) => x !== cb)) };
@@ -305,9 +308,102 @@ describe('the bounded catch-up heals a missed ping', () => {
   });
   afterEach(() => {
     AppState.addEventListener = realAdd;
+    mockSearchFlags.community_search = true;
   });
   const app = async (s: AppStateStatus) => act(async () => appListeners.forEach((cb) => cb(s)));
   const focus = async () => act(async () => focusListeners.forEach((cb) => cb()));
+
+  const findPage = (withVoice: boolean) => ({
+    version: 1,
+    query: 'press',
+    results: withVoice ? [{
+      id: 'find-voice',
+      kind: 'voice_note_transcript',
+      targetId: 'vn-other',
+      cohortId: null,
+      authorId: 'u-alice',
+      excerpt: 'press with control',
+      createdAt: '2026-06-01T00:00:00.000Z',
+    }] : [],
+    nextCursor: null,
+    tookMs: 3,
+  });
+
+  const renderFind = async () => {
+    mockGetMe.mockResolvedValue({
+      workspace_id: 'ws-1',
+      membership: { role: 'client' },
+      unread: { cohort_messages: 0, dm_messages: 0, mentions: 0 },
+    });
+    return render(
+      <QueryClientProvider client={newClient()}>
+        <NavigationContext.Provider value={navigation as never}>
+          <CommunityFindScreen />
+        </NavigationContext.Provider>
+      </QueryClientProvider>,
+    );
+  };
+
+  it.each(['foreground', 'focus'])('Find heals a missed ping once on %s return', async (first) => {
+    mockSearch.mockResolvedValueOnce(findPage(true)).mockResolvedValue(findPage(false));
+    const view = await renderFind();
+    await fireEvent.changeText(await view.findByTestId('community-search-input'), 'press');
+    expect(await view.findByText('press with control')).toBeTruthy();
+    expect(mockSearch).toHaveBeenCalledTimes(1);
+    expect(mockPing.current).toBeNull(); // No ping or badge subscription delivers this update.
+    const start = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(start + BOUND + 1_000);
+    spies.push(clock);
+
+    if (first === 'foreground') {
+      await app('background');
+      await app('active');
+    } else {
+      await focus();
+    }
+    await waitFor(() => expect(view.queryByText('press with control')).toBeNull());
+    expect(view.getByTestId('community-find-no-results')).toBeTruthy();
+    expect(view.queryByLabelText(/press with control/)).toBeNull();
+    expect(mockSearch).toHaveBeenCalledTimes(2);
+    expect(mockSearch.mock.calls[1]).toEqual(['ws-1', expect.objectContaining({ q: 'press' })]);
+
+    // The paired app/focus events share the same bound, rather than issuing two reads.
+    await app('active');
+    await focus();
+    expect(mockSearch).toHaveBeenCalledTimes(2);
+
+    clock.mockReturnValue(start + 2 * BOUND + 2_000);
+    await focus();
+    await waitFor(() => expect(mockSearch).toHaveBeenCalledTimes(3));
+    view.unmount();
+    expect(focusListeners).toHaveLength(0);
+    expect(appListeners).toHaveLength(0);
+  });
+
+  it('Find stays idle on return without a search term', async () => {
+    mockSearch.mockResolvedValue(findPage(false));
+    const view = await renderFind();
+    expect(await view.findByTestId('community-find-idle')).toBeTruthy();
+    await app('active');
+    await focus();
+    expect(mockSearch).not.toHaveBeenCalled();
+  });
+
+  it('Find does not re-read a populated search when its runtime gate turns off', async () => {
+    mockSearch.mockResolvedValue(findPage(true));
+    const view = await renderFind();
+    await fireEvent.changeText(await view.findByTestId('community-search-input'), 'press');
+    expect(await view.findByText('press with control')).toBeTruthy();
+    const start = Date.now();
+    spies.push(jest.spyOn(Date, 'now').mockReturnValue(start + BOUND + 1_000));
+    mockSearchFlags.community_search = false;
+    // Changing input re-renders the mounted screen with the newly disabled runtime gate.
+    await fireEvent.changeText(view.getByTestId('community-search-input'), 'press ');
+    expect(view.getByText('Search is not available right now.')).toBeTruthy();
+    await app('active');
+    await focus();
+    expect(mockSearch).toHaveBeenCalledTimes(1);
+  });
 
   it('the app back in front or the screen refocused re-reads at most once per bound', async () => {
     const live = note('vn-other', 'u-alice');

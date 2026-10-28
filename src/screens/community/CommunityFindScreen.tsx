@@ -37,6 +37,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import { useCommunitySearch } from '../../hooks/useCommunitySearch';
+import { useVoiceCatchUp } from '../../hooks/useVoiceFeed';
 import { track } from '../../analytics/posthog.service';
 import {
   AnalyticsEvents,
@@ -92,6 +93,11 @@ export default function CommunityFindScreen(): React.ReactElement {
     term,
     enabled: runtimeEnabled,
   });
+  // Use the same bounded return path as voice lists if a live removal ping was missed.
+  useVoiceCatchUp(
+    search,
+    featureFlags.communitySearch && runtimeEnabled && !!workspaceId && trimmed.length > 0,
+  );
 
   const data = useMemo(
     () => dedupeById(search.data?.pages.flatMap((p) => p.results) ?? []),
