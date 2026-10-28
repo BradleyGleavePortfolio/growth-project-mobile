@@ -478,8 +478,11 @@ describe('FACE + VOICE contract — RomanAvatar + BACKEND-PAYLOAD copy on every 
     // serialising the rendered tree and confirming the avatar's testID appears
     // before the payload copy string. (Comparing host-node fibers directly is
     // brittle — react-test-renderer's internal Maps throw on identity checks —
-    // so we compare positions in the serialised tree instead.)
-    const serialised = JSON.stringify(toJSON());
+    // so we compare positions in the serialised tree instead.) FIN-868: the quiet
+    // Home pulls to refresh, so its RefreshControl element (circular) is left out.
+    const serialised = JSON.stringify(toJSON(), (key, value) =>
+      key === 'refreshControl' ? undefined : value,
+    );
     const avatarIdx = serialised.indexOf('coach-community-home-empty-avatar');
     const copyIdx = serialised.indexOf('TEST_EMPTY_HOME_COPY');
     expect(avatarIdx).toBeGreaterThan(-1);
