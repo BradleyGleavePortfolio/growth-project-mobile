@@ -196,7 +196,7 @@ describe('coachCommunityApi — read endpoints on the server routes', () => {
       client_user_id: USER_ID,
       client_name: 'Dana Reyes',
       avatar_url: null,
-      snippet: 'Can I swap Thursday for Friday?',
+      snippet: 'Can I swap Thursday for Friday?...',
       created_at: '2026-10-21T09:00:00.000Z',
       acknowledged: false,
       type: 'message',
@@ -930,7 +930,7 @@ describe('coachCommunityApi — FX4-868 inbox route + row pinned to the server D
       ['post', 'text'],
     ]);
     expect(res.items[1].voice).toEqual({ note_id: NOTE_ID, duration_ms: 4000 });
-    expect(res.items[2]).toMatchObject({ snippet: 'Front squat, 3 x 5', ack });
+    expect(res.items[2]).toMatchObject({ snippet: 'Front squat, 3 x 5...', ack });
   });
 
   it('a photo row shows its caption, or the word "Photo" when the caption is empty', async () => {
@@ -946,9 +946,40 @@ describe('coachCommunityApi — FX4-868 inbox route + row pinned to the server D
     });
     const res = await coachCommunityApi.getInbox();
     expect(res.items.map((i) => [i.kind, i.snippet])).toEqual([
-      ['photo', 'New squat best'],
-      ['photo', 'Photo'],
-      ['photo', 'Photo'],
+      ['photo', 'New squat best...'],
+      ['photo', 'Photo...'],
+      ['photo', 'Photo...'],
+    ]);
+  });
+
+  it('every message row ends with "..." so a cut text never looks complete; a post does not (#179-11)', async () => {
+    flags.communityVoiceNotes = true;
+    const cut = `${'Long question about my week. '.repeat(7)}Can I`.slice(0, 200);
+    serveGets({
+      '/community/me/coach-inbox': {
+        items: [
+          serverInboxRow(ROW_1, { preview: cut }),
+          serverInboxRow(ROW_2, {
+            kind: 'voice',
+            preview: 'Voice note',
+            voice: { note_id: NOTE_ID, duration_ms: 4000 },
+          }),
+          serverInboxRow(ROW_3, { kind: 'photo', preview: '' }),
+          serverInboxRow(POST_ID, {
+            type: 'post',
+            preview: 'Week 3 check-in',
+            item_url_path: `/community/cohorts/${COHORT_ID}/posts/${POST_ID}`,
+          }),
+        ],
+        next_cursor: null,
+      },
+    });
+    const res = await coachCommunityApi.getInbox();
+    expect(res.items.map((i) => i.snippet)).toEqual([
+      `${cut.trimEnd()}...`,
+      'Voice note...',
+      'Photo...',
+      'Week 3 check-in',
     ]);
   });
 
