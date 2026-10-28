@@ -84,6 +84,14 @@ describe('Coach community Home on K2 Style B (FIN-868)', () => {
     expect(refetch).toHaveBeenCalledTimes(2);
   });
 
+  it("on the stack the error is the inbox's inline card: cream, no portrait (m#883)", async () => {
+    mockDashboard.current = dashboard({ isError: true });
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityHomeScreen />);
+    expect(queryByTestId('coach-community-home-error-avatar')).toBeNull();
+    const card = StyleSheet.flatten(getByTestId('coach-community-home-error').props.style);
+    expect(card).toMatchObject({ backgroundColor: colors.cream });
+  });
+
   it('a quiet Home with failed words pulls to retry both the summary and the words', async () => {
     const refetch = jest.fn();
     const retry = jest.fn();

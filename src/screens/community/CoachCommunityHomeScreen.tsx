@@ -6,7 +6,7 @@
  * flagged moderation items. Each card routes into the matching surface.
  *
  * K2 Style B (#172-10, as the inbox). THREE distinct branches (UX P0.2): skeleton cards; an
- * honest CoachErrorState on a load failure (never a calm/empty masquerade); and
+ * honest inline error card on a load failure (never a calm/empty masquerade); and
  * — when the dashboard is genuinely quiet (no unread, no cohorts, nothing
  * flagged) — the operator-locked Roman-voiced empty state. The empty-state copy
  * and avatar crop come from the backend voice policy (face + voice contract),
@@ -27,12 +27,13 @@ import { spacing, radius, withAlpha, colors, layout } from '../../theme/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../components/HapticPressable';
 import { featureFlags } from '../../config/featureFlags';
-import { CoachRomanEmptyState, CoachErrorState } from '../../components/community/coach';
+import { CoachRomanEmptyState } from '../../components/community/coach';
 import {
   useCoachDashboard,
   useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
+import { InboxNoticeCard } from './CoachCommunityInboxScreen';
 
 // K2 Style B: one light palette in both themes, named by role.
 const semanticColors = {
@@ -109,11 +110,12 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
         testID="coach-community-home-screen"
       >
         <HomeTitle />
-        <CoachErrorState
+        <InboxNoticeCard
           message="Could not load your community summary. Pull to retry."
           onRetry={() => dashboard.refetch()}
           retrying={dashboard.isRefetching}
           testID="coach-community-home-error"
+          flush
         />
       </ScrollView>
     );
