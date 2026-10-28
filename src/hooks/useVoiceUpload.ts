@@ -36,6 +36,7 @@ import {
   type VoiceNoteMimeType,
   type VoiceNoteView,
 } from '../api/communityVoiceApi';
+import { AccountChangedError, bindingIsCurrent, type AccountBinding } from '../services/accountBinding';
 import { voiceKeys } from './voiceQueryKeys';
 
 /** A recording handed to the upload pipeline. */
@@ -61,6 +62,12 @@ export interface UseVoiceUploadOptions {
   uploadedKey?: string;
   /** C-4: told the key once the bytes are up, so a resend can post that same note. */
   onUploaded?: (storageKey: string) => void;
+  /**
+   * BF-2 (VF-848B): the sign-in this publish belongs to (the outbox binds every send). Each hop names it, so
+   * it goes out only with that sign-in's own credential, and the publish stops at the first check after the
+   * sign-in changes (AccountChangedError): nothing more goes out, no key is told, no answer is taken.
+   */
+  binding?: AccountBinding;
 }
 
 export type VoiceUploadMutation = UseMutationResult<
@@ -95,6 +102,11 @@ async function defaultReadBytes(uri: string): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
+/** BF-2: a bound publish stops once its sign-in is over (`sent`: an earlier hop may have reached the server). */
+function stillBound(binding: AccountBinding | undefined, sent: boolean): void {
+  if (binding && !bindingIsCurrent(binding)) throw new AccountChangedError(sent);
+}
+
 /** The three hops for one recording; throws the typed error of the failed hop. */
 export async function publishVoiceNote(
   workspaceId: string,
@@ -103,25 +115,35 @@ export async function publishVoiceNote(
 ): Promise<VoiceNoteView> {
   assertVoicePublishable(input);
   const readBytes = options.readBytes ?? defaultReadBytes;
-  if (options.uploadedKey) return recordVoiceNote(workspaceId, input, options.uploadedKey);
+  const { binding } = options;
+  stillBound(binding, false);
+  if (options.uploadedKey) return recordVoiceNote(workspaceId, input, options.uploadedKey, binding);
 
   // Hop 1 — mint the signed upload target (server validates limits).
   const target = await communityVoiceApi.issueUploadUrl(workspaceId, {
     duration_ms: input.durationMs,
     bytes: input.bytes,
     mime_type: input.mimeType,
-  });
+  }, binding);
+  stillBound(binding, true);
 
   // Hop 2 — PUT the raw audio bytes to storage.
   const body = await readBytes(input.uri);
-  await communityVoiceApi.uploadBytes(target.upload_url, body, input.mimeType, options.onProgress);
+  stillBound(binding, true);
+  await communityVoiceApi.uploadBytes(target.upload_url, body, input.mimeType, options.onProgress, binding);
+  stillBound(binding, true);
   options.onUploaded?.(target.storage_key);
-  return recordVoiceNote(workspaceId, input, target.storage_key);
+  return recordVoiceNote(workspaceId, input, target.storage_key, binding);
 }
 
 // Hop 3 — durably record the note (server re-asserts the bucket binding).
-function recordVoiceNote(workspaceId: string, input: VoiceUploadInput, storageKey: string): Promise<VoiceNoteView> {
-  return communityVoiceApi.create(workspaceId, {
+async function recordVoiceNote(
+  workspaceId: string,
+  input: VoiceUploadInput,
+  storageKey: string,
+  binding: AccountBinding | undefined,
+): Promise<VoiceNoteView> {
+  const note = await communityVoiceApi.create(workspaceId, {
     storage_key: storageKey,
     duration_ms: input.durationMs,
     bytes: input.bytes,
@@ -129,7 +151,9 @@ function recordVoiceNote(workspaceId: string, input: VoiceUploadInput, storageKe
     ...(input.cohortId ? { cohortId: input.cohortId } : {}),
     ...(input.conversationId ? { conversationId: input.conversationId } : {}),
     ...(input.waveformPeaks ? { waveformPeaks: input.waveformPeaks } : {}),
-  });
+  }, binding);
+  stillBound(binding, true);
+  return note;
 }
 
 export function useVoiceUpload(

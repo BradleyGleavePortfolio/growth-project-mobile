@@ -3,6 +3,9 @@
  * has it: sending (spinner, "Sending…") · waiting (offline: spinner + wifi-off, sends when the signal is
  * back, from any screen) · failed (online: Try again / Delete, recording kept). The queue is saved to
  * AsyncStorage and the audio moved into documents, so a restart picks it up. Per author, emptied on sign-out.
+ * BF-2 (VF-848B): each send is bound to the sign-in that runs it (services/accountBinding.ts). A sign-out
+ * drops the queue and its recordings, and a read, a file move or a send it overtakes is ignored. A new
+ * sign-in of the same account with no sign-out sends the note again under that sign-in.
  * Cold start (LS-848 B2): with the flag on, this module drives the queue from app start — the signed-in
  * author from the user cache, the signal from NetInfo — so a restart on Home sends what waits with no
  * voice screen open.
@@ -19,6 +22,14 @@ import { readUserCache } from '../lib/userCache';
 import { queryClient } from '../services/queryClient';
 import { isEffectivelyOnline, useNetworkStatus } from './useNetworkStatus';
 import { CommunityApiError } from '../api/apiCall';
+import {
+  AccountChangedError,
+  authEpoch,
+  bindingIsCurrent,
+  captureAccountBinding,
+  isAccountChangedError,
+  type AccountBinding,
+} from '../services/accountBinding';
 import { publishVoiceNote, type VoiceUploadInput } from './useVoiceUpload';
 import { voiceKeys } from './voiceQueryKeys';
 import type { VoiceRecordingResult } from './voiceRecorderPort';
@@ -71,9 +82,10 @@ async function keepFile(uri: string): Promise<string> {
 }
 /** Delete the files this outbox moved (one already gone is fine). */
 function dropFiles(gone: VoiceOutboxItem[]): void {
-  for (const i of gone) {
-    try { if (i.input.uri.includes('/voice-outbox/')) new File(i.input.uri).delete(); } catch { /* gone */ }
-  }
+  for (const i of gone) dropFile(i.input.uri);
+}
+function dropFile(uri: string): void {
+  try { if (uri.includes('/voice-outbox/')) new File(uri).delete(); } catch { /* gone */ }
 }
 function remove(id: string): void {
   dropFiles(items.filter((i) => i.id === id));
@@ -81,16 +93,21 @@ function remove(id: string): void {
 }
 /** After a restart: load the saved queue once; a send cut off mid-way waits again. */
 function restore(): Promise<void> {
-  restored ??= AsyncStorage.getItem(STORE_KEY)
-    .then((raw) => {
-      const saved = (raw ? JSON.parse(raw) : []) as VoiceOutboxItem[];
-      const back = saved
-        .filter((s) => !items.some((i) => i.id === s.id))
-        .map((s) => ({ ...s, status: s.status === 'failed' ? s.status : ('waiting' as const) }));
-      if (back.length > 0) commit([...back, ...items]);
-    })
-    .catch(() => undefined);
+  restored ??= readSaved();
   return restored;
+}
+/** BF-2: a read that a sign-in change overtakes is read again, so a queue emptied at sign-out stays empty. */
+async function readSaved(): Promise<void> {
+  const at = authEpoch();
+  const raw = await AsyncStorage.getItem(STORE_KEY).catch(() => null);
+  if (at !== authEpoch()) return readSaved();
+  try {
+    const saved = (raw ? JSON.parse(raw) : []) as VoiceOutboxItem[];
+    const back = saved
+      .filter((s) => !items.some((i) => i.id === s.id))
+      .map((s) => ({ ...s, status: s.status === 'failed' ? s.status : ('waiting' as const) }));
+    if (back.length > 0) commit([...back, ...items]);
+  } catch { /* unreadable: nothing to restore */ }
 }
 function patch(id: string, p: Partial<VoiceOutboxItem>): void {
   commit(items.map((i) => (i.id === id ? { ...i, ...p } : i)));
@@ -110,7 +127,9 @@ function subscribe(l: () => void): () => void {
 function flush(): void {
   const s = session;
   if (!s) return;
+  const at = authEpoch();
   void restore().then(() => {
+    if (at !== authEpoch()) return flush(); // BF-2: the sign-in changed meanwhile: whoever is signed in now
     if (online) items.filter((i) => i.authorId === s.authorId && i.status === 'waiting').forEach((i) => void run(i.id, s.qc));
   });
 }
@@ -118,6 +137,8 @@ authEvents.on('logout', () => {
   driverEpoch += 1;
   session = null;
   dropFiles(items);
+  // BF-2: also the recordings of a saved queue not read back yet, and any left by an earlier run.
+  try { new Directory(Paths.document, 'voice-outbox').delete(); } catch { /* none */ }
   commit([]);
 });
 
@@ -161,30 +182,52 @@ export function resetVoiceOutbox(coldStart = false): void {
   if (!coldStart) void AsyncStorage.removeItem(STORE_KEY);
 }
 
+/** BF-2: the send still belongs to the sign-in that runs it, and its row is still queued. */
+function live(id: string, authorId: string, binding: AccountBinding): boolean {
+  return bindingIsCurrent(binding) && session?.authorId === authorId && items.some((i) => i.id === id);
+}
+const accountChanged = (err: unknown): boolean =>
+  isAccountChangedError(err) || (err instanceof CommunityApiError && isAccountChangedError(err.cause));
+
 async function run(id: string, qc: QueryClient): Promise<void> {
   const item = items.find((i) => i.id === id);
-  if (!item || item.status === 'sending') return;
+  // BF-2: a note goes out only while its own author is signed in.
+  if (!item || item.status === 'sending' || session?.authorId !== item.authorId) return;
   if (!online) {
     patch(id, { status: 'waiting' });
     return;
   }
   patch(id, { status: 'sending', progress: 0 });
+  const startedAt = authEpoch();
+  const binding = await captureAccountBinding();
   try {
+    // BF-2: no sign-in token on the phone (or it changed while read): nothing goes out.
+    if (!binding) throw new AccountChangedError(false);
     await publishVoiceNote(item.workspaceId, item.input, {
+      binding,
       onProgress: (f) => setProgress(id, f),
       uploadedKey: item.uploadedKey,
       onUploaded: (key) => patch(id, { uploadedKey: key }),
     });
+    if (!live(id, item.authorId, binding)) throw new AccountChangedError(true);
     // Keep the row until the feed holds the real note, so nothing blinks out.
     await qc.invalidateQueries({ queryKey: voiceKeys.feedRoot(item.workspaceId) });
     remove(id);
-    void HapticService.success(); // GOAL: the note is in; a soft success, not silence
+    if (bindingIsCurrent(binding)) void HapticService.success(); // GOAL: the note is in; a soft success, not silence
   } catch (err) {
-    // C-4: the server turned that key down (too old, or the bytes are gone): the next try uploads again.
-    if (err instanceof CommunityApiError && err.status === 400) patch(id, { uploadedKey: undefined });
-    // Offline by now: wait for the signal. Online: say it did not send.
-    patch(id, { status: online ? 'failed' : 'waiting' });
-    if (online) void HapticService.error();
+    if (binding && live(id, item.authorId, binding) && !accountChanged(err)) {
+      // C-4: the server turned that key down (too old, or the bytes are gone): the next try uploads again.
+      if (err instanceof CommunityApiError && err.status === 400) patch(id, { uploadedKey: undefined });
+      // Offline by now: wait for the signal. Online: say it did not send.
+      patch(id, { status: online ? 'failed' : 'waiting' });
+      if (online) void HapticService.error();
+      return;
+    }
+    // BF-2: the sign-in changed under the send. Signed out: the row went with the queue. The same author in
+    // a new sign-in: the note waits and goes again under that sign-in. No Not sent row, no buzz.
+    if (!items.some((i) => i.id === id)) return;
+    patch(id, { status: 'waiting' });
+    if (authEpoch() !== startedAt) flush();
   }
 }
 
@@ -221,6 +264,8 @@ export function useVoiceOutbox(workspaceId: string | null, authorId: string | nu
       if (peaks.length > 0) input.waveformPeaks = peaks;
       commit([...items, { id, authorId, workspaceId, input, peaks, status: 'sending' }]);
       void keepFile(uri).then((kept) => {
+        // BF-2: a sign-out while the file moved dropped this note: delete the moved recording, send nothing.
+        if (!items.some((i) => i.id === id)) return dropFile(kept);
         patch(id, { input: { ...input, uri: kept }, status: 'waiting' });
         return run(id, qc);
       });
