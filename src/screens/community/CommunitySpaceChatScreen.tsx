@@ -233,7 +233,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   const [info, setInfo] = useState(false);
   // FR-871R6 (m#879 Opus B1 / Sol B879-1): the member's tab bar steps aside here (ClientNavigator), so the dock and its
   // lines keep clear of the home indicator / Android navigation bar themselves, in their own colour; with the keyboard
-  // up the dock sits on the keyboard (no double gap). The coach's tab bar still fills the inset (Found: CoachNavigator).
+  // up the dock sits on the keyboard (no double gap). The coach's tab bar steps aside too (CoachNavigator, FIN-871R6 m#879 B2).
   const insets = useSafeAreaInsets();
   const [keyboardUp, setKeyboardUp] = useState(false);
   useEffect(() => {
@@ -241,7 +241,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     const down = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardUp(false));
     return () => { up.remove(); down.remove(); };
   }, []);
-  const dockInset = coachStack || keyboardUp ? 0 : insets.bottom;
+  const dockInset = keyboardUp ? 0 : insets.bottom;
   const lineInset = dockInset ? { paddingBottom: spacing.lg + dockInset } : null;
 
   return (
