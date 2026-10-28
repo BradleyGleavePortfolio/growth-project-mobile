@@ -4,7 +4,7 @@
  * the Copilot button and link, and the masthead and body rhythm.
  */
 import React from 'react';
-import { AccessibilityInfo, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Animated, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../../services/api';
@@ -17,7 +17,7 @@ import { lightTokens } from '../../../../theme/tokens';
 import { SuggestionCard } from '../SuggestionCard';
 import { SuggestionStatusList } from '../SuggestionStatusList';
 import { SourceTag } from '../AnswerCard';
-import { LedgerButton, LedgerLink } from '../RomanNotice';
+import { CalmIn, LedgerButton, LedgerLink } from '../RomanNotice';
 
 let mockParams: Record<string, unknown> | undefined;
 let mockFontScale = 1;
@@ -305,4 +305,23 @@ test('B-878R3-3 (owner 178-4, op 2): Not now is style A\'s forest link, 44 tall,
   expect(s.getByTestId('copilot-not-now').props.accessibilityState?.disabled).toBe(true);
   expect(flat(s.getByText('Not now')).color).toBe('#5A5A56');
   await act(async () => done({ ...SUGGESTED, status: 'pending', sent_at: '2026-10-21T21:34:00Z' }));
+});
+
+test('B-S4: the calm entry is one 200 ms opacity fade that moves nothing (so Reduce Motion\'s cross-fade is the same); a changed status fades in again, a repeat poll does not', async () => {
+  const timing = jest.spyOn(Animated, 'timing');
+  const calm = await render(<CalmIn testID="calm"><Text>Sent</Text></CalmIn>);
+  expect(timing).toHaveBeenCalledTimes(1);
+  expect(timing.mock.calls[0][1]).toMatchObject({ toValue: 1, duration: 200, useNativeDriver: true });
+  expect(flat(calm.getByTestId('calm'))).toHaveProperty('opacity');
+  expect(flat(calm.getByTestId('calm')).transform).toBeUndefined();
+  timing.mockClear();
+  const pending = { ...SUGGESTED, status: 'pending', sent_at: '2026-10-21T21:34:00Z' };
+  const list = await render(<SuggestionStatusList items={[pending] as never} coach="Alex" />);
+  expect(timing).toHaveBeenCalledTimes(1);
+  await list.rerender(<SuggestionStatusList items={[{ ...pending }] as never} coach="Alex" />);
+  expect(timing).toHaveBeenCalledTimes(1);
+  await list.rerender(<SuggestionStatusList items={[{ ...pending, status: 'approved', decided_at: '2026-10-22T09:00:00Z' }] as never} coach="Alex" />);
+  expect(timing).toHaveBeenCalledTimes(2);
+  expect(timing.mock.calls[1][1]).toMatchObject({ duration: 200 });
+  timing.mockRestore();
 });
