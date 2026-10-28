@@ -35,6 +35,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import {
   MORE_ITEMS,
+  NEW_ROW,
   ROMAN_MORE_ITEM,
   WEARABLE_MORE_ITEMS,
   planMoreItems,
@@ -271,8 +272,9 @@ export default function YouScreen() {
     );
   }
 
+  // `highlight`: style A's new row (GOAL 01 .lrow.new, More's NEW_ROW), only for Your path (Opus B-878R3-1, Sol B-878-E).
   const row = (key: string, icon: RowIcon | 'roman', label: string, onPress: () => void, opts: {
-    detail?: string | null; tag?: string | null; hint?: string; first?: boolean;
+    detail?: string | null; tag?: string | null; hint?: string; first?: boolean; highlight?: boolean;
   } = {}) => (
     <Pressable
       key={key}
@@ -281,14 +283,18 @@ export default function YouScreen() {
       accessibilityLabel={[label, opts.detail, opts.tag].filter(Boolean).join(', ')}
       accessibilityHint={opts.hint}
       testID={`you-row-${key}`}
-      style={({ pressed }) => [styles.row, !opts.first && styles.rowLine, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.row, !opts.first && styles.rowLine, opts.highlight && styles.rowNew, pressed && styles.pressed]}
     >
-      <View style={styles.rowIcon}>
-        {icon === 'roman' ? <RomanAvatar crop="neutral" size={28} /> : <Ionicons name={icon} size={22} color={sc.accentText} />}
-      </View>
+      {opts.highlight && icon !== 'roman' ? (
+        <View style={styles.rowNewIcon} testID="you-row-new-icon"><Ionicons name={icon} size={20} color={NEW_ROW.icon} /></View>
+      ) : (
+        <View style={styles.rowIcon}>
+          {icon === 'roman' ? <RomanAvatar crop="neutral" size={28} /> : <Ionicons name={icon} size={22} color={sc.accentText} />}
+        </View>
+      )}
       <View style={styles.fill}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {opts.detail ? <Text style={styles.rowDetail}>{opts.detail}</Text> : null}
+        <Text style={opts.highlight ? styles.rowNewLabel : styles.rowLabel}>{label}</Text>
+        {opts.detail ? <Text style={opts.highlight ? styles.rowNewDetail : styles.rowDetail}>{opts.detail}</Text> : null}
       </View>
       {opts.tag ? <Text style={styles.tag}>{opts.tag}</Text> : null}
       <Ionicons name="chevron-forward" size={20} color={sc.textMuted} />
@@ -296,7 +302,7 @@ export default function YouScreen() {
   );
   const itemRow = (item: MoreItem, i: number) => {
     const r = row(item.target.screen, item.isRoman ? 'roman' : item.icon, item.label, () => open(item), {
-      detail: item.description, hint: item.a11yHint, first: i === 0,
+      detail: item.description, hint: item.a11yHint, first: i === 0, highlight: item.highlight,
     });
     // #LEARN-COACHLESS op 1 (kept by Learn A): with learnHub on, Learn waits for the coach's guidelines or a lesson.
     if (featureFlags.learnHub && item.target.screen === 'Learn') return <LearnDoor key={item.label}>{r}</LearnDoor>;
@@ -311,10 +317,13 @@ export default function YouScreen() {
 
   // #SLEEP-PLACE op 2: with healthPages on, the first row is Sleep and recovery (More's own row).
   const health = showsWearableRows() ? WEARABLE_MORE_ITEMS : [];
-  // Today's More rows stay until their homes ship; Profile's home is Edit above.
+  // Today's More rows stay until their homes ship; Profile's home is Edit above. Your path, the one highlighted row,
+  // leads them as it leads its group in GOAL 01 (Opus B-878R3-1); the sections and every other row stay (Sol B-878-E).
+  const plan = planMoreItems();
   const kept = [
+    ...plan.filter((item) => item.highlight),
     ...(featureFlags.romanChat ? [ROMAN_MORE_ITEM] : []),
-    ...planMoreItems(),
+    ...plan.filter((item) => !item.highlight),
     ...MORE_ITEMS.filter((item) => item.target.screen !== 'ProfileMain'),
   ];
 
@@ -408,6 +417,11 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   rowIcon: { width: 28, alignItems: 'center' },
   rowLabel: { ...typography.bodyMd, color: sc.textPrimary },
   rowDetail: { ...typography.bodySmall, color: sc.textMuted, marginTop: 2 },
+  // Style A's .lrow.new as More draws it: leaf tint, 62 high, 11/16 in, 14 to a 36 forest tile, 16/500 over 13.5 grey.
+  rowNew: { minHeight: 62, paddingVertical: 11, gap: 14, backgroundColor: NEW_ROW.bg },
+  rowNewIcon: { width: 36, height: 36, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', backgroundColor: NEW_ROW.tile },
+  rowNewLabel: { fontFamily: 'Inter_500Medium', fontWeight: '500', fontSize: 16, lineHeight: 21, color: sc.textPrimary },
+  rowNewDetail: { fontFamily: 'Inter_400Regular', fontSize: 13.5, lineHeight: 18, color: NEW_ROW.muted, marginTop: 2 },
   tag: {
     ...typography.caption, letterSpacing: 0.2, color: sc.accentText, borderWidth: 1, borderColor: sc.accentText,
     borderRadius: radius.chip, paddingHorizontal: 10, paddingVertical: 2, overflow: 'hidden',
