@@ -31,7 +31,6 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
-  findNodeHandle,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { describeCommunityFailure } from '../../api/communityErrors';
@@ -572,11 +571,13 @@ export function alertCoachFailure(err: unknown): void {
   Alert.alert(f.title, f.message);
 }
 
-/** Screen-reader focus to a row (RN Web has no findNodeHandle). */
+/**
+ * Screen-reader focus to a row, as CreditPackCheckoutScreen moves it: the event
+ * goes to the row itself, so no findNodeHandle (gone on the new architecture).
+ */
 function focusRow(node: View | null): void {
   if (Platform.OS === 'web' || node == null) return;
-  const tag = findNodeHandle(node);
-  if (tag != null) AccessibilityInfo.setAccessibilityFocus(tag);
+  AccessibilityInfo.sendAccessibilityEvent(node, 'focus');
 }
 
 /** "1 member", "3 members": the count words on the Cohorts row and page. */
