@@ -80,3 +80,19 @@ test('with the Copilot switch off, You has no Your path row and Roman still lead
   const at = rows.indexOf('Roman');
   expect(rows.slice(at, at + 2)).toEqual(['Roman', 'Meal plan']);
 });
+
+// B-878R3-1 closure: GOAL 01 puts the new entry in the first Your plan group,
+// not merely first inside a later Support group. Keep the rest of C9 intact.
+test('B-878R3-1: all-on Your path leads Your plan before Account, Settings and Support', async () => {
+  Object.assign(mockFlags, { youTabV2: true, clientPathCopilot: true, romanChat: true, clientTimelineV2: true, healthPages: true });
+  const view = await draw();
+  expect(screen.queryByText('Your plan')).not.toBeNull();
+
+  const rendered = JSON.stringify(view.toJSON());
+  const pathAt = rendered.indexOf('"Your path"');
+  expect(pathAt).toBeGreaterThan(-1);
+  for (const laterGroup of ['Account', 'Settings', 'Support']) {
+    const groupAt = rendered.indexOf(`"${laterGroup}"`);
+    expect(groupAt).toBeGreaterThan(pathAt);
+  }
+});
