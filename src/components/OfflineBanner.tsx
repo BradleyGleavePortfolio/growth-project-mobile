@@ -13,7 +13,8 @@ import { isCoachLikeRole } from '../lib/roleSelectionGate';
 
 const CLIENT_LINE = "You're offline — food logs will sync when you reconnect.";
 // FIN-868R5 C6: a coach has no food logs, and nothing of theirs waits to sync.
-const COACH_LINE = "You're offline — reconnect to load the latest.";
+// Opens as the K2 offline banner and the inbox's offline card do.
+const COACH_LINE = 'You are offline. Reconnect to see the latest.';
 
 export default function OfflineBanner() {
   const status = useNetworkStatus();
