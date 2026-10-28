@@ -1601,7 +1601,8 @@ describe('FX4-868 round 4 — Cohorts and a cohort in K2 Style B (#172-10)', () 
     mockState.cohorts = { data: [cohort({ name: 'Spring block' })], isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
     const { getByTestId, getByText } = await render(<CoachCommunityCohortsScreen />);
     const row = getByTestId(`coach-community-cohort-row-${COHORT}`);
-    expect(row.props.accessibilityLabel).toMatch(/^Spring block, \d+ members$/);
+    // FIN-868R5: the label also speaks the unread count the row shows.
+    expect(row.props.accessibilityLabel).toBe('Spring block, 3 members, 1 unread');
     expect(getByText('SB')).toBeTruthy();
   });
 

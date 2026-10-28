@@ -554,6 +554,11 @@ export function alertCoachFailure(err: unknown): void {
   Alert.alert(f.title, f.message);
 }
 
+/** "1 member", "3 members": the count words on the Cohorts row and page. */
+export function membersLabel(count: number): string {
+  return `${count} ${count === 1 ? 'member' : 'members'}`;
+}
+
 /** Up to two initials for a filled serif monogram (K2). */
 export function initialsOf(name: string): string {
   return name

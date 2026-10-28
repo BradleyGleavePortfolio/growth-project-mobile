@@ -44,7 +44,13 @@ import {
 } from '../../hooks/useCoachCommunity';
 import type { CoachCohort } from '../../api/coachCommunityApi';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
-import { alertCoachFailure, InboxNoticeCard, initialsOf, k2Styles } from './CoachCommunityInboxScreen';
+import {
+  alertCoachFailure,
+  InboxNoticeCard,
+  initialsOf,
+  k2Styles,
+  membersLabel,
+} from './CoachCommunityInboxScreen';
 
 /** The serif page title (K2): the navigation bar above it stays empty. */
 function CohortsTitle(): React.ReactElement {
@@ -99,7 +105,9 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
           })
         }
         accessibilityRole="button"
-        accessibilityLabel={`${item.name}, ${item.member_count} members`}
+        accessibilityLabel={`${item.name}, ${membersLabel(item.member_count)}${
+          item.unread_count > 0 ? `, ${item.unread_count} unread` : ''
+        }`}
         testID={`coach-community-cohort-row-${item.id}`}
         style={styles.row}
       >
@@ -117,7 +125,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
             {item.name}
           </Text>
           <Text style={styles.rowMeta}>
-            {item.member_count} members
+            {membersLabel(item.member_count)}
             {item.unread_count > 0 ? ` · ${item.unread_count} unread` : ''}
           </Text>
         </View>

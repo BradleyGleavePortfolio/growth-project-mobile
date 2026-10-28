@@ -63,7 +63,12 @@ import {
 } from '../../api/coachCommunityApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CoachCommunityRoute } from './coachCommunityNavTypes';
-import { InboxNoticeCard, initialsOf, k2Styles } from './CoachCommunityInboxScreen';
+import {
+  InboxNoticeCard,
+  initialsOf,
+  k2Styles,
+  membersLabel,
+} from './CoachCommunityInboxScreen';
 
 /** An invite or remove that failed: the shared community copy, plus the one roster case it lacks. */
 function alertMemberFailure(err: unknown): void {
@@ -215,7 +220,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           {cohortName}
         </Text>
         {data ? (
-          <Text style={styles.headerMeta}>{memberCount} members</Text>
+          <Text style={styles.headerMeta}>{membersLabel(memberCount)}</Text>
         ) : null}
       </View>
 
