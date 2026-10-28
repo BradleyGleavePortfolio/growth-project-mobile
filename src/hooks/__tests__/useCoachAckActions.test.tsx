@@ -38,7 +38,7 @@ import {
   type AckTransitionResponse,
 } from '../../api/coachCommunityApi';
 import { useCoachAckActions } from '../useCoachAckActions';
-import { coachCommunityKeys } from '../useCoachCommunity';
+import { coachCommunityKeys, useCoachAckState } from '../useCoachCommunity';
 
 const MSG = '11111111-1111-1111-1111-111111111111';
 
@@ -176,6 +176,28 @@ describe('useCoachAckActions — error rollback', () => {
 
     await waitFor(() => expect(result.current.markSeen.isError).toBe(true));
     expect(qc.getQueryData<AckStateDto>(key)).toBeUndefined();
+  });
+
+  it('a refused first Ack also clears the row that reads the cache, so Acknowledge comes back (FIN-868R5 LS-3)', async () => {
+    const { Wrapper } = makeWrapper();
+    let refuse: (e: Error) => void = () => undefined;
+    mockApi.markCoachAckAcked.mockImplementationOnce(
+      () => new Promise((_ok, no) => (refuse = no)),
+    );
+
+    // The inbox row reads the cache in its own component; the Ack button's
+    // mutation lives in a child, so nothing else re-renders the row.
+    const row = await renderHook(() => useCoachAckState(MSG), { wrapper: Wrapper });
+    const button = await renderHook(() => useCoachAckActions(MSG), { wrapper: Wrapper });
+
+    await act(async () => {
+      button.result.current.markAcked.mutate();
+    });
+    expect(row.result.current?.state).toBe('acked'); // optimistic, request in flight
+
+    await act(async () => refuse(new Error('boom')));
+    await waitFor(() => expect(button.result.current.markAcked.isError).toBe(true));
+    expect(row.result.current).toBeUndefined();
   });
 });
 
