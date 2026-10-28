@@ -6,23 +6,35 @@
  * cannot be closed while Roman writes or the draft sends. HomeSheet is the Home's one sheet (LO B1).
  */
 import React, { useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import api from '../../../services/api';
 import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, typography } from '../../../theme/tokens';
+import { forestPop, layout, neutral, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietLoading } from '../../../ui/states/QuietStates';
 import type { AtRiskEntry } from '../../../services/commandCenterApi';
 import { firstWord, type HomeWinDraft } from './homeDay';
+import { RomanMark } from './RomanMark';
+import { KeepTail } from './KeepTail';
+import { SEMI, styleA } from './HomeParts';
+import type { LineParts } from './planEndedData';
 
 export interface DraftAsk {
   clientName: string;
   /** What the draft is for, in the coach's words: shown on the ask step. */
   about: string;
+  /** `about` in pieces, for the K3 context chip: its package moves to the next line whole (KeepTail). */
+  aboutParts?: LineParts;
   request: HomeWinDraft;
+  /** A server route that builds Roman's request itself (b#1130's plan-ended draft); the answer reads as invoke's. */
+  path?: string;
+  /** That route answered 404 (b#1141: the pair is blocked, or the plan is no longer ended): the list re-reads without it. */
+  onGone?: () => void;
+  /** RENEWAL3 K3a/K3b: Roman's deep head (mark, "Roman", the title, the context chip) over the sheet. Plan-ended asks only. */
+  look?: 'roman';
 }
 
 type Step =
@@ -31,13 +43,13 @@ type Step =
   | { kind: 'ready'; draftId: string; reply: string }
   | { kind: 'sending'; draftId: string; reply: string }
   | { kind: 'sent' }
-  | { kind: 'failed'; words: string; draft?: { draftId: string; reply: string } };
+  | { kind: 'failed'; words: string; draft?: { draftId: string; reply: string }; gone?: boolean };
 
 interface InvokeAnswer { enabled?: boolean; provider?: string; reply?: string; approval?: { required?: boolean; draft_id?: string | null } }
 
 /** Roman's written draft, or null when Roman is off or filed nothing: then nothing can be sent. */
-export async function askRomanToDraft(request: HomeWinDraft): Promise<{ draftId: string; reply: string } | null> {
-  const res = await api.post<InvokeAnswer>('/ai/gateway/invoke', request);
+export async function askRomanToDraft(request: HomeWinDraft, path?: string): Promise<{ draftId: string; reply: string } | null> {
+  const res = await api.post<InvokeAnswer>(path ?? '/ai/gateway/invoke', path ? {} : request);
   const a = res.data ?? {};
   const draftId = a.approval?.draft_id;
   if (a.enabled === false || a.provider === 'stub' || a.approval?.required !== true || typeof draftId !== 'string' || !draftId) return null;
@@ -75,8 +87,8 @@ export function HomeSheet({ list, ask, onCloseList, onCloseAsk, onSent }: { list
     <Modal visible transparent animationType="slide" onRequestClose={() => close.current()}>
       <View style={s.scrim}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close.current()} accessibilityRole="button" accessibilityLabel="Close" />
-        <View style={[s.sheet, { paddingBottom: bottom + 16 }]} testID={ask ? 'home-draft-sheet' : 'home-list-sheet'}>
-          <View style={s.grab} />
+        <View style={[s.sheet, ask?.look === 'roman' && s.sheetRoman, ask?.look === 'roman' && s.whiteBody, { paddingBottom: bottom + 16 }]} testID={ask ? 'home-draft-sheet' : 'home-list-sheet'}>
+          {ask?.look === 'roman' ? null : <View style={s.grab} />}
           {ask ? <DraftSteps ask={ask} s={s} close={close} onClose={onCloseAsk} onSent={onSent} /> : list ? (
             <>
               <Text style={s.title} accessibilityRole="header">{list.title}</Text>
@@ -112,13 +124,19 @@ export function HomeSheet({ list, ask, onCloseList, onCloseAsk, onSent }: { list
 function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAsk; s: S; close: React.RefObject<() => void>; onClose: () => void; onSent: () => void }) {
   const [step, setStep] = useState<Step>({ kind: 'ask' });
   const first = firstWord(ask.clientName);
+  const roman = ask.look === 'roman';
 
   const write = async () => {
     setStep({ kind: 'writing' });
     try {
-      const d = await askRomanToDraft(ask.request);
+      const d = await askRomanToDraft(ask.request, ask.path);
       setStep(d ? { kind: 'ready', ...d } : { kind: 'failed', words: "Roman can't write this right now. Nothing was sent." });
-    } catch {
+    } catch (err) {
+      if (ask.path && (err as { response?: { status?: number } })?.response?.status === 404) {
+        setStep({ kind: 'failed', words: "Roman can't write this right now. Nothing was sent.", gone: true }); // no Try again: it won't work (LO C2)
+        ask.onGone?.();
+        return;
+      }
       setStep({ kind: 'failed', words: "Roman couldn't write this. Nothing was sent. Try again in a moment." });
     }
   };
@@ -142,32 +160,52 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
   closeRef.current = close;
 
   const draft = step.kind === 'ready' || step.kind === 'sending' ? step : step.kind === 'failed' ? step.draft : undefined;
+  const title = step.kind === 'sent' ? `Sent to ${first}` : draft ? `Roman's draft for ${first}` : `Ask Roman to write to ${first}?`;
   return (
     <>
+      {ask.look === 'roman' ? (
+        <View style={s.head} testID="home-draft-head">
+          <View style={[s.grab, s.grabOnDeep]} testID="home-draft-grab" />
+          <View style={s.headMark}>
+            <RomanMark size={32} r={17} gap={2} />
+            <Text style={s.headName} accessibilityElementsHidden importantForAccessibility="no">{'Roman'.toUpperCase()}</Text>
+          </View>
+          <Text style={[s.title, s.titleOnDeep]} accessibilityRole="header">{title}</Text>
+          {step.kind === 'ask' ? <Text style={[s.muted, s.mutedOnDeep]}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
+          {step.kind !== 'sent' ? (
+            <View
+              style={s.about} testID="home-draft-about"
+              // The chip's words are pieces (KeepTail): it reads as one line, as P1 and the rows read their own label.
+              accessible={!!ask.aboutParts} accessibilityLabel={ask.aboutParts ? ask.about : undefined}
+            >
+              <Ionicons name="refresh" size={16} color={styleA.onDeep} />
+              {ask.aboutParts ? <KeepTail parts={ask.aboutParts} style={s.aboutText} box={s.aboutBox} testID="home-draft-about-line" /> : <Text style={s.aboutText}>{ask.about}</Text>}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
       <ScrollView bounces={false}>
-        <Text style={s.title} accessibilityRole="header">
-          {step.kind === 'sent' ? `Sent to ${first}` : draft ? `Roman's draft for ${first}` : `Ask Roman to write to ${first}?`}
-        </Text>
-        {step.kind === 'ask' ? <Text style={s.body}>{ask.about}</Text> : null}
-        {step.kind === 'ask' ? <Text style={s.muted}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
+        {ask.look === 'roman' ? null : <Text style={s.title} accessibilityRole="header">{title}</Text>}
+        {step.kind === 'ask' && ask.look !== 'roman' ? <Text style={s.body}>{ask.about}</Text> : null}
+        {step.kind === 'ask' && ask.look !== 'roman' ? <Text style={s.muted}>You read it before it goes. Nothing is sent until you tap Send.</Text> : null}
         {step.kind === 'writing' ? <QuietLoading label="Roman is writing" /> : null}
-        {draft ? <View style={s.draft}><Text style={s.body} testID="home-draft-text">{draft.reply}</Text></View> : null}
+        {draft ? <View style={[s.draft, roman && s.draftBoxRoman]} testID="home-draft-box"><Text style={[s.body, roman && s.draftRoman]} testID="home-draft-text">{draft.reply}</Text></View> : null}
         {step.kind === 'failed' ? <Text style={s.error} accessibilityLiveRegion="polite">{step.words}</Text> : null}
       </ScrollView>
-      <View style={s.actions}>
-        {step.kind === 'ask' || (step.kind === 'failed' && !step.draft) ? (
-          <HapticPressable intent="light" style={s.primary} onPress={write} accessibilityRole="button" accessibilityLabel={step.kind === 'failed' ? 'Try again' : 'Ask Roman'} testID="home-draft-ask">
-            <Text style={s.primaryText}>{step.kind === 'failed' ? 'Try again' : 'Ask Roman'}</Text>
+      <View style={[s.actions, roman && s.actionsRoman, roman && (step.kind === 'ask' || step.kind === 'sent') && s.actionsBare]} testID="home-draft-actions">
+        {step.kind === 'ask' || (step.kind === 'failed' && !step.draft && !step.gone) ? (
+          <HapticPressable intent="light" style={[s.primary, roman && s.primaryRoman]} onPress={write} accessibilityRole="button" accessibilityLabel={step.kind === 'failed' ? 'Try again' : 'Ask Roman'} testID="home-draft-ask">
+            <Text style={[s.primaryText, roman && s.primaryTextRoman]}>{step.kind === 'failed' ? 'Try again' : 'Ask Roman'}</Text>
           </HapticPressable>
         ) : null}
         {draft ? (
-          <HapticPressable intent="medium" style={s.primary} disabled={step.kind === 'sending'} onPress={() => send(draft.draftId, draft.reply)} accessibilityRole="button" accessibilityLabel={`Send to ${first}`} testID="home-draft-send">
-            <Text style={s.primaryText}>{step.kind === 'sending' ? 'Sending' : 'Send'}</Text>
+          <HapticPressable intent="medium" style={[s.primary, roman && s.primaryRoman]} disabled={step.kind === 'sending'} onPress={() => send(draft.draftId, draft.reply)} accessibilityRole="button" accessibilityLabel={`Send to ${first}`} testID="home-draft-send">
+            <Text style={[s.primaryText, roman && s.primaryTextRoman]}>{step.kind === 'sending' ? 'Sending' : 'Send'}</Text>
           </HapticPressable>
         ) : null}
         {step.kind !== 'writing' && step.kind !== 'sending' ? (
-          <Pressable style={s.secondary} onPress={close} accessibilityRole="button" accessibilityLabel={step.kind === 'sent' ? 'Done' : 'Not now'} testID="home-draft-close">
-            <Text style={s.secondaryText}>{step.kind === 'sent' ? 'Done' : 'Not now'}</Text>
+          <Pressable style={[s.secondary, roman && s.secondaryRoman]} onPress={close} accessibilityRole="button" accessibilityLabel={step.kind === 'sent' ? 'Done' : 'Not now'} testID="home-draft-close">
+            <Text style={[s.secondaryText, roman && s.secondaryTextRoman]}>{step.kind === 'sent' ? 'Done' : 'Not now'}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -175,11 +213,45 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
   );
 }
 
-const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>) =>
+/** RENEWAL3 K3's sheet gutter (r2b.py `.dhead`, r2a.py `.ask`): 22 on iPhone, 18 on Android. */
+const ROMAN_GUTTER = Platform.OS === 'android' ? 18 : 22;
+
+const makeStyles = ({ colors, semanticColors: sem, colorScheme }: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
     scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: sem.overlay },
     sheet: { maxHeight: '85%', paddingTop: 8, paddingHorizontal: layout.gutter, backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
     grab: { width: 40, height: 5, borderRadius: radius.chip, backgroundColor: sem.border, alignSelf: 'center', marginBottom: 12 },
+    // RENEWAL3 K3a/K3b (r2b.py `.dhead`, r2a.py `.at`, `.am`, `.ctx`, `.dtx`): the deep head runs edge to edge over the
+    // sheet's top, with K3's own metrics (LS B1).
+    sheetRoman: { paddingTop: 0, paddingHorizontal: ROMAN_GUTTER, overflow: 'hidden' },
+    head: { marginHorizontal: -ROMAN_GUTTER, paddingHorizontal: ROMAN_GUTTER, paddingTop: 8, paddingBottom: 16, marginBottom: 16, backgroundColor: forestPop.deep },
+    // K3's on-deep tones are Style A's (r2b.py:66-69 `.dhead`): the grab is the deep line, the title white, the chip on the
+    // tile ground with on-deep text (FX5-859, LO B2).
+    grabOnDeep: { backgroundColor: styleA.line },
+    headMark: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+    headName: { ...typography.caption, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.8, color: forestPop.gold },
+    titleOnDeep: { color: neutral[0] },
+    mutedOnDeep: { ...typography.body, fontSize: 14.5, lineHeight: 21, marginTop: 0, color: forestPop.onDeepMuted },
+    about: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 8, marginTop: 12, minHeight: 30, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.chip, backgroundColor: styleA.deep2 },
+    aboutText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, color: styleA.onDeep, flexShrink: 1 },
+    draftRoman: { fontSize: 15.5, lineHeight: 23, ...(colorScheme === 'light' ? { color: styleA.ink } : {}) },
+    // RENEWAL3 K3a/K3b (r2b.py `.ask`, `.draft`): the sheet's body and Roman's draft box are white (#FFFFFF) under the deep head
+    // in light mode (Sol m#866 B1); dark mode keeps the theme's own surfaces. The box has K3b's own edge and padding
+    // (r2a.py:108 `.draft`: 1 #DCE3DB, 12/14/6) and sits right under the head's 16 (r2b.py:176) (FX5-859, LO B3, LS B2).
+    whiteBody: colorScheme === 'light' ? { backgroundColor: neutral[0] } : {},
+    draftBoxRoman: {
+      marginTop: 0, paddingTop: 12, paddingHorizontal: 14, paddingBottom: 6, borderWidth: 1,
+      ...(colorScheme === 'light' ? { backgroundColor: neutral[0], borderColor: styleA.cardLine } : {}),
+    },
+    // K3's buttons (r2a.py:79-81 `.btn`, `.sec2`; :115 `.sbtns`): 48 and 44 tall, 600 15/20, 6 apart; with nothing above
+    // them (ask, sent) they sit right under the head's 16 (r2b.py:170). Wins and reach-outs keep main's sheet.
+    actionsRoman: { gap: 6 },
+    actionsBare: { marginTop: 0 },
+    primaryRoman: { minHeight: 48 },
+    primaryTextRoman: { fontFamily: SEMI, fontSize: 15, lineHeight: 20, color: neutral[0] },
+    secondaryRoman: { minHeight: 44 },
+    secondaryTextRoman: { fontFamily: SEMI, fontSize: 15, lineHeight: 20 },
+    aboutBox: { flexShrink: 1 },
     title: { fontFamily: 'Inter_600SemiBold', fontSize: 20, lineHeight: 26, color: colors.textPrimary, marginBottom: 8 },
     body: { ...typography.body, color: colors.textPrimary },
     muted: { ...typography.bodySmall, color: colors.textMuted, marginTop: 6 },
