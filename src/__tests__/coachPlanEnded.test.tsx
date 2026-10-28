@@ -7,10 +7,12 @@ import React from 'react';
 import { BackHandler, Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
-  groupPlanEnded, homeLabel, homeLine, homeParts, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, rowParts, withoutBlocked,
+  groupPlanEnded, homeLabel, homeLine, homeParts, joinLine, messagedLine, parsePlanEndedPage, readPlanEnded, rowLine, rowParts, withoutBlocked,
   type PlanEndedRow,
 } from '../screens/coach/home-v11/planEndedData';
-import { KeepTail } from '../screens/coach/home-v11/KeepTail';
+import { KeepTail, keepTailPieces } from '../screens/coach/home-v11/KeepTail';
+import { HomeSheet, reachOutAsk } from '../screens/coach/home-v11/DraftSheets';
+import { forestPop } from '../theme/tokens';
 import { useBlockedUsersStore } from '../store/blockedUsersStore';
 import { prefsStorage } from '../storage/mmkv';
 
@@ -95,9 +97,9 @@ async function renderHome() {
 type View = Awaited<ReturnType<typeof renderHome>>;
 const press = (v: View, ...ids: string[]) => ids.reduce((p, id) => p.then(() => fireEvent.press(v.getByTestId(id))), Promise.resolve());
 const churnReads = () => mockGet.mock.calls.filter(([url]) => url === '/v1/coach/churned-clients').length;
-/** KeepTail's pieces: the lead, then the dot and the tail in their own row (the dot is only drawn, so it is hidden). */
+/** KeepTail's pieces, in order: each word of the lead, the last one carrying the dot, then the tail whole (FX5-859). */
 const drawn = (el: ReturnType<View['getByTestId']>) => within(el).getAllByText(/./, { includeHiddenElements: true }).map((t) => t.props.children as string);
-const keepTail = (v: View, id: string) => [drawn(v.getByTestId(id))[0], drawn(v.getByTestId(`${id}-tail`))];
+const keepTail = (v: View, id: string) => drawn(v.getByTestId(id));
 
 describe('plan ended: the read and its words', () => {
   it('reads every page, newest first, and is off on a 404 or an answer that is not the list', async () => {
@@ -136,9 +138,9 @@ describe('plan ended on the coach Home', () => {
   it('shows P1 under the rings with the newest client and opens the grouped list', async () => {
     const v = await renderHome();
     expect(v.getByTestId('home-plan-ended').props.accessibilityLabel).toBe('Plan ended last 7 days, 5. Maya Ortiz, plan ended today, and 4 more');
-    expect(keepTail(v, 'home-plan-ended-line')).toEqual(['Maya Ortiz', ['·', 'ended today']]); // "ended today" stays whole, the dot with it
+    expect(keepTail(v, 'home-plan-ended-line')).toEqual(['Maya', 'Ortiz ·', 'ended today']); // "ended today" stays whole; the dot ends its word
     await press(v, 'home-plan-ended');
-    expect(keepTail(v, 'plan-ended-line-c1')).toEqual(['Plan ended today', ['·', '12-week block']]); // the package stays whole, the dot with it
+    expect(keepTail(v, 'plan-ended-line-c1')).toEqual(['Plan', 'ended', 'today ·', '12-week block']); // the package stays whole; the dot ends its word
     expect(v.getByTestId('plan-ended-row-c1').props.accessibilityLabel).toBe('Maya Ortiz. Plan ended today · 12-week block');
     expect(v.getByTestId('plan-ended-list')).toBeTruthy();
     expect(v.getByText('NEWEST FIRST')).toBeTruthy();
@@ -190,8 +192,10 @@ describe('plan ended on the coach Home', () => {
     expect([mark.props.importantForAccessibility, within(mark).getByText('R', { includeHiddenElements: true }).props.style]).toEqual(['no-hide-descendants', expect.arrayContaining([expect.objectContaining({ fontFamily: 'CormorantGaramond_500Medium', color: '#D4B96B' })])]);
     await press(v, 'plan-ended-ask');
     expect(v.getByText('Ask Roman to write to Maya?')).toBeTruthy();
-    // the K3 context chip: RN3-34 in two pieces, so "· 12-week block" moves down whole at large text (KeepTail, as on P1/K2)
-    expect(keepTail(v, 'home-draft-about-line')).toEqual(['Plan ended today', ['·', '12-week block']]);
+    // the K3 context chip: RN3-34 in KeepTail's pieces, as on P1/K2, so "12-week block" moves down whole at large text and
+    // the dot ends line 1; the chip reads as one line
+    expect(keepTail(v, 'home-draft-about-line')).toEqual(['Plan', 'ended', 'today ·', '12-week block']);
+    expect(['accessible', 'accessibilityLabel'].map((k) => v.getByTestId('home-draft-about').props[k])).toEqual([true, 'Plan ended today · 12-week block']);
     const head = within(v.getByTestId('home-draft-head')); // K3a: Roman's deep head with the mark and "Roman" (RN3-33)
     expect([head.getByTestId('roman-mark', { includeHiddenElements: true }), head.getByText('ROMAN', { includeHiddenElements: true }), head.getByText('Ask Roman to write to Maya?')].every(Boolean)).toBe(true);
     // RENEWAL3 K3a/K3b: white body under the deep head (r2b.py `.ask`), and Roman's draft box white too (`.draft`; Sol m#866 B1)
@@ -383,20 +387,111 @@ describe('plan ended: RENEWAL3 metrics, not the Home shared rows (LS B1)', () =>
   });
 });
 
-describe('plan ended: the dot travels with the tail, never alone on a line (FX4-859, m#866 B2)', () => {
+describe('plan ended: the line breaks where RENEWAL3 breaks it, the dot ending line 1 (FX5-859, LO B1)', () => {
   const st = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
-  it('draws the lead, then the dot and the tail in one row that never wraps; the dot is only drawn', async () => {
-    const v = await render(<KeepTail parts={{ lead: 'Plan ended 3 days ago', tail: '12-week block' }} style={{ fontSize: 13, lineHeight: 18 }} testID="kt" />);
-    expect(keepTail(v, 'kt')).toEqual(['Plan ended 3 days ago', ['·', '12-week block']]);
-    // the line can break only before the dot: the dot's row does not wrap, so the dot always sits beside the tail
-    expect([st(v.getByTestId('kt')).flexWrap, st(v.getByTestId('kt-tail')).flexDirection, st(v.getByTestId('kt-tail')).flexWrap]).toEqual(['wrap', 'row', undefined]);
-    const gaps = [st(v.getByTestId('kt')).columnGap, st(v.getByTestId('kt-tail')).columnGap];
-    expect([gaps[0], (gaps[0] as number) > 0]).toEqual([gaps[1], true]); // one space wide on each side of the dot
-    // a screen reader reads the words, with no stop on the dot
-    expect(within(v.getByTestId('kt')).getAllByText(/./).map((t) => t.props.children)).toEqual(['Plan ended 3 days ago', '12-week block']);
+  it('draws each lead word, the last one with the dot, then the tail whole, in one wrapping row', async () => {
+    const parts = { lead: 'Plan ended 3 days ago', tail: '12-week block' };
+    const v = await render(<KeepTail parts={parts} style={{ fontSize: 13, lineHeight: 18 }} testID="kt" />);
+    // r2b.py:148 `%s · <span class="nw">%s</span>`: the lead breaks at its spaces, the tail never, and "ago ·" moves as one,
+    // so the dot ends line 1 wherever "ago ·" fits there and never starts a line or sits alone
+    expect(keepTail(v, 'kt')).toEqual(['Plan', 'ended', '3', 'days', 'ago ·', '12-week block']);
+    const row = v.getByTestId('kt');
+    expect([st(row).flexDirection, st(row).flexWrap, (st(row).columnGap as number) > 0]).toEqual(['row', 'wrap', true]); // one space between pieces
+    expect(row.children.map((c) => (typeof c === 'string' ? c : c.type))).toEqual(Array(6).fill('Text')); // every piece is the row's own child
+    expect([v.queryByTestId('kt-tail'), v.queryByText('·', { includeHiddenElements: true })]).toEqual([null, null]); // no lone dot
+    // the characters are the approved line exactly, and no no-break characters are added
+    expect(keepTail(v, 'kt').join(' ')).toBe(joinLine(parts));
+    expect(keepTail(v, 'kt').join('')).not.toMatch(/[\u00a0\u2007\u202f\u2060\ufeff]/);
+  });
+  it('glues the dot to a one-word lead too, and to the last word of a name', () => {
+    expect([keepTailPieces({ lead: 'Cher', tail: 'ended today' }), keepTailPieces({ lead: 'Maya  Ortiz', tail: 'ended 2 days ago' })])
+      .toEqual([['Cher ·', 'ended today'], ['Maya', 'Ortiz ·', 'ended 2 days ago']]);
   });
   it('draws no dot when there is no tail', async () => {
     const v = await render(<KeepTail parts={{ lead: 'Plan ended 2 days ago', tail: '' }} style={{ fontSize: 13 }} testID="kt" />);
     expect([v.getByTestId('kt').props.children, v.queryByText('·', { includeHiddenElements: true })]).toEqual(['Plan ended 2 days ago', null]);
+  });
+});
+
+describe('plan ended: the masthead scrolls away and each date heading sticks (FX5-859, LS B1)', () => {
+  const st = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
+  type Node = { type: string; props: Record<string, unknown>; children: (Node | string)[] };
+  it('scrolls the masthead with the rows, keeps only the status band still, and pins each heading on the page ground', async () => {
+    const v = await renderHome();
+    await press(v, 'home-plan-ended');
+    const scroll = v.getByTestId('plan-ended-scroll') as unknown as Node;
+    // r3.py `pe_page`: the masthead (Back, NEWEST FIRST, the title) is in the scroll, so it leaves as the rows come up
+    expect(['plan-ended-head', 'plan-ended-back'].map((id) => within(v.getByTestId('plan-ended-scroll')).queryByTestId(id) !== null)).toEqual([true, true]);
+    expect(within(v.getByTestId('plan-ended-head')).getByText('Plan ended last 7 days, 5')).toBeTruthy();
+    // only the status band stays put, above the scroll, on the masthead's deep ground
+    expect(within(v.getByTestId('plan-ended-scroll')).queryByTestId('plan-ended-band')).toBeNull();
+    expect(st(v.getByTestId('plan-ended-band')).backgroundColor).toBe(forestPop.deep);
+    // the scroll's own children, in order: the masthead, then each date heading and its card; the headings stick
+    const content = scroll.children[scroll.children.length - 1] as Node;
+    const kids = content.children.map((c) => (typeof c === 'string' ? c : c.props.testID));
+    expect(kids).toEqual(['plan-ended-head', 'plan-ended-today', 'plan-ended-today-card', 'plan-ended-yesterday', 'plan-ended-yesterday-card', 'plan-ended-week', 'plan-ended-week-card']);
+    expect((scroll.props.stickyHeaderIndices as number[]).map((i) => kids[i])).toEqual(['plan-ended-today', 'plan-ended-yesterday', 'plan-ended-week']);
+    // r2b.py:59 `.lsec`: a pinned heading is opaque on the page's own ground, so the rows pass beneath it
+    expect(['today', 'yesterday', 'week'].map((k) => st(v.getByTestId(`plan-ended-${k}`)).backgroundColor)).toEqual(Array(3).fill(st(v.getByTestId('plan-ended-list')).backgroundColor));
+    expect(['paddingTop', 'paddingBottom', 'paddingHorizontal'].map((k) => st(v.getByTestId('plan-ended-today'))[k])).toEqual([14, 8, 4]);
+    // a scroll changes nothing else: Back still closes the list, and the rows and headings stay
+    await fireEvent.scroll(v.getByTestId('plan-ended-scroll'), { nativeEvent: { contentOffset: { x: 0, y: 420 }, contentSize: { width: 390, height: 1200 }, layoutMeasurement: { width: 390, height: 700 } } });
+    expect([v.getByTestId('plan-ended-week'), v.getByTestId('plan-ended-row-c5')].every(Boolean)).toBe(true);
+    await press(v, 'plan-ended-back');
+    await waitFor(() => expect(v.queryByTestId('plan-ended-list')).toBeNull());
+  });
+  it('keeps each sticky index on its heading when a failed re-read puts its error in the scroll', async () => {
+    const w = await renderHome();
+    churned = () => Promise.reject(new Error('offline'));
+    await press(w, 'home-plan-ended');
+    await waitFor(() => expect(w.getByTestId('plan-ended-error')).toBeTruthy());
+    const scroll = w.getByTestId('plan-ended-scroll') as unknown as Node;
+    const content = scroll.children[scroll.children.length - 1] as Node;
+    const kids = content.children.map((c) => (typeof c === 'string' ? c : c.props.testID ?? 'error'));
+    expect((scroll.props.stickyHeaderIndices as number[]).map((i) => kids[i])).toEqual(['plan-ended-today', 'plan-ended-yesterday', 'plan-ended-week']);
+    expect(kids.slice(0, 2)).toEqual(['plan-ended-head', 'error']);
+  });
+});
+
+describe('plan ended: RENEWAL3 Style A values, one class (FX5-859, LO B2/B3, LS B2)', () => {
+  const st = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
+  const pick = (el: { props: { style?: unknown } }, keys: string[]) => keys.map((k) => st(el)[k]);
+  it('draws P1, P1-0, K1/K2 and K3 in Style A tones and sizes, and leaves the wins and reach-outs sheet as main has it', async () => {
+    // P1 (r2b.py `.wbrow`, `.stk`; r3.py:69-71): the tile ground, 10 top and bottom, on-deep title, 30 discs with a 2 ring outside
+    const v = await renderHome();
+    expect(pick(v.getByTestId('home-plan-ended'), ['backgroundColor', 'paddingVertical'])).toEqual(['#26402F', 10]);
+    expect(st(v.getByText('Plan ended last 7 days, 5')).color).toBe('#F4F7F2');
+    const discs = ['MO', 'DP', 'SO'].map((t) => v.getByText(t, { includeHiddenElements: true }).parent as unknown as { props: { style?: unknown } });
+    expect(pick(discs[0], ['width', 'borderWidth', 'borderColor', 'margin', 'backgroundColor'])).toEqual([34, 2, '#26402F', -2, forestPop.leaf]); // 34 - 2 x 2 = a 30 disc
+    expect(discs.slice(1).map((d) => st(d).marginLeft)).toEqual([-8, -8]); // each 6 over the one before
+    // K1/K2 (r2a.py `.pgcard`, `.nm`, `.la`, `.btn`, `.btn.out`; r2b.py:58 `.h1`): flat cards, ink names, graphite lines (owner #168-13)
+    await press(v, 'home-plan-ended');
+    expect(st(within(v.getByTestId('plan-ended-head')).getByText('Plan ended last 7 days, 5')).color).toBe('#FFFFFF');
+    expect(pick(v.getByTestId('plan-ended-today-card'), ['shadowOpacity', 'elevation', 'backgroundColor'])).toEqual([0, 0, '#FFFFFF']);
+    expect(st(v.getByText('Maya Ortiz')).color).toBe('#142019');
+    expect(Array.from(new Set(within(v.getByTestId('plan-ended-line-c1')).getAllByText(/./).map((t) => st(t).color)))).toEqual(['#2C2C2C']);
+    await press(v, 'plan-ended-row-c1');
+    expect(pick(v.getByTestId('plan-ended-message'), ['backgroundColor', 'borderColor', 'borderWidth'])).toEqual(['#FFFFFF', '#2C4A36', 1.5]);
+    expect([st(within(v.getByTestId('plan-ended-message')).getByText('Message')).color, st(within(v.getByTestId('plan-ended-ask')).getByText('Ask Roman to write')).color]).toEqual(['#2C4A36', '#FFFFFF']);
+    // K3a (r2a.py:79-81 `.btn`, `.sec2`; r2b.py:66-69 `.dhead`, :170): 48 and 44 tall, 600 15/20, 6 apart, 16 under the head
+    await press(v, 'plan-ended-ask');
+    const semi = ['fontFamily', 'fontSize', 'lineHeight'];
+    expect([st(v.getByTestId('home-draft-ask')).minHeight, pick(v.getByText('Ask Roman'), [...semi, 'color'])]).toEqual([48, ['Inter_600SemiBold', 15, 20, '#FFFFFF']]);
+    expect([st(v.getByTestId('home-draft-close')).minHeight, pick(v.getByText('Not now'), semi)]).toEqual([44, ['Inter_600SemiBold', 15, 20]]);
+    expect([pick(v.getByTestId('home-draft-actions'), ['gap', 'marginTop']), st(v.getByTestId('home-draft-head')).marginBottom]).toEqual([[6, 0], 16]);
+    expect([st(v.getByTestId('home-draft-grab')).backgroundColor, st(v.getByTestId('home-draft-about')).backgroundColor, st(v.getByText('Ask Roman to write to Maya?')).color]).toEqual(['#4A6553', '#26402F', '#FFFFFF']);
+    expect(Array.from(new Set(within(v.getByTestId('home-draft-about-line')).getAllByText(/./).map((t) => st(t).color)))).toEqual(['#F4F7F2']);
+    // K3b (r2a.py:108 `.draft`, `.dtx`; r2b.py:176): the box's 1 #DCE3DB edge, 12/14/6, right under the head; the buttons 16 below it
+    await act(async () => { fireEvent.press(v.getByTestId('home-draft-ask')); });
+    await waitFor(() => expect(v.getByTestId('home-draft-text')).toBeTruthy());
+    expect(pick(v.getByTestId('home-draft-box'), ['borderWidth', 'borderColor', 'paddingTop', 'paddingHorizontal', 'paddingBottom', 'marginTop'])).toEqual([1, '#DCE3DB', 12, 14, 6, 0]);
+    expect([st(v.getByTestId('home-draft-text')).color, st(v.getByTestId('home-draft-send')).minHeight, pick(v.getByTestId('home-draft-actions'), ['gap', 'marginTop'])]).toEqual(['#142019', 48, [6, 16]]);
+    // a reach-out's sheet (not Roman's look) keeps main's sheet: 52 and 48 tall, 17 and 16 type, 4 apart, 16 down
+    const r = await render(<HomeSheet list={null} ask={reachOutAsk({ user_id: 'u9', display_name: 'Ana Ruiz', top_factor: 'No check-in for 9 days' } as never)} onCloseList={() => {}} onCloseAsk={() => {}} onSent={() => {}} />);
+    expect([st(r.getByTestId('home-draft-ask')).minHeight, st(r.getByText('Ask Roman')).fontSize, st(r.getByTestId('home-draft-close')).minHeight, pick(r.getByTestId('home-draft-actions'), ['gap', 'marginTop'])]).toEqual([52, 17, 48, [4, 16]]);
+    // P1-0 (r3.py:69 `.wbrow.q`): the tile ground, the deep line's edge, a quiet title
+    churned = () => Promise.resolve({ data: page([]) });
+    const z = await renderHome();
+    expect([pick(z.getByTestId('home-plan-ended-none'), ['backgroundColor', 'borderLeftColor', 'paddingVertical']), st(z.getByText('Plan ended last 7 days, 0')).color]).toEqual([['#26402F', '#4A6553', 10], forestPop.onDeepMuted]);
   });
 });

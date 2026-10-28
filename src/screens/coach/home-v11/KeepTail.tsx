@@ -7,12 +7,12 @@ import { PixelRatio, StyleSheet, Text, View, type StyleProp, type TextStyle, typ
 import type { LineParts } from './planEndedData';
 
 /**
- * "{lead} · {tail}" with the tail kept whole: it moves to the next line as one piece rather than splitting inside
- * "12-week block" or "ended today" (RENEWAL3 r3.py's `nw` span). The dot travels with the tail: the two share one row
- * that never wraps, so a break before the dot carries it down with the package and the dot never sits alone on a line,
- * at any width or text size (FX4-859, m#866 B2). The characters are the approved words exactly: no no-break characters
- * are added, so nothing reads or looks different from the owner's text. Each gap is one space wide. The dot is only
- * drawn: a screen reader reads the lead and the tail (P1, K2 and the lookup rows read their own label).
+ * "{lead} · {tail}", broken where RENEWAL3 breaks it (r2b.py:148, `%s · <span class="nw">%s</span>`): each word of the
+ * lead is its own piece, the last word carries the dot ("ago ·"), and the tail is one piece, so "12-week block" or
+ * "ended today" never splits. The row wraps only between pieces: the dot ends line 1 whenever "ago ·" fits there, it
+ * moves down only with its word, and it never starts a line or sits alone, at any width or text size (FX5-859, LO B1).
+ * The characters are the approved words exactly: no no-break characters are added. Each gap is one space wide. P1, K2
+ * and the lookup rows read their own label; K3's chip reads the line as one (`DraftSheets.tsx`).
  */
 export function KeepTail({ parts, style, box, maxFontSizeMultiplier, testID }: {
   parts: LineParts; style: StyleProp<TextStyle>; box?: StyleProp<ViewStyle>; maxFontSizeMultiplier?: number; testID?: string;
@@ -23,17 +23,21 @@ export function KeepTail({ parts, style, box, maxFontSizeMultiplier, testID }: {
   const gap = { columnGap: Math.round(size * 0.28 * scale) };
   return (
     <View style={[kt.row, gap, box]} testID={testID}>
-      <Text style={[style, kt.part]} maxFontSizeMultiplier={maxFontSizeMultiplier}>{parts.lead}</Text>
-      <View style={[kt.tail, gap]} testID={testID ? `${testID}-tail` : undefined}>
-        <Text style={[style, kt.dot]} maxFontSizeMultiplier={maxFontSizeMultiplier} accessibilityElementsHidden importantForAccessibility="no">·</Text>
-        <Text style={[style, kt.part]} maxFontSizeMultiplier={maxFontSizeMultiplier}>{parts.tail}</Text>
-      </View>
+      {keepTailPieces(parts).map((piece, i) => (
+        <Text key={i} style={[style, kt.part]} maxFontSizeMultiplier={maxFontSizeMultiplier}>{piece}</Text>
+      ))}
     </View>
   );
 }
+
+/** The pieces KeepTail draws: the lead's words, the last one with the dot, then the tail whole. */
+export function keepTailPieces({ lead, tail }: LineParts): string[] {
+  const words = lead.split(' ').filter(Boolean);
+  const last = words.pop();
+  return [...words, last ? `${last} ·` : '·', tail];
+}
+
 const kt = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', minWidth: 0 },
-  tail: { flexDirection: 'row', flexShrink: 1, minWidth: 0 },
   part: { flexShrink: 1 },
-  dot: { flexShrink: 0 },
 });
