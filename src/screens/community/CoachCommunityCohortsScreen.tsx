@@ -4,13 +4,13 @@
  *
  * Features:
  *   - Pull-to-refresh on the list.
- *   - A floating action button (FAB) opens a create-cohort modal; submitting a
+ *   - An in-flow "New cohort" button (K2) opens a create-cohort modal; submitting a
  *     non-empty name fires an optimistic create (provisional row at the top of
  *     the list) that reconciles with the server row on success.
  *   - Tapping a row routes into CoachCommunityCohortDetail.
  *
- * THREE distinct branches (UX P0.2): a loading spinner; an honest
- * CoachErrorState on failure (never a calm/empty masquerade); and — on a
+ * K2 Style B (#172-10, as the inbox). THREE distinct branches (UX P0.2): skeleton cards; an honest
+ * inline error card on failure (never a calm/empty masquerade); and — on a
  * genuinely empty cohort list — the operator-locked Roman-voiced empty state
  * whose copy + crop come from the backend voice policy (face + voice
  * contract). A CompletionToast confirms a successful create (G11). Touch
@@ -24,16 +24,16 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  ActivityIndicator,
   RefreshControl,
   Modal,
+  ScrollView,
   TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, withAlpha } from '../../theme/tokens';
+import { spacing, radius, withAlpha, colors, layout } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
-import { CoachRomanEmptyState, CoachErrorState } from '../../components/community/coach';
+import { CoachRomanEmptyState } from '../../components/community/coach';
 import CompletionToast, {
   useCompletionToast,
 } from '../../components/community/CompletionToast';
@@ -44,6 +44,18 @@ import {
 } from '../../hooks/useCoachCommunity';
 import type { CoachCohort } from '../../api/coachCommunityApi';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
+import { alertCoachFailure, InboxNoticeCard, initialsOf, k2Styles } from './CoachCommunityInboxScreen';
+
+/** The serif page title (K2): the navigation bar above it stays empty. */
+function CohortsTitle(): React.ReactElement {
+  return (
+    <View style={k2Styles.titleBlock}>
+      <Text accessibilityRole="header" style={k2Styles.title}>
+        Cohorts
+      </Text>
+    </View>
+  );
+}
 
 export default function CoachCommunityCohortsScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -71,6 +83,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
           setModalOpen(false);
           completion.show('Cohort created.');
         },
+        onError: alertCoachFailure,
       },
     );
   }, [trimmed, createCohort, completion]);
@@ -88,62 +101,104 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
         accessibilityRole="button"
         accessibilityLabel={`${item.name}, ${item.member_count} members`}
         testID={`coach-community-cohort-row-${item.id}`}
-        style={[
-          styles.row,
-          {
-            backgroundColor: semanticColors.bgSurface,
-            borderColor: semanticColors.border,
-          },
-        ]}
+        style={styles.row}
       >
+        <View
+          style={k2Styles.monogram}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Text style={k2Styles.monogramText} allowFontScaling={false}>
+            {initialsOf(item.name)}
+          </Text>
+        </View>
         <View style={styles.rowBody}>
-          <Text
-            style={[styles.rowName, { color: semanticColors.textPrimary }]}
-            numberOfLines={1}
-          >
+          <Text style={styles.rowName} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text style={[styles.rowMeta, { color: semanticColors.textMuted }]}>
+          <Text style={styles.rowMeta}>
             {item.member_count} members
             {item.unread_count > 0 ? ` · ${item.unread_count} unread` : ''}
           </Text>
         </View>
       </HapticPressable>
     ),
-    [navigation, semanticColors],
+    [navigation],
   );
 
   if (cohorts.isLoading) {
     return (
-      <View
-        style={[styles.center, { backgroundColor: semanticColors.bgPrimary }]}
-        testID="coach-community-cohorts-screen"
-      >
-        <ActivityIndicator
-          color={semanticColors.accent}
+      <View style={k2Styles.page} testID="coach-community-cohorts-screen">
+        <CohortsTitle />
+        <View
+          accessible
+          accessibilityLabel="Loading your cohorts"
           testID="coach-community-cohorts-loading"
-        />
+          style={k2Styles.skeletonList}
+        >
+          {[0, 1, 2].map((n) => (
+            <View key={n} style={styles.skeletonCard} />
+          ))}
+        </View>
       </View>
     );
   }
 
   return (
-    <View
-      style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-      testID="coach-community-cohorts-screen"
-    >
+    <View style={k2Styles.page} testID="coach-community-cohorts-screen">
+      <CohortsTitle />
+      <HapticPressable
+        intent="medium"
+        onPress={() => setModalOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Create a new cohort"
+        testID="coach-community-cohorts-fab"
+        style={styles.primaryButton}
+      >
+        <Text style={styles.primaryButtonLabel}>New cohort</Text>
+      </HapticPressable>
+
       {cohorts.isError ? (
-        <CoachErrorState
-          message="Could not load your cohorts. Pull to retry."
-          onRetry={() => cohorts.refetch()}
-          retrying={cohorts.isRefetching}
-          testID="coach-community-cohorts-error"
-        />
+        <ScrollView
+          testID="coach-community-cohorts-error-scroll"
+          contentContainerStyle={styles.noticeScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={cohorts.isRefetching}
+              onRefresh={() => cohorts.refetch()}
+              tintColor={colors.forest}
+            />
+          }
+        >
+          <InboxNoticeCard
+            message="Could not load your cohorts. Pull to retry."
+            onRetry={() => cohorts.refetch()}
+            retrying={cohorts.isRefetching}
+            testID="coach-community-cohorts-error"
+            flush
+          />
+        </ScrollView>
       ) : isEmpty ? (
-        <CoachRomanEmptyState
-          result={emptyState}
-          testID="coach-community-cohorts-empty"
-        />
+        // Roman's words say "Pull to retry" when they fail: the pull retries them.
+        <ScrollView
+          testID="coach-community-cohorts-empty-scroll"
+          contentContainerStyle={k2Styles.emptyScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={cohorts.isRefetching}
+              onRefresh={() => {
+                void cohorts.refetch();
+                if (emptyState.status === 'error') emptyState.retry();
+              }}
+              tintColor={colors.forest}
+            />
+          }
+        >
+          <CoachRomanEmptyState
+            result={emptyState}
+            testID="coach-community-cohorts-empty"
+          />
+        </ScrollView>
       ) : (
         <FlatList
           data={data}
@@ -154,24 +209,11 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
             <RefreshControl
               refreshing={cohorts.isRefetching}
               onRefresh={() => cohorts.refetch()}
-              tintColor={semanticColors.accent}
+              tintColor={colors.forest}
             />
           }
         />
       )}
-
-      <HapticPressable
-        intent="medium"
-        onPress={() => setModalOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Create a new cohort"
-        testID="coach-community-cohorts-fab"
-        style={[styles.fab, { backgroundColor: semanticColors.accent }]}
-      >
-        <Text style={[styles.fabLabel, { color: semanticColors.textOnAccent }]}>
-          New cohort
-        </Text>
-      </HapticPressable>
 
       <Modal
         visible={modalOpen}
@@ -186,35 +228,18 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
             { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
           ]}
         >
-          <View
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: semanticColors.bgSurface,
-                borderColor: semanticColors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: semanticColors.textPrimary }]}>
-              Name your cohort
-            </Text>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Name your cohort</Text>
             <TextInput
               value={name}
               onChangeText={setName}
               autoFocus
               placeholder="Spring strength block"
-              placeholderTextColor={semanticColors.textMuted}
+              placeholderTextColor={colors.graphite}
               accessibilityLabel="Cohort name"
               testID="coach-community-cohorts-name-input"
               onSubmitEditing={onSubmit}
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: semanticColors.bgPrimary,
-                  borderColor: semanticColors.border,
-                  color: semanticColors.textPrimary,
-                },
-              ]}
+              style={styles.modalInput}
             />
             <View style={styles.modalActions}>
               <HapticPressable
@@ -226,11 +251,9 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
                 testID="coach-community-cohorts-modal-cancel"
-                style={[styles.modalButton, styles.modalCancel, { borderColor: semanticColors.border }]}
+                style={[styles.modalButton, styles.modalCancel]}
               >
-                <Text style={[styles.modalCancelLabel, { color: semanticColors.textPrimary }]}>
-                  Cancel
-                </Text>
+                <Text style={styles.modalCancelLabel}>Cancel</Text>
               </HapticPressable>
               <HapticPressable
                 intent="success"
@@ -244,7 +267,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
                   styles.modalButton,
                   {
                     backgroundColor: canSubmit
-                      ? semanticColors.accent
+                      ? colors.forest
                       : semanticColors.disabledBg,
                   },
                 ]}
@@ -254,7 +277,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
                     styles.modalSubmitLabel,
                     {
                       color: canSubmit
-                        ? semanticColors.textOnAccent
+                        ? colors.bone
                         : semanticColors.textOnDisabled,
                     },
                   ]}
@@ -273,23 +296,19 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   listContent: {
-    padding: spacing.lg,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.xs,
     gap: spacing.sm,
     paddingBottom: 96,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
     padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.card,
+    backgroundColor: colors.cream,
     minHeight: 64,
   },
   rowBody: {
@@ -297,50 +316,67 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rowName: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
-    fontWeight: '600',
+    lineHeight: 21,
+    color: colors.ink,
   },
   rowMeta: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
+    lineHeight: 18,
+    color: colors.graphite,
   },
-  fab: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.xl,
+  skeletonCard: {
+    height: 76,
+    borderRadius: radius.card,
+    backgroundColor: colors.cream,
+  },
+  noticeScroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xs },
+  primaryButton: {
+    marginHorizontal: layout.gutter,
+    marginBottom: spacing.md,
     minHeight: 48,
     paddingHorizontal: spacing.xl,
-    borderRadius: radius.pill,
+    borderRadius: radius.button,
+    backgroundColor: colors.forest,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fabLabel: {
-    fontSize: 15,
-    fontWeight: '600',
+  primaryButtonLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    lineHeight: 21,
+    color: colors.bone,
   },
   scrim: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    padding: layout.gutter,
   },
   modalCard: {
     width: '100%',
     maxWidth: 360,
     padding: spacing.xl,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sheet,
+    backgroundColor: colors.bone,
     gap: spacing.md,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 26,
+    lineHeight: 33,
+    color: colors.ink,
   },
   modalInput: {
     minHeight: 48,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.button,
+    backgroundColor: colors.cream,
     paddingHorizontal: spacing.md,
+    fontFamily: 'Inter_400Regular',
     fontSize: 16,
+    color: colors.ink,
   },
   modalActions: {
     flexDirection: 'row',
@@ -353,17 +389,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: radius.md,
+    borderRadius: radius.button,
   },
   modalCancel: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1.5,
+    borderColor: colors.forest,
   },
   modalCancelLabel: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
+    color: colors.forest,
   },
   modalSubmitLabel: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
   },
 });

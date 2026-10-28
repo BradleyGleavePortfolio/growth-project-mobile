@@ -9,7 +9,7 @@
  * and the same idempotency contract, but their endpoint sets are disjoint.
  *
  * Backend contract source of truth (binding — do NOT drift):
- *   growth-project-backend/src/community/coach-inbox/community-coach-inbox.controller.ts
+ *   growth-project-backend/src/community/inbox/community-coach-inbox.controller.ts
  *   growth-project-backend/src/community/cohorts/community-cohort-write.controller.ts
  *   growth-project-backend/src/community/cohorts/community-cohort-members.controller.ts
  *   growth-project-backend/src/community/moderation/community-moderation.controller.ts
@@ -97,6 +97,13 @@ const InboxVoiceSchema = z
   .object({ note_id: z.string().uuid(), duration_ms: z.number().int().nonnegative() })
   .passthrough();
 
+/**
+ * Every inbox row kind the server sends: src/community/inbox/
+ * community-coach-inbox.dto.ts:48 kind enum on main 946d1cb0 (text, voice, photo;
+ * a client's space photo's preview is its caption, or "Photo").
+ */
+export const COACH_INBOX_ROW_KINDS = ['text', 'voice', 'photo'] as const;
+
 /** Per-row ack summary: community-coach-inbox.dto.ts:25-31. */
 export const InboxAckSummarySchema = z
   .object({ state: z.enum(COACH_ACK_STATES), sla_state: z.enum(COACH_SLA_STATES) })
@@ -122,7 +129,7 @@ export const CoachInboxItemSchema = z
     acknowledged: z.boolean(),
     /** Only message rows carry coach acks; a voice row's id is the note's id. */
     type: z.enum(['message', 'post']),
-    kind: z.enum(['text', 'voice']),
+    kind: z.enum(COACH_INBOX_ROW_KINDS),
     voice: InboxVoiceSchema.optional(),
     ack: InboxAckSummarySchema.optional(),
   })
@@ -628,9 +635,12 @@ const PAGE_LIMIT = 100;
 
 /** Inbox row kinds this build can draw; any other kind is skipped. Read per call, not at import. */
 const inboxRowKinds = (): readonly string[] =>
-  featureFlags.communityVoiceNotes ? ['text', 'voice'] : ['text'];
+  featureFlags.communityVoiceNotes ? ['text', 'voice', 'photo'] : ['text', 'photo'];
 
-/** One inbox row: src/community/inbox/community-coach-inbox.dto.ts:34-52. */
+/** The approved row text for a photo with no caption (owner 10-26, UPDATE 2). */
+const PHOTO_PREVIEW = 'Photo';
+
+/** One inbox row: src/community/inbox/community-coach-inbox.dto.ts:34-54 (main 946d1cb0). */
 const InboxRowWireSchema = z
   .object({
     id: z.string().uuid(),
@@ -669,7 +679,11 @@ function toInboxItems(rows: unknown[]): CoachInboxItem[] {
       client_user_id: author_user_id,
       client_name: author_display_name,
       avatar_url: null,
-      snippet: preview,
+      // A photo row shows its caption; with none it says "Photo", never blank.
+      // A message row ends with "..." (#179-11): it opens in space chat later.
+      snippet:
+        (rowKind === 'photo' ? preview.trim() || PHOTO_PREVIEW : preview.trimEnd()) +
+        (rest.type === 'message' ? '...' : ''),
       // The server lists only unanswered items, so none are acknowledged.
       acknowledged: false,
     });

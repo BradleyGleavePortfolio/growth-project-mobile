@@ -114,17 +114,35 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
       <CoachCommunityStack.Screen
         name="CoachCommunityInbox"
         component={CoachCommunityInboxScreen}
-        options={{ title: 'Inbox' }}
+        // K2: the page draws its serif title; the bar keeps only the back control.
+        options={{
+          title: 'Inbox',
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
+        }}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityCohorts"
         component={CoachCommunityCohortsScreen}
-        options={{ title: 'Cohorts' }}
+        // K2 (#172-10, as the inbox): the page draws its serif title.
+        options={{
+          title: 'Cohorts',
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
+        }}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityCohortDetail"
         component={CoachCommunityCohortDetailScreen}
-        options={{ title: 'Cohort' }}
+        // K2: the page draws the cohort's name as its serif title.
+        options={{
+          title: 'Cohort',
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
+        }}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityPostDetail"
