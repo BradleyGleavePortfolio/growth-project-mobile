@@ -612,6 +612,50 @@ describe('SafetyMenu — iOS: the sheet closes before its Alert (Opus R5-B4)', (
     expect(onReported).toHaveBeenCalledTimes(1);
   });
 
+  // VUX-B3 (LS-VUX m#886): Cancel while the report is still sending. The sheet has gone (its onDismiss has
+  // fired) by the time the server says yes, so Report sent and the fold come at once, not never.
+  it('Cancel while the report sends: Report sent and the fold still come once it is in', async () => {
+    let accept: () => void = () => undefined;
+    mockReport.mockImplementation(() => new Promise<void>((ok) => (accept = ok)));
+    const onReported = jest.fn();
+    const { getByTestId, queryByTestId } = await renderMenu({ targetType: 'voice_note', onReported });
+    await fireEvent.press(getByTestId('sm'));
+    const dismiss = sheetDismiss(getByTestId);
+    await fireEvent.press(getByTestId('sm-report'));
+    // The press resolves with the report itself, so it is not awaited until the server answers.
+    const sending = fireEvent.press(getByTestId('sm-reason-spam'));
+    await waitFor(() => expect(mockReport).toHaveBeenCalledTimes(1));
+    await fireEvent.press(getByTestId('sm-close'));
+    expect(queryByTestId('sm-sheet')).toBeNull();
+    await act(async () => dismiss()); // iOS: the sheet is gone
+    expect(alertSpy).not.toHaveBeenCalled();
+    await act(async () => accept());
+    await sending;
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy).toHaveBeenCalledWith('Report sent', expect.any(String));
+    expect(onReported).toHaveBeenCalledTimes(1);
+  });
+
+  it('Cancel, and the report is in before the sheet has gone: Report sent waits for onDismiss', async () => {
+    let accept: () => void = () => undefined;
+    mockReport.mockImplementation(() => new Promise<void>((ok) => (accept = ok)));
+    const onReported = jest.fn();
+    const { getByTestId } = await renderMenu({ targetType: 'voice_note', onReported });
+    await fireEvent.press(getByTestId('sm'));
+    const dismiss = sheetDismiss(getByTestId);
+    await fireEvent.press(getByTestId('sm-report'));
+    const sending = fireEvent.press(getByTestId('sm-reason-spam'));
+    await waitFor(() => expect(mockReport).toHaveBeenCalledTimes(1));
+    await fireEvent.press(getByTestId('sm-close'));
+    await act(async () => accept()); // still closing
+    await sending;
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(onReported).not.toHaveBeenCalled();
+    await act(async () => dismiss());
+    expect(alertSpy).toHaveBeenCalledWith('Report sent', expect.any(String));
+    expect(onReported).toHaveBeenCalledTimes(1);
+  });
+
   it('a menu unmounted mid-close still shows what was waiting', async () => {
     const onReported = jest.fn();
     const { getByTestId, unmount } = await renderMenu({ onReported });
