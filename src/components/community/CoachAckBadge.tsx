@@ -64,18 +64,26 @@ export type AckBadgeInput = Pick<AckStateDto, 'state'> & {
   sla?: { sla_state?: CoachSlaState | null } | null;
 };
 
+// Both only move forward on the server: ack state by rank, SLA by time since sent.
+const ACK_ORDER: readonly CoachAckState[] = ['none', 'seen', 'acked', 'replied'];
+const SLA_ORDER: readonly CoachSlaState[] = ['within', 'warning', 'breached'];
+const later = <T,>(order: readonly T[], a: T | null | undefined, b: T): T =>
+  a != null && order.indexOf(a) > order.indexOf(b) ? a : b;
+
 /**
- * The ack signal an inbox row shows: the per-message cache wins once an action
- * has filled it; before that, the row's own `ack` summary (state + SLA state)
- * from the inbox response. Returns undefined when neither is present.
+ * The ack signal an inbox row shows: the per-message cache (kept all session)
+ * merged with the row's own `ack` summary (re-read each visit), later wins, so
+ * a warm cache never freezes the row. Undefined when neither is present.
  */
 export function inboxRowAck(
   cached: AckStateDto | null | undefined,
   summary: InboxAckSummary | null | undefined,
 ): AckBadgeInput | undefined {
-  if (cached != null) return cached;
-  if (summary == null) return undefined;
-  return { state: summary.state, sla: { sla_state: summary.sla_state } };
+  if (summary == null) return cached ?? undefined;
+  return {
+    state: later(ACK_ORDER, cached?.state, summary.state),
+    sla: { sla_state: later(SLA_ORDER, cached?.sla?.sla_state, summary.sla_state) },
+  };
 }
 
 // ─── Ack-state presentation ──────────────────────────────────────────────────

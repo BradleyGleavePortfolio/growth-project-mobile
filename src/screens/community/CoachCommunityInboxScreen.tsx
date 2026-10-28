@@ -590,8 +590,8 @@ function InboxRow({
   // stable for the entire lifetime of a build — a hook guarded by it never
   // changes its called/not-called status at runtime, which keeps the
   // flag-off path (and its invariance test) from touching any ack hook. When
-  // the flag is on, the per-message ack cache wins once an action fills it;
-  // before that the row's own `ack` summary drives the badge AND the label.
+  // the flag is on, the per-message ack cache and the row's own `ack` summary
+  // merge (inboxRowAck, later wins) and drive the badge AND the label.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const cached = ACKS_ENABLED ? useCoachAckState(item.id) : undefined;
   // Coach acks are per message: typed and photo rows carry them; a voice
