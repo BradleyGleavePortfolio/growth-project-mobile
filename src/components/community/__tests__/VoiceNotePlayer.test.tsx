@@ -372,6 +372,18 @@ describe('VoiceNotePlayer — GOAL geometry (FR-848R4)', () => {
     const strip = getByTestId('voice-waveform', { includeHiddenElements: true });
     expect(StyleSheet.flatten(strip.props.style)).toMatchObject({ height: 44, gap: 3 });
   });
+
+  // Opus R5-B1: the review sheet's bare player sits flush; every padding edge of its root is 0.
+  it('the bare player root has no padding on any edge and no border', async () => {
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} tone="bare" playback={makePlayback(true)} />,
+    );
+    const root = StyleSheet.flatten(getByTestId('voice-player').props.style);
+    for (const edge of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'] as const) {
+      expect(root[edge] ?? root.padding ?? 0).toBe(0);
+    }
+    expect(root.borderWidth).toBe(0);
+  });
 });
 
 // LO-848R4 B4: the duration and the retry line are Inter (GOAL), not the system face.
@@ -384,5 +396,68 @@ describe('VoiceNotePlayer — loaded faces (LO-848R4 B4)', () => {
     const texts = container.queryAll((n) => n.type === 'Text');
     expect(texts.length).toBeGreaterThan(0);
     for (const t of texts) expect(String(StyleSheet.flatten(t.props.style)?.fontFamily)).toMatch(/^(Inter_|ionicons$)/); // ionicons: icon glyphs
+  });
+});
+
+// LO-848R4 B6-B8: the disc sits on the bars' row (GOAL .brow) with the time under the bars
+// (GOAL .bfoot, 64 in); the review strip is 34 bars 4 pt wide, 3 apart, packed from the left
+// (235 pt); `disabled` greys the disc while the viewer's own note sends or waits.
+describe('VoiceNotePlayer — GOAL rows, review strip and held disc (FR-848R5)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  const flat = (n: { props: { style?: unknown } }) => StyleSheet.flatten(n.props.style);
+
+  it('puts the disc and the bars on one centred row and the time under the bars', async () => {
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9]} playback={makePlayback(true)} />,
+    );
+    const toggle = getByTestId('voice-player-toggle');
+    const seek = getByTestId('voice-player-seek');
+    const row = toggle.parent!;
+    expect(row).toBe(seek.parent);
+    expect(flat(row)).toMatchObject({ flexDirection: 'row', alignItems: 'center', gap: 12 });
+    const foot = getByTestId('voice-player-duration', { includeHiddenElements: true }).parent!;
+    expect(foot).not.toBe(row);
+    expect(flat(foot)).toMatchObject({ marginTop: 6, paddingLeft: 64, justifyContent: 'space-between' });
+  });
+
+  it('draws the review strip as 34 bars, 4 pt wide, 3 apart, from the left; a tap past its end is the end', async () => {
+    const playback = makePlayback(true);
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2, 0.9, 0.5]} tone="bare" playback={playback} />,
+    );
+    const strip = getByTestId('voice-waveform', { includeHiddenElements: true });
+    expect(flat(strip)).toMatchObject({ height: 44, gap: 3, justifyContent: 'flex-start' });
+    expect(flat(strip).flex).toBeUndefined(); // packed from the left, not stretched
+    const bars = strip.props.children[0];
+    expect(bars).toHaveLength(34);
+    for (const bar of bars) {
+      const st = StyleSheet.flatten(bar.props.style);
+      expect(st).toMatchObject({ width: 4 });
+      // no flex shorthand: react-native-web reads `flex: 0` as `0 1 0%` and drops the width
+      expect(st.flex).toBeUndefined();
+    }
+    const seek = getByTestId('voice-player-seek');
+    await fireEvent(seek, 'layout', { nativeEvent: { layout: { width: 300 } } });
+    await fireEvent.press(seek, { nativeEvent: { locationX: 117.5 } });
+    expect(getByTestId('voice-player-seek').props.accessibilityValue).toEqual({ text: '0:21 of 0:42' });
+    await fireEvent.press(seek, { nativeEvent: { locationX: 290 } });
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(playback.handle.play).toHaveBeenCalled());
+    // 117.5 of the 235 pt strip is the middle; 290 is past the end, so the end.
+    expect(playback.handle.seek).toHaveBeenCalledWith(42_000);
+  });
+
+  it('a held note has a grey disc that does not play, but keeps its Play label', async () => {
+    const playback = makePlayback(true);
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={42_000} peaks={[0.2]} disabled playback={playback} />,
+    );
+    const toggle = getByTestId('voice-player-toggle');
+    expect(flat(toggle)).toMatchObject({ backgroundColor: '#E2E6E1' });
+    expect(toggle.props.accessibilityLabel).toBe('Play voice note, 0:42');
+    expect(toggle.props.accessibilityState).toMatchObject({ disabled: true });
+    fireEvent.press(toggle);
+    await act(async () => undefined);
+    expect(playback.load).not.toHaveBeenCalled();
   });
 });

@@ -101,7 +101,7 @@ export interface VoiceRecorderState {
 
 const TICK_MS = 100;
 /** How many live level bars the record sheet draws. */
-export const LIVE_LEVEL_BARS = 28;
+export const LIVE_LEVEL_BARS = 30; // GOAL B-01a/01b: 30 slots
 /** One live bar per this many ticks (a calm scroll, not a flicker). */
 const LEVEL_EVERY_TICKS = 2;
 

@@ -215,3 +215,92 @@ describe('VoiceNoteComposer — loaded faces (LO-848R4 B4)', () => {
     expect(unfaced(off.container)).toEqual([]);
   });
 });
+
+// LO-848R4 B6: the GOAL B-01/02/07 rhythm — no blanket gap, each row its own GOAL margin; the live
+// strip is 30 slots, un-arrived ones are ghost bars, and it is only as tall as its tallest bar; the
+// denied buttons are the .btn 54 pt height.
+describe('VoiceNoteComposer — GOAL sheet rhythm and live strip (FR-848R5)', () => {
+  const flat = (n: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(n.props.style as never) ?? {}) as Record<string, unknown>;
+  const hidden = { includeHiddenElements: true };
+
+  it('recording: per-row GOAL margins, 30 slots with ghost bars, a strip that sizes to its bars', async () => {
+    const { findByTestId, getByTestId } = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={makePort()} />,
+    );
+    const levels = await findByTestId('voice-composer-levels', hidden);
+    expect(flat(getByTestId('voice-composer')).gap).toBeUndefined();
+    expect(flat(getByTestId('voice-composer-timer', hidden))).toMatchObject({ marginTop: 4, fontSize: 56 });
+    const strip = flat(levels);
+    expect(strip).toMatchObject({ marginTop: 12, marginBottom: 10, gap: 4 });
+    expect(strip.height).toBeUndefined();
+    expect(levels.children).toHaveLength(30);
+    const ghosts = levels.children.filter((c) => typeof c !== 'string' && flat(c).backgroundColor === '#E2E6E1');
+    expect(ghosts.length).toBeGreaterThan(0);
+    for (const g of ghosts) {
+      if (typeof g === 'string') continue;
+      const st = flat(g);
+      expect(st).toMatchObject({ width: 5, borderRadius: 2 });
+      expect(st.height).toBeGreaterThanOrEqual(3);
+      expect(st.height).toBeLessThanOrEqual(10);
+    }
+    expect(flat(getByTestId('voice-composer-line-max', hidden).parent!)).toMatchObject({ marginTop: 4, marginBottom: 16 });
+    expect(flat(getByTestId('voice-privacy-copy').parent!)).toMatchObject({ marginTop: 16, marginBottom: 12 });
+  });
+
+  it('review: the listen row 14 / 12 and the buttons 14 / 10', async () => {
+    const { findByTestId, getByTestId } = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={makePort()} />,
+    );
+    await waitFor(() => expect(getByTestId('voice-record-button').props.accessibilityLabel).toMatch(/stop/i));
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-record-button'));
+    });
+    await findByTestId('voice-composer-review');
+    expect(flat(getByTestId('voice-composer-listen').parent!)).toMatchObject({ marginTop: 14, marginBottom: 12 });
+    expect(flat(getByTestId('voice-composer-review-actions'))).toMatchObject({ gap: 10, marginTop: 14, marginBottom: 10 });
+  });
+
+  // FR-848R5 render check (Android 360, 130% text): "Re-record" broke over two lines; GOAL .bbtns wraps the buttons instead.
+  it('review: when Re-record would take two lines the buttons stack full width', async () => {
+    const { findByTestId, getByTestId, getByText } = await render(
+      <VoiceNoteComposer {...props} target={target} recorder={makePort()} />,
+    );
+    await waitFor(() => expect(getByTestId('voice-record-button').props.accessibilityLabel).toMatch(/stop/i));
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-record-button'));
+    });
+    await findByTestId('voice-composer-review');
+    const row = () => flat(getByTestId('voice-composer-review-actions'));
+    // One line each: side by side.
+    await act(async () => {
+      fireEvent(getByText('Re-record'), 'layout', { nativeEvent: { layout: { height: 26 } } });
+      fireEvent(getByText('Send'), 'layout', { nativeEvent: { layout: { height: 26 } } });
+    });
+    expect(row().flexDirection).toBe('row');
+    expect(flat(getByTestId('voice-composer-send').parent!.parent!)).toMatchObject({ flex: 1 });
+    // Re-record wraps to two lines: the pair stacks, each button full width.
+    await act(async () => {
+      fireEvent(getByText('Re-record'), 'layout', { nativeEvent: { layout: { height: 52 } } });
+    });
+    expect(row()).toMatchObject({ flexDirection: 'column', gap: 10 });
+    expect(flat(getByTestId('voice-composer-send').parent!.parent!)).toMatchObject({ alignSelf: 'stretch' });
+    expect(flat(getByTestId('voice-composer-send').parent!.parent!).flex).toBeUndefined();
+  });
+
+  it('denied: Open Settings and Not now are both 54 pt', async () => {
+    const { getByTestId } = await render(
+      <VoiceNoteComposer
+        {...props}
+        target={target}
+        recorder={makePort({
+          getPermissionStatus: jest.fn().mockResolvedValue('undetermined'),
+          requestPermission: jest.fn().mockResolvedValue('denied'),
+        })}
+      />,
+    );
+    await waitFor(() => expect(getByTestId('voice-composer-denied')).toBeTruthy());
+    expect(flat(getByTestId('voice-composer-permission-action')).minHeight).toBe(54);
+    expect(flat(getByTestId('voice-composer-not-now')).minHeight).toBe(54);
+  });
+});

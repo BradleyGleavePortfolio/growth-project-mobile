@@ -15,9 +15,13 @@
  * ("Member" before backend #1122), a Coach mark and deep card, and the real waveform. Unsent notes wait
  * on top: Sending…, Not sent (Try again, Delete), or offline a spinner and wifi-off ("Waiting to send").
  *
- * Safety (GOAL B-06a..c): the report sheet shows the note's card; a reported note folds into the VN-07
- * row for this viewer (its player unmounts); the workspace coach (or owner) also gets Delete on other
- * members' notes (the server allows the author, the workspace coach and the platform owner).
+ * Safety (GOAL B-06a..c, owner #174-4): the report sheet shows the note's card; a reported note folds into
+ * the VN-07 row for this viewer (its player unmounts) and keeps its menu, Report shown as done ("Reported")
+ * with Block still there; the workspace coach (or owner) also gets "Remove for everyone" on other members'
+ * notes, asked in the same sheet (the server allows the author, the workspace coach and the platform owner).
+ * The author deletes their own note with Delete. A note the coach removed keeps its place as one quiet
+ * line (removed/VoiceRemovedPlaceholder): no player, no menu. It swaps in on the feed's next read (the
+ * coach's own removal refreshes at once; a Hall note sends no realtime ping, backend #1165 CONTRACT §3).
  *
  * Copy: plain words, no exclamation marks, no emojis. Failures say what
  * happened and what to do next (describeCommunityFailure).
@@ -42,6 +46,7 @@ import { voiceKeys } from '../../hooks/voiceQueryKeys';
 import { communityVoiceApi, type VoiceNoteView } from '../../api/communityVoiceApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useCommunityMe } from '../../hooks/useCommunity';
+import VoiceRemovedPlaceholder, { voiceRemovedLine } from './removed/VoiceRemovedPlaceholder';
 
 export interface VoiceNotesSectionProps {
   workspaceId: string | null;
@@ -145,16 +150,23 @@ export default function VoiceNotesSection({
           const when = formatRelative(note.created_at);
           const name = mine ? 'You' : (note.author_name ?? 'Member');
           const folded = reported.has(note.id);
+          // Owner #174-4: a coach-removed note keeps its place as one quiet line, no player or menu.
+          const removedLine = voiceRemovedLine(note, viewerUserId);
+          const remove = async () => {
+            await communityVoiceApi.remove(note.id);
+            await refresh();
+          };
           return (
             <View key={note.id} style={styles.note} testID={`${testID}-note-${note.id}`}>
               <View style={styles.noteMeta}>
                 <Text style={styles.who} numberOfLines={1}>
                   {name}
                 </Text>
-                {coach ? <Text style={styles.coach}>Coach</Text> : null}
-                {when ? <Text style={styles.when}>{when}</Text> : null}
+                {coach ? <Text style={[styles.coach, styles.keep]} numberOfLines={1}>Coach</Text> : null}
+                {when ? <Text style={[styles.when, styles.keep]} numberOfLines={1}>{when}</Text> : null}
                 <View style={styles.spacer} />
-                {folded ? null : (
+                {/* Owner #174-4: a reported note keeps its menu (Reported, Block, the coach's Remove). */}
+                {removedLine ? null : (
                   <SafetyMenu
                     targetType="voice_note"
                     targetId={note.id}
@@ -163,14 +175,9 @@ export default function VoiceNotesSection({
                     viewerCoachId={viewerCoachId}
                     contentNoun="voice note"
                     context={{ name, detail: `voice note · ${formatDuration(note.duration_ms)}` }}
-                    onDelete={
-                      mine || viewerModerates
-                        ? async () => {
-                            await communityVoiceApi.remove(note.id);
-                            await refresh();
-                          }
-                        : undefined
-                    }
+                    reported={folded}
+                    onDelete={mine ? remove : undefined}
+                    onRemove={!mine && viewerModerates ? remove : undefined}
                     onReported={() => markVoiceNoteReported(note.id)}
                     onBlocked={() => {
                       void refresh();
@@ -179,7 +186,9 @@ export default function VoiceNotesSection({
                   />
                 )}
               </View>
-              {folded ? (
+              {removedLine ? (
+                <VoiceRemovedPlaceholder line={removedLine} testID={`${testID}-removed-${note.id}`} />
+              ) : folded ? (
                 <VoiceReportedFold testID={`${testID}-reported-${note.id}`} />
               ) : (
                 <VoiceNotePlayer
@@ -229,6 +238,9 @@ function OutboxRow({ item, onRetry, onDiscard, testID }: {
 }): React.ReactElement {
   const failed = item.status === 'failed';
   const waiting = item.status === 'waiting';
+  // Opus R5-B2: the sender's ··· on every unsent row. While an attempt runs it is held (the upload
+  // cannot be called back from here), so a Delete never races a note that is about to post.
+  const sending = item.status === 'sending';
   const confirmDiscard = () =>
     Alert.alert('Delete this voice note?', undefined, [
       { text: 'Cancel', style: 'cancel' },
@@ -241,11 +253,27 @@ function OutboxRow({ item, onRetry, onDiscard, testID }: {
         <Text style={styles.when} testID={`${testID}-status`}>
           {item.status === 'sending' ? 'Sending…' : failed ? 'Not sent' : ''}
         </Text>
+        <View style={styles.spacer} />
+        <HapticPressable
+          intent="light"
+          onPress={confirmDiscard}
+          disabled={sending}
+          accessibilityRole="button"
+          accessibilityLabel="Delete voice note"
+          accessibilityState={{ disabled: sending }}
+          hitSlop={8}
+          style={[styles.ownMenu, sending ? styles.held : null]}
+          testID={`${testID}-menu`}
+        >
+          <Ionicons name="ellipsis-horizontal" size={18} color={fp.n700} />
+        </HapticPressable>
       </View>
       <VoiceNotePlayer
         url={item.input.uri}
         durationMs={item.input.durationMs}
         peaks={item.peaks}
+        // GOAL B-03 / B-10a: the sender's own disc is grey while it sends or waits.
+        disabled={!failed}
         trailing={
           failed ? undefined : (
             // Owner: a sending circle, plus a struck-through wifi mark offline.
@@ -342,7 +370,11 @@ const styles = StyleSheet.create({
   coach: { overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.chip,
     backgroundColor: fp.deep, color: fp.gold, fontFamily: voiceFaces.semibold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   when: { fontFamily: voiceFaces.regular, fontSize: 15, color: fp.n700 },
+  // The name gives way first: at 130% text on a 360 pt phone the Inter name, Coach mark and time overflow the row.
+  keep: { flexShrink: 0 },
   spacer: { flex: 1 },
+  ownMenu: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  held: { opacity: 0.4 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 28 },
   wifiOff: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
   strike: { position: 'absolute', width: 22, height: 2, backgroundColor: fp.n700, transform: [{ rotate: '45deg' }] },
