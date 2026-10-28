@@ -16,7 +16,7 @@ export const ledger = {
   chip: '#D2E2B4',
   /** A declined change's chip (GOAL .ot.no). */
   still: '#F2F2EE',
-  /** An awaiting change's chip and status tile (GOAL .ot.wait, .stl .d.wait; Sol C-852R3-2). */
+  /** An awaiting change's chip and status tile (GOAL .ot.wait, .stl .d.wait; Opus C-852R3-2, Sol B-S1). */
   wait: '#F7EFD6',
   /** Dates, month headings and fact labels (GOAL #5A5A56). */
   muted: '#5A5A56',

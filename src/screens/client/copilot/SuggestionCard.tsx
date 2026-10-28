@@ -110,8 +110,8 @@ export function SuggestionCard({ suggestion, coach, onSent, onDismiss, send = co
 
 const s = StyleSheet.create({
   stack: { gap: 12 },
-  // Style A's card rhythm (.sug, .sug h3, .ba, .srcs, .pv, .btn; Opus B-878-G): title 10, tiles, tags and privacy 12,
-  // Send 14.
+  // Style A's card rhythm (.sug, .sug h3, .ba, .srcs, .pv, .btn; Opus C-878R3-2, Sol B-878-G): title 10, tiles, tags
+  // and privacy 12, Send 14.
   card: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: radius.card, padding: 16 },
   title: { marginTop: 10 },
   next: { marginTop: 12 },
