@@ -799,7 +799,7 @@ describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card
     expect(pad(r, 'space-chat-composer')).toBe(spacing.sm + 34);
   });
 
-  it('Opus B1 / Sol B879-1: the hint line under announcements keeps clear of it too; the coach (tab bar below) adds nothing', async () => {
+  it('Opus B1 / Sol B879-1, B2 / B879-2: the hint line under announcements keeps clear of it too, and so does the coach\'s composer (the coach\'s bar steps aside too)', async () => {
     mockParams.current = { cohortId: 'c-ann' };
     const a = await open();
     await a.findByTestId('space-chat-hint');
@@ -810,7 +810,7 @@ describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card
     mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
     const b = await open();
     await b.findByTestId('space-chat-composer');
-    expect(pad(b, 'space-chat-composer')).toBeUndefined();
+    expect(pad(b, 'space-chat-composer')).toBe(spacing.sm + 34);
   });
 
   it('Opus B3 / Sol B879-3: a row that reads Sending… has no Delete (text and voice); Waiting to send keeps it', async () => {

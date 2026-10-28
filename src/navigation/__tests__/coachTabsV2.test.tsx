@@ -725,3 +725,18 @@ it.each([
   expect(view.getAllByRole('tab')).toHaveLength(6);
   mockFlags.coachBrief = true;
 });
+
+// FIN-871R6 (m#879 Opus B2 / Sol B879-2): the coach's space chat is full screen, as the member's (GOAL 05b): the bar
+// steps aside while it is open, on the six-tab bar (EntryTabBar reads the open route's style) and on today's bar.
+it.each([
+  [true, 6],
+  [false, 7],
+])('with coachTabsV2 %s the open space chat leaves no tabs on the bar, and leaving it restores %s', async (v2, tabs) => {
+  mockFlags.coachTabsV2 = v2;
+  const view = await mount();
+  expect(view.getAllByRole('tab')).toHaveLength(tabs);
+  await act(async () => ref.navigate('CommunityStack', { screen: 'CommunitySpaceChat', params: { cohortId: 'c-1' } }));
+  expect(view.queryAllByRole('tab')).toHaveLength(0);
+  await act(async () => ref.navigate('CommunityStack', { screen: 'CoachCommunityHome' }));
+  expect(view.getAllByRole('tab')).toHaveLength(tabs);
+});
