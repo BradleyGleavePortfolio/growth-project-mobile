@@ -316,8 +316,9 @@ describe('communityVoiceApi — bound to one sign-in (BF-2)', () => {
       { storage_key: uploadTarget.storage_key, duration_ms: 4200, bytes: 91234, mime_type: 'audio/mp4' },
       binding,
     );
-    expect(api.post.mock.calls[0][2]).toMatchObject({ accountBinding: binding });
-    expect(api.post.mock.calls[1][2]).toMatchObject({ accountBinding: binding });
+    // Read the one option directly: a request signal does not print in a diff.
+    expect(api.post.mock.calls[0][2]?.accountBinding).toBe(binding);
+    expect(api.post.mock.calls[1][2]?.accountBinding).toBe(binding);
   });
 
   it('a sign-in change aborts a bound byte upload', async () => {
