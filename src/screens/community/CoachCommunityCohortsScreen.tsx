@@ -53,6 +53,9 @@ import {
 } from './CoachCommunityInboxScreen';
 
 /** The serif page title (K2): the navigation bar above it stays empty. */
+const NAME_MIN = 2;
+const NAME_MAX = 120;
+
 function CohortsTitle(): React.ReactElement {
   return (
     <View style={k2Styles.titleBlock}>
@@ -77,10 +80,12 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
   const data = cohorts.data ?? [];
   const isEmpty = !cohorts.isLoading && !cohorts.isError && data.length === 0;
   const trimmed = name.trim();
-  const canSubmit = trimmed.length > 0 && !createCohort.isPending;
+  // CreateCohortDto: 2 to 120 characters once trimmed (the field stops at 120).
+  // Counted as the server counts (an emoji is one character).
+  const canSubmit = Array.from(trimmed).length >= NAME_MIN && !createCohort.isPending;
 
   const onSubmit = useCallback(() => {
-    if (trimmed.length === 0 || createCohort.isPending) return;
+    if (!canSubmit) return;
     createCohort.mutate(
       { name: trimmed },
       {
@@ -92,7 +97,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
         onError: alertCoachFailure,
       },
     );
-  }, [trimmed, createCohort, completion]);
+  }, [trimmed, canSubmit, createCohort, completion]);
 
   const renderItem = useCallback(
     ({ item }: { item: CoachCohort }) => (
@@ -245,6 +250,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
               placeholder="Spring strength block"
               placeholderTextColor={colors.graphite}
               accessibilityLabel="Cohort name"
+              maxLength={NAME_MAX}
               testID="coach-community-cohorts-name-input"
               onSubmitEditing={onSubmit}
               style={styles.modalInput}
