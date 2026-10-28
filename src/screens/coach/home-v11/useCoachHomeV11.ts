@@ -174,7 +174,9 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     draftsWaiting: queue.length, draftKinds, draftsState, draftsError: drafts.error, draftsRetrying: !!drafts.isFetching, now,
   };
   return {
-    data, focused: isFocused, reload: load, retryMonth: () => loadMonth(seq.current),
+    // The Home's one block-list read: the Plan ended list takes this one (usePlanEnded), so a Home mount sends one
+    // GET /users/blocks, not two (LO m#866 C1).
+    data, blockList, focused: isFocused, reload: load, retryMonth: () => loadMonth(seq.current),
     retryRoster: () => { setRosterState('loading'); void loadRoster(seq.current); },
     retryDrafts: () => void drafts.refetch(),
   };

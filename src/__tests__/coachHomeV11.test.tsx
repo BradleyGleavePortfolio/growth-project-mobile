@@ -194,6 +194,13 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
       useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null });
     }
   });
+  it("reads the coach's block list once on a Home mount: the Plan ended list takes the Home's read (LO m#866 C1)", async () => {
+    const blockReads = () => mockGet.mock.calls.filter(([url]) => url === '/users/blocks').length;
+    await renderHome();
+    await waitFor(() => expect(blockReads()).toBeGreaterThan(0));
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(blockReads()).toBe(1);
+  });
   it.each([
     ['home-drafts', 'ClientsStack', { screen: 'PendingAiDrafts', initial: false }],
     ['home-ask-roman', 'SettingsStack', { screen: 'RomanChat', initial: false }],
