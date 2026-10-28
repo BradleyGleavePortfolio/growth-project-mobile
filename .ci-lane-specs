@@ -1,0 +1,12 @@
+src/config/__tests__/iosPrivacyManifest.test.js
+src/config/__tests__/storeReviewPermissions.test.js
+src/config/__tests__/purchaseSurfaces.test.ts
+src/screens/settings/__tests__/DeleteAccountScreen.test.tsx
+src/__tests__/iosStorePackagePurchasePosture.test.tsx
+src/__tests__/membershipWebsiteLinkIos.test.tsx
+src/__tests__/iosCreditPackLink.test.tsx
+src/screens/auth/__tests__/LoginGoogleGate.test.tsx
+src/utils/__tests__/appleAuth.test.ts
+src/screens/consultation/__tests__/consentHealthNotes.test.tsx
+src/services/health/__tests__/healthPermissionsMatchUse.test.ts
+src/__tests__/PushPromptSheet.test.tsx
