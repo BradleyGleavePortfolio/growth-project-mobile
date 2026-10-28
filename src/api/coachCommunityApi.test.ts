@@ -952,6 +952,25 @@ describe('coachCommunityApi — FX4-868 inbox route + row pinned to the server D
     ]);
   });
 
+  it('a message row\'s own closing dots fold into the "..." so a row never shows four (FIN-868R5 B2)', async () => {
+    serveGets({
+      '/community/me/coach-inbox': {
+        items: [
+          serverInboxRow(ROW_1, { preview: 'My knee is a bit sore after Saturday.' }),
+          serverInboxRow(ROW_2, { preview: 'Not sure about the plan... ' }),
+          serverInboxRow(ROW_3, { preview: 'Done!' }),
+        ],
+        next_cursor: null,
+      },
+    });
+    const res = await coachCommunityApi.getInbox();
+    expect(res.items.map((i) => i.snippet)).toEqual([
+      'My knee is a bit sore after Saturday...',
+      'Not sure about the plan...',
+      'Done!...',
+    ]);
+  });
+
   it('every message row ends with "..." so a cut text never looks complete; a post does not (#179-11)', async () => {
     flags.communityVoiceNotes = true;
     const cut = `${'Long question about my week. '.repeat(7)}Can I`.slice(0, 200);
