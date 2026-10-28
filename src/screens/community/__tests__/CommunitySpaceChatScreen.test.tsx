@@ -820,7 +820,8 @@ describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card
     await a.findByTestId('space-chat-row-vo-3');
     expect(a.getByTestId('space-chat-local-busy-vo-3')).toBeTruthy();
     expect(a.queryByTestId('space-chat-local-menu-vo-3')).toBeNull();
-    await fireEvent.changeText(a.getByTestId('space-chat-composer-field'), 'Nice work');
+    // The phone's own row draws before the server answers; the composer waits for that answer (m#871 Opus B3).
+    await fireEvent.changeText(await a.findByTestId('space-chat-composer-field'), 'Nice work');
     await fireEvent.press(a.getByTestId('space-chat-composer-send'));
     await waitFor(() => expect(a.getAllByText('Sending…')).toHaveLength(2));
     expect(a.getAllByTestId(/^space-chat-local-busy-/)).toHaveLength(2);
