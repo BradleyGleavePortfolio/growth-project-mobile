@@ -3,23 +3,24 @@
  * sections, drawn on the Home page or, `deep`, in the space-list drawer. One
  * reader (useSpaceTree) feeds both, so they never disagree.
  *
- * Today's API has no layers (B-LAYERS), no per-space counts (B3) and no
- * threads (B4), so the spaces are one flat Spaces section in the server's
- * order and carry no count; nothing is invented. Section-kind spaces hold
+ * Today's API has no layers (B-LAYERS) and no threads (B4), so the spaces
+ * are one flat Spaces section in the server's order. Each space carries the
+ * server's unread count (SC-BE2 `unread_count`, 99 = "99+"; m#871 Sol B5);
+ * an older server sends none and the row has no badge. Section-kind spaces hold
  * other spaces, so they wait for B-LAYERS. The coach row is the C3 coach
  * thread with its real unread count.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
 import HapticPressable from '../HapticPressable';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
-import { useCommunityCohorts, useCommunityMe, useCommunityWorkspace } from '../../hooks/useCommunity';
+import { communityKeys, useCommunityCohorts, useCommunityMe, useCommunityWorkspace } from '../../hooks/useCommunity';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { startSpaceOutbox } from './space-chat/spaceChatOutbox';
 import { forestPop as fp, layout, typography } from '../../theme/tokens';
@@ -34,6 +35,8 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 export interface SpaceRow { key: string; label: string; icon: IconName | '#'; meta?: string; chip?: string; badge?: number; target: SpaceTarget }
 export interface SpaceSection { key: string; title: string; rows: SpaceRow[] }
 
+/** SC-BE2 caps a space's count at 99, meaning 99 or more: drawn "99+" like any count over 99. */
+const spaceBadge = (n: number | undefined) => (n != null && n >= 99 ? 100 : n);
 const firstWord = (v: unknown) => (typeof v === 'string' ? (v.trim().split(/\s+/)[0] ?? '') : '');
 
 /** The community name, its sections, and the load state, from today's endpoints. */
@@ -45,6 +48,17 @@ export function useSpaceTree() {
   const me = useCommunityMe();
   const workspaceId = me.data?.feature_flag_state === 'enabled' ? (me.data.workspace_id ?? null) : null;
   const cohorts = useCommunityCohorts(workspaceId != null);
+  // FR-871R6 (Sol B879-6): a live ping re-reads only community/me (useCommunityBadge). When its space count moves,
+  // the per-space counts are read again too, so an open Home or drawer shows the new numbers with no pull.
+  const qc = useQueryClient();
+  const spaceUnread = me.data?.unread?.cohort_messages;
+  const seenUnread = useRef(spaceUnread);
+  useEffect(() => {
+    if (spaceUnread === undefined || spaceUnread === seenUnread.current) return;
+    const first = seenUnread.current === undefined;
+    seenUnread.current = spaceUnread;
+    if (!first) void qc.invalidateQueries({ queryKey: communityKeys.cohorts() });
+  }, [qc, spaceUnread]);
   const workspace = useCommunityWorkspace(workspaceId);
   const coachName = useQuery({
     queryKey: ['community', 'home', 'coach-name', coachId],
@@ -61,7 +75,7 @@ export function useSpaceTree() {
 
   const spaces: SpaceRow[] = (cohorts.data?.cohorts ?? [])
     .filter((c) => c.kind !== 'section')
-    .map((c): SpaceRow => ({ key: c.id, label: c.name, icon: c.kind === 'announcement' ? 'megaphone-outline' : '#', target: { kind: 'space', id: c.id } }));
+    .map((c): SpaceRow => ({ key: c.id, label: c.name, icon: c.kind === 'announcement' ? 'megaphone-outline' : '#', badge: spaceBadge(c.unread_count), target: { kind: 'space', id: c.id } }));
   if (coachId) spaces.push({ key: 'leaderboard', label: 'Leaderboard', icon: 'podium-outline', chip: 'Private', target: { kind: 'route', name: 'Leaderboard' } });
   if (featureFlags.communityClassroom) spaces.push({ key: 'classroom', label: 'Classroom', icon: 'book-outline', target: { kind: 'route', name: 'CommunityClassroom' } });
   // FR-880R2 (owner 10-23 "Dissapear", Sol B2): a closed coaching chat, either person's block, leaves Community Home

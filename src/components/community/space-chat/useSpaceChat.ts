@@ -7,7 +7,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { useCommunityMe } from '../../../hooks/useCommunity';
+import { communityKeys, useCommunityMe } from '../../../hooks/useCommunity';
+import { coachCommunityKeys } from '../../../hooks/useCoachCommunity';
+import { communityVoiceApi } from '../../../api/communityVoiceApi';
 import { isNoAccess, spaceChatApi, type SpaceMessage, type SpaceMessagePage } from './spaceChatApi';
 import { setSpaceOutboxOnline, spaceOutbox, startSpaceOutbox, useSpaceOutbox, type PendingRow } from './spaceChatOutbox';
 
@@ -78,8 +80,10 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     });
   }, [qc, key]);
 
-  const remove = useCallback(async (id: string) => {
-    await spaceChatApi.remove(id);
+  // A voice note is deleted through the voice route (m#848's communityVoiceApi.remove: the server retracts the note
+  // and its chat row); a text message through the space's own (FR-871, m#879 Opus B1 / Sol B2).
+  const remove = useCallback(async (id: string, voiceNoteId?: string) => {
+    await (voiceNoteId ? communityVoiceApi.remove(voiceNoteId) : spaceChatApi.remove(id));
     dropFromCache((m) => m.id !== id);
   }, [dropFromCache]);
 
@@ -89,8 +93,15 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
   /** Resolves false when the mark did not land, so the page tries again with the next row seen (FR-871 Sol B1 C). */
   const markRead = useCallback(async (messageId: string): Promise<boolean> => {
     if (read.isError) return true;
-    return spaceChatApi.markRead(cohortId, messageId).then(() => true, () => false);
-  }, [cohortId, read.isError]);
+    // m#871 Sol B5: a mark that moved the line refreshes the space badges and the community's unread total.
+    return spaceChatApi.markRead(cohortId, messageId).then(() => {
+      void qc.invalidateQueries({ queryKey: communityKeys.cohorts() });
+      void qc.invalidateQueries({ queryKey: communityKeys.me() });
+      // FR-871R6 (Sol B879-6): the coach's space list reads its own cache; its count drops with the read too.
+      void qc.invalidateQueries({ queryKey: coachCommunityKeys.cohorts() });
+      return true;
+    }, () => false);
+  }, [cohortId, read.isError, qc]);
 
   return {
     list,

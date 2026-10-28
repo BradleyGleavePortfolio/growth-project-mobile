@@ -8,11 +8,12 @@
  * Text scales (no maxFontSizeMultiplier / allowFontScaling off anywhere on the page).
  */
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, FlatList, Keyboard, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { authEvents } from '../../../utils/authEvents';
+import { forestPop as fp, spacing } from '../../../theme/tokens';
 
 const mockDisk = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
@@ -46,10 +47,11 @@ let mockUser = { id: 'me-1', name: 'Dana Reyes', coach_id: 'coach-1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 const mockInsets = { top: 47, right: 0, bottom: 34, left: 0 }; // an iPhone with a home indicator
 jest.mock('react-native-safe-area-context', () => {
-  const { createElement } = require('react');
+  const { createContext, createElement } = require('react');
   const { View } = require('react-native');
   return {
     SafeAreaView: ({ children, style, testID }: { children?: unknown; style?: unknown; testID?: string }) => createElement(View, { style, testID }, children),
+    SafeAreaInsetsContext: createContext(mockInsets),
     useSafeAreaInsets: () => mockInsets,
   };
 });
@@ -69,18 +71,36 @@ jest.mock('../../../hooks/useCommunity', () => ({
     ? { data: undefined, isLoading: false, isError: true, error: Object.assign(new Error('HTTP 500'), { isAxiosError: true, response: { status: 500, data: {} } }), refetch: mockCohorts.refetch }
     : { data: { feature_flag_state: 'on', cohorts: cohorts() }, isLoading: false, isError: false, refetch: mockCohorts.refetch }),
   useCommunityMe: () => ({ dataUpdatedAt: 0 }),
+  communityKeys: { cohorts: () => ['community', 'cohorts'], me: () => ['community', 'me'] },
 }));
 jest.mock('../../../components/community/VoiceNotePlayer', () => {
-  const { Text } = jest.requireActual('react-native');
-  return (p: { testID: string; durationMs: number; url: string | null; onPlaybackError?: () => void }) => <Text testID={p.testID} onPress={p.onPlaybackError}>{`player ${p.durationMs} ${p.url}`}</Text>;
+  const { Text, View } = jest.requireActual('react-native');
+  // Draws what SpaceVoiceNote hands the player (m#879): the trailing mark and the footer (send states, Try again).
+  return (p: { testID: string; durationMs: number; url: string | null; onPlaybackError?: () => void; trailing?: import('react').ReactNode; footer?: import('react').ReactNode }) => (
+    <View><Text testID={p.testID} onPress={p.onPlaybackError}>{`player ${p.durationMs} ${p.url}`}</Text>{p.trailing}{p.footer}</View>
+  );
 });
-jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn(async () => ({ url: 'https://x/v.m4a' })) } }));
+jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn(async () => ({ url: 'https://x/v.m4a' })), remove: jest.fn(async () => ({ deleted: true })) } }));
+// SC-M2: m#848's voice outbox and record sheet (FX-848) stand in; the space chat only feeds them.
+const mockVoice = { items: [] as unknown[], online: true, send: jest.fn(), retry: jest.fn(), discard: jest.fn() };
+jest.mock('../../../hooks/useVoiceOutbox', () => ({ useVoiceOutbox: () => mockVoice }));
+jest.mock('../../../components/community/VoiceRecordSheet', () => {
+  const { Text } = jest.requireActual('react-native');
+  return { __esModule: true, default: (p: { visible: boolean; target: { cohortName: string } }) => (p.visible ? <Text testID="voice-sheet">{p.target.cohortName}</Text> : null) };
+});
 jest.mock('../../../components/community/SafetyMenu', () => {
   const { Text } = jest.requireActual('react-native');
-  return (p: { testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void> }) => (
+  type MockMenuProps = {
+    testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void>;
+    context?: { name: string; detail: string }; reported?: boolean; onReported?: () => void;
+  };
+  return (p: MockMenuProps) => (
     <>
       <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
-      {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { void p.onDelete?.(); }}>delete</Text> : null}
+      {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { p.onDelete?.().catch(() => undefined); }}>delete</Text> : null}
+      {/* FR-871R6 (m#879 B4): the card the report sheet draws above the reasons, and Report, done once sent. */}
+      {p.context ? <Text testID={`${p.testID}-context`}>{`${p.context.name} | ${p.context.detail}`}</Text> : null}
+      {p.onReported ? <Text testID={`${p.testID}-report`} onPress={p.onReported}>{p.reported ? 'Reported' : 'Report'}</Text> : null}
     </>
   );
 });
@@ -88,6 +108,9 @@ const mockApi = { get: jest.fn(), post: jest.fn(), delete: jest.fn() };
 jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi }));
 
 const Screen = require('../CommunitySpaceChatScreen').default;
+// Required here, after the stand-ins above exist (both reach services/api or the device cache when loaded).
+const { resetReportedVoiceNotes } = require('../../../components/community/VoiceReportedFold');
+const { coachCommunityKeys } = require('../../../hooks/useCoachCommunity');
 
 const msg = (id: string, at: string, who: { id: string; name: string; is_coach?: boolean }, extra: Record<string, unknown> = {}) => ({
   id, cohort_id: 'c-every', sender_user_id: who.id, body: `body ${id}`, kind: 'text', created_at: at, updated_at: at,
@@ -112,6 +135,9 @@ beforeEach(() => {
   mockCohorts.refetch.mockReset();
   mockNavigate.mockReset();
   mockFlags.communityVoiceNotes = true;
+  mockVoice.items = [];
+  mockVoice.retry.mockReset();
+  mockVoice.discard.mockReset();
   mockNet.isOnline = true;
   mockNet.reachable = null;
   mockRole = 'client';
@@ -128,6 +154,7 @@ beforeEach(() => {
       if (readAnswer instanceof Error) throw readAnswer;
       return { data: readAnswer };
     }
+    if (url === '/community/voice-consent') return { data: { seen: true, seen_at: '2026-10-20T10:00:00.000Z' } };
     return { data: { messages: page, next_before: null } };
   });
   mockApi.post.mockReset().mockImplementation(async (url: string) =>
@@ -143,9 +170,15 @@ const open = async () => {
   return r;
 };
 afterEach(() => client?.clear());
-// FlatList viewability does not run in tests: report the rows on screen by hand.
-const see = (r: Awaited<ReturnType<typeof open>>, ...keys: string[]) => fireEvent(r.getByTestId('space-chat-list'), 'viewableItemsChanged',
-  { viewableItems: keys.map((key) => ({ key, isViewable: true, index: null })), changed: [] });
+// FlatList viewability does not run in tests: report the rows on screen by hand. `see`: rows mostly on screen; `cover`:
+// rows filling most of the screen (taller than it; FR-871R5, m#871 Sol B2).
+type Pair = { viewabilityConfig: object; onViewableItemsChanged: (info: unknown) => void };
+const pairs = (r: Awaited<ReturnType<typeof open>>) => r.getByTestId('space-chat-list').props.viewabilityConfigCallbackPairs as Pair[];
+const report = (n: number) => (r: Awaited<ReturnType<typeof open>>, ...keys: string[]) => act(async () => {
+  pairs(r)[n].onViewableItemsChanged({ viewableItems: keys.map((key) => ({ key, isViewable: true, index: null })), changed: [] });
+});
+const see = report(0);
+const cover = report(1);
 const readMarks = () => mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/read')).map(([, b]) => b.message_id);
 
 it('member Everyone: header, rows with names as sent, Coach mark, voice row, New messages line, composer', async () => {
@@ -158,6 +191,13 @@ it('member Everyone: header, rows with names as sent, Coach mark, voice row, New
   expect(r.getAllByText('Coach')).toHaveLength(2);
   expect(r.getByTestId('space-chat-voice-v1')).toBeTruthy();
   expect(r.getByTestId('space-chat-new-line')).toBeTruthy();
+  // 05b: the New messages line is moss-green words on a leaf rule, never gold (FR-871R5, m#879 Opus C8).
+  const newLine = r.getByTestId('space-chat-new-line');
+  expect(StyleSheet.flatten(within(newLine).getByText('New messages').props.style)).toMatchObject({ color: fp.brand400 });
+  const kids = newLine.children as ReadonlyArray<string | { props: { style?: unknown } }>;
+  const fills = kids.map((c) => (typeof c === 'string' ? undefined : (StyleSheet.flatten(c.props.style as never) as { backgroundColor?: string } | undefined)?.backgroundColor));
+  expect(fills.filter(Boolean)).toEqual([fp.leaf, fp.leaf]);
+  expect(JSON.stringify(StyleSheet.flatten(newLine.props.style))).not.toContain(fp.goldInk);
   expect(r.getByTestId('space-chat-composer-field')).toBeTruthy();
   expect(r.queryByTestId('space-chat-hint')).toBeNull();
   // The stream reads the space's own route, newest first, and marks the newest row read (SC-BE2).
@@ -473,6 +513,114 @@ it('every control has a spoken label and no text is locked to a size', async () 
   expect(locked).toHaveLength(0);
 });
 
+it('SC-M2: the mic sits in the composer until there is text and opens the record sheet for this space', async () => {
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  await fireEvent.press(r.getByTestId('space-chat-mic'));
+  expect((await r.findByTestId('voice-sheet')).props.children).toBe('Everyone');
+  await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'hi');
+  expect(await r.findByTestId('space-chat-composer-send')).toBeTruthy();
+  expect(r.queryByTestId('space-chat-mic')).toBeNull();
+});
+
+it('SC-M2: no mic while communityVoiceNotes is off', async () => {
+  mockFlags.communityVoiceNotes = false;
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  expect(r.getByTestId('space-chat-composer-field')).toBeTruthy();
+  expect(r.queryByTestId('space-chat-mic')).toBeNull();
+});
+
+it('SC-M2: a voice note on its way to this space shows at the bottom with its state; Not sent has Try again and Delete', async () => {
+  const note = (id: string, cohortId: string, status: string) => ({
+    id, authorId: 'me-1', workspaceId: 'ws', peaks: [0.4], status, input: { uri: `file:///${id}.m4a`, durationMs: 8000, cohortId },
+  });
+  mockVoice.items = [note('vo-1', 'c-every', 'failed'), note('vo-2', 'c-ann', 'sending')];
+  const r = await open();
+  await r.findByTestId('space-chat-row-vo-1');
+  expect(r.queryByTestId('space-chat-row-vo-2')).toBeNull();
+  expect(r.getByTestId('space-chat-failed-vo-1')).toBeTruthy();
+  expect(r.getByTestId('space-chat-voice-failed-vo-1')).toBeTruthy();
+  expect(r.getByText('That didn’t send. Your recording is safe — try sending again.')).toBeTruthy();
+  await fireEvent.press(r.getByText('Try again'));
+  expect(mockVoice.retry).toHaveBeenCalledWith('vo-1');
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, b) => b?.find((x) => x.text === 'Delete')?.onPress?.());
+  await fireEvent.press(r.getByText('Delete'));
+  expect(alert).toHaveBeenCalledWith('Delete this voice note?', undefined, expect.any(Array));
+  expect(mockVoice.discard).toHaveBeenCalledWith('vo-1');
+  alert.mockRestore();
+});
+
+it('FR-871R5 (m#879 Opus B1, owner 10-20 12:25): offline with a voice note waiting, no sentence; the card has the circle and the struck wifi, the header nothing', async () => {
+  mockNet.isOnline = false;
+  const note = (id: string, status: string) => ({ id, authorId: 'me-1', workspaceId: 'ws', peaks: [0.4], status, input: { uri: `file:///${id}.m4a`, durationMs: 8000, cohortId: 'c-every' } });
+  mockVoice.items = [note('vo-1', 'waiting')];
+  const r = await open();
+  await r.findByTestId('space-chat-row-vo-1');
+  expect(r.queryByText(/You are offline/)).toBeNull();
+  expect(r.queryByTestId('space-chat-offline')).toBeNull();
+  expect(r.getByTestId('space-chat-voice-waiting-vo-1').props.accessibilityLabel).toBe('Waiting to send');
+  expect(r.getByTestId('space-chat-voice-wifi-off-vo-1')).toBeTruthy();
+  expect(r.getByTestId('space-chat-waiting-vo-1').props.children).toBe('');
+  expect(r.getByTestId('space-chat-local-menu-vo-1').props.accessibilityLabel).toBe('Delete this voice note');
+});
+
+it('FR-871R5 (m#871 Opus B1 / Sol B1): opening at the first unread row tries the row again while it fails, a few times at most, and reads nothing until placed', async () => {
+  const toIndex = jest.spyOn(FlatList.prototype, 'scrollToIndex');
+  const toOffset = jest.spyOn(FlatList.prototype, 'scrollToOffset');
+  const r = await open();
+  await r.findByTestId('space-chat-new-line');
+  await see(r, 'm3', 'm2');
+  // No row is measured in tests, so every try fails: the offset guess, then the row itself again.
+  await waitFor(() => expect(toIndex.mock.calls.length).toBeGreaterThanOrEqual(2));
+  const index = (toIndex.mock.calls[0][0] as { index: number }).index;
+  expect(index).toBeGreaterThan(0);
+  expect(toIndex).toHaveBeenLastCalledWith({ index, viewPosition: 0.5, animated: false });
+  expect(toOffset).toHaveBeenCalledWith(expect.objectContaining({ animated: false }));
+  await act(async () => { await new Promise((res) => setTimeout(res, 500)); });
+  expect(toIndex.mock.calls.length).toBeLessThanOrEqual(6);
+  expect(readMarks()).toEqual([]);
+  await see(r, 'm3', 'm2', 'new-line');
+  await waitFor(() => expect(readMarks()).toEqual(['m3']));
+  toIndex.mockRestore();
+  toOffset.mockRestore();
+});
+
+it('FR-871R5 (m#871 Sol B2): a message taller than the screen counts as seen while it fills the screen', async () => {
+  const r = await open();
+  await r.findByTestId('space-chat-new-line');
+  expect(pairs(r).map((x) => x.viewabilityConfig)).toEqual([{ itemVisiblePercentThreshold: 60 }, { viewAreaCoveragePercentThreshold: 60 }]);
+  await see(r, 'new-line');
+  expect(readMarks()).toEqual([]);
+  await cover(r, 'm3');
+  await waitFor(() => expect(readMarks()).toEqual(['m3']));
+});
+
+it('FR-871 (m#879 Opus B1 / Sol B2): your own voice note has Delete, through the voice route; a failed delete keeps the row', async () => {
+  const voiceApi = jest.requireMock('../../../api/communityVoiceApi').communityVoiceApi;
+  page = [msg('m5', '2026-10-22T10:10:00.000Z', ME, { kind: 'voice', body: null, voice_note: { id: 'v5', duration_ms: 9000, waveform_peaks: null, heard_at: null } }), ...page];
+  voiceApi.remove.mockRejectedValueOnce(new Error('HTTP 500'));
+  const r = await open();
+  await r.findByTestId('space-chat-row-m5');
+  expect(r.queryByTestId('space-chat-menu-m3-delete')).toBeNull();
+  await fireEvent.press(r.getByTestId('space-chat-menu-m5-delete'));
+  await waitFor(() => expect(voiceApi.remove).toHaveBeenCalledWith('v5'));
+  expect(r.getByTestId('space-chat-row-m5')).toBeTruthy();
+  await fireEvent.press(r.getByTestId('space-chat-menu-m5-delete'));
+  await waitFor(() => expect(r.queryByTestId('space-chat-row-m5')).toBeNull());
+  expect(voiceApi.remove).toHaveBeenCalledTimes(2);
+  expect(mockApi.delete).not.toHaveBeenCalled();
+});
+
+it('m#871 Sol B5: a read mark that lands refreshes the space badges and the unread total', async () => {
+  const r = await open();
+  await r.findByTestId('space-chat-new-line');
+  const spy = jest.spyOn(client, 'invalidateQueries');
+  await see(r, 'm3', 'm2', 'new-line');
+  await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'cohorts'] }));
+  expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'me'] });
+});
+
 describe('FR-871R6 (m#871): member Space info, the hint, the server answer on this visit, refused sends', () => {
   const rejected = () => Object.assign(new Error('HTTP 422'), {
     isAxiosError: true, response: { status: 422, data: { code: 'community.content.rejected', message: 'Server words' } },
@@ -625,5 +773,141 @@ describe('FR-871R6 (m#871): member Space info, the hint, the server answer on th
     const row = JSON.parse(mockDisk.get('space_outbox_me-1') ?? '[]')[0];
     await act(async () => { spaceOutbox.discard(row.localId); });
     expect(r.getByLabelText('Dana Reyes, Sending…. On its way')).toBeTruthy();
+  });
+});
+
+describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card and fold, the coach list count', () => {
+  afterEach(async () => {
+    (Keyboard.addListener as unknown as { mockRestore?: () => void }).mockRestore?.();
+    await act(async () => { resetReportedVoiceNotes(); });
+  });
+  const pad = (r: Awaited<ReturnType<typeof open>>, id: string) => (StyleSheet.flatten(r.getByTestId(id).props.style) as { paddingBottom?: number }).paddingBottom;
+  const keyboard = () => {
+    const on: Record<string, () => void> = {};
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((e: string, h: () => void) => { on[e] = h; return { remove: () => undefined }; }) as never);
+    return on;
+  };
+
+  it('Opus B1 / Sol B879-1: with no tab bar below, the composer keeps clear of the home indicator; with the keyboard up it does not', async () => {
+    const on = keyboard();
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(pad(r, 'space-chat-composer')).toBe(spacing.sm + 34);
+    await act(async () => { on.keyboardWillShow(); });
+    expect(pad(r, 'space-chat-composer')).toBeUndefined();
+    await act(async () => { on.keyboardWillHide(); });
+    expect(pad(r, 'space-chat-composer')).toBe(spacing.sm + 34);
+  });
+
+  it('Opus B1 / Sol B879-1, B2 / B879-2: the hint line under announcements keeps clear of it too, and so does the coach\'s composer (the coach\'s bar steps aside too)', async () => {
+    mockParams.current = { cohortId: 'c-ann' };
+    const a = await open();
+    await a.findByTestId('space-chat-hint');
+    expect(pad(a, 'space-chat-hint')).toBe(spacing.lg + 34);
+    await a.unmount();
+    mockRole = 'owner';
+    mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+    mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+    const b = await open();
+    await b.findByTestId('space-chat-composer');
+    expect(pad(b, 'space-chat-composer')).toBe(spacing.sm + 34);
+  });
+
+  it('Opus B3 / Sol B879-3: a row that reads Sending… has no Delete (text and voice); Waiting to send keeps it', async () => {
+    mockApi.post.mockImplementation((url: string) => (String(url).endsWith('/read') ? Promise.resolve({ data: { ok: true } }) : new Promise(() => undefined)));
+    mockVoice.items = [{ id: 'vo-3', authorId: 'me-1', workspaceId: 'ws', peaks: [0.4], status: 'sending', input: { uri: 'file:///vo-3.m4a', durationMs: 8000, cohortId: 'c-every' } }];
+    const a = await open();
+    await a.findByTestId('space-chat-row-vo-3');
+    expect(a.getByTestId('space-chat-local-busy-vo-3')).toBeTruthy();
+    expect(a.queryByTestId('space-chat-local-menu-vo-3')).toBeNull();
+    // The phone's own row draws before the server answers; the composer waits for that answer (m#871 Opus B3).
+    await fireEvent.changeText(await a.findByTestId('space-chat-composer-field'), 'Nice work');
+    await fireEvent.press(a.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(a.getAllByText('Sending…')).toHaveLength(2));
+    expect(a.getAllByTestId(/^space-chat-local-busy-/)).toHaveLength(2);
+    expect(a.queryAllByTestId(/^space-chat-local-menu-/)).toHaveLength(0);
+    await a.unmount();
+    mockVoice.items = [];
+    mockNet.isOnline = false;
+    const b = await open();
+    await b.findByTestId('space-chat-row-m3');
+    await fireEvent.changeText(b.getByTestId('space-chat-composer-field'), 'On the train');
+    await fireEvent.press(b.getByTestId('space-chat-composer-send'));
+    expect(await b.findByText('Waiting to send')).toBeTruthy();
+    expect(b.getAllByTestId(/^space-chat-local-menu-/).map((x) => x.props.accessibilityLabel)).toEqual(['Delete this message']);
+  });
+
+  it('Opus B4 / Sol B879-4: the report sheet gets the card; a reported voice note folds (its player goes) and stays folded; a text keeps its place, Reported', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(r.getByTestId('space-chat-menu-m2-context').props.children).toBe('Sam Okafor | voice note · 0:42');
+    expect(r.getByTestId('space-chat-menu-m3-context').props.children).toBe('jo b. | body m3');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m2-report'));
+    expect(r.getByText('You reported this voice note. It is hidden for you.')).toBeTruthy();
+    expect(r.getByTestId('space-chat-reported-m2')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-voice-v1')).toBeNull();
+    expect(r.getByTestId('space-chat-menu-m2-report').props.children).toBe('Reported');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3-report'));
+    expect(r.getByTestId('space-chat-menu-m3-report').props.children).toBe('Reported');
+    expect(r.getByLabelText(/^jo b\., .*\. body m3$/)).toBeTruthy();
+    expect(r.getByTestId('space-chat-menu-m1-report').props.children).toBe('Report');
+    await r.unmount();
+    const again = await open();
+    await again.findByTestId('space-chat-row-m3');
+    expect(again.getByTestId('space-chat-reported-m2')).toBeTruthy();
+    expect(again.queryByTestId('space-chat-voice-v1')).toBeNull();
+    expect(again.getByTestId('space-chat-menu-m3-report').props.children).toBe('Reported');
+    await again.unmount();
+    authEvents.emit('logout');
+    const next = await open();
+    await next.findByTestId('space-chat-row-m3');
+    expect(next.getByTestId('space-chat-voice-v1')).toBeTruthy();
+    expect(next.getByTestId('space-chat-menu-m3-report').props.children).toBe('Report');
+  });
+
+  it('Sol B879-6: a read mark that lands refreshes the coach\'s space list too', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-new-line');
+    const spy = jest.spyOn(client, 'invalidateQueries');
+    await see(r, 'm3', 'm2', 'new-line');
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: coachCommunityKeys.cohorts() }));
+  });
+});
+
+describe('FR-871R7 (m#879 Sol B879-3): a text the server accepted, before the list carries it', () => {
+  it('B-TEST: with the list refresh after the receipt held, it offers no Delete that only hides it on the phone; the server row brings the real Delete', async () => {
+    const { spaceOutbox } = require('../../../components/community/space-chat/spaceChatOutbox');
+    const accepted = msg('m9', '2026-10-22T10:20:00.000Z', ME, { body: 'Accepted text' });
+    mockApi.post.mockImplementation(async (url: string) => (String(url).endsWith('/read') ? { data: { ok: true } } : { data: { message: accepted } }));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    // From here every list read waits (a slow line): the refresh the receipt starts is held until released below.
+    const held: Array<() => void> = [];
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    mockApi.get.mockImplementation((url: string) => (String(url).endsWith('/messages')
+      ? new Promise((done) => { held.push(() => done(answer(url))); })
+      : answer(url)));
+    page = [accepted, ...page];
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Accepted text');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    const sent = await r.findByTestId(/^space-chat-sent-/);
+    await waitFor(() => expect(held.length).toBeGreaterThan(0));
+    const localId = String(sent.props.testID).replace('space-chat-sent-', '');
+    expect(r.getAllByLabelText(/^Dana Reyes, .*\. Accepted text$/)).toHaveLength(1);
+    // The receipt is in, the list is not: no phone-only Delete (the ••• keeps its place, with nothing to press) ...
+    expect(r.queryByTestId(`space-chat-local-menu-${localId}`)).toBeNull();
+    expect(r.getByTestId(`space-chat-local-busy-${localId}`)).toBeTruthy();
+    // ... and the outbox keeps the row if anything asks it to drop it (the text is on the server for everyone).
+    await act(async () => { spaceOutbox.discard(localId); });
+    expect(r.getByTestId(`space-chat-sent-${localId}`)).toBeTruthy();
+    expect(mockApi.delete).not.toHaveBeenCalled();
+    // The held read answers with the accepted text: the server row takes the phone's place, once, with the real Delete.
+    await act(async () => { held.splice(0).forEach((go) => go()); });
+    await r.findByTestId('space-chat-row-m9');
+    expect(r.queryByTestId(`space-chat-row-${localId}`)).toBeNull();
+    expect(r.getAllByLabelText(/^Dana Reyes, .*\. Accepted text$/)).toHaveLength(1);
+    await fireEvent.press(r.getByTestId('space-chat-menu-m9-delete'));
+    await waitFor(() => expect(mockApi.delete).toHaveBeenCalledWith('/community/messages/m9'));
+    await waitFor(() => expect(r.queryAllByLabelText(/^Dana Reyes, .*\. Accepted text$/)).toHaveLength(0));
   });
 });

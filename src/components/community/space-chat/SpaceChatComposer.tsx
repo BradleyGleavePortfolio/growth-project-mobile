@@ -24,9 +24,11 @@ export interface SpaceChatComposerProps {
   leading?: React.ReactNode;
   /** SC-M2: the mic, shown while the field is empty. */
   trailing?: React.ReactNode;
+  /** FR-871R6 (m#879 Opus B1): the bottom safe area to keep clear while no tab bar is under the dock (0 otherwise). */
+  bottomInset?: number;
 }
 
-export default function SpaceChatComposer({ cohortId, onSend, leading, trailing }: SpaceChatComposerProps): React.ReactElement {
+export default function SpaceChatComposer({ cohortId, onSend, leading, trailing, bottomInset = 0 }: SpaceChatComposerProps): React.ReactElement {
   const [text, setText] = useChatDraft(`space:${cohortId}`);
   const body = text.trim();
   const rejected = useSpaceOutbox(cohortId).find((r) => r.state === 'failed' && r.reason === 'rejected');
@@ -37,7 +39,7 @@ export default function SpaceChatComposer({ cohortId, onSend, leading, trailing 
     Alert.alert(REJECTED_WORDS.title, REJECTED_WORDS.message);
   }, [rejected, text, setText]);
   return (
-    <View style={[s.bar, leading ? null : s.noLead]} testID="space-chat-composer">
+    <View style={[s.bar, leading ? null : s.noLead, bottomInset ? { paddingBottom: spacing.sm + bottomInset } : null]} testID="space-chat-composer">
       {leading ? <View style={s.slot}>{leading}</View> : null}
       <TextInput
         value={text}

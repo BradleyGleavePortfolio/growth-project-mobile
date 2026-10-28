@@ -24,6 +24,7 @@ import { Text, View } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/client/HomeScreen';
@@ -890,11 +891,13 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
         <Tab.Screen
           name="CommunityTab"
           component={CommunityNavigator}
-          options={{
+          options={({ route }) => ({
             tabBarAccessibilityLabel: 'Community',
             title: 'Community',
             tabBarIcon: ({ color }) => <CommunityTabBarIcon color={color} />,
-          }}
+            // FR-871R5 (m#879 Opus B2): the space chat is full screen (GOAL 05b); its composer sits at the bottom edge.
+            ...(getFocusedRouteNameFromRoute(route) === 'CommunitySpaceChat' ? { tabBarStyle: { display: 'none' as const } } : {}),
+          })}
         />
       )}
     </Tab.Navigator>

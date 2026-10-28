@@ -6,6 +6,10 @@
  *                                                       CONTRACT 6370303541) answers a resend with the first message
  *   DELETE community/messages/:id                       own text message
  *   GET/POST community/cohorts/:id/read                  SC-BE2; any failure (404 before it ships) hides the line
+ *   POST community/voice-notes/:id/heard                 VOICE-BE (backend community-voice.controller markHeard): the
+ *                                                       viewer played a voice note to the end -> { voice_note_id, heard_at }
+ *   GET/POST community/voice-consent                    VOICE-BE: was the 08a first-use card shown to the caller ->
+ *                                                       { seen, seen_at }; POST records it (idempotent). Ported from m#858.
  */
 import { z } from 'zod';
 import api from '../../../services/api';
@@ -47,7 +51,10 @@ const ReadSchema = z
   .object({ last_read_at: z.string().nullable(), last_read_message_id: z.string().nullable() })
   .passthrough();
 export type SpaceRead = z.infer<typeof ReadSchema>;
+const HeardSchema = z.object({ voice_note_id: z.string(), heard_at: z.string() }).passthrough();
 const AnySchema = z.unknown();
+const ConsentSchema = z.object({ seen: z.boolean(), seen_at: z.string().nullable() }).passthrough();
+export type VoiceConsent = z.infer<typeof ConsentSchema>;
 
 export const SPACE_PAGE_LIMIT = 30;
 export const SPACE_MESSAGE_MAX = 4000;
@@ -85,6 +92,19 @@ export const spaceChatApi = {
       () => api.post<unknown>(`/community/cohorts/${cohortId}/read`, { message_id: messageId }),
       'space_chat',
     ).then(() => undefined);
+  },
+  markHeard(voiceNoteId: string): Promise<string> {
+    return call(
+      HeardSchema,
+      () => api.post<unknown>(`/community/voice-notes/${voiceNoteId}/heard`, {}),
+      'space_chat',
+    ).then((r) => r.heard_at);
+  },
+  getVoiceConsent(): Promise<VoiceConsent> {
+    return call(ConsentSchema, () => api.get<unknown>('/community/voice-consent'), 'space_chat');
+  },
+  recordVoiceConsent(): Promise<VoiceConsent> {
+    return call(ConsentSchema, () => api.post<unknown>('/community/voice-consent'), 'space_chat');
   },
 };
 

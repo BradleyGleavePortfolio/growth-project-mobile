@@ -16,11 +16,15 @@
  *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route. The page
  *     opens there (or at the message asked for), loading older pages until that row is loaded (FR-871 Sol B1), once the
  *     cursor has answered. Read marks and the pill follow what is on screen (FlatList viewability), not a scroll
- *     distance: the newest row seen is marked, only while the page is in front and after it has opened in place.
+ *     distance: the newest row seen is marked, only while the page is in front and after it has opened in place. A row
+ *     counts as seen when most of it is on screen, or when it fills most of the screen (a message taller than the
+ *     screen; FR-871R5, m#871 Sol B2). Opening in place tries the row again until the rows around it have measured
+ *     (FR-871R5, m#871 Opus B1 / Sol B1).
+ *   - Offline: no line about it; a voice note waiting on the phone says so in its card (owner 10-20 12:25, FR-871R5).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View,
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +32,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, useRoute, type NavigationProp, type ParamListBase, type RouteProp } from '@react-navigation/native';
 import { SpaceListButton } from '../../components/community/SpaceDrawer';
 import SpaceChatComposer from '../../components/community/space-chat/SpaceChatComposer';
+import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
+import { useSpaceVoiceOutbox } from '../../components/community/space-chat/useSpaceVoiceOutbox';
+import type { VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
 import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
 import { type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
@@ -44,6 +51,7 @@ type Params = { CommunitySpaceChat: { cohortId: string; messageId?: string } };
 type Item =
   | { type: 'msg'; key: string; m: SpaceMessage }
   | { type: 'local'; key: string; r: PendingRow }
+  | { type: 'voice'; key: string; v: VoiceOutboxItem; at: string }
   | { type: 'day'; key: string; label: string }
   | { type: 'new'; key: string };
 
@@ -68,6 +76,9 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   const answered = useServerAnswered(chat.list);
   const admitted = !!cohort && answered && !chat.noAccess;
   const canPost = admitted && (isCoachViewer || !coachOnly);
+  // SC-M2: voice notes into this space (m#848's outbox, sent with this space's id) while communityVoiceNotes is on.
+  const voiceOn = featureFlags.communityVoiceNotes && !!cohort?.workspace_id && !!client?.id;
+  const voice = useSpaceVoiceOutbox(voiceOn ? cohort?.workspace_id ?? null : null, client?.id ?? null, cohortId);
 
   const myName = useMemo(() => chat.messages.find((m) => m.sender_user_id === client?.id)?.sender?.name
     ?? client?.name ?? [client?.firstName, client?.lastName].filter(Boolean).join(' '), [chat.messages, client]);
@@ -78,6 +89,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
       ...chat.messages.filter(drawable).map((m) => ({ at: m.created_at, item: { type: 'msg', key: m.id, m } as Item, mine: m.sender_user_id === client?.id })),
       ...chat.pending.filter((r) => r.state !== 'sent' || !chat.messages.some((m) => m.id === r.serverId))
         .map((r) => ({ at: r.createdAt, item: { type: 'local', key: r.localId, r } as Item, mine: true })),
+      ...voice.rows.map(({ v, at }) => ({ at, item: { type: 'voice', key: v.id, v, at } as Item, mine: true })),
     ].sort((a, b) => a.at.localeCompare(b.at));
     const lastRead = chat.readCursor?.last_read_at ?? null;
     const out: Item[] = [];
@@ -93,15 +105,31 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
       out.push(row.item);
     }
     return out.reverse();
-  }, [chat.messages, chat.pending, chat.readCursor, client?.id]);
+  }, [chat.messages, chat.pending, chat.readCursor, client?.id, voice.rows]);
 
   // Open at the message asked for, else at the New messages line, once per visit after the read cursor has answered.
   // Older pages load first until that row is loaded (the asked-for row, or the oldest unread one) or there are none.
   const listRef = useRef<FlatList<Item>>(null);
   const [target, setTarget] = useState<string | null | undefined>(undefined);
   const [placed, setPlaced] = useState(false);
-  const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set());
-  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => setSeen(new Set(viewableItems.map((v) => v.key)))).current;
+  const [seenRows, setSeenRows] = useState<ReadonlySet<string>>(() => new Set());
+  const [seenTall, setSeenTall] = useState<ReadonlySet<string>>(() => new Set());
+  const seen = useMemo(() => new Set([...seenRows, ...seenTall]), [seenRows, seenTall]);
+  const viewPairs = useRef([setSeenRows, setSeenTall].map((set, i) => ({
+    viewabilityConfig: VIEWABLE[i],
+    onViewableItemsChanged: ({ viewableItems }: { viewableItems: ViewToken[] }) => set(new Set(viewableItems.map((v) => v.key))),
+  }))).current;
+  // The row to open at, tried again (a few frames at most) while the rows around it have not measured yet.
+  const tries = useRef(0);
+  const placedRef = useRef(false);
+  placedRef.current = placed;
+  const toRow = useCallback((index: number) => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }), []);
+  const onPlaceFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+    listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    if (tries.current >= 5) return;
+    tries.current += 1;
+    setTimeout(() => { if (!placedRef.current) toRow(info.index); }, 50);
+  }, [toRow]);
   useEffect(() => {
     if (target !== undefined || !chat.readSettled || items.length === 0) return;
     const lastRead = chat.readCursor?.last_read_at;
@@ -114,8 +142,8 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     }
     const index = items.findIndex((i) => (messageId ? i.key === messageId : i.type === 'new'));
     setTarget(index > 0 ? items[index].key : null);
-    if (index > 0) requestAnimationFrame(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }));
-  }, [items, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list]);
+    if (index > 0) requestAnimationFrame(() => toRow(index));
+  }, [items, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list, toRow]);
   // In place once the row it opened at is on screen (or the person scrolls); only then do read marks count.
   useEffect(() => { if (!placed && (target === null || (!!target && seen.has(target)))) setPlaced(true); }, [placed, target, seen]);
 
@@ -153,16 +181,27 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         />
       );
     }
+    if (item.type === 'voice') {
+      const v = item.v;
+      return (
+        <SpaceChatRow
+          id={v.id} name={myName} isCoach={isCoachViewer} createdAt={item.at} body={null}
+          voice={{ id: v.id, duration_ms: v.input.durationMs, waveform_peaks: v.peaks }} localUri={v.input.uri}
+          authorId={client?.id ?? ''} state={v.status} onRetry={() => voice.retry(v.id)} onDiscard={() => voice.discard(v.id)}
+          viewerUserId={client?.id} offline={!isOnline}
+        />
+      );
+    }
     const m = item.m;
     return (
       <SpaceChatRow
         id={m.id} name={m.sender?.name ?? ''} avatarUrl={m.sender?.avatar_url} isCoach={!!m.sender?.is_coach}
         createdAt={m.created_at} body={m.body} voice={m.voice_note} authorId={m.sender_user_id}
         viewerUserId={client?.id} viewerCoachId={client?.coach_id} offline={!isOnline}
-        onDelete={() => chat.remove(m.id)} onBlocked={chat.dropAuthor}
+        onDelete={() => chat.remove(m.id, m.voice_note?.id)} onBlocked={chat.dropAuthor}
       />
     );
-  }, [chat, client, isCoachViewer, isOnline, myName]);
+  }, [chat, client, isCoachViewer, isOnline, myName, voice]);
 
   const loading = chat.list.isLoading || cohorts.isLoading;
   // Offline with nothing kept: say so at once rather than spin through the retries.
@@ -180,6 +219,18 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   };
   const members = cohort ? `${cohort.member_count.toLocaleString('en-US')} ${cohort.member_count === 1 ? 'member' : 'members'}` : '';
   const [info, setInfo] = useState(false);
+  // FR-871R6 (m#879 Opus B1 / Sol B879-1): the member's tab bar steps aside here (ClientNavigator), so the dock and its
+  // lines keep clear of the home indicator / Android navigation bar themselves, in their own colour; with the keyboard
+  // up the dock sits on the keyboard (no double gap). The coach's tab bar steps aside too (CoachNavigator, FIN-871R6 m#879 B2).
+  const insets = useSafeAreaInsets();
+  const [keyboardUp, setKeyboardUp] = useState(false);
+  useEffect(() => {
+    const up = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardUp(true));
+    const down = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardUp(false));
+    return () => { up.remove(); down.remove(); };
+  }, []);
+  const dockInset = keyboardUp ? 0 : insets.bottom;
+  const lineInset = dockInset ? { paddingBottom: spacing.lg + dockInset } : null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
@@ -233,13 +284,12 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
             data={items}
             keyExtractor={(i) => i.key}
             renderItem={renderItem}
-            onViewableItemsChanged={onViewable}
-            viewabilityConfig={VIEWABLE}
+            viewabilityConfigCallbackPairs={viewPairs}
             onScrollBeginDrag={() => setPlaced(true)}
             keyboardShouldPersistTaps="handled"
             onEndReached={() => { if (chat.list.hasNextPage && !chat.list.isFetchingNextPage) void chat.list.fetchNextPage(); }}
             onEndReachedThreshold={0.4}
-            onScrollToIndexFailed={(info) => listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })}
+            onScrollToIndexFailed={onPlaceFailed}
             contentContainerStyle={s.stream}
             testID="space-chat-list"
           />
@@ -254,11 +304,16 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           </TouchableOpacity>
         ) : null}
         {chat.noAccess ? (
-          <Text style={s.line} testID="space-chat-no-access">This conversation is closed</Text>
+          <Text style={[s.line, lineInset]} testID="space-chat-no-access">This conversation is closed</Text>
         ) : canPost ? (
-          <SpaceChatComposer cohortId={cohortId} onSend={chat.send} />
+          <SpaceChatComposer
+            cohortId={cohortId}
+            onSend={chat.send}
+            bottomInset={dockInset}
+            trailing={voiceOn ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
+          />
         ) : admitted ? (
-          <Text style={s.line} testID="space-chat-hint">Only your coach posts here.</Text>
+          <Text style={[s.line, lineInset]} testID="space-chat-hint">Only your coach posts here.</Text>
         ) : null}
       </KeyboardAvoidingView>
       {info && cohort && !coachStack ? <SpaceInfoSheet name={cohort.name} members={members} onClose={() => setInfo(false)} /> : null}
@@ -290,7 +345,8 @@ function SpaceInfoSheet({ name, members, onClose }: { name: string; members: str
   );
 }
 
-const VIEWABLE = { itemVisiblePercentThreshold: 60 };
+/** Seen: most of the row is on screen, or the row fills most of the screen (one taller than the screen). */
+const VIEWABLE = [{ itemVisiblePercentThreshold: 60 }, { viewAreaCoveragePercentThreshold: 60 }];
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: fp.deep },
   flex: { flex: 1, backgroundColor: colors.bone },

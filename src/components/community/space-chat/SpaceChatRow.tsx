@@ -2,18 +2,20 @@
  * SC-M1 (agent 168), FX-871 (agent 169): one Studio row of the space chat (mockup VOICE-B 05b). Rounded-square avatar
  * (members on the Studio greens, the coach deep with a gold initial), the name exactly as the server sends it, the Coach
  * mark (VN-M1) on the coach's rows, the time, then the content under the name. Each message kind draws in one place
- * (MessageBody): text unboxed, voice on m#848's player (only while communityVoiceNotes is on); a later kind adds a case.
+ * (MessageBody): text unboxed, voice on m#848's player via SpaceVoiceNote (New / Played, SC-M2); a later kind adds a case.
  * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send (with a
  * clock) keep the text at full contrast (FR-871 Sol B4: no fade); Not sent has Try again (the same Idempotency-Key)
- * and Delete. Report / Block / Delete go through SafetyMenu. Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
+ * and Delete. Report / Block / Delete go through SafetyMenu; a row still on the phone has its own ••• that only deletes
+ * it from the phone (FR-871R5, m#879 Opus B3 / Sol B4), and a row on its way or already taken by the server has none
+ * until the server row takes its place (FR-871R7, Sol B879-3). Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
  */
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
 import SafetyMenu from '../SafetyMenu';
-import VoiceNotePlayer from '../VoiceNotePlayer';
-import { communityVoiceApi } from '../../../api/communityVoiceApi';
+import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from '../VoiceReportedFold';
+import { formatDuration } from '../voiceFormat';
+import SpaceVoiceNote from './SpaceVoiceNote';
 import { brand, colors, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
 import { REJECTED_WORDS, type PendingState } from './spaceChatOutbox';
@@ -39,6 +41,8 @@ export interface SpaceChatRowProps {
   createdAt: string;
   body: string | null;
   voice?: SpaceMessage['voice_note'];
+  /** A voice note still in the phone's outbox (SC-M2): played from this file. */
+  localUri?: string | null;
   authorId: string;
   /** Local rows only ('waiting' is drawn as sending while the phone is online: it is next in the queue). */
   state?: PendingState;
@@ -53,37 +57,18 @@ export interface SpaceChatRowProps {
   onBlocked?: (userId: string) => void;
 }
 
-function VoiceBody({ voice, coach, offline }: { voice: NonNullable<SpaceMessage['voice_note']>; coach: boolean; offline: boolean }) {
-  const note = useQuery({
-    queryKey: ['community', 'space-chat-voice', voice.id],
-    queryFn: () => communityVoiceApi.getOne(voice.id),
-    staleTime: 5 * 60_000,
-  });
-  // FR-871 Sol B2: the signed URL lasts 600 s and the cache 5 min, so a failed play asks for a fresh URL (as the feed
-  // and the detail page do); when that ask fails too, Try again asks again.
-  return (
-    <>
-      <VoiceNotePlayer
-        url={note.data?.url ?? null}
-        durationMs={voice.duration_ms}
-        peaks={voice.waveform_peaks ?? undefined}
-        tone={coach ? 'coach' : 'light'}
-        offline={offline}
-        onPlaybackError={() => { void note.refetch(); }}
-        testID={`space-chat-voice-${voice.id}`}
-      />
-      {note.isError && !note.isFetching ? (
-        <TouchableOpacity onPress={() => { void note.refetch(); }} accessibilityRole="button" accessibilityLabel="Try again" style={s.discard} testID={`space-chat-voice-retry-${voice.id}`}>
-          <Text style={s.discardText}>Try again</Text>
-        </TouchableOpacity>
-      ) : null}
-    </>
-  );
-}
-
 /** One place per message kind: a later kind (photo, reply) adds its case here. */
-function MessageBody(p: SpaceChatRowProps): React.ReactElement | null {
-  if (p.voice) return <VoiceBody voice={p.voice} coach={p.isCoach} offline={p.offline} />;
+function MessageBody(p: SpaceChatRowProps & { folded: boolean }): React.ReactElement | null {
+  // GOAL B-06b / VN-07: a voice note this viewer reported folds to one line; the player goes.
+  if (p.voice && p.folded) return <VoiceReportedFold testID={`space-chat-reported-${p.id}`} />;
+  if (p.voice) {
+    const mine = !!p.viewerUserId && p.authorId === p.viewerUserId;
+    const send = p.state === 'waiting' && !p.offline ? 'sending' : p.state === 'sent' ? undefined : p.state;
+    return (
+      <SpaceVoiceNote voice={p.voice} coach={p.isCoach} mine={mine} offline={p.offline} localUri={p.localUri}
+        send={send} onRetry={p.onRetry} onDiscard={p.onDiscard} />
+    );
+  }
   if (p.body) return <Text style={s.body} importantForAccessibility="no" accessibilityElementsHidden>{p.body}</Text>;
   return null;
 }
@@ -93,13 +78,25 @@ const STATE_WORD: Record<'sending' | 'waiting' | 'failed', string> = { sending: 
 export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const local = !!p.state;
   const shown = p.state === 'waiting' && !p.offline ? 'sending' : p.state;
-  const time = shown && shown !== 'sent' ? STATE_WORD[shown] : spaceTime(p.createdAt);
+  // A voice note waiting offline says so in its card (GOAL 10a), so its header carries no word.
+  const time = shown === 'waiting' && p.voice ? '' : shown && shown !== 'sent' ? STATE_WORD[shown] : spaceTime(p.createdAt);
   const initial = p.name.trim().charAt(0).toUpperCase();
   const isOwn = !!p.viewerUserId && p.authorId === p.viewerUserId;
   const tile: Tile = p.isCoach ? { bg: fp.deep, fg: fp.gold } : tileFor(p.authorId);
   // Name, chip and time grow (large text) or wrap: then the body starts below them, not tucked up.
   const [wrapped, setWrapped] = useState(false);
+  // FR-871R6 (m#879 Opus B4 / Sol B879-4): the report sheet shows what is reported (GOAL B-06a), and a report stays
+  // done for this viewer (per account, across restarts: the voice unit's store, which keeps ids only). A reported
+  // voice note folds (B-06b); a reported text keeps its place (a text fold needs words from the owner).
+  const reportedIds = useReportedVoiceNotes();
+  const reportId = p.voice ? p.voice.id : p.id;
+  const reported = reportedIds.has(reportId);
   const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
+  const noun = p.voice ? 'voice note' : 'message';
+  const confirmDiscard = () => Alert.alert(`Delete this ${noun}?`, undefined, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: p.onDiscard },
+  ]);
   return (
     <View style={s.row} testID={`space-chat-row-${p.id}`}>
       <View style={s.head}>
@@ -113,10 +110,19 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
         <View style={s.who} accessible accessibilityLabel={label} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 24)}>
           <Text style={s.name}>{p.name}</Text>
           {p.isCoach ? <Text style={s.mark}>Coach</Text> : null}
-          {shown === 'waiting' ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
+          {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
         </View>
-        {local ? null : (
+        {/* FR-871R6 (m#879 Opus B3 / Sol B879-3): no Delete while a row reads Sending…: its send cannot be called back.
+            FR-871R7 (Sol B879-3): nor once the server took it (sent, the list not refreshed yet): it is on the server for
+            everyone, so a Delete here would only hide it on this phone. The server row brings the real Delete. */}
+        {local && (shown === 'sending' || shown === 'sent') ? (
+          <View style={s.more} testID={`space-chat-local-busy-${p.id}`} />
+        ) : local ? (
+          <TouchableOpacity onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel={`Delete this ${noun}`} hitSlop={8} style={s.more} testID={`space-chat-local-menu-${p.id}`}>
+            <Ionicons name="ellipsis-horizontal" size={18} color={SMALL_GREY} />
+          </TouchableOpacity>
+        ) : (
           <SafetyMenu
             targetType="message"
             targetId={p.id}
@@ -124,19 +130,22 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             authorName={p.name}
             viewerUserId={p.viewerUserId}
             viewerCoachId={p.isCoach && !isOwn ? p.authorId : p.viewerCoachId}
-            contentNoun="message"
-            onDelete={isOwn && !p.voice ? p.onDelete : undefined}
+            contentNoun={p.voice ? 'voice note' : 'message'}
+            context={{ name: p.name, detail: p.voice ? `voice note · ${formatDuration(p.voice.duration_ms)}` : (p.body ?? '') }}
+            reported={reported}
+            onReported={() => markVoiceNoteReported(reportId)}
+            onDelete={isOwn ? p.onDelete : undefined}
             onBlocked={p.onBlocked}
             testID={`space-chat-menu-${p.id}`}
           />
         )}
       </View>
       <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
-        <MessageBody {...p} />
+        <MessageBody {...p} folded={reported && !local} />
         {p.state === 'failed' && p.rejected ? (
           <Text style={s.reason} testID={`space-chat-rejected-${p.id}`}>{REJECTED_WORDS.message}</Text>
         ) : null}
-        {p.state === 'failed' ? (
+        {p.state === 'failed' && !p.voice ? (
           <View style={s.actions}>
             {p.rejected ? null : (
               <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
@@ -205,6 +214,7 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },
   again: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.button, backgroundColor: fp.forest },
   againText: { ...typography.bodyMd, color: fp.onDeep },
+  more: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   discard: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.sm, justifyContent: 'center' },
   discardText: { ...typography.bodyMd, color: SMALL_GREY },
   reason: { ...typography.bodySmall, color: SMALL_GREY, marginTop: spacing.xs },
