@@ -4,7 +4,8 @@
  * default); with the flag off SpaceTree and the coach space list open today's screens.
  *   - Header (mockup VOICE-B 05b): the space list on the left (members: the space drawer; the coach: the coach's space
  *     list), `# name` and the member count, and the info button: the coach's opens the space's page (members, invites,
- *     removals); a member's opens a read-only sheet with the space's name and member count (FR-871R6, Opus B1).
+ *     removals); a member's opens a read-only sheet with the space's name, member count, purpose and people
+ *     (SpaceInfoSheet: FR-871R6 Opus B1, FR-871R7 Sol B871-1).
  *   - Rows: Studio rows (SpaceChatRow), day lines (Style B's day format), voice rows when communityVoiceNotes is on.
  *   - Composer: SpaceChatComposer (pill field, slots for SC-M4's "+" and SC-M2's mic), shown only once the server let
  *     this person in on this visit (useServerAnswered: a page restored from the saved cache at a cold start does not
@@ -27,7 +28,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View,
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +37,7 @@ import { useIsFocused, useNavigation, useRoute, type NavigationProp, type ParamL
 import { SpaceListButton } from '../../components/community/SpaceDrawer';
 import SpaceChatComposer from '../../components/community/space-chat/SpaceChatComposer';
 import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
+import SpaceInfoSheet from '../../components/community/space-chat/SpaceInfoSheet';
 import { useSpaceVoiceOutbox } from '../../components/community/space-chat/useSpaceVoiceOutbox';
 import type { VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
 import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
@@ -49,7 +51,7 @@ import { useCommunityCohorts } from '../../hooks/useCommunity';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { featureFlags } from '../../config/featureFlags';
-import { colors, forestPop as fp, neutral, radius, spacing, typography, withAlpha } from '../../theme/tokens';
+import { colors, forestPop as fp, radius, spacing, typography } from '../../theme/tokens';
 
 type Params = { CommunitySpaceChat: { cohortId: string; messageId?: string } };
 type Item =
@@ -328,7 +330,10 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           <Text style={[s.line, lineInset]} testID="space-chat-hint">Only your coach posts here.</Text>
         ) : null}
       </KeyboardAvoidingView>
-      {info && cohort && !coachStack ? <SpaceInfoSheet name={cohort.name} members={members} onClose={() => setInfo(false)} /> : null}
+      {info && cohort && !coachStack ? (
+        <SpaceInfoSheet cohortId={cohortId} name={cohort.name} members={members} description={cohort.description} viewerId={client?.id}
+          people={chat.noAccess ? 'closed' : admitted ? 'open' : 'wait'} offline={!isOnline} onClose={() => setInfo(false)} />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -338,25 +343,6 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
  * member cannot already see in the header. The space's purpose and its people wait for the API (Found, not fixed).
  * A tap on the scrim, the system Back or the screen reader's escape closes it (the space drawer's pattern).
  */
-function SpaceInfoSheet({ name, members, onClose }: { name: string; members: string; onClose: () => void }): React.ReactElement {
-  const insets = useSafeAreaInsets();
-  return (
-    <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
-      <View style={s.scrim}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" testID="space-info-scrim" />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.xl }]} accessibilityViewIsModal onAccessibilityEscape={onClose} testID="space-info-sheet">
-          <View style={s.grab} />
-          <View style={s.titleRow} accessible accessibilityRole="header">
-            <HashGlyph color={SMALL_GREY} />
-            <Text style={s.sheetTitle} numberOfLines={2}>{name}</Text>
-          </View>
-          <Text style={s.sheetSub}>{members}</Text>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 /** Seen: most of the row is on screen, or the row fills most of the screen (one taller than the screen). */
 const VIEWABLE = [{ itemVisiblePercentThreshold: 60 }, { viewAreaCoveragePercentThreshold: 60 }];
 const s = StyleSheet.create({
@@ -381,9 +367,4 @@ const s = StyleSheet.create({
   pillText: { ...typography.bodyMd, color: fp.onDeep },
   line: { ...typography.bodySmall, color: SMALL_GREY, textAlign: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
   // Space info (members): the safety sheet's look (white, 24 top corners, grab), the header's title and count in ink.
-  scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: withAlpha(colors.ink, 0.4) },
-  sheet: { backgroundColor: neutral[0], borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, gap: 2 },
-  grab: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10, backgroundColor: fp.sageLine },
-  sheetTitle: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 19, lineHeight: 24, color: fp.ink, flexShrink: 1 },
-  sheetSub: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: SMALL_GREY },
 });

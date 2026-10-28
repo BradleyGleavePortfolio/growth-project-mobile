@@ -55,6 +55,19 @@ a space picked there replaces the open one, so Back returns Home. Loading is a s
 skeleton; a failed read shows the error with Try again (error tick if it fails again).
 Tests: `CommunityHomeScreen.test.tsx`.
 
+`CommunitySpaceChatScreen.tsx` (SC-M1, `featureFlags.communitySpaceChat`, default off) is
+the space chat: one stream per space, newest at the bottom, with `# name` and the member
+count in the header. The coach's info button opens the space's page. A member's opens
+`components/community/space-chat/SpaceInfoSheet` (FR-871R7): the name, the member count,
+the purpose the coach wrote (the space's `description` on GET /community/cohorts, shown
+only when it has text; backend#1178 adds the field, so it is read as optional) and the
+people in the space from GET /community/cohorts/:cohortId/members, grouped Coach, Team
+and Members with the viewer first as "You". People load 50 at a time (Show more), stay in
+memory only, and are asked for only after the server has let this person in on this
+visit; a 403 or 404 lists no one. Loading is the shared QuietLoading; a failed read is one
+calm line with Try again (the connection line when offline).
+Tests: `CommunitySpaceChatScreen.test.tsx`.
+
 The shell retains Today, Hall, Cohorts, Challenges and Messages behind their
 existing flags, with underlined text segments and real unread counts. Safety and
 coach-gated leaderboard stay visible; Find and Classroom open their existing
