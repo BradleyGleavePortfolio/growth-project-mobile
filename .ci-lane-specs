@@ -1,0 +1,8 @@
+src/hooks/__tests__/useVoice
+src/api/communityVoiceApi
+src/api/__tests__/communityVoiceApi
+src/components/community
+src/screens/community
+src/services/__tests__/accountBinding
+src/navigation/__tests__/communityVoiceFlagOff
+src/__tests__/copyVoice
