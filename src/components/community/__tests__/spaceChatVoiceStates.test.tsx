@@ -151,10 +151,12 @@ describe('SpaceChatRow — a row still on the phone (FR-871R5, m#879 Opus B3 / S
     alert.mockRestore();
   });
 
-  it('FR-871R6 (m#879 Opus B3 / Sol B879-3): sending: no •••, its send cannot be called back; the row keeps its place', async () => {
+  // FR-871R6 (m#879 Opus B3 / Sol B879-3): sending: its send cannot be called back. FR-871R7 (Sol B879-3): sent, the
+  // server took it and the list has not caught up: a Delete here would only hide it on this phone.
+  it.each(['sending', 'sent'] as const)('%s: no •••, nothing that only hides it on this phone; the row keeps its place', async (state) => {
     const r = await render(
       <SpaceChatRow id="l-1" name="Mia" isCoach={false} createdAt="2026-10-26T10:00:00.000Z" body="Hi" authorId="u-1"
-        viewerUserId="u-1" state="sending" offline={false} onRetry={jest.fn()} onDiscard={jest.fn()} />,
+        viewerUserId="u-1" state={state} offline={false} onRetry={jest.fn()} onDiscard={jest.fn()} />,
     );
     expect(r.queryByTestId('space-chat-local-menu-l-1')).toBeNull();
     expect(StyleSheet.flatten(r.getByTestId('space-chat-local-busy-l-1').props.style)).toMatchObject({ minWidth: 44, minHeight: 44 });

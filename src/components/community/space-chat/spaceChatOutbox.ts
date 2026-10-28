@@ -1,9 +1,10 @@
 /**
  * FX-871 (agent 169; Sol B4 and Opus B4 on m#871): the space chat outbox. Texts the viewer sent stay here until the
- * server list carries them: sending, waiting (written offline) or failed (Try again reuses the same Idempotency-Key,
- * Delete drops it). The rows are kept on the device per signed-in user (cacheStorage, so a sign-out wipes them), and the
- * outbox runs from the first space chat or Community Home of the session until sign-out: back online, waiting rows go
- * out one at a time, oldest first, whichever page is open. After an app restart they go out once the outbox starts again.
+ * server list carries them: sending, waiting (written offline), failed (Try again reuses the same Idempotency-Key,
+ * Delete drops it) or sent (the server took it; it stays, with no Delete, until the list carries it). The rows are
+ * kept on the device per signed-in user (cacheStorage, so a sign-out wipes them), and the outbox runs from the first
+ * space chat or Community Home of the session until sign-out: back online, waiting rows go out one at a time, oldest
+ * first, whichever page is open. After an app restart they go out once the outbox starts again.
  * A refusal keeps only its class on the row, never the error (FR-871R6, m#871 Sol B871-2 / Opus B3): `rejected` (422
  * community.content.rejected: the composer takes the text back to rephrase) or `closed` (403 / 404: the page closes).
  */
@@ -143,9 +144,12 @@ export const spaceOutbox = {
     patch(localId, { state: 'waiting', reason: undefined });
     void flush();
   },
-  /** A row already on its way stays (its send cannot be called back; the server list carries it once it lands). */
+  /**
+   * Only a row the server never took leaves (waiting, not sent). One on its way stays (its send cannot be called back),
+   * and so does one the server took (FR-871R7, m#879 Sol B879-3: everyone sees it); the server row's Delete is the real one.
+   */
   discard(localId: string): void {
-    set(rows.filter((r) => r.localId !== localId || r.state === 'sending'));
+    set(rows.filter((r) => r.localId !== localId || r.state === 'sending' || r.state === 'sent'));
   },
   /** A sent row leaves once the server list carries it. */
   settle(serverIds: Set<string>): void {
