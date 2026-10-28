@@ -378,3 +378,29 @@ describe('The spoken row says when the message came', () => {
     );
   });
 });
+
+describe('Acknowledge hands screen-reader focus to its row', () => {
+  it('moves focus to the row as the button goes away', async () => {
+    jest.spyOn(Native, 'findNodeHandle').mockReturnValue(17);
+    const focus = jest
+      .spyOn(Native.AccessibilityInfo, 'setAccessibilityFocus')
+      .mockImplementation(() => undefined);
+    const item = inboxItem();
+    mockOwnedIds.current = new Set([OWN_SPACE]);
+    mockState.inbox = idle({ items: [item], next_cursor: null });
+    const screen = await render(<CoachCommunityInboxScreen />);
+    await fireEvent.press(screen.getByTestId(`coach-community-inbox-mark-acked-${item.id}`));
+    expect(mockMarkAckedMutate).toHaveBeenCalledTimes(1);
+    expect(focus).toHaveBeenCalledWith(17);
+  });
+});
+
+describe('Loading is said once', () => {
+  it('hides the line under the title from screen readers while the inbox loads', async () => {
+    mockState.inbox = { ...idle(undefined), isLoading: true };
+    const screen = await render(<CoachCommunityInboxScreen />);
+    expect(screen.getAllByLabelText('Loading your inbox')).toHaveLength(1);
+    expect(screen.queryByText('Loading your inbox', { includeHiddenElements: false })).toBeNull();
+    expect(screen.getByText('Loading your inbox', { includeHiddenElements: true })).toBeTruthy();
+  });
+});
