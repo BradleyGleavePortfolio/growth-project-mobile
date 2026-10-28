@@ -1078,7 +1078,7 @@ describe('FR-871R7 (m#871 Sol B871-1 / Opus B1): a member\'s Space info: what th
     expect(within(people).getByLabelText('Dana, you')).toBeTruthy();
     expect(StyleSheet.flatten(within(people).getByText('You').props.style)).toMatchObject({ color: '#2C2C2C' }); // graphite, owner #168-13
     // The coach on the space chat's coach tile: deep, with a gold initial.
-    const coachTile = within(people).getByTestId('space-info-person-coach-1').children[0] as { props: { style: unknown } };
+    const coachTile = within(people).getByTestId('space-info-person-coach-1').children[0] as unknown as { props: { style: unknown } };
     expect(StyleSheet.flatten(coachTile.props.style)).toMatchObject({ backgroundColor: fp.deep, borderRadius: 12 });
     expect(within(sheet).queryAllByRole('button')).toHaveLength(0); // no coach controls, nothing to change
     expect(within(sheet).queryByTestId('space-info-alone')).toBeNull();
