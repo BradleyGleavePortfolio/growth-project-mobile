@@ -10,7 +10,11 @@ import React from 'react';
 import * as Native from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { Alert } from 'react-native';
-import type { CoachEmptyStateSurfaceKey } from '../../../api/coachCommunityApi';
+import {
+  CoachCommunityApiError,
+  type CoachEmptyStateSurfaceKey,
+} from '../../../api/coachCommunityApi';
+import { describeCommunityFailure } from '../../../api/communityErrors';
 
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
@@ -270,5 +274,34 @@ describe('Create takes only a name the server accepts', () => {
   it('stops the name at 120 characters, the server limit', async () => {
     const screen = await openCreate();
     expect(screen.getByTestId('coach-community-cohorts-name-input').props.maxLength).toBe(120);
+  });
+});
+
+describe('A cohort name already used says so', () => {
+  // community-cohort-write.service.ts: a name already used in the coach's
+  // workspace (archived cohorts too) is a 409 'community.cohort.name_taken';
+  // the app said "This changed while you were looking at it."
+  const NAME_TAKEN = 'You already used this name for a cohort. Choose a different name.';
+  const refusal = {
+    isAxiosError: true,
+    response: { status: 409, data: { error: 'conflict', code: 'community.cohort.name_taken' } },
+  };
+
+  it('maps community.cohort.name_taken to its own words', () => {
+    expect(describeCommunityFailure(refusal, 'moderate').message).toBe(NAME_TAKEN);
+  });
+
+  it('the Cohorts screen shows those words when Create is refused', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockCreateMutate.mockImplementation(
+      (_vars: unknown, opts?: { onError?: (e: unknown) => void }) =>
+        opts?.onError?.(new CoachCommunityApiError('conflict', 409, 'refused', refusal)),
+    );
+    mockState.cohorts = idle([cohort()]);
+    const screen = await render(<CoachCommunityCohortsScreen />);
+    await fireEvent.press(screen.getByTestId('coach-community-cohorts-fab'));
+    await fireEvent.changeText(screen.getByTestId('coach-community-cohorts-name-input'), 'Spring block');
+    await fireEvent.press(screen.getByTestId('coach-community-cohorts-modal-submit'));
+    expect(alert).toHaveBeenCalledWith('Action not applied', NAME_TAKEN);
   });
 });
