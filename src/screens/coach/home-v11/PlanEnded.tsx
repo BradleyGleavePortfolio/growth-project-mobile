@@ -16,7 +16,7 @@ import { QuietError, loadFailureMessage } from '../../../ui/states/QuietStates';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { openInboxChat } from '../../../navigation/coachInbox';
 import type { DraftAsk } from './DraftSheets';
-import { SEMI, useCardStyles } from './HomeParts';
+import { SEMI, styleA, useCardStyles } from './HomeParts';
 import { RomanMark } from './RomanMark';
 import {
   groupPlanEnded, homeLabel, homeParts, initialsOf, messagedLine, planEndedAsk, planEndedTitle, rowLine, rowParts,
@@ -40,7 +40,7 @@ export function PlanEndedHomeRow({ page, onOpen }: { page: PlanEndedPage; onOpen
       <View style={[hs.row, hs.rowQuiet]} accessible accessibilityLabel={label} testID="home-plan-ended-none">
         <Ionicons name="refresh" size={24} color={forestPop.onDeepMuted} />
         <View style={hs.grow}>
-          <Text style={hs.title}>{planEndedTitle(0)}</Text>
+          <Text style={[hs.title, hs.titleQuiet]}>{planEndedTitle(0)}</Text>
           <Text style={hs.line}>Clients whose plan ended show here, newest first.</Text>
         </View>
       </View>
@@ -65,7 +65,7 @@ export function PlanEndedHomeRow({ page, onOpen }: { page: PlanEndedPage; onOpen
           </View>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={forestPop.onDeepMuted} />
+      <Ionicons name="chevron-forward" size={20} color={forestPop.onDeepMuted} />
     </Pressable>
   );
 }
@@ -83,10 +83,15 @@ interface ListProps {
   covered?: boolean;
 }
 
-/** K1 and K2: Today, Yesterday, Earlier this week, each with its count; one row open at a time. */
+/**
+ * K1 and K2: Today, Yesterday, Earlier this week, each with its count; one row open at a time. RENEWAL3's scroll model
+ * (r3.py `pe_page`, r2b.py `.lsec`): only the status band stays put; the masthead scrolls with the list, and each date
+ * heading sticks under the band while its rows pass beneath it (FX5-859, LS B1).
+ */
 export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk, covered = false }: ListProps) {
   const { colors, semanticColors: sc, colorScheme } = useTheme();
   const cs = useCardStyles();
+  const light = colorScheme !== 'dark'; // RENEWAL3's Style A values are light-scheme values; a dark scheme keeps the theme's
   const { top, bottom } = useScreenInsets();
   const { width } = useWindowDimensions();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -125,105 +130,129 @@ export function PlanEndedList({ page, loading, error, onReload, onClose, onAsk, 
     openInboxChat(navigation, r.client_id, r.name);
     onClose(); // the chat is in Messages; nothing stays open behind it
   };
-  const body = (
-    <>
-      {error ? <QuietError layout="inline" message={loadFailureMessage(error, 'This list')} onRetry={onReload} testID="plan-ended-error" /> : null}
-      {groups.length === 0 ? <Text style={[cs.muted, ls.empty]}>Clients whose plan ended show here, newest first.</Text> : null}
-      {groups.map((g) => (
-        <View key={g.key} testID={`plan-ended-${g.key}`}>
-          <View style={ls.section}>
-            <Text style={[cs.section, ls.sectionText]} accessibilityRole="header" accessibilityLabel={`${g.label}, ${g.rows.length}`}>{g.label.toUpperCase()}</Text>
-            <View style={ls.badge} importantForAccessibility="no-hide-descendants"><Text style={ls.badgeText} maxFontSizeMultiplier={1.2}>{g.rows.length}</Text></View>
-          </View>
-          <View style={[cs.card, ls.flush, colorScheme === 'light' && ls.cardLight]} testID={`plan-ended-${g.key}-card`}>
-            {g.rows.map((r, i) => {
-              const open = openId === r.client_id;
-              const messaged = r.last_coach_message_at ? messagedLine(r.last_coach_message_at, page.time_zone) : null;
-              return (
-                <View key={r.client_id} style={[i > 0 && cs.rowLine, open && { backgroundColor: sc.bgPrimary }]}>
-                  <Pressable
-                    style={({ pressed }) => [cs.row, ls.row, pressed && ls.pressed]}
-                    onPress={() => { void HapticService.selection(); setOpenId(open ? null : r.client_id); }}
-                    accessibilityRole="button" accessibilityState={{ expanded: open }}
-                    accessibilityLabel={[r.name, rowLine(r), messaged].filter(Boolean).join('. ')} testID={`plan-ended-row-${r.client_id}`}
-                  >
-                    <View style={ls.mono}><Text style={ls.monoText} maxFontSizeMultiplier={1.2}>{initialsOf(r.name)}</Text></View>
-                    <View style={cs.rowText}>
-                      <Text style={[ls.name, { color: colors.textPrimary }]}>{r.name}</Text>
-                      <KeepTail parts={rowParts(r)} style={[ls.line, { color: colors.textMuted }]} testID={`plan-ended-line-${r.client_id}`} />
-                      {messaged ? (
-                        <View style={ls.messaged}>
-                          <Ionicons name="checkmark" size={14} color={colors.success} />
-                          <Text style={[ls.messagedText, { color: colors.success }]}>{messaged}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Ionicons name={open ? 'close' : 'chevron-forward'} size={open ? 18 : 20} color={colors.textMuted} />
-                  </Pressable>
-                  {open ? (
-                    <View style={ls.actions}>
-                      <Pressable
-                        style={({ pressed }) => [ls.button, ls.ask, pressed && ls.pressed]} onPress={() => { void HapticService.softImpact(); onAsk(planEndedAsk(r)); }}
-                        accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${r.name}`} testID="plan-ended-ask"
-                      >
-                        <RomanMark />
-                        <Text style={[ls.buttonText, { color: forestPop.onDeep }]}>Ask Roman to write</Text>
-                      </Pressable>
-                      <Pressable
-                        style={({ pressed }) => [ls.button, ls.message, { borderColor: colors.textPrimary }, pressed && ls.pressed]} onPress={() => message(r)}
-                        accessibilityRole="button" accessibilityLabel={`Message ${r.name}`} testID="plan-ended-message"
-                      >
-                        <Text style={[ls.buttonText, { color: colors.textPrimary }]}>Message</Text>
-                      </Pressable>
+  // RENEWAL3's tones on the white card (r2a.py `.nm`, `.la`, `.mut`, `.btn.out`): Style A's ink and chevron grey, and the
+  // small line in graphite (owner #168-13); a dark scheme keeps the theme's (FX5-859, LO B2, LS B2).
+  const ink = light ? styleA.ink : colors.textPrimary;
+  const lineColor = { color: light ? styleA.grey : colors.textMuted };
+  const chevron = light ? styleA.inkMuted : colors.textMuted;
+  const messageLook = light ? ls.messageLight : { borderColor: colors.textPrimary };
+  const messageInk = light ? forestPop.forest : colors.textPrimary;
+
+  // The scroll's direct children, flat, so each date heading can stick (ScrollView `stickyHeaderIndices`): the masthead,
+  // then each heading and its card. No child is null, so native and web count the same indices.
+  const items: React.ReactElement[] = [(
+    <View key="head" style={ls.head} testID="plan-ended-head">
+      <View style={ls.headRow}>
+        <Pressable onPress={() => close.current()} hitSlop={8} style={ls.back} accessibilityRole="button" accessibilityLabel="Back" testID="plan-ended-back">
+          <Ionicons name="chevron-back" size={28} color={styleA.onDeep} />
+        </Pressable>
+        <Text style={ls.order} maxFontSizeMultiplier={1.3}>NEWEST FIRST</Text>
+      </View>
+      <Text style={ls.title} accessibilityRole="header">{planEndedTitle(page.total)}</Text>
+    </View>
+  )];
+  if (error) {
+    items.push(<View key="error" style={ls.errorBox}><QuietError layout="inline" message={loadFailureMessage(error, 'This list')} onRetry={onReload} testID="plan-ended-error" /></View>);
+  }
+  if (groups.length === 0) items.push(<Text key="empty" style={[cs.muted, ls.empty, ls.gutter]}>Clients whose plan ended show here, newest first.</Text>);
+  const sticky: number[] = [];
+  for (const g of groups) {
+    sticky.push(items.length);
+    items.push(
+      <View key={`${g.key}-head`} style={[ls.section, { backgroundColor: sc.bgPrimary }]} testID={`plan-ended-${g.key}`}>
+        <Text style={[cs.section, ls.sectionText]} accessibilityRole="header" accessibilityLabel={`${g.label}, ${g.rows.length}`}>{g.label.toUpperCase()}</Text>
+        <View style={ls.badge} importantForAccessibility="no-hide-descendants"><Text style={ls.badgeText} maxFontSizeMultiplier={1.2}>{g.rows.length}</Text></View>
+      </View>,
+      <View key={`${g.key}-card`} style={[cs.card, ls.flush, light && ls.cardLight]} testID={`plan-ended-${g.key}-card`}>
+        {g.rows.map((r, i) => {
+          const open = openId === r.client_id;
+          const messaged = r.last_coach_message_at ? messagedLine(r.last_coach_message_at, page.time_zone) : null;
+          return (
+            <View key={r.client_id} style={[i > 0 && cs.rowLine, open && { backgroundColor: sc.bgPrimary }]}>
+              <Pressable
+                style={({ pressed }) => [cs.row, ls.row, pressed && ls.pressed]}
+                onPress={() => { void HapticService.selection(); setOpenId(open ? null : r.client_id); }}
+                accessibilityRole="button" accessibilityState={{ expanded: open }}
+                accessibilityLabel={[r.name, rowLine(r), messaged].filter(Boolean).join('. ')} testID={`plan-ended-row-${r.client_id}`}
+              >
+                <View style={ls.mono}><Text style={ls.monoText} maxFontSizeMultiplier={1.2}>{initialsOf(r.name)}</Text></View>
+                <View style={cs.rowText}>
+                  <Text style={[ls.name, { color: ink }]}>{r.name}</Text>
+                  <KeepTail parts={rowParts(r)} style={[ls.line, lineColor]} testID={`plan-ended-line-${r.client_id}`} />
+                  {messaged ? (
+                    <View style={ls.messaged}>
+                      <Ionicons name="checkmark" size={14} color={colors.success} />
+                      <Text style={[ls.messagedText, { color: colors.success }]}>{messaged}</Text>
                     </View>
                   ) : null}
                 </View>
-              );
-            })}
-          </View>
-        </View>
-      ))}
-    </>
-  );
+                <Ionicons name={open ? 'close' : 'chevron-forward'} size={open ? 18 : 20} color={chevron} />
+              </Pressable>
+              {open ? (
+                <View style={ls.actions}>
+                  <Pressable
+                    style={({ pressed }) => [ls.button, ls.ask, pressed && ls.pressed]} onPress={() => { void HapticService.softImpact(); onAsk(planEndedAsk(r)); }}
+                    accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${r.name}`} testID="plan-ended-ask"
+                  >
+                    <RomanMark />
+                    <Text style={[ls.buttonText, ls.askText]}>Ask Roman to write</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [ls.button, ls.message, messageLook, pressed && ls.pressed]} onPress={() => message(r)}
+                    accessibilityRole="button" accessibilityLabel={`Message ${r.name}`} testID="plan-ended-message"
+                  >
+                    <Text style={[ls.buttonText, { color: messageInk }]}>Message</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>,
+    );
+  }
 
   return (
     <Animated.View
       style={[StyleSheet.absoluteFill, { backgroundColor: sc.bgPrimary, transform: [{ translateX: x }] }]} testID="plan-ended-list"
       accessibilityViewIsModal={!covered} // VoiceOver stays in the list; on Android the Home under it hides its content (LO C1)
     >
-      <View style={[ls.head, { paddingTop: top + 4 }]}>
-        <View style={ls.headRow}>
-          <Pressable onPress={() => close.current()} hitSlop={8} style={ls.back} accessibilityRole="button" accessibilityLabel="Back" testID="plan-ended-back">
-            <Ionicons name="chevron-back" size={28} color={forestPop.onDeep} />
-          </Pressable>
-          <Text style={ls.order} maxFontSizeMultiplier={1.3}>NEWEST FIRST</Text>
-        </View>
-        <Text style={ls.title} accessibilityRole="header">{planEndedTitle(page.total)}</Text>
-      </View>
+      <View style={[ls.band, { height: top }]} testID="plan-ended-band" />
       <ScrollView
-        testID="plan-ended-scroll" contentContainerStyle={[ls.page, { paddingBottom: 32 + bottom }]}
+        testID="plan-ended-scroll" stickyHeaderIndices={sticky} contentContainerStyle={{ paddingBottom: 32 + bottom }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onReload} tintColor={sc.accent} />}
       >
-        {body}
+        {items}
       </ScrollView>
     </Animated.View>
   );
 }
 
+/** P1's monograms (r2b.py `.stk span`): a 30 disc with a 2 ring outside it, each 6 over the one before. */
+const DISC = 30;
+const RING = 2;
+
 const hs = StyleSheet.create({
-  // RENEWAL3 P1 (r2b.py `.wbrow`, `.wbt`, `.wbs`): its own metrics, not the Home's shared rows (LS B1).
+  // RENEWAL3 P1 (r2b.py `.wbrow`, `.wbt`, `.wbs`, `.stk`; r3.py:69-71): its own metrics, not the Home's shared rows (LS B1),
+  // on Style A's tile ground with its on-deep tones (FX5-859, LO B2, LS B2).
   row: {
-    minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, paddingVertical: 8, paddingLeft: 12, paddingRight: 10,
-    borderRadius: radius.button, borderLeftWidth: 4, borderLeftColor: forestPop.leaf, backgroundColor: forestPop.forest,
+    minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, paddingVertical: 10, paddingLeft: 12, paddingRight: 10,
+    borderRadius: radius.button, borderLeftWidth: 4, borderLeftColor: forestPop.leaf, backgroundColor: styleA.deep2,
   },
-  rowQuiet: { borderLeftColor: forestPop.brand400 },
+  rowQuiet: { borderLeftColor: styleA.line },
   grow: { flex: 1, minWidth: 0 },
-  title: { fontFamily: SEMI, fontSize: 15, lineHeight: 20, color: forestPop.onDeep },
-  lineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  title: { fontFamily: SEMI, fontSize: 15, lineHeight: 20, color: styleA.onDeep },
+  titleQuiet: { color: forestPop.onDeepMuted }, // P1-0 (r3.py:69 `.wbrow.q .wbt`)
+  lineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   line: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, color: forestPop.onDeepMuted },
   monos: { flexDirection: 'row' },
-  mono: { width: 32, height: 32, borderRadius: 16, backgroundColor: forestPop.leaf, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: forestPop.forest },
-  monoOver: { marginLeft: -6 },
+  // The ring is drawn outside the disc as the GOAL's box-shadow is: the box is 34 and gives 2 back on every side, so
+  // each disc takes 30 and the next sits 6 over it.
+  mono: {
+    width: DISC + 2 * RING, height: DISC + 2 * RING, borderRadius: DISC / 2 + RING, margin: -RING, borderWidth: RING, borderColor: styleA.deep2,
+    backgroundColor: forestPop.leaf, alignItems: 'center', justifyContent: 'center',
+  },
+  monoOver: { marginLeft: -RING - 6 },
   monoText: { fontFamily: SEMI, fontSize: 11, lineHeight: 14, color: forestPop.deep },
   pressed: { opacity: 0.7 },
 });
@@ -231,14 +260,22 @@ const hs = StyleSheet.create({
 // RENEWAL3 K1/K2 (r2a.py `.lh`, `.h1`, `.cnt`, `.pgcard`, `.lr`, `.av`, `.nm`, `.la`, `.msg`, `.acts`, `.btn`): the list's own
 // metrics, not the Home's shared card rows (LS B1).
 const ls = StyleSheet.create({
-  head: { backgroundColor: forestPop.deep, paddingHorizontal: GUTTER, paddingBottom: 18, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
+  // The status band holds the top inset and stays put; the masthead under it scrolls (r2b.py `.sb`, r3.py `pe_page`).
+  band: { backgroundColor: forestPop.deep },
+  head: {
+    backgroundColor: forestPop.deep, paddingTop: 4, paddingHorizontal: GUTTER, paddingBottom: 18, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet,
+  },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
   back: { width: 44, height: 44, justifyContent: 'center', marginLeft: -8 },
   order: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted },
-  title: { ...typography.h1, lineHeight: 38, color: forestPop.onDeep, marginTop: 4 },
-  page: { paddingHorizontal: GUTTER, paddingTop: 8, gap: 8 },
+  title: { ...typography.h1, lineHeight: 38, color: neutral[0], marginTop: 4 }, // r2b.py:58 `.h1` #FFFFFF
+  gutter: { marginHorizontal: GUTTER },
+  errorBox: { marginHorizontal: GUTTER, marginTop: 12 },
   empty: { paddingVertical: 24, textAlign: 'center' },
-  section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, marginBottom: 2 },
+  // A date heading sticks under the status band on the page's own ground, so rows pass beneath it (r2b.py:59 `.lsec`).
+  section: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: GUTTER, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 4,
+  },
   sectionText: { marginTop: 0, marginBottom: 0, flexShrink: 1 },
   badge: { minWidth: 24, borderRadius: radius.chip, paddingHorizontal: 9, paddingVertical: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.deep },
   badgeText: { fontFamily: SEMI, fontSize: 12, lineHeight: 16, color: forestPop.leaf },
@@ -250,13 +287,18 @@ const ls = StyleSheet.create({
   messaged: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   messagedText: { fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, flexShrink: 1 },
   // The shared card pads with paddingVertical/paddingHorizontal (Style A, main de460a24), which a plain `padding: 0`
-  // does not undo; zero both, as the Home's own Clients card does (FX4-859).
-  flush: { paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden', borderRadius: radius.card },
+  // does not undo; zero both, as the Home's own Clients card does (FX4-859). RENEWAL3's `.pgcard` is flat: the shared
+  // card's lift is off here (r2b.py:62; FX5-859, LS B2).
+  flush: {
+    paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden', borderRadius: radius.card, marginHorizontal: GUTTER, shadowOpacity: 0, elevation: 0,
+  },
   cardLight: { backgroundColor: neutral[0] },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 14, paddingBottom: 14 },
   button: { minHeight: 48, flexGrow: 1, borderRadius: radius.button, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   ask: { backgroundColor: forestPop.forest },
+  askText: { color: neutral[0] }, // r2a.py `.btn` #FFFFFF
   message: { borderWidth: 1.5 },
+  messageLight: { backgroundColor: neutral[0], borderColor: forestPop.forest }, // r2a.py `.btn.out`: white, a 1.5 forest edge
   buttonText: { fontFamily: SEMI, fontSize: 15, lineHeight: 20, flexShrink: 1 },
   pressed: { opacity: 0.7 },
 });
