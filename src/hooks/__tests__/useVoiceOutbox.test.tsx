@@ -7,6 +7,7 @@ import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resetVoiceOutbox, useVoiceOutbox } from '../useVoiceOutbox';
 import { authEvents } from '../../utils/authEvents';
+import { CommunityApiError } from '../../api/apiCall';
 import type { VoiceRecordingResult } from '../voiceRecorderPort';
 
 const mockPublish = jest.fn();
@@ -149,3 +150,47 @@ describe('useVoiceOutbox — upload progress (GOAL 03)', () => {
   });
 });
 
+// C-4 (LO-VUX m#848): the bytes are up and the reply to the post is lost (a timeout). Try again posts the
+// same key, which the server answers with the note it already made, so the community never gets two
+// notes; the key is kept on the phone through a restart. A key the server turns down (400: too old, the
+// bytes gone) is dropped, so the next try uploads again.
+describe('useVoiceOutbox — a lost reply never posts twice (C-4)', () => {
+  const KEY = 'u-me/k-1.m4a';
+  const lostReply = (_ws: string, _in: unknown, o: { onUploaded: (k: string) => void }) => {
+    o.onUploaded(KEY);
+    return Promise.reject(new CommunityApiError('network', 0, 'voice note: timed out'));
+  };
+
+  it('Try again, after a restart too, posts the same key and uploads nothing', async () => {
+    mockPublish.mockImplementationOnce(lostReply);
+    const before = await setup();
+    await act(async () => before.result.current.send(REC));
+    await waitFor(() => expect(before.result.current.items[0]?.status).toBe('failed'));
+    await before.unmount();
+    resetVoiceOutbox(true); // a cold start: only what the phone saved is left
+    const after = await setup();
+    await waitFor(() => expect(after.result.current.items[0]?.uploadedKey).toBe(KEY));
+    await act(async () => after.result.current.retry(after.result.current.items[0].id));
+    await waitFor(() => expect(after.result.current.items).toHaveLength(0));
+    expect(mockPublish).toHaveBeenCalledTimes(2);
+    expect(mockPublish).toHaveBeenLastCalledWith('ws-1', expect.anything(), expect.objectContaining({ uploadedKey: KEY }));
+    await after.unmount();
+  });
+
+  it('a key the server turns down is dropped, so the next try uploads again', async () => {
+    mockPublish
+      .mockImplementationOnce(lostReply)
+      .mockRejectedValueOnce(new CommunityApiError('unknown', 400, 'voice note: storage key rejected'));
+    const { result } = await setup();
+    await act(async () => result.current.send(REC));
+    await waitFor(() => expect(result.current.items[0]?.status).toBe('failed'));
+    await act(async () => result.current.retry(result.current.items[0].id));
+    await waitFor(() => expect(mockPublish).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.items[0]?.status).toBe('failed'));
+    expect(result.current.items[0].uploadedKey).toBeUndefined();
+    await act(async () => result.current.retry(result.current.items[0].id));
+    await waitFor(() => expect(result.current.items).toHaveLength(0));
+    expect(mockPublish.mock.calls[1][2]).toMatchObject({ uploadedKey: KEY });
+    expect(mockPublish.mock.calls[2][2].uploadedKey).toBeUndefined();
+  });
+});
