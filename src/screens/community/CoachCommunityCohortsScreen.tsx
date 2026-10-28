@@ -4,21 +4,17 @@
  *
  * Features:
  *   - Pull-to-refresh on the list.
- *   - An in-flow "New cohort" button (K2: no floating buttons) opens a
- *     create-cohort modal; submitting a
+ *   - An in-flow "New cohort" button (K2) opens a create-cohort modal; submitting a
  *     non-empty name fires an optimistic create (provisional row at the top of
  *     the list) that reconciles with the server row on success.
  *   - Tapping a row routes into CoachCommunityCohortDetail.
  *
- * K2 Style B (#172-10, the area's newest GOAL, as the inbox): bone page, a
- * serif page title, warm cream row cards with filled serif monograms, 24pt
- * gutters. THREE distinct branches (UX P0.2): skeleton cards while loading; an
- * honest inline error card on failure (never a calm/empty masquerade; the
- * card can be pulled, so "Pull to retry" is true, and has a Try again button);
- * and — on a genuinely empty cohort list — the operator-locked Roman-voiced
- * empty state whose copy + crop come from the backend voice policy (face +
- * voice contract). A CompletionToast confirms a successful create (G11).
- * Touch targets are >= 44pt.
+ * K2 Style B (#172-10, as the inbox). THREE distinct branches (UX P0.2): skeleton cards; an honest
+ * inline error card on failure (never a calm/empty masquerade); and — on a
+ * genuinely empty cohort list — the operator-locked Roman-voiced empty state
+ * whose copy + crop come from the backend voice policy (face + voice
+ * contract). A CompletionToast confirms a successful create (G11). Touch
+ * targets are >= 44pt.
  */
 import React, { useCallback, useState } from 'react';
 import {
@@ -28,7 +24,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  ActivityIndicator,
   RefreshControl,
   Modal,
   ScrollView,
@@ -49,22 +44,13 @@ import {
 } from '../../hooks/useCoachCommunity';
 import type { CoachCohort } from '../../api/coachCommunityApi';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
-
-/** Up to two initials for a cohort's filled monogram (as the inbox's rows). */
-function initialsOf(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('');
-}
+import { InboxNoticeCard, initialsOf, k2Styles } from './CoachCommunityInboxScreen';
 
 /** The serif page title (K2): the navigation bar above it stays empty. */
 function CohortsTitle(): React.ReactElement {
   return (
-    <View style={styles.titleBlock}>
-      <Text accessibilityRole="header" style={styles.title}>
+    <View style={k2Styles.titleBlock}>
+      <Text accessibilityRole="header" style={k2Styles.title}>
         Cohorts
       </Text>
     </View>
@@ -117,11 +103,11 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
         style={styles.row}
       >
         <View
-          style={styles.monogram}
+          style={k2Styles.monogram}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
-          <Text style={styles.monogramText} allowFontScaling={false}>
+          <Text style={k2Styles.monogramText} allowFontScaling={false}>
             {initialsOf(item.name)}
           </Text>
         </View>
@@ -141,13 +127,13 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
 
   if (cohorts.isLoading) {
     return (
-      <View style={styles.page} testID="coach-community-cohorts-screen">
+      <View style={k2Styles.page} testID="coach-community-cohorts-screen">
         <CohortsTitle />
         <View
           accessible
           accessibilityLabel="Loading your cohorts"
           testID="coach-community-cohorts-loading"
-          style={styles.skeletonList}
+          style={k2Styles.skeletonList}
         >
           {[0, 1, 2].map((n) => (
             <View key={n} style={styles.skeletonCard} />
@@ -158,7 +144,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
   }
 
   return (
-    <View style={styles.page} testID="coach-community-cohorts-screen">
+    <View style={k2Styles.page} testID="coach-community-cohorts-screen">
       <CohortsTitle />
       <HapticPressable
         intent="medium"
@@ -183,37 +169,19 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
             />
           }
         >
-          <View style={styles.noticeCard} testID="coach-community-cohorts-error">
-            <Text accessibilityRole="alert" style={styles.noticeText}>
-              Could not load your cohorts. Pull to retry.
-            </Text>
-            <HapticPressable
-              intent="light"
-              onPress={() => cohorts.refetch()}
-              disabled={cohorts.isRefetching}
-              accessibilityRole="button"
-              accessibilityLabel="Try again"
-              accessibilityState={{
-                disabled: cohorts.isRefetching,
-                busy: cohorts.isRefetching,
-              }}
-              testID="coach-community-cohorts-error-retry"
-              style={styles.noticeButton}
-            >
-              {cohorts.isRefetching ? (
-                <ActivityIndicator color={colors.forest} />
-              ) : (
-                <Text style={styles.noticeButtonLabel}>Try again</Text>
-              )}
-            </HapticPressable>
-          </View>
+          <InboxNoticeCard
+            message="Could not load your cohorts. Pull to retry."
+            onRetry={() => cohorts.refetch()}
+            retrying={cohorts.isRefetching}
+            testID="coach-community-cohorts-error"
+            flush
+          />
         </ScrollView>
       ) : isEmpty ? (
-        // Roman's words say "Pull to retry" when they fail to load: the pull
-        // retries them and the list.
+        // Roman's words say "Pull to retry" when they fail: the pull retries them.
         <ScrollView
           testID="coach-community-cohorts-empty-scroll"
-          contentContainerStyle={styles.emptyScroll}
+          contentContainerStyle={k2Styles.emptyScroll}
           refreshControl={
             <RefreshControl
               refreshing={cohorts.isRefetching}
@@ -326,21 +294,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
   );
 }
 
-// K2 Style B, as the inbox: bone page (#166-2), cream cards, forest accent,
-// ink text, graphite small text (#168-13), 24pt gutters, semantic radii.
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.bone },
-  titleBlock: {
-    paddingHorizontal: layout.gutter,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  title: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 36,
-    lineHeight: 46,
-    color: colors.ink,
-  },
   listContent: {
     paddingHorizontal: layout.gutter,
     paddingTop: spacing.xs,
@@ -355,20 +309,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     backgroundColor: colors.cream,
     minHeight: 64,
-  },
-  monogram: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.chip,
-    backgroundColor: colors.forest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monogramText: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18,
-    lineHeight: 23,
-    color: colors.bone,
   },
   rowBody: {
     flex: 1,
@@ -386,44 +326,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.graphite,
   },
-  skeletonList: { paddingHorizontal: layout.gutter, gap: spacing.sm },
   skeletonCard: {
     height: 76,
     borderRadius: radius.card,
     backgroundColor: colors.cream,
   },
   noticeScroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xs },
-  emptyScroll: { flexGrow: 1 },
-  noticeCard: {
-    backgroundColor: colors.cream,
-    borderRadius: radius.card,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  // The inbox's inline card (GOAL B error frame): ink line, outlined forest
-  // Try again across the card, so the page keeps one filled button.
-  noticeText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-    lineHeight: 24,
-    color: colors.ink,
-  },
-  noticeButton: {
-    minHeight: 48,
-    borderRadius: radius.button,
-    borderWidth: 1.5,
-    borderColor: colors.forest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  noticeButtonLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
-    lineHeight: 22,
-    color: colors.forest,
-  },
-  // K2 has no floating buttons: the main action sits in the page flow.
   primaryButton: {
     marginHorizontal: layout.gutter,
     marginBottom: spacing.md,

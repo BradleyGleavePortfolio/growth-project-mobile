@@ -7,16 +7,11 @@
  * the inbox when the coach replies in that space (the server stamps
  * `coach_replied_at`, and the inbox lists only unanswered items).
  *
- * Styled to K2 Style B (round 2 restyle): bone page, serif page title and
- * date line, warm cream row cards, filled serif-monogram avatars, clock times,
- * skeleton loading and a calm inline card for errors. Branches (UX P0.2):
- * skeleton while loading; an honest error card when nothing has loaded (a
- * failed refresh keeps the rows already shown); an offline card when the phone
- * is offline (the app's network hook) with nothing cached; and — on a
- * genuinely empty inbox — the K2 dark caught-up page: Roman's face in a gold
- * ring above his line, whose copy + crop come from the backend voice policy,
- * and a way back to Community. Rows from blocked people never show. Touch
- * targets are >= 44pt; page gutters are 24pt (layout.gutter).
+ * K2 Style B. Branches (UX P0.2): skeleton while loading; an honest error card
+ * when nothing has loaded; an offline card when offline with nothing cached;
+ * and — on a genuinely empty inbox — the dark caught-up page (Roman's face in
+ * his gold ring above his line, from the voice policy). Rows from blocked
+ * people never show. Touch targets are >= 44pt; gutters are 24pt.
  */
 import React, {
   useCallback,
@@ -127,8 +122,7 @@ function InboxTriageBanner({
     />
   );
   if (!clearInbox) return card;
-  // A clear inbox stays one calm page (K2 B_caught_up): the card shows there
-  // only when the triage has items, never its empty, loading or error card.
+  // A clear inbox shows the triage card only when it has items (K2 B_caught_up).
   return status === 'ready' ? <View style={styles.triageHeader}>{card}</View> : null;
 }
 
@@ -188,10 +182,8 @@ export default function CoachCommunityInboxScreen({
     showToast('Acknowledged.');
   }, [showToast]);
 
-  // Owner rule: a blocked person disappears from the inbox at once. Rows from
-  // anyone in the blocked list are filtered here (defence in depth next to the
-  // server filter). When the list shrinks (an unblock), refetch so rows the
-  // server dropped come back.
+  // Owner rule: a blocked person disappears from the inbox at once (next to the
+  // server filter); an unblock refetches so their rows come back.
   const blocked = useBlockedUsersStore((s) => s.blocked);
   const blockedIds = useMemo(() => new Set(blocked.map((b) => b.id)), [blocked]);
   const blockedCount = blocked.length;
@@ -211,12 +203,10 @@ export default function CoachCommunityInboxScreen({
     [inbox.data?.items, blockedIds],
   );
   const hasItems = items.length > 0;
-  // Offline: the phone's own network state (NetInfo), or react-query pausing
-  // a fetch while it thinks the phone is offline.
+  // Offline: NetInfo, or react-query pausing a fetch while it thinks so.
   const offline = inbox.fetchStatus === 'paused' || !isEffectivelyOnline(network);
 
-  // K2: the caught-up page is dark, so the bar above it turns forest with a
-  // bone back arrow; every other state keeps the bone bar.
+  // K2: the dark caught-up page gets a forest bar; every other state keeps bone.
   const caughtUp =
     !hasItems &&
     !offline &&
@@ -283,8 +273,7 @@ export default function CoachCommunityInboxScreen({
     );
   }
 
-  // A failed refetch or next page keeps the rows already shown; the full error
-  // shows only when there is nothing to show.
+  // A failed refetch keeps the rows shown; the full error only when there are none.
   if (inbox.isError && !hasItems) {
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
@@ -300,8 +289,7 @@ export default function CoachCommunityInboxScreen({
   }
 
   if (!hasItems) {
-    // The empty inbox pulls to refresh, as the list does. When Roman's words
-    // failed to load (their card says "Pull to retry"), the pull retries them.
+    // The empty inbox pulls to refresh; it also retries Roman's words if they failed.
     const onEmptyRefresh = (): void => {
       void inbox.refetch();
       if (emptyState.status === 'error') emptyState.retry();
@@ -318,8 +306,7 @@ export default function CoachCommunityInboxScreen({
         />
       );
     }
-    // The voice policy is still loading or failed: the light page, never
-    // Roman's words without his face.
+    // Policy loading or failed: the light page (never Roman's words without his face).
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
         <ScrollView
@@ -452,10 +439,8 @@ function InboxTitle({
 }
 
 /**
- * K2 closure (DESIGN_TRAINING 7.7): the dark caught-up page. Roman's face
- * (crop from the voice policy) sits in his gold ring above his line, set large
- * in the serif — his voice is never shown without his face. A cream button
- * goes back to Community, the only way into the inbox.
+ * K2 closure (DESIGN_TRAINING 7.7): Roman's face (voice-policy crop) in his gold
+ * ring above his serif line, and a cream button back to Community.
  */
 function InboxCaughtUp({
   payload,
@@ -513,7 +498,7 @@ function InboxCaughtUp({
 }
 
 /** K2 inline card: a calm line and, when there is one, a "Try again" button. */
-function InboxNoticeCard({
+export function InboxNoticeCard({
   message,
   onRetry,
   retrying,
@@ -556,7 +541,8 @@ function InboxNoticeCard({
   );
 }
 
-function initialsOf(name: string): string {
+/** Up to two initials for a filled serif monogram (K2). */
+export function initialsOf(name: string): string {
   return name
     .split(/\s+/)
     .filter(Boolean)
@@ -915,8 +901,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  // K2 caught-up page: forest page, Roman's face in his gold ring, his line
-  // large in the serif (bone), a cream button at the foot.
+  // K2 caught-up page: forest, Roman in his gold ring, his serif line, a cream button.
   caughtUpPage: {
     flex: 1,
     backgroundColor: colors.forest,
@@ -961,3 +946,6 @@ const styles = StyleSheet.create({
     color: colors.forest,
   },
 });
+
+// Cohorts and a cohort draw the same K2 page, title, monogram and card.
+export { styles as k2Styles };

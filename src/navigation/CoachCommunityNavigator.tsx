@@ -90,8 +90,7 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
       <CoachCommunityStack.Screen
         name="CoachCommunityInbox"
         component={CoachCommunityInboxScreen}
-        // K2: the page draws its own serif title and date line, so the bar
-        // keeps only the back control and blends into the bone page.
+        // K2: the page draws its serif title; the bar keeps only the back control.
         options={{
           title: 'Inbox',
           headerTitle: '',

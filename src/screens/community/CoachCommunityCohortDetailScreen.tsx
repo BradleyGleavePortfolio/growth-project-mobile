@@ -13,13 +13,10 @@
  *     §2.3 — no one-tap destructive actions); confirming fires an optimistic
  *     remove with rollback.
  *
- * K2 Style B (#172-10, as the inbox): bone page, the cohort's name as a serif
- * page title, warm cream member cards with filled serif monograms, 24pt
- * gutters. THREE distinct branches (UX P0.2): skeleton cards while loading;
- * an honest inline error card on failure (never a calm/empty masquerade); and
- * — on a cohort with no members — the operator-locked Roman-voiced empty state
- * whose copy + crop come from the backend voice policy (face + voice
- * contract).
+ * K2 Style B (#172-10, as the inbox). THREE distinct branches (UX P0.2): skeleton cards; an honest
+ * inline error card on failure (never a calm/empty masquerade); and — on a
+ * cohort with no members — the operator-locked Roman-voiced empty state whose
+ * copy + crop come from the backend voice policy (face + voice contract).
  *
  * Destructive Remove is demoted (UX P1.1): it is NOT a button on every row.
  * Each client row carries an overflow (kebab) affordance that opens a small
@@ -36,7 +33,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  ActivityIndicator,
   Modal,
   Pressable,
   RefreshControl,
@@ -67,6 +63,7 @@ import {
 } from '../../api/coachCommunityApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CoachCommunityRoute } from './coachCommunityNavTypes';
+import { InboxNoticeCard, initialsOf, k2Styles } from './CoachCommunityInboxScreen';
 
 /** An invite or remove that failed: the shared community copy, plus the one roster case it lacks. */
 function alertMemberFailure(err: unknown): void {
@@ -80,16 +77,6 @@ function alertMemberFailure(err: unknown): void {
       ? 'No client of yours has that email. Check it and try again.'
       : f.message,
   );
-}
-
-/** Up to two initials for a member's filled monogram (as the inbox's rows). */
-function initialsOf(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('');
 }
 
 /** Minimal, intentionally permissive email shape check (server is the gate). */
@@ -161,12 +148,12 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         {/* The roster has no photos (avatar_url is always null): K2 filled
             serif monogram, as the inbox's rows. */}
         <View
-          style={styles.monogram}
+          style={k2Styles.monogram}
           testID={`coach-community-member-avatar-${item.user_id}`}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
-          <Text style={styles.monogramText} allowFontScaling={false}>
+          <Text style={k2Styles.monogramText} allowFontScaling={false}>
             {initialsOf(item.name)}
           </Text>
         </View>
@@ -201,7 +188,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
 
   if (detail.isLoading) {
     return (
-      <View style={styles.page} testID="coach-community-cohort-detail-screen">
+      <View style={k2Styles.page} testID="coach-community-cohort-detail-screen">
         <View style={styles.header}>
           <Text accessibilityRole="header" style={styles.headerName}>
             {cohortName}
@@ -211,7 +198,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           accessible
           accessibilityLabel="Loading this cohort"
           testID="coach-community-cohort-detail-loading"
-          style={styles.skeletonList}
+          style={k2Styles.skeletonList}
         >
           {[0, 1, 2].map((n) => (
             <View key={n} style={styles.skeletonCard} />
@@ -222,7 +209,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
   }
 
   return (
-    <View style={styles.page} testID="coach-community-cohort-detail-screen">
+    <View style={k2Styles.page} testID="coach-community-cohort-detail-screen">
       <View style={styles.header}>
         <Text accessibilityRole="header" style={styles.headerName}>
           {cohortName}
@@ -255,37 +242,19 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
             />
           }
         >
-          <View style={styles.noticeCard} testID="coach-community-cohort-detail-error">
-            <Text accessibilityRole="alert" style={styles.noticeText}>
-              Could not load this cohort. Pull back and open it again.
-            </Text>
-            <HapticPressable
-              intent="light"
-              onPress={() => detail.refetch()}
-              disabled={detail.isRefetching}
-              accessibilityRole="button"
-              accessibilityLabel="Try again"
-              accessibilityState={{
-                disabled: detail.isRefetching,
-                busy: detail.isRefetching,
-              }}
-              testID="coach-community-cohort-detail-error-retry"
-              style={styles.noticeButton}
-            >
-              {detail.isRefetching ? (
-                <ActivityIndicator color={colors.forest} />
-              ) : (
-                <Text style={styles.noticeButtonLabel}>Try again</Text>
-              )}
-            </HapticPressable>
-          </View>
+          <InboxNoticeCard
+            message="Could not load this cohort. Pull back and open it again."
+            onRetry={() => detail.refetch()}
+            retrying={detail.isRefetching}
+            testID="coach-community-cohort-detail-error"
+            flush
+          />
         </ScrollView>
       ) : isEmptyMembers ? (
-        // Roman's words say "Pull to retry" when they fail to load: the pull
-        // retries them and the roster.
+        // Roman's words say "Pull to retry" when they fail: the pull retries them.
         <ScrollView
           testID="coach-community-cohort-detail-empty-scroll"
-          contentContainerStyle={styles.emptyScroll}
+          contentContainerStyle={k2Styles.emptyScroll}
           refreshControl={
             <RefreshControl
               refreshing={detail.isRefetching}
@@ -463,8 +432,6 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
   );
 }
 
-// K2 Style B, as the inbox: bone page (#166-2), cream cards, forest accent,
-// ink text, graphite small text (#168-13), 24pt gutters, semantic radii.
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bone },
   header: {
@@ -502,20 +469,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cream,
     minHeight: 64,
   },
-  monogram: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.chip,
-    backgroundColor: colors.forest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monogramText: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18,
-    lineHeight: 23,
-    color: colors.bone,
-  },
   memberBody: {
     flex: 1,
     gap: 2,
@@ -545,43 +498,12 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: colors.ink,
   },
-  skeletonList: { paddingHorizontal: layout.gutter, gap: spacing.sm },
   skeletonCard: {
     height: 72,
     borderRadius: radius.card,
     backgroundColor: colors.cream,
   },
   noticeScroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xs },
-  emptyScroll: { flexGrow: 1 },
-  noticeCard: {
-    backgroundColor: colors.cream,
-    borderRadius: radius.card,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  // The inbox's inline card (GOAL B error frame): ink line, outlined forest
-  // Try again across the card, so the page keeps one filled button.
-  noticeText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-    lineHeight: 24,
-    color: colors.ink,
-  },
-  noticeButton: {
-    minHeight: 48,
-    borderRadius: radius.button,
-    borderWidth: 1.5,
-    borderColor: colors.forest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  noticeButtonLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
-    lineHeight: 22,
-    color: colors.forest,
-  },
   sheetRoot: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -602,7 +524,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
   },
-  // K2 has no floating buttons: the main action sits in the page flow.
   primaryButton: {
     marginHorizontal: layout.gutter,
     marginBottom: spacing.md,
