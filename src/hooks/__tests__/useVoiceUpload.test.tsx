@@ -27,7 +27,7 @@ jest.mock('../../api/communityVoiceApi', () => {
 });
 
 import { communityVoiceApi } from '../../api/communityVoiceApi';
-import { useVoiceUpload } from '../useVoiceUpload';
+import { publishVoiceNote, useVoiceUpload } from '../useVoiceUpload';
 import { voiceKeys } from '../voiceQueryKeys';
 
 const api = jest.mocked(communityVoiceApi);
@@ -180,5 +180,34 @@ describe('useVoiceUpload — cache invalidation', () => {
       await result.current.mutateAsync(goodInput);
     });
     expect(spy).toHaveBeenCalledWith({ queryKey: voiceKeys.feedRoot(WS) });
+  });
+});
+
+// C-4 (LO-VUX m#848): once the bytes are up, a resend only posts the same key again (the server answers a
+// known key with the note it already made), so a lost create reply never makes a second note.
+describe('publishVoiceNote — a resend posts the same key (C-4)', () => {
+  it('tells the key once the bytes are up, before the note is posted', async () => {
+    const readBytes = jest.fn().mockResolvedValue(new ArrayBuffer(8));
+    const onUploaded = jest.fn(() => expect(api.create).not.toHaveBeenCalled());
+    await publishVoiceNote(WS, goodInput, { readBytes, onUploaded });
+    expect(onUploaded).toHaveBeenCalledWith(target.storage_key);
+    expect(api.create).toHaveBeenCalledWith(WS, expect.objectContaining({ storage_key: target.storage_key }));
+  });
+
+  it('with a kept key: no new upload, the same key is posted', async () => {
+    const readBytes = jest.fn().mockResolvedValue(new ArrayBuffer(8));
+    const onUploaded = jest.fn();
+    const note = await publishVoiceNote(WS, goodInput, { readBytes, onUploaded, uploadedKey: 'user-1/kept.m4a' });
+    expect(note).toEqual(createdNote);
+    expect(api.issueUploadUrl).not.toHaveBeenCalled();
+    expect(api.uploadBytes).not.toHaveBeenCalled();
+    expect(readBytes).not.toHaveBeenCalled();
+    expect(onUploaded).not.toHaveBeenCalled();
+    expect(api.create).toHaveBeenCalledWith(WS, {
+      storage_key: 'user-1/kept.m4a',
+      duration_ms: 3000,
+      bytes: 50_000,
+      mime_type: 'audio/mp4',
+    });
   });
 });

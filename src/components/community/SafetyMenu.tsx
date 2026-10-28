@@ -114,7 +114,10 @@ export default function SafetyMenu({
   const [busy, setBusy] = useState(false);
   // Opus R5-B4: what to run once the sheet has finished closing (see afterClose).
   const afterCloseRef = useRef<(() => void) | null>(null);
+  // VUX-B3: whether the sheet is up or still closing (from the tap that opens it to iOS onDismiss).
+  const shownRef = useRef(false);
   const runAfterClose = () => {
+    shownRef.current = false;
     const next = afterCloseRef.current;
     afterCloseRef.current = null;
     next?.();
@@ -140,10 +143,10 @@ export default function SafetyMenu({
     setStep('menu');
   };
 
-  /** Close the sheet, then run `next` once it is gone (iOS: the Modal's onDismiss). */
+  /** Close the sheet, then run `next` once it is gone (iOS: the Modal's onDismiss; at once if it is gone already). */
   const afterClose = (next: () => void) => {
     close();
-    if (Platform.OS === 'ios') afterCloseRef.current = next;
+    if (Platform.OS === 'ios' && shownRef.current) afterCloseRef.current = next;
     else next();
   };
 
@@ -233,7 +236,10 @@ export default function SafetyMenu({
     <>
       <HapticPressable
         intent="light"
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          shownRef.current = true;
+          setOpen(true);
+        }}
         accessibilityRole="button"
         // #175-W: a viewer who can also remove this (the coach, the owner) hears all three actions.
         accessibilityLabel={
