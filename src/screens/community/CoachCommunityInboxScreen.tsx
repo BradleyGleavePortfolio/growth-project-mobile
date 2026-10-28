@@ -572,8 +572,8 @@ export function alertCoachFailure(err: unknown): void {
 }
 
 /**
- * Screen-reader focus to a row, as CreditPackCheckoutScreen moves it: the event
- * goes to the row itself, so no findNodeHandle (gone on the new architecture).
+ * Screen-reader focus to a row, as CreditPackCheckoutScreen moves it: the
+ * event goes to the row itself, with no findNodeHandle lookup.
  */
 function focusRow(node: View | null): void {
   if (Platform.OS === 'web' || node == null) return;

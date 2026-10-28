@@ -384,7 +384,7 @@ describe('The spoken row says when the message came', () => {
 describe('Acknowledge hands screen-reader focus to its row', () => {
   it('moves focus to the row as the button goes away', async () => {
     // The row itself gets the focus event (the call CreditPackCheckoutScreen
-    // uses; it needs no findNodeHandle, so it holds on the new architecture).
+    // uses, with no findNodeHandle lookup).
     const focus = jest
       .spyOn(Native.AccessibilityInfo, 'sendAccessibilityEvent')
       .mockImplementation(() => undefined);
