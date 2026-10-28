@@ -643,6 +643,21 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     );
   });
 
+  it('a failed create says why, in the shared community words (FIN-868R5 LS-4)', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
+    await fireEvent.press(getByTestId('coach-community-cohorts-fab'));
+    await fireEvent.changeText(getByTestId('coach-community-cohorts-name-input'), 'Winter cut');
+    await fireEvent.press(getByTestId('coach-community-cohorts-modal-submit'));
+    const opts = mockCreateMutate.mock.calls[0][1] as { onError?: (e: unknown) => void };
+    await act(async () => opts.onError?.({ isAxiosError: true }));
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Action not applied',
+      'You appear to be offline. Check your connection, then try again.',
+    );
+    alertSpy.mockRestore();
+  });
+
   it('does not create a cohort with an empty name', async () => {
     const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
     await fireEvent.press(getByTestId('coach-community-cohorts-fab'));
@@ -1215,6 +1230,24 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     expect(
       getByTestId('coach-community-inbox-completion-toast'),
     ).toBeTruthy();
+  });
+
+  it('a refused Acknowledge says why; a 409 keeps only its calm inline line (FIN-868R5 LS-4)', async () => {
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    await fireEvent.press(getByTestId(`coach-community-inbox-mark-acked-${MID}`));
+    const opts = mockMarkAckedMutate.mock.calls[0][1] as { onError?: (e: unknown) => void };
+    await act(async () => opts.onError?.({ isAxiosError: true, response: { status: 429 } }));
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Action not applied',
+      'You are doing that a little too often. Wait a minute, then try again.',
+    );
+    mockIsIllegalAckTransition.mockReturnValueOnce(true);
+    await act(async () => opts.onError?.({ isAxiosError: true, response: { status: 409 } }));
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    alertSpy.mockRestore();
   });
 
   it('surfaces an accessible 409 conflict notice when the ack transition is illegal (Code F3)', async () => {
