@@ -21,14 +21,17 @@ import React, {
   useRef,
 } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
   View,
   Text,
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  Platform,
   RefreshControl,
   ScrollView,
+  findNodeHandle,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { describeCommunityFailure } from '../../api/communityErrors';
@@ -562,6 +565,13 @@ export function alertCoachFailure(err: unknown): void {
   Alert.alert(f.title, f.message);
 }
 
+/** Screen-reader focus to a row (RN Web has no findNodeHandle). */
+function focusRow(node: View | null): void {
+  if (Platform.OS === 'web' || node == null) return;
+  const tag = findNodeHandle(node);
+  if (tag != null) AccessibilityInfo.setAccessibilityFocus(tag);
+}
+
 /** "1 member", "3 members": the count words on the Cohorts row and page. */
 export function membersLabel(count: number): string {
   return `${count} ${count === 1 ? 'member' : 'members'}`;
@@ -630,6 +640,7 @@ function InboxRow({
   const breached = ack != null && resolveAckBadgeVisibility(ack).breached;
   const label = buildRowAccessibilityLabel(item, ack);
   const rowTestID = `coach-community-inbox-row-${item.id}`;
+  const mainRef = useRef<View>(null);
 
   const content = (
     <>
@@ -673,6 +684,7 @@ function InboxRow({
         </HapticPressable>
       ) : (
         <View
+          ref={mainRef}
           accessible
           accessibilityLabel={label}
           testID={rowTestID}
@@ -687,6 +699,7 @@ function InboxRow({
           ack={ack}
           onAcknowledged={onAcknowledged}
           canAck={canAck}
+          rowRef={mainRef}
         />
       ) : null}
     </View>
@@ -710,11 +723,13 @@ function CoachAckRow({
   ack,
   onAcknowledged,
   canAck,
+  rowRef,
 }: {
   item: CoachInboxItem;
   ack: AckBadgeInput | undefined;
   onAcknowledged: () => void;
   canAck: boolean;
+  rowRef: React.RefObject<View | null>;
 }): React.ReactElement {
   const { semanticColors } = useTheme();
   const actions = useCoachAckActions(item.id);
@@ -745,15 +760,18 @@ function CoachAckRow({
       {alreadyAcked || !canAck ? null : (
         <HapticPressable
           intent="light"
-          onPress={() =>
+          onPress={() => {
+            // C4: the button goes as soon as it is tapped, so a screen
+            // reader's focus moves to the row instead of the top of the page.
+            focusRow(rowRef.current);
             actions.markAcked.mutate(undefined, {
               onSuccess: onAcknowledged,
               // A 409 keeps its calm inline line below; any other refusal says why.
               onError: (e) => {
                 if (!isIllegalAckTransition(e)) alertCoachFailure(e);
               },
-            })
-          }
+            });
+          }}
           disabled={pending}
           accessibilityRole="button"
           accessibilityLabel={`Acknowledge message from ${item.client_name}`}
