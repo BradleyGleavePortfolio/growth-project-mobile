@@ -1,9 +1,9 @@
 /**
- * VoiceNoteComposer — the v3-3 record→review→send surface, embedded by the
- * community composer screen when the user picks the voice mode. It orchestrates
- * the recorder hook (capture) and the upload hook (the two-hop publish), and
- * composes the smaller presentational pieces (record button, waveform, privacy
- * copy). It owns NO transport logic of its own — it is the glue.
+ * VoiceNoteComposer — the voice notes Style B record sheet body (VOICE-M; owner
+ * "VOICE-PICK-VOICE ; I want style b"), hosted by VoiceRecordSheet and the
+ * composer route. It records and reviews; Send hands the recording to the
+ * outbox (useVoiceOutbox) and the sheet closes, so sending, failed and offline
+ * live on the feed row. It owns NO transport logic of its own.
  *
  * States it renders honestly (no dead controls, no lies about capability):
  *   - unavailable → a calm "voice recording isn't available on this build"
@@ -11,86 +11,95 @@
  *   - denied      → a REAL mic-permission recovery state: a "try again" action,
  *     and when the OS will no longer prompt, an "Open Settings" deep-link
  *     instead of a no-op button (audit req — denial needs real recovery).
- *   - idle        → the privacy disclosure + the record button.
- *   - recording   → the live record/stop button (elapsed + cap).
+ *   - idle        → the sheet starts recording as it opens (GOAL 01b, one tap
+ *     from Record); idle shows only after Try again, with the forest disc.
+ *   - recording   → serif timer, live level bars, elapsed · line · 5:00, stop;
+ *     "{time} left" and one warning tap from 15 s left; stops at 5:00.
  *   - error       → what failed (permission check / start / save), a Try again
  *     that returns to idle, and a support path with the reported reference.
- *   - recorded    → a waveform preview + duration, a "Re-record" reset, and a
- *     "Send" that runs the publish pipeline. A publish failure preserves the
- *     recording so "Send" can be retried without re-recording.
+ *   - recorded    → listen back (the feed's player), "Re-record", "Send".
  *
  * The audience disclosure (VoicePrivacyCopy) renders the REAL target audience
  * (DM recipient / named cohort / community), computed from the props.
  *
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
-import React, { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Linking } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Linking, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
-import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
-import {
-  useVoiceUpload,
-  type VoiceUploadInput,
-} from '../../hooks/useVoiceUpload';
-import type { VoiceRecorderPort } from '../../hooks/voiceRecorderPort';
+import { forestPop as fp, neutral, radius, spacing, typography, voiceFaces, voiceShades } from '../../theme/tokens';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { LIVE_LEVEL_BARS, useVoiceRecorder } from '../../hooks/useVoiceRecorder';
+import type { VoiceRecorderPort, VoiceRecordingResult } from '../../hooks/voiceRecorderPort';
+import type { VoicePlaybackPort } from './voicePlaybackPort';
 import VoiceNoteRecordButton from './VoiceNoteRecordButton';
-import VoiceNoteWaveform from './VoiceNoteWaveform';
+import VoiceNotePlayer from './VoiceNotePlayer';
 import VoicePrivacyCopy, { type VoiceAudienceTarget } from './VoicePrivacyCopy';
 import { formatDuration } from './voiceFormat';
 import { COMMUNITY_SUPPORT_EMAIL } from '../../api/communityErrors';
 
 export interface VoiceNoteComposerProps {
-  /** Workspace the note is published into (null disables Send). */
-  workspaceId: string | null;
-  /** The concrete send target → drives the audience disclosure + routing. */
+  /** The concrete send target → drives the audience disclosure. */
   target: VoiceAudienceTarget;
-  /** Optional cohort id when target.kind === 'cohort'. */
-  cohortId?: string;
-  /** Optional conversation id when target.kind === 'dm'. */
-  conversationId?: string;
-  /** Fired after a note is published, so the screen can pop / confirm. */
-  onPublished?: () => void;
+  /** Send hands the recording to the outbox. */
+  onSend: (recording: VoiceRecordingResult) => void;
+  /** Cancel, Not now and Delete close the sheet. */
+  onClose: () => void;
   /** Inject a recorder port for tests; defaults to the resolved adapter. */
   recorder?: VoiceRecorderPort;
-  /** Inject a byte reader for tests (passed through to the upload hook). */
-  readBytes?: (uri: string) => Promise<ArrayBuffer>;
+  /** Inject a playback port for the listen-back player in tests. */
+  playback?: VoicePlaybackPort;
   testID?: string;
 }
 
+const SHEET_GUTTER = 20;
+const WARN_LEFT_MS = 15_000; // one warning tap and "{time} left" from here
+const HINT_MS = 3_000; // "Records up to 5:00 of audio." for the first seconds
+/** GOAL B-01a: the slots not yet recorded are #E2E6E1 ghost bars 3-10 pt tall, not dots. */
+const GHOST_HEIGHTS = [5, 4, 3, 4, 4, 3, 5, 7, 5, 4, 9, 10, 9, 5, 3, 5, 4, 3, 5, 5, 3, 8, 10, 10, 6, 3, 6, 6, 3, 4];
+
 export default function VoiceNoteComposer({
-  workspaceId,
   target,
-  cohortId,
-  conversationId,
-  onPublished,
+  onSend,
+  onClose,
   recorder,
-  readBytes,
+  playback,
   testID,
 }: VoiceNoteComposerProps): React.ReactElement {
   const { semanticColors } = useTheme();
   const rec = useVoiceRecorder(recorder ? { recorder } : {});
-  const upload = useVoiceUpload(workspaceId, readBytes ? { readBytes } : {});
+  // GOAL .bbtns wraps rather than break a label: when "Re-record" would take two lines (large text on a narrow
+  // phone) the review buttons stack full width. Compared with the one-word Send label, so no font maths.
+  const [stackReview, setStackReview] = useState(false);
+  const reviewLabels = useRef<{ re?: number; send?: number }>({});
+  const onReviewLabel = (k: 're' | 'send') => (e: LayoutChangeEvent) => {
+    reviewLabels.current[k] = e.nativeEvent.layout.height;
+    const { re, send } = reviewLabels.current;
+    if (re && send && re > send * 1.5) setStackReview(true);
+  };
+  const warned = useRef(false);
+  const { start, status } = rec;
+  // One tap from Record (GOAL 01b): the sheet starts recording as it opens. Once per mount, so a
+  // re-render or a later idle (after Try again) never starts a second take on its own.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current) return;
+    autoStarted.current = true;
+    void start();
+  }, [start]);
 
-  const send = useCallback(() => {
-    if (!rec.recording || !workspaceId) return;
-    const input: VoiceUploadInput = {
-      uri: rec.recording.uri,
-      durationMs: rec.recording.durationMs,
-      bytes: rec.recording.bytes,
-      mimeType: rec.recording.mimeType,
-      ...(cohortId ? { cohortId } : {}),
-      ...(conversationId ? { conversationId } : {}),
-    };
-    upload.mutate(input, {
-      onSuccess: () => {
-        rec.reset();
-        onPublished?.();
-      },
-    });
-  }, [cohortId, conversationId, onPublished, rec, upload, workspaceId]);
+  const left = rec.maxDurationMs - rec.elapsedMs;
+  useEffect(() => {
+    if (status !== 'recording') warned.current = false;
+    else if (left <= WARN_LEFT_MS && !warned.current) {
+      warned.current = true;
+      void HapticService.warning();
+    }
+  }, [left, status]);
+
+  const restart = () => { rec.reset(); void start(); };
 
   const recordStatus = useMemo<'idle' | 'recording' | 'stopping'>(() => {
     if (rec.status === 'recording') return 'recording';
@@ -101,20 +110,21 @@ export default function VoiceNoteComposer({
   // ── Unavailable build ───────────────────────────────────────────────────────
   if (rec.status === 'unavailable') {
     return (
-      <View
-        style={styles.notice}
-        accessibilityRole="text"
-        testID={testID ?? 'voice-composer-unavailable'}
-      >
-        <Ionicons
-          name="mic-off-outline"
-          size={22}
-          color={semanticColors.textMuted}
-        />
-        <Text style={[styles.noticeText, { color: semanticColors.textMuted }]}>
-          Voice recording isn’t available on this build yet. You can still send a
-          written note.
-        </Text>
+      <View style={[styles.container, styles.stacked]} testID={testID ?? 'voice-composer-unavailable'}>
+        {/* GOAL 10b: no header; the reason beside a wash circle, then one full-width Close. */}
+        <View style={styles.unavailableRow} accessibilityRole="text">
+          <View style={styles.wash}>
+            <Ionicons name="mic-off-outline" size={24} color={fp.forest} />
+          </View>
+          <Text style={[styles.noticeText, styles.unavailableText]}>
+            Voice recording isn’t available on this build yet. You can still send a
+            written note.
+          </Text>
+        </View>
+        <HapticPressable intent="light" onPress={onClose} accessibilityRole="button" accessibilityLabel="Close"
+          testID="voice-composer-close" style={[styles.primaryAction, styles.outlined]}>
+          <Text style={[styles.primaryLabel, { color: fp.forest }]}>Close</Text>
+        </HapticPressable>
       </View>
     );
   }
@@ -122,20 +132,15 @@ export default function VoiceNoteComposer({
   // ── Mic permission denied — real recovery ───────────────────────────────────
   if (rec.status === 'denied') {
     return (
-      <View
-        style={styles.notice}
-        accessibilityRole="text"
-        testID={testID ?? 'voice-composer-denied'}
-      >
-        <Ionicons
-          name="lock-closed-outline"
-          size={22}
-          color={semanticColors.accentText}
-        />
-        <Text style={[styles.noticeText, { color: semanticColors.textPrimary }]}>
+      <View style={styles.container} testID={testID ?? 'voice-composer-denied'}>
+        <View style={[styles.wash, styles.washLarge]} testID="voice-composer-denied-wash">
+          <Ionicons name="mic-off-outline" size={32} color={fp.forest} />
+        </View>
+        <Text style={[styles.noticeText, styles.centered]} accessibilityRole="text">
           Microphone access is off, so a voice note can’t be recorded. Turn it on
           to record.
         </Text>
+        <View style={styles.deniedActions}>
         <HapticPressable
           intent="medium"
           onPress={() => {
@@ -149,17 +154,17 @@ export default function VoiceNoteComposer({
               : 'Try enabling the microphone again'
           }
           testID="voice-composer-permission-action"
-          style={[
-            styles.secondaryAction,
-            { borderColor: semanticColors.border },
-          ]}
+          style={[styles.primaryAction, styles.filled]}
         >
-          <Text
-            style={[styles.secondaryLabel, { color: semanticColors.accentText }]}
-          >
+          <Text style={[styles.primaryLabel, { color: fp.onDeep }]}>
             {rec.mustOpenSettings ? 'Open Settings' : 'Try again'}
           </Text>
         </HapticPressable>
+        <HapticPressable intent="light" onPress={onClose} accessibilityRole="button" accessibilityLabel="Not now"
+          testID="voice-composer-not-now" style={styles.quiet}>
+          <Text style={[styles.primaryLabel, { color: fp.forest }]}>Not now</Text>
+        </HapticPressable>
+        </View>
       </View>
     );
   }
@@ -178,6 +183,7 @@ export default function VoiceNoteComposer({
         accessibilityRole="text"
         testID={testID ?? 'voice-composer-error'}
       >
+        <SheetHeader onCancel={onClose} />
         <Ionicons name="alert-circle-outline" size={22} color={semanticColors.accentText} />
         <Text style={[styles.noticeText, { color: semanticColors.textPrimary }]}>
           {what} Try again. If it keeps happening, close other apps that use the
@@ -190,9 +196,9 @@ export default function VoiceNoteComposer({
           accessibilityRole="button"
           accessibilityLabel="Try recording again"
           testID="voice-composer-error-retry"
-          style={[styles.secondaryAction, { borderColor: semanticColors.border }]}
+          style={styles.secondaryAction}
         >
-          <Text style={[styles.secondaryLabel, { color: semanticColors.accentText }]}>
+          <Text style={styles.secondaryLabel}>
             Try again
           </Text>
         </HapticPressable>
@@ -200,179 +206,227 @@ export default function VoiceNoteComposer({
     );
   }
 
-  // ── Recorded — review + send ────────────────────────────────────────────────
+  // ── Recorded — listen back, Re-record, Send ────────────────────────────────
   if (rec.status === 'recorded' && rec.recording) {
-    const sending = upload.isPending;
-    const failed = upload.isError;
+    const recording = rec.recording;
     return (
       <View style={styles.container} testID={testID ?? 'voice-composer-review'}>
-        <VoicePrivacyCopy target={target} />
-
-        <View
-          style={[
-            styles.previewRow,
-            {
-              backgroundColor: semanticColors.bgSurface,
-              borderColor: semanticColors.border,
-            },
-          ]}
-        >
-          <View style={styles.previewWave}>
-            <VoiceNoteWaveform peaks={rec.recording.peaks} height={32} />
-          </View>
-          <Text
-            style={[styles.previewDuration, { color: semanticColors.textMuted }]}
-            accessibilityLabel={`Recorded ${formatDuration(rec.recording.durationMs)}`}
-            testID="voice-composer-preview-duration"
-          >
-            {formatDuration(rec.recording.durationMs)}
-          </Text>
+        <SheetHeader onCancel={() => { rec.reset(); onClose(); }} discard />
+        <Text style={styles.timer} accessibilityElementsHidden testID="voice-composer-preview-duration">
+          {formatDuration(recording.durationMs)}
+        </Text>
+        <Text style={styles.hint}>Listen back before you send.</Text>
+        <View style={styles.reviewRow}>
+          <VoiceNotePlayer
+            url={recording.uri}
+            durationMs={recording.durationMs}
+            peaks={recording.peaks}
+            tone="bare"
+            {...(playback ? { playback } : {})}
+            testID="voice-composer-listen"
+          />
         </View>
-
-        {failed ? (
-          <Text
-            style={[styles.errorText, { color: semanticColors.accentText }]}
-            accessibilityRole="text"
-            testID="voice-composer-send-error"
-          >
-            That didn’t send. Your recording is safe — try sending again.
-          </Text>
-        ) : null}
-
-        <View style={styles.reviewActions}>
+        <VoicePrivacyCopy target={target} />
+        <View style={[styles.reviewActions, stackReview && styles.reviewStacked]} testID="voice-composer-review-actions">
+          <View style={stackReview ? styles.stackCell : styles.fill}>
           <HapticPressable
             intent="light"
-            onPress={() => rec.reset()}
-            disabled={sending}
+            onPress={restart}
             accessibilityRole="button"
             accessibilityLabel="Discard and record again"
-            accessibilityState={{ disabled: sending }}
             testID="voice-composer-rerecord"
-            style={[
-              styles.secondaryAction,
-              { borderColor: semanticColors.border },
-            ]}
+            style={[styles.primaryAction, styles.outlined]}
           >
-            <Text
-              style={[styles.secondaryLabel, { color: semanticColors.textMuted }]}
-            >
-              Re-record
-            </Text>
+            <Ionicons name="refresh" size={20} color={fp.forest} />
+            <Text style={[styles.primaryLabel, { color: fp.forest }]} onLayout={onReviewLabel('re')}>Re-record</Text>
           </HapticPressable>
-
+          </View>
+          <View style={stackReview ? styles.stackCell : styles.fill}>
           <HapticPressable
-            intent="success"
-            onPress={send}
-            disabled={sending || !workspaceId}
+            intent="light"
+            onPress={() => { onSend(recording); rec.reset(); }}
             accessibilityRole="button"
-            accessibilityLabel={failed ? 'Try sending the voice note again' : 'Send voice note'}
-            accessibilityState={{ disabled: sending || !workspaceId, busy: sending }}
+            accessibilityLabel="Send voice note"
             testID="voice-composer-send"
-            style={[
-              styles.primaryAction,
-              {
-                backgroundColor:
-                  sending || !workspaceId
-                    ? semanticColors.disabledBg
-                    : semanticColors.accent,
-              },
-            ]}
+            style={[styles.primaryAction, styles.filled]}
           >
-            <Text
-              style={[
-                styles.primaryLabel,
-                {
-                  color:
-                    sending || !workspaceId
-                      ? semanticColors.textOnDisabled
-                      : semanticColors.textOnAccent,
-                },
-              ]}
-            >
-              {sending ? 'Sending…' : failed ? 'Try again' : 'Send'}
-            </Text>
+            <Ionicons name="arrow-up" size={20} color={fp.onDeep} />
+            <Text style={[styles.primaryLabel, { color: fp.onDeep }]} onLayout={onReviewLabel('send')}>Send</Text>
           </HapticPressable>
+          </View>
         </View>
       </View>
     );
   }
 
   // ── Idle / recording — capture ──────────────────────────────────────────────
+  const live = recordStatus !== 'idle';
+  const warn = live && left <= WARN_LEFT_MS;
+  const hint = warn
+    ? `${formatDuration(left)} left`
+    : !live || rec.elapsedMs < HINT_MS
+      ? `Records up to ${formatDuration(rec.maxDurationMs)} of audio.`
+      : '';
   return (
     <View style={styles.container} testID={testID ?? 'voice-composer'}>
-      <VoicePrivacyCopy target={target} />
+      {/* Closing unmounts the recorder hook, which releases the microphone. */}
+      <SheetHeader onCancel={onClose} cancelLabel={live ? 'Cancel recording' : 'Cancel'} />
+      <Text style={styles.timer} accessibilityElementsHidden testID="voice-composer-timer">
+        {formatDuration(rec.elapsedMs)}
+      </Text>
+      <Text style={[styles.hint, warn && styles.hintWarn]} accessibilityLiveRegion="polite">
+        {hint}
+      </Text>
+      <View style={styles.levels} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+        testID="voice-composer-levels">
+        {Array.from({ length: LIVE_LEVEL_BARS }, (_, i) => {
+          const v = rec.levels[i];
+          return v === undefined ? (
+            <View key={i} style={[styles.ghost, { height: GHOST_HEIGHTS[i % GHOST_HEIGHTS.length] }]} />
+          ) : (
+            <View key={i} style={[styles.level, { height: 8 + Math.round(v * 56) }]} />
+          );
+        })}
+      </View>
+      <View style={styles.line} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Text style={styles.lineLabel} testID="voice-composer-line-elapsed">{formatDuration(rec.elapsedMs)}</Text>
+        <View style={styles.track}>
+          <View style={[styles.trackFill, { width: `${Math.min(1, rec.elapsedMs / rec.maxDurationMs) * 100}%` }]} />
+        </View>
+        <Text style={styles.lineLabel} testID="voice-composer-line-max">{formatDuration(rec.maxDurationMs)}</Text>
+      </View>
       <VoiceNoteRecordButton
         status={recordStatus}
         elapsedMs={rec.elapsedMs}
         maxDurationMs={rec.maxDurationMs}
-        onStart={() => void rec.start()}
+        onStart={() => void start()}
         onStop={() => void rec.stop()}
       />
+      <View style={styles.livePrivacy}>
+        <VoicePrivacyCopy target={target} />
+      </View>
+    </View>
+  );
+}
+
+function SheetHeader({ onCancel, cancelLabel = 'Cancel', discard = false }: {
+  onCancel: () => void; cancelLabel?: string; discard?: boolean;
+}): React.ReactElement {
+  return (
+    <View style={styles.header}>
+      <HapticPressable
+        intent="light"
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel={discard ? 'Delete' : cancelLabel}
+        testID={discard ? 'voice-composer-discard' : 'voice-composer-cancel'}
+        style={styles.headerAction}
+      >
+        {discard ? (
+          <Ionicons name="trash-outline" size={24} color={fp.n700} />
+        ) : (
+          <Text style={styles.cancel}>Cancel</Text>
+        )}
+      </HapticPressable>
+      <Text style={styles.title} accessibilityRole="header">Voice note</Text>
+      <View style={styles.headerAction} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // GOAL sheet: 20 pt gutters (.bsheet padding 8 20 0); each row carries its own GOAL margin, no gap.
   container: {
-    gap: spacing.md,
+    paddingHorizontal: SHEET_GUTTER,
   },
+  stacked: { gap: spacing.md, paddingBottom: spacing.md },
   notice: {
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: SHEET_GUTTER,
   },
   noticeText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontFamily: voiceFaces.regular,
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: 'center',
+    color: fp.ink,
   },
-  previewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  previewWave: { flex: 1 },
-  previewDuration: {
-    fontSize: 13,
-    fontWeight: '500',
-    minWidth: 40,
-    textAlign: 'right',
-  },
-  errorText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
+  centered: { paddingHorizontal: spacing.sm }, // GOAL B-07 text padding 0 8
+  unavailableRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 10 },
+  unavailableText: { flex: 1, textAlign: 'left' },
+  fill: { flex: 1, alignSelf: 'stretch' },
+  reviewStacked: { flexDirection: 'column' },
+  stackCell: { alignSelf: 'stretch' },
+  // GOAL .stop: margin -2 -8 0.
+  header: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: -2, marginHorizontal: -8 },
+  headerAction: { minWidth: 72, minHeight: 44, justifyContent: 'center' },
+  cancel: { fontFamily: voiceFaces.semibold, fontSize: 16, lineHeight: 20, fontWeight: '600', color: fp.forest },
+  title: { fontFamily: voiceFaces.semibold, fontSize: 17, lineHeight: 22, fontWeight: '600', color: fp.ink },
+  // GOAL .btime: Cormorant 500 at 56/70 — the loaded Medium face (h3), not a synthesised weight.
+  timer: { fontFamily: typography.h3.fontFamily, fontSize: 56, lineHeight: 70, fontWeight: '500', color: fp.ink,
+    textAlign: 'center', fontVariant: ['lining-nums', 'tabular-nums'], marginTop: 4 },
+  // GOAL .bsub: 14/1.4, at least 1.2em tall, straight under the timer.
+  hint: { fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 20, minHeight: 17, color: fp.n700, textAlign: 'center' },
+  hintWarn: { color: fp.ink, fontFamily: voiceFaces.semibold, fontWeight: '600' },
+  // GOAL .blive: margin 12 0 10; only as tall as its tallest bar (10 pt at 0:01, 64 live).
+  levels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 12, marginBottom: 10 },
+  level: { width: 5, borderRadius: 3, backgroundColor: fp.leaf, borderWidth: 1, borderColor: fp.moss },
+  ghost: { width: 5, borderRadius: 2, backgroundColor: voiceShades.hairline },
+  // GOAL .bline: margin 4 0 16.
+  line: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 16 },
+  lineLabel: { fontFamily: voiceFaces.medium, fontSize: 13, lineHeight: 16, fontWeight: '500', color: fp.n700, fontVariant: ['tabular-nums'] },
+  track: { flex: 1, height: 4, borderRadius: 2, backgroundColor: voiceShades.hairline, overflow: 'hidden' },
+  trackFill: { height: 4, backgroundColor: fp.forest },
+  wash: { width: 56, height: 56, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: voiceShades.leafWash, borderWidth: 1, borderColor: voiceShades.washEdge },
+  washLarge: { width: 72, height: 72, alignSelf: 'center', marginTop: 14, marginBottom: 12 },
+  // GOAL B-02 .brow margin 14 0 12; .bbtns gap 10, margin 14 0 10.
+  reviewRow: { marginTop: 14, marginBottom: 12 },
   reviewActions: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: 10,
+    marginTop: 14,
+    marginBottom: 10,
   },
+  // GOAL B-01 privacy wrapper margin 16 0 12.
+  livePrivacy: { marginTop: 16, marginBottom: 12 },
+  // GOAL B-07 .bbtns as a column: gap 10, margin 14 0 10.
+  deniedActions: { gap: 10, marginTop: 14, marginBottom: 10 },
   secondaryAction: {
-    minHeight: 48,
+    alignSelf: 'stretch',
+    minHeight: 54, // GOAL .btn 54 (LO-848R4 B6)
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.button,
+    backgroundColor: fp.forest,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryLabel: {
-    fontSize: 15,
+    fontFamily: voiceFaces.semibold,
+    fontSize: 17,
     fontWeight: '600',
+    color: fp.onDeep,
   },
   primaryAction: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: radius.md,
+    minHeight: 54,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  filled: { backgroundColor: fp.forest },
+  outlined: { borderWidth: 1.5, borderColor: fp.forest, backgroundColor: neutral[0] },
   primaryLabel: {
-    fontSize: 15,
+    fontFamily: voiceFaces.semibold,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: '600',
   },
+  // GOAL B-07 Not now: a text button at the .btn 54 pt height (LO-848R4 B6).
+  quiet: { alignSelf: 'stretch', minHeight: 54, alignItems: 'center', justifyContent: 'center' },
 });

@@ -7,12 +7,16 @@
  * this row deliberately renders `result.excerpt` and nothing else from the
  * payload. Tokens only (no raw hex), line Ionicons only (no emoji), fontWeight
  * <= '600' (quiet-luxury doctrine).
+ *
+ * Sol R5-B1: a voice note this viewer reported shows (and reads aloud) only the VN-07 fold here, as
+ * in the Hall and the detail, never its transcript excerpt.
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
+import VoiceReportedFold, { useReportedVoiceNotes } from './VoiceReportedFold';
 import type {
   SearchResultRow as SearchResultRowModel,
   CommunitySearchKind,
@@ -60,6 +64,11 @@ export default function SearchResultRow({
   const { semanticColors } = useTheme();
   const meta = KIND_META[result.kind];
   const when = formatRelative(result.createdAt);
+  const reported = useReportedVoiceNotes();
+
+  if (result.kind === 'voice_note_transcript' && reported.has(result.targetId)) {
+    return <VoiceReportedFold testID={`${testID ?? `community-search-result-${result.id}`}-reported`} />;
+  }
 
   return (
     <Pressable

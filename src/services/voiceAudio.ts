@@ -239,6 +239,9 @@ export function createExpoRecorderPort(audio: ExpoAudio, recorder: AudioRecorder
         peaks: downsamplePeaks(peaks),
       };
     },
+    level() {
+      return peaks.length > 0 ? peaks[peaks.length - 1] : null;
+    },
     async cancel() {
       stopMeter();
       startedAt = null;

@@ -25,6 +25,8 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useCommunityMe } from '../../hooks/useCommunity';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useVoiceOutbox } from '../../hooks/useVoiceOutbox';
 import { ThreadHeader } from '../../components/community';
 import VoiceNoteComposer from '../../components/community/VoiceNoteComposer';
 import type { VoiceAudienceTarget } from '../../components/community/VoicePrivacyCopy';
@@ -38,6 +40,8 @@ export default function CommunityVoiceComposerScreen(): React.ReactElement {
 
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? null;
+  // Send queues the note in the outbox; the Hall's feed shows its progress.
+  const outbox = useVoiceOutbox(workspaceId, useCurrentUser()?.id ?? null);
 
   // Derive the concrete audience disclosure + the publish scope from the route
   // params. The scope ids (cohortId / conversationId) are forwarded to the
@@ -91,11 +95,12 @@ export default function CommunityVoiceComposerScreen(): React.ReactElement {
       <ThreadHeader title="Voice note" testID="community-voice-composer-header" />
       <View style={styles.content}>
         <VoiceNoteComposer
-          workspaceId={workspaceId}
           target={target}
-          {...(cohortId ? { cohortId } : {})}
-          {...(conversationId ? { conversationId } : {})}
-          onPublished={() => navigation.goBack()}
+          onSend={(recording) => {
+            outbox.send(recording, { cohortId, conversationId });
+            navigation.goBack();
+          }}
+          onClose={() => navigation.goBack()}
         />
       </View>
     </SafeAreaView>

@@ -27,6 +27,7 @@ jest.mock('../../api/communityApi', () => ({
 }));
 
 jest.mock('../../api/communityRealtime', () => ({
+  COMMUNITY_BROADCAST_EVENTS: jest.requireActual('../../api/communityRealtime').COMMUNITY_BROADCAST_EVENTS,
   subscribeToCommunityUser: jest.fn(),
 }));
 
