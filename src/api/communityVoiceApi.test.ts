@@ -25,6 +25,8 @@ import {
   type VoiceUploadTarget,
 } from './communityVoiceApi';
 import { CommunityApiError } from './communityApi';
+import { authEpoch } from '../services/accountBinding';
+import { authEvents } from '../utils/authEvents';
 
 jest.mock('../services/api', () => ({
   __esModule: true,
@@ -297,5 +299,37 @@ describe('communityVoiceApi — the coach-removed placeholder row (REMOVED-BY-M)
     expect(() =>
       VoiceNoteViewSchema.parse({ ...removed(), removed_by: { role: 'coach', user_id: 'u', name: 'S', x: 1 } }),
     ).toThrow();
+  });
+});
+
+// BF-2 (LS-871X, VF-848B): a bound publish names its sign-in to the API client (which sends the hop only
+// with that sign-in's own credential), and a sign-in change stops the byte upload while it runs.
+describe('communityVoiceApi — bound to one sign-in (BF-2)', () => {
+  it('issueUploadUrl and create hand the sign-in to the API client', async () => {
+    const binding = { subject: 'sub:user-1', epoch: authEpoch() };
+    api.post
+      .mockResolvedValueOnce({ data: uploadTarget })
+      .mockResolvedValueOnce({ data: { voice_note: view() } });
+    await communityVoiceApi.issueUploadUrl(WS, { duration_ms: 4200, bytes: 91234, mime_type: 'audio/mp4' }, binding);
+    await communityVoiceApi.create(
+      WS,
+      { storage_key: uploadTarget.storage_key, duration_ms: 4200, bytes: 91234, mime_type: 'audio/mp4' },
+      binding,
+    );
+    expect(api.post.mock.calls[0][2]).toMatchObject({ accountBinding: binding });
+    expect(api.post.mock.calls[1][2]).toMatchObject({ accountBinding: binding });
+  });
+
+  it('a sign-in change aborts a bound byte upload', async () => {
+    const binding = { subject: 'sub:user-1', epoch: authEpoch() };
+    let signal: AbortSignal | undefined;
+    mockedAxios.put.mockImplementationOnce((_url, _body, config) => {
+      signal = config?.signal as AbortSignal | undefined;
+      return new Promise(() => undefined);
+    });
+    void communityVoiceApi.uploadBytes(uploadTarget.upload_url, new ArrayBuffer(8), 'audio/mp4', undefined, binding);
+    expect(signal?.aborted).toBe(false);
+    authEvents.emit();
+    expect(signal?.aborted).toBe(true);
   });
 });

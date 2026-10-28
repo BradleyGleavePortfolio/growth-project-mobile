@@ -34,6 +34,8 @@ jest.mock('expo-file-system', () => {
   return { File, Directory, Paths: { document: 'file:///docs' } };
 });
 const net = NetInfo as unknown as { __setState: (s: object) => void; __reset: () => void };
+// The signed-in author's token on the phone: a queued note goes out only under it (BF-2).
+const secure = jest.requireMock('expo-secure-store') as { __store: Map<string, string> };
 
 const REC: VoiceRecordingResult = { uri: 'file:///r.m4a', durationMs: 3000, bytes: 10, mimeType: 'audio/mp4', peaks: [0.2, 0.8] };
 
@@ -49,6 +51,7 @@ beforeEach(async () => {
   net.__reset();
   resetVoiceOutbox();
   await AsyncStorage.clear();
+  secure.__store.set('supabase_token', 'token-me');
   mockPublish.mockReset().mockResolvedValue({ id: 'vn-1' });
 });
 
