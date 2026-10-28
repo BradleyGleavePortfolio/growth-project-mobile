@@ -56,7 +56,7 @@ function makeWrapper() {
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
-  return { Wrapper };
+  return { Wrapper, qc };
 }
 
 beforeEach(() => {
@@ -87,6 +87,11 @@ describe('useVoiceFeed — disabled postures (no network)', () => {
 });
 
 describe('useVoiceFeed — enabled fetch + cursor pagination', () => {
+  it('keeps the feed off the phone, so a restart never shows notes from before a ban (LS B1)', async () => {
+    const { Wrapper, qc } = makeWrapper();
+    await renderHook(() => useVoiceFeed({ workspaceId: WS }), { wrapper: Wrapper });
+    expect(qc.getQueryCache().getAll()[0]?.meta).toEqual({ persist: false });
+  });
   it('calls listFeed with a bounded page limit, no cursor on page 1', async () => {
     api.listFeed.mockResolvedValue(page([{ id: 'n1' }]));
     const { Wrapper } = makeWrapper();
