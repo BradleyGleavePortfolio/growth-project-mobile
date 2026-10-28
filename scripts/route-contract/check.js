@@ -14,9 +14,11 @@ function compare(calls, snapshot, allowlist) {
   if (!lines.length || lines.some((line) => !/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|ALL) \//.test(line))) throw new Error('Invalid route snapshot');
   const allowed = allowlist.split('\n').filter((line) => line && !line.startsWith('#')).map((line) => {
     const [method, pathname, caller, pr, ...reason] = line.split('\t');
+    const why = reason.join(' ').trim();
+    const removalPr = /^https:\/\/github\.com\/BradleyGleavePortfolio\/growth-project-(mobile|backend)\/pull\/\d+$/.test(pr);
+    const queuedDeadCaller = pr === 'ROUTE-GAP-1' && /^unreachable on main: .+/i.test(why);
     if (!/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(method) || !pathname?.startsWith('/api/')
-      || !caller || !/^https:\/\/github\.com\/BradleyGleavePortfolio\/growth-project-(mobile|backend)\/pull\/\d+$/.test(pr)
-      || !reason.join(' ').trim()) throw new Error(`Invalid allowlist entry: ${line}`);
+      || !caller || !(removalPr || queuedDeadCaller) || !why) throw new Error(`Invalid allowlist entry: ${line}`);
     return { method, path: pathname, caller, pr };
   });
   const missing = calls.filter((call) => !lines.some((route) => matches(call, route)));

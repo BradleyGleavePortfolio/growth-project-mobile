@@ -61,9 +61,13 @@ test('direct backend fetch is included; unclassified fetch fails closed', () => 
   fixture('api/caller.ts', 'fetch(arbitraryUrl);');
   expect(() => mobileRoutes(root)).toThrow('not statically classified');
 });
+test('dynamic fetch method cannot silently default to GET', () => {
+  expect(() => phone("fetch(`${env.API_URL}/things`, {method:verb});")).toThrow('Unresolved HTTP method');
+});
 test('unknown URL and partial dynamic segments fail closed', () => {
   expect(() => phone('api.get(arbitraryUrl);')).toThrow('Unresolved URL');
   expect(() => phone('api.get(`/thing/prefix-${id}`);')).toThrow('partial path segment');
+  expect(() => phone("let route = '/things'; route = '/missing'; api.get(route);")).toThrow('Mutable route binding');
 });
 test.each(['api[method]("/things");', 'const {get} = api; get("/things");', 'const get = api.get; get("/things");'])(
   'unsupported client indirection cannot silently disappear: %s', (code) => {
@@ -91,6 +95,10 @@ test('exact allowlist requires a removal PR and becomes an error when stale', ()
   expect(compare(calls, snapshot('GET /api/other'), entry).missing).toEqual([]);
   expect(compare(calls, snapshot('GET /api/known-gap'), entry).stale).toHaveLength(1);
   expect(() => compare(calls, snapshot('GET /api/other'), entry.replace(pr, 'TODO'))).toThrow('Invalid allowlist');
+  expect(() => compare(calls, snapshot('GET /api/other'), entry.replace(pr, 'ROUTE-GAP-1'))).toThrow('Invalid allowlist');
+  const queued = `GET\t/api/known-gap\tapi/caller.ts\tROUTE-GAP-1\tunreachable on main: unused helper, no caller`;
+  expect(compare(calls, snapshot('GET /api/other'), queued).missing).toEqual([]);
+  expect(compare(calls, snapshot('GET /api/known-gap'), queued).stale).toHaveLength(1);
 });
 test('snapshot requires reproducible main head metadata', () => {
   expect(() => compare([], 'GET /api/things\n', '')).toThrow('backend main head');

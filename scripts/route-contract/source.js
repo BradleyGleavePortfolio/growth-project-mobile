@@ -78,7 +78,12 @@ function context(names) {
       const decl = resolve(node);
       if (bindings.has(decl)) return bindings.get(decl);
       if (decl && decl !== node) {
-        if (decl.initializer) return ev(decl.initializer);
+        if (decl.initializer) {
+          if (ts.isVariableDeclaration(decl) && !(decl.parent.flags & ts.NodeFlags.Const)) {
+            throw new Error(`Mutable route binding needs explicit support: ${decl.name.getText()}`);
+          }
+          return ev(decl.initializer);
+        }
         if (ts.isParameter(decl) && decl.type) {
           const literals = [];
           const type = ts.isTypeReferenceNode(decl.type) ? resolve(decl.type.typeName)?.type : decl.type;

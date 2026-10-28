@@ -64,9 +64,11 @@ function mobileRoutes(root) {
         direct = true;
         url = node.arguments[0];
         const config = node.arguments[1];
-        method = config && ts.isObjectLiteralExpression(config)
-          ? ctx.evaluate(config.properties.find((p) => p.name?.getText() === 'method')?.initializer)[0] : 'get';
-        if (method === UNKNOWN) method = 'get';
+        if (!config) method = 'get';
+        else if (ts.isObjectLiteralExpression(config)) {
+          const property = config.properties.find((p) => p.name?.getText() === 'method');
+          method = property ? ctx.evaluate(property.initializer)[0] : 'get';
+        } else method = UNKNOWN;
       } else if (ts.isIdentifier(expr) && clients.has(expr.text)) {
         errors.push(`${at}: callable API client needs an explicit method and URL`);
         return;

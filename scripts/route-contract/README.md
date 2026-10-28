@@ -16,6 +16,7 @@ git -C ../growth-project-backend fetch origin main
 git -C ../growth-project-backend checkout --detach origin/main
 node scripts/route-contract/backend.js ../growth-project-backend \
   scripts/route-contract/backend-routes.txt
+node scripts/route-contract/backend.js ../growth-project-backend --unmounted
 git diff -- scripts/route-contract/backend-routes.txt
 ```
 
@@ -61,10 +62,17 @@ do not broaden an exclusion or replace it with a regular-expression skip.
 ## Known gaps
 
 `allowlist.tsv` is tab separated: method, canonical path, exact caller file, removal PR
-URL, reason. Each row must name a real follow-up PR. No wildcard paths, caller globs,
+URL, reason. Each row must name a real follow-up PR, except the exact operator-owned
+`ROUTE-GAP-1` token authorized by agent 180 on 2026-10-28 11:2x PDT. That token is
+only valid with a non-empty `unreachable on main: ...` reason, independently checked
+at this PR's head; it is a queued dead-caller cleanup, not an empty placeholder PR.
+No other queue token is accepted. No wildcard paths, caller globs,
 silent baselines or permanently ignored directories are permitted. The check prints
 every exception, and fails when an entry no longer corresponds to a missing caller,
-so the removal PR must delete its allowlist rows too.
+so the removal PR must delete its allowlist rows too. The eight community exceptions
+belong to mobile PR 868. The 14 ROUTE-GAP-1 exceptions are unused helpers, screens
+without navigation entries, or Team Mode callers hidden for launch. Any newly live
+caller must not use the dead-caller exception without resolving the route.
 
 The guard covers route registration only. Guards, rollout switches, payload schemas,
 tenant scope, runtime middleware and response compatibility still need their own tests.

@@ -125,9 +125,9 @@ if (require.main === module) {
     if (process.argv[3] === '--unmounted') {
       backendRoutes(path.resolve(process.argv[2]), (unmounted) => console.log(unmounted.join('\n')));
     } else {
-    const output = snapshot(path.resolve(process.argv[2]));
-    if (process.argv[3]) fs.writeFileSync(process.argv[3], output);
-    else process.stdout.write(output);
+      const output = snapshot(path.resolve(process.argv[2]));
+      if (process.argv[3]) fs.writeFileSync(process.argv[3], output);
+      else process.stdout.write(output);
     }
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
