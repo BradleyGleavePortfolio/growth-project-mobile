@@ -198,3 +198,41 @@ describe('LS-6: Acknowledge shows only where this coach can acknowledge', () => 
     expect(queryByTestId(`coach-community-inbox-mark-acked-${team.id}`)).toBeNull();
   });
 });
+
+describe('Member counts read naturally and the spoken row says what it shows', () => {
+  const member = {
+    user_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    name: 'Dana Cruz',
+    email: 'dana@example.com',
+    avatar_url: null,
+    role: 'client',
+    id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    joined_at: new Date().toISOString(),
+  };
+
+  it('a cohort with one member says "1 member", and its label speaks the unread count', async () => {
+    mockState.cohorts = idle([cohort({ member_count: 1, unread_count: 2 })]);
+    const { getByText, getByTestId } = await render(<CoachCommunityCohortsScreen />);
+    expect(getByText('1 member · 2 unread')).toBeTruthy();
+    expect(getByTestId(`coach-community-cohort-row-${OWN_SPACE}`).props.accessibilityLabel).toBe(
+      'Spring block, 1 member, 2 unread',
+    );
+  });
+
+  it('a cohort with nothing unread says only how many members', async () => {
+    mockState.cohorts = idle([cohort({ member_count: 3, unread_count: 0 })]);
+    const { getByText, getByTestId } = await render(<CoachCommunityCohortsScreen />);
+    expect(getByText('3 members')).toBeTruthy();
+    expect(getByTestId(`coach-community-cohort-row-${OWN_SPACE}`).props.accessibilityLabel).toBe(
+      'Spring block, 3 members',
+    );
+  });
+
+  it('the cohort page header says "1 member"', async () => {
+    mockRouteParams.current = { cohortId: OWN_SPACE, cohortName: 'Spring block' };
+    mockState.cohortDetail = idle({ cohort: cohort({ member_count: 1 }), members: [member] });
+    const { getByText, queryByText } = await render(<CoachCommunityCohortDetailScreen />);
+    expect(getByText('1 member')).toBeTruthy();
+    expect(queryByText('1 members')).toBeNull();
+  });
+});
