@@ -4,6 +4,10 @@ const METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'optio
 
 function mobileRoutes(root) {
   const ctx = context(files(root));
+  const methodValue = (node) => {
+    const values = ctx.evaluate(node);
+    return values.length === 1 ? values[0] : UNKNOWN;
+  };
   const routes = [];
   const errors = [];
   for (const source of ctx.sources) {
@@ -57,7 +61,7 @@ function mobileRoutes(root) {
           if (source.fileName.endsWith('/services/api.ts') && config?.getText() === 'originalConfig') return;
           if (config && ts.isObjectLiteralExpression(config)) {
             url = config.properties.find((p) => p.name?.getText() === 'url')?.initializer;
-            method = ctx.evaluate(config.properties.find((p) => p.name?.getText() === 'method')?.initializer)[0];
+            method = methodValue(config.properties.find((p) => p.name?.getText() === 'method')?.initializer);
           }
         } else return;
       } else if (ts.isIdentifier(expr) && expr.text === 'fetch') {
@@ -67,7 +71,7 @@ function mobileRoutes(root) {
         if (!config) method = 'get';
         else if (ts.isObjectLiteralExpression(config)) {
           const property = config.properties.find((p) => p.name?.getText() === 'method');
-          method = property ? ctx.evaluate(property.initializer)[0] : 'get';
+          method = property ? methodValue(property.initializer) : 'get';
         } else method = UNKNOWN;
       } else if (ts.isIdentifier(expr) && clients.has(expr.text)) {
         errors.push(`${at}: callable API client needs an explicit method and URL`);

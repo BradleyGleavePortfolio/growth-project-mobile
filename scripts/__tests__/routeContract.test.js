@@ -63,6 +63,7 @@ test('direct backend fetch is included; unclassified fetch fails closed', () => 
 });
 test('dynamic fetch method cannot silently default to GET', () => {
   expect(() => phone("fetch(`${env.API_URL}/things`, {method:verb});")).toThrow('Unresolved HTTP method');
+  expect(() => phone("api.request({method:flag?'GET':'POST',url:'/things'});")).toThrow('Unresolved HTTP method');
 });
 test('unknown URL and partial dynamic segments fail closed', () => {
   expect(() => phone('api.get(arbitraryUrl);')).toThrow('Unresolved URL');
