@@ -99,8 +99,8 @@ const InboxVoiceSchema = z
 
 /**
  * Every inbox row kind the server sends: src/community/inbox/
- * community-coach-inbox.dto.ts kind enum (main: text, voice; b#1172: + photo,
- * a client's space photo whose preview is its caption, or "Photo").
+ * community-coach-inbox.dto.ts:48 kind enum on main 946d1cb0 (text, voice, photo;
+ * a client's space photo's preview is its caption, or "Photo").
  */
 export const COACH_INBOX_ROW_KINDS = ['text', 'voice', 'photo'] as const;
 
@@ -640,7 +640,7 @@ const inboxRowKinds = (): readonly string[] =>
 /** The approved row text for a photo with no caption (owner 10-26, UPDATE 2). */
 const PHOTO_PREVIEW = 'Photo';
 
-/** One inbox row: src/community/inbox/community-coach-inbox.dto.ts:34-53 (b#1172: :34-55). */
+/** One inbox row: src/community/inbox/community-coach-inbox.dto.ts:34-54 (main 946d1cb0). */
 const InboxRowWireSchema = z
   .object({
     id: z.string().uuid(),

@@ -433,7 +433,6 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.bone },
   header: {
     paddingHorizontal: layout.gutter,
     paddingTop: spacing.sm,

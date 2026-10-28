@@ -860,11 +860,11 @@ describe('coachCommunityApi — v2-2 ack DTO strict drift contract', () => {
 
 /**
  * FX4-868: the inbox route and row are pinned to the server's controller and
- * DTO (growth-project-backend src/community/inbox/): controller
+ * DTO (growth-project-backend src/community/inbox/ on main 946d1cb0): controller
  * community-coach-inbox.controller.ts:21 @Controller('community') + :25
- * @Get('me/coach-inbox'); dto InboxItemSchema :34-53 on main 03d51758 (strict,
- * kind text | voice) and :34-54 on b#1172 c7d4aa2f (kind text | voice | photo;
- * a photo's preview is its caption, or "Photo"). b#1173 keeps that row shape.
+ * @Get('me/coach-inbox'); dto InboxItemSchema :34-54 (strict; kind :48 is
+ * text | voice | photo; a photo's preview is its caption, or "Photo").
+ * FIN-868: b#1173 keeps that row shape.
  */
 describe('coachCommunityApi — FX4-868 inbox route + row pinned to the server DTO', () => {
   // Every key the server's strict InboxItemSchema can send, in DTO order.
