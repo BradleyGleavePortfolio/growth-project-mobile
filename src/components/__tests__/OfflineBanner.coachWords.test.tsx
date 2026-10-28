@@ -18,7 +18,8 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 import OfflineBanner from '../OfflineBanner';
 
 const CLIENT_WORDS = "You're offline \u2014 food logs will sync when you reconnect.";
-const COACH_WORDS = "You're offline \u2014 reconnect to load the latest.";
+// Opens as the K2 offline banner and the inbox's offline card do ("You are offline.").
+const COACH_WORDS = 'You are offline. Reconnect to see the latest.';
 
 describe('Offline banner words fit who is signed in', () => {
   it.each(['coach', 'sub_coach', 'owner'])('a %s is not told food logs will sync', async (role) => {
