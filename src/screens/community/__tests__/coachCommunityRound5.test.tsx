@@ -170,6 +170,8 @@ describe('LS-6: Acknowledge shows only where this coach can acknowledge', () => 
     cohort_id: TEAM_SPACE,
     cohort_name: 'Team space',
     client_name: 'Eli Park',
+    // Overdue, so the row has a badge to keep (none + within shows none).
+    ack: { state: 'none', sla_state: 'breached' },
   });
 
   beforeEach(() => {
@@ -381,9 +383,10 @@ describe('The spoken row says when the message came', () => {
 
 describe('Acknowledge hands screen-reader focus to its row', () => {
   it('moves focus to the row as the button goes away', async () => {
-    jest.spyOn(Native, 'findNodeHandle').mockReturnValue(17);
+    // The row itself gets the focus event (the call CreditPackCheckoutScreen
+    // uses; it needs no findNodeHandle, so it holds on the new architecture).
     const focus = jest
-      .spyOn(Native.AccessibilityInfo, 'setAccessibilityFocus')
+      .spyOn(Native.AccessibilityInfo, 'sendAccessibilityEvent')
       .mockImplementation(() => undefined);
     const item = inboxItem();
     mockOwnedIds.current = new Set([OWN_SPACE]);
@@ -391,7 +394,9 @@ describe('Acknowledge hands screen-reader focus to its row', () => {
     const screen = await render(<CoachCommunityInboxScreen />);
     await fireEvent.press(screen.getByTestId(`coach-community-inbox-mark-acked-${item.id}`));
     expect(mockMarkAckedMutate).toHaveBeenCalledTimes(1);
-    expect(focus).toHaveBeenCalledWith(17);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(focus.mock.calls[0][0]).toBeTruthy();
+    expect(focus.mock.calls[0][1]).toBe('focus');
   });
 });
 
