@@ -1,0 +1,5 @@
+src/screens/community
+src/navigation
+src/components/community
+src/screens/messaging
+src/__tests__
