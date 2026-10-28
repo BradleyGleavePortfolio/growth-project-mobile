@@ -15,6 +15,20 @@ author deletes their own post from its "..." menu after a confirm
 (DELETE /community/posts/:postId); replies have no delete endpoint. Pull to refresh
 reloads the post and its replies. Tests: `CommunityThreadScreen.test.tsx`.
 
+A Hall or space post, a reply, or a challenge comment that a coach removed (backend
+#1176; the reads send `X-Client-Removed-Rows: 1` from `api/communityRemovedRows.ts` and
+`api/communityChallengesApi.ts`) keeps its place as the voice notes' one quiet line
+(`components/community/removed/VoiceRemovedPlaceholder`, worded by `removedRowLine`):
+the coach who removed it reads "You removed this post" / "You removed this comment", the
+author "Your coach removed your post" / "Your coach removed your comment" with the
+Community safety link, and anyone else "Removed by Coach {name}". The row has no title,
+words, reactions, menu or reply box, and a removed Hall row does not open. A removed
+post's page keeps the "Post" header and its author/time line. A `community.post.updated`
+ping re-reads the post lists, the post page, its replies, Today and open Find searches
+that can hold a post. A server without #1176 ignores the header and nothing changes.
+Tests: `CommunitySpaceRemovedPost.test.tsx`, `CommunityThreadScreen.test.tsx`,
+`CommunityChallengeDetailScreen.test.tsx`, `hooks/__tests__/usePostRemovalPing.test.tsx`.
+
 ReactionBar offers Like, Fire, Strength, Love, Clap and Celebrate from the single
 `COMMUNITY_REACTION_BY_KIND` registry in `api/communityApi.ts`. REST accepts exact
 emoji graphemes; named kinds are for realtime only. Raised hands display the

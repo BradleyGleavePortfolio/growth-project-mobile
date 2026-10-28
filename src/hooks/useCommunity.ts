@@ -17,6 +17,7 @@ import {
   useQuery,
   useMutation,
   useQueryClient,
+  type QueryClient,
   type UseQueryResult,
 } from '@tanstack/react-query';
 import {
@@ -36,7 +37,13 @@ import {
   subscribeToCommunityUser,
   type CommunityPing,
 } from '../api/communityRealtime';
+import {
+  removedRowsApi,
+  type RemovableComment,
+  type RemovablePost,
+} from '../api/communityRemovedRows';
 import { refreshVoiceQueries } from './voiceQueryKeys';
+import { communitySearchKeys } from './useCommunitySearch';
 
 // ─── Query keys (stable, namespaced) ─────────────────────────────────────────
 
@@ -96,25 +103,27 @@ export function useCommunityWorkspace(workspaceId: string | null): UseQueryResul
   });
 }
 
+/** REMOVED-BY-M3: the list keeps a coach-removed post as its placeholder (communityRemovedRows). */
 export function usePosts(
   workspaceId: string | null | undefined,
-): UseQueryResult<CommunityPost[]> {
+): UseQueryResult<RemovablePost[]> {
   return useQuery({
     queryKey: communityKeys.posts(workspaceId ?? '∅'),
     queryFn: async () => {
-      const res = await communityApi.listPosts(workspaceId as string);
+      const res = await removedRowsApi.listPosts(workspaceId as string);
       return res.posts;
     },
     enabled: !!workspaceId,
   });
 }
 
+/** REMOVED-BY-M3: a coach-removed reply stays as its placeholder (body null); a removed post answers []. */
 export function usePostComments(
   postId: string | null | undefined,
-): UseQueryResult<CommunityComment[]> {
+): UseQueryResult<RemovableComment[]> {
   return useQuery({
     queryKey: communityKeys.comments(postId ?? '∅'),
-    queryFn: () => communityApi.listComments(postId as string),
+    queryFn: () => removedRowsApi.listComments(postId as string),
     enabled: !!postId,
   });
 }
@@ -335,6 +344,30 @@ export interface CommunityBadgeState {
   mentions: number;
 }
 
+const POST_QUERY_KINDS: readonly unknown[] = ['posts', 'post', 'comments', 'today'];
+
+/** A Find search whose pages can hold a post: all kinds ('∅') or posts only. */
+function isPostSearchKey(key: readonly unknown[]): boolean {
+  const root = communitySearchKeys.all;
+  if (key[0] !== root[0] || key[1] !== root[1]) return false;
+  const kind = key[root.length + 2];
+  return kind === '∅' || kind === 'post';
+}
+
+/**
+ * REMOVED-BY-M3: re-read over REST the post lists, post pages, replies, Today and open Find searches
+ * that can hold a post, so a removed post or reply turns into its placeholder (or leaves Find and
+ * Today) with no tap. A closed such search is dropped, as for voice, so reopening it cannot show the
+ * removed words first.
+ */
+export function refreshPostQueries(qc: QueryClient): Promise<void> {
+  qc.removeQueries({ type: 'inactive', predicate: (q) => isPostSearchKey(q.queryKey) });
+  return qc.invalidateQueries({
+    predicate: (q) =>
+      (q.queryKey[0] === 'community' && POST_QUERY_KINDS.includes(q.queryKey[1])) || isPostSearchKey(q.queryKey),
+  });
+}
+
 /**
  * Returns the live unread badge state for the Community tab and wires the
  * Supabase Realtime subscription so the count updates without polling: each
@@ -362,6 +395,12 @@ export function useCommunityBadge(
       const known: readonly unknown[] = Object.values(COMMUNITY_BROADCAST_EVENTS);
       if (event === COMMUNITY_BROADCAST_EVENTS.messageUpdated || !known.includes(event)) {
         void refreshVoiceQueries(qc);
+      }
+      // REMOVED-BY-M3: a coach's removal of a post, or of a reply under it, arrives as post.updated
+      // (backend #1176, ids only), as an edit does. Only that event re-reads the posts: an odd ping
+      // already re-reads the voice queries and all-kinds searches above, and lists re-read on open.
+      if (event === COMMUNITY_BROADCAST_EVENTS.postUpdated) {
+        void refreshPostQueries(qc);
       }
     });
     return unsubscribe;

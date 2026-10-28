@@ -12,6 +12,11 @@
  * The author can delete their own post. Replies distinguish loading, failure
  * and true empty, pull to refresh, and the empty action focuses the composer.
  * Safety handlers and moderation behaviour stay intact.
+ *
+ * REMOVED-BY-M3: a post or reply a coach removed reads as one quiet line
+ * (removed/removedRowLine) under its author/time line: no title, words,
+ * reactions, menu or reply box. Older servers send no removed keys, so
+ * nothing changes there.
  */
 import React, { useRef, useState } from 'react';
 import {
@@ -40,11 +45,13 @@ import {
   useCommunityMe,
   isOptimisticId,
 } from '../../hooks/useCommunity';
-import {
-  communityApi,
-  type CommunityReactionEmoji,
-  type CommunityReactionSummary,
+import type {
+  CommunityReactionEmoji,
+  CommunityReactionSummary,
 } from '../../api/communityApi';
+import { removedRowsApi } from '../../api/communityRemovedRows';
+import VoiceRemovedPlaceholder from '../../components/community/removed/VoiceRemovedPlaceholder';
+import { removedRowLine } from '../../components/community/removed/removedRowLine';
 import { useQuery } from '@tanstack/react-query';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
@@ -111,7 +118,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
 
   const post = useQuery({
     queryKey: ['community', 'post', postId],
-    queryFn: () => communityApi.getPost(postId),
+    queryFn: () => removedRowsApi.getPost(postId),
     enabled: !!postId,
   });
   const comments = usePostComments(postId);
@@ -133,6 +140,8 @@ export default function CommunityThreadScreen(): React.ReactElement {
   const isEmpty = !comments.isLoading && !comments.isError && data.length === 0;
   const p = closed ? undefined : post.data;
   const isOwnPost = !!p && !!client?.id && p.author_user_id === client.id;
+  const removedLine = p ? removedRowLine(p, 'post', client?.id) : null;
+  const live = open && !removedLine;
   const pendingTap =
     react.isPending && react.variables?.postId === postId ? react.variables : null;
   const reactions = withPendingTap(p?.reactions ?? react.data?.reactions ?? [], pendingTap);
@@ -190,7 +199,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
               </Text>
             ) : null}
           </View>
-          {p ? (
+          {p && !removedLine ? (
             <SafetyMenu
               targetType="post"
               targetId={p.id}
@@ -209,13 +218,17 @@ export default function CommunityThreadScreen(): React.ReactElement {
           ) : null}
         </View>
 
-        {p?.body ? (
+        {removedLine ? (
+          <View style={styles.removed}>
+            <VoiceRemovedPlaceholder line={removedLine} testID="community-thread-post-removed" />
+          </View>
+        ) : p?.body ? (
           <Text style={[styles.body, { color: semanticColors.textPrimary }]}>
             {p.body}
           </Text>
         ) : null}
 
-        {open ? <ReactionBar
+        {live ? <ReactionBar
           reactions={reactions}
           onToggle={(emoji, active) =>
             react.mutate({ postId, emoji, active })
@@ -241,7 +254,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
                 <Text style={[typography.bodySmall, { color: semanticColors.accentText }]}>Try again</Text>
               </HapticPressable> : null}
             </View>
-          ) : isEmpty && open ? (
+          ) : isEmpty && live ? (
             <View style={styles.center}>
               <Text testID="community-thread-empty" style={[typography.bodySmall, { color: semanticColors.textMuted }]}>No replies yet</Text>
               <HapticPressable onPress={() => composerRef.current?.focus()} style={styles.replyAction}
@@ -251,6 +264,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
             </View>
           ) : null}
           renderItem={({ item }) => {
+            const replyRemoved = removedRowLine(item, 'comment', client?.id);
             const meta = metaLine(
               authorLabel(item.author_user_id, item.author_name, client?.id, client?.coach_id),
               isOptimisticId(item.id) ? 'Sending…' : formatRelative(item.created_at),
@@ -267,11 +281,15 @@ export default function CommunityThreadScreen(): React.ReactElement {
                       {meta}
                     </Text>
                   ) : null}
-                  <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>
-                    {item.body}
-                  </Text>
+                  {replyRemoved ? (
+                    <VoiceRemovedPlaceholder line={replyRemoved} testID={`comment-removed-${item.id}`} />
+                  ) : (
+                    <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>
+                      {item.body}
+                    </Text>
+                  )}
                 </View>
-                <SafetyMenu
+                {replyRemoved ? null : <SafetyMenu
                   targetType="comment"
                   targetId={item.id}
                   authorUserId={item.author_user_id}
@@ -279,7 +297,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
                   viewerUserId={client?.id}
                   viewerCoachId={client?.coach_id}
                   testID={`comment-safety-${item.id}`}
-                />
+                />}
               </View>
             );
           }}
@@ -287,7 +305,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
           style={styles.flex}
         />
 
-        {closed ? <ConversationClosedLine testID="community-thread-closed" /> : !open ? null : <ComposerInput
+        {closed ? <ConversationClosedLine testID="community-thread-closed" /> : !live ? null : <ComposerInput
           ref={composerRef}
           placeholder="Add a reply"
           maxLength={COMMENT_MAX}
@@ -339,6 +357,7 @@ const styles = StyleSheet.create({
   },
   list: { paddingVertical: spacing.sm, flexGrow: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', paddingRight: spacing.sm },
+  removed: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   comment: {
     flexDirection: 'row',
     alignItems: 'flex-start',
