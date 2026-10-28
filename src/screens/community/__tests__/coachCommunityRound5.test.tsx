@@ -341,3 +341,40 @@ describe('Invite takes only an email the server accepts', () => {
     );
   });
 });
+
+describe('The spoken row says when the message came', () => {
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+
+  it('reads the clock time today, the weekday this week and the date before, in full', async () => {
+    const now = Date.now();
+    const today = inboxItem({ created_at: new Date(now - 1_000).toISOString() });
+    const recent = inboxItem({
+      id: '44444444-4444-4444-4444-444444444444',
+      created_at: new Date(now - 3 * 86_400_000).toISOString(),
+    });
+    const older = inboxItem({
+      id: '55555555-5555-5555-5555-555555555555',
+      created_at: new Date(now - 40 * 86_400_000).toISOString(),
+    });
+    mockState.inbox = idle({ items: [today, recent, older], next_cursor: null });
+    const screen = await render(<CoachCommunityInboxScreen />);
+    const label = (id: string): string =>
+      screen.getByTestId(`coach-community-inbox-row-${id}`).props.accessibilityLabel;
+
+    expect(label(today.id)).toMatch(
+      /^Dana Cruz in Spring block, \d{1,2}:\d{2} (am|pm): Quick question about my plan\.\.\.$/,
+    );
+    const r = new Date(recent.created_at);
+    expect(label(recent.id)).toBe(
+      `Dana Cruz in Spring block, ${DAYS[r.getDay()]}: Quick question about my plan...`,
+    );
+    const o = new Date(older.created_at);
+    expect(label(older.id)).toBe(
+      `Dana Cruz in Spring block, ${o.getDate()} ${MONTHS[o.getMonth()]}: Quick question about my plan...`,
+    );
+  });
+});
