@@ -56,7 +56,7 @@ export interface VoiceNotePlayerProps {
   onPlaybackError?: () => void;
   /** Card style: member card, coach card, or none (review sheet). */
   tone?: 'light' | 'coach' | 'bare';
-  /** No connection: a remote note cannot load, so Play is off. */
+  /** No connection: a remote note cannot load, so Play is off (a clip already playing keeps Pause). */
   offline?: boolean;
   /** Drawn at the end of the time row (the outbox row's waiting mark). */
   trailing?: React.ReactNode;
@@ -229,19 +229,21 @@ export default function VoiceNotePlayer({
   const progress = total > 0 ? positionMs / total : 0;
   const playing = state === 'playing';
   const iconName = playing ? 'pause' : 'play';
+  // VUX-B1: a clip already playing keeps its Pause when the signal drops or the note is held; only a new Play is off.
+  const off = disabled && !playing;
 
-  const controlLabel = unavailable
-    ? !port.isAvailable
-      ? 'Audio playback is not available on this build'
-      : 'Audio unavailable'
-    : playing
-      ? 'Pause voice note'
+  const controlLabel = playing
+    ? 'Pause voice note'
+    : unavailable
+      ? !port.isAvailable
+        ? 'Audio playback is not available on this build'
+        : 'Audio unavailable'
       : `Play voice note, ${formatDuration(durationMs)}`;
 
   const deep = tone === 'coach';
   const ink = deep ? fp.onDeep : fp.ink;
-  const discBg = disabled ? voiceShades.hairline : deep ? fp.onDeep : fp.deep;
-  const discFg = disabled ? voiceShades.track : deep ? fp.deep : fp.leaf;
+  const discBg = off ? voiceShades.hairline : deep ? fp.onDeep : fp.deep;
+  const discFg = off ? voiceShades.track : deep ? fp.deep : fp.leaf;
   const time =
     url === null || !port.isAvailable
       ? '—:—'
@@ -264,10 +266,10 @@ export default function VoiceNotePlayer({
         <HapticPressable
           intent="light"
           onPress={onPress}
-          disabled={disabled || state === 'loading'}
+          disabled={off || state === 'loading'}
           accessibilityRole="button"
           accessibilityLabel={controlLabel}
-          accessibilityState={{ disabled: disabled || state === 'loading', busy: state === 'loading' }}
+          accessibilityState={{ disabled: off || state === 'loading', busy: state === 'loading' }}
           testID="voice-player-toggle"
           style={[styles.control, { backgroundColor: discBg }]}
         >

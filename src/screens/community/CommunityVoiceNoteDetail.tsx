@@ -78,7 +78,8 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   const voiceNoteId = route.params?.voiceNoteId ?? '';
   const excerpt = route.params?.excerpt ?? '';
   const reported = useReportedVoiceNotes();
-  const role = useCommunityMe().data?.membership?.role;
+  const me = useCommunityMe().data;
+  const role = me?.membership?.role;
   const viewerModerates = role === 'coach' || role === 'owner';
 
   // Server-evaluated runtime gate (fail-safe OFF). The static flag below still
@@ -95,6 +96,21 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   });
   // A removal ping re-reads this page (useCommunityBadge); a missed one heals on the way back (#1165).
   useVoiceCatchUp(note, noteEnabled);
+
+  // VUX-B2: losing the community while this page is open (a ban, a removal) asks the server for the
+  // note again; the page shows Loading, with the player unloaded, until the server says it may be heard.
+  const meWorkspace = me ? me.workspace_id : undefined;
+  const meMembership = me ? (me.membership?.id ?? null) : undefined;
+  const admitted = useRef<[string | null, string | null] | null>(null);
+  useEffect(() => {
+    if (meWorkspace === undefined || meMembership === undefined) return;
+    const before = admitted.current;
+    admitted.current = [meWorkspace, meMembership];
+    const lost =
+      !!before &&
+      ((before[0] !== null && before[0] !== meWorkspace) || (before[1] !== null && before[1] !== meMembership));
+    if (lost) void qc.resetQueries({ queryKey: voiceKeys.note(voiceNoteId), exact: true });
+  }, [meWorkspace, meMembership, qc, voiceNoteId]);
 
   // Announce the surface once metadata loads so a screen-reader user gets a
   // landmark for the detail they navigated into.
