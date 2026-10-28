@@ -29,6 +29,8 @@ jest.mock('../../api/communityVoiceApi', () => {
 import { communityVoiceApi } from '../../api/communityVoiceApi';
 import { publishVoiceNote, useVoiceUpload } from '../useVoiceUpload';
 import { voiceKeys } from '../voiceQueryKeys';
+import { authEpoch } from '../../services/accountBinding';
+import { authEvents } from '../../utils/authEvents';
 
 const api = jest.mocked(communityVoiceApi);
 const WS = '11111111-1111-4111-8111-111111111111';
@@ -90,16 +92,18 @@ describe('useVoiceUpload — three-hop publish', () => {
       await result.current.mutateAsync(goodInput);
     });
 
+    // The hook names no sign-in (BF-2: only the outbox binds its sends), so the last argument is empty.
     expect(api.issueUploadUrl).toHaveBeenCalledWith(WS, {
       duration_ms: 3000,
       bytes: 50_000,
       mime_type: 'audio/mp4',
-    });
+    }, undefined);
     expect(readBytes).toHaveBeenCalledWith('file:///tmp/rec.m4a');
     expect(api.uploadBytes).toHaveBeenCalledWith(
       target.upload_url,
       expect.any(ArrayBuffer),
       'audio/mp4',
+      undefined,
       undefined,
     );
     expect(api.create).toHaveBeenCalledWith(WS, {
@@ -107,7 +111,7 @@ describe('useVoiceUpload — three-hop publish', () => {
       duration_ms: 3000,
       bytes: 50_000,
       mime_type: 'audio/mp4',
-    });
+    }, undefined);
     // RNTL v14 + TanStack Query v5: post-mutation state lands on the next
     // microtask flush; wait for it so the assertion is not racing the
     // mutation's internal setState.
@@ -128,6 +132,7 @@ describe('useVoiceUpload — three-hop publish', () => {
     expect(api.create).toHaveBeenCalledWith(
       WS,
       expect.objectContaining({ cohortId: 'co-9' }),
+      undefined,
     );
   });
 });
@@ -191,7 +196,7 @@ describe('publishVoiceNote — a resend posts the same key (C-4)', () => {
     const onUploaded = jest.fn(() => expect(api.create).not.toHaveBeenCalled());
     await publishVoiceNote(WS, goodInput, { readBytes, onUploaded });
     expect(onUploaded).toHaveBeenCalledWith(target.storage_key);
-    expect(api.create).toHaveBeenCalledWith(WS, expect.objectContaining({ storage_key: target.storage_key }));
+    expect(api.create).toHaveBeenCalledWith(WS, expect.objectContaining({ storage_key: target.storage_key }), undefined);
   });
 
   it('with a kept key: no new upload, the same key is posted', async () => {
@@ -208,6 +213,59 @@ describe('publishVoiceNote — a resend posts the same key (C-4)', () => {
       duration_ms: 3000,
       bytes: 50_000,
       mime_type: 'audio/mp4',
+    }, undefined);
+  });
+});
+
+// BF-2 (LS-871X, VF-848B): the outbox's publish is bound to the sign-in that sends it. It names that
+// sign-in on every hop (the API client sends a hop only with that sign-in's own credential) and stops at
+// the first check after the sign-in changes, so nothing of the old sign-in's note goes on.
+describe('publishVoiceNote — bound to one sign-in (BF-2)', () => {
+  const readBytes = () => Promise.resolve(new ArrayBuffer(8));
+  const bound = () => ({ subject: 'sub:user-1', epoch: authEpoch() });
+  const stopped = { code: 'ACCOUNT_CHANGED' };
+
+  it('names its sign-in on every hop', async () => {
+    const binding = bound();
+    await publishVoiceNote(WS, goodInput, { readBytes, binding });
+    expect(api.issueUploadUrl).toHaveBeenCalledWith(WS, expect.anything(), binding);
+    expect(api.uploadBytes).toHaveBeenCalledWith(target.upload_url, expect.any(ArrayBuffer), 'audio/mp4', undefined, binding);
+    expect(api.create).toHaveBeenCalledWith(WS, expect.anything(), binding);
+  });
+
+  it('a sign-in change while the upload target is minted: no bytes go up and nothing is posted', async () => {
+    api.issueUploadUrl.mockImplementationOnce(async () => {
+      authEvents.emit();
+      return target;
     });
+    await expect(publishVoiceNote(WS, goodInput, { readBytes, binding: bound() })).rejects.toMatchObject(stopped);
+    expect(api.uploadBytes).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it('a sign-in change during the upload: no key is told and nothing is posted', async () => {
+    const onUploaded = jest.fn();
+    api.uploadBytes.mockImplementationOnce(async () => {
+      authEvents.emit();
+    });
+    await expect(publishVoiceNote(WS, goodInput, { readBytes, binding: bound(), onUploaded })).rejects.toMatchObject(stopped);
+    expect(onUploaded).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it('a sign-in change while the note is posted: its answer is not taken', async () => {
+    api.create.mockImplementationOnce(async () => {
+      authEvents.emit();
+      return createdNote;
+    });
+    await expect(publishVoiceNote(WS, goodInput, { readBytes, binding: bound() })).rejects.toMatchObject(stopped);
+  });
+
+  it('a sign-in that is already over sends nothing at all', async () => {
+    const binding = bound();
+    authEvents.emit();
+    await expect(publishVoiceNote(WS, goodInput, { readBytes, binding })).rejects.toMatchObject(stopped);
+    expect(api.issueUploadUrl).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
   });
 });

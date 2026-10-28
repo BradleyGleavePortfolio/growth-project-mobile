@@ -65,3 +65,37 @@ export function registerVoicePlayback(port: VoicePlaybackPort | null): void {
 export function resolveVoicePlayback(): VoicePlaybackPort {
   return registered ?? nativeVoicePlayback() ?? unavailablePlayback;
 }
+
+/**
+ * BF-1 (LS-871X on m#871): one voice note plays at a time, across every port
+ * and screen (Hall, note detail, coach report queue, the record sheet's
+ * listen-back). A player takes the turn as it starts; the note that had it is
+ * stopped: paused with its place kept, or, if still loading, told not to play
+ * when its load lands. Pause, end, error and unload give the turn back, and
+ * nothing ever hands it on, so an unload or a late load never restarts a
+ * paused note.
+ */
+export interface VoicePlaybackTurn {
+  /** Called when another note takes the turn. Resolves once this one is quiet. */
+  stop(): Promise<void>;
+}
+
+let turn: VoicePlaybackTurn | null = null;
+
+/** Take the turn; resolves once the note that had it has stopped (at once if none). */
+export function takeVoicePlaybackTurn(next: VoicePlaybackTurn): Promise<void> {
+  const previous = turn;
+  turn = next;
+  if (!previous || previous === next) return Promise.resolve();
+  return previous.stop().catch(() => undefined);
+}
+
+/** True while this note holds the turn. */
+export function hasVoicePlaybackTurn(holder: VoicePlaybackTurn): boolean {
+  return turn === holder;
+}
+
+/** Give the turn back (pause, end, error, unload). A no-op if another note has it. */
+export function endVoicePlaybackTurn(holder: VoicePlaybackTurn): void {
+  if (turn === holder) turn = null;
+}
