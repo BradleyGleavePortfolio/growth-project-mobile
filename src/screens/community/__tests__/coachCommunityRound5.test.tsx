@@ -236,3 +236,39 @@ describe('Member counts read naturally and the spoken row says what it shows', (
     expect(queryByText('1 members')).toBeNull();
   });
 });
+
+describe('Create takes only a name the server accepts', () => {
+  // CreateCohortDto trims, then needs 2 to 120 characters; anything else was
+  // refused with a 400 the app explained as "a server problem".
+  async function openCreate() {
+    mockState.cohorts = idle([cohort()]);
+    const screen = await render(<CoachCommunityCohortsScreen />);
+    await fireEvent.press(screen.getByTestId('coach-community-cohorts-fab'));
+    return screen;
+  }
+
+  it('keeps Create off for a one-letter name and sends a two-letter one', async () => {
+    const screen = await openCreate();
+    const input = screen.getByTestId('coach-community-cohorts-name-input');
+    const submit = () => screen.getByTestId('coach-community-cohorts-modal-submit');
+    await fireEvent.changeText(input, ' A ');
+    expect(submit().props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: true }),
+    );
+    await fireEvent.press(submit());
+    await fireEvent(input, 'submitEditing');
+    expect(mockCreateMutate).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(input, 'AB');
+    expect(submit().props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: false }),
+    );
+    await fireEvent.press(submit());
+    expect(mockCreateMutate).toHaveBeenCalledWith({ name: 'AB' }, expect.any(Object));
+  });
+
+  it('stops the name at 120 characters, the server limit', async () => {
+    const screen = await openCreate();
+    expect(screen.getByTestId('coach-community-cohorts-name-input').props.maxLength).toBe(120);
+  });
+});
