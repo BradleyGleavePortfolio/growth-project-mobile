@@ -1,0 +1,7 @@
+src/api
+src/hooks
+src/screens/community
+src/components/community
+src/navigation
+src/screens/messaging
+src/__tests__
