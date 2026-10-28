@@ -23,7 +23,9 @@ jest.mock('../../../../api/romanApi', () => {
 jest.mock('../../../../config/featureFlags', () => ({ featureFlags: { clientPathCopilot: true } }));
 jest.mock('../../../../api/schedulingApi', () => ({ resolveClientTimezone: () => 'UTC' }));
 jest.mock('../../../../hooks/useCalendar', () => ({ useMyCoaches: () => ({ data: [{ name: 'Alex Rivera' }] }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }), NavigationContext: jest.requireActual('react').createContext(null) }));
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ goBack: jest.fn() }), useRoute: () => ({ params: undefined }), NavigationContext: jest.requireActual('react').createContext(null),
+}));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
@@ -31,7 +33,7 @@ jest.mock('../../../../components/roman/RomanTypingIndicator', () => ({ __esModu
 jest.mock('../../../../components/roman/RomanCrisisActions', () => ({ __esModule: true, default: () => mockText('crisis buttons') }));
 jest.mock('../../../../components/coachless/JoinCoachState', () => ({
   __esModule: true, default: ({ title }: { title: string }) => mockText(title), useClientNeedsCoach: () => mockNeedsCoach,
-  ROMAN_LOCK_TITLE: 'Roman works with a coach', ROMAN_LOCK_BODY: 'lock body',
+  ROMAN_LOCK_TITLE: 'Roman works with a coach', ROMAN_LOCK_BODY: 'lock body', JOIN_A_COACH: 'Join a coach',
 }));
 jest.mock('../../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-1', role: 'student' }) }));
 jest.mock('../../../../theme/ThemeProvider', () => {
@@ -70,7 +72,7 @@ test('the week block draws the server week, and a change this week offers its ow
   expect(s.getByText('Roman answers from your plan, check-ins and logs. Changes go to Alex first.')).toBeTruthy();
 });
 
-test('a question goes through Roman with the Copilot header; the answer shows its facts and the suggestion card', async () => {
+test('a question goes through Roman with the Copilot header; an answer that offers a change is plain text over the suggestion card', async () => {
   get.mockResolvedValue({ data: { week: { ...WEEK, target: { ...WEEK.target, from: '2020-01-06T00:00:00Z' } }, suggestions: [] } } as never);
   send.mockResolvedValueOnce({ text: 'Friday works [1]. Saturday trains other muscles [2].', messageId: 'm1', interrupted: false,
     copilot: { sources: FACTS, suggestion: SUGGESTED } } as never);
@@ -80,11 +82,11 @@ test('a question goes through Roman with the Copilot header; the answer shows it
   await act(async () => fireEvent.press(s.getByText('Explain my targets')));
   expect(open).toHaveBeenCalledWith('client');
   expect(send).toHaveBeenCalledWith('sess-1', 'Explain my targets', { copilot: true });
-  expect(s.getByTestId('copilot-lead').props.children).toBe('Friday works.');
-  expect(s.getByText('Saturday trains other muscles.')).toBeTruthy();
-  expect(s.getByText('From your data')).toBeTruthy();
-  expect(s.getByText(FACTS[1].label)).toBeTruthy();
-  expect(s.getByText('Check-in')).toBeTruthy();
+  // Frame 04 (Sol B-851-G2): no serif lead and no facts tray; the suggestion card carries the source tags.
+  expect(s.queryByTestId('copilot-lead')).toBeNull();
+  expect(s.getByText('Friday works. Saturday trains other muscles.')).toBeTruthy();
+  expect(s.queryByText('From your data')).toBeNull();
+  expect(s.getByText('Plan')).toBeTruthy();
   expect(s.getByText('Send to Alex')).toBeTruthy();
   expect(s.getByTestId('copilot-suggestion-tags')).toBeTruthy();
   expect(s.getByText('2,150 kcal target')).toBeTruthy();
