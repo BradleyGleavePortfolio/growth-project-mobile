@@ -141,7 +141,9 @@ function buildRowAccessibilityLabel(
   item: CoachInboxItem,
   ack: AckBadgeInput | undefined,
 ): string {
-  const base = `${item.client_name} in ${item.cohort_name}: ${item.snippet}`;
+  // C3: the label also says the time the row shows, with words in full.
+  const when = inboxRowTime(item.created_at, new Date(), true);
+  const base = `${item.client_name} in ${item.cohort_name}${when ? `, ${when}` : ''}: ${item.snippet}`;
   if (!ACKS_ENABLED || ack == null) return base;
   const { showStatePill, slaState, breached } = resolveAckBadgeVisibility(ack);
   const SLA_PHRASE: Record<'warning' | 'breached', string> = {
@@ -406,9 +408,15 @@ export function inboxDateLine(now: Date = new Date()): string {
 
 /**
  * Row time in the K2 style: a clock time for today ("6:41 am"), the weekday
- * within the last week ("Wed"), else the date ("14 Oct").
+ * within the last week ("Wed"), else the date ("14 Oct"). `spoken` gives the
+ * day and month in full ("Wednesday", "14 October") for screen readers.
  */
-export function inboxRowTime(iso: string, now: Date = new Date()): string {
+export function inboxRowTime(
+  iso: string,
+  now: Date = new Date(),
+  spoken = false,
+): string {
+  const cut = (word: string): string => (spoken ? word : word.slice(0, 3));
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return '';
   if (then.toDateString() === now.toDateString()) {
@@ -417,8 +425,8 @@ export function inboxRowTime(iso: string, now: Date = new Date()): string {
     return `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h < 12 ? 'am' : 'pm'}`;
   }
   const days = (now.getTime() - then.getTime()) / 86_400_000;
-  if (days >= 0 && days < 7) return DAYS[then.getDay()].slice(0, 3);
-  return `${then.getDate()} ${MONTHS[then.getMonth()].slice(0, 3)}`;
+  if (days >= 0 && days < 7) return cut(DAYS[then.getDay()]);
+  return `${then.getDate()} ${cut(MONTHS[then.getMonth()])}`;
 }
 
 function InboxTitle({
