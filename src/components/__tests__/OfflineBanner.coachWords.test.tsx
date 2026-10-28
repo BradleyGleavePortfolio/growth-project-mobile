@@ -17,19 +17,20 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 import OfflineBanner from '../OfflineBanner';
 
-const CLIENT_WORDS = 'You\u2019re offline \u2014 food logs will sync when you reconnect.';
+const CLIENT_WORDS = "You're offline \u2014 food logs will sync when you reconnect.";
+const COACH_WORDS = "You're offline \u2014 reconnect to load the latest.";
 
 describe('Offline banner words fit who is signed in', () => {
   it.each(['coach', 'sub_coach', 'owner'])('a %s is not told food logs will sync', async (role) => {
     mockUser.current = { role };
     const { getByText, queryByText } = await render(<OfflineBanner />);
-    expect(getByText('You\u2019re offline \u2014 reconnect to load the latest.')).toBeTruthy();
+    expect(getByText(COACH_WORDS)).toBeTruthy();
     expect(queryByText(/food logs/)).toBeNull();
   });
 
   it.each([{ role: 'client' }, {}, null])('a client (or no saved account) keeps the food log line', async (user) => {
     mockUser.current = user;
     const { getByText } = await render(<OfflineBanner />);
-    expect(getByText(CLIENT_WORDS.replace('\u2019', "'"))).toBeTruthy();
+    expect(getByText(CLIENT_WORDS)).toBeTruthy();
   });
 });
