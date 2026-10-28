@@ -319,7 +319,7 @@ describe('Invite takes only an email the server accepts', () => {
     return screen;
   }
 
-  it.each(['dana@gmail.c', 'dana@gmail..com', 'dana.@gmail.com', '.dana@gmail.com', 'dana@gmail.com.'])(
+  it.each(['dana@example.c', 'dana@example..com', 'dana.@example.com', '.dana@example.com', 'dana@example.com.'])(
     'keeps Send invite off for %s',
     async (typed) => {
       const screen = await openInvite();
@@ -334,11 +334,11 @@ describe('Invite takes only an email the server accepts', () => {
     const screen = await openInvite();
     await fireEvent.changeText(
       screen.getByTestId('coach-community-cohort-detail-email-input'),
-      ' dana.cruz+spring@mail.example.co.uk ',
+      ' dana.cruz+spring@mail.example.org ',
     );
     await fireEvent.press(screen.getByTestId('coach-community-cohort-detail-invite-submit'));
     expect(mockInviteMutate).toHaveBeenCalledWith(
-      { email: 'dana.cruz+spring@mail.example.co.uk' },
+      { email: 'dana.cruz+spring@mail.example.org' },
       expect.any(Object),
     );
   });
