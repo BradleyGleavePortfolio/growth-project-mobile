@@ -1,0 +1,11 @@
+src/components/community
+src/screens/community
+src/hooks/__tests__/useCommunity
+src/hooks/__tests__/useVoice
+src/api/communityVoiceApi
+src/api/__tests__/communityVoiceApi
+src/api/__tests__/communitySafetyApi
+src/navigation/__tests__/community
+src/services/__tests__/voiceAudio
+src/services/__tests__/queryClient
+src/screens/client/__tests__/CommunityWinsScreen
