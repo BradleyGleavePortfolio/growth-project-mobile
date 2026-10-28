@@ -1,0 +1,12 @@
+src/components/community
+src/screens/community
+src/hooks
+src/api
+src/navigation
+src/__tests__/copyVoice.guard.test.ts
+src/__tests__/truthfulCopy.guard.test.ts
+src/__tests__/quietLuxuryDoctrine.test.ts
+src/__tests__/wave11Doctrine.test.ts
+src/__tests__/keyboardSafeSheets.test.tsx
+src/__tests__/c6Copy.test.tsx
+src/__tests__/boneSwapGuard.test.ts
