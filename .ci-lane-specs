@@ -1,0 +1,5 @@
+src/screens/client/copilot
+src/screens/client/__tests__
+src/navigation
+src/screens/coach/copilot
+src/screens/client/learn/__tests__/learnDoor.test.tsx
