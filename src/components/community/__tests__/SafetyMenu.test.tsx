@@ -463,6 +463,95 @@ describe('SafetyMenu — GOAL B-06 sheet (FR-848R5)', () => {
   });
 });
 
+// REMOVED-BY-M (owner #174-4): a reported item keeps its menu; the coach's Remove is asked in the same sheet.
+describe('SafetyMenu — Reported and Remove for everyone (REMOVED-BY-M)', () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  const flat = (n: { props: { style?: unknown } }) => StyleSheet.flatten(n.props.style);
+
+  it('a reported item shows Report as done (not a button) and keeps Block', async () => {
+    const { getByTestId, queryByTestId, getByText } = await renderMenu({ targetType: 'voice_note', reported: true });
+    await fireEvent.press(getByTestId('sm'));
+    const done = getByTestId('sm-reported');
+    expect(done.props.accessibilityState).toEqual({ disabled: true });
+    expect(done.props.accessibilityLabel).toBe('Reported');
+    expect(getByText('Reported')).toBeTruthy();
+    expect(flat(getByText('Reported'))).toMatchObject({ color: '#5A5A56' });
+    expect(queryByTestId('sm-report')).toBeNull();
+    expect(getByTestId('sm-block')).toBeTruthy();
+  });
+
+  it('Remove for everyone swaps the menu for the question in the same sheet; no alert', async () => {
+    const onRemove = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId, queryByTestId, getByText } = await renderMenu({
+      targetType: 'voice_note',
+      contentNoun: 'voice note',
+      onRemove,
+    });
+    await fireEvent.press(getByTestId('sm'));
+    expect(getByTestId('sm-report')).toBeTruthy();
+    expect(getByTestId('sm-block')).toBeTruthy();
+    await fireEvent.press(getByTestId('sm-remove'));
+    expect(onRemove).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(getByTestId('sm-confirm-remove')).toBeTruthy();
+    expect(queryByTestId('sm-report')).toBeNull();
+    expect(queryByTestId('sm-block')).toBeNull();
+    expect(queryByTestId('sm-remove')).toBeNull();
+    expect(flat(getByText('Remove this voice note for everyone?'))).toMatchObject({ fontSize: 18, fontWeight: '600' });
+    expect(getByText('Everyone here will see that you removed it.')).toBeTruthy();
+    expect(flat(getByText('Remove for everyone'))).toMatchObject({ fontSize: 16, fontWeight: '600' });
+    await act(async () => {
+      fireEvent.press(getByTestId('sm-remove-confirm'));
+    });
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(alertSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(queryByTestId('sm-confirm-remove')).toBeNull());
+  });
+
+  it('Cancel on the question removes nothing and the next open starts at the menu', async () => {
+    const onRemove = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId, queryByTestId } = await renderMenu({ onRemove });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-remove'));
+    await fireEvent.press(getByTestId('sm-close'));
+    expect(onRemove).not.toHaveBeenCalled();
+    await fireEvent.press(getByTestId('sm'));
+    expect(getByTestId('sm-remove')).toBeTruthy();
+    expect(queryByTestId('sm-confirm-remove')).toBeNull();
+  });
+
+  it('a failed remove says what happened and keeps the sheet open', async () => {
+    const onRemove = jest.fn().mockRejectedValue(new Error('offline'));
+    const { getByTestId } = await renderMenu({ onRemove });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-remove'));
+    await act(async () => {
+      fireEvent.press(getByTestId('sm-remove-confirm'));
+    });
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(getByTestId('sm-confirm-remove')).toBeTruthy();
+  });
+
+  it('own content never gets Remove; it keeps Delete', async () => {
+    const onRemove = jest.fn().mockResolvedValue(undefined);
+    const onDelete = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId, queryByTestId } = await renderMenu({ authorUserId: ME, onRemove, onDelete });
+    await fireEvent.press(getByTestId('sm'));
+    expect(queryByTestId('sm-remove')).toBeNull();
+    expect(queryByTestId('sm-reported')).toBeNull();
+    expect(getByTestId('sm-delete')).toBeTruthy();
+  });
+
+  it('every line of the question names a loaded Inter face', async () => {
+    const { getByTestId, container } = await renderMenu({ onRemove: jest.fn().mockResolvedValue(undefined) });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-remove'));
+    const texts = container.queryAll((n) => n.type === 'Text');
+    expect(texts.length).toBeGreaterThan(3);
+    for (const t of texts) expect(String(flat(t)?.fontFamily)).toMatch(/^Inter_/);
+  });
+});
+
 // Opus R5-B4: on iOS an Alert raised over the open sheet, or while it closes, can be dropped. Every
 // Alert that follows the sheet (the Delete and Block confirms, "Report sent") waits for the Modal's
 // onDismiss: the sheet is gone first, then the Alert, then the action.
@@ -520,6 +609,50 @@ describe('SafetyMenu — iOS: the sheet closes before its Alert (Opus R5-B4)', (
     expect(title).toBe('Report sent');
     expect(message).toMatch(/911/);
     expect(message).toMatch(/988/);
+    expect(onReported).toHaveBeenCalledTimes(1);
+  });
+
+  // VUX-B3 (LS-VUX m#886): Cancel while the report is still sending. The sheet has gone (its onDismiss has
+  // fired) by the time the server says yes, so Report sent and the fold come at once, not never.
+  it('Cancel while the report sends: Report sent and the fold still come once it is in', async () => {
+    let accept: () => void = () => undefined;
+    mockReport.mockImplementation(() => new Promise<void>((ok) => (accept = ok)));
+    const onReported = jest.fn();
+    const { getByTestId, queryByTestId } = await renderMenu({ targetType: 'voice_note', onReported });
+    await fireEvent.press(getByTestId('sm'));
+    const dismiss = sheetDismiss(getByTestId);
+    await fireEvent.press(getByTestId('sm-report'));
+    // The press resolves with the report itself, so it is not awaited until the server answers.
+    const sending = fireEvent.press(getByTestId('sm-reason-spam'));
+    await waitFor(() => expect(mockReport).toHaveBeenCalledTimes(1));
+    await fireEvent.press(getByTestId('sm-close'));
+    expect(queryByTestId('sm-sheet')).toBeNull();
+    await act(async () => dismiss()); // iOS: the sheet is gone
+    expect(alertSpy).not.toHaveBeenCalled();
+    await act(async () => accept());
+    await sending;
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy).toHaveBeenCalledWith('Report sent', expect.any(String));
+    expect(onReported).toHaveBeenCalledTimes(1);
+  });
+
+  it('Cancel, and the report is in before the sheet has gone: Report sent waits for onDismiss', async () => {
+    let accept: () => void = () => undefined;
+    mockReport.mockImplementation(() => new Promise<void>((ok) => (accept = ok)));
+    const onReported = jest.fn();
+    const { getByTestId } = await renderMenu({ targetType: 'voice_note', onReported });
+    await fireEvent.press(getByTestId('sm'));
+    const dismiss = sheetDismiss(getByTestId);
+    await fireEvent.press(getByTestId('sm-report'));
+    const sending = fireEvent.press(getByTestId('sm-reason-spam'));
+    await waitFor(() => expect(mockReport).toHaveBeenCalledTimes(1));
+    await fireEvent.press(getByTestId('sm-close'));
+    await act(async () => accept()); // still closing
+    await sending;
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(onReported).not.toHaveBeenCalled();
+    await act(async () => dismiss());
+    expect(alertSpy).toHaveBeenCalledWith('Report sent', expect.any(String));
     expect(onReported).toHaveBeenCalledTimes(1);
   });
 

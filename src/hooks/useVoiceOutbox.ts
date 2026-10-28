@@ -18,6 +18,7 @@ import { featureFlags } from '../config/featureFlags';
 import { readUserCache } from '../lib/userCache';
 import { queryClient } from '../services/queryClient';
 import { isEffectivelyOnline, useNetworkStatus } from './useNetworkStatus';
+import { CommunityApiError } from '../api/apiCall';
 import { publishVoiceNote, type VoiceUploadInput } from './useVoiceUpload';
 import { voiceKeys } from './voiceQueryKeys';
 import type { VoiceRecordingResult } from './voiceRecorderPort';
@@ -34,6 +35,8 @@ export interface VoiceOutboxItem {
   status: VoiceOutboxStatus;
   /** Upload share in [0,1] while sending — the GOAL 03 line under the row. */
   progress?: number;
+  /** C-4: the bytes are up under this key; a resend only posts it again, so a lost reply never makes two notes. */
+  uploadedKey?: string;
 }
 
 const STORE_KEY = 'tgp.voiceOutbox.v1';
@@ -92,7 +95,7 @@ function restore(): Promise<void> {
 function patch(id: string, p: Partial<VoiceOutboxItem>): void {
   commit(items.map((i) => (i.id === id ? { ...i, ...p } : i)));
 }
-/** Upload progress: drawn, not saved (a restart sends again from the start). */
+/** Upload progress: drawn, not saved (a restart starts the line again). */
 function setProgress(id: string, f: number): void {
   const cur = items.find((i) => i.id === id);
   if (!cur || cur.status !== 'sending' || (f < 1 && Math.abs(f - (cur.progress ?? 0)) < 0.04)) return;
@@ -167,12 +170,18 @@ async function run(id: string, qc: QueryClient): Promise<void> {
   }
   patch(id, { status: 'sending', progress: 0 });
   try {
-    await publishVoiceNote(item.workspaceId, item.input, { onProgress: (f) => setProgress(id, f) });
+    await publishVoiceNote(item.workspaceId, item.input, {
+      onProgress: (f) => setProgress(id, f),
+      uploadedKey: item.uploadedKey,
+      onUploaded: (key) => patch(id, { uploadedKey: key }),
+    });
     // Keep the row until the feed holds the real note, so nothing blinks out.
     await qc.invalidateQueries({ queryKey: voiceKeys.feedRoot(item.workspaceId) });
     remove(id);
     void HapticService.success(); // GOAL: the note is in; a soft success, not silence
-  } catch {
+  } catch (err) {
+    // C-4: the server turned that key down (too old, or the bytes are gone): the next try uploads again.
+    if (err instanceof CommunityApiError && err.status === 400) patch(id, { uploadedKey: undefined });
     // Offline by now: wait for the signal. Online: say it did not send.
     patch(id, { status: online ? 'failed' : 'waiting' });
     if (online) void HapticService.error();
