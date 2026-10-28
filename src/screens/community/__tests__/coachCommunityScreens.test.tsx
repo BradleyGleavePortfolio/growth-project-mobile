@@ -1661,11 +1661,13 @@ describe('FX4-868 round 4 — pull to retry on the empty pages, the member sheet
     expect(queryByTestId('coach-community-member-menu-remove')).toBeNull();
   });
 
-  it('a long member name may take two lines (130% text), never cut to one', async () => {
+  it('a long member name may take two lines and the email reads in full (130% text), never cut', async () => {
     mockRouteParams.current = { cohortId: COHORT };
-    mockState.cohortDetail = { data: { cohort: cohort(), members: [member({ name: 'Morgan Featherstonehaugh' })] }, isLoading: false, isError: false };
+    const email = 'morgan.featherstonehaugh.training@example.com';
+    mockState.cohortDetail = { data: { cohort: cohort(), members: [member({ name: 'Morgan Featherstonehaugh', email })] }, isLoading: false, isError: false };
     const { getByText } = await render(<CoachCommunityCohortDetailScreen />);
     expect(getByText('Morgan Featherstonehaugh').props.numberOfLines).toBe(2);
+    expect(getByText(`client · ${email}`).props.numberOfLines).toBeUndefined();
   });
 
   it('the Cohorts and cohort error cards use the inbox card: an outlined forest Try again, so the page keeps one filled button', async () => {

@@ -174,7 +174,8 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           <Text style={styles.memberName} numberOfLines={2}>
             {item.name}
           </Text>
-          <Text style={styles.memberMeta} numberOfLines={2}>
+          {/* The email wraps in full: at 130% text a cut address cannot be read. */}
+          <Text style={styles.memberMeta}>
             {item.role}
             {item.email ? ` · ${item.email}` : ''}
           </Text>
