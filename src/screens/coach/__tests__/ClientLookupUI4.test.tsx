@@ -11,6 +11,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 const mockGetClients = jest.fn();
 const mockUnread = jest.fn();
 const mockSendNudge = jest.fn();
+const mockPrefs = new Map<string, string>(); // this phone's saved block list (blockedUsersStore)
+const mockListBlocked = jest.fn(); // GET /users/blocks
 const mockCache = new Map<string, string>();
 const mockHaptic = { success: jest.fn(), error: jest.fn(), warning: jest.fn(), selection: jest.fn() };
 const mockRenders = { az: 0 }; // A to Z row renders (Opus B1: a scroll must not redraw the rows)
@@ -19,7 +21,9 @@ jest.mock('../../../services/api', () => ({
 }));
 jest.mock('../../../storage/mmkv', () => ({
   cacheStorage: { getStringAsync: async (k: string) => mockCache.get(k), set: async (k: string, v: string) => void mockCache.set(k, v) },
+  prefsStorage: { getString: () => undefined, getStringAsync: async (k: string) => mockPrefs.get(k), set: async (k: string, v: string) => void mockPrefs.set(k, v), delete: async (k: string) => void mockPrefs.delete(k) },
 }));
+jest.mock('../../../api/messagesApi', () => ({ messagesModerationApi: { listBlocked: () => mockListBlocked() } }));
 jest.mock('../../../ui/haptics/haptics.service', () => ({ get HapticService() { return mockHaptic; } }));
 let mockRole: string | undefined = 'coach';
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: mockRole }) }));
@@ -58,9 +62,11 @@ jest.mock('../../../navigation/coachLanding', () => ({ coachLandingTab: () => 'C
 import ClientLookupScreen from '../lookup/ClientLookupScreen';
 import { CoachTeamEntryContext } from '../../../navigation/coachTeamEntry';
 import { useCoachStore } from '../../../store/coachStore';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { featureFlags } from '../../../config/featureFlags';
 import { dayWord, groupByLetter, lastLoggedWord, lookupReason, needsYouSentence, parseLookupQuery, recentFromRoster } from '../../../utils/coach/clientLookup';
 import type { RosterClient } from '../../../utils/coach/clientRoster';
+import { needsAndSteady } from '../home-v11/useCoachHomeV11';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const day = (offset: number) => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -84,6 +90,7 @@ async function mount(rows: ReturnType<typeof wire>[], unread: Record<string, num
   mockUnread.mockResolvedValue({ data: { total: 0, by_client: unread } });
   await render(<CoachTeamEntryContext.Provider value><ClientLookupScreen navigation={nav} route={route as never} /></CoachTeamEntryContext.Provider>);
   await waitFor(() => expect(screen.getByTestId('lookup-count')).toBeTruthy());
+  await waitFor(() => expect(screen.queryByText('Loading clients')).toBeNull()); // this phone's block list is read first
 }
 
 const UNDER_15 = [wire('c1', 'Maya Brooks', { last: day(0), review: 2 }), wire('c2', 'Theo Grant', { last: day(0), workout: day(0) }), wire('c3', 'Priya Nair', {}, day(-2))];
@@ -91,7 +98,16 @@ const NAMES = ['Ana Lopez', 'Ava Price', 'Ben Carter', 'Bianca Shah', 'Chloe Dun
   'Grace Kim', 'Maya Brooks', 'Omar Haddad', 'Priya Nair', 'Sam Okafor', 'Theo Grant', 'Uma Reyes'];
 const MANY = NAMES.map((n, i) => wire(`m${i}`, n, n === 'Ben Carter' ? { last: day(-5) } : n === 'Ava Price' ? {} : { last: day(-1) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockCache.clear(); useCoachStore.getState().reset(); focused = true; mockRole = 'coach'; onTabBlur = undefined; });
+beforeEach(() => {
+  jest.clearAllMocks(); mockCache.clear(); useCoachStore.getState().reset(); focused = true; mockRole = 'coach'; onTabBlur = undefined;
+  mockListBlocked.mockResolvedValue({ blocked: [] });
+});
+// The store as the app leaves it once this coach's list is read (a block made a moment ago is in it), and the server's
+// list, which names the block too: Block posts it first, and GET /users/blocks's answer replaces this phone's copy (FX-872).
+const blockedNow = (id: string, displayName: string) => {
+  mockListBlocked.mockResolvedValue({ blocked: [{ blockedId: id, displayName, blockedAt: '2026-10-20T10:00:00Z' }] });
+  useBlockedUsersStore.setState({ blocked: [{ id, displayName, role: 'client', blockedAt: '2026-10-20T10:00:00Z' }], hydrated: true, userId: 'coach-1' });
+};
 
 describe('UI-4 helpers', () => {
   it('reads typed filter words and writes the Needs you sentence with number words', () => {
@@ -271,6 +287,79 @@ describe('UI-4 Search first (15 or more)', () => {
     await fireEvent.press(screen.getByTestId('lookup-chip-quiet'));
     expect(screen.getByText('2 results')).toBeTruthy();
     expect(screen.getByText('Ava Price')).toBeTruthy();
+  });
+  it('a client this coach blocked gets no messaging on any row (owner, b#1141): no Say hello, Reply, Message or Nudge; Review and the row stay', async () => {
+    blockedNow('c3', 'Priya Nair');
+    try {
+      await mount(UNDER_15);
+      expect([screen.queryByTestId('lookup-act-c3'), !!screen.getByTestId('lookup-row-c3'), !!screen.getByTestId('lookup-act-c1')]).toEqual([null, true, true]);
+      expect(screen.getByText('One needs you today. Two are steady.')).toBeTruthy(); // Priya's Say hello is not counted
+    } finally {
+      useBlockedUsersStore.setState({ blocked: [] });
+    }
+  });
+  it('the same on the 15+ list: a blocked client keeps the row with no Message or Nudge; an unblocked one keeps both', async () => {
+    blockedNow('m2', 'Ben Carter');
+    try {
+      await mount(MANY);
+      await fireEvent.changeText(screen.getByTestId('lookup-search'), 'ben');
+      expect([!!screen.getByTestId('lookup-row-m2'), screen.queryByTestId('lookup-message-m2'), screen.queryByTestId('lookup-nudge-m2')]).toEqual([true, null, null]);
+      await fireEvent.changeText(screen.getByTestId('lookup-search'), 'bianca');
+      expect([!!screen.getByTestId('lookup-message-m3'), !!screen.getByTestId('lookup-nudge-m3')]).toEqual([true, true]); // control: not blocked
+    } finally {
+      useBlockedUsersStore.setState({ blocked: [] });
+    }
+  });
+  describe('on a cold start (LO m#866 B1): the lookup reads the block list itself, before any chat screen has', () => {
+    const KEY = 'blocked_user_ids_v1:coach-1';
+    const PRIYA = { id: 'c3', displayName: 'Priya Nair', role: 'client', blockedAt: '2026-10-20T10:00:00Z' };
+    const appStart = () => useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); // nothing read yet
+    beforeEach(() => { mockPrefs.clear(); appStart(); });
+    afterEach(() => { mockPrefs.clear(); appStart(); });
+    it("a client blocked earlier on this phone (its saved list; the server down) gets no Say hello and no count", async () => {
+      mockPrefs.set(KEY, JSON.stringify([PRIYA]));
+      mockListBlocked.mockRejectedValue(new Error('Network Error'));
+      await mount(UNDER_15);
+      expect([screen.queryByTestId('lookup-act-c3'), !!screen.getByTestId('lookup-row-c3'), !!screen.getByTestId('lookup-act-c1')]).toEqual([null, true, true]);
+      expect(screen.getByText('One needs you today. Two are steady.')).toBeTruthy();
+    });
+    it('a client GET /users/blocks names (blocked on another phone) loses Message and Nudge on the 15+ list', async () => {
+      mockListBlocked.mockResolvedValue({ blocked: [{ blockedId: 'm2', displayName: 'Ben Carter', blockedAt: '2026-10-20T10:00:00Z' }] });
+      await mount(MANY);
+      await fireEvent.changeText(screen.getByTestId('lookup-search'), 'ben');
+      await waitFor(() => expect(screen.queryByTestId('lookup-message-m2')).toBeNull());
+      expect([!!screen.getByTestId('lookup-row-m2'), screen.queryByTestId('lookup-nudge-m2')]).toEqual([true, null]);
+    });
+    it('shows no row with an action until the saved list is read', async () => {
+      mockListBlocked.mockResolvedValue({ blocked: [{ blockedId: 'c3', displayName: 'Priya Nair', blockedAt: PRIYA.blockedAt }] }); // the server's list names her too
+      let done: (v: string | undefined) => void = () => undefined;
+      const read = jest.requireMock('../../../storage/mmkv').prefsStorage;
+      const was = read.getStringAsync;
+      read.getStringAsync = (k: string) => (k === KEY ? new Promise((r) => { done = r; }) : was(k));
+      try {
+        mockGetClients.mockImplementation(async (status: string) => (status === 'archived' ? { data: [] } : { data: UNDER_15 }));
+        mockUnread.mockResolvedValue({ data: { total: 0, by_client: {} } });
+        await render(<CoachTeamEntryContext.Provider value><ClientLookupScreen navigation={nav} /></CoachTeamEntryContext.Provider>);
+        await waitFor(() => expect(screen.getByTestId('lookup-count')).toBeTruthy());
+        expect([!!screen.getByText('Loading clients'), screen.queryByTestId('lookup-act-c1'), screen.queryByTestId('lookup-act-c3')]).toEqual([true, null, null]);
+        await act(async () => { done(JSON.stringify([PRIYA])); });
+        await waitFor(() => expect(screen.getByTestId('lookup-act-c1')).toBeTruthy());
+        expect(screen.queryByTestId('lookup-act-c3')).toBeNull();
+      } finally { read.getStringAsync = was; }
+    });
+  });
+  it("the Home's Needs you tile counts what this list shows, a blocked client with an action left out of both (LO m#866 B2)", async () => {
+    blockedNow('c3', 'Priya Nair'); // Priya, new this week, would get Say hello
+    try {
+      await mount(UNDER_15, {}, undefined, { params: { view: 'needs' } });
+      const listed = screen.queryAllByTestId(/^lookup-row-/).length;
+      const blockedIds = new Set(useBlockedUsersStore.getState().blocked.map((b) => b.id));
+      const tile = needsAndSteady(useCoachStore.getState().clients, {}, new Date(), blockedIds).needs.length;
+      expect([listed, tile]).toEqual([1, 1]);
+      expect(needsAndSteady(useCoachStore.getState().clients, {}, new Date()).needs.length).toBe(2); // control: unblocked, Priya counts
+    } finally {
+      useBlockedUsersStore.setState({ blocked: [] });
+    }
   });
   it('message and bell open the thread and the nudge form; a sent nudge gives the success haptic', async () => {
     mockSendNudge.mockResolvedValue({});

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import api from '../../../services/api';
 import type { DraftAsk } from './DraftSheets';
-import { useCoachBlockList } from './blockList';
+import type { CoachBlockList } from './blockList';
 
 export interface PlanEndedRow {
   client_id: string;
@@ -142,7 +142,7 @@ export function withoutBlocked(page: PlanEndedPage | null, blockedIds: ReadonlyA
 }
 
 /** The Home's read: on mount, on each return to the Home, and on `reload`. A failed re-read keeps the last list. */
-export function usePlanEnded() {
+export function usePlanEnded(blockList: CoachBlockList) {
   const isFocused = useIsFocused();
   const [page, setPage] = useState<PlanEndedPage | null>(null);
   const [state, setState] = useState<{ loading: boolean; error: unknown }>({ loading: true, error: null });
@@ -166,8 +166,9 @@ export function usePlanEnded() {
     mounted.current = true;
     void reload();
   }, [isFocused, reload]);
-  // Held until this phone's block list for the coach is read: a cold start never shows a blocked client (LO C1).
-  const { known, blockedIds } = useCoachBlockList();
+  // Held until this phone's block list for the coach is read: a cold start never shows a blocked client (LO C1). The
+  // list is the Home's own read (useCoachHomeV11), so a Home mount sends one GET /users/blocks (LO m#866 C1).
+  const { known, blockedIds } = blockList;
   const shown = useMemo(() => (known ? withoutBlocked(page, blockedIds) : null), [known, page, blockedIds]);
   return { page: shown, loading: state.loading || !known, error: state.error, reload };
 }

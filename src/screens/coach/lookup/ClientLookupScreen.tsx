@@ -30,6 +30,13 @@ import {
   needsYouSentence, parseLookupQuery, readRecentClientIds, recentFromRoster, rememberRecentClient,
   type LookupAction, type LookupFilter, type LookupReason, type UnreadByClient,
 } from '../../../utils/coach/clientLookup';
+import { HomeSheet, type DraftAsk } from '../home-v11/DraftSheets';
+import {
+  messagedLine, planEndedAsk, planEndedTitle, readPlanEnded, rowLine, rowParts, withoutBlocked, type LineParts, type PlanEndedPage, type PlanEndedRow,
+} from '../home-v11/planEndedData';
+import { KeepTail } from '../home-v11/PlanEnded';
+import { RomanMark } from '../home-v11/RomanMark';
+import { needsYouReason, useCoachBlockList } from '../home-v11/blockList';
 import { useLookupNudge } from './useLookupNudge';
 import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
@@ -51,7 +58,12 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const canSeeRiskBoard = me?.role === 'coach' || me?.role === 'owner';
   const { clients, isLoading, loadError, filterStatus, loadClients, setFilterStatus } = useCoachStore();
   const [query, setQuery] = useState('');
-  const [chip, setChip] = useState<LookupFilter | null>(null);
+  const [chip, setChip] = useState<LookupFilter | 'ended' | null>(null);
+  // RENEWAL3 L1-L3: CHURN-M's server list, read as the Home reads it (readPlanEnded). The chip shows only while the server
+  // answers with the list: a 404 (FEATURE_PLAN_RENEWAL off) or any other answer hides it; a failed re-read keeps the last list.
+  const [ended, setEnded] = useState<{ coach: string; page: PlanEndedPage | null } | null>(null);
+  const endedSeq = useRef(0);
+  const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [unread, setUnread] = useState<UnreadByClient>({});
   const [archivedCount, setArchivedCount] = useState<number | null>(null);
   const [recentIds, setRecentIds] = useState<string[]>([]);
@@ -73,15 +85,31 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const teamEntry = useContext(CoachTeamEntryContext); // COACHTABS: a Team Mode head coach opens Team here, as on today's list
   const archived = filterStatus === 'archived';
 
+  // The chip shows only on the 15+ (Search first) list, not Archived (owner 6352485746): no read for a list that can't show it.
+  const wantEnded = useRef(false);
+  const endedBusy = useRef<string | null>(null); // the coach whose read is in flight
+  const loadEnded = useCallback(async () => {
+    if (!coachId || !wantEnded.current || endedBusy.current === coachId) return; // a read in flight is already fresh
+    const mine = ++endedSeq.current;
+    endedBusy.current = coachId;
+    try {
+      const page = await readPlanEnded();
+      if (mine === endedSeq.current) setEnded({ coach: coachId, page });
+    } catch {
+      // a failed re-read keeps the last list
+    } finally {
+      if (mine === endedSeq.current) endedBusy.current = null;
+    }
+  }, [coachId]);
   const loadSide = useCallback(async () => {
     if (!coachId) return;
     setRecentIds(await readRecentClientIds(coachId));
-    const [u, a] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE)]);
+    const [u, a] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE), loadEnded()]);
     // A failed unread read keeps the counts already shown. The archived count shows only when one page holds them all.
     if (u.status === 'fulfilled') setUnread((u.value?.data?.by_client as UnreadByClient) ?? {});
     const rows: unknown = a.status === 'fulfilled' ? a.value?.data : null;
     setArchivedCount(Array.isArray(rows) && rows.length < ROSTER_PAGE_SIZE ? rows.length : null);
-  }, [coachId]);
+  }, [coachId, loadEnded]);
 
   useEffect(() => {
     if (coachId) loadClients(coachId, filterStatus);
@@ -114,9 +142,31 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   }, [navigation, needsView]);
   const searchFirst = archived || (!needsView && (activeTotal.current ?? roster.length) >= SEARCH_FIRST_AT);
   const parsed = parseLookupQuery(query);
-  const filters = chip && !parsed.filters.includes(chip) ? [...parsed.filters, chip] : parsed.filters;
-  const narrowing = parsed.text.length > 0 || filters.length > 0;
-  const results = roster.filter((c) => matchesRosterSearch(c, parsed.text) && filters.every((f) => matchesLookupFilter(c, f, unread)));
+  wantEnded.current = searchFirst && !archived;
+  const showEnded = wantEnded.current;
+  const haveEnded = !!ended && ended.coach === coachId;
+  useEffect(() => {
+    if (showEnded && !haveEnded) void loadEnded(); // the roster reached 15 after this focus's read was skipped
+  }, [showEnded, haveEnded, loadEnded]);
+  // b#1141's server leaves blocked pairs out; the phone also leaves out clients on the coach's own block list, read on
+  // mount (this phone's copy, then GET /users/blocks), and holds the rows until this phone's copy is read (LO B1).
+  const blockList = useCoachBlockList();
+  const blockKnown = !coachId || blockList.known;
+  // Owner (b#1141): a blocked pair gets no messaging at all, so no Message, Nudge, Reply or Say hello on any lookup row.
+  const blockedIds = useMemo(() => new Set(blockList.blockedIds), [blockList.blockedIds]);
+  const canMessage = (c: RosterClient) => !blockedIds.has(c.id);
+  const endedPage = useMemo(
+    () => (ended && ended.coach === coachId && blockList.known ? withoutBlocked(ended.page, blockList.blockedIds) : null),
+    [ended, coachId, blockList.known, blockList.blockedIds],
+  );
+  const endedOn = chip === 'ended' && endedPage != null;
+  const filters = chip && chip !== 'ended' && !parsed.filters.includes(chip) ? [...parsed.filters, chip] : parsed.filters;
+  const narrowing = parsed.text.length > 0 || filters.length > 0 || endedOn;
+  const matches = (c: RosterClient) => matchesRosterSearch(c, parsed.text) && filters.every((f) => matchesLookupFilter(c, f, unread));
+  // L2: the server's order (newest end first), and only clients on this coach's own list; typing still narrows it.
+  const byId = new Map(roster.map((c) => [c.id, c]));
+  const endedRows = endedOn && endedPage ? endedPage.items.flatMap((r) => { const c = byId.get(r.client_id); return c && matches(c) ? [{ c, r }] : []; }) : [];
+  const results = endedOn ? endedRows.map((x) => x.c) : roster.filter(matches);
   const recent = recentFromRoster(recentIds, archived ? [] : roster);
 
   // A row tap opens the peek sheet (and Opened recently); each sheet button opens today's screen for it.
@@ -156,19 +206,25 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
       <Ionicons name={icon} size={20} color={colors.primary} />
     </HapticPressable>
   );
-  const clientRow = (c: RosterClient, r: LookupReason, trailing: React.ReactNode) => {
+  const clientRow = (c: RosterClient, r: LookupReason, trailing: React.ReactNode, messaged?: string | null, parts?: LineParts) => {
     const name = rosterDisplayName(c);
     return (
       <View key={c.id} style={s.row}>
         <View style={s.mid}>
-          <HapticPressable intent="light" style={s.rowMain} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={`${name}, ${r.text}`} testID={`lookup-row-${c.id}`}>
+          <HapticPressable intent="light" style={s.rowMain} onPress={() => openClient(c)} accessibilityRole="button" accessibilityLabel={[name, r.text, messaged].filter(Boolean).join(', ')} testID={`lookup-row-${c.id}`}>
             {avatar(c, 40)}
             <View style={s.mid}>
               <Text style={s.name} numberOfLines={2}>{name}</Text>
               <View style={s.reasonRow}>
                 {r.ok ? <View style={s.dot} /> : null}
-                <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>
+                {parts ? <KeepTail parts={parts} style={[s.reason, s.endedLine]} box={s.mid} testID={`lookup-line-${c.id}`} /> : <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>}
               </View>
+              {messaged ? (
+                <View style={s.messaged}>
+                  <Ionicons name="checkmark" size={14} color={colors.success} />
+                  <Text style={[s.reason, s.messagedText]}>{messaged}</Text>
+                </View>
+              ) : null}
             </View>
             {trailing ? null : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
           </HapticPressable>
@@ -179,13 +235,24 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   };
   const quickRow = (c: RosterClient) => {
     const name = rosterDisplayName(c);
-    return clientRow(c, { ...lookupReason(c, unread, 'recent'), ok: false }, (
+    // A blocked client keeps the row (it opens the peek) with the chevron in place of Message and Nudge.
+    return clientRow(c, { ...lookupReason(c, unread, 'recent'), ok: false }, canMessage(c) ? (
       <>
         {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
         {iconButton('notifications-outline', `Nudge, ${name}`, () => nudge.open(c), `lookup-nudge-${c.id}`)}
       </>
-    ));
+    ) : null);
   };
+  // L2: "Plan ended {n} days ago · {package}" (RN3-30), "Messaged {Mon D}" (RN3-31) when the server has the coach's last
+  // message, and Roman's mark in the bell's place: the ask-first draft the Home's list opens (RN3-41).
+  const endedRow = ({ c, r }: { c: RosterClient; r: PlanEndedRow }) => clientRow(c, { text: rowLine(r), action: null, ok: false }, (
+    <>
+      {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
+      <HapticPressable intent="light" style={s.iconBtn} onPress={() => setAsk({ ...planEndedAsk(r), onGone: () => void loadEnded() })} accessibilityRole="button" accessibilityLabel={`Ask Roman to write to ${firstName(c)}`} testID={`lookup-roman-${c.id}`}>
+        <RomanMark size={24} r={14} />
+      </HapticPressable>
+    </>
+  ), r.last_coach_message_at && endedPage ? messagedLine(r.last_coach_message_at, endedPage.time_zone) : null, rowParts(r));
 
   const header = (
     <View>
@@ -225,12 +292,14 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const sections = searchFirst ? groupByLetter(roster) : [];
   const presentLetters = sections.map((x) => x.letter).filter((l) => LETTERS.includes(l));
   let body: React.ReactNode;
-  if (isLoading) body = <QuietLoading label="Loading clients" rows={5} testID="lookup-loading" />;
+  if (isLoading || !blockKnown) body = <QuietLoading label="Loading clients" rows={5} testID="lookup-loading" />;
   else if (loadError && roster.length === 0) {
     body = <QuietError message={loadError} onRetry={() => coachId && loadClients(coachId, filterStatus)} testID="lookup-error" />;
   } else if (!searchFirst) {
     // Mockup 1's order: last logged first (sortRoster 'recent').
-    const all = sortRoster(roster, 'recent').map((c) => ({ c, r: lookupReason(c, unread, 'needs') }));
+    // A blocked client's Reply, Nudge or Say hello is no action at all, so the sentence, the Needs you view and the Home's
+    // tile never count it (one rule: needsYouReason).
+    const all = sortRoster(roster, 'recent').map((c) => ({ c, r: needsYouReason(c, unread, blockedIds) }));
     const rows = needsView ? all.filter((x) => x.r.action) : all;
     const needs = all.filter((x) => x.r.action).length;
     body = (
@@ -280,6 +349,11 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
               <View style={[s.chip, chip === f && s.chipOn]}><Text style={[s.chipText, chip === f && s.chipTextOn]}>{FILTER_LABELS[f]} <Text style={s.chipCount}>{chipCount(f)}</Text></Text></View>
             </HapticPressable>
           ))}
+          {!archived && endedPage ? ( // RN3-38; {n} is the server's `total`, as on the Home
+            <HapticPressable intent="light" style={s.chipTarget} onPress={() => setChip(chip === 'ended' ? null : 'ended')} accessibilityRole="button" accessibilityState={{ selected: chip === 'ended' }} accessibilityLabel={planEndedTitle(endedPage.total)} testID="lookup-chip-ended">
+              <View style={[s.chip, chip === 'ended' && s.chipOn]}><Text style={[s.chipText, chip === 'ended' && s.chipTextOn]}>Plan ended last 7 days <Text style={s.chipCount}>{endedPage.total}</Text></Text></View>
+            </HapticPressable>
+          ) : null}
           <HapticPressable intent="light" style={s.chipTarget} onPress={toggleArchived} accessibilityRole="button" accessibilityState={{ selected: archived }} accessibilityLabel={archivedCount != null || archived ? `Archived, ${archived ? roster.length : archivedCount}` : 'Archived'} testID="lookup-chip-archived">
             <View style={[s.chip, archived && s.chipOn]}><Text style={[s.chipText, archived && s.chipTextOn]}>
               Archived{archived || archivedCount != null ? <Text style={s.chipCount}> {archived ? roster.length : archivedCount}</Text> : null}
@@ -290,7 +364,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
         {narrowing ? (
           <>
             <View style={s.sect}><Overline style={s.eyebrow}>{results.length} {results.length === 1 ? 'result' : 'results'}</Overline></View>
-            {results.length > 0 ? results.map(quickRow) : <EmptyStateNoResults query={query} onClearSearch={() => { setQuery(''); setChip(null); }} />}
+            {results.length > 0 ? (endedOn ? endedRows.map(endedRow) : results.map(quickRow)) : <EmptyStateNoResults query={query} onClearSearch={() => { setQuery(''); setChip(null); }} />}
           </>
         ) : (
           <>
@@ -360,11 +434,12 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
       <ClientPeekSheet client={peek} coachId={coachId} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open}>
         {peek ? nudge.modal : null}
       </ClientPeekSheet>
+      <HomeSheet list={null} ask={ask} onCloseList={() => setAsk(null)} onCloseAsk={() => setAsk(null)} onSent={() => void loadSide()} />
     </View>
   );
 }
 
-const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>) =>
+const makeStyles = ({ colors, semanticColors: sem, colorScheme }: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     content: { paddingHorizontal: layout.gutter, paddingBottom: 104 },
@@ -388,6 +463,12 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     reasonRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
     reason: { ...typography.bodySmall, color: colors.textMuted, flexShrink: 1 },
     reasonOk: { color: colors.textPrimary },
+    // L2's Plan ended line is the line K1/K2 draw: small grey text on a light ground in graphite (owner #168-13); a dark
+    // scheme keeps the theme's. The lookup's own rows keep their grey until the GREY-TEXT sweep (FX5-859B, Sol m#866 C).
+    endedLine: { color: colorScheme === 'dark' ? colors.textMuted : palette.graphite },
+    // RENEWAL3 L2 (r3.py `.k4msg`): 13/18 medium, a 14 check, 5 apart (LS B1).
+    messaged: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
+    messagedText: { fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, color: colors.success },
     dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: colors.primary },
     act: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: colors.primary, marginLeft: 8 },
     actText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: colors.primary },

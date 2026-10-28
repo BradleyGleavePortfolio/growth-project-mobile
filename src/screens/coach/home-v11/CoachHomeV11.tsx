@@ -48,10 +48,10 @@ export default function CoachHomeV11(p: Props) {
   const cs = useCardStyles();
   const { top, bottom } = useScreenInsets();
   const bigText = useWindowDimensions().fontScale > 1.15; // no win line, Approve over the kinds: on the first screen (LS B2)
-  const { data, reload, retryMonth, retryRoster, retryDrafts, focused } = useCoachHomeV11(p.sources);
+  const { data, blockList, reload, retryMonth, retryRoster, retryDrafts, focused } = useCoachHomeV11(p.sources);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [list, setList] = useState<'wins' | 'reach' | null>(null);
-  const planEnded = usePlanEnded();
+  const planEnded = usePlanEnded(blockList);
   const [ended, setEnded] = useState(false); // the plan-ended list, over the Home
   const o = data.overview;
   const home = data.home;
