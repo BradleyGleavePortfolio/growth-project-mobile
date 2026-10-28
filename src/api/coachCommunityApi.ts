@@ -673,6 +673,7 @@ function toInboxItems(rows: unknown[]): CoachInboxItem[] {
     const rowKind = kind ?? 'text';
     if (!inboxRowKinds().includes(rowKind)) continue;
     if (rowKind === 'voice' && !rest.voice) continue;
+    const text = rowKind === 'photo' ? preview.trim() || PHOTO_PREVIEW : preview.trimEnd();
     out.push({
       ...rest,
       kind: rowKind as CoachInboxItem['kind'],
@@ -681,9 +682,8 @@ function toInboxItems(rows: unknown[]): CoachInboxItem[] {
       avatar_url: null,
       // A photo row shows its caption; with none it says "Photo", never blank.
       // A message row ends with "..." (#179-11): it opens in space chat later.
-      snippet:
-        (rowKind === 'photo' ? preview.trim() || PHOTO_PREVIEW : preview.trimEnd()) +
-        (rest.type === 'message' ? '...' : ''),
+      // Its own closing dots fold in, so a row never shows four.
+      snippet: rest.type === 'message' ? `${text.replace(/[\s.…]+$/, '')}...` : text,
       // The server lists only unanswered items, so none are acknowledged.
       acknowledged: false,
     });
