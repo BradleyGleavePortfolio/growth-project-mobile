@@ -6,7 +6,8 @@
  * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send (with a
  * clock) keep the text at full contrast (FR-871 Sol B4: no fade); Not sent has Try again (the same Idempotency-Key)
  * and Delete. Report / Block / Delete go through SafetyMenu; a row still on the phone has its own ••• that only deletes
- * it from the phone (FR-871R5, m#879 Opus B3 / Sol B4). Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
+ * it from the phone (FR-871R5, m#879 Opus B3 / Sol B4), and a row on its way or already taken by the server has none
+ * until the server row takes its place (FR-871R7, Sol B879-3). Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
  * REMOVED-BY-M2 (agent 175): a row the coach removed keeps its head and draws SpaceRemovedPlaceholder's one line in
  * place of the content, with no menu (owner #174-4).
  */
@@ -122,8 +123,10 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
           <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
         </View>
-        {/* FR-871R6 (m#879 Opus B3 / Sol B879-3): no Delete while a row reads Sending…: its send cannot be called back. */}
-        {local && shown === 'sending' ? (
+        {/* FR-871R6 (m#879 Opus B3 / Sol B879-3): no Delete while a row reads Sending…: its send cannot be called back.
+            FR-871R7 (Sol B879-3): nor once the server took it (sent, the list not refreshed yet): it is on the server for
+            everyone, so a Delete here would only hide it on this phone. The server row brings the real Delete. */}
+        {local && (shown === 'sending' || shown === 'sent') ? (
           <View style={s.more} testID={`space-chat-local-busy-${p.id}`} />
         ) : local ? (
           <TouchableOpacity onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel={`Delete this ${noun}`} hitSlop={8} style={s.more} testID={`space-chat-local-menu-${p.id}`}>

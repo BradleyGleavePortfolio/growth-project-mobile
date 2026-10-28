@@ -1034,3 +1034,41 @@ describe('FR-871R6 (m#887): the space\'s coach removes someone else\'s message o
     expect(r.getByLabelText(/body m3$/)).toBeTruthy();
   });
 });
+
+describe('FR-871R7 (m#879 Sol B879-3): a text the server accepted, before the list carries it', () => {
+  it('B-TEST: with the list refresh after the receipt held, it offers no Delete that only hides it on the phone; the server row brings the real Delete', async () => {
+    const { spaceOutbox } = require('../../../components/community/space-chat/spaceChatOutbox');
+    const accepted = msg('m9', '2026-10-22T10:20:00.000Z', ME, { body: 'Accepted text' });
+    mockApi.post.mockImplementation(async (url: string) => (String(url).endsWith('/read') ? { data: { ok: true } } : { data: { message: accepted } }));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    // From here every list read waits (a slow line): the refresh the receipt starts is held until released below.
+    const held: Array<() => void> = [];
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    mockApi.get.mockImplementation((url: string) => (String(url).endsWith('/messages')
+      ? new Promise((done) => { held.push(() => done(answer(url))); })
+      : answer(url)));
+    page = [accepted, ...page];
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Accepted text');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    const sent = await r.findByTestId(/^space-chat-sent-/);
+    await waitFor(() => expect(held.length).toBeGreaterThan(0));
+    const localId = String(sent.props.testID).replace('space-chat-sent-', '');
+    expect(r.getAllByLabelText(/^Dana Reyes, .*\. Accepted text$/)).toHaveLength(1);
+    // The receipt is in, the list is not: no phone-only Delete (the ••• keeps its place, with nothing to press) ...
+    expect(r.queryByTestId(`space-chat-local-menu-${localId}`)).toBeNull();
+    expect(r.getByTestId(`space-chat-local-busy-${localId}`)).toBeTruthy();
+    // ... and the outbox keeps the row if anything asks it to drop it (the text is on the server for everyone).
+    await act(async () => { spaceOutbox.discard(localId); });
+    expect(r.getByTestId(`space-chat-sent-${localId}`)).toBeTruthy();
+    expect(mockApi.delete).not.toHaveBeenCalled();
+    // The held read answers with the accepted text: the server row takes the phone's place, once, with the real Delete.
+    await act(async () => { held.splice(0).forEach((go) => go()); });
+    await r.findByTestId('space-chat-row-m9');
+    expect(r.queryByTestId(`space-chat-row-${localId}`)).toBeNull();
+    expect(r.getAllByLabelText(/^Dana Reyes, .*\. Accepted text$/)).toHaveLength(1);
+    await fireEvent.press(r.getByTestId('space-chat-menu-m9-delete'));
+    await waitFor(() => expect(mockApi.delete).toHaveBeenCalledWith('/community/messages/m9'));
+    await waitFor(() => expect(r.queryAllByLabelText(/^Dana Reyes, .*\. Accepted text$/)).toHaveLength(0));
+  });
+});
