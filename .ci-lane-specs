@@ -1,0 +1,8 @@
+src/hooks/__tests__/useVoiceOutbox.accountFence.test.tsx
+src/hooks/__tests__/useVoiceOutbox.transport.test.tsx
+src/components/community/__tests__/VoiceNotesSection.test.tsx
+src/screens/community/__tests__/CommunityVoiceComposerScreen.accountFence.test.tsx
+src/hooks/__tests__/useVoiceOutbox.test.tsx
+src/hooks/__tests__/useVoiceOutboxDriver.test.ts
+src/hooks/__tests__/useVoiceUpload.test.tsx
+src/api/communityVoiceApi.test.ts
