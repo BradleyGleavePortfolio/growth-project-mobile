@@ -20,9 +20,10 @@ jest.mock('../../../storage/mmkv', () => ({ cacheStorage: { getStringAsync: asyn
 jest.mock('../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), warning: jest.fn(), selection: jest.fn(), softImpact: jest.fn() } }));
 let mockCoach = 'coach-1';
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: mockCoach, role: 'coach' }) }));
+let mockScheme: 'light' | 'dark' = 'light';
 jest.mock('../../../theme/ThemeProvider', () => {
   const anyColor = new Proxy({}, { get: () => '#000000' });
-  return { useTheme: () => ({ colors: anyColor, semanticColors: anyColor }) };
+  return { useTheme: () => ({ colors: anyColor, semanticColors: anyColor, colorScheme: mockScheme }) };
 });
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 const mockText = (t: string) => React.createElement(jest.requireActual('react-native').Text, null, t);
@@ -68,6 +69,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   useCoachStore.getState().reset();
   mockCoach = 'coach-1';
+  mockScheme = 'light';
   mockGetClients.mockImplementation(async (status: string) => ({ data: status === 'archived' ? [wire('old', 'Zed Old')] : ROSTER }));
   mockUnread.mockResolvedValue({ data: { total: 0, by_client: {} } });
   churned = () => Promise.resolve({ data: page(ROWS, { total: 7 }) });
@@ -172,6 +174,24 @@ describe('L2: picked', () => {
       const { width, height } = StyleSheet.flatten(screen.getByTestId(id).props.style as StyleProp<ViewStyle>);
       expect([id, width, height]).toEqual([id, 44, 44]);
     }
+  });
+  it("draws the Plan ended line in graphite on the light ground, as K1/K2 do; the lookup's own rows keep theirs (owner #168-13, Sol m#866 C)", async () => {
+    const color = (t: { props: { style?: unknown } }) => StyleSheet.flatten(t.props.style as StyleProp<TextStyle>).color;
+    await mount();
+    // Control: a typed search (no chip) draws the lookup's own row, whose grey is the theme's (the stub's #000000) until the sweep.
+    await fireEvent.changeText(screen.getByTestId('lookup-search'), 'sam');
+    expect(within(screen.getByTestId('lookup-row-sam')).getAllByText(/./).map(color)).not.toContain('#2C2C2C');
+    await fireEvent.changeText(screen.getByTestId('lookup-search'), '');
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    for (const id of ['maya', 'sam', 'lena']) expect([id, ...new Set(texts(`lookup-line-${id}`).map(color))]).toEqual([id, '#2C2C2C']);
+    expect(color(screen.getByText('Messaged Oct 20'))).toBe('#000000'); // the theme's success, unchanged
+  });
+  it("keeps the theme's muted line in a dark scheme, where graphite would not read (owner #168-13 is for light grounds)", async () => {
+    mockScheme = 'dark';
+    await mount();
+    await fireEvent.press(screen.getByTestId('lookup-chip-ended'));
+    const colors = texts('lookup-line-sam').map((t) => StyleSheet.flatten(t.props.style as StyleProp<TextStyle>).color);
+    expect(new Set(colors)).toEqual(new Set(['#000000']));
   });
   it('narrows with typing, and picking it again leaves the filter', async () => {
     await mount();

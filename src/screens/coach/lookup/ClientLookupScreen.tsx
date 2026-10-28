@@ -217,7 +217,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
               <Text style={s.name} numberOfLines={2}>{name}</Text>
               <View style={s.reasonRow}>
                 {r.ok ? <View style={s.dot} /> : null}
-                {parts ? <KeepTail parts={parts} style={s.reason} box={s.mid} testID={`lookup-line-${c.id}`} /> : <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>}
+                {parts ? <KeepTail parts={parts} style={[s.reason, s.endedLine]} box={s.mid} testID={`lookup-line-${c.id}`} /> : <Text style={[s.reason, r.ok && s.reasonOk]} numberOfLines={3}>{r.text}</Text>}
               </View>
               {messaged ? (
                 <View style={s.messaged}>
@@ -439,7 +439,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   );
 }
 
-const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>) =>
+const makeStyles = ({ colors, semanticColors: sem, colorScheme }: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     content: { paddingHorizontal: layout.gutter, paddingBottom: 104 },
@@ -463,6 +463,9 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     reasonRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
     reason: { ...typography.bodySmall, color: colors.textMuted, flexShrink: 1 },
     reasonOk: { color: colors.textPrimary },
+    // L2's Plan ended line is the line K1/K2 draw: small grey text on a light ground in graphite (owner #168-13); a dark
+    // scheme keeps the theme's. The lookup's own rows keep their grey until the GREY-TEXT sweep (FX5-859B, Sol m#866 C).
+    endedLine: { color: colorScheme === 'dark' ? colors.textMuted : palette.graphite },
     // RENEWAL3 L2 (r3.py `.k4msg`): 13/18 medium, a 14 check, 5 apart (LS B1).
     messaged: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
     messagedText: { fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, color: colors.success },
