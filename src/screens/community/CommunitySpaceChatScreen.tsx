@@ -338,11 +338,6 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   );
 }
 
-/**
- * FR-871R6 (Opus B1 / Sol B871-1): a member's Space info, read only: the space's name and member count, nothing a
- * member cannot already see in the header. The space's purpose and its people wait for the API (Found, not fixed).
- * A tap on the scrim, the system Back or the screen reader's escape closes it (the space drawer's pattern).
- */
 /** Seen: most of the row is on screen, or the row fills most of the screen (one taller than the screen). */
 const VIEWABLE = [{ itemVisiblePercentThreshold: 60 }, { viewAreaCoveragePercentThreshold: 60 }];
 const s = StyleSheet.create({
@@ -366,5 +361,4 @@ const s = StyleSheet.create({
   },
   pillText: { ...typography.bodyMd, color: fp.onDeep },
   line: { ...typography.bodySmall, color: SMALL_GREY, textAlign: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
-  // Space info (members): the safety sheet's look (white, 24 top corners, grab), the header's title and count in ink.
 });
