@@ -1,0 +1,6 @@
+src/hooks
+src/services
+src/api
+src/components/community
+src/screens/community
+src/__tests__/copyVoice
