@@ -66,6 +66,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COMMUNITY_SEARCH: process.env.EXPO_PUBLIC_FF_COMMUNITY_SEARCH,
   EXPO_PUBLIC_FF_COMMUNITY_TAB: process.env.EXPO_PUBLIC_FF_COMMUNITY_TAB,
   EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES: process.env.EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES,
+  EXPO_PUBLIC_FF_COMMUNITY_SPACE_CHAT: process.env.EXPO_PUBLIC_FF_COMMUNITY_SPACE_CHAT,
   EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS,
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
@@ -227,6 +228,8 @@ export const featureFlags = {
    *  even in dev until the upload pipeline ships, to avoid suggesting the
    *  feature is available. */
   communityVoiceNotes: readFlag('EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES', false),
+  /** SC-M1: a space opens as one chat stream (CommunitySpaceChatScreen). OFF: today's space screens. */
+  communitySpaceChat: readFlag('EXPO_PUBLIC_FF_COMMUNITY_SPACE_CHAT', false),
   /** Verified-progress signoff surfaces. Coach + client see status chips
    *  and submission flow even before the backend signoff endpoints land. */
   verifiedProgressSignoff: readFlag(
