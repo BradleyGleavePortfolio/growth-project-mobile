@@ -1,7 +1,7 @@
 /**
  * #878 fix round 3 (FR-852X; Opus B-878R3-1, Sol B-878-E): with every switch on, the You tab (youTabV2, the tab every
- * V1 client has) draws Your path as style A's new row (GOAL 01 .lrow.new), leading its group, and it opens Copilot.
- * The You sections and every other row stay as C9 drew them.
+ * V1 client has) draws Your path as style A's new row (GOAL 01 .lrow.new) and it opens Copilot. Fix round 4 (FR-878R5,
+ * owner #180-2 op 1): it leads a Your plan group above Account; the other You sections and rows stay as C9 drew them.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -27,9 +27,10 @@ jest.mock('../../../../components/roman/RomanAvatar', () => () => null);
 jest.mock('../../../../components/tutorial/TutorialTarget', () => ({ children }: { children: React.ReactNode }) => children);
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn(), softImpact: jest.fn() } }));
 jest.mock('../../../../utils/haptics', () => ({ warningTap: jest.fn() }));
-jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'u1', name: 'Jordan Lee', role: 'student', coach_id: 'c1' }) }));
+let mockCoachless = false;
+jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'u1', name: 'Jordan Lee', role: 'student', coach_id: mockCoachless ? undefined : 'c1' }) }));
 jest.mock('../../../../lib/userCache', () => ({ readUserCacheSync: () => null }));
-jest.mock('../../../../components/coachless/JoinCoachState', () => ({ useClientNeedsCoach: () => false }));
+jest.mock('../../../../components/coachless/JoinCoachState', () => ({ useClientNeedsCoach: () => mockCoachless }));
 jest.mock('../../../../hooks/useWorkoutBuilder', () => ({ useMyWorkoutAssignments: () => ({ data: [] }) }));
 jest.mock('../../../../services/api', () => ({ __esModule: true, default: { get: jest.fn(async () => ({ data: { id: 'c1', name: 'Alex Rivera', avatar_url: null } })) } }));
 jest.mock('../../../../lib/packagePayment', () => ({ ...jest.requireActual('../../../../lib/packagePayment'), listClientPlans: async () => [] }));
@@ -48,6 +49,7 @@ const draw = () => { client.clear(); return render(<QueryClientProvider client={
 
 beforeEach(() => {
   for (const k of Object.keys(mockFlags)) delete mockFlags[k];
+  mockCoachless = false;
   mockNavigate.mockReset();
 });
 
@@ -63,10 +65,11 @@ test('every switch on: Your path on You is the leaf new row with the forest tile
   expect(flat(screen.getByText('Ask why your plan is set the way it is'))).toMatchObject({ fontSize: 13.5, color: '#5A5A56', marginTop: 2 });
   expect(screen.getAllByTestId('you-row-new-icon')).toHaveLength(1);
   expect(rowEl.props.accessibilityHint).toBe('Opens Your path');
-  // Leads its group: Your path, then Roman, then the plan rows as before.
+  // Owner #180-2 op 1 (GOAL 01): You's first row, alone in Your plan above Account; Roman and the plan rows lead Support.
   const rows = screen.getAllByTestId(/^you-row-/).filter((r) => r.props.accessibilityRole === 'button').map((r) => String(r.props.accessibilityLabel).split(',')[0]);
-  const at = rows.indexOf('Your path');
-  expect(rows.slice(at, at + 3)).toEqual(['Your path', 'Roman', 'Meal plan']);
+  expect(rows.slice(0, 2)).toEqual(['Your path', 'Your plans']);
+  const at = rows.indexOf('Roman');
+  expect(rows.slice(at, at + 2)).toEqual(['Roman', 'Meal plan']);
   await fireEvent.press(rowEl);
   expect(mockNavigate.mock.calls[0][0]).toBe('Copilot');
 });
@@ -76,9 +79,23 @@ test('with the Copilot switch off, You has no Your path row and Roman still lead
   await draw();
   expect(screen.queryByTestId('you-row-Copilot')).toBeNull();
   expect(screen.queryByTestId('you-row-new-icon')).toBeNull();
+  expect(screen.queryByText('Your plan')).toBeNull();
   const rows = screen.getAllByTestId(/^you-row-/).filter((r) => r.props.accessibilityRole === 'button').map((r) => String(r.props.accessibilityLabel).split(',')[0]);
   const at = rows.indexOf('Roman');
   expect(rows.slice(at, at + 2)).toEqual(['Roman', 'Meal plan']);
+});
+
+// Owner #180-2 op 1 keeps the row for a client with no coach (GOAL frame 12: Copilot shows Roman's lock there).
+test('no coach, every switch on: Join a coach, then Your plan led by Your path, then Account', async () => {
+  mockCoachless = true;
+  Object.assign(mockFlags, { youTabV2: true, clientPathCopilot: true, romanChat: true, clientTimelineV2: true, healthPages: true });
+  await draw();
+  expect(screen.getByTestId('you-join-coach')).toBeTruthy();
+  const headers = screen.getAllByRole('header').map((h) => String(h.props.children));
+  const join = headers.indexOf('Join a coach');
+  expect(headers.slice(join, join + 3)).toEqual(['Join a coach', 'Your plan', 'Account']);
+  await fireEvent.press(screen.getByTestId('you-row-Copilot'));
+  expect(mockNavigate.mock.calls[0][0]).toBe('Copilot');
 });
 
 // B-878R3-1 closure: GOAL 01 puts the new entry in the first Your plan group,

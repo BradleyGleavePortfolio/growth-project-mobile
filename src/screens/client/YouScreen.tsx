@@ -1,7 +1,8 @@
 /**
  * YouScreen — the You tab home, MOCK-C9 Style C slice 1 (C9-S1), behind featureFlags.youTabV2 (off: MoreScreen).
  * Masthead (week ring, name, Edit = today's Profile), Your coach or Join a coach (the existing CoachCodeSheet),
- * then Account, Settings, Health and devices and Support (today's More rows until their homes ship), Sign out.
+ * then Your plan (Your path, with the Copilot switch on), Account, Settings, Health and devices and Support (today's
+ * More rows until their homes ship), Sign out.
  * Coachless clients get every row; only Roman needs a coach (owner 10-17). Detail: src/screens/client/README.md.
  */
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
@@ -317,11 +318,12 @@ export default function YouScreen() {
 
   // #SLEEP-PLACE op 2: with healthPages on, the first row is Sleep and recovery (More's own row).
   const health = showsWearableRows() ? WEARABLE_MORE_ITEMS : [];
-  // Today's More rows stay until their homes ship; Profile's home is Edit above. Your path, the one highlighted row,
-  // leads them as it leads its group in GOAL 01 (Opus B-878R3-1); the sections and every other row stay (Sol B-878-E).
+  // Owner #180-2 op 1 (GOAL 01, "You > Your plan > Your path"): Your path, the one highlighted row, leads a Your plan
+  // group (More's title) above Account. Today's other More rows stay in Support until their homes ship; Profile's home
+  // is Edit above (Sol B-878-E).
   const plan = planMoreItems();
+  const yourPlan = plan.filter((item) => item.highlight);
   const kept = [
-    ...plan.filter((item) => item.highlight),
     ...(featureFlags.romanChat ? [ROMAN_MORE_ITEM] : []),
     ...plan.filter((item) => !item.highlight),
     ...MORE_ITEMS.filter((item) => item.target.screen !== 'ProfileMain'),
@@ -336,6 +338,7 @@ export default function YouScreen() {
       </View>
       <View style={styles.body}>
         {coachCard}
+        {yourPlan.length > 0 ? section(yourPlan[0].section, yourPlan.map(itemRow)) : null}
         {section(YOU_COPY.account, row('plans', 'ticket-outline', YOU_COPY.yourPlans, () => navigation.navigate('ClientPackages'), {
           detail: charge?.line, tag: charge?.tag, first: true,
         }))}
