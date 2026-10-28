@@ -24,9 +24,8 @@
  *       3. create(...) durably records the note, re-asserting the same limits
  *          and the `${userId}/` bucket binding. The client is NEVER trusted on
  *          the second hop either — the server re-derives the namespace.
- *     The waveform is a CLIENT-SIDE visualization only; the backend does not
- *     accept waveform peaks on create (it stores null and reports
- *     `has_waveform`), so this client intentionally does not send them.
+ *   - Voice notes Studio (backend #1122, live) adds six view keys and optional
+ *     create `waveform_peaks`; the view keys stay optional so an older note parses.
  *
  * Limits mirror the backend DTO constants exactly so the recorder/composer can
  * pre-validate before a round-trip; the server remains authoritative.
@@ -75,6 +74,19 @@ export const VoiceUploadTargetSchema = z
   .strict();
 export type VoiceUploadTarget = z.infer<typeof VoiceUploadTargetSchema>;
 
+/**
+ * Who removed a voice note for everyone: the space's coach or the platform owner (always shown as the
+ * coach). `name` is the name this viewer sees for that coach here (the author_name rule).
+ */
+export const VoiceRemovedBySchema = z
+  .object({
+    role: z.literal('coach'),
+    user_id: z.string(),
+    name: z.string(),
+  })
+  .strict();
+export type VoiceRemovedBy = z.infer<typeof VoiceRemovedBySchema>;
+
 export const VoiceNoteViewSchema = z
   .object({
     id: z.string(),
@@ -91,9 +103,20 @@ export const VoiceNoteViewSchema = z
     duration_ms: z.number().int(),
     bytes: z.number().int(),
     mime_type: z.string(),
-    /** Whether the server stored waveform peaks (currently always false). */
+    /** Whether the server stored waveform peaks. */
     has_waveform: z.boolean(),
     created_at: z.string(),
+    // Studio keys (backend #1122; OPERATOR RULING 6304777236), optional so an older server still parses.
+    author_name: z.string().optional(),
+    author_is_coach: z.boolean().optional(),
+    waveform_peaks: z.array(z.number()).nullable().optional(),
+    heard_at: z.string().nullable().optional(),
+    message_id: z.string().nullable().optional(),
+    parent_message_id: z.string().nullable().optional(),
+    // A coach removal (backend #1165 CONTRACT 6405215872): the note keeps its place with every audio
+    // field emptied and these two keys; live rows never carry them (absent, not null).
+    removed_at: z.string().optional(),
+    removed_by: VoiceRemovedBySchema.optional(),
   })
   .strict();
 export type VoiceNoteView = z.infer<typeof VoiceNoteViewSchema>;
@@ -113,6 +136,17 @@ export type VoiceNoteFeedPage = z.infer<typeof VoiceNoteFeedResponseSchema>;
 
 const VoiceDeleteResponseSchema = z.object({ deleted: z.literal(true) }).strict();
 export type VoiceDeleteResult = z.infer<typeof VoiceDeleteResponseSchema>;
+
+/** The server's peak cap (backend #1122 = the recorder's MAX_PEAKS). */
+export const MAX_WAVEFORM_PEAKS = 64;
+
+/** Peaks the server accepts: 1..64 finite numbers in 0..1, else none. */
+export function wirePeaks(peaks: readonly number[] | undefined): number[] | undefined {
+  const out = (peaks ?? [])
+    .slice(0, MAX_WAVEFORM_PEAKS)
+    .map((v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0));
+  return out.length > 0 ? out : undefined;
+}
 
 // ─── Transport helper (mirrors communityClassroomApi.call) ───────────────────
 
@@ -188,6 +222,8 @@ export interface CreateVoiceNoteInput {
   cohortId?: string;
   /** Optional DM conversation target. */
   conversationId?: string;
+  /** Recorded peaks (omitted when none). */
+  waveformPeaks?: number[];
 }
 
 export interface VoiceFeedParams {
@@ -243,6 +279,7 @@ export const communityVoiceApi = {
     uploadUrl: string,
     body: Blob | ArrayBuffer,
     mimeType: VoiceNoteMimeType,
+    onProgress?: (fraction: number) => void,
   ): Promise<void> {
     try {
       // The signed URL is an absolute storage endpoint, not an API route, so
@@ -250,6 +287,9 @@ export const communityVoiceApi = {
       await axios.put(uploadUrl, body, {
         headers: { 'Content-Type': mimeType },
         signal: AbortSignal.timeout(VOICE_UPLOAD_TIMEOUT_MS),
+        ...(onProgress
+          ? { onUploadProgress: (e: { loaded: number; total?: number }) => { if (e.total) onProgress(e.loaded / e.total); } }
+          : {}),
       });
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -283,6 +323,8 @@ export const communityVoiceApi = {
     };
     if (input.cohortId) body.cohort_id = input.cohortId;
     if (input.conversationId) body.conversation_id = input.conversationId;
+    const peaks = wirePeaks(input.waveformPeaks);
+    if (peaks) body.waveform_peaks = peaks;
     return call(VoiceNoteResponseSchema, () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/voice-notes`,

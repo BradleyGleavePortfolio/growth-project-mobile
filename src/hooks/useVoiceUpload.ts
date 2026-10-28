@@ -48,11 +48,19 @@ export interface VoiceUploadInput {
   cohortId?: string;
   /** Optional DM conversation target. */
   conversationId?: string;
+  /** Recorded peaks (backend #1122). */
+  waveformPeaks?: number[];
 }
 
 export interface UseVoiceUploadOptions {
   /** Inject a byte reader for tests; defaults to fetch(uri) → arrayBuffer. */
   readBytes?: (uri: string) => Promise<ArrayBuffer>;
+  /** Upload share in [0,1] as the audio bytes go up (the outbox row's line). */
+  onProgress?: (fraction: number) => void;
+  /** C-4: a key an earlier try already uploaded to; only hop 3 runs again (the server answers with that same note). */
+  uploadedKey?: string;
+  /** C-4: told the key once the bytes are up, so a resend can post that same note. */
+  onUploaded?: (storageKey: string) => void;
 }
 
 export type VoiceUploadMutation = UseMutationResult<
@@ -87,44 +95,55 @@ async function defaultReadBytes(uri: string): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
+/** The three hops for one recording; throws the typed error of the failed hop. */
+export async function publishVoiceNote(
+  workspaceId: string,
+  input: VoiceUploadInput,
+  options: UseVoiceUploadOptions = {},
+): Promise<VoiceNoteView> {
+  assertVoicePublishable(input);
+  const readBytes = options.readBytes ?? defaultReadBytes;
+  if (options.uploadedKey) return recordVoiceNote(workspaceId, input, options.uploadedKey);
+
+  // Hop 1 — mint the signed upload target (server validates limits).
+  const target = await communityVoiceApi.issueUploadUrl(workspaceId, {
+    duration_ms: input.durationMs,
+    bytes: input.bytes,
+    mime_type: input.mimeType,
+  });
+
+  // Hop 2 — PUT the raw audio bytes to storage.
+  const body = await readBytes(input.uri);
+  await communityVoiceApi.uploadBytes(target.upload_url, body, input.mimeType, options.onProgress);
+  options.onUploaded?.(target.storage_key);
+  return recordVoiceNote(workspaceId, input, target.storage_key);
+}
+
+// Hop 3 — durably record the note (server re-asserts the bucket binding).
+function recordVoiceNote(workspaceId: string, input: VoiceUploadInput, storageKey: string): Promise<VoiceNoteView> {
+  return communityVoiceApi.create(workspaceId, {
+    storage_key: storageKey,
+    duration_ms: input.durationMs,
+    bytes: input.bytes,
+    mime_type: input.mimeType,
+    ...(input.cohortId ? { cohortId: input.cohortId } : {}),
+    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+    ...(input.waveformPeaks ? { waveformPeaks: input.waveformPeaks } : {}),
+  });
+}
+
 export function useVoiceUpload(
   workspaceId: string | null,
   options: UseVoiceUploadOptions = {},
 ): VoiceUploadMutation {
   const qc = useQueryClient();
-  const readBytes = options.readBytes ?? defaultReadBytes;
 
   return useMutation<VoiceNoteView, Error, VoiceUploadInput>({
     mutationFn: async (input) => {
       if (!workspaceId) {
         throw new Error('workspaceId is required to publish a voice note');
       }
-      assertVoicePublishable(input);
-
-      // Hop 1 — mint the signed upload target (server validates limits).
-      const target = await communityVoiceApi.issueUploadUrl(workspaceId, {
-        duration_ms: input.durationMs,
-        bytes: input.bytes,
-        mime_type: input.mimeType,
-      });
-
-      // Hop 2 — PUT the raw audio bytes to storage.
-      const body = await readBytes(input.uri);
-      await communityVoiceApi.uploadBytes(
-        target.upload_url,
-        body,
-        input.mimeType,
-      );
-
-      // Hop 3 — durably record the note (server re-asserts the bucket binding).
-      return communityVoiceApi.create(workspaceId, {
-        storage_key: target.storage_key,
-        duration_ms: input.durationMs,
-        bytes: input.bytes,
-        mime_type: input.mimeType,
-        ...(input.cohortId ? { cohortId: input.cohortId } : {}),
-        ...(input.conversationId ? { conversationId: input.conversationId } : {}),
-      });
+      return publishVoiceNote(workspaceId, input, options);
     },
     onSuccess: () => {
       if (workspaceId) {
