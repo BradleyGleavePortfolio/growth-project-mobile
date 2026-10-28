@@ -1,0 +1,6 @@
+src/hooks/__tests__/useCommunity
+src/hooks/__tests__/useVoice
+src/screens/community/__tests__
+src/components/community
+src/api/__tests__/community
+src/navigation/__tests__/community
