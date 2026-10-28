@@ -142,13 +142,13 @@ function useAckMutation(
     },
     onError: (err, _vars, ctx) => {
       // Restore the exact prior snapshot. When there was NO prior value we
-      // remove the cache entry rather than calling setQueryData(undefined)
+      // reset the cache entry rather than calling setQueryData(undefined)
       // (React Query treats an `undefined` updater value as a no-op, which
-      // would otherwise strand the optimistic state). Removing it makes the
-      // badge fall back to its `none` source-of-truth, never a stale optimistic
-      // state.
+      // would otherwise strand the optimistic state). A reset, unlike a remove,
+      // tells the row that reads the entry, so its badge falls back to the
+      // row's own summary and Acknowledge comes back.
       if (ctx?.prev === undefined) {
-        qc.removeQueries({ queryKey: key, exact: true });
+        void qc.resetQueries({ queryKey: key, exact: true });
       } else {
         qc.setQueryData<AckStateDto>(key, ctx.prev);
       }

@@ -261,3 +261,41 @@ describe('communityVoiceApi — error + contract mapping', () => {
     expect(() => VoiceNoteViewSchema.parse(bad)).toThrow();
   });
 });
+
+// REMOVED-BY-M item 3 (owner #174-4; backend #1165 CONTRACT 6405215872 §1): a coach-removed note keeps its
+// place with every audio field emptied plus removed_at and removed_by; the strict schema must take it.
+describe('communityVoiceApi — the coach-removed placeholder row (REMOVED-BY-M)', () => {
+  const removed = () =>
+    view({
+      url: null,
+      duration_ms: 0,
+      bytes: 0,
+      has_waveform: false,
+      waveform_peaks: null,
+      heard_at: null,
+      removed_at: '2026-10-25T23:40:00.000Z',
+      removed_by: { role: 'coach', user_id: 'u-coach', name: 'Sam' },
+    });
+
+  it('the list and the single read parse a removed row', async () => {
+    api.get.mockResolvedValueOnce({ data: { voice_notes: [view(), removed()], next_cursor: null } });
+    const page = await communityVoiceApi.listFeed(WS);
+    expect(page.voice_notes[0].removed_at).toBeUndefined();
+    expect(page.voice_notes[1]).toMatchObject({
+      removed_at: '2026-10-25T23:40:00.000Z',
+      removed_by: { role: 'coach', user_id: 'u-coach', name: 'Sam' },
+      url: null,
+    });
+    api.get.mockResolvedValueOnce({ data: { voice_note: removed() } });
+    expect((await communityVoiceApi.getOne(NOTE_ID)).removed_by?.user_id).toBe('u-coach');
+  });
+
+  it('removed_by stays strict: only the coach role, no extra keys', () => {
+    expect(() =>
+      VoiceNoteViewSchema.parse({ ...removed(), removed_by: { role: 'member', user_id: 'u', name: 'S' } }),
+    ).toThrow();
+    expect(() =>
+      VoiceNoteViewSchema.parse({ ...removed(), removed_by: { role: 'coach', user_id: 'u', name: 'S', x: 1 } }),
+    ).toThrow();
+  });
+});

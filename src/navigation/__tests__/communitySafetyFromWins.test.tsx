@@ -14,7 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
-import { Alert, type AlertButton } from 'react-native';
+import { Alert, Platform, type AlertButton } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContainer } from '@react-navigation/native';
@@ -130,8 +130,15 @@ beforeEach(() => {
   // Blocking hides the blocked member's wins (two-way, server side).
   mockGetFeed.mockReset().mockImplementation(async () => (mockBlocked.has('u-alice') ? [] : [ALICE_WIN]));
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  // SafetyMenu raises its follow-up Alerts at once on Android; on iOS it waits for the Modal's
+  // onDismiss (Opus R5-B4, driven in SafetyMenu.test).
+  Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
 });
-afterEach(() => alertSpy.mockRestore());
+const realOS = Platform.OS;
+afterEach(() => {
+  alertSpy.mockRestore();
+  Object.defineProperty(Platform, 'OS', { configurable: true, get: () => realOS });
+});
 
 function pressAlertButton(text: string) {
   const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
