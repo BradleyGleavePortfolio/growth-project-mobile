@@ -166,3 +166,60 @@ describe('useCommunitySearch — enabled fetch + cursor pagination', () => {
     expect(result.current.hasNextPage).toBe(false);
   });
 });
+
+// LO-848R4 B5: a page that can carry voice transcript rows is never saved to the phone, and one an
+// older build saved is refused after a restart, even offline (no network to refetch it).
+describe('useCommunitySearch — voice pages are never kept on the phone (LO-848R4 B5)', () => {
+  const { dehydrate, hydrate, onlineManager } = jest.requireActual('@tanstack/react-query');
+  const { communitySearchKeys } = jest.requireActual('../useCommunitySearch');
+  // The app persister's rule (src/services/queryClient.ts shouldDehydrateQuery).
+  const save = (qc: QueryClient) =>
+    JSON.parse(JSON.stringify(dehydrate(qc, { shouldDehydrateQuery: (q: { meta?: { persist?: boolean } }) => q.meta?.persist !== false })));
+  const voiceRow = row({ id: 'res-v', kind: 'voice_note_transcript', targetId: 'vn-1', excerpt: 'my squat felt strong' });
+  const wrap = (qc: QueryClient) => ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+
+  afterEach(() => onlineManager.setOnline(true));
+
+  it('saves no all-kinds or voice-only page, but still saves a posts-only page', async () => {
+    api.search.mockResolvedValue(page([voiceRow]));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    const all = await renderHook(() => useCommunitySearch({ workspaceId: WS, term: 'squat' }), { wrapper: wrap(qc) });
+    const voice = await renderHook(
+      () => useCommunitySearch({ workspaceId: WS, term: 'squat', kind: 'voice_note_transcript' }),
+      { wrapper: wrap(qc) },
+    );
+    api.search.mockResolvedValue(page([row()]));
+    const posts = await renderHook(() => useCommunitySearch({ workspaceId: WS, term: 'squat', kind: 'post' }), {
+      wrapper: wrap(qc),
+    });
+    await waitFor(() => expect(all.result.current.isSuccess && voice.result.current.isSuccess && posts.result.current.isSuccess).toBe(true));
+    const kinds = save(qc).queries.map((q: { queryKey: unknown[] }) => q.queryKey[4]);
+    expect(kinds).toEqual(['post']);
+  });
+
+  it('refuses a voice page an older build saved, after a restart and offline', async () => {
+    // The older build: the page was saved with no persist mark.
+    const old = new QueryClient();
+    old.setQueryData(communitySearchKeys.query(WS, 'squat'), { pages: [page([voiceRow])], pageParams: [undefined] });
+    old.setQueryData(communitySearchKeys.query(WS, 'squat', 'post'), { pages: [page([row()])], pageParams: [undefined] });
+    const disk = save(old);
+    expect(disk.queries).toHaveLength(2);
+
+    // Restart with no signal: the phone restores what it saved.
+    onlineManager.setOnline(false);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    hydrate(qc, disk);
+    const { result } = await renderHook(() => useCommunitySearch({ workspaceId: WS, term: 'squat' }), {
+      wrapper: wrap(qc),
+    });
+    expect(result.current.data).toBeUndefined();
+    expect(JSON.stringify(result.current.data ?? null)).not.toContain('my squat felt strong');
+    expect(api.search).not.toHaveBeenCalled();
+    // The posts-only page is not voice and stays.
+    expect(qc.getQueryData(communitySearchKeys.query(WS, 'squat', 'post'))).toBeTruthy();
+    // And it is not written back to the phone.
+    expect(JSON.stringify(save(qc))).not.toContain('my squat felt strong');
+  });
+});

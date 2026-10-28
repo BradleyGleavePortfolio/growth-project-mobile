@@ -77,6 +77,8 @@ export interface VoiceRecorderState {
   maxDurationMs: number;
   /** The finished recording once status === 'recorded'. */
   recording: VoiceRecordingResult | null;
+  /** The last LIVE_LEVEL_BARS metering samples while recording, oldest first. */
+  levels: number[];
   /** True when the mic permission was denied. */
   canRetryPermission: boolean;
   /**
@@ -98,6 +100,10 @@ export interface VoiceRecorderState {
 }
 
 const TICK_MS = 100;
+/** How many live level bars the record sheet draws. */
+export const LIVE_LEVEL_BARS = 30; // GOAL B-01a/01b: 30 slots
+/** One live bar per this many ticks (a calm scroll, not a flicker). */
+const LEVEL_EVERY_TICKS = 2;
 
 export function useVoiceRecorder(
   options: UseVoiceRecorderOptions = {},
@@ -113,6 +119,7 @@ export function useVoiceRecorder(
   );
   const [elapsedMs, setElapsedMs] = useState(0);
   const [recording, setRecording] = useState<VoiceRecordingResult | null>(null);
+  const [levels, setLevels] = useState<number[]>([]);
   const [mustOpenSettings, setMustOpenSettings] = useState(false);
   const [error, setError] = useState<VoiceRecorderError | null>(null);
 
@@ -186,9 +193,16 @@ export function useVoiceRecorder(
     if (tickRef.current !== null) clearInterval(tickRef.current);
     startedAtRef.current = Date.now();
     setElapsedMs(0);
+    setLevels([]);
+    let ticks = 0;
     tickRef.current = setInterval(() => {
       const startedAt = startedAtRef.current;
       if (startedAt === null) return;
+      ticks += 1;
+      const level = ticks % LEVEL_EVERY_TICKS === 0 ? recorder.level?.() : null;
+      if (typeof level === 'number') {
+        setLevels((prev) => [...prev, level].slice(-LIVE_LEVEL_BARS));
+      }
       const next = Date.now() - startedAt;
       if (next >= maxDurationMs) {
         setElapsedMs(maxDurationMs);
@@ -198,7 +212,7 @@ export function useVoiceRecorder(
       }
       setElapsedMs(next);
     }, TICK_MS);
-  }, [finalize, maxDurationMs]);
+  }, [finalize, maxDurationMs, recorder]);
 
   const start = useCallback(async () => {
     if (!recorder.isAvailable) {
@@ -305,6 +319,7 @@ export function useVoiceRecorder(
     elapsedMs,
     maxDurationMs,
     recording,
+    levels,
     canRetryPermission: status === 'denied',
     mustOpenSettings,
     isAvailable: recorder.isAvailable,
