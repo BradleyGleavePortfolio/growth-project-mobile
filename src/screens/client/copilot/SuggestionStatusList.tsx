@@ -59,13 +59,13 @@ export function SuggestionStatusList({ items, coach, now }: { items: CopilotSugg
 }
 
 const s = StyleSheet.create({
-  // .sec sits 22 under what is above it (the page's gap is 16; Opus B-878-G); its heading 10 over the card.
+  // .sec sits 22 under what is above it (the page's gap is 16; Sol B-878-G); its heading 10 over the card.
   wrap: { gap: 10, marginTop: 6 },
   card: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
   // Style A's status rows (.stl, .stl .ic, .note; Sol B-G2).
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
   tile: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  // .stl .s 3 under the title, .note 8, .stl .d 2 (Opus B-878-G).
+  // .stl .s 3 under the title, .note 8, .stl .d 2 (Sol B-878-G).
   text: { flex: 1 },
   line: { marginTop: 3 },
   meta: { marginTop: 2 },

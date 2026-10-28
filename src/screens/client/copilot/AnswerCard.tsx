@@ -23,7 +23,7 @@ const TAG: Record<SourceKind, { bg: string; ink: string }> = {
   workout_log: { bg: forestPop.moss, ink: forestPop.onDeep },
 };
 
-/** Style A's tag is 74 wide at least, in text units (.tag min-width §74), so it grows with the label (Opus C-878R3-2). */
+/** Style A's tag is 74 wide at least, in text units (.tag min-width §74), so it grows with the label (Opus B-878R3-2). */
 const TAG_TEXT_MAX = 1.3;
 
 export function SourceTag({ kind }: { kind: SourceKind }) {

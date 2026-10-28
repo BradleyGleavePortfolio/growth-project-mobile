@@ -229,7 +229,7 @@ test('B-S4: a sent change folds the newest turn to its question and Sent line; n
   expect(flat(s.getByTestId('copilot-status-list'))).toMatchObject({ marginTop: 6 });
 });
 
-test('C-878R3-2: a source tag is 74 wide at least in text units, so at 130% text it is 96.2', async () => {
+test('B-878R3-2: a source tag is 74 wide at least in text units, so at 130% text it is 96.2', async () => {
   mockFontScale = 1.3;
   const s = await render(<SourceTag kind="plan" />);
   expect(flat(s.getByTestId('copilot-tag-plan')).minWidth).toBeCloseTo(96.2);

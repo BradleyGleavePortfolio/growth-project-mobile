@@ -506,7 +506,7 @@ const s = StyleSheet.create({
   page: { paddingHorizontal: 0, paddingBottom: 0 },
   list: { paddingHorizontal: 0 },
   scroll: { flexGrow: 1, paddingBottom: layout.gutter },
-  // Style A's masthead (.mh, .nav, .mh h1; Opus B-878-G): Back 44 tall, the title 4 under it, 20 under the week.
+  // Style A's masthead (.mh, .nav, .mh h1; Sol B-878-G): Back 44 tall, the title 4 under it, 20 under the week.
   mast: { paddingHorizontal: 20, paddingBottom: 20, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
   mastTitle: { marginTop: 4, letterSpacing: 0.2 },
   // Style A compact masthead (.mhs, .nav, .mhs .mini span; #852 round 3 B-H1): the title right under Back.
