@@ -176,6 +176,9 @@ jest.mock('../../../hooks/useCoachCommunity', () => {
     useCoachDashboard: () => mockState.dashboard,
     useCoachInbox: () => mockState.inbox,
     useCoachCohorts: () => mockState.cohorts,
+    // FIN-868R5 LS-6: the coach's own spaces are not known here, so every
+    // row keeps Acknowledge (coachCommunityRound5.test.tsx covers the rule).
+    useCoachOwnedCohortIds: () => null,
     useCoachCohortDetail: () => mockState.cohortDetail,
     useCoachFlagged: () => mockState.flagged,
     useCoachPostDetail: () => mockState.postDetail,

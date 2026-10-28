@@ -35,6 +35,7 @@ jest.mock('../../../hooks/useCoachCommunity', () => {
   return {
     coachCommunityKeys: actual.coachCommunityKeys,
     useCoachInbox: () => mockInbox,
+    useCoachOwnedCohortIds: () => null,
     useCoachEmptyStatePayload: () => ({
       status: 'ready',
       payload: {
