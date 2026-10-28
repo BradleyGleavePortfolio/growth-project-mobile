@@ -128,10 +128,42 @@ describe('communityChallengesApi — happy-path parse', () => {
     );
     api.get.mockResolvedValueOnce({ data: { comments: [], next_cursor: null } });
     await communityChallengesApi.listComments(CID);
+    // REMOVED-BY-M3: the comments read opts in to coach-removed placeholders (backend #1176).
     expect(api.get).toHaveBeenLastCalledWith(
       `/community/challenges/${CID}/comments`,
-      { params: { limit: '20' } },
+      { params: { limit: '20' }, headers: { 'X-Client-Removed-Rows': '1' } },
     );
+  });
+
+  describe('REMOVED-BY-M3: a comment a coach removed (backend #1176 contract section 5)', () => {
+    const live = { id: UID, challenge_id: CID, author_user_id: UID, body: 'Nice work', created_at: ISO };
+    const placeholder = {
+      id: '66666666-6666-6666-6666-666666666666',
+      challenge_id: CID,
+      author_user_id: UID,
+      body: null,
+      created_at: ISO,
+      removed_at: ISO,
+      removed_by: { role: 'coach', user_id: 'coach-1', name: 'Maya' },
+    };
+
+    it('keeps the placeholder (body null + removed keys) next to live comments, and the cursor', async () => {
+      api.get.mockResolvedValueOnce({ data: { comments: [live, placeholder], next_cursor: CID } });
+      const page = await communityChallengesApi.listComments(CID);
+      expect(page.comments).toEqual([live, placeholder]);
+      expect(page.next_cursor).toBe(CID);
+    });
+
+    it('still reads a header-less answer exactly as today (no removed keys)', async () => {
+      api.get.mockResolvedValueOnce({ data: { comments: [live], next_cursor: null } });
+      await expect(communityChallengesApi.listComments(CID)).resolves.toEqual({ comments: [live], next_cursor: null });
+    });
+
+    it('rejects a removed_by with a fourth key (strict), as a contract error', async () => {
+      const bad = { ...placeholder, removed_by: { ...placeholder.removed_by, extra: 'x' } };
+      api.get.mockResolvedValueOnce({ data: { comments: [bad], next_cursor: null } });
+      await expect(communityChallengesApi.listComments(CID)).rejects.toMatchObject({ kind: 'contract' });
+    });
   });
 
   it('rejects a list envelope MISSING the next_cursor field (strict)', async () => {
