@@ -305,3 +305,39 @@ describe('A cohort name already used says so', () => {
     expect(alert).toHaveBeenCalledWith('Action not applied', NAME_TAKEN);
   });
 });
+
+describe('Invite takes only an email the server accepts', () => {
+  // AssignMemberDto checks IsEmail; a near-miss such as "gmail.c" passed the
+  // phone's check and came back as "a server problem".
+  async function openInvite() {
+    mockRouteParams.current = { cohortId: OWN_SPACE, cohortName: 'Spring block' };
+    mockState.cohortDetail = idle({ cohort: cohort(), members: [] });
+    const screen = await render(<CoachCommunityCohortDetailScreen />);
+    await fireEvent.press(screen.getByTestId('coach-community-cohort-detail-invite'));
+    return screen;
+  }
+
+  it.each(['dana@gmail.c', 'dana@gmail..com', 'dana.@gmail.com', '.dana@gmail.com', 'dana@gmail.com.'])(
+    'keeps Send invite off for %s',
+    async (typed) => {
+      const screen = await openInvite();
+      await fireEvent.changeText(screen.getByTestId('coach-community-cohort-detail-email-input'), typed);
+      expect(
+        screen.getByTestId('coach-community-cohort-detail-invite-submit').props.accessibilityState,
+      ).toEqual(expect.objectContaining({ disabled: true }));
+    },
+  );
+
+  it('sends a well-formed address', async () => {
+    const screen = await openInvite();
+    await fireEvent.changeText(
+      screen.getByTestId('coach-community-cohort-detail-email-input'),
+      ' dana.cruz+spring@mail.example.co.uk ',
+    );
+    await fireEvent.press(screen.getByTestId('coach-community-cohort-detail-invite-submit'));
+    expect(mockInviteMutate).toHaveBeenCalledWith(
+      { email: 'dana.cruz+spring@mail.example.co.uk' },
+      expect.any(Object),
+    );
+  });
+});
