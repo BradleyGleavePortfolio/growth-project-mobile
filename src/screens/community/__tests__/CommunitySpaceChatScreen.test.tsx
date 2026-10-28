@@ -92,7 +92,7 @@ jest.mock('../../../components/community/SafetyMenu', () => {
   const { Text } = jest.requireActual('react-native');
   type MockMenuProps = {
     testID: string; authorUserId: string; onBlocked?: (id: string) => void; onDelete?: () => Promise<void>;
-    context?: { name: string; detail: string }; reported?: boolean; onReported?: () => void;
+    context?: { name: string; detail: string }; reported?: boolean; onReported?: () => void; onRemove?: () => Promise<void>;
   };
   return (p: MockMenuProps) => (
     <>
@@ -101,6 +101,8 @@ jest.mock('../../../components/community/SafetyMenu', () => {
       {/* FR-871R6 (m#879 B4): the card the report sheet draws above the reasons, and Report, done once sent. */}
       {p.context ? <Text testID={`${p.testID}-context`}>{`${p.context.name} | ${p.context.detail}`}</Text> : null}
       {p.onReported ? <Text testID={`${p.testID}-report`} onPress={p.onReported}>{p.reported ? 'Reported' : 'Report'}</Text> : null}
+      {/* FR-871R6 (m#887 B1): Remove for everyone (the real menu confirms first; the confirm is the menu's own test). */}
+      {p.onRemove ? <Text testID={`${p.testID}-remove`} onPress={() => { p.onRemove?.().catch(() => undefined); }}>remove</Text> : null}
     </>
   );
 });
@@ -621,6 +623,99 @@ it('m#871 Sol B5: a read mark that lands refreshes the space badges and the unre
   expect(spy).toHaveBeenCalledWith({ queryKey: ['community', 'me'] });
 });
 
+// REMOVED-BY-M2 (owner #174-4, b#1165 CONTRACT 6405215872 section 2): a row the coach removed keeps its place.
+const BY_COACH = { role: 'coach', user_id: 'coach-1', name: 'Sam Okafor' };
+const removed = (id: string, at: string, who: { id: string; name: string }, extra: Record<string, unknown> = {}) =>
+  msg(id, at, who, { deleted: true, body: null, voice_note: null, removed_at: '2026-10-22T11:00:00.000Z', removed_by: BY_COACH, ...extra });
+const order = (r: Awaited<ReturnType<typeof open>>) =>
+  r.getAllByTestId(/^space-chat-(row-|new-line)/).map((n) => String(n.props.testID).replace(/^space-chat-(row-)?/, ''));
+// The line is read once, by the row's head with the name and time; the drawn line itself is hidden from a screen reader.
+const line = (r: Awaited<ReturnType<typeof open>>, text: string) => r.getAllByText(text, { includeHiddenElements: true });
+const removedPage = (who: { id: string; name: string }) => [
+  msg('m3', '2026-10-22T10:05:00.000Z', JO),
+  removed('rv', '2026-10-22T09:50:00.000Z', who, { kind: 'voice' }),
+  removed('rt', '2026-10-22T09:40:00.000Z', who),
+  ...page.slice(1),
+];
+
+it('REMOVED-BY-M2: a removed text row and voice row stay in place for everyone else, one line each, no menu or player', async () => {
+  page = removedPage(JO);
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rt');
+  expect(order(r)).toEqual(['m3', 'rv', 'rt', 'm2', 'new-line', 'm1']);
+  expect(line(r, 'Removed by Coach Sam Okafor')).toHaveLength(2);
+  expect(r.getByTestId('space-chat-removed-rv')).toBeTruthy();
+  for (const id of ['rt', 'rv']) {
+    expect(r.queryByTestId(`space-chat-menu-${id}`)).toBeNull();
+    expect(r.queryByTestId(`space-chat-removed-safety-${id}`)).toBeNull();
+  }
+  expect(r.getByTestId('space-chat-menu-m3')).toBeTruthy();
+  expect(r.getAllByText(/^player /)).toHaveLength(1);
+  expect(r.getAllByLabelText(/^jo b\., .+\. Removed by Coach Sam Okafor$/)).toHaveLength(2);
+});
+
+it('REMOVED-BY-M2: the coach who removed them reads "You removed this message" / "You removed this voice note"', async () => {
+  mockRole = 'owner';
+  mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+  mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+  page = removedPage(JO);
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rt');
+  expect(line(r, 'You removed this message')).toHaveLength(1);
+  expect(line(r, 'You removed this voice note')).toHaveLength(1);
+  expect(r.getByLabelText(/^jo b\., .+\. You removed this message$/)).toBeTruthy();
+  expect(r.queryByText(/Removed by Coach/, { includeHiddenElements: true })).toBeNull();
+  expect(r.queryByTestId('space-chat-menu-rt')).toBeNull();
+  expect(r.queryByTestId('space-chat-menu-rv')).toBeNull();
+});
+
+it('REMOVED-BY-M2: the author reads "Your coach removed your message" with a link to Community safety', async () => {
+  mockStack.routes = ['CommunityTab', 'CommunitySpaceChat', 'CommunitySafety'];
+  page = removedPage(ME);
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rt');
+  expect(line(r, 'Your coach removed your message')).toHaveLength(1);
+  expect(line(r, 'Your coach removed your voice note')).toHaveLength(1);
+  expect(r.getAllByLabelText(/^Dana Reyes, .+\. Your coach removed your (message|voice note)$/)).toHaveLength(2);
+  expect(r.getByTestId('space-chat-removed-safety-rv')).toBeTruthy();
+  expect(r.queryByTestId('space-chat-menu-rt-delete')).toBeNull();
+  await fireEvent.press(r.getByTestId('space-chat-removed-safety-rt'));
+  expect(mockNavigate).toHaveBeenCalledWith('CommunitySafety');
+});
+
+it('REMOVED-BY-M2: an author\'s own delete and a removal from before b#1165 (no removed_by) still vanish', async () => {
+  page = [msg('own', '2026-10-22T10:10:00.000Z', ME, { deleted: true, body: null }), msg('old', '2026-10-22T09:45:00.000Z', JO, { deleted: true }), ...page];
+  const r = await open();
+  await r.findByTestId('space-chat-row-m3');
+  expect(order(r)).toEqual(['m3', 'm2', 'new-line', 'm1']);
+});
+
+it('REMOVED-BY-M2: a removed voice row stays out while communityVoiceNotes is off; the text one stays', async () => {
+  mockFlags.communityVoiceNotes = false;
+  page = removedPage(JO);
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rt');
+  expect(r.queryByTestId('space-chat-row-rv')).toBeNull();
+});
+
+it('REMOVED-BY-M2: the read mark, the New messages line and the pill count only live rows', async () => {
+  page = [removed('rn', '2026-10-22T10:20:00.000Z', JO), msg('m3', '2026-10-22T10:05:00.000Z', JO),
+    removed('ru', '2026-10-22T09:10:00.000Z', JO), ...page.slice(1)];
+  const r = await open();
+  await r.findByTestId('space-chat-removed-rn');
+  // The line sits above the first live unread row, not above the placeholder before it.
+  expect(order(r)).toEqual(['rn', 'm3', 'm2', 'new-line', 'ru', 'm1']);
+  await see(r, 'rn', 'm3', 'm2', 'new-line');
+  await waitFor(() => expect(readMarks()).toEqual(['m3']));
+  // Scrolled up, the newest live row is removed: an older row is newest now, which is no new message.
+  await see(r, 'm2', 'new-line');
+  page = [removed('m3', '2026-10-22T10:05:00.000Z', JO), ...page.filter((m) => (m as { id: string }).id !== 'm3')];
+  await act(async () => { await client.refetchQueries(); });
+  await r.findByTestId('space-chat-removed-m3');
+  expect(r.queryByTestId('space-chat-pill')).toBeNull();
+  expect(readMarks()).toEqual(['m3']);
+});
+
 describe('FR-871R6 (m#871): member Space info, the hint, the server answer on this visit, refused sends', () => {
   const rejected = () => Object.assign(new Error('HTTP 422'), {
     isAxiosError: true, response: { status: 422, data: { code: 'community.content.rejected', message: 'Server words' } },
@@ -871,6 +966,72 @@ describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card
     const spy = jest.spyOn(client, 'invalidateQueries');
     await see(r, 'm3', 'm2', 'new-line');
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: coachCommunityKeys.cohorts() }));
+  });
+});
+
+describe('FR-871R6 (m#887): the space\'s coach removes someone else\'s message or voice note for everyone', () => {
+  const asCoach = () => {
+    mockRole = 'owner';
+    mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+    mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+  };
+  const voiceApi = () => jest.requireMock('../../../api/communityVoiceApi').communityVoiceApi as { remove: jest.Mock };
+  // The file's earlier removal cases call this mock too; count only this block's calls.
+  beforeEach(() => { voiceApi().remove.mockClear(); });
+  // The server's answer after a removal: the row comes back deleted with removed_by (b#1165 CONTRACT section 2).
+  const serverRemoves = (id: string) => { page = page.map((m) => ((m as { id: string }).id === id ? removed(id, (m as { created_at: string }).created_at, JO, { kind: (m as { kind: string }).kind }) : m)); };
+
+  it('Opus B1 / Sol B887-1: the coach gets Remove for everyone on members\' rows, not on their own; a member never gets it', async () => {
+    const m = await open();
+    await m.findByTestId('space-chat-row-m3');
+    expect(m.queryAllByTestId(/^space-chat-menu-.*-remove$/)).toHaveLength(0);
+    await m.unmount();
+    asCoach();
+    const c = await open();
+    await c.findByTestId('space-chat-row-m3');
+    expect(c.getByTestId('space-chat-menu-m3-remove')).toBeTruthy();
+    expect(c.queryByTestId('space-chat-menu-m1-remove')).toBeNull();
+    expect(c.queryByTestId('space-chat-menu-m2-remove')).toBeNull();
+  });
+
+  it('Opus B1 / Sol B887-1: a text goes through one DELETE on its route and keeps its place as "You removed this message"', async () => {
+    asCoach();
+    mockApi.delete.mockImplementation(async () => { serverRemoves('m3'); return { data: { ok: true } }; });
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3-remove'));
+    await waitFor(() => expect(r.getByTestId('space-chat-removed-m3')).toBeTruthy());
+    expect(mockApi.delete).toHaveBeenCalledTimes(1);
+    expect(String(mockApi.delete.mock.calls[0][0])).toContain('m3');
+    expect(voiceApi().remove).not.toHaveBeenCalled();
+    expect(line(r, 'You removed this message')).toHaveLength(1);
+    expect(r.queryByLabelText(/body m3$/)).toBeNull();
+    expect(order(r).indexOf('m3')).toBeGreaterThanOrEqual(0);
+  });
+
+  it('Opus B1 / Sol B887-1: a voice note goes through the voice route; its player goes and the row reads "You removed this voice note"', async () => {
+    asCoach();
+    page = [msg('m5', '2026-10-22T10:10:00.000Z', JO, { kind: 'voice', body: null, voice_note: { id: 'v5', duration_ms: 9000, waveform_peaks: null, heard_at: null } }), ...page];
+    voiceApi().remove.mockImplementationOnce(async () => { serverRemoves('m5'); return { deleted: true }; });
+    const r = await open();
+    await r.findByTestId('space-chat-voice-v5');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m5-remove'));
+    await waitFor(() => expect(r.getByTestId('space-chat-removed-m5')).toBeTruthy());
+    expect(voiceApi().remove).toHaveBeenCalledWith('v5');
+    expect(mockApi.delete).not.toHaveBeenCalled();
+    expect(r.queryByTestId('space-chat-voice-v5')).toBeNull();
+    expect(line(r, 'You removed this voice note')).toHaveLength(1);
+  });
+
+  it('Opus B1 / Sol B887-1: a refused removal changes nothing on the page', async () => {
+    asCoach();
+    mockApi.delete.mockRejectedValue(Object.assign(new Error('HTTP 403'), { isAxiosError: true, response: { status: 403, data: {} } }));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3-remove'));
+    await waitFor(() => expect(mockApi.delete).toHaveBeenCalledTimes(1));
+    expect(r.queryByTestId('space-chat-removed-m3')).toBeNull();
+    expect(r.getByLabelText(/body m3$/)).toBeTruthy();
   });
 });
 

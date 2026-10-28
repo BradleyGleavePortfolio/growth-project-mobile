@@ -8,6 +8,8 @@
  * and Delete. Report / Block / Delete go through SafetyMenu; a row still on the phone has its own ••• that only deletes
  * it from the phone (FR-871R5, m#879 Opus B3 / Sol B4), and a row on its way or already taken by the server has none
  * until the server row takes its place (FR-871R7, Sol B879-3). Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
+ * REMOVED-BY-M2 (agent 175): a row the coach removed keeps its head and draws SpaceRemovedPlaceholder's one line in
+ * place of the content, with no menu (owner #174-4).
  */
 import React, { useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -16,6 +18,7 @@ import SafetyMenu from '../SafetyMenu';
 import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from '../VoiceReportedFold';
 import { formatDuration } from '../voiceFormat';
 import SpaceVoiceNote from './SpaceVoiceNote';
+import SpaceRemovedPlaceholder, { type SpaceRemovedLine } from './removed/SpaceRemovedPlaceholder';
 import { brand, colors, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
 import { REJECTED_WORDS, type PendingState } from './spaceChatOutbox';
@@ -54,7 +57,13 @@ export interface SpaceChatRowProps {
   viewerCoachId?: string | null;
   offline: boolean;
   onDelete?: () => Promise<void>;
+  /** FR-871R6 (m#887 Opus B1): Remove for everyone, for the space's coach on someone else's row (owner #174-4). */
+  onRemove?: () => Promise<void>;
   onBlocked?: (userId: string) => void;
+  /** The coach removed this row (b#1165): its one line for this viewer; no content and no menu are drawn. */
+  removed?: SpaceRemovedLine | null;
+  /** The author's link from a removed row to Community safety (left out where that page is not on the stack). */
+  onSafety?: () => void;
 }
 
 /** One place per message kind: a later kind (photo, reply) adds its case here. */
@@ -91,7 +100,8 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const reportedIds = useReportedVoiceNotes();
   const reportId = p.voice ? p.voice.id : p.id;
   const reported = reportedIds.has(reportId);
-  const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${p.body ? `. ${p.body}` : ''}`;
+  const said = p.removed ? p.removed.text : p.body;
+  const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${said ? `. ${said}` : ''}`;
   const noun = p.voice ? 'voice note' : 'message';
   const confirmDiscard = () => Alert.alert(`Delete this ${noun}?`, undefined, [
     { text: 'Cancel', style: 'cancel' },
@@ -122,7 +132,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           <TouchableOpacity onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel={`Delete this ${noun}`} hitSlop={8} style={s.more} testID={`space-chat-local-menu-${p.id}`}>
             <Ionicons name="ellipsis-horizontal" size={18} color={SMALL_GREY} />
           </TouchableOpacity>
-        ) : (
+        ) : p.removed ? null : (
           <SafetyMenu
             targetType="message"
             targetId={p.id}
@@ -135,30 +145,37 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             reported={reported}
             onReported={() => markVoiceNoteReported(reportId)}
             onDelete={isOwn ? p.onDelete : undefined}
+            onRemove={isOwn ? undefined : p.onRemove}
             onBlocked={p.onBlocked}
             testID={`space-chat-menu-${p.id}`}
           />
         )}
       </View>
-      <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
-        <MessageBody {...p} folded={reported && !local} />
-        {p.state === 'failed' && p.rejected ? (
-          <Text style={s.reason} testID={`space-chat-rejected-${p.id}`}>{REJECTED_WORDS.message}</Text>
-        ) : null}
-        {p.state === 'failed' && !p.voice ? (
-          <View style={s.actions}>
-            {p.rejected ? null : (
-              <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
-                <Ionicons name="refresh" size={16} color={fp.onDeep} />
-                <Text style={s.againText}>Try again</Text>
+      {p.removed ? (
+        <View style={[s.content, s.untucked]} testID={`space-chat-content-${p.id}`}>
+          <SpaceRemovedPlaceholder id={p.id} line={p.removed} onSafety={p.onSafety} />
+        </View>
+      ) : (
+        <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
+          <MessageBody {...p} folded={reported && !local} />
+          {p.state === 'failed' && p.rejected ? (
+            <Text style={s.reason} testID={`space-chat-rejected-${p.id}`}>{REJECTED_WORDS.message}</Text>
+          ) : null}
+          {p.state === 'failed' && !p.voice ? (
+            <View style={s.actions}>
+              {p.rejected ? null : (
+                <TouchableOpacity onPress={p.onRetry} accessibilityRole="button" accessibilityLabel="Try again" style={s.again} testID={`space-chat-retry-${p.id}`}>
+                  <Ionicons name="refresh" size={16} color={fp.onDeep} />
+                  <Text style={s.againText}>Try again</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={p.onDiscard} accessibilityRole="button" accessibilityLabel="Delete" style={s.discard} testID={`space-chat-discard-${p.id}`}>
+                <Text style={s.discardText}>Delete</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={p.onDiscard} accessibilityRole="button" accessibilityLabel="Delete" style={s.discard} testID={`space-chat-discard-${p.id}`}>
-              <Text style={s.discardText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-      </View>
+            </View>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 }

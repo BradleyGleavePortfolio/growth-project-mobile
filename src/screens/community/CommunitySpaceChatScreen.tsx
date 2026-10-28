@@ -20,6 +20,9 @@
  *     counts as seen when most of it is on screen, or when it fills most of the screen (a message taller than the
  *     screen; FR-871R5, m#871 Sol B2). Opening in place tries the row again until the rows around it have measured
  *     (FR-871R5, m#871 Opus B1 / Sol B1).
+ *   - A row the coach removed (b#1165: deleted with removed_by) keeps its place as one quiet line (REMOVED-BY-M2, owner
+ *     #174-4); an author's own delete still vanishes. Only live rows count for the read mark, the New messages line and
+ *     the pill: the server counts unread without deleted rows and will not take one as the read mark.
  *   - Offline: no line about it; a voice note waiting on the phone says so in its card (owner 10-20 12:25, FR-871R5).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,6 +39,7 @@ import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
 import { useSpaceVoiceOutbox } from '../../components/community/space-chat/useSpaceVoiceOutbox';
 import type { VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
 import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
+import { isCoachRemoved, spaceRemovedLine } from '../../components/community/space-chat/removed/SpaceRemovedPlaceholder';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
 import { type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
 import { useServerAnswered } from '../../components/messaging/ConversationClosed';
@@ -55,14 +59,19 @@ type Item =
   | { type: 'day'; key: string; label: string }
   | { type: 'new'; key: string };
 
-const drawable = (m: SpaceMessage) =>
-  !m.deleted && (m.kind === 'voice' ? featureFlags.communityVoiceNotes && !!m.voice_note : m.kind === 'text' && !!m.body);
+// The kinds this page draws; a coach's removal draws in place whatever the kind (the removal rule reads none).
+const kindDrawn = (m: SpaceMessage) => (m.kind === 'voice' ? featureFlags.communityVoiceNotes : m.kind === 'text');
+const live = (m: SpaceMessage) =>
+  kindDrawn(m) && !m.deleted && (m.kind === 'voice' ? !!m.voice_note : !!m.body);
+const drawable = (m: SpaceMessage) => live(m) || (kindDrawn(m) && isCoachRemoved(m));
 
 export default function CommunitySpaceChatScreen(): React.ReactElement {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { cohortId, messageId } = useRoute<RouteProp<Params, 'CommunitySpaceChat'>>().params;
   // The coach's stack has the space's member page; the member stack has the space drawer.
   const coachStack = !!navigation.getState?.()?.routeNames?.includes('CoachCommunityCohortDetail');
+  // A removed row's author gets a link to Community safety where that page is on the stack (the member side).
+  const safetyRoute = !!navigation.getState?.()?.routeNames?.includes('CommunitySafety');
   const client = useCurrentUser();
   const isOnline = isEffectivelyOnline(useNetworkStatus());
   const focused = useIsFocused();
@@ -98,7 +107,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     for (const row of rows) {
       const d = spaceDay(row.at);
       if (d !== day) { day = d; out.push({ type: 'day', key: `day-${row.at}`, label: d }); }
-      if (lastRead && !newDrawn && !row.mine && row.item.type === 'msg' && row.at > lastRead) {
+      if (lastRead && !newDrawn && !row.mine && row.item.type === 'msg' && live(row.item.m) && row.at > lastRead) {
         newDrawn = true;
         out.push({ type: 'new', key: 'new-line' });
       }
@@ -149,17 +158,18 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
 
   // The pill: someone else posts while the row that was newest is off screen; it goes once the newest row is seen.
   const [pill, setPill] = useState(false);
-  const newest = chat.messages.find(drawable);
-  const prevNewest = useRef<string | undefined>(undefined);
+  const newest = chat.messages.find(live);
+  const prevNewest = useRef<{ id: string; at: string } | undefined>(undefined);
   useEffect(() => {
-    if (!newest || newest.id === prevNewest.current) return;
+    if (!newest || newest.id === prevNewest.current?.id) return;
     const prev = prevNewest.current;
-    prevNewest.current = newest.id;
-    if (prev !== undefined && !seen.has(prev) && newest.sender_user_id !== client?.id) setPill(true);
+    prevNewest.current = { id: newest.id, at: newest.created_at };
+    // Only a newer row: a removal that leaves an older row newest is not a new message.
+    if (prev !== undefined && newest.created_at > prev.at && !seen.has(prev.id) && newest.sender_user_id !== client?.id) setPill(true);
   }, [newest, seen, client?.id]);
   useEffect(() => { if (newest && seen.has(newest.id)) setPill(false); }, [newest, seen]);
   // Read up to the newest row actually on screen; a failed mark is tried again with the next one seen.
-  const newestSeen = placed && focused ? chat.messages.find((m) => drawable(m) && seen.has(m.id)) : undefined;
+  const newestSeen = placed && focused ? chat.messages.find((m) => live(m) && seen.has(m.id)) : undefined;
   const marked = useRef('');
   useEffect(() => {
     if (!newestSeen || newestSeen.created_at <= (marked.current || chat.readCursor?.last_read_at || '')) return;
@@ -199,9 +209,11 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         createdAt={m.created_at} body={m.body} voice={m.voice_note} authorId={m.sender_user_id}
         viewerUserId={client?.id} viewerCoachId={client?.coach_id} offline={!isOnline}
         onDelete={() => chat.remove(m.id, m.voice_note?.id)} onBlocked={chat.dropAuthor}
+        onRemove={isCoachViewer ? () => chat.removeForEveryone(m.id, m.voice_note?.id) : undefined}
+        removed={spaceRemovedLine(m, client?.id)} onSafety={safetyRoute ? () => navigation.navigate('CommunitySafety') : undefined}
       />
     );
-  }, [chat, client, isCoachViewer, isOnline, myName, voice]);
+  }, [chat, client, isCoachViewer, isOnline, myName, voice, navigation, safetyRoute]);
 
   const loading = chat.list.isLoading || cohorts.isLoading;
   // Offline with nothing kept: say so at once rather than spin through the retries.
