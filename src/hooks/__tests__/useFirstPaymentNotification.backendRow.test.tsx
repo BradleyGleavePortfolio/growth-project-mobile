@@ -92,7 +92,7 @@ describe('B-LSNOTIFY3-2: the backend first-payment row reaches the celebration',
       const view = await render(<Harness onFirstPayment={onFirstPayment} />);
       await waitFor(() => expect(onFirstPayment).toHaveBeenCalledTimes(1));
       expect(onFirstPayment).toHaveBeenCalledWith(expected);
-      view.unmount();
+      await view.unmount();
     }
   });
 
@@ -125,7 +125,7 @@ describe('B-LSNOTIFY3-2: the backend first-payment row reaches the celebration',
       });
       expect(onFirstPayment).not.toHaveBeenCalled();
       expect(view.getByTestId('err').props.children).toBe('none');
-      view.unmount();
+      await view.unmount();
     }
   });
 
