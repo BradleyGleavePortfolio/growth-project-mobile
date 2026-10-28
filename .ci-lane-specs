@@ -1,0 +1,5 @@
+src/components/community/__tests__/VoiceNotePlayer.oneAtATime.test.tsx
+src/components/community/__tests__/VoiceNotesSection.oneAtATime.test.tsx
+src/components/community/__tests__/VoiceNoteComposer.oneAtATime.test.tsx
+src/screens/community/__tests__/CommunityVoiceNoteDetail.oneAtATime.test.tsx
+src/screens/community/__tests__/coachModerationVoice.oneAtATime.test.tsx
