@@ -20,6 +20,8 @@ import {
   type UseQueryResult,
   type UseMutationResult,
 } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { isEffectivelyOnline, useNetworkStatus } from './useNetworkStatus';
 import {
   coachCommunityApi,
   CoachCommunityApiError,
@@ -68,12 +70,32 @@ export const coachCommunityKeys = {
 
 // ─── Read hooks ──────────────────────────────────────────────────────────────
 
+/**
+ * React Native has no browser online event and the app wires no React Query
+ * onlineManager, so nothing refetches on reconnect by itself. Every coach read
+ * reloads once when the phone comes back online: an offline first open loads
+ * on its own (the inbox card promises it) and kept rows catch up.
+ */
+function useRefetchOnReconnect(
+  refetch: (o: { cancelRefetch: boolean }) => unknown,
+  when = true,
+): void {
+  const online = isEffectivelyOnline(useNetworkStatus());
+  const wasOnline = useRef(online);
+  useEffect(() => {
+    if (online && !wasOnline.current && when) void refetch({ cancelRefetch: false });
+    wasOnline.current = online;
+  }, [online, when, refetch]);
+}
+
 export function useCoachDashboard(): UseQueryResult<CoachDashboard> {
-  return useQuery({
+  const q = useQuery({
     queryKey: coachCommunityKeys.dashboard(),
     queryFn: () => coachCommunityApi.getDashboard(),
     staleTime: 30_000,
   });
+  useRefetchOnReconnect(q.refetch);
+  return q;
 }
 
 /** Module-level so `select` reruns only on new data. */
@@ -83,7 +105,7 @@ const flattenInbox = (d: InfiniteData<CoachInboxPage>) => ({
 
 /** The coach inbox, one server page at a time (fetchNextPage at the list end). */
 export function useCoachInbox() {
-  return useInfiniteQuery({
+  const q = useInfiniteQuery({
     queryKey: coachCommunityKeys.inbox(),
     queryFn: ({ pageParam }) => coachCommunityApi.getInbox({ cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
@@ -92,6 +114,8 @@ export function useCoachInbox() {
     staleTime: 30_000,
     meta: { persist: false }, // never saved to the phone, so a restart cannot show rows from before a ban
   });
+  useRefetchOnReconnect(q.refetch);
+  return q;
 }
 
 /** A blocked or banned person's cached rows go at once; the refetch lets the server filter. */
@@ -111,30 +135,36 @@ export function dropAuthorFromCoachInbox(qc: QueryClient, userId: string): void 
 }
 
 export function useCoachCohorts(): UseQueryResult<CoachCohort[]> {
-  return useQuery({
+  const q = useQuery({
     queryKey: coachCommunityKeys.cohorts(),
     queryFn: () => coachCommunityApi.getCohorts(),
     staleTime: 60_000,
   });
+  useRefetchOnReconnect(q.refetch);
+  return q;
 }
 
 export function useCoachCohortDetail(
   cohortId: string,
 ): UseQueryResult<CoachCohortDetail> {
-  return useQuery({
+  const q = useQuery({
     queryKey: coachCommunityKeys.cohort(cohortId),
     queryFn: () => coachCommunityApi.getCohortDetail(cohortId),
     staleTime: 30_000,
   });
+  useRefetchOnReconnect(q.refetch);
+  return q;
 }
 
 export function useCoachFlagged(): UseQueryResult<CoachFlaggedItem[]> {
-  return useQuery({
+  const q = useQuery({
     queryKey: coachCommunityKeys.flagged(),
     queryFn: () => coachCommunityApi.getFlagged(),
     staleTime: 15_000,
     meta: { persist: false }, // reported posts are never saved to the phone (same as the inbox)
   });
+  useRefetchOnReconnect(q.refetch);
+  return q;
 }
 
 /**
@@ -147,7 +177,7 @@ export function useCoachFlagged(): UseQueryResult<CoachFlaggedItem[]> {
  * constants — that silent fallback is exactly the violation this fix removes.
  */
 export function useCoachEmptyStates(): UseQueryResult<CoachEmptyStatesResponse> {
-  return useQuery({
+  const q = useQuery({
     queryKey: coachCommunityKeys.emptyStates(),
     queryFn: async () => {
       const data = await coachCommunityApi.getCoachEmptyStates();
@@ -167,6 +197,8 @@ export function useCoachEmptyStates(): UseQueryResult<CoachEmptyStatesResponse> 
     gcTime: Infinity,
     retry: false,
   });
+  useRefetchOnReconnect(q.refetch, q.isError); // loaded copy never changes
+  return q;
 }
 
 /**
@@ -265,13 +297,15 @@ export function useCoachAckState(
 export function useCoachPostDetail(
   postId: string,
 ): UseQueryResult<CoachPostDetail> {
-  return useQuery({
+  const q = useQuery({
     queryKey: coachCommunityKeys.post(postId),
     queryFn: () => coachCommunityApi.getCoachPostDetail(postId),
     enabled: postId.length > 0,
     staleTime: 15_000,
     meta: { persist: false }, // a post is never saved to the phone (same as the inbox)
   });
+  useRefetchOnReconnect(q.refetch, postId.length > 0);
+  return q;
 }
 
 // ─── Mutation hooks (optimistic + rollback) ──────────────────────────────────
