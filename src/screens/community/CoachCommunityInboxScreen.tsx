@@ -55,6 +55,7 @@ import {
   useCoachInbox,
   useCoachAckState,
   useCoachEmptyStatePayload,
+  useCoachOwnedCohortIds,
 } from '../../hooks/useCoachCommunity';
 import {
   useCoachAckActions,
@@ -174,6 +175,9 @@ export default function CoachCommunityInboxScreen({
   navigation,
 }: { navigation?: InboxNav } = {}): React.ReactElement {
   const inbox = useCoachInbox();
+  // ACKS_ENABLED is fixed for the build, so the hook order never changes.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const ownedIds = ACKS_ENABLED ? useCoachOwnedCohortIds() : null;
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
   const network = useNetworkStatus();
 
@@ -240,9 +244,10 @@ export default function CoachCommunityInboxScreen({
         item={item}
         onOpen={item.type === 'post' ? () => openItem(item) : undefined}
         onAcknowledged={onAcknowledged}
+        canAck={ownedIds == null || ownedIds.has(item.cohort_id)}
       />
     ),
-    [openItem, onAcknowledged],
+    [openItem, onAcknowledged, ownedIds],
   );
 
   if (!hasItems && offline) {
@@ -589,10 +594,13 @@ function InboxRow({
   item,
   onOpen,
   onAcknowledged,
+  canAck,
 }: {
   item: CoachInboxItem;
   onOpen?: () => void;
   onAcknowledged: () => void;
+  /** LS-6: false on a row from a space this coach does not own. */
+  canAck: boolean;
 }): React.ReactElement {
   // ACKS_ENABLED is a build-time constant, so the number/order of hooks is
   // stable for the entire lifetime of a build — a hook guarded by it never
@@ -661,7 +669,12 @@ function InboxRow({
         </View>
       )}
       {acks ? (
-        <CoachAckRow item={item} ack={ack} onAcknowledged={onAcknowledged} />
+        <CoachAckRow
+          item={item}
+          ack={ack}
+          onAcknowledged={onAcknowledged}
+          canAck={canAck}
+        />
       ) : null}
     </View>
   );
@@ -683,10 +696,12 @@ function CoachAckRow({
   item,
   ack,
   onAcknowledged,
+  canAck,
 }: {
   item: CoachInboxItem;
   ack: AckBadgeInput | undefined;
   onAcknowledged: () => void;
+  canAck: boolean;
 }): React.ReactElement {
   const { semanticColors } = useTheme();
   const actions = useCoachAckActions(item.id);
@@ -706,6 +721,7 @@ function CoachAckRow({
 
   // Once acknowledged (or replied) the badge already says so, so the button
   // goes: the word never shows twice and no disabled button is left behind.
+  // A co-coach's row keeps its badge but has no button: the server refuses.
   return (
     <View style={styles.ackRow}>
       <CoachAckBadge
@@ -713,7 +729,7 @@ function CoachAckRow({
         labelledByRow
         testID={`coach-community-inbox-ack-badge-${item.id}`}
       />
-      {alreadyAcked ? null : (
+      {alreadyAcked || !canAck ? null : (
         <HapticPressable
           intent="light"
           onPress={() =>
