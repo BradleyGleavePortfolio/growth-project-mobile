@@ -4,6 +4,8 @@
  * cards; the error and quiet pages pull to refresh (their words say "Pull to retry"); the
  * cards are cream with no outline, and the colours stay light in both themes.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import React from 'react';
 import { StyleSheet, RefreshControl } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -106,5 +108,20 @@ describe('Coach community Home on K2 Style B (FIN-868)', () => {
     expect(plain).toMatchObject({ backgroundColor: colors.cream, borderColor: 'transparent' });
     // The pull refreshes the loaded page too.
     expect(getByTestId('coach-community-home-screen').props.refreshControl.type).toBe(RefreshControl);
+  });
+
+  it('the Home bar draws no title of its own and blends into the bone page', () => {
+    const nav = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', 'navigation', 'CoachCommunityNavigator.tsx'),
+      'utf8',
+    );
+    const start = nav.indexOf('name="CoachCommunityHome"');
+    expect(start).toBeGreaterThan(-1);
+    const block = nav.slice(start, nav.indexOf('/>', start));
+    // The title stays for the back button and screen readers; the bar draws none.
+    expect(block).toMatch(/title: 'Community'/);
+    expect(block).toMatch(/headerTitle: ''/);
+    expect(block).toMatch(/headerShadowVisible: false/);
+    expect(block).toMatch(/headerStyle: \{ backgroundColor: tokenColors\.bone \}/);
   });
 });
