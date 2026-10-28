@@ -6,6 +6,7 @@
  * that the rendered component surfaces the concrete sentence to AT.
  */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 jest.mock('../../../theme/useTheme', () => {
@@ -66,5 +67,11 @@ describe('VoicePrivacyCopy — render', () => {
     expect(getByTestId('voice-privacy-text').props.children).toBe(
       'Everyone in Spring Block can hear this voice note.',
     );
+  });
+
+  it('is a plain line in the sheet grey, no box (LO-848 B1, #VOICE-SHADES)', async () => {
+    const { getByTestId } = await render(<VoicePrivacyCopy target={{ kind: 'cohort', cohortName: 'Spring Block' }} />);
+    expect(StyleSheet.flatten(getByTestId('voice-privacy-copy').props.style)).toEqual({ flexDirection: 'row', alignItems: 'flex-start', gap: 8 });
+    expect(StyleSheet.flatten(getByTestId('voice-privacy-text').props.style).color).toBe('#5A5A56');
   });
 });
