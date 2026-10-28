@@ -21,6 +21,7 @@ import React, {
   useRef,
 } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -30,6 +31,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, colors, semantic, layout, radius } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
@@ -541,6 +543,12 @@ export function InboxNoticeCard({
   );
 }
 
+/** A coach create or Acknowledge that failed says why, in the shared community words. */
+export function alertCoachFailure(err: unknown): void {
+  const f = describeCommunityFailure(err, 'moderate');
+  Alert.alert(f.title, f.message);
+}
+
 /** Up to two initials for a filled serif monogram (K2). */
 export function initialsOf(name: string): string {
   return name
@@ -683,7 +691,7 @@ function CoachAckRow({
   const { semanticColors } = useTheme();
   const actions = useCoachAckActions(item.id);
   const pending = actions.markAcked.isPending;
-  // `ack` is the cache once filled, else the row's own summary.
+  // `ack` is the cache merged with the row's own summary (later wins).
   const reached = ack?.state;
   const alreadyAcked = reached === 'acked' || reached === 'replied';
 
@@ -709,7 +717,13 @@ function CoachAckRow({
         <HapticPressable
           intent="light"
           onPress={() =>
-            actions.markAcked.mutate(undefined, { onSuccess: onAcknowledged })
+            actions.markAcked.mutate(undefined, {
+              onSuccess: onAcknowledged,
+              // A 409 keeps its calm inline line below; any other refusal says why.
+              onError: (e) => {
+                if (!isIllegalAckTransition(e)) alertCoachFailure(e);
+              },
+            })
           }
           disabled={pending}
           accessibilityRole="button"

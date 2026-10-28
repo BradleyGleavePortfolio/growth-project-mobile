@@ -44,7 +44,7 @@ import {
 } from '../../hooks/useCoachCommunity';
 import type { CoachCohort } from '../../api/coachCommunityApi';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
-import { InboxNoticeCard, initialsOf, k2Styles } from './CoachCommunityInboxScreen';
+import { alertCoachFailure, InboxNoticeCard, initialsOf, k2Styles } from './CoachCommunityInboxScreen';
 
 /** The serif page title (K2): the navigation bar above it stays empty. */
 function CohortsTitle(): React.ReactElement {
@@ -83,6 +83,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
           setModalOpen(false);
           completion.show('Cohort created.');
         },
+        onError: alertCoachFailure,
       },
     );
   }, [trimmed, createCohort, completion]);
