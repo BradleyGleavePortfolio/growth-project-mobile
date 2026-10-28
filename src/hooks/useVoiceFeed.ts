@@ -13,7 +13,13 @@
  *     different scope is a distinct cache entry; the cursor threads through
  *     pageParam under that key.
  *   - Pure read: nothing is mutated here.
+ *   - Catch-up (backend #1165, a coach's removal): a removal ping re-reads the feed live
+ *     (useCommunityBadge). A ping missed while the phone slept or the socket was down heals when the
+ *     app returns to the foreground or the screen regains focus (useVoiceCatchUp), bounded below.
  */
+import { createContext, useContext, useEffect, useRef, type ContextType } from 'react';
+import { AppState } from 'react-native';
+import { NavigationContext } from '@react-navigation/native';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type {
   UseInfiniteQueryResult,
@@ -49,9 +55,56 @@ function toScope(opts: UseVoiceFeedOptions): VoiceFeedScope {
   return { kind: 'all' };
 }
 
+/**
+ * The catch-up bound: at most one re-read per voice screen per 15 s, counted from its last read (a
+ * ping's re-read counts). A return to the app or to the screen comes in bursts (an iOS banner or Face
+ * ID flips the app inactive and back, Back from a note page refocuses the list), and 15 s folds each
+ * burst into one GET while staying under the 30 s staleTime, so a note removed while the phone slept is
+ * gone on the first look back. Live removals ride the ping, not this.
+ */
+export const VOICE_CATCH_UP_MS = 15_000;
+
+/** Stands in when the navigation module is stubbed (tests): no focus, the foreground return still applies. */
+const NoNavigation = createContext<ContextType<typeof NavigationContext>>(undefined);
+
+/**
+ * Re-reads a voice query when the app returns to the foreground or its screen regains focus, at most
+ * once per VOICE_CATCH_UP_MS. No read before the first answer (that read is already running) and none
+ * while disabled. Outside a navigator only the foreground return applies.
+ */
+export function useVoiceCatchUp(
+  query: { refetch: (o?: { cancelRefetch?: boolean }) => unknown; dataUpdatedAt: number },
+  enabled: boolean,
+): void {
+  const navigation = useContext(NavigationContext ?? NoNavigation);
+  const latest = useRef({ query, enabled, last: 0 });
+  latest.current.query = query;
+  latest.current.enabled = enabled;
+  useEffect(() => {
+    const catchUp = () => {
+      const s = latest.current;
+      const now = Date.now();
+      const lastRead = Math.max(s.last, s.query.dataUpdatedAt);
+      if (!s.enabled || !s.query.dataUpdatedAt || now - lastRead < VOICE_CATCH_UP_MS) return;
+      s.last = now;
+      void s.query.refetch({ cancelRefetch: false });
+    };
+    const app = AppState.addEventListener('change', (state) => {
+      if (state === 'active') catchUp();
+    });
+    const offFocus =
+      typeof navigation?.addListener === 'function' ? navigation.addListener('focus', catchUp) : undefined;
+    return () => {
+      app.remove();
+      offFocus?.();
+    };
+  }, [navigation]);
+}
+
 export function useVoiceFeed(options: UseVoiceFeedOptions): VoiceFeedQuery {
   const { workspaceId, cohortId, conversationId } = options;
-  return useInfiniteQuery({
+  const enabled = !!workspaceId && featureFlags.communityVoiceNotes;
+  const feed = useInfiniteQuery({
     queryKey: voiceKeys.feed(workspaceId ?? '∅', toScope(options)),
     queryFn: ({ pageParam }) => {
       // Unreachable at runtime: enabled only when workspaceId is non-null. The
@@ -66,7 +119,9 @@ export function useVoiceFeed(options: UseVoiceFeedOptions): VoiceFeedQuery {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
-    enabled: !!workspaceId && featureFlags.communityVoiceNotes,
+    enabled,
     meta: { persist: false }, // never a list saved to the phone, so a restart cannot show notes from before a ban
   });
+  useVoiceCatchUp(feed, enabled);
+  return feed;
 }

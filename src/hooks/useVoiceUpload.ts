@@ -55,6 +55,12 @@ export interface VoiceUploadInput {
 export interface UseVoiceUploadOptions {
   /** Inject a byte reader for tests; defaults to fetch(uri) → arrayBuffer. */
   readBytes?: (uri: string) => Promise<ArrayBuffer>;
+  /** Upload share in [0,1] as the audio bytes go up (the outbox row's line). */
+  onProgress?: (fraction: number) => void;
+  /** C-4: a key an earlier try already uploaded to; only hop 3 runs again (the server answers with that same note). */
+  uploadedKey?: string;
+  /** C-4: told the key once the bytes are up, so a resend can post that same note. */
+  onUploaded?: (storageKey: string) => void;
 }
 
 export type VoiceUploadMutation = UseMutationResult<
@@ -97,6 +103,7 @@ export async function publishVoiceNote(
 ): Promise<VoiceNoteView> {
   assertVoicePublishable(input);
   const readBytes = options.readBytes ?? defaultReadBytes;
+  if (options.uploadedKey) return recordVoiceNote(workspaceId, input, options.uploadedKey);
 
   // Hop 1 — mint the signed upload target (server validates limits).
   const target = await communityVoiceApi.issueUploadUrl(workspaceId, {
@@ -107,11 +114,15 @@ export async function publishVoiceNote(
 
   // Hop 2 — PUT the raw audio bytes to storage.
   const body = await readBytes(input.uri);
-  await communityVoiceApi.uploadBytes(target.upload_url, body, input.mimeType);
+  await communityVoiceApi.uploadBytes(target.upload_url, body, input.mimeType, options.onProgress);
+  options.onUploaded?.(target.storage_key);
+  return recordVoiceNote(workspaceId, input, target.storage_key);
+}
 
-  // Hop 3 — durably record the note (server re-asserts the bucket binding).
+// Hop 3 — durably record the note (server re-asserts the bucket binding).
+function recordVoiceNote(workspaceId: string, input: VoiceUploadInput, storageKey: string): Promise<VoiceNoteView> {
   return communityVoiceApi.create(workspaceId, {
-    storage_key: target.storage_key,
+    storage_key: storageKey,
     duration_ms: input.durationMs,
     bytes: input.bytes,
     mime_type: input.mimeType,
