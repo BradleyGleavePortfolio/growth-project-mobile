@@ -193,7 +193,7 @@ describe('useCoachAckActions — error rollback', () => {
     await act(async () => {
       button.result.current.markAcked.mutate();
     });
-    expect(row.result.current?.state).toBe('acked'); // optimistic, request in flight
+    await waitFor(() => expect(row.result.current?.state).toBe('acked')); // optimistic, in flight
 
     await act(async () => refuse(new Error('boom')));
     await waitFor(() => expect(button.result.current.markAcked.isError).toBe(true));
