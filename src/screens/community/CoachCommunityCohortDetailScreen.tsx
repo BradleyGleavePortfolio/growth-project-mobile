@@ -63,7 +63,12 @@ import {
 } from '../../api/coachCommunityApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CoachCommunityRoute } from './coachCommunityNavTypes';
-import { InboxNoticeCard, initialsOf, k2Styles } from './CoachCommunityInboxScreen';
+import {
+  InboxNoticeCard,
+  initialsOf,
+  k2Styles,
+  membersLabel,
+} from './CoachCommunityInboxScreen';
 
 /** An invite or remove that failed: the shared community copy, plus the one roster case it lacks. */
 function alertMemberFailure(err: unknown): void {
@@ -79,9 +84,13 @@ function alertMemberFailure(err: unknown): void {
   );
 }
 
-/** Minimal, intentionally permissive email shape check (server is the gate). */
+/**
+ * The email shapes the server's IsEmail accepts (AssignMemberDto): no empty
+ * part around a dot, and an ending of two or more letters. A near miss such as
+ * "gmail.c" keeps Send invite off instead of coming back as a server problem.
+ */
 function looksLikeEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  return /^[^\s@.]+(\.[^\s@.]+)*@([^\s@.]+\.)+[^\s@.\d]{2,}$/.test(value.trim());
 }
 
 export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
@@ -215,7 +224,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           {cohortName}
         </Text>
         {data ? (
-          <Text style={styles.headerMeta}>{memberCount} members</Text>
+          <Text style={styles.headerMeta}>{membersLabel(memberCount)}</Text>
         ) : null}
       </View>
 

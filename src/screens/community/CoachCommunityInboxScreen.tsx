@@ -21,12 +21,14 @@ import React, {
   useRef,
 } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
   View,
   Text,
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  Platform,
   RefreshControl,
   ScrollView,
 } from 'react-native';
@@ -55,6 +57,7 @@ import {
   useCoachInbox,
   useCoachAckState,
   useCoachEmptyStatePayload,
+  useCoachOwnedCohortIds,
 } from '../../hooks/useCoachCommunity';
 import {
   useCoachAckActions,
@@ -140,7 +143,9 @@ function buildRowAccessibilityLabel(
   item: CoachInboxItem,
   ack: AckBadgeInput | undefined,
 ): string {
-  const base = `${item.client_name} in ${item.cohort_name}: ${item.snippet}`;
+  // C3: the label also says the time the row shows, with words in full.
+  const when = inboxRowTime(item.created_at, new Date(), true);
+  const base = `${item.client_name} in ${item.cohort_name}${when ? `, ${when}` : ''}: ${item.snippet}`;
   if (!ACKS_ENABLED || ack == null) return base;
   const { showStatePill, slaState, breached } = resolveAckBadgeVisibility(ack);
   const SLA_PHRASE: Record<'warning' | 'breached', string> = {
@@ -174,6 +179,9 @@ export default function CoachCommunityInboxScreen({
   navigation,
 }: { navigation?: InboxNav } = {}): React.ReactElement {
   const inbox = useCoachInbox();
+  // ACKS_ENABLED is fixed for the build, so the hook order never changes.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const ownedIds = ACKS_ENABLED ? useCoachOwnedCohortIds() : null;
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
   const network = useNetworkStatus();
 
@@ -240,9 +248,10 @@ export default function CoachCommunityInboxScreen({
         item={item}
         onOpen={item.type === 'post' ? () => openItem(item) : undefined}
         onAcknowledged={onAcknowledged}
+        canAck={ownedIds == null || ownedIds.has(item.cohort_id)}
       />
     ),
-    [openItem, onAcknowledged],
+    [openItem, onAcknowledged, ownedIds],
   );
 
   if (!hasItems && offline) {
@@ -260,7 +269,7 @@ export default function CoachCommunityInboxScreen({
   if (inbox.isLoading) {
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
-        <InboxTitle subtitle="Loading your inbox" />
+        <InboxTitle subtitle="Loading your inbox" unspokenSubtitle />
         <View
           accessible
           accessibilityLabel="Loading your inbox"
@@ -401,9 +410,15 @@ export function inboxDateLine(now: Date = new Date()): string {
 
 /**
  * Row time in the K2 style: a clock time for today ("6:41 am"), the weekday
- * within the last week ("Wed"), else the date ("14 Oct").
+ * within the last week ("Wed"), else the date ("14 Oct"). `spoken` gives the
+ * day and month in full ("Wednesday", "14 October") for screen readers.
  */
-export function inboxRowTime(iso: string, now: Date = new Date()): string {
+export function inboxRowTime(
+  iso: string,
+  now: Date = new Date(),
+  spoken = false,
+): string {
+  const cut = (word: string): string => (spoken ? word : word.slice(0, 3));
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return '';
   if (then.toDateString() === now.toDateString()) {
@@ -412,18 +427,21 @@ export function inboxRowTime(iso: string, now: Date = new Date()): string {
     return `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h < 12 ? 'am' : 'pm'}`;
   }
   const days = (now.getTime() - then.getTime()) / 86_400_000;
-  if (days >= 0 && days < 7) return DAYS[then.getDay()].slice(0, 3);
-  return `${then.getDate()} ${MONTHS[then.getMonth()].slice(0, 3)}`;
+  if (days >= 0 && days < 7) return cut(DAYS[then.getDay()]);
+  return `${then.getDate()} ${cut(MONTHS[then.getMonth()])}`;
 }
 
 function InboxTitle({
   subtitle,
   flush,
   onDark,
+  unspokenSubtitle,
 }: {
   subtitle?: string;
   flush?: boolean;
   onDark?: boolean;
+  /** C7: shown but not spoken, when the content below says the same words. */
+  unspokenSubtitle?: boolean;
 }): React.ReactElement {
   return (
     <View style={flush ? styles.titleBlockFlush : styles.titleBlock}>
@@ -433,7 +451,11 @@ function InboxTitle({
       >
         Inbox
       </Text>
-      <Text style={[styles.dateLine, onDark ? styles.dateLineOnDark : null]}>
+      <Text
+        style={[styles.dateLine, onDark ? styles.dateLineOnDark : null]}
+        accessibilityElementsHidden={unspokenSubtitle}
+        importantForAccessibility={unspokenSubtitle ? 'no-hide-descendants' : 'auto'}
+      >
         {subtitle ?? inboxDateLine()}
       </Text>
     </View>
@@ -549,6 +571,20 @@ export function alertCoachFailure(err: unknown): void {
   Alert.alert(f.title, f.message);
 }
 
+/**
+ * Screen-reader focus to a row, as CreditPackCheckoutScreen moves it: the
+ * event goes to the row itself, with no findNodeHandle lookup.
+ */
+function focusRow(node: View | null): void {
+  if (Platform.OS === 'web' || node == null) return;
+  AccessibilityInfo.sendAccessibilityEvent(node, 'focus');
+}
+
+/** "1 member", "3 members": the count words on the Cohorts row and page. */
+export function membersLabel(count: number): string {
+  return `${count} ${count === 1 ? 'member' : 'members'}`;
+}
+
 /** Up to two initials for a filled serif monogram (K2). */
 export function initialsOf(name: string): string {
   return name
@@ -589,10 +625,13 @@ function InboxRow({
   item,
   onOpen,
   onAcknowledged,
+  canAck,
 }: {
   item: CoachInboxItem;
   onOpen?: () => void;
   onAcknowledged: () => void;
+  /** LS-6: false on a row from a space this coach does not own. */
+  canAck: boolean;
 }): React.ReactElement {
   // ACKS_ENABLED is a build-time constant, so the number/order of hooks is
   // stable for the entire lifetime of a build — a hook guarded by it never
@@ -609,6 +648,7 @@ function InboxRow({
   const breached = ack != null && resolveAckBadgeVisibility(ack).breached;
   const label = buildRowAccessibilityLabel(item, ack);
   const rowTestID = `coach-community-inbox-row-${item.id}`;
+  const mainRef = useRef<View>(null);
 
   const content = (
     <>
@@ -652,6 +692,7 @@ function InboxRow({
         </HapticPressable>
       ) : (
         <View
+          ref={mainRef}
           accessible
           accessibilityLabel={label}
           testID={rowTestID}
@@ -661,7 +702,13 @@ function InboxRow({
         </View>
       )}
       {acks ? (
-        <CoachAckRow item={item} ack={ack} onAcknowledged={onAcknowledged} />
+        <CoachAckRow
+          item={item}
+          ack={ack}
+          onAcknowledged={onAcknowledged}
+          canAck={canAck}
+          rowRef={mainRef}
+        />
       ) : null}
     </View>
   );
@@ -683,10 +730,14 @@ function CoachAckRow({
   item,
   ack,
   onAcknowledged,
+  canAck,
+  rowRef,
 }: {
   item: CoachInboxItem;
   ack: AckBadgeInput | undefined;
   onAcknowledged: () => void;
+  canAck: boolean;
+  rowRef: React.RefObject<View | null>;
 }): React.ReactElement {
   const { semanticColors } = useTheme();
   const actions = useCoachAckActions(item.id);
@@ -706,6 +757,7 @@ function CoachAckRow({
 
   // Once acknowledged (or replied) the badge already says so, so the button
   // goes: the word never shows twice and no disabled button is left behind.
+  // A co-coach's row keeps its badge but has no button: the server refuses.
   return (
     <View style={styles.ackRow}>
       <CoachAckBadge
@@ -713,18 +765,21 @@ function CoachAckRow({
         labelledByRow
         testID={`coach-community-inbox-ack-badge-${item.id}`}
       />
-      {alreadyAcked ? null : (
+      {alreadyAcked || !canAck ? null : (
         <HapticPressable
           intent="light"
-          onPress={() =>
+          onPress={() => {
+            // C4: the button goes as soon as it is tapped, so a screen
+            // reader's focus moves to the row instead of the top of the page.
+            focusRow(rowRef.current);
             actions.markAcked.mutate(undefined, {
               onSuccess: onAcknowledged,
               // A 409 keeps its calm inline line below; any other refusal says why.
               onError: (e) => {
                 if (!isIllegalAckTransition(e)) alertCoachFailure(e);
               },
-            })
-          }
+            });
+          }}
           disabled={pending}
           accessibilityRole="button"
           accessibilityLabel={`Acknowledge message from ${item.client_name}`}

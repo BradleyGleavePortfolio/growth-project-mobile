@@ -153,6 +153,9 @@ const BY_CODE: Record<string, string> = {
     'You are no longer a member of this community. Contact your coach if you think this is a mistake.',
   'community.cohort.not_found':
     'This cohort is no longer available. Go back and refresh, or contact your coach.',
+  // Coach create: the name is already used in their workspace, archived too.
+  'community.cohort.name_taken':
+    'You already used this name for a cohort. Choose a different name.',
   'community.challenge.not_joined': 'Join the challenge first, then you can comment.',
   'community.moderation.not_found':
     'This report has already been handled or removed. Pull down to refresh the queue.',
