@@ -65,7 +65,9 @@ people in the space from GET /community/cohorts/:cohortId/members, grouped Coach
 and Members with the viewer first as "You". People load 50 at a time (Show more), stay in
 memory only, and are asked for only after the server has let this person in on this
 visit; a 403 or 404 lists no one. Loading is the shared QuietLoading; a failed read is one
-calm line with Try again (the connection line when offline).
+calm line with Try again (the connection line when offline). When the chat's own read
+failed (not a refusal), the people line says so with Try again, which reloads the chat
+(FR-897). The keyboard goes away before the sheet opens.
 Tests: `CommunitySpaceChatScreen.test.tsx`.
 
 The shell retains Today, Hall, Cohorts, Challenges and Messages behind their
