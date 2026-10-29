@@ -169,19 +169,13 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
           options={{ headerShown: false }}
         />
       ) : null}
-      {/* VOICE-INBOX: a voice row in the inbox opens its note here. */}
+      {/* VOICE-INBOX: a voice row in the inbox opens its note here. FR-865R4 (Sol R3 B7): the page draws its own deep
+          Studio bar with Back (frame 05b), so the stack draws none over it. */}
       {featureFlags.communityVoiceNotes ? (
         <CoachCommunityStack.Screen
           name="CommunityVoiceNoteDetail"
           component={CommunityVoiceNoteDetail}
-          // One header: the note draws its own "Voice note" title, so the bar
-          // keeps only the back control, in the page colour with no shadow —
-          // no second, empty bar above the title.
-          options={{
-            title: '',
-            headerShadowVisible: false,
-            headerStyle: { backgroundColor: tokenColors.bone },
-          }}
+          options={{ headerShown: false }}
         />
       ) : null}
     </CoachCommunityStack.Navigator>
