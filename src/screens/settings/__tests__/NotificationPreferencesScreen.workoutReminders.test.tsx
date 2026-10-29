@@ -478,7 +478,7 @@ describe('STORE-B2: plan renewal offers (off until the person turns it on)', () 
     mockGet.mockResolvedValue({ data: { plan_renewal_push: true, plan_renewal_offers_opt_in_at: null } });
     const { findByLabelText, getByText } = await render(<NotificationPreferencesScreen navigation={navigation} role={() => 'student'} />);
     expect((await findByLabelText(OFFERS)).props.value).toBe(false);
-    expect(getByText('A note the day after your plan ends and a week later, with plans you can choose. Off until you turn it on.')).toBeTruthy();
+    expect(getByText('A note the day after your plan ends and a week later, with plans you can choose.')).toBeTruthy();
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
@@ -508,5 +508,45 @@ describe('STORE-B2: plan renewal offers (off until the person turns it on)', () 
     await fireEvent(await findByLabelText(OFFERS), 'valueChange', true);
     expect(await findByTestId('notif-pref-save-error')).toBeTruthy();
     expect((await findByLabelText(OFFERS)).props.value).toBe(false);
+  });
+
+  // FR-B2 B2: a failed first read is told, with Try again; it never shows a yes the server has not given.
+  it('B2: a failed first read hides the switch (even with an old saved yes), tells it, and Try again shows the server answer', async () => {
+    await AsyncStorage.setItem('gp_notif_category_prefs', JSON.stringify({ plan_renewal: true }));
+    mockGet
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockResolvedValueOnce({ data: { plan_renewal_offers_opt_in_at: null } });
+    const { findByRole, findByTestId, findByLabelText, queryByLabelText, queryByTestId, getByText } = await render(
+      <NotificationPreferencesScreen navigation={navigation} role={() => 'student'} />,
+    );
+    expect(await findByTestId('notif-pref-read-error')).toBeTruthy();
+    expect(getByText('Notification preferences could not be loaded. Check your connection, then try again.')).toBeTruthy();
+    expect(queryByLabelText(OFFERS)).toBeNull();
+    await fireEvent.press(await findByRole('button', { name: 'Try again' }));
+    expect((await findByLabelText(OFFERS)).props.value).toBe(false);
+    expect(queryByTestId('notif-pref-read-error')).toBeNull();
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('B2: Try again that fails again keeps the notice and the switch hidden', async () => {
+    mockGet.mockRejectedValue(new Error('Network Error'));
+    const { findByRole, findByTestId, queryByLabelText } = await render(
+      <NotificationPreferencesScreen navigation={navigation} role={() => 'student'} />,
+    );
+    await fireEvent.press(await findByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    expect(await findByTestId('notif-pref-read-error')).toBeTruthy();
+    expect(queryByLabelText(OFFERS)).toBeNull();
+  });
+
+  it('B2: an older server (no field) after a good read: no notice, switch hidden', async () => {
+    mockGet.mockResolvedValue({ data: { workout_reminder_push: true, plan_renewal_push: true } });
+    const { findByLabelText, queryByLabelText, queryByTestId } = await render(
+      <NotificationPreferencesScreen navigation={navigation} role={() => 'student'} />,
+    );
+    expect(await findByLabelText('Workout reminders')).toBeTruthy();
+    expect(queryByTestId('notif-pref-read-error')).toBeNull();
+    expect(queryByLabelText(OFFERS)).toBeNull();
   });
 });
