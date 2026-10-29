@@ -39,6 +39,12 @@ const ParentSchema = z
     snippet: z.string().nullish(), voice_duration_ms: z.number().nullish(),
   })
   .passthrough();
+type SpaceParent = z.infer<typeof ParentSchema>;
+const LenientParent = z.custom<SpaceParent | null | undefined>(() => true).transform((v): SpaceParent | null | undefined => {
+  if (v == null) return v;
+  const read = ParentSchema.safeParse(v);
+  return read.success ? read.data : null;
+});
 export const SpaceMessageSchema = z
   .object({
     id: z.string(),
@@ -56,7 +62,7 @@ export const SpaceMessageSchema = z
     // author's own delete; an older server that never sends them keeps today's behaviour (the row is left out).
     removed_at: z.string().nullish(),
     removed_by: RemovedBySchema.nullish(),
-    parent: ParentSchema.nullish().catch(null),
+    parent: LenientParent,
   })
   .passthrough();
 export type SpaceMessage = z.infer<typeof SpaceMessageSchema>;
