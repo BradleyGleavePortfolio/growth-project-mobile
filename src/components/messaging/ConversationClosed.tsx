@@ -41,6 +41,11 @@ const SETTINGS_WORD = 'Settings';
 /** BAM-2b, same ruling: they blocked me. {N} is the name I already see for them in this conversation. */
 export const blockedYouLine = (name: string): string => `${name} has blocked you`;
 
+// FR-877R2 (LO C4): a refused send takes the focused composer away. close() asks the bar that replaces it to say its
+// own line (BAM-1, BAM-2a or BAM-2b), once, if that bar comes up within a few seconds.
+const ANNOUNCE_WINDOW_MS = 5_000;
+let announceUntil = 0;
+
 /** Who closed a one-to-one conversation: 'me' (BAM-2a), 'them' (BAM-2b), null (BAM-1). */
 export type ClosedBy = 'me' | 'them' | null;
 
@@ -117,7 +122,7 @@ export function useConversationClosed(
       setRefused(true);
       closedRefusals.add(otherUserId);
       void HapticService.warning();
-      AccessibilityInfo.announceForAccessibility?.(CLOSED_LINE); // the composer that had focus just went away
+      announceUntil = Date.now() + ANNOUNCE_WINDOW_MS; // the composer that had focus just went away
       return true;
     },
     [otherUserId],
@@ -230,6 +235,11 @@ export function ConversationClosedLine({
   const who = name?.trim();
   const line = given ?? (by === 'me' ? BLOCKED_BY_ME_LINE : by === 'them' && who ? blockedYouLine(who) : CLOSED_LINE);
   const link = !given && by === 'me' ? openBlocked : null;
+  useEffect(() => {
+    if (Date.now() >= announceUntil) return;
+    announceUntil = 0;
+    AccessibilityInfo.announceForAccessibility?.(line); // LO C4: the words this bar shows, not always BAM-1
+  }, [line]);
   const bar = [styles.bar, { backgroundColor: semanticColors.bgSurface, borderTopColor: semanticColors.border }, style];
   const muted = [typography.bodySmall, styles.line, { color: semanticColors.textMuted }];
   const icon = <Ionicons name="lock-closed-outline" size={16} color={semanticColors.textMuted} />;

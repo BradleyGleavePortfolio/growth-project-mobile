@@ -32,6 +32,7 @@ import {
   useCommunityMe,
   useDmMessages,
   usePosts,
+  useMyCoachName,
 } from '../../hooks/useCommunity';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
@@ -75,8 +76,10 @@ export default function CommunityComposerScreen(): React.ReactElement {
     [gateRead.error],
     useServerAnswered(gateRead) && hasWorkspace, // FR-872 (Sol B3): no space now = no fields, even after an answer
   );
-  // BLOCK-TELL #169-5: in DM mode `by` picks the line for my side. No name shows here, so BAM-2b falls back to BAM-1.
+  // BLOCK-TELL #169-5: in DM mode `by` picks the line for my side. FR-877R2 (LS B1): this screen shows no name, so
+  // BAM-2b takes my coach's name when the DM is with my coach; with no name known it stays BAM-1.
   const by = useClosedBy(mode === 'dm' ? dmTo : null, closed, { errors: [gateRead.error] });
+  const coach = useMyCoachName(by === 'them' && dmTo === client?.coach_id ? dmTo : null);
 
   const bodyMax = mode === 'dm' ? DM_MAX : POST_BODY_MAX;
   const trimmedTitle = title.trim();
@@ -133,7 +136,9 @@ export default function CommunityComposerScreen(): React.ReactElement {
           {mode === 'dm' ? 'New message' : 'New post'}
         </Text>
 
-        {closed ? <><View style={styles.flex} /><ConversationClosedLine by={mode === 'dm' ? by : null} testID="community-composer-closed" /></> : <>
+        {closed ? <><View style={styles.flex} />{coach.settled ? ( // the bar waits for the name, so its line never changes
+          <ConversationClosedLine by={mode === 'dm' ? by : null} name={coach.name} testID="community-composer-closed" />
+        ) : null}</> : <>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.content}

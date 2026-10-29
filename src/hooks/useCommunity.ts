@@ -37,6 +37,7 @@ import {
   type CommunityPing,
 } from '../api/communityRealtime';
 import { refreshVoiceQueries } from './voiceQueryKeys';
+import api from '../services/api';
 
 // ─── Query keys (stable, namespaced) ─────────────────────────────────────────
 
@@ -57,6 +58,23 @@ export const communityKeys = {
 };
 
 // ─── Read hooks ──────────────────────────────────────────────────────────────
+
+/**
+ * FR-877R2 (LS-877R2 B1): my coach's name, from the read Community home's coach row makes (SpaceTree.tsx, same key
+ * and request, so it is usually in memory already). For a closed coach DM with no name on screen (the empty inbox's
+ * "Send your coach a message"), so BAM-2b names the coach. `name`: null when unknown, empty or the read failed (the
+ * line then stays BAM-1, never a made-up name). `settled`: the read answered, or there is nothing to read.
+ */
+export function useMyCoachName(coachId: string | null | undefined): { name: string | null; settled: boolean } {
+  const q = useQuery({
+    queryKey: ['community', 'home', 'coach-name', coachId ?? null],
+    enabled: !!coachId,
+    staleTime: 300_000,
+    queryFn: async () => (await api.get<{ name?: unknown }>('/v1/clients/me/coach')).data?.name ?? null,
+  });
+  const name = typeof q.data === 'string' && q.data.trim() ? q.data.trim() : null;
+  return { name, settled: !coachId || q.isSuccess || q.isError };
+}
 
 export function useCommunityMe(): UseQueryResult<CommunityMeResponse> {
   return useQuery({

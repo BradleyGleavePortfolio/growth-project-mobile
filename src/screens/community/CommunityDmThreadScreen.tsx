@@ -66,6 +66,9 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   );
   // BLOCK-TELL #169-5: the read refusal's code (blocked_by_you / blocked_by_them) says who closed it.
   const by = useClosedBy(recipientId, closed, { errors: [messages.error] });
+  // FR-877R2 (LO C2): BAM-2b names them only by a name this screen was given, or "Coach" for my own coach. A member
+  // reached with no name (a link) gets BAM-1, never the "Coach" fallback as their name.
+  const shownName = route.params?.participantLabel ?? (recipientId && recipientId === client?.coach_id ? participantLabel : null);
 
   // FR-880R2 (Sol B1, LO-872R4 C2): the DM read waits for /community/me (it is off until the space is known), so a slow,
   // failed or offline me read is this screen's read too: the same two lines, and Try again reads me again.
@@ -190,7 +193,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           />
         )}
 
-        {closed ? <ConversationClosedLine by={by} name={participantLabel} testID="community-dmthread-closed" /> : !open ? null : <ComposerInput
+        {closed ? <ConversationClosedLine by={by} name={shownName} testID="community-dmthread-closed" /> : !open ? null : <ComposerInput
           placeholder="Message"
           maxLength={DM_MAX}
           sending={sendDm.isPending}
