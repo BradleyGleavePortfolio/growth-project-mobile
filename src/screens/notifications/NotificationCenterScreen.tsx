@@ -37,6 +37,7 @@ import {
 } from '../../services/notificationsApi';
 import { routeInAppNotification, routePushTap } from '../../services/pushTapRouter';
 import { featureFlags } from '../../config/featureFlags';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 
 function relativeTime(iso: string): string {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -102,7 +103,8 @@ type Action =
   | { type: 'REFRESH_START' }
   | { type: 'REFRESH_SUCCESS'; payload: NotificationPage; unreadCount: number }
   | { type: 'MARK_READ'; id: string }
-  | { type: 'MARK_ALL_READ' };
+  | { type: 'MARK_ALL_READ' }
+  | { type: 'BLOCK_CHANGED' };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -153,6 +155,9 @@ function reducer(state: State, action: Action): State {
         notifications: state.notifications.map((n) => ({ ...n, read: true })),
         unreadCount: 0,
       };
+    case 'BLOCK_CHANGED':
+      // B-LSNOTIFY4-B1171-1: drop every loaded row (and its words) at once; the fresh read decides what stays.
+      return { ...INITIAL_STATE, isLoadingFirst: true };
     default:
       return state;
   }
@@ -194,6 +199,17 @@ export default function NotificationCenterScreen() {
   useEffect(() => {
     loadFirst();
   }, [loadFirst]);
+
+  // B-LSNOTIFY4-B1171-1: this screen stays mounted under Messages -> ContactView. A block or unblock
+  // anywhere clears the loaded rows and reads the list again, so a blocked person's words never linger.
+  const blocked = useBlockedUsersStore((st) => st.blocked);
+  const seenBlocked = useRef(blocked);
+  useEffect(() => {
+    if (seenBlocked.current === blocked) return;
+    seenBlocked.current = blocked;
+    dispatch({ type: 'BLOCK_CHANGED' });
+    void loadFirst();
+  }, [blocked, loadFirst]);
 
   // Infinite scroll — load next page
   const loadMore = useCallback(async () => {
