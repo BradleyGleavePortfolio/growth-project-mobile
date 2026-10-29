@@ -39,6 +39,7 @@ jest.mock('../../../hooks/useCoachCommunity', () => ({
     useCoachInbox: () => mockInbox,
     useCoachEmptyStatePayload: () => ({ status: 'loading' }),
     useCoachAckState: () => undefined,
+    useCoachOwnedCohortIds: () => null,
 }));
 
 jest.mock('../../../hooks/useCoachAckActions', () => ({
@@ -117,8 +118,9 @@ describe('CoachCommunityInboxScreen — voice rows (flag on)', () => {
     expect(getByText(/^\S? ?Voice note · 0:42$/u)).toBeTruthy();
     expect(getByText('Sam Lee')).toBeTruthy();
     expect(getByText('Quick question about my plan')).toBeTruthy();
-    expect(getByTestId(`coach-community-inbox-row-${VOICE_ID}`).props.accessibilityLabel).toBe(
-      'Sam Lee in Spring block: Voice note · 0:42',
+    // The coach inbox label also says the row's time in words (FIN-868R5 C3).
+    expect(getByTestId(`coach-community-inbox-row-${VOICE_ID}`).props.accessibilityLabel).toMatch(
+      /^Sam Lee in Spring block, [^:]+(:[0-9]{2} [ap]m)?: Voice note · 0:42$/,
     );
   });
 

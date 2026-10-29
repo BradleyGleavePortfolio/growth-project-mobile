@@ -7,32 +7,42 @@
  * the inbox when the coach replies in that space (the server stamps
  * `coach_replied_at`, and the inbox lists only unanswered items).
  *
- * Styled to K2 Style B (round 2 restyle): bone page, serif page title and
- * date line, warm cream row cards, filled serif-monogram avatars, clock times,
- * skeleton loading and a calm inline card for errors. Branches (UX P0.2):
- * skeleton while loading; an honest error card when nothing has loaded (a
- * failed refresh keeps the rows already shown); an offline card when the phone
- * is offline with nothing cached; and — on a genuinely empty inbox — the
- * operator-locked Roman-voiced empty state whose copy + crop come from the
- * backend voice policy. Rows from blocked people never show. Touch targets are
- * >= 44pt.
+ * K2 Style B. Branches (UX P0.2): skeleton while loading; an honest error card
+ * when nothing has loaded; an offline card when offline with nothing cached;
+ * and — on a genuinely empty inbox — the dark caught-up page (Roman's face in
+ * his gold ring above his line, from the voice policy). Rows from blocked
+ * people never show. Touch targets are >= 44pt; gutters are 24pt.
  */
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import {
+  AccessibilityInfo,
+  Alert,
   View,
   Text,
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  Platform,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, colors, semantic, brand } from '../../theme/tokens';
+import { spacing, colors, semantic, layout, radius, brand } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
+import RomanAvatar from '../../components/roman/RomanAvatar';
 import {
   CoachRomanEmptyState,
   MonogramBadge,
 } from '../../components/community/coach';
+import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
 import CoachAckBadge, {
   resolveAckBadgeVisibility,
   inboxRowAck,
@@ -40,9 +50,6 @@ import CoachAckBadge, {
 } from '../../components/community/CoachAckBadge';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { formatDuration } from '../../components/community/voiceFormat';
 import CompletionToast, {
   useCompletionToast,
 } from '../../components/community/CompletionToast';
@@ -50,16 +57,30 @@ import {
   useCoachInbox,
   useCoachAckState,
   useCoachEmptyStatePayload,
+  useCoachOwnedCohortIds,
 } from '../../hooks/useCoachCommunity';
 import {
   useCoachAckActions,
   isIllegalAckTransition,
 } from '../../hooks/useCoachAckActions';
 import { featureFlags } from '../../config/featureFlags';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { formatDuration } from '../../components/community/voiceFormat';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
-import type { CoachInboxItem } from '../../api/coachCommunityApi';
+import type { CoachInboxItem, RomanCopyPayload } from '../../api/coachCommunityApi';
+
+/** What the inbox uses from navigation; tests pass only `navigate`. */
+type InboxNav = Pick<CoachCommunityNav, 'navigate'> & {
+  goBack?: () => void;
+  canGoBack?: () => boolean;
+  setOptions?: (options: {
+    headerStyle?: { backgroundColor: string };
+    headerTintColor?: string;
+  }) => void;
+};
 
 // v2-2 kill switch: when OFF the inbox renders exactly as the v1-6 surface
 // (no ack badge, no "Mark acked" quick-action). Read once at module scope —
@@ -81,7 +102,11 @@ const TRIAGE_ENABLED = featureFlags.communityAiTriage;
  * any HTTP failure, or a Zod drift surfaces as the card's calm, typed error
  * state; the human inbox below is always unaffected.
  */
-function InboxTriageBanner(): React.ReactElement {
+function InboxTriageBanner({
+  clearInbox = false,
+}: {
+  clearInbox?: boolean;
+}): React.ReactElement | null {
   const triage = useInboxTriage();
   // Typed state machine: loading | error | empty | ready. `empty` is derived
   // explicitly here from the server's `is_empty` flag so the card never has to
@@ -94,7 +119,7 @@ function InboxTriageBanner(): React.ReactElement {
       : triage.data?.is_empty === true
         ? 'empty'
         : 'ready';
-  return (
+  const card = (
     <AiTriageCard
       status={status}
       triage={triage.data}
@@ -104,6 +129,9 @@ function InboxTriageBanner(): React.ReactElement {
       testID="coach-community-inbox-ai-triage"
     />
   );
+  if (!clearInbox) return card;
+  // A clear inbox shows the triage card only when it has items (K2 B_caught_up).
+  return status === 'ready' ? <View style={styles.triageHeader}>{card}</View> : null;
 }
 
 /**
@@ -118,7 +146,9 @@ function buildRowAccessibilityLabel(
   item: CoachInboxItem,
   ack: AckBadgeInput | undefined,
 ): string {
-  const base = `${item.client_name} in ${item.cohort_name}: ${item.snippet}`;
+  // C3: the label also says the time the row shows, with words in full.
+  const when = inboxRowTime(item.created_at, new Date(), true);
+  const base = `${item.client_name} in ${item.cohort_name}${when ? `, ${when}` : ''}: ${item.snippet}`;
   if (!ACKS_ENABLED || ack == null) return base;
   const { showStatePill, slaState, breached } = resolveAckBadgeVisibility(ack);
   const SLA_PHRASE: Record<'warning' | 'breached', string> = {
@@ -150,9 +180,13 @@ function buildRowAccessibilityLabel(
 
 export default function CoachCommunityInboxScreen({
   navigation,
-}: { navigation?: Pick<CoachCommunityNav, 'navigate'> } = {}): React.ReactElement {
+}: { navigation?: InboxNav } = {}): React.ReactElement {
   const inbox = useCoachInbox();
+  // ACKS_ENABLED is fixed for the build, so the hook order never changes.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const ownedIds = ACKS_ENABLED ? useCoachOwnedCohortIds() : null;
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
+  const network = useNetworkStatus();
 
   // UX F6: a subtle, proportionate closure moment on a successful acknowledge,
   // reusing the established CompletionToast pattern (no new infrastructure).
@@ -161,10 +195,8 @@ export default function CoachCommunityInboxScreen({
     showToast('Acknowledged.');
   }, [showToast]);
 
-  // Owner rule: a blocked person disappears from the inbox at once. Rows from
-  // anyone in the blocked list are filtered here (defence in depth next to the
-  // server filter). When the list shrinks (an unblock), refetch so rows the
-  // server dropped come back.
+  // Owner rule: a blocked person disappears from the inbox at once (next to the
+  // server filter); an unblock refetches so their rows come back.
   const blocked = useBlockedUsersStore((s) => s.blocked);
   const blockedIds = useMemo(() => new Set(blocked.map((b) => b.id)), [blocked]);
   const blockedCount = blocked.length;
@@ -184,8 +216,23 @@ export default function CoachCommunityInboxScreen({
     [inbox.data?.items, blockedIds],
   );
   const hasItems = items.length > 0;
-  // react-query pauses a fetch while the phone is offline.
-  const offline = inbox.fetchStatus === 'paused';
+  // Offline: NetInfo, or react-query pausing a fetch while it thinks so.
+  const offline = inbox.fetchStatus === 'paused' || !isEffectivelyOnline(network);
+
+  // K2: the dark caught-up page gets a forest bar; every other state keeps bone.
+  const caughtUp =
+    !hasItems &&
+    !offline &&
+    !inbox.isLoading &&
+    !inbox.isError &&
+    emptyState.status === 'ready';
+  const setOptions = navigation?.setOptions;
+  useLayoutEffect(() => {
+    setOptions?.({
+      headerStyle: { backgroundColor: caughtUp ? colors.forest : colors.bone },
+      headerTintColor: caughtUp ? colors.bone : colors.ink,
+    });
+  }, [caughtUp, setOptions]);
 
   const openItem = useCallback(
     (item: CoachInboxItem) => {
@@ -204,9 +251,10 @@ export default function CoachCommunityInboxScreen({
         item={item}
         onOpen={item.type === 'post' ? () => openItem(item) : undefined}
         onAcknowledged={onAcknowledged}
+        canAck={ownedIds == null || ownedIds.has(item.cohort_id)}
       />
     ),
-    [openItem, onAcknowledged],
+    [openItem, onAcknowledged, ownedIds],
   );
 
   if (!hasItems && offline) {
@@ -224,7 +272,7 @@ export default function CoachCommunityInboxScreen({
   if (inbox.isLoading) {
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
-        <InboxTitle subtitle="Loading your inbox" />
+        <InboxTitle subtitle="Loading your inbox" unspokenSubtitle />
         <View
           accessible
           accessibilityLabel="Loading your inbox"
@@ -239,8 +287,7 @@ export default function CoachCommunityInboxScreen({
     );
   }
 
-  // A failed refetch or next page keeps the rows already shown; the full error
-  // shows only when there is nothing to show.
+  // A failed refetch keeps the rows shown; the full error only when there are none.
   if (inbox.isError && !hasItems) {
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
@@ -256,17 +303,44 @@ export default function CoachCommunityInboxScreen({
   }
 
   if (!hasItems) {
+    // The empty inbox pulls to refresh; it also retries Roman's words if they failed.
+    const onEmptyRefresh = (): void => {
+      void inbox.refetch();
+      if (emptyState.status === 'error') emptyState.retry();
+    };
+    if (caughtUp && emptyState.status === 'ready') {
+      const canGoBack =
+        navigation?.goBack != null && navigation.canGoBack?.() !== false;
+      return (
+        <InboxCaughtUp
+          payload={emptyState.payload}
+          onBack={canGoBack ? () => navigation?.goBack?.() : undefined}
+          onRefresh={onEmptyRefresh}
+          refreshing={inbox.isRefetching}
+        />
+      );
+    }
+    // Policy loading or failed: the light page (never Roman's words without his face).
     return (
       <View style={styles.page} testID="coach-community-inbox-screen">
-        {TRIAGE_ENABLED ? (
-          <View style={styles.triageHeader}>
-            <InboxTriageBanner />
-          </View>
-        ) : null}
-        <CoachRomanEmptyState
-          result={emptyState}
-          testID="coach-community-inbox-empty"
-        />
+        <ScrollView
+          testID="coach-community-inbox-empty-scroll"
+          contentContainerStyle={styles.emptyScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={inbox.isRefetching}
+              onRefresh={onEmptyRefresh}
+              tintColor={colors.forest}
+            />
+          }
+        >
+          <InboxTitle />
+          {TRIAGE_ENABLED ? <InboxTriageBanner clearInbox /> : null}
+          <CoachRomanEmptyState
+            result={emptyState}
+            testID="coach-community-inbox-empty"
+          />
+        </ScrollView>
       </View>
     );
   }
@@ -339,9 +413,15 @@ export function inboxDateLine(now: Date = new Date()): string {
 
 /**
  * Row time in the K2 style: a clock time for today ("6:41 am"), the weekday
- * within the last week ("Wed"), else the date ("14 Oct").
+ * within the last week ("Wed"), else the date ("14 Oct"). `spoken` gives the
+ * day and month in full ("Wednesday", "14 October") for screen readers.
  */
-export function inboxRowTime(iso: string, now: Date = new Date()): string {
+export function inboxRowTime(
+  iso: string,
+  now: Date = new Date(),
+  spoken = false,
+): string {
+  const cut = (word: string): string => (spoken ? word : word.slice(0, 3));
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return '';
   if (then.toDateString() === now.toDateString()) {
@@ -350,29 +430,102 @@ export function inboxRowTime(iso: string, now: Date = new Date()): string {
     return `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h < 12 ? 'am' : 'pm'}`;
   }
   const days = (now.getTime() - then.getTime()) / 86_400_000;
-  if (days >= 0 && days < 7) return DAYS[then.getDay()].slice(0, 3);
-  return `${then.getDate()} ${MONTHS[then.getMonth()].slice(0, 3)}`;
+  if (days >= 0 && days < 7) return cut(DAYS[then.getDay()]);
+  return `${then.getDate()} ${cut(MONTHS[then.getMonth()])}`;
 }
 
 function InboxTitle({
   subtitle,
   flush,
+  onDark,
+  unspokenSubtitle,
 }: {
   subtitle?: string;
   flush?: boolean;
+  onDark?: boolean;
+  /** C7: shown but not spoken, when the content below says the same words. */
+  unspokenSubtitle?: boolean;
 }): React.ReactElement {
   return (
     <View style={flush ? styles.titleBlockFlush : styles.titleBlock}>
-      <Text accessibilityRole="header" style={styles.title}>
+      <Text
+        accessibilityRole="header"
+        style={[styles.title, onDark ? styles.titleOnDark : null]}
+      >
         Inbox
       </Text>
-      <Text style={styles.dateLine}>{subtitle ?? inboxDateLine()}</Text>
+      <Text
+        style={[styles.dateLine, onDark ? styles.dateLineOnDark : null]}
+        accessibilityElementsHidden={unspokenSubtitle}
+        importantForAccessibility={unspokenSubtitle ? 'no-hide-descendants' : 'auto'}
+      >
+        {subtitle ?? inboxDateLine()}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * K2 closure (DESIGN_TRAINING 7.7): Roman's face (voice-policy crop) in his gold
+ * ring above his serif line, and a cream button back to Community.
+ */
+function InboxCaughtUp({
+  payload,
+  onBack,
+  onRefresh,
+  refreshing,
+}: {
+  payload: RomanCopyPayload;
+  onBack?: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+}): React.ReactElement {
+  const crop = payload.avatar_crop === 'smile' ? 'smile' : 'neutral';
+  return (
+    <View style={styles.caughtUpPage} testID="coach-community-inbox-screen">
+      <StatusBar style="light" />
+      <ScrollView
+        testID="coach-community-inbox-empty-scroll"
+        contentContainerStyle={styles.emptyScroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.bone}
+          />
+        }
+      >
+        <InboxTitle onDark />
+        {TRIAGE_ENABLED ? <InboxTriageBanner clearInbox /> : null}
+        <View style={styles.caughtUpBody} testID="coach-community-inbox-empty">
+          <View style={styles.caughtUpRing}>
+            <RomanAvatar
+              crop={crop}
+              size={64}
+              testID="coach-community-inbox-empty-avatar"
+            />
+          </View>
+          <Text style={styles.caughtUpText}>{payload.text}</Text>
+        </View>
+      </ScrollView>
+      {onBack ? (
+        <HapticPressable
+          intent="light"
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Community"
+          testID="coach-community-inbox-empty-back"
+          style={styles.caughtUpButton}
+        >
+          <Text style={styles.caughtUpButtonLabel}>Back to Community</Text>
+        </HapticPressable>
+      ) : null}
     </View>
   );
 }
 
 /** K2 inline card: a calm line and, when there is one, a "Try again" button. */
-function InboxNoticeCard({
+export function InboxNoticeCard({
   message,
   onRetry,
   retrying,
@@ -415,7 +568,28 @@ function InboxNoticeCard({
   );
 }
 
-function initialsOf(name: string): string {
+/** A coach create or Acknowledge that failed says why, in the shared community words. */
+export function alertCoachFailure(err: unknown): void {
+  const f = describeCommunityFailure(err, 'moderate');
+  Alert.alert(f.title, f.message);
+}
+
+/**
+ * Screen-reader focus to a row, as CreditPackCheckoutScreen moves it: the
+ * event goes to the row itself, with no findNodeHandle lookup.
+ */
+function focusRow(node: View | null): void {
+  if (Platform.OS === 'web' || node == null) return;
+  AccessibilityInfo.sendAccessibilityEvent(node, 'focus');
+}
+
+/** "1 member", "3 members": the count words on the Cohorts row and page. */
+export function membersLabel(count: number): string {
+  return `${count} ${count === 1 ? 'member' : 'members'}`;
+}
+
+/** Up to two initials for a filled serif monogram (K2). */
+export function initialsOf(name: string): string {
   return name
     .split(/\s+/)
     .filter(Boolean)
@@ -455,7 +629,7 @@ type InboxRowProps = React.ComponentProps<typeof InboxRow>;
 /**
  * VOICE-INBOX (#167-4): a voice row (the API sends one only with
  * communityVoiceNotes on, and only with its note) reads "Voice note · 0:42"
- * and opens the note; every other row is the typed row.
+ * and opens the note; every other row is the coach inbox row.
  */
 function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
   const { voice } = props.item;
@@ -468,7 +642,7 @@ function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
 
 /**
  * The voice row is the same card; its one pressable element opens the note
- * (no outer pressable wrapping an accessible row — one element, one label).
+ * (no outer pressable around an accessible row: one element, one label).
  */
 function VoiceInboxRow({
   noteId,
@@ -522,25 +696,30 @@ function InboxRow({
   item,
   onOpen,
   onAcknowledged,
+  canAck,
 }: {
   item: CoachInboxItem;
   onOpen?: () => void;
   onAcknowledged: () => void;
+  /** LS-6: false on a row from a space this coach does not own. */
+  canAck: boolean;
 }): React.ReactElement {
   // ACKS_ENABLED is a build-time constant, so the number/order of hooks is
   // stable for the entire lifetime of a build — a hook guarded by it never
   // changes its called/not-called status at runtime, which keeps the
   // flag-off path (and its invariance test) from touching any ack hook. When
-  // the flag is on, the per-message ack cache wins once an action fills it;
-  // before that the row's own `ack` summary drives the badge AND the label.
+  // the flag is on, the per-message ack cache and the row's own `ack` summary
+  // merge (inboxRowAck, later wins) and drive the badge AND the label.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const cached = ACKS_ENABLED ? useCoachAckState(item.id) : undefined;
-  // Only typed message rows carry coach acks.
-  const acks = ACKS_ENABLED && item.type === 'message' && item.kind === 'text';
+  // Coach acks are per message: typed and photo rows carry them; a voice
+  // row's id is the note's id, and posts have none.
+  const acks = ACKS_ENABLED && item.type === 'message' && item.kind !== 'voice';
   const ack = acks ? inboxRowAck(cached, item.ack) : undefined;
   const breached = ack != null && resolveAckBadgeVisibility(ack).breached;
   const label = buildRowAccessibilityLabel(item, ack);
   const rowTestID = `coach-community-inbox-row-${item.id}`;
+  const mainRef = useRef<View>(null);
 
   const content = (
     <>
@@ -555,8 +734,11 @@ function InboxRow({
         <Text style={styles.rowCohort} numberOfLines={1}>
           {item.cohort_name}
         </Text>
+        {/* A row that opens (a post or a voice note) clamps to two lines; a
+            typed message row has nowhere to open yet, so it shows the whole
+            text (at most 200). */}
         {item.kind === 'voice' ? <VoiceStrip id={item.id} /> : null}
-        <Text style={styles.rowSnippet} numberOfLines={2}>
+        <Text style={styles.rowSnippet} numberOfLines={onOpen ? 2 : undefined}>
           {item.snippet}
         </Text>
       </View>
@@ -583,6 +765,7 @@ function InboxRow({
         </HapticPressable>
       ) : (
         <View
+          ref={mainRef}
           accessible
           accessibilityLabel={label}
           testID={rowTestID}
@@ -592,7 +775,13 @@ function InboxRow({
         </View>
       )}
       {acks ? (
-        <CoachAckRow item={item} ack={ack} onAcknowledged={onAcknowledged} />
+        <CoachAckRow
+          item={item}
+          ack={ack}
+          onAcknowledged={onAcknowledged}
+          canAck={canAck}
+          rowRef={mainRef}
+        />
       ) : null}
     </View>
   );
@@ -614,15 +803,19 @@ function CoachAckRow({
   item,
   ack,
   onAcknowledged,
+  canAck,
+  rowRef,
 }: {
   item: CoachInboxItem;
   ack: AckBadgeInput | undefined;
   onAcknowledged: () => void;
+  canAck: boolean;
+  rowRef: React.RefObject<View | null>;
 }): React.ReactElement {
   const { semanticColors } = useTheme();
   const actions = useCoachAckActions(item.id);
   const pending = actions.markAcked.isPending;
-  // `ack` is the cache once filled, else the row's own summary.
+  // `ack` is the cache merged with the row's own summary (later wins).
   const reached = ack?.state;
   const alreadyAcked = reached === 'acked' || reached === 'replied';
 
@@ -635,6 +828,9 @@ function CoachAckRow({
   // message rather than an actionable error.
   const conflict = isIllegalAckTransition(actions.markAcked.error);
 
+  // Once acknowledged (or replied) the badge already says so, so the button
+  // goes: the word never shows twice and no disabled button is left behind.
+  // A co-coach's row keeps its badge but has no button: the server refuses.
   return (
     <View style={styles.ackRow}>
       <CoachAckBadge
@@ -642,30 +838,31 @@ function CoachAckRow({
         labelledByRow
         testID={`coach-community-inbox-ack-badge-${item.id}`}
       />
-      <HapticPressable
-        intent="light"
-        onPress={() =>
-          actions.markAcked.mutate(undefined, { onSuccess: onAcknowledged })
-        }
-        disabled={pending || alreadyAcked}
-        accessibilityRole="button"
-        accessibilityLabel={`Acknowledge message from ${item.client_name}`}
-        accessibilityState={{ disabled: pending || alreadyAcked }}
-        testID={`coach-community-inbox-mark-acked-${item.id}`}
-        style={[
-          styles.markAckedButton,
-          {
-            borderColor: colors.forest,
-            opacity: pending || alreadyAcked ? 0.5 : 1,
-          },
-        ]}
-      >
-        <Text
-          style={styles.markAckedLabel}
+      {alreadyAcked || !canAck ? null : (
+        <HapticPressable
+          intent="light"
+          onPress={() => {
+            // C4: the button goes as soon as it is tapped, so a screen
+            // reader's focus moves to the row instead of the top of the page.
+            focusRow(rowRef.current);
+            actions.markAcked.mutate(undefined, {
+              onSuccess: onAcknowledged,
+              // A 409 keeps its calm inline line below; any other refusal says why.
+              onError: (e) => {
+                if (!isIllegalAckTransition(e)) alertCoachFailure(e);
+              },
+            });
+          }}
+          disabled={pending}
+          accessibilityRole="button"
+          accessibilityLabel={`Acknowledge message from ${item.client_name}`}
+          accessibilityState={{ disabled: pending, busy: pending }}
+          testID={`coach-community-inbox-mark-acked-${item.id}`}
+          style={[styles.markAckedButton, pending ? styles.markAckedPending : null]}
         >
-          {alreadyAcked ? 'Acknowledged' : 'Acknowledge'}
-        </Text>
-      </HapticPressable>
+          <Text style={styles.markAckedLabel}>Acknowledge</Text>
+        </HapticPressable>
+      )}
       {conflict ? (
         <Text
           accessibilityRole="alert"
@@ -681,16 +878,17 @@ function CoachAckRow({
 }
 
 // K2 Style B tokens: bone page (owner #166-2), warm cream cards, forest accent,
-// ink text. Serif roles keep lineHeight >= 1.25 x fontSize (Android descenders).
+// ink text, graphite small grey text (owner #168-13), 24pt gutters, semantic
+// radii. Serif roles keep lineHeight >= 1.25 x fontSize (Android descenders).
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bone },
   pageSpinner: { paddingVertical: spacing.lg },
   triageHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingHorizontal: layout.gutter,
+    paddingBottom: spacing.md,
   },
   titleBlock: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: layout.gutter,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
@@ -701,32 +899,34 @@ const styles = StyleSheet.create({
     lineHeight: 46,
     color: colors.ink,
   },
+  titleOnDark: { color: colors.bone },
   dateLine: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
     lineHeight: 21,
-    color: colors.charcoal,
+    color: colors.graphite,
   },
+  dateLineOnDark: { color: colors.cream },
   listHeader: { gap: spacing.sm, marginBottom: spacing.xs },
   listContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: layout.gutter,
     paddingBottom: spacing.xl,
     gap: spacing.sm,
   },
-  skeletonList: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  skeletonList: { paddingHorizontal: layout.gutter, gap: spacing.sm },
   skeletonCard: {
     height: 88,
-    borderRadius: 16,
+    borderRadius: radius.card,
     backgroundColor: colors.cream,
     opacity: 0.7,
   },
   noticeCard: {
     backgroundColor: colors.cream,
-    borderRadius: 16,
+    borderRadius: radius.card,
     padding: spacing.lg,
     gap: spacing.md,
   },
-  noticeCardInset: { marginHorizontal: spacing.lg },
+  noticeCardInset: { marginHorizontal: layout.gutter },
   noticeText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 16,
@@ -735,7 +935,7 @@ const styles = StyleSheet.create({
   },
   noticeButton: {
     minHeight: 48,
-    borderRadius: 12,
+    borderRadius: radius.button,
     borderWidth: 1.5,
     borderColor: colors.forest,
     alignItems: 'center',
@@ -750,7 +950,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.cream,
-    borderRadius: 16,
+    borderRadius: radius.card,
     borderWidth: 1.5,
     borderColor: 'transparent',
     paddingVertical: spacing.md,
@@ -767,7 +967,7 @@ const styles = StyleSheet.create({
   monogram: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.chip,
     backgroundColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
@@ -799,13 +999,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
     lineHeight: 18,
-    color: colors.charcoal,
+    color: colors.graphite,
   },
   rowCohort: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     lineHeight: 16,
-    color: colors.charcoal,
+    color: colors.graphite,
   },
   rowSnippet: {
     fontFamily: 'Inter_400Regular',
@@ -826,10 +1026,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    borderRadius: 12,
+    borderRadius: radius.button,
     borderWidth: 1.5,
+    borderColor: colors.forest,
     backgroundColor: colors.bone,
   },
+  markAckedPending: { opacity: 0.5 },
   markAckedLabel: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
@@ -858,4 +1060,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  // K2 caught-up page: forest, Roman in his gold ring, his serif line, a cream button.
+  caughtUpPage: {
+    flex: 1,
+    backgroundColor: colors.forest,
+    paddingBottom: spacing.xl,
+  },
+  caughtUpBody: {
+    flex: 1,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing['2xl'],
+    paddingBottom: spacing.xl,
+    gap: spacing.xl,
+  },
+  emptyScroll: { flexGrow: 1 },
+  caughtUpRing: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.chip,
+    borderWidth: 2,
+    borderColor: colors.romanAccent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  caughtUpText: {
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 40,
+    color: colors.bone,
+  },
+  caughtUpButton: {
+    marginHorizontal: layout.gutter,
+    minHeight: 54,
+    borderRadius: radius.button,
+    backgroundColor: colors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  caughtUpButtonLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 17,
+    lineHeight: 22,
+    color: colors.forest,
+  },
 });
+
+// Cohorts and a cohort draw the same K2 page, title, monogram and card.
+export { styles as k2Styles };

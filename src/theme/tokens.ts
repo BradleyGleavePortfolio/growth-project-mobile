@@ -18,6 +18,8 @@
  * ink (#1A1A18) on cream (#F1E8D5)              ~15.2:1              PASS     PASS
  * charcoal (#3D3D3A) on bone (#F7FAF7)          ~10.4:1              PASS     PASS
  * forest (#2C4A36) on bone (#F7FAF7)            ~ 9.3:1              PASS     PASS
+ * graphite (#2C2C2C) on bone (#F7FAF7)          ~13.3:1              PASS     PASS
+ * graphite (#2C2C2C) on cream (#F1E8D5)         ~11.5:1              PASS     PASS
  * stone (#B1A89F) on bone (#F7FAF7)             ~ 2.2:1              FAIL     FAIL (decorative/disabled only)
  * mutedGold (#C5A253) on bone (#F7FAF7)         ~ 2.3:1              FAIL     FAIL (fills/borders only)
  *
@@ -36,7 +38,8 @@ export const colors = {
   cream:       '#F1E8D5',  // card surface, warm
   ink:         '#1A1A18',  // primary text, dark sections (NEVER #000)
   charcoal:    '#3D3D3A',  // secondary text on light
-  stone:       '#B1A89F',  // tertiary text, hairlines, meta
+  graphite:    '#2C2C2C',  // small grey text on light grounds (owner #168-13)
+  stone:       '#B1A89F',  // hairlines, icons, disabled; never text on light
 
   // Single accent — wellness app
   forest:      '#2C4A36',  // PRIMARY accent, replaces #2D6A4F
@@ -547,6 +550,16 @@ export const voiceShades = {
   track: '#C9D0CA', // sheet handle, field borders, off controls
   washEdge: '#D3E2B8', // edge of the leaf wash (icon circles, safety line box)
   scrim: 'rgba(26, 26, 24, 0.45)', // the record sheet's scrim (mockup .scrim)
+} as const;
+
+/**
+ * GOAL voice text faces: Inter throughout (loaded in App.tsx). A style sets the
+ * face that matches its fontWeight, so the phone never falls back to the system face.
+ */
+export const voiceFaces = {
+  regular: typography.body.fontFamily, // Inter_400Regular
+  medium: typography.bodyMd.fontFamily, // Inter_500Medium
+  semibold: typography.micro.fontFamily, // Inter_600SemiBold
 } as const;
 
 /** Dark-mode semantic tokens. */

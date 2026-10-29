@@ -74,6 +74,8 @@ export const InboxThreadSchema = z.object({
   muted_until: isoString.nullable(),
   pinned: z.boolean(),
   blocked_by_me: z.boolean(),
+  /** b#1141 contract A: a block on either side, the only way the person blocked learns the chat is closed. */
+  closed: z.boolean().optional(),
   last_activity_at: isoString.nullable(),
 });
 export type InboxThread = z.infer<typeof InboxThreadSchema>;
@@ -82,6 +84,8 @@ export const InboxResponseSchema = z.object({
   items: z.array(InboxThreadSchema),
   next_cursor: z.string().nullable(),
   total_unread: z.number().int().nonnegative(),
+  /** b#1153 (CONTRACT 6375583793): coach side, my clients whose chat a block closed, either way. Absent = none. */
+  closed_client_ids: z.array(z.string()).optional(),
 });
 export type InboxResponse = z.infer<typeof InboxResponseSchema>;
 

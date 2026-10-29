@@ -8,15 +8,24 @@ import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { Colors } from '../constants/colors';
+import { readUserCacheSync } from '../lib/userCache';
+import { isCoachLikeRole } from '../lib/roleSelectionGate';
+
+const CLIENT_LINE = "You're offline — food logs will sync when you reconnect.";
+// FIN-868R5 C6: a coach has no food logs, and nothing of theirs waits to sync.
+// Opens as the K2 offline banner and the inbox's offline card do.
+const COACH_LINE = 'You are offline. Reconnect to see the latest.';
 
 export default function OfflineBanner() {
   const status = useNetworkStatus();
   if (isEffectivelyOnline(status)) return null;
+  // Read when the banner shows, which is when the network changes.
+  const coach = isCoachLikeRole(readUserCacheSync()?.role);
 
   return (
     <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
       <Ionicons name="cloud-offline-outline" size={14} color={Colors.textOnPrimary} />
-      <Text style={styles.text}>You're offline — food logs will sync when you reconnect.</Text>
+      <Text style={styles.text}>{coach ? COACH_LINE : CLIENT_LINE}</Text>
     </View>
   );
 }

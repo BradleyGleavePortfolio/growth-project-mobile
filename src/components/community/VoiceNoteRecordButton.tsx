@@ -62,7 +62,7 @@ export default function VoiceNoteRecordButton({
   return (
     <View style={styles.wrap}>
       <HapticPressable
-        intent={recording ? 'warning' : 'medium'}
+        intent={recording ? 'light' : 'medium'}
         onPress={handlePress}
         disabled={stopping}
         accessibilityRole="button"
@@ -79,7 +79,7 @@ export default function VoiceNoteRecordButton({
         {recording || stopping ? (
           <View style={styles.square} />
         ) : (
-          <Ionicons name="mic-outline" size={36} color={fp.onDeep} />
+          <Ionicons name="mic-outline" size={28} color={fp.onDeep} />
         )}
       </HapticPressable>
     </View>
@@ -89,12 +89,13 @@ export default function VoiceNoteRecordButton({
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center' },
   button: {
-    width: 96,
-    height: 96,
+    // GOAL .bbig: a 76 pt disc with a 13 pt stop square (the 28 pt icon's 11/24 rect).
+    width: 76,
+    height: 76,
     borderRadius: radius.pill,
     backgroundColor: fp.forest,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  square: { width: 24, height: 24, borderRadius: radius.control, backgroundColor: fp.onDeep },
+  square: { width: 13, height: 13, borderRadius: 3, backgroundColor: fp.onDeep },
 });

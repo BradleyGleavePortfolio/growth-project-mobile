@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyText: {
-    color: colors.stone,
+    color: colors.graphite,
     fontSize: 13,
   },
   romanRow: {

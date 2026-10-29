@@ -28,13 +28,15 @@
  * (HomeStack `MessagesInbox`), where the coach and Roman sit side by side.
  * Flag off, or Roman chat off, every entry keeps its own destination.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientUnreadCount } from '../../hooks/useClientUnreadCount';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import NotificationBadge from '../NotificationBadge';
 import { useTheme } from '../../theme/ThemeProvider';
 import { radius, typography } from '../../theme/tokens';
@@ -103,6 +105,14 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
       .catch((error: unknown) => logger.warn('homeHeader.unread-messages', { error: String(error) }));
   }, [coachId]);
   useFocusEffect(refreshUnreadMessages);
+  // FR-880: a block or unblock reads the count again at once (a blocked pair counts 0), not on the next 30 s tick.
+  const blocked = useBlockedUsersStore((st) => st.blocked);
+  const seenBlocked = useRef(blocked);
+  useEffect(() => {
+    if (seenBlocked.current === blocked) return;
+    seenBlocked.current = blocked;
+    refreshUnreadMessages();
+  }, [blocked, refreshUnreadMessages]);
   useEffect(() => {
     const id = setInterval(refreshUnreadMessages, 30000);
     const sub = AppState.addEventListener('change', (state) => {
@@ -127,6 +137,10 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
   const openRoman = () =>
     toList ? navigation.navigate('MessagesInbox') : navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false });
   const hasCoach = !!coachId;
+  // FR-880R2 (owner 10-23 "Dissapear"): while the coaching chat is closed (either person's block) Home offers no
+  // "Message {coach}"; the slot stays empty (Roman's door stays) and the button comes back on unblock.
+  // FR-880R3 (Opus C2): the slot also stays empty until the answer is known (saved blocks + first read), as SpaceTree.
+  const coachChat = useCoachChatClosed(coachId);
   // useCurrentUser reads the cache asynchronously (first render is null): choose
   // coach or Roman only once the user is known, so a coached client never sees
   // "Ask Roman" flash first (U1 on m#618).
@@ -136,7 +150,9 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
 
   return (
     <View style={[styles.row, rings && styles.ringsRow]}>
-      {hasCoach ? (
+      {hasCoach && (coachChat.closed || !coachChat.known) ? (
+        <View style={styles.message} testID="home-leading-empty" />
+      ) : hasCoach ? (
         <Pressable
           onPress={openMessages}
           accessibilityRole="button"
@@ -183,7 +199,7 @@ export default function HomeHeaderActions({ layout = 'classic' }: { layout?: 'cl
           accessibilityRole="button"
           accessibilityLabel="Chat with Roman"
           testID="home-roman-chat"
-          style={styles.bell}
+          style={[styles.bell, styles.besideBell]}
         >
           <RomanAvatar crop="neutral" size={32} testID="home-roman-avatar" />
         </Pressable>
@@ -225,4 +241,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   bell: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  // FR-880R3 (Opus C1): Roman sits beside the bell (clear of its 8 pt hitSlop), so he stays put when the button leaves.
+  besideBell: { marginLeft: 'auto', marginRight: 8 },
 });

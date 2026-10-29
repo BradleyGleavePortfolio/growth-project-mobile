@@ -78,6 +78,7 @@ jest.mock('../../../analytics/posthog.service', () => ({
 
 import CommunityFindScreen from '../CommunityFindScreen';
 import { AnalyticsEvents } from '../../../analytics/events';
+import { markVoiceNoteReported, resetReportedVoiceNotes } from '../../../components/community/VoiceReportedFold';
 
 function resultRow(over: Record<string, unknown> = {}) {
   return {
@@ -156,6 +157,33 @@ describe('CommunityFindScreen — F1 voice-note routing', () => {
       voiceNoteId: 'voice-note-9',
       excerpt: 'the matched transcript text',
     });
+  });
+});
+
+// Sol R5-B1: a voice note this viewer reported shows only the VN-07 fold in Find; its transcript
+// excerpt is neither drawn nor read aloud (the row's spoken label carried it).
+describe('CommunityFindScreen — a reported voice note folds in Find', () => {
+  afterEach(() => resetReportedVoiceNotes());
+  it('folds the reported note and keeps other hits as they were', async () => {
+    mockSearchState.data = {
+      pages: [
+        {
+          results: [
+            resultRow({ id: 'vn-res', kind: 'voice_note_transcript', targetId: 'voice-note-9', excerpt: 'the matched transcript text' }),
+            resultRow({ id: 'vn-other', kind: 'voice_note_transcript', targetId: 'voice-note-8', excerpt: 'another note' }),
+          ],
+        },
+      ],
+    };
+    markVoiceNoteReported('voice-note-9');
+    await render(<CommunityFindScreen />);
+    await typeAndSettle();
+    expect(screen.getByTestId('community-search-result-vn-res-reported')).toBeTruthy();
+    expect(screen.getByText('You reported this voice note. It is hidden for you.')).toBeTruthy();
+    expect(screen.queryByText('the matched transcript text')).toBeNull();
+    expect(screen.queryByLabelText(/the matched transcript text/)).toBeNull();
+    expect(screen.queryByTestId('community-search-result-vn-res')).toBeNull();
+    expect(screen.getByLabelText('Voice note. another note')).toBeTruthy();
   });
 });
 
