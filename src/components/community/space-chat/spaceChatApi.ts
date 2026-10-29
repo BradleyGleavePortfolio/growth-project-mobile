@@ -5,6 +5,9 @@
  *                                                       coach's removal (b#1165: deleted + removed_by); 404/403 = no access
  *   POST community/cohorts/:id/messages { body }        Idempotency-Key reused on every retry and Try again; FX-IDEM (b#1144,
  *                                                       CONTRACT 6370303541) answers a resend with the first message
+ *        + parent_message_id (SC-M3)                     a text reply (SC-BE1): a reply to a reply joins its thread's first
+ *                                                       message; a parent gone or out of sight is the same 404 as no access.
+ *                                                       Reads carry `parent` (its quote); the POST answer does not
  *   DELETE community/messages/:id                       own text message
  *   GET/POST community/cohorts/:id/read                  SC-BE2; any failure (404 before it ships) hides the line
  *   POST community/voice-notes/:id/heard                 VOICE-BE (backend community-voice.controller markHeard): the
@@ -28,6 +31,14 @@ const VoiceSchema = z
   .passthrough();
 /** b#1165 CONTRACT 6405215872 section 2: who removed a row (the space's coach, or the platform owner shown as the coach). */
 const RemovedBySchema = z.object({ role: z.string(), user_id: z.string(), name: z.string() }).passthrough();
+/** SC-BE1: on a reply, the message it answers as this viewer may see it, or `gone` alone (deleted, removed, blocked either
+ *  way, its author left). A shape this build cannot read is no quote, never a failed page. */
+const ParentSchema = z
+  .object({
+    id: z.string(), gone: z.boolean(), kind: z.string().nullish(), sender_name: z.string().nullish(),
+    snippet: z.string().nullish(), voice_duration_ms: z.number().nullish(),
+  })
+  .passthrough();
 export const SpaceMessageSchema = z
   .object({
     id: z.string(),
@@ -45,6 +56,7 @@ export const SpaceMessageSchema = z
     // author's own delete; an older server that never sends them keeps today's behaviour (the row is left out).
     removed_at: z.string().nullish(),
     removed_by: RemovedBySchema.nullish(),
+    parent: ParentSchema.nullish().catch(null),
   })
   .passthrough();
 export type SpaceMessage = z.infer<typeof SpaceMessageSchema>;
@@ -76,10 +88,10 @@ export const spaceChatApi = {
       'space_chat',
     );
   },
-  send(cohortId: string, body: string, idempotencyKey: string): Promise<SpaceMessage> {
+  send(cohortId: string, body: string, idempotencyKey: string, parentMessageId?: string): Promise<SpaceMessage> {
     return call(
       SentSchema,
-      () => api.post<unknown>(`/community/cohorts/${cohortId}/messages`, { body }, {
+      () => api.post<unknown>(`/community/cohorts/${cohortId}/messages`, parentMessageId ? { body, parent_message_id: parentMessageId } : { body }, {
         headers: { 'Idempotency-Key': idempotencyKey },
       }),
       'space_chat',

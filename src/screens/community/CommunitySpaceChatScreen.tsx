@@ -11,7 +11,11 @@
  *     this person in on this visit (useServerAnswered: a page restored from the saved cache at a cold start does not
  *     count, FR-871R6 Opus B3), so a banned member never gets a box to type in (owner 10-22 ban ruling).
  *   - Announcements (a coach-posting space): members get no composer, only "Only your coach posts here."; the coach
- *     posts as usual.
+ *     posts as usual. A member who chooses Reply on the coach's post gets the field until the reply is sent or cancelled.
+ *   - SC-M3 (agent 184, owner #167-5 TEXT-REPLIES): press and hold a row for the sheet (Reply, Copy; SpaceMessageSheet).
+ *     Reply puts ReplyComposer above the field (no mic while it is set) and the text goes with parent_message_id; a
+ *     reply draws its quote (SpaceReplyQuote), which scrolls to the message when it is loaded here. Report, Block and
+ *     Delete stay on the row's own ••• (SafetyMenu, unchanged).
  *   - No access (the server answers a read or a send with 404 or 403: not a member, or banned): no space content and no
  *     composer, one line where the composer was: "This conversation is closed" (BAM-1, owner #169-5).
  *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route. The page
@@ -38,6 +42,11 @@ import { SpaceListButton } from '../../components/community/SpaceDrawer';
 import SpaceChatComposer from '../../components/community/space-chat/SpaceChatComposer';
 import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
 import SpaceInfoSheet from '../../components/community/space-chat/SpaceInfoSheet';
+import SpaceMessageSheet from '../../components/community/space-chat/SpaceMessageSheet';
+import { firstLine, quoteOf, quoteOfTarget, voiceLine } from '../../components/community/space-chat/SpaceReplyQuote';
+import type { ReplyTarget } from '../../components/messaging/ReplyComposer';
+import * as Clipboard from 'expo-clipboard';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import { useSpaceVoiceOutbox } from '../../components/community/space-chat/useSpaceVoiceOutbox';
 import type { VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
 import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
@@ -135,8 +144,16 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   const placedRef = useRef(false);
   placedRef.current = placed;
   const toRow = useCallback((index: number) => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }), []);
+  // SC-M3: the row a quote scrolls to, while that scroll is on its way.
+  const jumping = useRef<number | null>(null);
   const onPlaceFailed = useCallback((info: { index: number; averageItemLength: number }) => {
     listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    // SC-M3: a quote's message far off screen: once more, once the guess has brought its rows in.
+    if (jumping.current === info.index) {
+      jumping.current = null;
+      setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), 100);
+      return;
+    }
     if (tries.current >= 5) return;
     tries.current += 1;
     setTimeout(() => { if (!placedRef.current) toRow(info.index); }, 50);
@@ -180,6 +197,41 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     void chat.markRead(newestSeen.id).then((ok) => { if (!ok && marked.current === newestSeen.created_at) marked.current = before; });
   }, [newestSeen, chat]);
 
+  // SC-M3: the row whose sheet is open, the message a reply answers (reply mode), the row a quote just scrolled to.
+  const [held, setHeld] = useState<SpaceMessage | null>(null);
+  const [reply, setReply] = useState<ReplyTarget | null>(null);
+  const [lit, setLit] = useState<string | null>(null);
+  useEffect(() => { setHeld(null); setReply(null); }, [cohortId]);
+  useEffect(() => {
+    if (!lit) return undefined;
+    const t = setTimeout(() => setLit(null), 1500);
+    return () => clearTimeout(t);
+  }, [lit]);
+  // What Reply answers: the row, or on a reply the first message of its thread (the server keeps one level, as a Slack
+  // thread does). None where the server would refuse it: a message gone, a space this person is not let into, and in a
+  // space only the coach posts in, a member's own top-level row (members answer the coach's posts there).
+  const replyTo = useCallback((m: SpaceMessage): ReplyTarget | null => {
+    if (!admitted || m.deleted) return null;
+    if (m.parent || m.parent_message_id) {
+      const q = quoteOf(m.parent ?? null);
+      return m.parent && q && !q.gone ? { id: m.parent.id, authorLabel: q.name, body: q.text } : null;
+    }
+    if (coachOnly && !isCoachViewer && !m.sender?.is_coach) return null;
+    const body = m.kind === 'voice' ? voiceLine(m.voice_note?.duration_ms ?? 0) : firstLine(m.body);
+    return { id: m.id, authorLabel: m.sender?.name ?? '', body };
+  }, [admitted, coachOnly, isCoachViewer]);
+  const copyOf = useCallback((m: SpaceMessage) => (m.kind === 'text' && m.body && !m.deleted ? () => {
+    void Clipboard.setStringAsync(m.body ?? '').then(() => HapticService.success(), () => undefined);
+  } : undefined), []);
+  const loaded = useMemo(() => new Set(items.map((i) => i.key)), [items]);
+  const jump = useCallback((id: string) => {
+    const index = items.findIndex((i) => i.key === id);
+    if (index < 0) return;
+    jumping.current = index;
+    listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+    setLit(id);
+  }, [items]);
+
   const renderItem = useCallback(({ item }: { item: Item }) => {
     if (item.type === 'day') return <DayLine label={item.label} />;
     if (item.type === 'new') return <NewMessagesLine />;
@@ -190,6 +242,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           id={r.localId} name={myName} isCoach={isCoachViewer} createdAt={r.createdAt} body={r.body}
           authorId={client?.id ?? ''} state={r.state} onRetry={() => chat.retry(r)} onDiscard={() => chat.removeLocal(r.localId)}
           viewerUserId={client?.id} offline={!isOnline} rejected={r.reason === 'rejected'}
+          quote={r.reply ? quoteOfTarget(r.reply) : null}
         />
       );
     }
@@ -205,6 +258,9 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
       );
     }
     const m = item.m;
+    const answer = replyTo(m);
+    const copy = copyOf(m);
+    const parentId = m.parent && !m.parent.gone && loaded.has(m.parent.id) ? m.parent.id : null;
     return (
       <SpaceChatRow
         id={m.id} name={m.sender?.name ?? ''} avatarUrl={m.sender?.avatar_url} isCoach={!!m.sender?.is_coach}
@@ -213,9 +269,12 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         onDelete={() => chat.remove(m.id, m.voice_note?.id)} onBlocked={chat.dropAuthor}
         onRemove={isCoachViewer ? () => chat.removeForEveryone(m.id, m.voice_note?.id) : undefined}
         removed={spaceRemovedLine(m, client?.id)} onSafety={safetyRoute ? () => navigation.navigate('CommunitySafety') : undefined}
+        quote={quoteOf(m.parent ?? null)} onQuote={parentId ? () => jump(parentId) : undefined}
+        onHold={answer || copy ? () => { Keyboard.dismiss(); setHeld(m); } : undefined}
+        onReply={answer ? () => setReply(answer) : undefined} onCopy={copy} held={held?.id === m.id || lit === m.id}
       />
     );
-  }, [chat, client, isCoachViewer, isOnline, myName, voice, navigation, safetyRoute]);
+  }, [chat, client, isCoachViewer, isOnline, myName, voice, navigation, safetyRoute, replyTo, copyOf, loaded, jump, held, lit]);
 
   const loading = chat.list.isLoading || cohorts.isLoading;
   // Offline with nothing kept: say so at once rather than spin through the retries.
@@ -233,6 +292,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   };
   const members = cohort ? `${cohort.member_count.toLocaleString('en-US')} ${cohort.member_count === 1 ? 'member' : 'members'}` : '';
   const [info, setInfo] = useState(false);
+  const heldReply = held ? replyTo(held) : null;
   // FR-871R6 (m#879 Opus B1 / Sol B879-1): the member's tab bar steps aside here (ClientNavigator), so the dock and its
   // lines keep clear of the home indicator / Android navigation bar themselves, in their own colour; with the keyboard
   // up the dock sits on the keyboard (no double gap). The coach's tab bar steps aside too (CoachNavigator, FIN-871R6 m#879 B2).
@@ -321,12 +381,16 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         ) : null}
         {chat.noAccess ? (
           <Text style={[s.line, lineInset]} testID="space-chat-no-access">This conversation is closed</Text>
-        ) : canPost ? (
+        ) : canPost || (admitted && reply) ? (
+          // SC-M3: a member answering the coach in a space only the coach posts in gets the field while the reply is set.
+          // No mic in reply mode: a voice reply is SC-M3 part 2 (after BPF-1-M).
           <SpaceChatComposer
             cohortId={cohortId}
-            onSend={chat.send}
+            onSend={(body) => { chat.send(body, reply ?? undefined); setReply(null); }}
             bottomInset={dockInset}
-            trailing={voiceOn ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
+            reply={reply}
+            onReply={setReply}
+            trailing={voiceOn && !reply ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
           />
         ) : admitted ? (
           <Text style={[s.line, lineInset]} testID="space-chat-hint">Only your coach posts here.</Text>
@@ -336,6 +400,10 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         <SpaceInfoSheet cohortId={cohortId} name={cohort.name} members={members} description={cohort.description} viewerId={client?.id}
           people={chat.noAccess ? 'closed' : admitted ? 'open' : chat.list.isError ? 'failed' : 'wait'}
           error={chat.list.error} onRetry={reload} retrying={chat.list.isFetching} offline={!isOnline} onClose={() => setInfo(false)} />
+      ) : null}
+      {held ? (
+        <SpaceMessageSheet onClose={() => setHeld(null)} onCopy={copyOf(held)}
+          onReply={heldReply ? () => setReply(heldReply) : undefined} />
       ) : null}
     </SafeAreaView>
   );

@@ -10,16 +10,21 @@
  * until the server row takes its place (FR-871R7, Sol B879-3). Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
  * REMOVED-BY-M2 (agent 175): a row the coach removed keeps its head and draws SpaceRemovedPlaceholder's one line in
  * place of the content, with no menu (owner #174-4).
+ * SC-M3 (agent 184): a reply carries its quote above its content (SpaceReplyQuote). A press and hold on a server row
+ * opens the screen's sheet (Reply, Copy) and lights the row while it is open; screen readers get Reply, Copy and Go to
+ * message as the row's actions, and hear the quote first in its one label.
  */
 import React, { useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, TouchableOpacity, View, type AccessibilityActionEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SafetyMenu from '../SafetyMenu';
 import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from '../VoiceReportedFold';
 import { formatDuration } from '../voiceFormat';
 import SpaceVoiceNote from './SpaceVoiceNote';
 import SpaceRemovedPlaceholder, { type SpaceRemovedLine } from './removed/SpaceRemovedPlaceholder';
-import { brand, colors, forestPop as fp, radius, spacing, typography } from '../../../theme/tokens';
+import SpaceReplyQuote, { spokenQuote, type SpaceQuote } from './SpaceReplyQuote';
+import { HapticService } from '../../../ui/haptics/haptics.service';
+import { brand, colors, forestPop as fp, radius, spacing, typography, voiceShades } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
 import { REJECTED_WORDS, type PendingState } from './spaceChatOutbox';
 
@@ -64,6 +69,15 @@ export interface SpaceChatRowProps {
   removed?: SpaceRemovedLine | null;
   /** The author's link from a removed row to Community safety (left out where that page is not on the stack). */
   onSafety?: () => void;
+  /** SC-M3: the message this row answers; `onQuote` scrolls to it when it is loaded on this page. */
+  quote?: SpaceQuote | null;
+  onQuote?: () => void;
+  /** Press and hold opens the screen's sheet; Reply and Copy are also the row's screen reader actions. */
+  onHold?: () => void;
+  onReply?: () => void;
+  onCopy?: () => void;
+  /** The row whose sheet is open, or the one a quote just scrolled to. */
+  held?: boolean;
 }
 
 /** One place per message kind: a later kind (photo, reply) adds its case here. */
@@ -101,14 +115,22 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
   const reportId = p.voice ? p.voice.id : p.id;
   const reported = reportedIds.has(reportId);
   const said = p.removed ? p.removed.text : p.body;
-  const label = `${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${said ? `. ${said}` : ''}`;
+  const label = `${p.quote && !p.removed ? spokenQuote(p.quote) : ''}${p.name}${p.isCoach ? ', Coach' : ''}, ${time}${said ? `. ${said}` : ''}`;
+  // A row on the phone, a removed one or a voice note folded for its reporter has nothing to answer or copy.
+  const open = !local && !p.removed && !(p.voice && reported);
+  const acts = open ? { reply: p.onReply, copy: p.onCopy, quote: p.onQuote } : {};
+  const actions = ([['reply', 'Reply'], ['copy', 'Copy'], ['quote', 'Go to message']] as const)
+    .filter(([n]) => acts[n]).map(([name, l]) => ({ name, label: l }));
+  const act = (e: AccessibilityActionEvent) => acts[e.nativeEvent.actionName as keyof typeof acts]?.();
+  const hold = open && p.onHold ? () => { void HapticService.mediumImpact(); p.onHold?.(); } : undefined;
+  const Root = hold ? Pressable : View;
   const noun = p.voice ? 'voice note' : 'message';
   const confirmDiscard = () => Alert.alert(`Delete this ${noun}?`, undefined, [
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: p.onDiscard },
   ]);
   return (
-    <View style={s.row} testID={`space-chat-row-${p.id}`}>
+    <Root style={[s.row, p.held ? s.held : null]} testID={`space-chat-row-${p.id}`} {...(hold ? { onLongPress: hold, delayLongPress: 350, accessible: false } : {})}>
       <View style={s.head}>
         {p.avatarUrl ? (
           <Image source={{ uri: p.avatarUrl }} style={[s.avatar, p.voice ? s.avatarSm : null]} accessibilityIgnoresInvertColors />
@@ -117,7 +139,8 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             <Text style={[p.isCoach ? s.coachInitial : s.initial, { color: tile.fg }]}>{initial}</Text>
           </View>
         )}
-        <View style={s.who} accessible accessibilityLabel={label} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 24)}>
+        <View style={s.who} accessible accessibilityLabel={label} accessibilityActions={actions.length ? actions : undefined}
+          onAccessibilityAction={act} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 24)}>
           <Text style={s.name}>{p.name}</Text>
           {p.isCoach ? <Text style={s.mark}>Coach</Text> : null}
           {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
@@ -157,6 +180,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
         </View>
       ) : (
         <View style={[s.content, p.voice ? s.voiceCard : wrapped ? s.untucked : null]} testID={`space-chat-content-${p.id}`}>
+          {p.quote ? <SpaceReplyQuote id={p.id} quote={p.quote} onPress={p.onQuote} /> : null}
           <MessageBody {...p} folded={reported && !local} />
           {p.state === 'failed' && p.rejected ? (
             <Text style={s.reason} testID={`space-chat-rejected-${p.id}`}>{REJECTED_WORDS.message}</Text>
@@ -176,7 +200,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           ) : null}
         </View>
       )}
-    </View>
+    </Root>
   );
 }
 
@@ -214,6 +238,8 @@ const AVATAR = 40;
 const GAP = 10;
 const s = StyleSheet.create({
   row: { paddingLeft: spacing.lg, paddingRight: spacing.xs, paddingVertical: spacing.sm },
+  // SC-M3: the row a sheet or a quote points at, on the leaf wash (Slack lights the message its menu is for).
+  held: { backgroundColor: voiceShades.leafWash },
   head: { flexDirection: 'row', alignItems: 'center', gap: GAP, minHeight: 44 },
   avatar: { width: AVATAR, height: AVATAR, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarSm: { width: 32, height: 32, borderRadius: 10 },
