@@ -35,6 +35,11 @@ import {
   type VoiceRecordingResult,
 } from './voiceRecorderPort';
 import { reportVoiceAudioCleanup, useNativeVoiceRecorder } from '../services/voiceAudio';
+import {
+  endVoicePlaybackTurn,
+  takeVoicePlaybackTurn,
+  type VoicePlaybackTurn,
+} from '../components/community/voicePlaybackPort';
 import { captureError } from '../services/sentry';
 import { newRequestId, shortReference } from '../utils/correlation';
 
@@ -157,11 +162,17 @@ export function useVoiceRecorder(
   // or while a start is still in flight.
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
+  // OB1 (m#896 AUDIT 6482721065): a take holds the voice playback turn, so a note playing when it
+  // begins is paused, its place kept, before the microphone starts. A take is not playback: stop is
+  // a no-op. The turn is given back when the take stops, is thrown away, or never starts.
+  const turnRef = useRef<VoicePlaybackTurn>({ stop: async () => undefined });
+  const releaseTurn = useCallback(() => endVoicePlaybackTurn(turnRef.current), []);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       generationRef.current += 1;
+      endVoicePlaybackTurn(turnRef.current);
       const wasCapturing = startedAtRef.current !== null || startingRef.current;
       clearTick();
       if (wasCapturing) {
@@ -186,8 +197,9 @@ export function useVoiceRecorder(
       fail('stop', err);
     } finally {
       stoppingRef.current = false;
+      releaseTurn();
     }
-  }, [clearTick, fail, maxDurationMs, recorder]);
+  }, [clearTick, fail, maxDurationMs, recorder, releaseTurn]);
 
   const beginTicker = useCallback(() => {
     if (tickRef.current !== null) clearInterval(tickRef.current);
@@ -244,13 +256,20 @@ export function useVoiceRecorder(
         setStatus('denied');
         return;
       }
+      await takeVoicePlaybackTurn(turnRef.current);
+      if (retired()) {
+        releaseTurn();
+        return;
+      }
       try {
         await recorder.start();
       } catch (err) {
+        releaseTurn();
         if (!retired()) fail('start', err);
         return;
       }
       if (retired()) {
+        releaseTurn();
         // The composer closed (or was reset) while the microphone was
         // starting: release the capture this call began.
         void recorder.cancel().catch(reportVoiceAudioCleanup('recorder_late_start_cancel'));
@@ -264,7 +283,7 @@ export function useVoiceRecorder(
     } finally {
       startingRef.current = false;
     }
-  }, [beginTicker, fail, recorder]);
+  }, [beginTicker, fail, recorder, releaseTurn]);
 
   const stop = useCallback(async () => {
     if (status !== 'recording') return;
@@ -274,6 +293,7 @@ export function useVoiceRecorder(
   const cancel = useCallback(async () => {
     generationRef.current += 1;
     clearTick();
+    releaseTurn();
     try {
       await recorder.cancel();
     } finally {
@@ -282,18 +302,19 @@ export function useVoiceRecorder(
       stoppingRef.current = false;
       setStatus(recorder.isAvailable ? 'idle' : 'unavailable');
     }
-  }, [clearTick, recorder]);
+  }, [clearTick, recorder, releaseTurn]);
 
   const reset = useCallback(() => {
     generationRef.current += 1;
     clearTick();
+    releaseTurn();
     setError(null);
     setRecording(null);
     setElapsedMs(0);
     setMustOpenSettings(false);
     stoppingRef.current = false;
     setStatus(recorder.isAvailable ? 'idle' : 'unavailable');
-  }, [clearTick, recorder.isAvailable]);
+  }, [clearTick, recorder.isAvailable, releaseTurn]);
 
   const retryPermission = useCallback(async () => {
     let perm: MicPermissionStatus;
