@@ -233,7 +233,7 @@ const GAPS: Record<string, string> = {
   'screens/community/CommunityChallengeDetailScreen.tsx challenge notes and progress / banned':
     'CommunityChallengeDetailScreen closes only the notes box: the primary action (Join / Log progress, ChallengeProgressSheet) stays for a banned member (growth-project-mobile#872 AUDIT, Opus C4/C9)',
   'screens/community/CommunityChallengeDetailScreen.tsx challenge notes and progress / I left the space':
-    'CommunityChallengeDetailScreen closes only the notes box: the primary action (Join / Log progress) stays for a member who left',
+    'CommunityChallengeDetailScreen closes only the notes box: the primary action (Join / Log progress) stays for a member who left (the departure case of the growth-project-mobile#872 AUDIT Opus C4/C9 gap)',
 };
 
 async function settle() {

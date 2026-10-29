@@ -116,7 +116,6 @@ type Surface = {
 const DM_PROOF = 'screens/community/__tests__/CommunityDmClosedBlockAllM.test.tsx';
 const CLIENT_THREAD = 'screens/client/__tests__/MessagesScreenV2.test.tsx';
 const COACH_THREAD = 'screens/coach/__tests__/ClientMessagesScreenV2.test.tsx';
-const AUDIT_872 = 'growth-project-mobile#872 AUDIT (Opus C4/C9)';
 
 const REGISTRY: Surface[] = [
   // ── Composers ──
@@ -348,7 +347,7 @@ const REGISTRY: Surface[] = [
   {
     file: 'screens/community/CommunityChallengeDetailScreen.tsx', kind: 'list', what: 'challenge notes and the leaderboard',
     how: 'closed (ban, departure, challenge gone) hides the notes; a blocked person\'s cached notes are not dropped',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced ([\'community\', \'challenge\', id, \'comments\'])', rule: 'block (cache after a block)', why: 'cached challenge notes keep a blocked author\'s rows until the next read', audit: AUDIT_872, shows: { cache: 'challenge-notes' } } },
+    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced ([\'community\', \'challenge\', id, \'comments\'])', rule: 'block (cache after a block)', why: 'cached challenge notes keep a blocked author\'s rows until the next read', shows: { cache: 'challenge-notes' } } },
   },
   {
     file: 'screens/community/CoachCommunityInboxScreen.tsx', kind: 'list', what: 'the coach community inbox rows',
