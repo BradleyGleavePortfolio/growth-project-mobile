@@ -1,0 +1,5 @@
+src/screens/community/__tests__
+src/api/__tests__/communityApi.test.ts
+src/components/community/space-chat/__tests__
+src/hooks/__tests__/useCohortChat.test.ts
+src/hooks/__tests__/useOfflineQuery.test.ts
