@@ -32,7 +32,8 @@
  * Look (FR-865R4, Sol R3 #865 B7, Opus R3 #865 C3/N6): Voice B Studio's page (GOAL B-09a in frame 05b's shell). ONE
  * header in every state, the deep forest bar with Back (StudioPage), the status band above it in the same forest; the
  * note named as the Hall names it (square identity tile, name, Coach mark, time) with the card under the name; the
- * player told when the phone is offline, so Play is off (GOAL B-10a) instead of a load that fails.
+ * player told when the phone is offline, so Play is off (GOAL B-10a) instead of a load that fails. FR-865R5 (Sol R4 #865 B1,
+ * B2): on a phone too narrow for the card under the name (320 pt) the card keeps the page's width, and the time is the clock.
  *
  * Tokens only (no raw hex); line Ionicons only (no emoji); fontWeight <= '600'.
  */
@@ -44,7 +45,9 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import { getCalendars } from 'expo-localization';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -59,7 +62,6 @@ import { ThreadHeader } from '../../components/community';
 import { ForestStatusBar } from '../../components/StatusBarBand';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import VoiceNotePlayer from '../../components/community/VoiceNotePlayer';
-import { formatRelative } from '../../components/community/SearchResultRow';
 import HapticPressable from '../../components/HapticPressable';
 import { communityVoiceApi, type VoiceNoteView } from '../../api/communityVoiceApi';
 import VoiceRemovedPlaceholder, {
@@ -92,8 +94,27 @@ function StudioPage({ onBack, children }: { onBack: () => void; children: React.
   );
 }
 
+/** GOAL B-09a: the card starts under the name, past the 32 pt tile, its 8 pt gap and 4 more as the frame. */
+const UNDER_NAME = 32 + spacing.sm + 4;
+/**
+ * Sol R4 #865 B1: the narrowest player card whose 48 bars (2 pt each, 2 apart: 190 pt) fit the seek target beside the 52 pt
+ * disc and its 12 pt gap, inside the card's 12 + 10 padding and 1 pt edges. Under the name that needs a 354 pt phone.
+ */
+const CARD_MIN = 48 * 2 + 47 * 2 + 52 + spacing.md + spacing.md + 10 + 2;
+
+/** Sol R4 #865 B2 (GOAL B-09a "9:20"): the note's clock, in the phone's own time zone and its 12/24-hour setting. */
+function clockOf(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  const options: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+  const h24 = getCalendars()[0]?.uses24hourClock;
+  if (typeof h24 === 'boolean') options.hourCycle = h24 ? 'h23' : 'h12'; // h23: midnight is 00:05, never 24:05
+  return at.toLocaleTimeString(undefined, options);
+}
+
 export default function CommunityVoiceNoteDetail(): React.ReactElement {
   const { semanticColors } = useTheme();
+  const { width } = useWindowDimensions();
   const route = useRoute<CommunityRoute<'CommunityVoiceNoteDetail'>>();
   const navigation = useNavigation<CommunityNav>();
   const goBack = () => navigation.goBack();
@@ -221,7 +242,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   }
 
   const data = note.data;
-  const when = formatRelative(data.created_at);
+  const when = clockOf(data.created_at);
   const mine = !!viewer?.id && viewer.id === data.author_id;
   const folded = reported.has(data.id);
   // Owner #174-4: a coach-removed note shows one quiet line, no player, menu or transcript.
@@ -255,6 +276,10 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   const name = data.author_name?.trim() || 'Voice note';
   const coach = data.author_is_coach === true;
   const initial = data.author_name?.trim()?.[0]?.toUpperCase() ?? '';
+  // Sol R4 #865 B1: where the card under the name is too narrow for its bars (a 320 pt phone), the player's card keeps the
+  // page's width (the page's 16 pt sides), as the Hall's, so every bar is on the screen and inside the target it seeks.
+  // The removed line and the reported fold have no bars and keep their place under the name.
+  const tight = !removedLine && !folded && width - 2 * spacing.lg - UNDER_NAME < CARD_MIN;
 
   return (
     <StudioPage onBack={goBack}>
@@ -307,7 +332,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
         </View>
 
         {/* GOAL B-09a: the card sits under the name, not under the tile. */}
-        <View style={initial ? styles.underName : undefined}>
+        <View style={initial && !tight ? styles.underName : undefined}>
           {removedLine ? (
             <VoiceRemovedPlaceholder line={removedLine} testID="community-voice-detail-removed" />
           ) : folded ? (
@@ -376,13 +401,13 @@ const styles = StyleSheet.create({
   keep: { flexShrink: 0 },
   spacer: { flex: 1 },
   // GOAL B-09a's small identity tile: a member's leaf tile with a moss edge and an ink initial; the coach's deep tile
-  // with a gold serif initial. The card below starts under the name (tile 32 + gap 8, + 4 as the frame).
+  // with a gold serif initial. The card below starts under the name (UNDER_NAME).
   tile: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   tileMember: { backgroundColor: fp.leaf, borderColor: fp.moss, borderWidth: 1 },
   tileCoach: { backgroundColor: fp.deep },
   initial: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600', color: fp.ink },
   initialCoach: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 18, lineHeight: 23, color: fp.gold },
-  underName: { paddingLeft: 32 + spacing.sm + 4 },
+  underName: { paddingLeft: UNDER_NAME },
   transcriptWrap: { gap: spacing.xs, marginTop: spacing.sm },
   transcriptLabel: { fontFamily: voiceFaces.semibold, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
   transcript: { fontFamily: voiceFaces.regular, fontSize: 15, lineHeight: 22 },
