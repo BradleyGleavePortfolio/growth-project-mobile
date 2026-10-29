@@ -1,0 +1,11 @@
+src/screens/community
+src/components/community
+src/components/messaging
+src/navigation/__tests__/communitySpaceChatFlag.test.tsx
+src/hooks/__tests__/useCommunity.test.tsx
+src/hooks/__tests__/useOfflineQuery.test.ts
+src/api/__tests__/communityApi.test.ts
+src/services/__tests__/queryClient
+src/services/__tests__/authActions.signOut
+src/__tests__/quietLuxuryDoctrine.test.ts
+src/__tests__/skeleton.test.ts
