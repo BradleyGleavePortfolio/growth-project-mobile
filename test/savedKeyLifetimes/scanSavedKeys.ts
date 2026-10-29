@@ -1,5 +1,5 @@
 /**
- * Test-only helper for savedKeyLifetimes.test.ts (KT-13 in KNOWN_TRAPS.md).
+ * Test-only helper for src/__tests__/savedKeyLifetimes.test.ts (KT-13 in KNOWN_TRAPS.md).
  *
  * Reads every non-test file under src/ with the TypeScript parser and lists
  * each place the app reads, writes or removes one saved key: AsyncStorage,
@@ -24,7 +24,7 @@ export interface KeySite {
   key: string;
 }
 
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(__dirname, '../..');
 const SKIP_DIRS = new Set(['__tests__', '__mocks__', '__fixtures__', 'node_modules']);
 /** The storage layers themselves: their callers are the sites. */
 const LAYERS = new Set(['src/storage/mmkv.ts', 'src/services/secureStorage.ts']);

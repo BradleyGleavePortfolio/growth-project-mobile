@@ -1,6 +1,6 @@
 /**
  * Every key the app saves on the phone, with its lifetime (KT-13, KNOWN_TRAPS.md). Test-only data for
- * savedKeyLifetimes.test.ts. `{uid}` is the signed-in account's id; `*` is any other part (a thread,
+ * src/__tests__/savedKeyLifetimes.test.ts. `{uid}` is the signed-in account's id; `*` is any other part (a thread,
  * a month, a source). A row covers every key its pattern matches.
  *
  *   DEVICE  the phone's own: survives sign out, the same for every account on the phone.

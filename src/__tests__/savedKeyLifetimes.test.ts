@@ -1,7 +1,7 @@
 /**
  * KT-13 (KNOWN_TRAPS.md): every key the app saves on the phone has a stated lifetime, and sign out, a
  * second account on the same phone and account deletion keep it. The registry is
- * savedKeyLifetimes/savedKeyRegistry.ts; the scan of src/ is savedKeyLifetimes/scanSavedKeys.ts.
+ * test/savedKeyLifetimes/savedKeyRegistry.ts; the scan of src/ is test/savedKeyLifetimes/scanSavedKeys.ts.
  *
  * When this goes red, the message names the file and line or the key. What a builder does:
  *   - "is not in the registry": you added a saved key. Register it: add a row with its lifetime
@@ -23,8 +23,8 @@ import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 import { signOut } from '../services/authActions';
 import { setUserCache } from '../lib/userCache';
 import { authEvents } from '../utils/authEvents';
-import { scanSavedKeys, type KeySite, type Store } from './savedKeyLifetimes/scanSavedKeys';
-import { KNOWN_GAPS, REGISTRY, RULES, type Row, type Rule } from './savedKeyLifetimes/savedKeyRegistry';
+import { scanSavedKeys, type KeySite, type Store } from '../../test/savedKeyLifetimes/scanSavedKeys';
+import { KNOWN_GAPS, REGISTRY, RULES, type Row, type Rule } from '../../test/savedKeyLifetimes/savedKeyRegistry';
 // Loaded as the app loads them at start: their sign-out listeners are part of the real sign out.
 import '../hooks/useVoiceOutbox';
 import '../components/community/voiceReportedStore';
