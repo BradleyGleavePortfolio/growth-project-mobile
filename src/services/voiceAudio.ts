@@ -72,30 +72,6 @@ export function resetExpoAudioForTests(): void {
   loaded = undefined;
   recorderImpl = null;
   playback = undefined;
-  captures = 0;
-  livePlayers.clear();
-  if (releaseTimer !== null) clearTimeout(releaseTimer);
-  releaseTimer = null;
-}
-
-// ─── iOS audio session ──────────────────────────────────────────────────────
-// LS-901 B1: expo-audio 56's own pause cleanup (ios/AudioModule.swift
-// deactivateSession) turns the session off 0.1 s later if no player plays; it
-// never looks at recorders, so it could stop a take begun in that window. Our
-// players opt out (keepAudioSessionActive) and this module turns the session
-// off itself, after the same wait, only when no take is starting or live.
-let captures = 0;
-const livePlayers = new Set<AudioPlayer>();
-let releaseTimer: ReturnType<typeof setTimeout> | null = null;
-
-function releaseSessionSoon(audio: ExpoAudio): void {
-  if (Platform.OS !== 'ios') return;
-  if (releaseTimer !== null) clearTimeout(releaseTimer);
-  releaseTimer = setTimeout(() => {
-    releaseTimer = null;
-    if (captures > 0 || Array.from(livePlayers).some((p) => p.playing)) return;
-    audio.setIsAudioActiveAsync(false).catch(reportVoiceAudioCleanup('release_session'));
-  }, 100);
 }
 
 /**
@@ -197,13 +173,6 @@ export function createExpoRecorderPort(audio: ExpoAudio, recorder: AudioRecorder
   let startedAt: number | null = null;
   let lastDurationMs = 0;
   let peaks: number[] = [];
-  let capturing = false;
-  const endCapture = () => {
-    if (!capturing) return;
-    capturing = false;
-    captures -= 1;
-    releaseSessionSoon(audio);
-  };
 
   const stopMeter = () => {
     if (meter !== null) clearInterval(meter);
@@ -234,17 +203,12 @@ export function createExpoRecorderPort(audio: ExpoAudio, recorder: AudioRecorder
       // B-314-7: if switching into recording mode, preparing or starting
       // fails, put the session back into playback mode before rethrowing, so
       // later voice notes do not play from the iOS earpiece.
-      if (!capturing) {
-        capturing = true;
-        captures += 1;
-      }
       try {
         await audio.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
         await recorder.prepareToRecordAsync();
         recorder.record();
       } catch (err) {
         await restorePlaybackMode();
-        endCapture();
         throw err;
       }
       startedAt = Date.now();
@@ -263,7 +227,6 @@ export function createExpoRecorderPort(audio: ExpoAudio, recorder: AudioRecorder
       } finally {
         // B-314-7: restored whether or not the native stop succeeded.
         await restorePlaybackMode();
-        endCapture();
       }
       const uri = recorder.uri;
       if (!uri) throw new VoiceRecordingFileMissingError();
@@ -287,7 +250,6 @@ export function createExpoRecorderPort(audio: ExpoAudio, recorder: AudioRecorder
         if (recorder.isRecording) await recorder.stop();
       } finally {
         await restorePlaybackMode();
-        endCapture();
       }
     },
   };
@@ -344,9 +306,8 @@ export function createExpoPlaybackPort(audio: ExpoAudio): VoicePlaybackPort {
         .catch(reportVoiceAudioCleanup('playback_mode'));
       const player: AudioPlayer = audio.createAudioPlayer(
         { uri: url },
-        { updateInterval: PLAYBACK_UPDATE_INTERVAL_MS, keepAudioSessionActive: true },
+        { updateInterval: PLAYBACK_UPDATE_INTERVAL_MS },
       );
-      livePlayers.add(player);
       let failed = false;
       const sub = player.addListener('playbackStatusUpdate', (s: AudioStatus) => {
         const error = statusError(s);
@@ -358,7 +319,6 @@ export function createExpoPlaybackPort(audio: ExpoAudio): VoicePlaybackPort {
         if (s.didJustFinish) {
           // Rewind so the next Play starts from the beginning.
           player.pause();
-          releaseSessionSoon(audio);
           void player.seekTo(0).catch(reportVoiceAudioCleanup('rewind'));
           events.onEnd?.();
           return;
@@ -372,7 +332,6 @@ export function createExpoPlaybackPort(audio: ExpoAudio): VoicePlaybackPort {
         },
         async pause() {
           player.pause();
-          releaseSessionSoon(audio);
         },
         async seek(positionMs: number) {
           await player.seekTo(positionMs / 1000);
@@ -381,7 +340,6 @@ export function createExpoPlaybackPort(audio: ExpoAudio): VoicePlaybackPort {
           if (released) return;
           released = true;
           sub.remove();
-          livePlayers.delete(player);
           player.remove();
         },
       };
