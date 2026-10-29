@@ -133,6 +133,7 @@ describe('FR-877R2 (LO C4): a refused send is announced with the line the bar sh
     ['BAM-1', {}, CLOSED_LINE],
   ])('%s', async (_label, props, said) => {
     const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    announce.mockClear(); // the react-native jest preset's mock is shared: drop calls from earlier tests
     const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
     await act(async () => { result.current.close(axiosErr(403, COACHING_BLOCKED)); });
     expect(announce).not.toHaveBeenCalled(); // close() itself no longer says BAM-1

@@ -181,6 +181,7 @@ describe('community DM', () => {
 
   it('FR-877R2 (LO C4): a refused send is announced with the line the bar shows, once', async () => {
     const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    announce.mockClear(); // the react-native jest preset's mock is shared: drop calls from earlier tests
     mockSendAsync.mockRejectedValueOnce(BLOCKED_BY_YOU);
     const view = await open();
     expect(announce).not.toHaveBeenCalled();
