@@ -76,6 +76,13 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 }));
 
 const mockGoBack = jest.fn();
+// FR-868: ContactView reaches the app's QueryClient to drop / restore the
+// person's coach-inbox rows. A real, empty client stands in for it here.
+jest.mock('../../../services/queryClient', () => {
+  const { QueryClient } = jest.requireActual('@tanstack/react-query');
+  return { queryClient: new QueryClient() };
+});
+
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ goBack: mockGoBack, navigate: jest.fn() }),
   useRoute: () => ({
@@ -180,5 +187,47 @@ describe('ContactView — block flow', () => {
 
     await waitFor(() => expect(mockUnblock).toHaveBeenCalled());
     expect(useBlockedUsersStore.getState().isBlocked('u1')).toBe(true);
+  });
+});
+
+describe('ContactView — coach inbox follows block and unblock (FR-868)', () => {
+  const { queryClient } = jest.requireMock('../../../services/queryClient');
+  const { coachCommunityKeys } = jest.requireActual('../../../hooks/useCoachCommunity');
+  const row = (id: string, client: string) => ({ id, client_user_id: client });
+  const seed = () =>
+    queryClient.setQueryData([...coachCommunityKeys.inbox(), 'all'], {
+      pages: [{ items: [row('m1', 'u1'), row('m2', 'u2')], next_cursor: null }],
+      pageParams: [null],
+    });
+  const rows = () =>
+    (queryClient.getQueryData([...coachCommunityKeys.inbox(), 'all']) as {
+      pages: Array<{ items: Array<{ client_user_id: string }> }>;
+    }).pages[0].items.map((i) => i.client_user_id);
+
+  it('blocking drops the person from the cached coach inbox at once', async () => {
+    seed();
+    mockBlock.mockResolvedValueOnce({ ok: true });
+    const { getByLabelText } = await render(<ContactView />);
+    await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+    await pressDestructive('Block', async () => {
+      await fireEvent.press(getByLabelText('Block user'));
+    });
+    await waitFor(() => expect(rows()).toEqual(['u2']));
+  });
+
+  it('unblocking invalidates the coach community queries so rows come back', async () => {
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+    await useBlockedUsersStore.getState().hydrate('me');
+    await useBlockedUsersStore.getState().block({ id: 'u1', displayName: 'Alice Smith', role: 'coach' });
+    mockUnblock.mockResolvedValueOnce({ ok: true });
+    const { getByLabelText } = await render(<ContactView />);
+    await waitFor(() => getByLabelText('Unblock user'));
+    await pressDestructive('Unblock', async () => {
+      await fireEvent.press(getByLabelText('Unblock user'));
+    });
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith({ queryKey: coachCommunityKeys.all }),
+    );
+    spy.mockRestore();
   });
 });
