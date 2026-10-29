@@ -97,7 +97,7 @@ const refused = (status: number, code: string) =>
 const challengeRefused = (status: number, code: string) => ({ isAxiosError: true, response: { status, data: { code } } });
 
 type State = 'open' | 'I blocked them' | 'they blocked me' | 'banned' | 'I left the space';
-const CLOSED: State[] = ['I blocked them', 'they blocked me', 'banned', 'I left the space'];
+const CLOSED: Exclude<State, 'open'>[] = ['I blocked them', 'they blocked me', 'banned', 'I left the space'];
 
 function wireOpen() {
   Object.values(mockWire).forEach((m) => m.mockReset());
@@ -278,7 +278,7 @@ describe.each(HOSTS.map((h) => [`${h.file} (${h.label})`, h] as const))('KT-2 co
     const view = await draw(host);
     const seen = host.controls.filter((id) => view.queryByTestId(id));
     expect(seen.length).toBeGreaterThan(0);
-    expect(typeable(view).length + seen.length).toBeGreaterThan(0);
+    if (host.controls.some((id) => /-(field|body)$/.test(id))) expect(typeable(view).length).toBeGreaterThan(0);
   });
 
   for (const state of CLOSED) {
