@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import { act, render, renderHook } from '@testing-library/react-native';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Text } from 'react-native';
 
 const mockWarning = jest.fn(async () => undefined);
 jest.mock('../../../ui/haptics/haptics.service', () => ({
@@ -127,23 +127,42 @@ describe('ConversationClosedLine', () => {
 });
 
 describe('FR-877R2 (LO C4): a refused send is announced with the line the bar shows', () => {
+  // FR-877R2B: one render per test. The send box and the bar that replaces it live in one host, as on every chat screen.
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    announce.mockClear(); // the react-native jest preset's mock is shared: drop calls from earlier tests
+  });
+  afterEach(() => announce.mockRestore());
+
+  function Chat(props: { by?: 'me' | 'them' | null; name?: string; refuse: unknown }): React.ReactElement {
+    const { closed, close } = useConversationClosed('coach-1', [], true);
+    return closed ? <ConversationClosedLine {...props} /> : <Text testID="send" onPress={() => close(props.refuse)}>Send</Text>;
+  }
+
   it.each([
     ['BAM-2a', { by: 'me' as const }, BLOCKED_BY_ME_LINE],
     ['BAM-2b', { by: 'them' as const, name: 'Sam Rivera' }, 'Sam Rivera has blocked you'],
     ['BAM-1', {}, CLOSED_LINE],
-  ])('%s', async (_label, props, said) => {
-    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
-    announce.mockClear(); // the react-native jest preset's mock is shared: drop calls from earlier tests
-    const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
-    await act(async () => { result.current.close(axiosErr(403, COACHING_BLOCKED)); });
-    expect(announce).not.toHaveBeenCalled(); // close() itself no longer says BAM-1
-    const first = await render(<ConversationClosedLine {...props} />);
+  ])('%s: said once, by the bar, not BAM-1 by close()', async (_label, props, said) => {
+    const view = await render(<Chat {...props} refuse={axiosErr(403, COACHING_BLOCKED)} />);
+    expect(announce).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByTestId('send'));
+    expect(view.queryByTestId('send')).toBeNull();
     expect(announce).toHaveBeenCalledTimes(1);
     expect(announce).toHaveBeenCalledWith(said);
-    first.unmount();
-    await render(<ConversationClosedLine {...props} />); // a closed chat opened later is not announced again
-    expect(announce).toHaveBeenCalledTimes(1);
-    announce.mockRestore();
+  });
+
+  it('a failure that is not a refusal keeps the send box and says nothing', async () => {
+    const view = await render(<Chat by="me" refuse={new Error('Network Error')} />);
+    await fireEvent.press(view.getByTestId('send'));
+    expect(view.getByTestId('send')).toBeTruthy();
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it('a chat that opens already closed (no refused send just before) is not announced', async () => {
+    await render(<ConversationClosedLine by="them" name="Sam Rivera" />);
+    expect(announce).not.toHaveBeenCalled();
   });
 });
 
