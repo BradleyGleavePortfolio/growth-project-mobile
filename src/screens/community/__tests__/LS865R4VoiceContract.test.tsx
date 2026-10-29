@@ -4,6 +4,7 @@
  * This is the server's normal coach response, not a missing or still-loading Me.
  */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -53,6 +54,7 @@ jest.mock('../../../api/communityVoiceApi', () => ({
 }));
 
 import CommunityVoiceNoteDetail from '../CommunityVoiceNoteDetail';
+import VoiceNotePlayer from '../../../components/community/VoiceNotePlayer';
 
 const NOTE = {
   id: 'note-1',
@@ -134,5 +136,43 @@ describe('LS-865R4 B2: Voice B heard status uses approved SC-M2-N1/N2 words', ()
     const view = await openNote();
     expect(view.queryByText('Played')).not.toBeNull();
     expect(view.queryByText('New')).toBeNull();
+  });
+});
+
+describe('LS-865R4 B3: the new under-name wrapper must leave room for its real waveform', () => {
+  const number = (value: unknown) => typeof value === 'number' ? value : 0;
+  it.each([320, 360, 390])('keeps the waveform inside the seek/card bounds at %i pt', async (width) => {
+    const view = await openNote();
+    const content = StyleSheet.flatten(view.getByTestId('community-voice-detail-scroll').props.contentContainerStyle);
+    const playerComponent = view.UNSAFE_getByType(VoiceNotePlayer);
+    const indent = StyleSheet.flatten(playerComponent.parent?.props.style);
+    const player = view.getByTestId('community-voice-detail-player');
+    const card = StyleSheet.flatten(player.props.style);
+    const disc = StyleSheet.flatten(view.getByTestId('voice-player-toggle').props.style);
+    const browNode = player.children[0];
+    if (typeof browNode === 'string') throw new Error('Expected the player brow');
+    const brow = StyleSheet.flatten(browNode.props.style);
+    const waveform = view.getByTestId('voice-waveform');
+    const strip = StyleSheet.flatten(waveform.props.style);
+    // Yoga/CSS cannot shrink the 1 pt border on either side of each bar. The
+    // real component's minimum strip is those borders plus its real row gaps.
+    const barBorders = waveform.children.reduce((sum, bar) => {
+      if (typeof bar === 'string') return sum;
+      const style = StyleSheet.flatten(bar.props.style);
+      return sum + number(style.borderLeftWidth ?? style.borderWidth) +
+        number(style.borderRightWidth ?? style.borderWidth);
+    }, 0);
+    const minimumStrip = barBorders + (waveform.children.length - 1) * number(strip.gap);
+    const availableStrip = width -
+      number(content.paddingLeft ?? content.paddingHorizontal ?? content.padding) -
+      number(content.paddingRight ?? content.paddingHorizontal ?? content.padding) -
+      number(indent?.paddingLeft) -
+      number(card.paddingLeft ?? card.paddingHorizontal ?? card.padding) -
+      number(card.paddingRight ?? card.paddingHorizontal ?? card.padding) -
+      number(card.borderLeftWidth ?? card.borderWidth) -
+      number(card.borderRightWidth ?? card.borderWidth) -
+      number(disc.width) - number(brow.gap);
+    expect(waveform.children).toHaveLength(48);
+    expect(minimumStrip).toBeLessThanOrEqual(availableStrip);
   });
 });
