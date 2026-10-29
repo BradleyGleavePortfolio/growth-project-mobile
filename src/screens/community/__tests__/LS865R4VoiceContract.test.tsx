@@ -119,3 +119,20 @@ describe('LS-865R4 B1: normal coach identity at the new coach-inbox destination'
     expect(safety.onRemove).toBeUndefined();
   });
 });
+
+describe('LS-865R4 B2: Voice B heard status uses approved SC-M2-N1/N2 words', () => {
+  // GET /voice-notes/:id already returns heard_at for this listener. #175-W approved
+  // "New" and check icon + "Played"; this is not a pending wording decision.
+  it('shows New for the listener whose heard_at is null', async () => {
+    const view = await openNote();
+    expect(view.queryByText('New')).not.toBeNull();
+    expect(view.queryByText('Played')).toBeNull();
+  });
+
+  it('shows Played rather than New when the server says this listener heard it', async () => {
+    mockGetOne.mockResolvedValue({ ...NOTE, heard_at: '2026-10-29T02:15:00.000Z' });
+    const view = await openNote();
+    expect(view.queryByText('Played')).not.toBeNull();
+    expect(view.queryByText('New')).toBeNull();
+  });
+});
