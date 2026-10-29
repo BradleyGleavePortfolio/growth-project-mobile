@@ -68,8 +68,9 @@ const APPROVED_GUIDELINES = [
   'Report anything that breaks these rules. Reports go to your coach and to the team.',
   'This space is not for emergencies. If you are in danger, call 911. If you are struggling emotionally, call or text 988.',
 ];
+// FR-877 B1: RC-BLOCK, owner-approved 2026-10-23 10:57 PDT (SoT A6.0-170, A6.25), the sentence b#1145 serves.
 const APPROVED_COMMITMENT =
-  'Reports are reviewed within 24 hours, every day, by your coach and the TGP Fitness team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you, and they are not told.';
+  'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you. In a direct message they see that you blocked them; nobody else is told.';
 
 async function renderScreen() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -127,6 +128,32 @@ describe('CommunitySafetyScreen', () => {
     }
     expect(getByTestId('community-safety-commitment').props.children).toBe(APPROVED_COMMITMENT);
     expect(await findByText(APPROVED_COMMITMENT)).toBeTruthy();
+  });
+
+  // FR-877 B1: one render per test (an unmount inside a test leaves act() open and breaks the tests after it).
+  const B1_LINE = /stops direct messages both ways\. In a direct message they see that you blocked them; nobody else is told\.$/;
+
+  it('FR-877 B1: the block explanation never promises the person is not told (server copy loaded)', async () => {
+    mockGetInfo.mockResolvedValue({
+      contact_email: 'safety@example.com',
+      report_reasons: [],
+      guidelines: ['Be kind to each other'],
+      response_commitment: APPROVED_COMMITMENT,
+    });
+    mockListBlocks.mockResolvedValue([]);
+    const { findByText, queryByText } = await renderScreen();
+    expect(await findByText(B1_LINE)).toBeTruthy();
+    expect(await findByText(APPROVED_COMMITMENT)).toBeTruthy();
+    expect(queryByText(/not told/)).toBeNull();
+  });
+
+  it('FR-877 B1: the block explanation never promises the person is not told (offline fallback)', async () => {
+    mockGetInfo.mockRejectedValue(new Error('offline'));
+    mockListBlocks.mockResolvedValue([]);
+    const { findByText, queryByText } = await renderScreen();
+    expect(await findByText(B1_LINE)).toBeTruthy();
+    expect(await findByText(APPROVED_COMMITMENT)).toBeTruthy();
+    expect(queryByText(/not told/)).toBeNull();
   });
 
   it('unblocks a member after confirmation', async () => {

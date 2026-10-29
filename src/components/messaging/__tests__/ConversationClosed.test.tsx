@@ -5,11 +5,12 @@
  */
 import React from 'react';
 import { act, render, renderHook } from '@testing-library/react-native';
+import { AccessibilityInfo, Text } from 'react-native';
 
 const mockWarning = jest.fn(async () => undefined);
 jest.mock('../../../ui/haptics/haptics.service', () => ({
   get HapticService() {
-    return { warning: mockWarning };
+    return { warning: mockWarning, softImpact: jest.fn(async () => undefined) };
   },
 }));
 jest.mock('../../../theme/useTheme', () => {
@@ -19,7 +20,12 @@ jest.mock('../../../theme/useTheme', () => {
 
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { CommunityApiError } from '../../../api/apiCall';
-import { CLOSED_LINE, ConversationClosedLine, isClosedRefusal, useConversationClosed } from '../ConversationClosed';
+import { NavigationContext } from '@react-navigation/native';
+import { fireEvent } from '@testing-library/react-native';
+import {
+  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, closedSideOfHeader, isClosedRefusal, useClosedBy,
+  useConversationClosed,
+} from '../ConversationClosed';
 import { closedRefusals } from '../closedRefusal';
 
 const axiosErr = (status: number, data: Record<string, unknown>) => ({ isAxiosError: true, response: { status, data } });
@@ -36,7 +42,7 @@ describe('isClosedRefusal', () => {
     ['coaching send, block either way (403 BLOCKED)', axiosErr(403, COACHING_BLOCKED)],
     ['coaching edit / pin (messaging.blocked)', axiosErr(403, { error: 'messaging.blocked', code: 'messaging.blocked' })],
     ['DM to someone I blocked', axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_you' })],
-    ['DM with someone who blocked me (not disclosed)', axiosErr(404, { error: 'not_found', code: 'community.dm.not_found' })],
+    ['DM with a member who is not there', axiosErr(404, { error: 'not_found', code: 'community.dm.not_found' })],
     ['DM with someone who blocked me (#169-5 code)', axiosErr(403, { code: 'community.dm.blocked_by_them' })],
     ['banned from the space', axiosErr(403, { code: 'community.workspace.no_access' })],
     ['banned from the cohort', axiosErr(403, { code: 'community.cohort.no_access' })],
@@ -117,5 +123,140 @@ describe('ConversationClosedLine', () => {
     expect(view.getByText(CLOSED_LINE)).toBeTruthy();
     expect(line.props.accessibilityLabel).toBe('This conversation is closed');
     expect(line.props.accessibilityLiveRegion).toBe('polite');
+  });
+});
+
+describe('FR-877R2 (LO C4): a refused send is announced with the line the bar shows', () => {
+  // FR-877R2B: one render per test. The send box and the bar that replaces it live in one host, as on every chat screen.
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    announce.mockClear(); // the react-native jest preset's mock is shared: drop calls from earlier tests
+  });
+  afterEach(() => announce.mockRestore());
+
+  function Chat(props: { by?: 'me' | 'them' | null; name?: string; refuse: unknown }): React.ReactElement {
+    const { closed, close } = useConversationClosed('coach-1', [], true);
+    return closed ? <ConversationClosedLine {...props} /> : <Text testID="send" onPress={() => close(props.refuse)}>Send</Text>;
+  }
+
+  it.each([
+    ['BAM-2a', { by: 'me' as const }, BLOCKED_BY_ME_LINE],
+    ['BAM-2b', { by: 'them' as const, name: 'Sam Rivera' }, 'Sam Rivera has blocked you'],
+    ['BAM-1', {}, CLOSED_LINE],
+  ])('%s: said once, by the bar, not BAM-1 by close()', async (_label, props, said) => {
+    const view = await render(<Chat {...props} refuse={axiosErr(403, COACHING_BLOCKED)} />);
+    expect(announce).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByTestId('send'));
+    expect(view.queryByTestId('send')).toBeNull();
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith(said);
+  });
+
+  it('a failure that is not a refusal keeps the send box and says nothing', async () => {
+    const view = await render(<Chat by="me" refuse={new Error('Network Error')} />);
+    await fireEvent.press(view.getByTestId('send'));
+    expect(view.getByTestId('send')).toBeTruthy();
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it('a chat that opens already closed (no refused send just before) is not announced', async () => {
+    await render(<ConversationClosedLine by="them" name="Sam Rivera" />);
+    expect(announce).not.toHaveBeenCalled();
+  });
+});
+
+describe('#169-5 CLOSED-LINE: who closed a one-to-one conversation (useClosedBy)', () => {
+  const SAM = { id: 'x', displayName: 'Sam', blockedAt: '2026-10-22T00:00:00Z' };
+  const byOf = async (other: string | null, closed: boolean, opts?: Parameters<typeof useClosedBy>[2]) =>
+    (await renderHook(() => useClosedBy(other, closed, opts))).result.current;
+
+  it('BAM-2a when I blocked them: my block list, the coaching row, or blocked_by_you', async () => {
+    expect(await byOf(null, true, { errors: [axiosErr(403, { code: 'community.dm.blocked_by_you' })] })).toBe('me');
+    expect(await byOf('x', true, { pair: true, mine: true })).toBe('me');
+    useBlockedUsersStore.setState({ blocked: [SAM] });
+    expect(await byOf('x', true)).toBe('me');
+    expect(await byOf('x', true, { pair: true })).toBe('me');
+  });
+
+  it('BAM-2b when they blocked me: blocked_by_them (also through a CommunityApiError cause), or a coaching chat closed by no block of mine', async () => {
+    expect(await byOf(null, true, { errors: [axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_them' })] })).toBe('them');
+    const wrapped = new CommunityApiError('forbidden', 403, 'community request failed (403)', axiosErr(403, { code: 'community.dm.blocked_by_them' }));
+    expect(await byOf('x', true, { errors: [wrapped] })).toBe('them');
+    expect(await byOf('x', true, { pair: true })).toBe('them');
+  });
+
+  it('the coaching header names the side and wins (b#1141 CONTRACT 6370968268)', async () => {
+    expect(closedSideOfHeader({ headers: { 'x-conversation-closed': 'blocked_by_you' } })).toBe('me');
+    expect(closedSideOfHeader({ headers: { get: (n: string) => (n === 'x-conversation-closed' ? 'blocked_by_them' : undefined) } })).toBe('them');
+    expect(closedSideOfHeader({ headers: {} })).toBeNull();
+    expect(closedSideOfHeader(null)).toBeNull();
+    expect(await byOf('x', true, { pair: true, side: 'me' })).toBe('me');
+    useBlockedUsersStore.setState({ blocked: [SAM] });
+    expect(await byOf('x', true, { pair: true, side: 'them' })).toBe('them');
+    expect(await byOf('x', false, { side: 'them' })).toBeNull();
+  });
+
+  it('BAM-1 for a ban or a member who left; null while open', async () => {
+    expect(await byOf('x', true, { errors: [axiosErr(404, { code: 'community.dm.not_found' })] })).toBeNull();
+    expect(await byOf('x', true, { errors: [axiosErr(403, { code: 'community.workspace.no_access' })] })).toBeNull();
+    expect(await byOf('x', false, { pair: true })).toBeNull();
+    useBlockedUsersStore.setState({ blocked: [SAM] });
+    expect(await byOf('x', false)).toBeNull();
+  });
+
+  it('with the gate: a refused coaching send closes it and says they blocked me; my block says me; an unblock opens it', async () => {
+    const hook = await renderHook(() => {
+      const gate = useConversationClosed('x', [], true);
+      return { ...gate, by: useClosedBy('x', gate.closed, { pair: true }) };
+    });
+    expect(hook.result.current).toMatchObject({ closed: false, by: null });
+    await act(async () => { hook.result.current.close(axiosErr(403, COACHING_BLOCKED)); });
+    expect(hook.result.current).toMatchObject({ closed: true, by: 'them' });
+    await act(async () => useBlockedUsersStore.setState({ blocked: [SAM] }));
+    expect(hook.result.current).toMatchObject({ closed: true, by: 'me' });
+    await act(async () => useBlockedUsersStore.setState({ blocked: [] }));
+    expect(hook.result.current).toMatchObject({ closed: false, by: null });
+    closedRefusals.clear('x');
+  });
+
+  it('the lines: BAM-2a, BAM-2b with the name, BAM-1 when there is no name', async () => {
+    expect((await render(<ConversationClosedLine by="me" />)).getByLabelText(BLOCKED_BY_ME_LINE)).toBeTruthy();
+    expect((await render(<ConversationClosedLine by="them" name=" Sam Lee " />)).getByText('Sam Lee has blocked you')).toBeTruthy();
+    expect((await render(<ConversationClosedLine by="them" name="" />)).getByText(CLOSED_LINE)).toBeTruthy();
+  });
+
+  it.each([
+    ['client (You stack)', 'MoreTab'],
+    ['coach (Settings stack)', 'SettingsStack'],
+  ])('"Settings" opens the blocked-people list: %s', async (_who, tab) => {
+    const navigate = jest.fn();
+    const stack = { getState: () => ({ routeNames: ['Messages'] }), navigate: jest.fn(), getParent: () => tabs };
+    const tabs = { getState: () => ({ routeNames: ['Home', tab] }), navigate, getParent: () => undefined };
+    const view = await render(
+      <NavigationContext.Provider value={stack as never}>
+        <ConversationClosedLine by="me" testID="closed" />
+      </NavigationContext.Provider>,
+    );
+    expect(view.getByTestId('closed').props.accessibilityRole).toBe('link');
+    expect(view.getByText('Settings')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('closed'));
+    expect(navigate).toHaveBeenCalledWith(tab, { screen: 'BlockedUsers', initial: false });
+  });
+
+  it('FR-877 (LO C1): a line that wraps stays centred and shrinks inside the bar', async () => {
+    const { StyleSheet } = jest.requireActual('react-native');
+    for (const el of [
+      (await render(<ConversationClosedLine by="them" name="Alexandra Montgomery-Fitzgerald" />)).getByText(/has blocked you$/),
+      (await render(<ConversationClosedLine by="me" />)).getByText(/^You blocked them\./),
+      (await render(<ConversationClosedLine />)).getByText(CLOSED_LINE),
+    ]) {
+      expect(StyleSheet.flatten(el.props.style)).toEqual(expect.objectContaining({ textAlign: 'center', flexShrink: 1 }));
+    }
+  });
+
+  it('with no blocked-people list in reach, BAM-2a is plain text (no dead link)', async () => {
+    const view = await render(<ConversationClosedLine by="me" testID="closed" />);
+    expect(view.getByTestId('closed').props.accessibilityRole).toBe('text');
   });
 });
