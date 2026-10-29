@@ -54,7 +54,6 @@ jest.mock('../../../api/communityVoiceApi', () => ({
 }));
 
 import CommunityVoiceNoteDetail from '../CommunityVoiceNoteDetail';
-import VoiceNotePlayer from '../../../components/community/VoiceNotePlayer';
 
 const NOTE = {
   id: 'note-1',
@@ -144,9 +143,19 @@ describe('LS-865R4 B3: the new under-name wrapper must leave room for its real w
   it.each([320, 360, 390])('keeps the waveform inside the seek/card bounds at %i pt', async (width) => {
     const view = await openNote();
     const content = StyleSheet.flatten(view.getByTestId('community-voice-detail-scroll').props.contentContainerStyle);
-    const playerComponent = view.UNSAFE_getByType(VoiceNotePlayer);
-    const indent = StyleSheet.flatten(playerComponent.parent?.props.style);
     const player = view.getByTestId('community-voice-detail-player');
+    const scroll = view.getByTestId('community-voice-detail-scroll');
+    // RNTL 14 exposes the actual host tree, not component-type queries.
+    let ancestor = player.parent;
+    let underNameIndent = 0;
+    while (ancestor && ancestor !== scroll) {
+      const style = StyleSheet.flatten(ancestor.props.style);
+      if (typeof style?.paddingLeft === 'number') {
+        underNameIndent = style.paddingLeft;
+        break;
+      }
+      ancestor = ancestor.parent;
+    }
     const card = StyleSheet.flatten(player.props.style);
     const disc = StyleSheet.flatten(view.getByTestId('voice-player-toggle').props.style);
     const browNode = player.children[0];
@@ -166,7 +175,7 @@ describe('LS-865R4 B3: the new under-name wrapper must leave room for its real w
     const availableStrip = width -
       number(content.paddingLeft ?? content.paddingHorizontal ?? content.padding) -
       number(content.paddingRight ?? content.paddingHorizontal ?? content.padding) -
-      number(indent?.paddingLeft) -
+      underNameIndent -
       number(card.paddingLeft ?? card.paddingHorizontal ?? card.padding) -
       number(card.paddingRight ?? card.paddingHorizontal ?? card.padding) -
       number(card.borderLeftWidth ?? card.borderWidth) -
