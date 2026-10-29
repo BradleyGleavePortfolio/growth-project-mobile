@@ -4,8 +4,9 @@
  *
  * The flag is read once at module scope, so this file pins it ON before the
  * screen is imported (coachCommunityInboxFlagOff.test.tsx pins it OFF).
- *   - the voice row shows a mic glyph, "Voice note · 0:42", the client's name
- *     and time; the typed row next to it is unchanged;
+ *   - the voice row shows the Voice B Studio card (deep disc, flat bars, the
+ *     length under them), the client's name and time, and says "Voice note ·
+ *     0:42" to a screen reader; the typed row next to it is unchanged;
  *   - tapping the voice row opens CommunityVoiceNoteDetail for that note;
  *     tapping a typed row opens nothing (as today); a voice row has no ack;
  *   - getInbox keeps voice rows (with their note) only with the flag on; an
@@ -13,7 +14,9 @@
  *     coachCommunityApi.test.ts shows voice rows are skipped.
  */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
+import { forestPop, voiceShades } from '../../../theme/tokens';
 
 jest.mock('../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../config/featureFlags');
@@ -108,13 +111,14 @@ beforeEach(() => {
 });
 
 describe('CoachCommunityInboxScreen — voice rows (flag on)', () => {
-  it('shows the voice row with a mic glyph, its length, name and time', async () => {
-    const { getByTestId, getByText } = await render(<CoachCommunityInboxScreen />);
+  it('shows the voice row with its voice card, its length, name and time', async () => {
+    const { getByTestId, getByText, queryByText } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId(`coach-community-inbox-row-${VOICE_ID}`)).toBeTruthy();
-    expect(getByTestId(`coach-community-inbox-voice-${VOICE_ID}`)).toBeTruthy();
+    expect(getByTestId(`coach-community-inbox-voice-${VOICE_ID}`, { includeHiddenElements: true })).toBeTruthy();
     expect(getByTestId(`coach-community-inbox-mark-acked-${TEXT_ID}`)).toBeTruthy();
-    // The mic glyph is an inline icon character at the start of the same line.
-    expect(getByText(/^\S? ?Voice note · 0:42$/u)).toBeTruthy();
+    // GOAL B-05a / B-09a: the length sits under the bars; the row says "Voice note · 0:42" aloud only.
+    expect(queryByText(/Voice note · 0:42/u)).toBeNull();
+    expect(getByTestId(`coach-community-inbox-voice-time-${VOICE_ID}`, { includeHiddenElements: true }).props.children).toBe('0:42');
     expect(getByText('Sam Lee')).toBeTruthy();
     expect(getByText('Quick question about my plan')).toBeTruthy();
     // The coach inbox label also says the row's time in words (FIN-868R5 C3).
@@ -127,6 +131,24 @@ describe('CoachCommunityInboxScreen — voice rows (flag on)', () => {
     const { queryByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(queryByTestId(`coach-community-inbox-voice-${TEXT_ID}`)).toBeNull();
     expect(queryByTestId(`coach-community-inbox-mark-acked-${VOICE_ID}`)).toBeNull();
+  });
+
+  // FR-865R4 (Opus R3 m#884 B4 voice row, Sol R3 B4, Opus C2): the row carries the Voice B Studio card the
+  // feed's player draws (white card, hairline, 52 pt deep disc with the leaf play mark, bars, the length
+  // under the bars). The inbox sends no loudness, so the bars are the player's flat baseline: none invented.
+  it('draws the Studio voice card: 52 pt deep disc, flat bars, length under the bars', async () => {
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    const hidden = { includeHiddenElements: true };
+    const card = StyleSheet.flatten(getByTestId(`coach-community-inbox-voice-${VOICE_ID}`, hidden).props.style);
+    expect(card).toMatchObject({ borderRadius: 16, borderWidth: 1, borderColor: voiceShades.hairline });
+    const disc = StyleSheet.flatten(getByTestId(`coach-community-inbox-voice-disc-${VOICE_ID}`, hidden).props.style);
+    expect(disc).toMatchObject({ width: 52, height: 52, backgroundColor: forestPop.deep });
+    const bars = getByTestId(`coach-community-inbox-voice-bars-${VOICE_ID}`, hidden);
+    const heights = bars.children.map((b) => StyleSheet.flatten((b as { props: { style: never } }).props.style).height);
+    expect(heights.length).toBe(48);
+    expect(new Set(heights)).toEqual(new Set([4]));
+    const time = StyleSheet.flatten(getByTestId(`coach-community-inbox-voice-time-${VOICE_ID}`, hidden).props.style);
+    expect(time).toMatchObject({ paddingLeft: 64, fontSize: 14 });
   });
 
   it('opens the voice note when the voice row is tapped', async () => {
