@@ -63,8 +63,9 @@ const s = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: withAlpha(colors.ink, 0.4) },
   sheet: { backgroundColor: neutral[0], borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: 20, paddingTop: 8 },
   grab: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10, backgroundColor: fp.sageLine },
-  // c04's rows: a 22 pt forest icon, 16 pt words, 52 pt tall; SafetyMenu's centred Cancel (600 16, 44 tall) under them.
-  row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  // c04's rows: a 22 pt forest icon, 16 pt words, 48 pt tall (c04 draws 41; 44 is the floor); SafetyMenu's centred Cancel
+  // (600 16, 44 tall) under them.
+  row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   rowText: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 21, color: fp.ink, flexShrink: 1 },
   cancel: { minHeight: 44, marginTop: spacing.xs, alignItems: 'center', justifyContent: 'center' },
   cancelText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 16, lineHeight: 20, color: fp.forest },
