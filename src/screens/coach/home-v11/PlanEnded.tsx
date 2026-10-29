@@ -263,12 +263,12 @@ const ls = StyleSheet.create({
   // The status band holds the top inset and stays put; the masthead under it scrolls (r2b.py `.sb`, r3.py `pe_page`).
   band: { backgroundColor: forestPop.deep },
   head: {
-    backgroundColor: forestPop.deep, paddingTop: 4, paddingHorizontal: GUTTER, paddingBottom: 18, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet,
+    backgroundColor: forestPop.deep, paddingTop: 0, paddingHorizontal: GUTTER, paddingBottom: 16, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet,
   },
-  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
+  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 },
   back: { width: 44, height: 44, justifyContent: 'center', marginLeft: -8 },
   order: { ...typography.caption, fontFamily: SEMI, letterSpacing: 1.6, color: forestPop.onDeepMuted },
-  title: { ...typography.h1, lineHeight: 38, color: neutral[0], marginTop: 4 }, // r2b.py:58 `.h1` #FFFFFF
+  title: { ...typography.h1, lineHeight: 38, color: neutral[0], marginTop: 0 }, // r2b.py:58 `.h1` #FFFFFF
   gutter: { marginHorizontal: GUTTER },
   errorBox: { marginHorizontal: GUTTER, marginTop: 12 },
   empty: { paddingVertical: 24, textAlign: 'center' },
