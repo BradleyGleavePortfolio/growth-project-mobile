@@ -1,7 +1,7 @@
 import React from 'react';
 import fs from 'fs';
 import path from 'path';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
@@ -58,4 +58,22 @@ it('STORE-B2 B1: the client Settings notification destination exposes the renewa
     <Screen navigation={{ navigate: jest.fn(), goBack: jest.fn() }} role={() => 'student'} />,
   );
   expect(await screen.findByLabelText('Plan renewal offers')).toBeTruthy();
+});
+
+it('STORE-B2 B2: an offline first preference read offers recovery and reloads the consent truth', async () => {
+  const api = require('../../../services/api').notificationsApi;
+  api.getPreferences
+    .mockRejectedValueOnce(new Error('Network Error'))
+    .mockResolvedValueOnce({
+      data: { plan_renewal_offers_opt_in_at: '2026-10-29T00:00:00Z' },
+    });
+  const Screen = require('../NotificationPreferencesScreen').default;
+  const screen = await render(
+    <Screen navigation={{ navigate: jest.fn(), goBack: jest.fn() }} role={() => 'student'} />,
+  );
+  // An unknown read must not silently masquerade as an unavailable preference.
+  // Keep consent fail-closed, but give the person a way to re-read after signal returns.
+  const retry = await screen.findByRole('button', { name: /try again/i });
+  fireEvent.press(retry);
+  expect((await screen.findByLabelText('Plan renewal offers')).props.value).toBe(true);
 });
