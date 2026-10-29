@@ -6,7 +6,8 @@
  *   2. Subscribes to the FIRST_PAYMENT domain notification
  *      (useFirstPaymentNotification), gated behind
  *      featureFlags.romanFirstPaymentWow.
- *   3. On the coach's FIRST (gate-unseen) FIRST_PAYMENT notification, formats the
+ *   3. On the coach's FIRST first-payment row, reads the persisted gate and, only
+ *      while it is unseen, formats the
  *      payload { amount, currency, clientId } into the celebration's display
  *      strings and overlays FirstPaymentWowScreen across the whole shell.
  *   4. On dismiss, writes the MMKV gate (markFirstPaymentSeen) BEFORE clearing
@@ -37,7 +38,7 @@ import {
 import { errorMessage } from '../../../types/common';
 import { logger } from '../../../utils/logger';
 import FirstPaymentWowScreen from './FirstPaymentWowScreen';
-import { markFirstPaymentSeen } from './firstPaymentGate';
+import { hasSeenFirstPayment, markFirstPaymentSeen } from './firstPaymentGate';
 
 export interface FirstPaymentWowHostProps {
   readonly children: React.ReactNode;
@@ -101,11 +102,18 @@ export default function FirstPaymentWowHost({
   // session; re-firing for coach A is still blocked.
   const dismissedCoachIdsRef = useRef<Set<string>>(new Set<string>());
 
+  // The coach whose shell is mounted now; an answer for an earlier coach (sign-out, then a new sign-in) is dropped.
+  const coachIdRef = useRef(coachId);
+  useEffect(() => {
+    coachIdRef.current = coachId;
+    return () => { coachIdRef.current = undefined; };
+  }, [coachId]);
+
   const handleFirstPayment = useCallback(
     (payload: FirstPaymentNotificationPayload) => {
       // Once THIS coach dismissed this session, never re-show for them — even
       // if the persisted gate failed to write. A different coach is unaffected.
-      if (coachId && dismissedCoachIdsRef.current.has(coachId)) return;
+      if (!coachId || dismissedCoachIdsRef.current.has(coachId)) return;
       const next: FirstPaymentDisplayEvent = {
         amount: formatPaymentAmount(payload.amount, payload.currency),
         // The fixed payload carries clientId only (no name) — the backend does
@@ -113,9 +121,23 @@ export default function FirstPaymentWowHost({
         // reads naturally with a calm generic.
         clientName: 'your client',
       };
-      // Only the first event wins; later notifications while the overlay is up
-      // are ignored (the gate is written on dismiss).
-      setEvent((current) => current ?? next);
+      // B-LONOTIFY4-1 / B-LSNOTIFY4-M898-1: the server keeps the first-payment row, so every app open hands it over
+      // again. Read the persisted once-only gate first: a coach who dismissed it on an earlier open never sees it again.
+      // A failed read is logged and shows it (the session latch still stops a repeat this session).
+      const show = (seen: boolean) => {
+        if (coachIdRef.current !== coachId || dismissedCoachIdsRef.current.has(coachId)) return;
+        if (seen) {
+          dismissedCoachIdsRef.current.add(coachId);
+          return;
+        }
+        // Only the first event wins; later notifications while the overlay is up
+        // are ignored (the gate is written on dismiss).
+        setEvent((current) => current ?? next);
+      };
+      void hasSeenFirstPayment(coachId).then(show, (err: unknown) => {
+        logger.warn('ed3', 'hasSeenFirstPayment failed', { reason: errorMessage(err, 'gate read failed') });
+        show(false);
+      });
     },
     [coachId],
   );
