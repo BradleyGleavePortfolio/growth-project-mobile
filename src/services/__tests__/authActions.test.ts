@@ -250,6 +250,29 @@ describe('signOut', () => {
     expect(await hasSeenFirstPayment('user-B')).toBe(true);
   });
 
+  // JOINOFFER-DEL (FR-898R3 follow-up): the Roman join-offer mark goes with a
+  // confirmed deletion too, only for the deleted account; an ordinary sign-out
+  // keeps every account's mark (lib/romanJoinOffer).
+  it('accountDeleted removes only the signing-out account join-offer mark', async () => {
+    await AsyncStorage.setItem('roman_join_offer:user-A', 'done');
+    await AsyncStorage.setItem('roman_join_offer:user-B', 'due');
+
+    await signOut(undefined, { accountDeleted: true });
+
+    expect(await AsyncStorage.getItem('roman_join_offer:user-A')).toBeNull();
+    expect(await AsyncStorage.getItem('roman_join_offer:user-B')).toBe('due');
+  });
+
+  it('control: an ordinary sign-out keeps the join-offer and first-payment marks', async () => {
+    await AsyncStorage.setItem('roman_join_offer:user-A', 'done');
+    await markFirstPaymentSeen('user-A');
+
+    await signOut();
+
+    expect(await AsyncStorage.getItem('roman_join_offer:user-A')).toBe('done');
+    expect(await hasSeenFirstPayment('user-A')).toBe(true);
+  });
+
   // MWB-4 #237 R11 (P2) — the workout-builder autosave offline mirror is keyed
   // as `mwb_autosave_mirror:<planId>` in raw AsyncStorage and holds a coach's
   // unsent plan ops/metadata. autosaveMirror.ts documents it as swept on
