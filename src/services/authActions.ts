@@ -43,6 +43,8 @@ import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
 import { DAY1_ANSWERS_KEY_PREFIX } from '../screens/day-one/answers';
 import { firstPaymentSeenKey } from '../screens/coach/ed/firstPaymentGate';
+import { ROMAN_JOIN_OFFER_KEY_PREFIX } from '../lib/romanJoinOffer';
+import { deletionScheduledThisSession } from './deletionSchedule';
 import { releaseAgeHolds } from '../lib/ageGate';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
@@ -415,19 +417,20 @@ export interface SignOutOptions {
    * account is deleted (the deletion screen's "deleted" state, or the deletion
    * receipt after a failed refresh). Then the marks an ordinary sign-out keeps
    * on purpose for a living account (deletedAccountKeys) are removed too.
-   * Never set for a scheduled or cancelled deletion, or any other sign-out.
+   * Never set for a scheduled or cancelled deletion, or any other sign-out
+   * (a deletion scheduled in this session is read from deletionSchedule).
    */
   accountDeleted?: boolean;
 }
 
 /**
  * The signing-out account's keys that an ordinary sign-out keeps on purpose
- * (the first-payment shown mark, firstPaymentGate) and that only a confirmed
- * account deletion removes. Only that account's keys: another account on this
- * phone keeps its own.
+ * (the first-payment shown mark, firstPaymentGate; the Roman join-offer mark,
+ * lib/romanJoinOffer) and that only a confirmed or scheduled account deletion
+ * removes. Only that account's keys: another account on this phone keeps its own.
  */
 function deletedAccountKeys(userId: string): string[] {
-  return [firstPaymentSeenKey(userId)];
+  return [firstPaymentSeenKey(userId), `${ROMAN_JOIN_OFFER_KEY_PREFIX}${userId}`];
 }
 
 export async function signOut(userId?: string | null, opts: SignOutOptions = {}): Promise<void> {
@@ -455,6 +458,11 @@ async function signOutWhileHealthRetires(
   healthStateRetired: Promise<void>,
   opts: SignOutOptions,
 ): Promise<void> {
+  // JOINOFFER-DEL (LO-898R4 C-1): read before any await, while this is still
+  // the signing-out session. Signing out while this account's deletion is
+  // scheduled removes the kept marks too: the deletion completes later on the
+  // server and this phone may never hear of it (services/deletionSchedule).
+  const accountLeaving = opts.accountDeleted === true || deletionScheduledThisSession();
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
@@ -524,7 +532,7 @@ async function signOutWhileHealthRetires(
   const perUserKeys = signingOutUserId
     ? [
         ...PER_USER_KEY_PREFIXES.map((p) => `${p}${signingOutUserId}`),
-        ...(opts.accountDeleted ? deletedAccountKeys(signingOutUserId) : []),
+        ...(accountLeaving ? deletedAccountKeys(signingOutUserId) : []),
       ]
     : [];
 

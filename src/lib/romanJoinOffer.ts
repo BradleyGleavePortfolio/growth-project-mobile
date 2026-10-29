@@ -17,6 +17,7 @@
  * The mark is one word per account id, no personal data, and is kept across sign-out on purpose: a
  * client who signs out, joins on the web and signs in again still gets the offer, and a client who
  * answered never sees it again. It never applies to another account (the key is the account id).
+ * A confirmed or scheduled account deletion removes it (authActions deletedAccountKeys).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
