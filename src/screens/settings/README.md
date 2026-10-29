@@ -166,7 +166,7 @@ time the app returns to the foreground, sent only when the zone or account
 changed). Workout reminders go to clients only, so the switch is hidden for
 coach and owner accounts.
 
-**Plan renewal reminders** (RENEWAL-M, backend #1127) map to `plan_renewal_push` (default on): the Day 0, 1 and 7 app notifications (no buttons) after a plan ends. Off stops only those; Home's pop-up and "Renew now" banner stay. Clients only, shown once the server returns the field.
+**Plan renewal offers** (STORE-B2, App Store 4.5.4) are the person's yes to the Day 1 and Day 7 app notifications after a plan ends. Off until the person turns it on: everyone starts at no, so the offers stop for everyone until they say yes. On sends `plan_renewal_offers: true` (the server stores the time of the yes in `plan_renewal_offers_opt_in_at`), off sends `false` (the server clears it); the switch shows whether that time is there. Mute all stops the offers too. The Day 0 notice that the plan ended keeps `plan_renewal_push` (RENEWAL-M, backend #1127) and has no switch here; Home's pop-up and "Renew now" banner stay. Clients only, shown once the server returns `plan_renewal_offers_opt_in_at`.
 
 Removed surface (SMALL-M-COPY-131): the `client_bot` Reminders row. Backend `eat_enabled` is stored but no sender consumes it, so the row offered no delivery control. Existing local `client_bot` values are preserved harmlessly when another preference is saved; the UI no longer maps or PATCHes `eat_enabled`. Rendered tests cover both saved values and the four retained category actions. ([Backend preference persistence](https://github.com/BradleyGleavePortfolio/growth-project-backend/blob/652b07a856fd807462da244c80f529eef39123c9/src/notifications/notifications.service.ts))
 
