@@ -145,7 +145,9 @@ describe('the note is named the Studio way (Sol R3 #865 B7, Opus R3 #865 N6)', (
     // The tile is decoration: a screen reader hears the name beside it, not the letter twice.
     expect(page.queryByTestId('community-voice-detail-tile')).toBeNull();
     expect(style(page.getByText('Riley Chen'))).toMatchObject({ fontSize: 17, fontWeight: '600', color: forestPop.ink });
-    expect(style(page.getByText('just now'))).toMatchObject({ fontSize: 15, color: forestPop.n700 });
+    // FR-865R5 (Sol R4 #865 B2): the time beside the name is the note's clock (GOAL B-09a "9:20"), not "just now".
+    expect(style(page.getByText(/^\d{1,2}:\d{2}(\s?[ap]\.?m\.?)?$/i))).toMatchObject({ fontSize: 15, color: forestPop.n700 });
+    expect(page.queryByText('just now')).toBeNull();
     expect(page.queryByText('Coach')).toBeNull();
     expect(page.queryByText('icon-mic-outline')).toBeNull();
     expect(lastPlayer()?.tone).toBe('light');
