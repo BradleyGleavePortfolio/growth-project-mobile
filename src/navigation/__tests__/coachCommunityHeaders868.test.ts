@@ -33,4 +33,12 @@ describe('coach community headers (FR-868)', () => {
     expect(block).toMatch(/headerShadowVisible: false/);
     expect(block).toMatch(/headerStyle: \{ backgroundColor: tokenColors\.bone \}/);
   });
+
+  // FR-865R4 (Sol R3 #865 B7, Opus R3 #865 C3): the voice note page draws its own deep Studio bar with Back
+  // (frame 05b), so the stack draws no bar over it: one header, never a light bar above a second title.
+  it('the voice note page has no stack bar: its own deep bar is the only header', () => {
+    const block = screenBlock('CommunityVoiceNoteDetail');
+    expect(block).toMatch(/headerShown: false/);
+    expect(block).not.toMatch(/title: ''/);
+  });
 });
