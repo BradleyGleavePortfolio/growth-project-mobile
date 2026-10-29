@@ -6,7 +6,8 @@
  * the space chat's tiles (the coach deep with a gold serif initial, members on the Studio greens, SpaceChatRow tileFor).
  * People are asked for only once the server let the viewer in on this visit (`people: 'open'`), so a page drawn from the
  * saved cache never lists them for someone who lost the space ('wait' shows the loading rows, or the connection line when
- * offline; 'closed' shows none).
+ * offline; 'closed' shows none). 'failed' (FR-897, m#897 LO-897 B1): the chat's own read failed without a refusal, so
+ * the people cannot be asked for yet; the could-not-load line, and Try again reloads the chat (`onRetry`).
  * Loading and could-not-load come from src/ui (QuietLoading, QuietError with Try again); Show more asks for the next 50.
  * No coach controls here: the coach's space page has them. Look: the safety sheet's (white, radius.sheet top corners,
  * grab), 44 pt targets, small grey text in graphite (owner #168-13).
@@ -22,7 +23,7 @@ import { colors, forestPop as fp, neutral, radius, spacing, typography, withAlph
 import { HashGlyph, SMALL_GREY, tileFor } from './SpaceChatRow';
 import { useSpaceMembers, type SpaceMember } from './spaceMembers';
 
-export type SpacePeopleAccess = 'wait' | 'open' | 'closed';
+export type SpacePeopleAccess = 'wait' | 'open' | 'closed' | 'failed';
 
 export interface SpaceInfoSheetProps {
   cohortId: string;
@@ -33,12 +34,17 @@ export interface SpaceInfoSheetProps {
   description?: string | null;
   viewerId?: string | null;
   people: SpacePeopleAccess;
+  /** 'failed': the chat read's error, and the page's reload with whether it is under way. */
+  error?: unknown;
+  onRetry?: () => void;
+  retrying?: boolean;
   offline: boolean;
   onClose: () => void;
 }
 
 /** The connection sentence of loadFailureMessage, for a sheet opened offline before any answer came back. */
 const NO_CONNECTION = { isAxiosError: true };
+const shown = (err: unknown, offline: boolean) => (offline || (err instanceof CommunityApiError && err.kind === 'network') ? NO_CONNECTION : err);
 
 export default function SpaceInfoSheet(p: SpaceInfoSheetProps): React.ReactElement {
   const insets = useSafeAreaInsets();
@@ -57,7 +63,10 @@ export default function SpaceInfoSheet(p: SpaceInfoSheetProps): React.ReactEleme
           <Text style={s.sub}>{p.members}</Text>
           <ScrollView style={s.scroll} contentContainerStyle={s.body} showsVerticalScrollIndicator={false} testID="space-info-scroll">
             {purpose ? <Text style={s.purpose} testID="space-info-purpose">{purpose}</Text> : null}
-            {p.people === 'wait' && p.offline ? (
+            {p.people === 'failed' ? (
+              <QuietError message={loadFailureMessage(shown(p.error, p.offline), 'People')} onRetry={p.onRetry} retrying={p.retrying}
+                layout="inline" testID="space-info-people-failed" />
+            ) : p.people === 'wait' && p.offline ? (
               // Offline on the saved page: the connection line, no button; the chat's own read lets the people in once back.
               <QuietError message={loadFailureMessage(NO_CONNECTION, 'People')} layout="inline" testID="space-info-people-offline" />
             ) : p.people === 'wait' ? <QuietLoading label="Loading people" rows={3} testID="space-info-people-loading" /> : null}
@@ -71,13 +80,12 @@ export default function SpaceInfoSheet(p: SpaceInfoSheetProps): React.ReactEleme
 
 function People({ cohortId, viewerId, offline }: { cohortId: string; viewerId?: string | null; offline: boolean }): React.ReactElement | null {
   const q = useSpaceMembers(cohortId, true);
-  const failed = (err: unknown) => (offline || (err instanceof CommunityApiError && err.kind === 'network') ? NO_CONNECTION : err);
   if (!q.data) {
     if (q.error) {
       // 403 / 404: the server no longer lets this viewer read the space (the page says so); the sheet lists no one.
       if (q.error instanceof CommunityApiError && (q.error.kind === 'forbidden' || q.error.status === 404)) return null;
       return (
-        <QuietError message={loadFailureMessage(failed(q.error), 'People')} onRetry={() => void q.refetch()} retrying={q.isFetching}
+        <QuietError message={loadFailureMessage(shown(q.error, offline), 'People')} onRetry={() => void q.refetch()} retrying={q.isFetching}
           layout="inline" testID="space-info-people-error" />
       );
     }
@@ -98,7 +106,7 @@ function People({ cohortId, viewerId, offline }: { cohortId: string; viewerId?: 
       <Group label="Members" people={members} viewerId={viewerId} />
       {alone ? <Text style={s.alone} testID="space-info-alone">No one else is here yet.</Text> : null}
       {q.hasNextPage && q.isFetchNextPageError ? (
-        <QuietError message={loadFailureMessage(failed(q.error), 'People')} onRetry={() => void q.fetchNextPage()} retrying={q.isFetchingNextPage}
+        <QuietError message={loadFailureMessage(shown(q.error, offline), 'People')} onRetry={() => void q.fetchNextPage()} retrying={q.isFetchingNextPage}
           layout="inline" testID="space-info-more-error" />
       ) : q.hasNextPage ? (
         <HapticPressable intent="light" onPress={() => void q.fetchNextPage()} disabled={q.isFetchingNextPage} accessibilityRole="button"

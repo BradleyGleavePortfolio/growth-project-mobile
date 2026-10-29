@@ -1282,3 +1282,104 @@ describe('LO-897 B1 (m#897 round 1, Claude Opus lens): Space info when the chat 
     expect(r.queryByTestId('space-info-people-loading')).toBeNull();
   });
 });
+
+describe('FR-897 (m#897 LO-897 B1, C1, C8): Space info when the chat could not load, the keyboard, and the people read failing', () => {
+  const memberCalls = () => mockApi.get.mock.calls.filter(([u]) => String(u).endsWith('/members'));
+  const chatFails = (err: () => unknown) => {
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    const state = { failing: true };
+    mockApi.get.mockImplementation(async (url: string, cfg?: unknown) => {
+      if (state.failing && String(url).endsWith('/messages')) throw err();
+      return (answer as (u: string, c?: unknown) => Promise<unknown>)(url, cfg);
+    });
+    return state;
+  };
+
+  it('the chat read failed online (500): the could-not-load line in place of the people; Try again reloads the chat, then lists them', async () => {
+    const state = chatFails(() => fail(500));
+    const r = await open();
+    await r.findByTestId('space-chat-error');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    const line = r.getByTestId('space-info-people-failed');
+    expect(within(line).getByText('People could not load. Try again in a moment.')).toBeTruthy();
+    expect(r.queryByTestId('space-info-people-loading')).toBeNull();
+    expect(memberCalls()).toHaveLength(0);
+    state.failing = false;
+    await fireEvent.press(r.getByTestId('space-info-people-failed-retry'));
+    expect(await r.findByTestId('space-info-person-u-2')).toBeTruthy();
+    expect(r.queryByTestId('space-info-people-failed')).toBeNull();
+    expect(memberCalls()).toHaveLength(1);
+  });
+
+  it('the chat read failed for the connection: the connection line, with Try again', async () => {
+    chatFails(() => Object.assign(new Error('Network Error'), { isAxiosError: true }));
+    const r = await open();
+    await r.findByTestId('space-chat-error');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    const line = r.getByTestId('space-info-people-failed');
+    expect(within(line).getByText('People could not load. Check your connection, then try again.')).toBeTruthy();
+    expect(r.getByTestId('space-info-people-failed-retry')).toBeTruthy();
+    expect(memberCalls()).toHaveLength(0);
+  });
+
+  it('a saved page at a cold start, and the chat read then fails online: the could-not-load line, not endless loading rows', async () => {
+    chatFails(() => fail(500));
+    client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-every'], { pages: [{ messages: page, next_before: null }], pageParams: [null] });
+    const r = await render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    expect(await r.findByTestId('space-info-people-failed')).toBeTruthy();
+    expect(r.queryByTestId('space-info-people-loading')).toBeNull();
+    expect(memberCalls()).toHaveLength(0);
+  });
+
+  it('C1: opening Space info puts the keyboard away first', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+    try {
+      const r = await open();
+      await r.findByTestId('space-chat-row-m3');
+      await fireEvent.press(r.getByTestId('space-chat-info'));
+      expect(dismiss).toHaveBeenCalledTimes(1);
+      expect(r.getByTestId('space-info-sheet')).toBeTruthy();
+    } finally {
+      dismiss.mockRestore();
+    }
+  });
+
+  it('C8: the people read refused (403): no one listed, no error', async () => {
+    membersAnswer = fail(403);
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    await waitFor(() => expect(memberCalls()).toHaveLength(1));
+    await waitFor(() => expect(r.queryByTestId('space-info-people-loading')).toBeNull());
+    expect(r.queryByTestId('space-info-people-error')).toBeNull();
+    expect(r.queryByTestId('space-info-people')).toBeNull();
+  });
+
+  it('C8: Show more fails: the people so far stay, one could-not-load line with Try again, which adds the next page', async () => {
+    const first = [person('me-1', 'Dana'), ...Array.from({ length: 49 }, (_, i) => person(`u-${100 + i}`, `Member ${i}`))];
+    const second = [person('u-200', 'Riley')];
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    let nextFails = true;
+    mockApi.get.mockImplementation(async (url: string, cfg?: { params?: { cursor?: string } }) => {
+      if (!String(url).endsWith('/members')) return answer(url);
+      if (cfg?.params?.cursor !== 'u-148') return { data: { members: first, next_cursor: 'u-148' } };
+      if (nextFails) throw fail(500);
+      return { data: { members: second, next_cursor: null } };
+    });
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    await fireEvent.press(await r.findByTestId('space-info-more'));
+    const line = await r.findByTestId('space-info-more-error');
+    expect(within(line).getByText('People could not load. Try again in a moment.')).toBeTruthy();
+    expect(r.getByTestId('space-info-person-u-148')).toBeTruthy();
+    expect(r.queryByTestId('space-info-more')).toBeNull();
+    nextFails = false;
+    await fireEvent.press(r.getByTestId('space-info-more-error-retry'));
+    expect(await r.findByTestId('space-info-person-u-200')).toBeTruthy();
+    expect(r.queryByTestId('space-info-more-error')).toBeNull();
+  });
+});

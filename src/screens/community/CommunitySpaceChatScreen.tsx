@@ -266,9 +266,11 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         <View style={s.icon}>
           {cohort ? (
             <TouchableOpacity
-              onPress={() => (coachStack
-                ? navigation.navigate('CoachCommunityCohortDetail', { cohortId, cohortName: cohort.name })
-                : setInfo(true))}
+              onPress={() => {
+                if (coachStack) { navigation.navigate('CoachCommunityCohortDetail', { cohortId, cohortName: cohort.name }); return; }
+                Keyboard.dismiss(); // FR-897 (LO-897 C1): the sheet never opens under the keyboard
+                setInfo(true);
+              }}
               accessibilityRole="button" accessibilityLabel="Space info" style={s.icon} testID="space-chat-info"
             >
               <Ionicons name="information-circle-outline" size={24} color={fp.onDeep} />
@@ -332,7 +334,8 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
       </KeyboardAvoidingView>
       {info && cohort && !coachStack ? (
         <SpaceInfoSheet cohortId={cohortId} name={cohort.name} members={members} description={cohort.description} viewerId={client?.id}
-          people={chat.noAccess ? 'closed' : admitted ? 'open' : 'wait'} offline={!isOnline} onClose={() => setInfo(false)} />
+          people={chat.noAccess ? 'closed' : admitted ? 'open' : chat.list.isError ? 'failed' : 'wait'}
+          error={chat.list.error} onRetry={reload} retrying={chat.list.isFetching} offline={!isOnline} onClose={() => setInfo(false)} />
       ) : null}
     </SafeAreaView>
   );
