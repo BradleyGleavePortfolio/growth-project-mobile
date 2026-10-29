@@ -302,12 +302,13 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
               </Text>
             </View>
           ) : null}
-          <Text style={styles.who} numberOfLines={1} accessibilityRole="header">
-            {name}
-          </Text>
-          {coach ? <Text style={[styles.coachMark, styles.keep]} numberOfLines={1}>Coach</Text> : null}
-          {when.length > 0 ? <Text style={[styles.when, styles.keep]} numberOfLines={1}>{when}</Text> : null}
-          <View style={styles.spacer} />
+          <View style={styles.byline}>
+            <Text style={styles.who} numberOfLines={1} accessibilityRole="header">
+              {name}
+            </Text>
+            {coach ? <Text style={[styles.coachMark, styles.keep]} numberOfLines={1}>Coach</Text> : null}
+            {when.length > 0 ? <Text style={[styles.when, styles.keep]} numberOfLines={1}>{when}</Text> : null}
+          </View>
           {/* Owner #174-4: a reported note keeps its menu (Reported, Block, the coach's Remove). */}
           {removedLine ? null : (
             <SafetyMenu
@@ -392,14 +393,16 @@ const styles = StyleSheet.create({
   },
   retryLabel: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600' },
   content: { padding: spacing.lg, gap: spacing.md },
-  // The Hall's voice row (VoiceNotesSection): name, Coach mark and time; the name gives way first at 130% on 360 pt.
+  // The Hall's voice row (VoiceNotesSection): name, Coach mark and time. Sol R4 #865 B2: a clock is longer than an age
+  // ("9:20 AM"), so where the three do not fit one line (320 pt, 130% text) the clock goes under the name instead of
+  // cutting it; only a name too long for its line gives way.
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
+  byline: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.sm },
   who: { fontFamily: voiceFaces.semibold, fontSize: 17, fontWeight: '600', color: fp.ink, flexShrink: 1 },
   coachMark: { overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.chip,
     backgroundColor: fp.deep, color: fp.gold, fontFamily: voiceFaces.semibold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   when: { fontFamily: voiceFaces.regular, fontSize: 15, color: fp.n700 },
   keep: { flexShrink: 0 },
-  spacer: { flex: 1 },
   // GOAL B-09a's small identity tile: a member's leaf tile with a moss edge and an ink initial; the coach's deep tile
   // with a gold serif initial. The card below starts under the name (UNDER_NAME).
   tile: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
