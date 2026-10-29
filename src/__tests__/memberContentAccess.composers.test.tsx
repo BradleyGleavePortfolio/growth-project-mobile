@@ -5,7 +5,7 @@
  * Every registered composer host (HOSTS below, keyed by the REGISTRY file) is drawn with real React Query and the real
  * community hooks; only the wire (communityApi, communityChallengesApi), navigation, theme and the signed-in user are
  * stubbed, as the screens' own tests do. For each closed state that applies to it (I blocked them, they blocked me,
- * banned, I left the space) it must draw nothing typeable and no way to send, and none of the other person's words;
+ * banned, removed or left the space) it must draw nothing typeable and no way to send, and none of the other person's words;
  * the open case proves the harness sees the box at all.
  *
  * When a case goes red: the host stopped closing for that state. Make it close again (useConversationClosed and
@@ -96,8 +96,8 @@ const refused = (status: number, code: string) =>
   new CommunityApiError('unknown', status, 'community request failed', { isAxiosError: true, response: { status, data: { code } } });
 const challengeRefused = (status: number, code: string) => ({ isAxiosError: true, response: { status, data: { code } } });
 
-type State = 'open' | 'I blocked them' | 'they blocked me' | 'banned' | 'I left the space';
-const CLOSED: Exclude<State, 'open'>[] = ['I blocked them', 'they blocked me', 'banned', 'I left the space'];
+type State = 'open' | 'I blocked them' | 'they blocked me' | 'banned' | 'removed or left the space';
+const CLOSED: Exclude<State, 'open'>[] = ['I blocked them', 'they blocked me', 'banned', 'removed or left the space'];
 
 function wireOpen() {
   Object.values(mockWire).forEach((m) => m.mockReset());
@@ -137,6 +137,8 @@ type Host = {
 };
 
 const block = () => useBlockedUsersStore.setState({ blocked: [{ id: THEM, displayName: 'Jordan', blockedAt: at }] });
+/** A coach's removal and my own departure read the same on the phone: no space on /me, and the space reads answer
+ * community.workspace.no_access ("banned, or no longer a member", closedRefusal.ts). */
 const leave = () => {
   mockWire.getMe.mockResolvedValue({ workspace_id: null, unread: { cohort_messages: 0, dm_messages: 0, mentions: 0 } });
 };
@@ -152,7 +154,7 @@ const HOSTS: Host[] = [
       'I blocked them': block,
       'they blocked me': () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.dm.blocked_by_them')),
       banned: () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.workspace.no_access')),
-      'I left the space': leave,
+      'removed or left the space': leave,
     },
   },
   {
@@ -164,7 +166,7 @@ const HOSTS: Host[] = [
       'I blocked them': block,
       'they blocked me': () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.dm.blocked_by_them')),
       banned: () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.workspace.no_access')),
-      'I left the space': leave,
+      'removed or left the space': leave,
     },
   },
   {
@@ -174,7 +176,7 @@ const HOSTS: Host[] = [
     closedMarks: ['community-composer-closed', 'community-composer-no-workspace'],
     states: {
       banned: () => mockWire.listPosts.mockRejectedValue(refused(403, 'community.workspace.no_access')),
-      'I left the space': leave,
+      'removed or left the space': leave,
     },
     notApplicable: { 'I blocked them': ONE_TO_ONE_NA, 'they blocked me': ONE_TO_ONE_NA },
   },
@@ -190,7 +192,7 @@ const HOSTS: Host[] = [
         mockWire.getPost.mockRejectedValue(refused(403, 'community.workspace.no_access'));
         mockWire.listComments.mockRejectedValue(refused(403, 'community.workspace.no_access'));
       },
-      'I left the space': () => {
+      'removed or left the space': () => {
         leave();
         mockWire.getPost.mockRejectedValue(refused(403, 'community.workspace.no_access'));
       },
@@ -203,7 +205,7 @@ const HOSTS: Host[] = [
     closedMarks: ['community-space-closed-line', 'community-space-no-workspace'],
     states: {
       banned: () => mockWire.listPosts.mockRejectedValue(refused(403, 'community.workspace.no_access')),
-      'I left the space': leave,
+      'removed or left the space': leave,
     },
     notApplicable: { 'I blocked them': ONE_TO_ONE_NA, 'they blocked me': ONE_TO_ONE_NA },
   },
@@ -214,7 +216,7 @@ const HOSTS: Host[] = [
     closedMarks: ['community-challenge-closed'],
     states: {
       banned: () => mockChallenges.listComments.mockRejectedValue(challengeRefused(403, 'community.workspace.no_access')),
-      'I left the space': () => {
+      'removed or left the space': () => {
         leave();
         mockChallenges.listComments.mockRejectedValue(challengeRefused(404, 'community.challenge.not_found'));
       },
@@ -232,7 +234,7 @@ const GAPS: Record<string, string> = {
     'CommunityThreadScreen asks useConversationClosed(null, ...): my block of the post\'s author (made here or on another screen) leaves the reply box and reactions open on the cached post until the server answers post.not_found on the next read',
   'screens/community/CommunityChallengeDetailScreen.tsx challenge notes and progress / banned':
     'CommunityChallengeDetailScreen closes only the notes box: the primary action (Join / Log progress, ChallengeProgressSheet) stays for a banned member (growth-project-mobile#872 AUDIT, Opus C4/C9)',
-  'screens/community/CommunityChallengeDetailScreen.tsx challenge notes and progress / I left the space':
+  'screens/community/CommunityChallengeDetailScreen.tsx challenge notes and progress / removed or left the space':
     'CommunityChallengeDetailScreen closes only the notes box: the primary action (Join / Log progress) stays for a member who left (the departure case of the growth-project-mobile#872 AUDIT Opus C4/C9 gap)',
 };
 
