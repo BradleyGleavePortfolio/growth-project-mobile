@@ -198,6 +198,19 @@ describe('community DM', () => {
 });
 
 describe('New message / New post composer', () => {
+  it('LS-877R2 B1: the empty-inbox coach DM entry discloses blocked_by_them before typing', async () => {
+    // CommunityDmListScreen.startWithCoach sends these exact params. The signed-in client's coach_id is coach-7.
+    mockParams.current = { mode: 'dm', recipientId: '' };
+    mockReadError = BLOCKED_BY_THEM;
+    const view = await render(<CommunityComposerScreen />);
+    expect(mockDmTo).toHaveBeenCalledWith('coach-7');
+    expect(view.getByTestId('community-composer-closed')).toBeTruthy();
+    expect(view.queryByTestId('community-composer-body')).toBeNull();
+    expect(view.queryByText(/has blocked you$/)).toBeTruthy();
+    expect(view.queryByText('This conversation is closed')).toBeNull();
+    expect(mockSendMutate).not.toHaveBeenCalled();
+  });
+
   it('New message to someone I blocked: no fields and no Send, only the closed line', async () => {
     block('member-2');
     mockParams.current = { mode: 'dm', recipientId: 'member-2' };
