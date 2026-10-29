@@ -52,6 +52,7 @@ jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
   useRoute: () => ({ params: mockParams }),
+  useFocusEffect: () => undefined, // FR-865R4: the voice note page's forest status band registers on focus
 }));
 
 // The private broadcast channel: the test holds the ping handler useCommunityBadge registers.
