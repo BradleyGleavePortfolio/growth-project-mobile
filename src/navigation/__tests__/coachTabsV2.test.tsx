@@ -703,8 +703,9 @@ it('every chat opened outside Clients goes through coachInbox.ts, and every file
   // MessagesScreen renders CoachInboxV2; ClientDetailScreen's safety card (SAFETY-CARD), the safety alert and the weekly
   // insight (SAFETY-CHAT-ROUTE) and the UI-4 lookup have their own rows above.
   // The brief's row takes its target from brief/briefActions.ts, which CoachBriefScreen re-exports (BRIEFA).
+  // The coach Home's plan-ended list (CHURN-M, home-v11/PlanEnded.tsx) has its Message row in coachPlanEnded.test.tsx.
   const rows = [...ENTRIES.map(([probe]) => (probe === 'CoachBriefScreen' ? 'briefActions.ts' : `${path.basename(probe)}.tsx`)),
-    'CoachInboxV2.tsx', 'ClientDetailScreen.tsx', 'CoachSafetyAlertScreen.tsx', 'ClientInsightScreen.tsx', 'ClientLookupScreen.tsx'];
+    'CoachInboxV2.tsx', 'ClientDetailScreen.tsx', 'CoachSafetyAlertScreen.tsx', 'ClientInsightScreen.tsx', 'ClientLookupScreen.tsx', 'PlanEnded.tsx'];
   expect(callers.map(([file]) => file).sort()).toEqual(rows.sort());
   // Only the navigator, the chat itself and Clients screens that open a chat over themselves name the route.
   const naming = SOURCES.filter(([, source]) => /["']ClientMessages["']/.test(source)).map(([file]) => file);

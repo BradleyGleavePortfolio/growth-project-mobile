@@ -7,7 +7,8 @@
  *
  * FR-880R3 (Sol B2, #172-10): `tone="deep"` is Voice B Studio frame 05b's compact deep-forest bar: Back where 05b has
  * its navigation button, a light 20 pt title, and `trailing` where 05b has its info button (an empty 44 pt slot when
- * there is nothing to offer, never a dead button). Only the community DM uses it; every other screen keeps the default.
+ * there is nothing to offer, never a dead button). The community DM and the voice note page (FR-865R4) use it; every
+ * other screen keeps the default.
  */
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
