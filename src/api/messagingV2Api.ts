@@ -84,6 +84,8 @@ export const InboxResponseSchema = z.object({
   items: z.array(InboxThreadSchema),
   next_cursor: z.string().nullable(),
   total_unread: z.number().int().nonnegative(),
+  /** b#1153 (CONTRACT 6375583793): coach side, my clients whose chat a block closed, either way. Absent = none. */
+  closed_client_ids: z.array(z.string()).optional(),
 });
 export type InboxResponse = z.infer<typeof InboxResponseSchema>;
 

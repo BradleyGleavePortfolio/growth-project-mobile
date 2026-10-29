@@ -73,7 +73,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
   const { closed, open, close } = useConversationClosed(
     mode === 'dm' ? dmTo : null,
     [gateRead.error],
-    useServerAnswered(gateRead),
+    useServerAnswered(gateRead) && hasWorkspace, // FR-872 (Sol B3): no space now = no fields, even after an answer
   );
   // BLOCK-TELL #169-5: in DM mode `by` picks the line for my side. No name shows here, so BAM-2b falls back to BAM-1.
   const by = useClosedBy(mode === 'dm' ? dmTo : null, closed, { errors: [gateRead.error] });
@@ -139,10 +139,11 @@ export default function CommunityComposerScreen(): React.ReactElement {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          {me.isLoading ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Loading community space…</Text> : null}
-          {me.isError ? <View>
+          {/* FR-872 (Opus C2): the read for this place counts too, so this is never a blank page with no way back */}
+          {me.isLoading || gateRead.isLoading ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Loading community space…</Text> : null}
+          {me.isError || (gateRead.isError && !open) ? <View>
             <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Community space did not load. Check your connection, then try again.</Text>
-            <HapticPressable onPress={() => void me.refetch()} accessibilityRole="button" accessibilityLabel="Try again"
+            <HapticPressable onPress={() => void (me.isError ? me.refetch() : gateRead.refetch())} accessibilityRole="button" accessibilityLabel="Try again"
               testID="community-composer-retry" style={styles.retry}>
               <Text style={[typography.bodySmall, { color: semanticColors.accentText }]}>Try again</Text>
             </HapticPressable>

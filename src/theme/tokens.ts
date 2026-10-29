@@ -18,6 +18,8 @@
  * ink (#1A1A18) on cream (#F1E8D5)              ~15.2:1              PASS     PASS
  * charcoal (#3D3D3A) on bone (#F7FAF7)          ~10.4:1              PASS     PASS
  * forest (#2C4A36) on bone (#F7FAF7)            ~ 9.3:1              PASS     PASS
+ * graphite (#2C2C2C) on bone (#F7FAF7)          ~13.3:1              PASS     PASS
+ * graphite (#2C2C2C) on cream (#F1E8D5)         ~11.5:1              PASS     PASS
  * stone (#B1A89F) on bone (#F7FAF7)             ~ 2.2:1              FAIL     FAIL (decorative/disabled only)
  * mutedGold (#C5A253) on bone (#F7FAF7)         ~ 2.3:1              FAIL     FAIL (fills/borders only)
  *
@@ -36,7 +38,8 @@ export const colors = {
   cream:       '#F1E8D5',  // card surface, warm
   ink:         '#1A1A18',  // primary text, dark sections (NEVER #000)
   charcoal:    '#3D3D3A',  // secondary text on light
-  stone:       '#B1A89F',  // tertiary text, hairlines, meta
+  graphite:    '#2C2C2C',  // small grey text on light grounds (owner #168-13)
+  stone:       '#B1A89F',  // hairlines, icons, disabled; never text on light
 
   // Single accent — wellness app
   forest:      '#2C4A36',  // PRIMARY accent, replaces #2D6A4F
@@ -535,6 +538,29 @@ export type ForestPopRole = keyof typeof forestPop;
 
 /** Path Copilot status tints (style A board, owner #162-1): leaf = sent / approved, gold = waiting, still = kept / expired. */
 export const pathTint = { leaf: '#EEF4E0', gold: gold[100], still: neutral[200] } as const;
+
+/**
+ * Voice notes Style B shades the B mockups draw that are not tokens above
+ * (owner 10-21 10:09, #VOICE-SHADES op 1, exact mockup shades).
+ */
+export const voiceShades = {
+  hairline: '#E2E6E1', // card and row hairlines, level dots, progress tracks
+  leafWash: '#EEF4E2', // icon circles on the consent and permission sheets
+  barOnDeep: '#6A7E71', // unplayed bars on the coach's deep card (3.23:1 on deep)
+  track: '#C9D0CA', // sheet handle, field borders, off controls
+  washEdge: '#D3E2B8', // edge of the leaf wash (icon circles, safety line box)
+  scrim: 'rgba(26, 26, 24, 0.45)', // the record sheet's scrim (mockup .scrim)
+} as const;
+
+/**
+ * GOAL voice text faces: Inter throughout (loaded in App.tsx). A style sets the
+ * face that matches its fontWeight, so the phone never falls back to the system face.
+ */
+export const voiceFaces = {
+  regular: typography.body.fontFamily, // Inter_400Regular
+  medium: typography.bodyMd.fontFamily, // Inter_500Medium
+  semibold: typography.micro.fontFamily, // Inter_600SemiBold
+} as const;
 
 /** Dark-mode semantic tokens. */
 export const darkTokens: SemanticTokens = {

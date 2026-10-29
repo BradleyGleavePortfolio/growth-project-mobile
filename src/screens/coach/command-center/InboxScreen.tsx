@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   },
   emptyBody: {
     ...typography.body,
-    color: colors.stone,
+    color: colors.graphite,
     textAlign: 'center',
   },
 });

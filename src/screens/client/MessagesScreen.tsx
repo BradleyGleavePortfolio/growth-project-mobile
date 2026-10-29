@@ -205,6 +205,7 @@ export default function MessagesScreen() {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
       setThreadClosed(closedByHeader(res)); // same batch as `answered`: never a render with a box first
       setThreadSide(closedSideOfHeader(res));
+      setAnswered(true); // FR-872 (Sol B2): only a read that came back answers; a failed first read leaves no box
       const list = normalizeList(res.data, currentUser?.id);
       if (outboxOn() && currentUser?.id) settleOutbox(currentUser.id, list.map((m) => m.v2?.client_message_id));
       setMessages((prev) => mergeById(list, reconcilePending(prev, list)));
@@ -232,7 +233,6 @@ export default function MessagesScreen() {
       return [];
     } finally {
       setLoading(false);
-      setAnswered(true);
     }
   }, [currentUser?.id, loadCoachReview]);
 
@@ -969,7 +969,7 @@ export default function MessagesScreen() {
 
       {thread.enabled ? (
         <ThreadV2Menus
-          thread={thread}
+          thread={open ? thread : { ...thread, editing: null } /* FR-872 (Sol B5): no edit sheet once closed */}
           target={open ? actionTarget : null}
           isMine={actionTarget?.sender_role === 'client'}
           onClose={() => setActionTarget(null)}

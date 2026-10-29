@@ -158,6 +158,7 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
     const gone = new Set<string>(blocked.map((b) => b.id));
     const out: InboxThread[] = [];
     for (const page of data?.pages ?? []) {
+      for (const id of page.closed_client_ids ?? []) gone.add(id); // FR-872 (Opus B1, Sol B1): blocked by the client
       for (const t of page.items) {
         if (seen.has(t.thread_id)) continue;
         seen.add(t.thread_id);

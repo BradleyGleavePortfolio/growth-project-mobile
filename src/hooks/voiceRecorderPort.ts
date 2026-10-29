@@ -58,6 +58,8 @@ export interface VoiceRecorderPort {
   stop(): Promise<VoiceRecordingResult>;
   /** Abort capture and discard any partial recording (best-effort). */
   cancel(): Promise<void>;
+  /** The latest metering sample in [0,1] while recording (live level bars). */
+  level?(): number | null;
 }
 
 /** Thrown by the unavailable adapter so callers fail loudly in dev, not silently. */

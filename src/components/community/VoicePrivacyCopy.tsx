@@ -25,8 +25,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { forestPop as fp, spacing, voiceFaces } from '../../theme/tokens';
 
 export type VoiceAudienceTarget =
   | { kind: 'dm'; recipientName?: string | null }
@@ -75,18 +74,11 @@ export default function VoicePrivacyCopy({
   target,
   testID,
 }: VoicePrivacyCopyProps): React.ReactElement {
-  const { semanticColors } = useTheme();
   const sentence = describeVoiceAudience(target);
 
   return (
     <View
-      style={[
-        styles.row,
-        {
-          backgroundColor: semanticColors.bgSurface,
-          borderColor: semanticColors.border,
-        },
-      ]}
+      style={styles.row}
       accessibilityRole="text"
       accessibilityLabel={sentence}
       testID={testID ?? 'voice-privacy-copy'}
@@ -94,10 +86,11 @@ export default function VoicePrivacyCopy({
       <Ionicons
         name="lock-closed-outline"
         size={16}
-        color={semanticColors.textMuted}
+        color={fp.n700}
+        style={styles.lock}
       />
       <Text
-        style={[styles.text, { color: semanticColors.textMuted }]}
+        style={styles.text}
         testID="voice-privacy-text"
       >
         {sentence}
@@ -109,17 +102,15 @@ export default function VoicePrivacyCopy({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
   },
+  lock: { marginTop: 1 },
   text: {
     flex: 1,
+    fontFamily: voiceFaces.regular,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '500',
+    color: fp.n700,
   },
 });

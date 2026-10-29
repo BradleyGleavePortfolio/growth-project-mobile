@@ -18,6 +18,7 @@ import api from '../../services/api';
 import HapticPressable from '../HapticPressable';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import { useCommunityCohorts, useCommunityMe, useCommunityWorkspace } from '../../hooks/useCommunity';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { forestPop as fp, layout, typography } from '../../theme/tokens';
@@ -59,8 +60,11 @@ export function useSpaceTree() {
     .map((c): SpaceRow => ({ key: c.id, label: c.name, icon: c.kind === 'announcement' ? 'megaphone-outline' : '#', target: { kind: 'space', id: c.id } }));
   if (coachId) spaces.push({ key: 'leaderboard', label: 'Leaderboard', icon: 'podium-outline', chip: 'Private', target: { kind: 'route', name: 'Leaderboard' } });
   if (featureFlags.communityClassroom) spaces.push({ key: 'classroom', label: 'Classroom', icon: 'book-outline', target: { kind: 'route', name: 'CommunityClassroom' } });
+  // FR-880R2 (owner 10-23 "Dissapear", Sol B2): a closed coaching chat, either person's block, leaves Community Home
+  // and the drawer: no row, no name, no count. The row waits for the first answer so it never shows and then goes.
+  const coachChat = useCoachChatClosed(coachId);
   const first = firstWord(coachName.data);
-  const dms: SpaceRow[] = coachId
+  const dms: SpaceRow[] = coachId && coachChat.known && !coachChat.closed
     ? [{ key: 'coach', label: first || 'Your coach', meta: first ? 'Your coach' : undefined, icon: 'chatbubble-outline', badge: coachUnread.data ?? 0, target: { kind: 'coach' } }]
     : [];
   const sections: SpaceSection[] = [

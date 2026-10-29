@@ -18,7 +18,11 @@
  * surface (with the flagged badge) so the coach can read the full thread before
  * deciding. A flagged VOICE NOTE carries a player (a 15-minute signed link;
  * pull to refresh mints a new one), because audio cannot be text-filtered and
- * the reviewer has to listen. Member WINS show their title and text. Every
+ * the reviewer has to listen. A reported PHOTO (a message with `image`) shows
+ * a thumbnail the coach opens full size, with the same four decisions; a
+ * photo that cannot be shown says so (never a blank tile), and a removed one
+ * reads "Removed" like any removed item (FlaggedPhoto, PHOTO-MOD-M). Member
+ * WINS show their title and text. Every
  * row shows the 24-hour review commitment ("Review within 5h", or "Past 24
  * hours" once overdue).
  *
@@ -63,6 +67,7 @@ import type {
   CoachModerationOutcome,
 } from '../../api/coachCommunityApi';
 import VoiceNotePlayer from '../../components/community/VoiceNotePlayer';
+import FlaggedPhoto, { readFlaggedPhoto } from '../../components/community/coach/FlaggedPhoto';
 import { COMMUNITY_REPORT_REASONS } from '../../api/communitySafetyApi';
 
 /**
@@ -81,6 +86,14 @@ export const TARGET_NOUN: Record<CoachFlaggedItem['target_type'], string> = {
   voice_note: 'voice note',
   win: 'win',
 };
+
+/**
+ * The noun for one item: a message that carries a photo (`image` key, kept or
+ * removed) reads "photo", so the meta line and the confirmation name it.
+ */
+export function flaggedNoun(item: CoachFlaggedItem): string {
+  return readFlaggedPhoto(item).kind === 'none' ? TARGET_NOUN[item.target_type] : 'photo';
+}
 
 /**
  * The 24-hour commitment, per report: "Review within 5h" while there is time,
@@ -150,7 +163,7 @@ function confirmCopy(d: PendingDecision): {
   body: string;
   confirm: string;
 } {
-  const what = `this ${TARGET_NOUN[d.item.target_type]} from ${d.item.author_name}`;
+  const what = `this ${flaggedNoun(d.item)} from ${d.item.author_name}`;
   switch (d.action) {
     case 'hide':
       return {
@@ -231,10 +244,13 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
   const renderItem = useCallback(
     ({ item }: { item: CoachFlaggedItem }) => {
       const isPost = item.target_type === 'post';
-      const noun = TARGET_NOUN[item.target_type];
+      const noun = flaggedNoun(item);
       const due = reviewDueLabel(item);
       const overdue = due.startsWith('Past');
       const voice = item.target_type === 'voice_note' && !item.removed ? item.media : null;
+      const photo = readFlaggedPhoto(item);
+      // A captionless photo has content "": draw the photo, not an empty line.
+      const showContent = !(photo.kind === 'photo' && item.content.trim() === '');
       return (
         <View
           style={[
@@ -273,28 +289,37 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
               {due}
             </Text>
           ) : null}
-          <HapticPressable
-            intent="light"
-            onPress={isPost ? () => onOpenPost(item) : undefined}
-            disabled={!isPost}
-            accessibilityRole={isPost ? 'button' : 'text'}
-            accessibilityLabel={
-              isPost
-                ? `Open post from ${item.author_name}`
-                : `Flagged ${noun} from ${item.author_name}`
-            }
-            accessibilityHint={isPost ? 'Opens the full post and thread' : undefined}
-            testID={`coach-community-flagged-content-${item.id}`}
-          >
-            <Text style={[styles.content, { color: semanticColors.textPrimary }]}>
-              {item.content}
-            </Text>
-            {isPost ? (
-              <Text style={[styles.openHint, { color: semanticColors.accent }]}>
-                View post
+          {showContent ? (
+            <HapticPressable
+              intent="light"
+              onPress={isPost ? () => onOpenPost(item) : undefined}
+              disabled={!isPost}
+              accessibilityRole={isPost ? 'button' : 'text'}
+              accessibilityLabel={
+                isPost
+                  ? `Open post from ${item.author_name}`
+                  : `Flagged ${noun} from ${item.author_name}`
+              }
+              accessibilityHint={isPost ? 'Opens the full post and thread' : undefined}
+              testID={`coach-community-flagged-content-${item.id}`}
+            >
+              <Text style={[styles.content, { color: semanticColors.textPrimary }]}>
+                {item.content}
               </Text>
-            ) : null}
-          </HapticPressable>
+              {isPost ? (
+                <Text style={[styles.openHint, { color: semanticColors.accent }]}>
+                  View post
+                </Text>
+              ) : null}
+            </HapticPressable>
+          ) : null}
+          {photo.kind === 'photo' ? (
+            <FlaggedPhoto
+              image={photo.image}
+              authorName={item.author_name}
+              testID={`coach-community-flagged-photo-${item.id}`}
+            />
+          ) : null}
           {voice ? (
             <View style={styles.player} testID={`coach-community-flagged-voice-${item.id}`}>
               <VoiceNotePlayer

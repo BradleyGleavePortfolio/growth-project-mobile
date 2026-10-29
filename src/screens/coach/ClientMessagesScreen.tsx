@@ -128,6 +128,7 @@ export default function ClientMessagesScreen() {
       const res = await coachApi.getClientMessages(clientId, { limit: PAGE_LIMIT });
       setThreadClosed(closedByHeader(res)); // same batch as `answered`: never a render with a box first
       setThreadSide(closedSideOfHeader(res));
+      setAnswered(true); // FR-872 (Sol B2): only a read that came back answers; a failed first read leaves no box
       const list: Message[] = normalizeList(res.data, clientId);
       setMessages(list);
       setHasMoreOlder(list.length >= PAGE_LIMIT);
@@ -139,7 +140,6 @@ export default function ClientMessagesScreen() {
       return [];
     } finally {
       setLoading(false);
-      setAnswered(true);
     }
   }, [clientId]);
 
@@ -173,6 +173,7 @@ export default function ClientMessagesScreen() {
       const res = await coachApi.getClientMessages(clientId, { limit: 100 });
       setThreadClosed(closedByHeader(res)); // closed until a read answers without the header
       setThreadSide(closedSideOfHeader(res));
+      setAnswered(true);
       const list: Message[] = normalizeList(res.data, clientId);
       setMessages((prev) => mergeById(prev, list));
       return list;
@@ -518,7 +519,7 @@ export default function ClientMessagesScreen() {
 
       {thread.enabled ? (
         <ThreadV2Menus
-          thread={thread}
+          thread={open ? thread : { ...thread, editing: null } /* FR-872 (Sol B5): no edit sheet once closed */}
           target={open ? actionTarget : null}
           isMine={!!currentUser?.id && actionTarget?.sender_id === currentUser.id}
           onClose={() => setActionTarget(null)}

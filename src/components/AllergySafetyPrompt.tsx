@@ -184,7 +184,7 @@ export default function AllergySafetyPrompt({
             accessibilityRole="button"
             accessibilityLabel="Set this up later"
           >
-            <Text style={styles.laterText}>Set this up later</Text>
+            <Text style={[styles.laterText, submitting && styles.laterTextDisabled]}>Set this up later</Text>
           </Pressable>
         </View>
       </View>
@@ -269,6 +269,8 @@ const styles = StyleSheet.create({
   },
   laterText: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colors.graphite,
   },
+  // While a save is pending Later cannot be tapped: it keeps the disabled stone (#168-13 applies to live text only).
+  laterTextDisabled: { color: colors.stone },
 });

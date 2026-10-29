@@ -310,6 +310,23 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByLabelText(/Message: from the coach/)).toBeNull();
   });
 
+  it('FR-872 (Opus C3): closed by the header with an empty thread shows no Start a conversation invite', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValue({ data: [], headers: { 'x-conversation-closed': 'blocked_by_them' } });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByTestId('messages-closed')).toBeTruthy();
+    expect(u.queryByText('Start a conversation with your coach')).toBeNull();
+  });
+
+  it('FR-872 (Opus C3) control: open with an empty thread shows the invite', async () => {
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
+    mockList.mockResolvedValue({ data: [], headers: {} });
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    expect(await u.findByText('Start a conversation with your coach')).toBeTruthy();
+  });
+
   it('FX-872 (b#1141 CONTRACT 6370968268): the inbox is empty and the thread read carries x-conversation-closed: closed, no box', async () => {
     getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } }));
     mockList.mockResolvedValueOnce({ data: [], headers: { 'x-conversation-closed': 'blocked_by_them' } });
@@ -334,6 +351,29 @@ describe('client MessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     await u.findByLabelText(/Message: from the coach/);
     expect(await u.findByLabelText('Message text')).toBeTruthy(); // once the inbox row answered too
     expect(u.queryByTestId('messages-closed')).toBeNull();
+  });
+
+  it('FR-872 (Sol B2): a failed first read leaves no box; a retry that answers without the header opens it', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } })); // inbox empty
+    mockList.mockRejectedValueOnce(new Error('offline'));
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText('Retry loading messages');
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    await fireEvent.press(u.getByLabelText('Retry loading messages'));
+    expect(await u.findByLabelText('Message text')).toBeTruthy();
+  });
+
+  it('FR-872 (Sol B5): an edit sheet already open goes when the chat closes; nothing left to save', async () => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Sam' } });
+    const u = await render(<MessagesScreen />);
+    await fireEvent(await u.findByLabelText(/Message: answer/), 'longPress');
+    await fireEvent.press(await waitFor(() => u.getByLabelText('Edit')));
+    expect(u.getByLabelText('Edited message text')).toBeTruthy();
+    await act(async () => useBlockedUsersStore.setState({ blocked: [{ id: 'coach-9', displayName: 'Sam', blockedAt: recent }] }));
+    expect(u.queryByLabelText('Edited message text')).toBeNull();
+    expect(u.queryByLabelText('Save edit')).toBeNull();
   });
 
   it('I blocked my coach: no message box, only the closed line; an unblock opens it again', async () => {

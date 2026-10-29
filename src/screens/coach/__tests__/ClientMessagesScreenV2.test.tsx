@@ -368,6 +368,30 @@ describe('ClientMessagesScreen closed by a block (BLOCK-ALL-M)', () => {
     expect(u.queryByTestId('client-messages-closed')).toBeNull();
   });
 
+  it('FR-872 (Sol B2): a failed first read leaves no box; a retry that answers without the header opens it', async () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    getMock.mockImplementation(async () => ({ data: { items: [], next_cursor: null, total_unread: 0 } })); // inbox empty
+    mockGetClientMessages.mockRejectedValueOnce(new Error('offline'));
+    const u = await render(<ClientMessagesScreen />);
+    const retry = await u.findByText('Could not load messages. Pull to retry.');
+    expect(u.queryByLabelText('Message text')).toBeNull();
+    await fireEvent.press(retry);
+    expect(await u.findByLabelText('Message text')).toBeTruthy();
+    spy.mockRestore();
+  });
+
+  it('FR-872 (Sol B5): an edit sheet already open goes when a read says the client blocked me; nothing to save', async () => {
+    const u = await render(<ClientMessagesScreen />);
+    await fireEvent(await u.findByLabelText(/Message: from the coach/), 'longPress');
+    await fireEvent.press(await waitFor(() => u.getByLabelText('Edit')));
+    expect(u.getByLabelText('Edited message text')).toBeTruthy();
+    mockGetClientMessages.mockResolvedValueOnce({ data: { messages: [] }, headers: { 'x-conversation-closed': 'blocked_by_them' } } as never);
+    await act(async () => mockSubs[mockSubs.length - 1].onPing());
+    expect(await u.findByTestId('client-messages-closed')).toBeTruthy();
+    expect(u.queryByLabelText('Edited message text')).toBeNull();
+    expect(u.queryByLabelText('Save edit')).toBeNull();
+  });
+
   it('I blocked this client: no message box, only the closed line; an unblock opens it again', async () => {
     useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Alice', blockedAt: recent }] });
     const u = await render(<ClientMessagesScreen />);
