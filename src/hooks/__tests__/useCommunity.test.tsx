@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { renderHook, waitFor, act } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('../../api/communityApi', () => ({
   communityApi: {
@@ -324,6 +324,17 @@ describe('FR-877R2 useMyCoachName — the coach name BAM-2b uses where a coach D
     const empty = await renderHook(() => useMyCoachName('coach-7'), { wrapper: makeWrapper().Wrapper });
     await waitFor(() => expect(empty.result.current.settled).toBe(true));
     expect(empty.result.current.name).toBeNull();
+  });
+
+  it('FR-877R2B: offline (the read waits for a connection) it is settled with no name, so the bar is not held back', async () => {
+    onlineManager.setOnline(false);
+    try {
+      const { result } = await renderHook(() => useMyCoachName('coach-7'), { wrapper: makeWrapper().Wrapper });
+      await waitFor(() => expect(result.current).toEqual({ name: null, settled: true }));
+      expect(mockGet).not.toHaveBeenCalled();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   it('with no coach to name it asks nothing and is settled at once', async () => {

@@ -63,7 +63,8 @@ export const communityKeys = {
  * FR-877R2 (LS-877R2 B1): my coach's name, from the read Community home's coach row makes (SpaceTree.tsx, same key
  * and request, so it is usually in memory already). For a closed coach DM with no name on screen (the empty inbox's
  * "Send your coach a message"), so BAM-2b names the coach. `name`: null when unknown, empty or the read failed (the
- * line then stays BAM-1, never a made-up name). `settled`: the read answered, or there is nothing to read.
+ * line then stays BAM-1, never a made-up name). `settled`: the read answered, there is nothing to read, or it is
+ * waiting for a connection (FR-877R2B: offline, the bar shows BAM-1 now instead of nothing until the phone is back).
  */
 export function useMyCoachName(coachId: string | null | undefined): { name: string | null; settled: boolean } {
   const q = useQuery({
@@ -73,7 +74,7 @@ export function useMyCoachName(coachId: string | null | undefined): { name: stri
     queryFn: async () => (await api.get<{ name?: unknown }>('/v1/clients/me/coach')).data?.name ?? null,
   });
   const name = typeof q.data === 'string' && q.data.trim() ? q.data.trim() : null;
-  return { name, settled: !coachId || q.isSuccess || q.isError };
+  return { name, settled: !coachId || q.isSuccess || q.isError || q.fetchStatus === 'paused' };
 }
 
 export function useCommunityMe(): UseQueryResult<CommunityMeResponse> {
