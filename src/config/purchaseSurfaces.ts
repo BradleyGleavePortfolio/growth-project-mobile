@@ -175,6 +175,13 @@ export function oneToOneCoachingLabel(coachName?: string | null): string {
   return name ? `1:1 coaching with ${name}` : '1:1 coaching with your coach';
 }
 
+/**
+ * STORE-1TO1 (owner #183-S1): every package includes 1:1 coaching with the coach who sells it, and
+ * the server refuses to publish or sell one whose coach cannot give it. The buyer pages list
+ * oneToOneCoachingLabel() first under "What's included"; the coach's package forms say this line.
+ */
+export const EVERY_PACKAGE_INCLUDES_COACHING = 'Every package includes 1:1 coaching with you.';
+
 // ---------------------------------------------------------------------------
 // External links (audit #304 B2). A dynamic, server-provided URL must not
 // become a way around the gate on hidden iOS builds.

@@ -8,6 +8,7 @@ import { colors, layout, radius, typography } from '../../../theme/tokens';
 import { QuietOverline, Screen, footerBottomPadding, useScreenInsets } from '../../../ui';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CoachMark } from '../../../components/purchase/PlanActiveMoment';
+import { oneToOneCoachingLabel } from '../../../config/purchaseSurfaces';
 
 export const CLIENT_PLAN_COPY = {
   about: 'About this plan',
@@ -115,17 +116,16 @@ export function ClientPlanPage({ name, price, description, features, coach, onBa
         contentContainerStyle={[s.scroll, { paddingBottom: footer ? layout.gutter : footerBottomPadding(insets.bottom) }]}>
         {outcomeKey ? <View style={s.outcome} testID="client-plan-outcome">{outcome}</View> : null}
         <CoachNote description={description} coach={coach} />
-        {features.length ? (
-          <View style={s.section}>
-            <QuietOverline style={s.overline} accessibilityRole="header">{CLIENT_PLAN_COPY.included}</QuietOverline>
-            {features.map((feature, i) => (
-              <View key={i} style={s.feature}>
-                <View style={[s.dot, { backgroundColor: colors.camel }]} />
-                <Text style={[s.body, { color: c.textPrimary }]}>{feature}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
+        {/* STORE-1TO1: every package includes 1:1 coaching with its coach, so this list always shows. */}
+        <View style={s.section}>
+          <QuietOverline style={s.overline} accessibilityRole="header">{CLIENT_PLAN_COPY.included}</QuietOverline>
+          {[oneToOneCoachingLabel(coach), ...features].map((feature, i) => (
+            <View key={i} style={s.feature}>
+              <View style={[s.dot, { backgroundColor: colors.camel }]} />
+              <Text style={[s.body, { color: c.textPrimary }]} testID={i === 0 ? 'client-plan-one-to-one' : undefined}>{feature}</Text>
+            </View>
+          ))}
+        </View>
         {children}
       </ScrollView>
     </Screen></PlanInk>

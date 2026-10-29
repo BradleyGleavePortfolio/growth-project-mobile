@@ -32,6 +32,7 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { formatCurrencyCents } from '../../../utils/currency';
 import type { PackageBillingInterval } from '../../../api/packagesApi';
+import { oneToOneCoachingLabel } from '../../../config/purchaseSurfaces';
 
 export type PackageDetailMode = 'buyer' | 'coachPreview';
 
@@ -149,22 +150,21 @@ export default function PackageDetailSurface({
         ) : null}
       </View>
 
-      {pkg.features.length > 0 ? (
-        <View style={styles.featuresList}>
-          <Text style={styles.featuresTitle}>What's included</Text>
-          {pkg.features.map((f, i) => (
-            <View key={i} style={styles.featureRow}>
-              <Ionicons
-                name="checkmark"
-                size={18}
-                color={semanticColors.accent}
-                style={{ marginTop: 2 }}
-              />
-              <Text style={styles.featureText}>{f}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
+      {/* STORE-1TO1: every package includes 1:1 coaching with its coach, so this list always shows. */}
+      <View style={styles.featuresList}>
+        <Text style={styles.featuresTitle}>What's included</Text>
+        {[oneToOneCoachingLabel(pkg.coach.displayName), ...pkg.features].map((f, i) => (
+          <View key={i} style={styles.featureRow}>
+            <Ionicons
+              name="checkmark"
+              size={18}
+              color={semanticColors.accent}
+              style={{ marginTop: 2 }}
+            />
+            <Text style={styles.featureText} testID={i === 0 ? 'package-detail-one-to-one' : undefined}>{f}</Text>
+          </View>
+        ))}
+      </View>
 
       {!isPreview ? purchaseSlot : null}
 
