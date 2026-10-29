@@ -55,10 +55,7 @@ jest.mock('../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: 
 jest.mock('../screens/coach/broadcasts/BroadcastsEntry', () => ({ BroadcastsEntry: () => null }));
 jest.mock('../screens/coach/CommunityReportsEntry', () => ({ CommunityReportsEntry: () => null }));
 jest.mock('../screens/coach/CommunityEntry', () => ({ CommunityEntry: () => null }));
-const mockClients = [
-  { id: 'client-blocked', firstName: 'Ana', lastName: 'Ruiz', status: 'active' },
-  { id: 'client-2', firstName: 'Ben', lastName: 'Ode', status: 'active' },
-];
+const mockClients = [{ id: 'client-blocked', firstName: 'Ana', lastName: 'Ruiz', status: 'active' }, { id: 'client-2', firstName: 'Ben', lastName: 'Ode', status: 'active' }];
 jest.mock('../store/coachStore', () => ({ useCoachStore: () => ({ clients: mockClients, loadClients: async () => undefined }) }));
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
@@ -95,293 +92,155 @@ type Proof =
   /** STATE_CASES below: lists kept in screen state, drawn, or (where a draw needs the whole navigator) read in the source. */
   | { by: 'state'; id: string };
 
-type KnownGap = {
-  /** file:function where the rule is missed */
-  where: string;
-  rule: string;
-  why: string;
-  audit?: string;
-  /** a CACHE_CASES id that shows the gap (run as it.failing), or a source check that shows it */
-  shows: { cache: string } | { lacks: RegExp };
-};
+/** where = file:function that misses the rule; shows = a CACHE_CASES id (run as it.failing) or a source check. */
+type KnownGap = { where: string; rule: string; why: string; shows: { cache: string } | { lacks: RegExp } };
+/** file under src/; what it shows or sends; how it applies a block (mine / theirs), a ban, a removal, a departure, a
+ * closed conversation and the cache after a block; the proof. */
+type Surface = { file: string; kind: Kind; what: string; how: string; proof: Proof | { by: 'gap'; gap: KnownGap } };
 
-type Surface = {
-  file: string; // under src/
-  kind: Kind;
-  what: string; // what it shows or sends
-  how: string; // block (mine / theirs), ban, removal, departure, closed conversation, and the cache after a block
-  proof: Proof | { by: 'gap'; gap: KnownGap };
-};
-
-const DM_PROOF = 'screens/community/__tests__/CommunityDmClosedBlockAllM.test.tsx';
 const CLIENT_THREAD = 'screens/client/__tests__/MessagesScreenV2.test.tsx';
 const COACH_THREAD = 'screens/coach/__tests__/ClientMessagesScreenV2.test.tsx';
+const gap = (where: string, rule: string, why: string, shows: KnownGap['shows']): Surface['proof'] => ({ by: 'gap', gap: { where, rule, why, shows } });
+/** blockSync.blockPlaced filters only the DM list and the coach inbox: every other cached list keeps the rows. */
+const cacheGap = (key: string, cache: string, why: string) => gap(`lib/blockSync.ts:blockPlaced (${key})`, 'block (cache after a block)', why, { cache });
 
 const REGISTRY: Surface[] = [
   // ── Composers ──
-  {
-    file: 'screens/community/CommunityDmThreadScreen.tsx', kind: 'composer', what: 'a member DM: typed text (ComposerInput -> useSendDm)',
+  { file: 'screens/community/CommunityDmThreadScreen.tsx', kind: 'composer', what: 'a member DM: typed text (ComposerInput -> useSendDm)',
     how: 'useConversationClosed(recipient, [thread read, send]) + ConversationClosedLine; my block from the block store, theirs and a ban or departure from the read refusal (community.dm.blocked_by_them / dm.not_found / workspace.no_access); nothing editable before the read answers (useServerAnswered)',
-    proof: { by: 'composers' },
-  },
-  {
-    file: 'screens/community/CommunityComposerScreen.tsx', kind: 'composer', what: 'a new post in a space, or a first message to my coach (TextInput -> useCreatePost / useSendDm)',
+    proof: { by: 'composers' } },
+  { file: 'screens/community/CommunityComposerScreen.tsx', kind: 'composer', what: 'a new post in a space, or a first message to my coach (TextInput -> useCreatePost / useSendDm)',
     how: 'useConversationClosed(dm recipient or null, [posts or dm read, send]); ready = useServerAnswered(gate read) && workspace; closed draws the line and no field',
-    proof: { by: 'composers' },
-  },
-  {
-    file: 'screens/community/CommunityThreadScreen.tsx', kind: 'composer', what: 'a reply to a post (ComposerInput -> useAddComment) and reactions (useReactToPost)',
+    proof: { by: 'composers' } },
+  { file: 'screens/community/CommunityThreadScreen.tsx', kind: 'composer', what: 'a reply to a post (ComposerInput -> useAddComment) and reactions (useReactToPost)',
     how: 'useConversationClosed(null, [post read, comments read, reply]); a post gone behind a block (post.not_found), a ban or a departure closes it and draws none of the post\'s words; a block of the post author is a list rule (the author\'s rows)',
-    proof: { by: 'composers' },
-  },
-  {
-    file: 'screens/community/CommunitySpaceScreen.tsx', kind: 'composer', what: '"New post" entry and the voice note record entry (VoiceNotesSection)',
+    proof: { by: 'composers' } },
+  { file: 'screens/community/CommunitySpaceScreen.tsx', kind: 'composer', what: '"New post" entry and the voice note record entry (VoiceNotesSection)',
     how: 'useConversationClosed(null, [posts read]); a ban or departure (workspace.no_access) draws the closed line and neither entry; a one-to-one block does not close a space',
-    proof: { by: 'composers' },
-  },
-  {
-    file: 'screens/community/CommunityChallengeDetailScreen.tsx', kind: 'composer', what: 'challenge notes (ComposerInput -> addComment) and progress (ChallengeProgressSheet)',
+    proof: { by: 'composers' } },
+  { file: 'screens/community/CommunityChallengeDetailScreen.tsx', kind: 'composer', what: 'challenge notes (ComposerInput -> addComment) and progress (ChallengeProgressSheet)',
     how: 'useConversationClosed(null, [detail, notes]); a ban, a departure or a challenge gone (challenge.not_found) closes the notes box',
-    proof: { by: 'composers' },
-  },
-  {
-    file: 'components/community/ComposerInput.tsx', kind: 'composer', what: 'the shared typed-text box of the community composers',
-    how: 'drawn only by a host that asked useConversationClosed', proof: { by: 'host', host: 'screens/community/CommunityDmThreadScreen.tsx' },
-  },
-  {
-    file: 'components/community/ChallengeProgressSheet.tsx', kind: 'composer', what: 'my challenge progress value',
-    how: 'opened only from the challenge screen', proof: { by: 'host', host: 'screens/community/CommunityChallengeDetailScreen.tsx' },
-  },
-  {
-    file: 'components/community/VoiceNotesSection.tsx', kind: 'composer', what: 'the voice note record entry of a space',
-    how: 'drawn only while the space is open', proof: { by: 'host', host: 'screens/community/CommunitySpaceScreen.tsx' },
-  },
-  {
-    file: 'components/community/VoiceRecordSheet.tsx', kind: 'composer', what: 'recording a voice note',
-    how: 'opened only from VoiceNotesSection', proof: { by: 'host', host: 'screens/community/CommunitySpaceScreen.tsx' },
-  },
-  {
-    file: 'screens/community/CommunityVoiceComposerScreen.tsx', kind: 'composer', what: 'recording and sending a voice note (useVoiceUpload / useVoiceOutbox)',
+    proof: { by: 'composers' } },
+  { file: 'components/community/ComposerInput.tsx', kind: 'composer', what: 'the shared typed-text box of the community composers',
+    how: 'drawn only by a host that asked useConversationClosed', proof: { by: 'host', host: 'screens/community/CommunityDmThreadScreen.tsx' } },
+  { file: 'components/community/ChallengeProgressSheet.tsx', kind: 'composer', what: 'my challenge progress value',
+    how: 'opened only from the challenge screen', proof: { by: 'host', host: 'screens/community/CommunityChallengeDetailScreen.tsx' } },
+  { file: 'components/community/VoiceNotesSection.tsx', kind: 'composer', what: 'the voice note record entry of a space',
+    how: 'drawn only while the space is open', proof: { by: 'host', host: 'screens/community/CommunitySpaceScreen.tsx' } },
+  { file: 'components/community/VoiceRecordSheet.tsx', kind: 'composer', what: 'recording a voice note',
+    how: 'opened only from VoiceNotesSection', proof: { by: 'host', host: 'screens/community/CommunitySpaceScreen.tsx' } },
+  { file: 'screens/community/CommunityVoiceComposerScreen.tsx', kind: 'composer', what: 'recording and sending a voice note (useVoiceUpload / useVoiceOutbox)',
     how: 'none of its own: it trusts the space that opened it',
-    proof: {
-      by: 'gap',
-      gap: {
-        where: 'screens/community/CommunityVoiceComposerScreen.tsx:CommunityVoiceComposerScreen', rule: 'ban, departure (a closed space)',
-        why: 'it reads nothing that can refuse and asks no closed gate, so a member banned or gone while it is open can still record and press send (the server refuses the upload)',
-        shows: { lacks: /useConversationClosed|isClosedRefusal/ },
-      },
-    },
-  },
-  {
-    file: 'screens/client/MessagesScreen.tsx', kind: 'composer', what: 'the client to coach chat: typed text, replies, edits (ReplyComposer, ThreadV2Parts)',
+    proof: gap('screens/community/CommunityVoiceComposerScreen.tsx:CommunityVoiceComposerScreen', 'ban, departure (a closed space)',
+      'it reads nothing that can refuse and asks no closed gate, so a member banned or gone while it is open can still record and press send (the server refuses the upload)',
+      { lacks: /useConversationClosed|isClosedRefusal/ }) },
+  { file: 'screens/client/MessagesScreen.tsx', kind: 'composer', what: 'the client to coach chat: typed text, replies, edits (ReplyComposer, ThreadV2Parts)',
     how: 'useConversationClosed(coach, [thread, send]) + useCoachingRow (the inbox row\'s closed / blocked_by_me); edit sheet nulled when closed; a refused send is remembered (closedRefusals)',
-    proof: {
-      by: 'suite', file: CLIENT_THREAD,
-      titles: [
-        'my coach blocked me: the inbox row says closed, so there is never a box and no message text',
-        'I blocked my coach: no message box, only the closed line; an unblock opens it again',
-        'my coach blocked me (server 403 BLOCKED on send): closed at once, nothing sent twice, no "Not sent" bubble',
-        'open: the message box is there and the closed line is not',
-      ],
-    },
-  },
-  {
-    file: 'screens/coach/ClientMessagesScreen.tsx', kind: 'composer', what: 'the coach to client chat: typed text, edits (ThreadV2Parts)',
+    proof: { by: 'suite', file: CLIENT_THREAD, titles: [
+      'my coach blocked me: the inbox row says closed, so there is never a box and no message text',
+      'I blocked my coach: no message box, only the closed line; an unblock opens it again',
+      'my coach blocked me (server 403 BLOCKED on send): closed at once, nothing sent twice, no "Not sent" bubble',
+      'open: the message box is there and the closed line is not',
+    ] } },
+  { file: 'screens/coach/ClientMessagesScreen.tsx', kind: 'composer', what: 'the coach to client chat: typed text, edits (ThreadV2Parts)',
     how: 'useConversationClosed(client, [thread, send]) + useCoachingRow; edit sheet nulled when closed',
-    proof: {
-      by: 'suite', file: COACH_THREAD,
-      titles: [
-        'the client blocked me: the inbox row says closed, so there is never a box',
-        'I blocked this client: no message box, only the closed line; an unblock opens it again',
-        'the client blocked me (server 403 BLOCKED on send): closed at once, no "Message not sent" box',
-        'FR-872 (Sol B5): an edit sheet already open goes when a read says the client blocked me; nothing to save',
-        'open: the message box is there and the closed line is not',
-      ],
-    },
-  },
-  {
-    file: 'components/messaging/ThreadV2Parts.tsx', kind: 'composer', what: 'the edit sheet of a coaching message',
-    how: 'opened only by the two coaching chats, which null it when closed', proof: { by: 'host', host: 'screens/coach/ClientMessagesScreen.tsx' },
-  },
-  {
-    file: 'screens/client/CommunityScreen.tsx', kind: 'composer', what: 'posting a win (title and description -> communityApi.postWin)',
+    proof: { by: 'suite', file: COACH_THREAD, titles: [
+      'the client blocked me: the inbox row says closed, so there is never a box',
+      'I blocked this client: no message box, only the closed line; an unblock opens it again',
+      'the client blocked me (server 403 BLOCKED on send): closed at once, no "Message not sent" box',
+      'FR-872 (Sol B5): an edit sheet already open goes when a read says the client blocked me; nothing to save',
+      'open: the message box is there and the closed line is not',
+    ] } },
+  { file: 'components/messaging/ThreadV2Parts.tsx', kind: 'composer', what: 'the edit sheet of a coaching message',
+    how: 'opened only by the two coaching chats, which null it when closed', proof: { by: 'host', host: 'screens/coach/ClientMessagesScreen.tsx' } },
+  { file: 'screens/client/CommunityScreen.tsx', kind: 'composer', what: 'posting a win (title and description -> communityApi.postWin)',
     how: 'none: the form is drawn whatever the member\'s community access',
-    proof: {
-      by: 'gap',
-      gap: {
-        where: 'screens/client/CommunityScreen.tsx:CommunityScreen', rule: 'ban, departure',
-        why: 'the wins form asks no closed gate, so a banned or departed member can type and send a win (the server decides)',
-        shows: { lacks: /useConversationClosed|isClosedRefusal|useBlockedUsersStore/ },
-      },
-    },
-  },
-
+    proof: gap('screens/client/CommunityScreen.tsx:CommunityScreen', 'ban, departure',
+      'the wins form asks no closed gate, so a banned or departed member can type and send a win (the server decides)',
+      { lacks: /useConversationClosed|isClosedRefusal|useBlockedUsersStore/ }) },
   ...([
     ['screens/coach/ClientDetailScreen.tsx', 'ClientDetailScreen:sendNudge', 'a typed nudge (title and body)'],
     ['screens/coach/lookup/useLookupNudge.tsx', 'useLookupNudge', 'a typed nudge from the coach lookup'],
     ['screens/coach/ClientRiskDetailScreen.tsx', 'ClientRiskDetailScreen:sendNudge', 'a fixed check-in nudge'],
   ] as const).map(([file, fn, what]): Surface => ({
     file, kind: 'composer', what: `${what} pushed to a client (coachApi.sendNudge)`, how: 'none: no closed gate before the send',
-    proof: {
-      by: 'gap',
-      gap: {
-        where: `${file}:${fn}`, rule: 'block (both ways), closed conversation',
-        why: 'the nudge is offered and sent to a client who blocked the coach, or whom the coach blocked; nothing on the phone asks whether the chat is closed (the server decides)',
-        shows: { lacks: /useConversationClosed|useCoachingRow|useCoachChatClosed|closed_client_ids|useBlockedUsersStore/ },
-      },
-    },
+    proof: gap(`${file}:${fn}`, 'block (both ways), closed conversation',
+      'the nudge is offered and sent to a client who blocked the coach, or whom the coach blocked; nothing on the phone asks whether the chat is closed (the server decides)',
+      { lacks: /useConversationClosed|useCoachingRow|useCoachChatClosed|closed_client_ids|useBlockedUsersStore/ }),
   })),
 
   // ── Lists, previews and counts ──
-  {
-    file: 'screens/community/CommunityDmListScreen.tsx', kind: 'list', what: 'my DM rows: name, preview, unread',
+  { file: 'screens/community/CommunityDmListScreen.tsx', kind: 'list', what: 'my DM rows: name, preview, unread',
     how: 'blockSync drops the row from communityKeys.dmThreads at once on my block; the server leaves out theirs, a ban and a departure',
-    proof: { by: 'cache', id: 'dm-list' },
-  },
-  {
-    file: 'screens/coach/CoachInboxV2.tsx', kind: 'list', what: 'the coach inbox: rows (text, voice, photo previews), unread',
+    proof: { by: 'cache', id: 'dm-list' } },
+  { file: 'screens/coach/CoachInboxV2.tsx', kind: 'list', what: 'the coach inbox: rows (text, voice, photo previews), unread',
     how: 'blockSync drops the row and its unread from the cached inbox; the screen also hides my blocks, closed_client_ids and closed / blocked_by_me rows',
-    proof: { by: 'cache', id: 'coach-inbox' },
-  },
-  {
-    file: 'screens/coach/MessagesScreen.tsx', kind: 'list', what: 'the legacy coach list (messaging v2 off): client rows and unread',
-    how: 'hides closed_client_ids (blocked either way) and my blocks from the block store at once',
-    proof: { by: 'state', id: 'legacy-coach-list' },
-  },
-  {
-    file: 'screens/client/MessagesInboxScreen.tsx', kind: 'list', what: 'the client inbox: the coach card, preview, unread',
+    proof: { by: 'cache', id: 'coach-inbox' } },
+  { file: 'screens/coach/MessagesScreen.tsx', kind: 'list', what: 'the legacy coach list (messaging v2 off): client rows and unread',
+    how: 'hides closed_client_ids (blocked either way) and my blocks from the block store at once', proof: { by: 'state', id: 'legacy-coach-list' } },
+  { file: 'screens/client/MessagesInboxScreen.tsx', kind: 'list', what: 'the client inbox: the coach card, preview, unread',
     how: 'the coaching row\'s closed / blocked_by_me and my block store hide the card; a block reads the list again',
-    proof: {
-      by: 'suite', file: 'screens/client/__tests__/MessagesInboxScreen.test.tsx',
-      titles: [
-        'the coach blocked me (the inbox leaves the row out): the card is gone; when the row is back, so is the card',
-        'I block my coach: the card leaves at once and the list reads again; my unblock reads again and it comes back',
-        'a cold offline list with my saved block never shows the coach; my unblock brings back the offline card',
-      ],
-    },
-  },
-  {
-    file: 'components/home/HomeHeaderActions.tsx', kind: 'list', what: 'the "Message {coach}" entry and its unread on Home',
+    proof: { by: 'suite', file: 'screens/client/__tests__/MessagesInboxScreen.test.tsx', titles: [
+      'the coach blocked me (the inbox leaves the row out): the card is gone; when the row is back, so is the card',
+      'I block my coach: the card leaves at once and the list reads again; my unblock reads again and it comes back',
+      'a cold offline list with my saved block never shows the coach; my unblock brings back the offline card',
+    ] } },
+  { file: 'components/home/HomeHeaderActions.tsx', kind: 'list', what: 'the "Message {coach}" entry and its unread on Home',
     how: 'useCoachChatClosed + my block store; a block reads the count again',
-    proof: {
-      by: 'suite', file: 'components/home/__tests__/HomeHeaderActions.test.tsx',
-      titles: ['a block hides the coach entry at once and an unblock brings it back, the count read again'],
-    },
-  },
-  {
-    file: 'hooks/useClientUnreadCount.ts', kind: 'list', what: 'the client notice count',
-    how: 're-reads on a block or unblock (subscribes to the block store)',
-    proof: { by: 'suite', file: 'hooks/__tests__/useClientUnreadCount.test.tsx', titles: ['a block and an unblock read the count again at once'] },
-  },
-  {
-    file: 'hooks/useApi.ts', kind: 'list', what: 'the messages unread badge (useUnreadCount, [\'messages\', \'unread-count\'])',
-    how: 'blockSync reads the badge again at once', proof: { by: 'cache', id: 'badge-messages' },
-  },
-  {
-    file: 'navigation/ClientNavigator.tsx', kind: 'list', what: 'the Community tab badge (useCommunityBadge, communityKeys.me)',
-    how: 'blockSync reads communityKeys.me again at once', proof: { by: 'cache', id: 'badge-community-me' },
-  },
-  {
-    file: 'screens/community/CommunityTabScreen.tsx', kind: 'list', what: 'the Community tab badge (useCommunityBadge)',
-    how: 'blockSync reads communityKeys.me again at once', proof: { by: 'cache', id: 'badge-community-me' },
-  },
-  {
-    file: 'components/community/SpaceTree.tsx', kind: 'list', what: 'the coach row unread in the space tree',
-    how: 'blockSync reads [\'community\', \'home\', \'coach-unread\'] again at once', proof: { by: 'cache', id: 'badge-coach-unread' },
-  },
-  {
-    file: 'navigation/CoachNavigator.tsx', kind: 'list', what: 'the coach bell count',
-    how: 'useCoachNotificationUnreadCount re-reads on a block or unblock (its effect depends on the block store)',
-    proof: { by: 'state', id: 'coach-bell-source' },
-  },
-  {
-    file: 'screens/community/CommunityDmThreadScreen.tsx', kind: 'list', what: 'the DM messages',
-    how: 'closed draws none of the other person\'s words (closed branch replaces the list)', proof: { by: 'composers' },
-  },
-  {
-    file: 'screens/community/CommunityComposerScreen.tsx', kind: 'list', what: 'reads posts or the coach DM only to decide open or closed (draws no member words)',
-    how: 'same gate as its composer', proof: { by: 'composers' },
-  },
-  {
-    file: 'screens/client/MessagesScreen.tsx', kind: 'list', what: 'the coaching thread messages',
-    how: 'filterOutBlocked over the shown messages; closed draws no message text', proof: {
-      by: 'suite', file: CLIENT_THREAD, titles: ['my coach blocked me: the inbox row says closed, so there is never a box and no message text'],
-    },
-  },
-  {
-    file: 'screens/coach/ClientMessagesScreen.tsx', kind: 'list', what: 'the coaching thread messages (coach side)',
-    how: 'filterOutBlocked over the messages; closed draws the closed line', proof: {
-      by: 'suite', file: COACH_THREAD, titles: ['I blocked this client: no message box, only the closed line; an unblock opens it again'],
-    },
-  },
-  {
-    file: 'screens/community/CommunitySpaceScreen.tsx', kind: 'list', what: 'the posts of a space (author, words, reactions)',
+    proof: { by: 'suite', file: 'components/home/__tests__/HomeHeaderActions.test.tsx', titles: ['a block hides the coach entry at once and an unblock brings it back, the count read again'] } },
+  { file: 'hooks/useClientUnreadCount.ts', kind: 'list', what: 'the client notice count', how: 're-reads on a block or unblock (subscribes to the block store)',
+    proof: { by: 'suite', file: 'hooks/__tests__/useClientUnreadCount.test.tsx', titles: ['a block and an unblock read the count again at once'] } },
+  { file: 'hooks/useApi.ts', kind: 'list', what: 'the messages unread badge (useUnreadCount, [\'messages\', \'unread-count\'])',
+    how: 'blockSync reads the badge again at once', proof: { by: 'cache', id: 'badge-messages' } },
+  { file: 'navigation/ClientNavigator.tsx', kind: 'list', what: 'the Community tab badge (useCommunityBadge, communityKeys.me)',
+    how: 'blockSync reads communityKeys.me again at once', proof: { by: 'cache', id: 'badge-community-me' } },
+  { file: 'screens/community/CommunityTabScreen.tsx', kind: 'list', what: 'the Community tab badge (useCommunityBadge)',
+    how: 'blockSync reads communityKeys.me again at once', proof: { by: 'cache', id: 'badge-community-me' } },
+  { file: 'components/community/SpaceTree.tsx', kind: 'list', what: 'the coach row unread in the space tree',
+    how: 'blockSync reads [\'community\', \'home\', \'coach-unread\'] again at once', proof: { by: 'cache', id: 'badge-coach-unread' } },
+  { file: 'navigation/CoachNavigator.tsx', kind: 'list', what: 'the coach bell count',
+    how: 'useCoachNotificationUnreadCount re-reads on a block or unblock (its effect depends on the block store)', proof: { by: 'state', id: 'coach-bell-source' } },
+  { file: 'screens/community/CommunityDmThreadScreen.tsx', kind: 'list', what: 'the DM messages',
+    how: 'closed draws none of the other person\'s words (closed branch replaces the list)', proof: { by: 'composers' } },
+  { file: 'screens/community/CommunityComposerScreen.tsx', kind: 'list', what: 'reads posts or the coach DM only to decide open or closed (draws no member words)',
+    how: 'same gate as its composer', proof: { by: 'composers' } },
+  { file: 'screens/client/MessagesScreen.tsx', kind: 'list', what: 'the coaching thread messages', how: 'filterOutBlocked over the shown messages; closed draws no message text',
+    proof: { by: 'suite', file: CLIENT_THREAD, titles: ['my coach blocked me: the inbox row says closed, so there is never a box and no message text'] } },
+  { file: 'screens/coach/ClientMessagesScreen.tsx', kind: 'list', what: 'the coaching thread messages (coach side)', how: 'filterOutBlocked over the messages; closed draws the closed line',
+    proof: { by: 'suite', file: COACH_THREAD, titles: ['I blocked this client: no message box, only the closed line; an unblock opens it again'] } },
+  { file: 'screens/community/CommunitySpaceScreen.tsx', kind: 'list', what: 'the posts of a space (author, words, reactions)',
     how: 'the server leaves out blocked authors on the next read; a block from a post\'s SafetyMenu invalidates [\'community\']; nothing drops the rows already in the cache',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced (communityKeys.posts)', rule: 'block (cache after a block)', why: 'blockPlaced filters only the DM list and the coach inbox; a space\'s cached posts keep the blocked author\'s rows until the next read (up to the 30 s staleTime when the block came from a profile or Settings)', shows: { cache: 'space-posts' } } },
-  },
-  {
-    file: 'screens/community/CommunityThreadScreen.tsx', kind: 'list', what: 'a post and its comments',
+    proof: cacheGap('communityKeys.posts', 'space-posts', 'a space\'s cached posts keep the blocked author\'s rows until the next read (up to the 30 s staleTime when the block came from a profile or Settings)') },
+  { file: 'screens/community/CommunityThreadScreen.tsx', kind: 'list', what: 'a post and its comments',
     how: 'closed (post gone, ban, departure) draws none of the post\'s words; a blocked commenter\'s cached comments are not dropped',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced (communityKeys.comments)', rule: 'block (cache after a block)', why: 'the cached comments keep a blocked commenter\'s rows until the next read; no block-store filter on comments', shows: { cache: 'post-comments' } } },
-  },
-  {
-    file: 'screens/community/CommunityTodayScreen.tsx', kind: 'list', what: 'today: the pinned post title and author',
-    how: 'server read only',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced (communityKeys.today)', rule: 'block (cache after a block)', why: 'a pinned post by a person I just blocked stays in the cached today read until the next read', shows: { cache: 'today' } } },
-  },
-  {
-    file: 'screens/community/CommunityFindScreen.tsx', kind: 'list', what: 'community search rows',
-    how: 'server read only; searches are kept in the cache to show again',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced (communitySearchKeys)', rule: 'block (cache after a block)', why: 'a saved search keeps a blocked author\'s rows in the cache and shows them again', shows: { cache: 'search' } } },
-  },
-  {
-    file: 'components/community/VoiceNotesSection.tsx', kind: 'list', what: 'the voice notes of a space',
+    proof: cacheGap('communityKeys.comments', 'post-comments', 'the cached comments keep a blocked commenter\'s rows until the next read; no block-store filter on comments') },
+  { file: 'screens/community/CommunityTodayScreen.tsx', kind: 'list', what: 'today: the pinned post title and author', how: 'server read only',
+    proof: cacheGap('communityKeys.today', 'today', 'a pinned post by a person I just blocked stays in the cached today read until the next read') },
+  { file: 'screens/community/CommunityFindScreen.tsx', kind: 'list', what: 'community search rows', how: 'server read only; searches are kept in the cache to show again',
+    proof: cacheGap('communitySearchKeys', 'search', 'a saved search keeps a blocked author\'s rows in the cache and shows them again') },
+  { file: 'components/community/VoiceNotesSection.tsx', kind: 'list', what: 'the voice notes of a space',
     how: 'server read only; removed notes draw "Removed by Coach {name}" from the server\'s removed_by',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced (voiceKeys.feedRoot)', rule: 'block (cache after a block)', why: 'the cached voice feed keeps a blocked author\'s notes until the next read', shows: { cache: 'voice-feed' } } },
-  },
-  {
-    file: 'screens/community/CommunityVoiceNoteDetail.tsx', kind: 'list', what: 'one voice note page',
-    how: 'server read only',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced (voiceKeys.note)', rule: 'block (cache after a block)', why: 'the cached note of a person I just blocked still opens and plays from the cache', shows: { cache: 'voice-note' } } },
-  },
-  {
-    file: 'screens/community/CommunityChallengeDetailScreen.tsx', kind: 'list', what: 'challenge notes and the leaderboard',
+    proof: cacheGap('voiceKeys.feedRoot', 'voice-feed', 'the cached voice feed keeps a blocked author\'s notes until the next read') },
+  { file: 'screens/community/CommunityVoiceNoteDetail.tsx', kind: 'list', what: 'one voice note page', how: 'server read only',
+    proof: cacheGap('voiceKeys.note', 'voice-note', 'the cached note of a person I just blocked still opens and plays from the cache') },
+  { file: 'screens/community/CommunityChallengeDetailScreen.tsx', kind: 'list', what: 'challenge notes and the leaderboard',
     how: 'closed (ban, departure, challenge gone) hides the notes; a blocked person\'s cached notes are not dropped',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced ([\'community\', \'challenge\', id, \'comments\'])', rule: 'block (cache after a block)', why: 'cached challenge notes keep a blocked author\'s rows until the next read', shows: { cache: 'challenge-notes' } } },
-  },
-  {
-    file: 'screens/community/CoachCommunityInboxScreen.tsx', kind: 'list', what: 'the coach community inbox rows',
-    how: 'filters my blocks from the block store at render (blockedIds)', proof: { by: 'state', id: 'coach-community-inbox-source' },
-  },
-  {
-    file: 'screens/community/CoachCommunityPostDetailScreen.tsx', kind: 'list', what: 'a post and its comments, coach side',
-    how: 'server read only',
-    proof: { by: 'gap', gap: { where: 'lib/blockSync.ts:blockPlaced (coachCommunityKeys.post)', rule: 'block (cache after a block)', why: 'the cached post detail keeps a blocked member\'s words until the next read', shows: { cache: 'coach-post-detail' } } },
-  },
-  {
-    file: 'screens/client/CommunityScreen.tsx', kind: 'list', what: 'the wins feed (other members\' wins)',
-    how: 'kept in screen state; no block filter',
-    proof: { by: 'gap', gap: { where: 'screens/client/CommunityScreen.tsx:CommunityScreen', rule: 'block (cache after a block), ban', why: 'the wins feed has no block-store filter, so a person I just blocked keeps their wins on screen until the next read', shows: { lacks: /useBlockedUsersStore|blockedIds/ } } },
-  },
-  {
-    file: 'screens/notifications/NotificationCenterScreen.tsx', kind: 'list', what: 'notification rows (titles and bodies, which can quote a message)',
+    proof: cacheGap('[\'community\', \'challenge\', id, \'comments\']', 'challenge-notes', 'cached challenge notes keep a blocked author\'s rows until the next read') },
+  { file: 'screens/community/CoachCommunityInboxScreen.tsx', kind: 'list', what: 'the coach community inbox rows',
+    how: 'filters my blocks from the block store at render (blockedIds)', proof: { by: 'state', id: 'coach-community-inbox-source' } },
+  { file: 'screens/community/CoachCommunityPostDetailScreen.tsx', kind: 'list', what: 'a post and its comments, coach side', how: 'server read only',
+    proof: cacheGap('coachCommunityKeys.post', 'coach-post-detail', 'the cached post detail keeps a blocked member\'s words until the next read') },
+  { file: 'screens/client/CommunityScreen.tsx', kind: 'list', what: 'the wins feed (other members\' wins)', how: 'kept in screen state; no block filter',
+    proof: gap('screens/client/CommunityScreen.tsx:CommunityScreen', 'block (cache after a block), ban', 'the wins feed has no block-store filter, so a person I just blocked keeps their wins on screen until the next read', { lacks: /useBlockedUsersStore|blockedIds/ }) },
+  { file: 'screens/notifications/NotificationCenterScreen.tsx', kind: 'list', what: 'notification rows (titles and bodies, which can quote a message)',
     how: 'kept in screen state; rows carry no person id the phone can match to a block',
-    proof: { by: 'gap', gap: { where: 'screens/notifications/NotificationCenterScreen.tsx:NotificationCenterScreen', rule: 'block (cache after a block)', why: 'a notice from a person I just blocked stays until the next read; the phone cannot match it to the block', shows: { lacks: /useBlockedUsersStore|blockedIds/ } } },
-  },
-  {
-    file: 'screens/coach/cross-pillar/CrossPillarMessagesScreen.tsx', kind: 'list', what: 'the coach\'s total unread messages',
-    how: 'read once when opened',
-    proof: { by: 'gap', gap: { where: 'screens/coach/cross-pillar/CrossPillarMessagesScreen.tsx:load', rule: 'block (count after a block)', why: 'the total is read once on open and not again on a block, so a just-blocked client\'s unread stays counted until a pull to refresh', shows: { lacks: /useBlockedUsersStore|useFocusEffect|isFocused/ } } },
-  },
-  {
-    file: 'screens/coach/home-v11/useCoachHomeV11.ts', kind: 'list', what: 'coach home unread counts',
-    how: 're-read on focus (a block is made on another screen, so coming back reads again); the server count leaves a closed chat out',
-    proof: { by: 'state', id: 'focus-reread-coach-home' },
-  },
-  {
-    file: 'screens/coach/lookup/ClientLookupScreen.tsx', kind: 'list', what: 'unread per client in the coach lookup',
-    how: 're-read on focus; the server count leaves a closed chat out', proof: { by: 'state', id: 'focus-reread-lookup' },
-  },
+    proof: gap('screens/notifications/NotificationCenterScreen.tsx:NotificationCenterScreen', 'block (cache after a block)', 'a notice from a person I just blocked stays until the next read; the phone cannot match it to the block', { lacks: /useBlockedUsersStore|blockedIds/ }) },
+  { file: 'screens/coach/cross-pillar/CrossPillarMessagesScreen.tsx', kind: 'list', what: 'the coach\'s total unread messages', how: 'read once when opened',
+    proof: gap('screens/coach/cross-pillar/CrossPillarMessagesScreen.tsx:load', 'block (count after a block)', 'the total is read once on open and not again on a block, so a just-blocked client\'s unread stays counted until a pull to refresh', { lacks: /useBlockedUsersStore|useFocusEffect|isFocused/ }) },
+  { file: 'screens/coach/home-v11/useCoachHomeV11.ts', kind: 'list', what: 'coach home unread counts',
+    how: 're-read on focus (a block is made on another screen, so coming back reads again); the server count leaves a closed chat out', proof: { by: 'state', id: 'focus-reread-coach-home' } },
+  { file: 'screens/coach/lookup/ClientLookupScreen.tsx', kind: 'list', what: 'unread per client in the coach lookup',
+    how: 're-read on focus; the server count leaves a closed chat out', proof: { by: 'state', id: 'focus-reread-lookup' } },
 ];
 
 /** Files that match a sign but are not a surface: plumbing the registered surfaces call, or no member words. */
@@ -550,10 +409,7 @@ const CACHE_CASES: Record<string, CacheCase> = {
   'coach-post-detail': { key: coachCommunityKeys.post('post-1'), seed: { post: row(BLOCKED), comments: [row(BLOCKED)] }, check: 'dropped' },
 };
 
-const holdsBlocked = (data: unknown) => {
-  const text = JSON.stringify(data ?? null);
-  return text.includes(BLOCKED) || text.includes(WORDS);
-};
+const holdsBlocked = (data: unknown) => [BLOCKED, WORDS].some((w) => JSON.stringify(data ?? null).includes(w));
 
 async function blockFromAnotherScreen(qc: QueryClient, c: CacheCase) {
   qc.setQueryData(c.key, c.seed);

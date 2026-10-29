@@ -144,36 +144,31 @@ const leave = () => {
 };
 const ONE_TO_ONE_NA = 'a block is one to one: it closes a DM, not a space (a blocked author\'s rows are a list rule)';
 
+/** A DM (thread or first message): my block from the block store; theirs, a ban or a departure from the thread read. */
+const DM_STATES: Host['states'] = {
+  'I blocked them': block,
+  'they blocked me': () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.dm.blocked_by_them')),
+  banned: () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.workspace.no_access')),
+  'removed or left the space': leave,
+};
+
 const HOSTS: Host[] = [
   {
     file: 'screens/community/CommunityDmThreadScreen.tsx', label: 'community DM',
     draw: () => { mockParams.current = { recipientId: THEM, participantLabel: 'Jordan Lee' }; return <CommunityDmThreadScreen />; },
-    controls: ['community-dmthread-composer-field', 'community-dmthread-composer-send'],
-    closedMarks: ['community-dmthread-closed'],
-    states: {
-      'I blocked them': block,
-      'they blocked me': () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.dm.blocked_by_them')),
-      banned: () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.workspace.no_access')),
-      'removed or left the space': leave,
-    },
+    controls: ['community-dmthread-composer-field', 'community-dmthread-composer-send'], closedMarks: ['community-dmthread-closed'],
+    states: DM_STATES,
   },
   {
     file: 'screens/community/CommunityComposerScreen.tsx', label: 'New message',
     draw: () => { mockParams.current = { mode: 'dm', recipientId: THEM }; return <CommunityComposerScreen />; },
-    controls: ['community-composer-body', 'community-composer-title', 'community-composer-submit'],
-    closedMarks: ['community-composer-closed', 'community-composer-no-workspace'],
-    states: {
-      'I blocked them': block,
-      'they blocked me': () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.dm.blocked_by_them')),
-      banned: () => mockWire.listDmMessages.mockRejectedValue(refused(403, 'community.workspace.no_access')),
-      'removed or left the space': leave,
-    },
+    controls: ['community-composer-body', 'community-composer-title', 'community-composer-submit'], closedMarks: ['community-composer-closed', 'community-composer-no-workspace'],
+    states: DM_STATES,
   },
   {
     file: 'screens/community/CommunityComposerScreen.tsx', label: 'New post',
     draw: () => { mockParams.current = { mode: 'post' }; return <CommunityComposerScreen />; },
-    controls: ['community-composer-body', 'community-composer-title', 'community-composer-submit'],
-    closedMarks: ['community-composer-closed', 'community-composer-no-workspace'],
+    controls: ['community-composer-body', 'community-composer-title', 'community-composer-submit'], closedMarks: ['community-composer-closed', 'community-composer-no-workspace'],
     states: {
       banned: () => mockWire.listPosts.mockRejectedValue(refused(403, 'community.workspace.no_access')),
       'removed or left the space': leave,
@@ -183,26 +178,18 @@ const HOSTS: Host[] = [
   {
     file: 'screens/community/CommunityThreadScreen.tsx', label: 'post replies and reactions',
     draw: () => { mockParams.current = { postId: POST }; return <CommunityThreadScreen />; },
-    controls: ['community-thread-composer-field', 'community-thread-composer-send', 'community-thread-reactions'],
-    closedMarks: ['community-thread-closed'],
+    controls: ['community-thread-composer-field', 'community-thread-composer-send', 'community-thread-reactions'], closedMarks: ['community-thread-closed'],
     states: {
       'I blocked them': block,
       'they blocked me': () => mockWire.getPost.mockRejectedValue(refused(404, 'community.post.not_found')),
-      banned: () => {
-        mockWire.getPost.mockRejectedValue(refused(403, 'community.workspace.no_access'));
-        mockWire.listComments.mockRejectedValue(refused(403, 'community.workspace.no_access'));
-      },
-      'removed or left the space': () => {
-        leave();
-        mockWire.getPost.mockRejectedValue(refused(403, 'community.workspace.no_access'));
-      },
+      banned: () => [mockWire.getPost, mockWire.listComments].forEach((m) => m.mockRejectedValue(refused(403, 'community.workspace.no_access'))),
+      'removed or left the space': () => { leave(); mockWire.getPost.mockRejectedValue(refused(403, 'community.workspace.no_access')); },
     },
   },
   {
     file: 'screens/community/CommunitySpaceScreen.tsx', label: 'space: New post and voice entry',
     draw: () => { mockParams.current = {}; return <CommunitySpaceScreen space="hall" />; },
-    controls: ['community-space-new-post', 'community-space-voice'],
-    closedMarks: ['community-space-closed-line', 'community-space-no-workspace'],
+    controls: ['community-space-new-post', 'community-space-voice'], closedMarks: ['community-space-closed-line', 'community-space-no-workspace'],
     states: {
       banned: () => mockWire.listPosts.mockRejectedValue(refused(403, 'community.workspace.no_access')),
       'removed or left the space': leave,
@@ -212,14 +199,10 @@ const HOSTS: Host[] = [
   {
     file: 'screens/community/CommunityChallengeDetailScreen.tsx', label: 'challenge notes and progress',
     draw: () => { mockParams.current = { challengeId: 'ch-1' }; return <CommunityChallengeDetailScreen />; },
-    controls: ['community-challenge-composer-field', 'community-challenge-composer-send', 'community-challenge-primary-action'],
-    closedMarks: ['community-challenge-closed'],
+    controls: ['community-challenge-composer-field', 'community-challenge-composer-send', 'community-challenge-primary-action'], closedMarks: ['community-challenge-closed'],
     states: {
       banned: () => mockChallenges.listComments.mockRejectedValue(challengeRefused(403, 'community.workspace.no_access')),
-      'removed or left the space': () => {
-        leave();
-        mockChallenges.listComments.mockRejectedValue(challengeRefused(404, 'community.challenge.not_found'));
-      },
+      'removed or left the space': () => { leave(); mockChallenges.listComments.mockRejectedValue(challengeRefused(404, 'community.challenge.not_found')); },
     },
     notApplicable: { 'I blocked them': ONE_TO_ONE_NA, 'they blocked me': ONE_TO_ONE_NA },
   },
