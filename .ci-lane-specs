@@ -1,0 +1,2 @@
+src/screens/community/__tests__/CommunitySpaceChatScreen.test.tsx
+--testNamePattern=B-TEST: the chat read failed while online
