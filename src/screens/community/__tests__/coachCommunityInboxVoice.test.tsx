@@ -200,8 +200,10 @@ describe('getInbox with the voice flag on', () => {
   });
 });
 
+// FR-865R4: the Studio voice card (m#865) replaced round 2's strip; the card itself is what screen readers skip, so
+// the row stays one element that says "…: Voice note · 0:42".
 describe('FR-868 round 2 — the voice row is one accessible element', () => {
-  it('no accessible element wraps the pressable voice row, and the strip is hidden from screen readers', async () => {
+  it('no accessible element wraps the pressable voice row, and the voice card is hidden from screen readers', async () => {
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     const row = getByTestId(`coach-community-inbox-row-${VOICE_ID}`);
     let node = row.parent;
@@ -210,9 +212,9 @@ describe('FR-868 round 2 — the voice row is one accessible element', () => {
       expect(node.props.accessibilityRole).not.toBe('button');
       node = node.parent;
     }
-    const glyph = getByTestId(`coach-community-inbox-voice-${VOICE_ID}`, { includeHiddenElements: true });
+    const card = getByTestId(`coach-community-inbox-voice-${VOICE_ID}`, { includeHiddenElements: true });
     let hidden = false;
-    let up = glyph.parent;
+    let up: typeof card | null = card;
     while (up && up !== row) {
       if (up.props.accessibilityElementsHidden === true) hidden = true;
       up = up.parent;
