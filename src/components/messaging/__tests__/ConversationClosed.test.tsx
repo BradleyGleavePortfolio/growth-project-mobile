@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { act, render, renderHook } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
 
 const mockWarning = jest.fn(async () => undefined);
 jest.mock('../../../ui/haptics/haptics.service', () => ({
@@ -41,7 +42,7 @@ describe('isClosedRefusal', () => {
     ['coaching send, block either way (403 BLOCKED)', axiosErr(403, COACHING_BLOCKED)],
     ['coaching edit / pin (messaging.blocked)', axiosErr(403, { error: 'messaging.blocked', code: 'messaging.blocked' })],
     ['DM to someone I blocked', axiosErr(403, { error: 'forbidden', code: 'community.dm.blocked_by_you' })],
-    ['DM with someone who blocked me (not disclosed)', axiosErr(404, { error: 'not_found', code: 'community.dm.not_found' })],
+    ['DM with a member who is not there', axiosErr(404, { error: 'not_found', code: 'community.dm.not_found' })],
     ['DM with someone who blocked me (#169-5 code)', axiosErr(403, { code: 'community.dm.blocked_by_them' })],
     ['banned from the space', axiosErr(403, { code: 'community.workspace.no_access' })],
     ['banned from the cohort', axiosErr(403, { code: 'community.cohort.no_access' })],
@@ -122,6 +123,26 @@ describe('ConversationClosedLine', () => {
     expect(view.getByText(CLOSED_LINE)).toBeTruthy();
     expect(line.props.accessibilityLabel).toBe('This conversation is closed');
     expect(line.props.accessibilityLiveRegion).toBe('polite');
+  });
+});
+
+describe('FR-877R2 (LO C4): a refused send is announced with the line the bar shows', () => {
+  it.each([
+    ['BAM-2a', { by: 'me' as const }, BLOCKED_BY_ME_LINE],
+    ['BAM-2b', { by: 'them' as const, name: 'Sam Rivera' }, 'Sam Rivera has blocked you'],
+    ['BAM-1', {}, CLOSED_LINE],
+  ])('%s', async (_label, props, said) => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    const { result } = await renderHook(() => useConversationClosed('coach-1', [], true));
+    await act(async () => { result.current.close(axiosErr(403, COACHING_BLOCKED)); });
+    expect(announce).not.toHaveBeenCalled(); // close() itself no longer says BAM-1
+    const first = await render(<ConversationClosedLine {...props} />);
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith(said);
+    first.unmount();
+    await render(<ConversationClosedLine {...props} />); // a closed chat opened later is not announced again
+    expect(announce).toHaveBeenCalledTimes(1);
+    announce.mockRestore();
   });
 });
 

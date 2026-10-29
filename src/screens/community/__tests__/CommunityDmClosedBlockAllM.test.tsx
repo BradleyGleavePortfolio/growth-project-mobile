@@ -4,7 +4,7 @@
  * "This conversation is closed"; a refused send keeps the typed text on the device; an unblock opens it again.
  */
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Alert, StyleSheet } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
@@ -40,6 +40,9 @@ let mockMessages: unknown[] = [];
 let mockReadPending = false;
 let mockMe: { workspace_id: string | null } = { workspace_id: 'ws-1' };
 const mockDmTo = jest.fn();
+// FR-877R2: my coach's name (the same read Community home makes); null = unknown or failed, pending = not answered yet.
+let mockCoachName: { name: string | null; settled: boolean } = { name: 'Sam Rivera', settled: true };
+const mockCoachNameFor = jest.fn();
 jest.mock('../../../hooks/useCommunity', () => ({
   useCommunityMe: () => ({ data: mockMe, isLoading: false, isError: false, isSuccess: true }),
   useDmMessages: (ws: string, to: string) => {
@@ -54,6 +57,10 @@ jest.mock('../../../hooks/useCommunity', () => ({
   useSendDm: () => ({ mutateAsync: mockSendAsync, mutate: mockSendMutate, isPending: false, error: null }),
   useCreatePost: () => ({ mutate: mockPostMutate, isPending: false, error: null }),
   isOptimisticId: () => false,
+  useMyCoachName: (coachId: string | null) => {
+    mockCoachNameFor(coachId);
+    return coachId ? mockCoachName : { name: null, settled: true };
+  },
 }));
 
 const CommunityDmThreadScreen = require('../CommunityDmThreadScreen').default;
@@ -77,6 +84,8 @@ beforeEach(async () => {
   mockReadPending = false;
   mockMe = { workspace_id: 'ws-1' };
   mockDmTo.mockReset();
+  mockCoachName = { name: 'Sam Rivera', settled: true };
+  mockCoachNameFor.mockReset();
   mockSendAsync.mockReset().mockResolvedValue({ id: 'dm-1' });
   mockSendMutate.mockReset();
   mockPostMutate.mockReset();
@@ -160,6 +169,28 @@ describe('community DM', () => {
     expect(view.queryByText(/blocked/i)).toBeNull();
   });
 
+  it('FR-877R2 (LO C2): reached with no name (a link), my coach is "Coach" as the header says; another member is named by nobody', async () => {
+    mockReadError = BLOCKED_BY_THEM;
+    mockParams.current = { recipientId: 'coach-7' };
+    expect((await render(<CommunityDmThreadScreen />)).getByText('Coach has blocked you')).toBeTruthy();
+    mockParams.current = { recipientId: 'member-2' };
+    const view = await render(<CommunityDmThreadScreen />);
+    expect(view.getByText('This conversation is closed')).toBeTruthy();
+    expect(view.queryByText(/has blocked you/)).toBeNull();
+  });
+
+  it('FR-877R2 (LO C4): a refused send is announced with the line the bar shows, once', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    mockSendAsync.mockRejectedValueOnce(BLOCKED_BY_YOU);
+    const view = await open();
+    expect(announce).not.toHaveBeenCalled();
+    await fireEvent.changeText(view.getByTestId(FIELD), 'Hi');
+    await act(async () => { fireEvent.press(view.getByTestId('community-dmthread-composer-send')); });
+    await waitFor(() => expect(view.getByTestId('community-dmthread-closed')).toBeTruthy());
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith(view.getByTestId('community-dmthread-closed').props.accessibilityLabel);
+  });
+
   it('a refused send closes at once with no error box, and the typed text is kept on the device', async () => {
     mockSendAsync.mockRejectedValueOnce(BLOCKED_BY_YOU);
     const view = await open();
@@ -209,6 +240,34 @@ describe('New message / New post composer', () => {
     expect(view.queryByText(/has blocked you$/)).toBeTruthy();
     expect(view.queryByText('This conversation is closed')).toBeNull();
     expect(mockSendMutate).not.toHaveBeenCalled();
+  });
+
+  it('FR-877R2 B1: the line names my coach as the app knows them; unknown name = BAM-1; the bar waits for the name', async () => {
+    mockParams.current = { mode: 'dm', recipientId: '' };
+    mockReadError = BLOCKED_BY_THEM;
+    const named = await render(<CommunityComposerScreen />);
+    expect(mockCoachNameFor).toHaveBeenCalledWith('coach-7');
+    expect(named.getByText('Sam Rivera has blocked you')).toBeTruthy();
+    expect(named.getByLabelText('Sam Rivera has blocked you')).toBeTruthy();
+    mockCoachName = { name: null, settled: false };
+    const waiting = await render(<CommunityComposerScreen />);
+    expect(waiting.queryByTestId('community-composer-closed')).toBeNull();
+    expect(waiting.queryByTestId('community-composer-body')).toBeNull(); // still closed: no box while it waits
+    mockCoachName = { name: null, settled: true }; // no coach name, or the read failed
+    const unknown = await render(<CommunityComposerScreen />);
+    expect(unknown.getByText('This conversation is closed')).toBeTruthy();
+    expect(unknown.queryByText(/has blocked you/)).toBeNull();
+  });
+
+  it('FR-877R2 B1: my own block of my coach stays BAM-2a, a ban stays BAM-1, and neither asks for the name', async () => {
+    mockParams.current = { mode: 'dm', recipientId: '' };
+    mockReadError = BLOCKED_BY_YOU;
+    expect((await render(<CommunityComposerScreen />)).getByLabelText('You blocked them. Unblock in Settings')).toBeTruthy();
+    mockReadError = NOT_FOUND;
+    const gone = await render(<CommunityComposerScreen />);
+    expect(gone.getByText('This conversation is closed')).toBeTruthy();
+    expect(gone.queryByText(/blocked/i)).toBeNull();
+    expect(mockCoachNameFor).not.toHaveBeenCalledWith('coach-7');
   });
 
   it('New message to someone I blocked: no fields and no Send, only the closed line', async () => {

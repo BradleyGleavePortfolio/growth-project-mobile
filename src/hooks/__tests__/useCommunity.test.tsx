@@ -31,6 +31,9 @@ jest.mock('../../api/communityRealtime', () => ({
   subscribeToCommunityUser: jest.fn(),
 }));
 
+const mockGet = jest.fn();
+jest.mock('../../services/api', () => ({ __esModule: true, default: { get: (...a: unknown[]) => mockGet(...a) } }));
+
 import { communityApi } from '../../api/communityApi';
 import { subscribeToCommunityUser } from '../../api/communityRealtime';
 import {
@@ -39,6 +42,7 @@ import {
   useAddComment,
   useSendDm,
   useCommunityBadge,
+  useMyCoachName,
 } from '../useCommunity';
 
 const WS = '11111111-1111-1111-1111-111111111111';
@@ -295,5 +299,36 @@ describe('useCommunityBadge — live unread via Realtime ping (no polling)', () 
     mockApi.getMe.mockResolvedValue(meWith(0, 0, 0));
     await renderHook(() => useCommunityBadge(null), { wrapper: Wrapper });
     expect(mockSubscribe).not.toHaveBeenCalled();
+  });
+});
+
+describe('FR-877R2 useMyCoachName — the coach name BAM-2b uses where a coach DM shows none', () => {
+  beforeEach(() => mockGet.mockReset());
+
+  it('reads /v1/clients/me/coach under Community home\'s key and gives the trimmed name', async () => {
+    mockGet.mockResolvedValue({ data: { id: 'coach-7', name: '  Sam Rivera ' } });
+    const { qc, Wrapper } = makeWrapper();
+    const { result } = await renderHook(() => useMyCoachName('coach-7'), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.settled).toBe(true));
+    expect(result.current.name).toBe('Sam Rivera');
+    expect(mockGet).toHaveBeenCalledWith('/v1/clients/me/coach');
+    expect(qc.getQueryData(['community', 'home', 'coach-name', 'coach-7'])).toBe('  Sam Rivera ');
+  });
+
+  it('a failed read or an empty name settles with no name (BAM-1, never a made-up one)', async () => {
+    mockGet.mockRejectedValueOnce(new Error('Network Error'));
+    const failed = await renderHook(() => useMyCoachName('coach-7'), { wrapper: makeWrapper().Wrapper });
+    await waitFor(() => expect(failed.result.current.settled).toBe(true));
+    expect(failed.result.current.name).toBeNull();
+    mockGet.mockResolvedValueOnce({ data: { name: '   ' } });
+    const empty = await renderHook(() => useMyCoachName('coach-7'), { wrapper: makeWrapper().Wrapper });
+    await waitFor(() => expect(empty.result.current.settled).toBe(true));
+    expect(empty.result.current.name).toBeNull();
+  });
+
+  it('with no coach to name it asks nothing and is settled at once', async () => {
+    const { result } = await renderHook(() => useMyCoachName(null), { wrapper: makeWrapper().Wrapper });
+    expect(result.current).toEqual({ name: null, settled: true });
+    expect(mockGet).not.toHaveBeenCalled();
   });
 });
