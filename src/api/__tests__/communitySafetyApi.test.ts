@@ -167,9 +167,12 @@ describe('owner-approved community safety copy (2026-10-01 09:07 PDT)', () => {
 
   it('pins the 24-hour moderation sentence and the full commitment', () => {
     expect(COMMUNITY_REVIEW_WITHIN_24H).toBe(H24);
+    // FR-877 B1: the offline fallback is RC-BLOCK word for word (owner 10-23 10:57 PDT, SoT A6.0-170 / A6.25), the
+    // sentence the server serves since b#1145; it no longer promises the blocked person is never told.
     expect(COMMUNITY_RESPONSE_COMMITMENT).toBe(
-      `${H24} Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you, and they are not told.`,
+      'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you. In a direct message they see that you blocked them; nobody else is told.',
     );
+    expect(COMMUNITY_RESPONSE_COMMITMENT).not.toMatch(/not told/);
     expect(COMMUNITY_REPORT_SENT_MESSAGE).toBe(
       `Thank you. ${H24} Content that breaks these guidelines is removed, and people who break them repeatedly lose access.`,
     );
