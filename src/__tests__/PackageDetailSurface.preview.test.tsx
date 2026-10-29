@@ -109,7 +109,9 @@ describe('PackageDetailSurface — shared presentation (no forked visuals)', () 
   it('shows only supplied inclusions and trial data, retaining one-time billing copy', async () => {
     const r = await render(<PackageDetailSurface package={{ ...VM, features: [], trialDays: null,
       billingInterval: 'one_time' }} mode="buyer" onPay={jest.fn()} />);
-    expect(r.queryByText("What's included")).toBeNull();
+    // STORE-1TO1: every package includes 1:1 coaching with its coach, so the list shows that alone.
+    expect(r.getByText("What's included")).toBeTruthy();
+    expect(r.getByTestId('package-detail-one-to-one').props.children).toBe('1:1 coaching with Jordan Coach');
     expect(r.queryByText(/Includes a .*free trial/)).toBeNull();
     expect(r.getByText('one-time payment')).toBeTruthy();
     await r.rerender(<PackageDetailSurface package={{ ...VM, trialDays: 7 }} mode="buyer" onPay={jest.fn()} />);
@@ -195,5 +197,14 @@ describe('CoachPackageEditScreen — preview-as-buyer is checkout-safe (source g
     // share-token lookup.
     expect(EDIT_CODE).not.toMatch(/getByShareToken/);
     expect(EDIT_CODE).toMatch(/previewViewModel/);
+  });
+});
+
+describe('PackageDetailSurface — STORE-1TO1 1:1 coaching line', () => {
+  it.each(['buyer', 'coachPreview'] as const)('lists 1:1 coaching with the coach first under What\'s included (%s)', async (mode) => {
+    const r = await render(<PackageDetailSurface package={VM} mode={mode} onPay={jest.fn()} />);
+    expect(r.getByTestId('package-detail-one-to-one').props.children).toBe('1:1 coaching with Jordan Coach');
+    const texts = r.getAllByText(/1:1 coaching with Jordan Coach|Weekly check-ins/).map((n) => n.props.children);
+    expect(texts).toEqual(['1:1 coaching with Jordan Coach', 'Weekly check-ins']);
   });
 });

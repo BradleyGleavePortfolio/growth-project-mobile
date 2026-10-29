@@ -392,3 +392,30 @@ it('Your plans: a plan that already ended gets its own copy, never a generic err
   );
   alertSpy.mockRestore();
 });
+
+// STORE-1TO1 (owner #183-S1): every package includes 1:1 coaching with its coach. The plan page
+// lists it first under "What's included", also for a package with no features of its own.
+it('Style C lists 1:1 coaching with the coach first under What\'s included, with or without features', async () => {
+  mockBillingV2 = true;
+  const original = await defaultPackages?.();
+  if (!original?.ok) throw new Error('Expected available plans');
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{ ...original.data[0], features: ['Weekly call'] }] });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  const page = pageOrder(r.getByTestId('client-plan-page'));
+  const at = (text: string) => page.findIndex((entry) => entry === text);
+  expect(r.getByTestId('client-plan-one-to-one').props.children).toBe('1:1 coaching with Coach Lee');
+  const line = at('client-plan-one-to-one');
+  expect(page[line + 1]).toBe('1:1 coaching with Coach Lee');
+  expect(at("What's included")).toBeGreaterThan(-1);
+  expect(at("What's included")).toBeLessThan(line);
+  expect(line).toBeLessThan(at('Weekly call'));
+  await r.unmount();
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{ ...original.data[0], features: [] }] });
+  const bare = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(bare.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(bare.getByTestId('plan-offer-pkg-monthly-open'));
+  expect(within(bare.getByTestId('client-plan-page')).getByText("What's included")).toBeTruthy();
+  expect(bare.getByTestId('client-plan-one-to-one').props.children).toBe('1:1 coaching with Coach Lee');
+});
