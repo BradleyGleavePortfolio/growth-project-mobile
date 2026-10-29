@@ -14,7 +14,7 @@
  *     coachCommunityApi.test.ts shows voice rows are skipped.
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { forestPop, voiceShades } from '../../../theme/tokens';
 
@@ -144,7 +144,8 @@ describe('CoachCommunityInboxScreen — voice rows (flag on)', () => {
     const disc = StyleSheet.flatten(getByTestId(`coach-community-inbox-voice-disc-${VOICE_ID}`, hidden).props.style);
     expect(disc).toMatchObject({ width: 52, height: 52, backgroundColor: forestPop.deep });
     const bars = getByTestId(`coach-community-inbox-voice-bars-${VOICE_ID}`, hidden);
-    const heights = bars.children.map((b) => StyleSheet.flatten((b as { props: { style: never } }).props.style).height);
+    type Styled = { props: { style?: StyleProp<ViewStyle> } };
+    const heights = bars.children.map((b) => StyleSheet.flatten((b as unknown as Styled).props.style)?.height);
     expect(heights.length).toBe(48);
     expect(new Set(heights)).toEqual(new Set([4]));
     const time = StyleSheet.flatten(getByTestId(`coach-community-inbox-voice-time-${VOICE_ID}`, hidden).props.style);
