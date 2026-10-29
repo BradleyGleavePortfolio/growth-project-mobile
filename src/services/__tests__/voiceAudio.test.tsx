@@ -15,12 +15,18 @@ jest.mock('../sentry', () => ({
 }));
 
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
-import { resolveVoicePlayback } from '../../components/community/voicePlaybackPort';
+import {
+  endVoicePlaybackTurn,
+  resolveVoicePlayback,
+  takeVoicePlaybackTurn,
+  type VoicePlaybackTurn,
+} from '../../components/community/voicePlaybackPort';
 import { downsamplePeaks, normaliseMetering, resetExpoAudioForTests } from '../voiceAudio';
 
 interface FakePlayer {
   source: { uri: string };
   options: { updateInterval: number };
+  playing: boolean;
   calls: string[];
   removed: boolean;
   emit(event: string, payload: Record<string, unknown>): void;
@@ -272,5 +278,66 @@ describe('metering helpers', () => {
     expect(out).toHaveLength(64);
     expect(out.every((p) => p === 1)).toBe(true);
     expect(downsamplePeaks([0.2, 0.4])).toEqual([0.2, 0.4]);
+  });
+});
+
+describe('iOS playback-to-recording audio-session handoff', () => {
+  it('keeps iOS capture alive when pausing the old note schedules session deactivation', async () => {
+    jest.useFakeTimers();
+    const audio = jest.requireMock<typeof import('expo-audio')>('expo-audio');
+    const createPlayer = audio.createAudioPlayer;
+    // Model the installed expo-audio native contract, not an arbitrary delay:
+    // ios/AudioModule.swift:244-248 calls deactivateSession on pause unless
+    // keepAudioSessionActive; :827-841 waits 0.1s and checks only playables.
+    // Apple's setActive(_:options:) documentation says false stops running
+    // audio objects even when it throws isBusy:
+    // https://developer.apple.com/documentation/avfaudio/avaudiosession/setactive(_:options:)
+    const playerFactory = jest.spyOn(audio, 'createAudioPlayer').mockImplementation((source, options) => {
+      const player = createPlayer(source, options);
+      const pause = player.pause.bind(player);
+      player.pause = () => {
+        pause();
+        if (!options?.keepAudioSessionActive) {
+          setTimeout(() => {
+            if (!mock.state.players.some((candidate) => candidate.playing)) {
+              for (const recorder of mock.state.recorders) recorder.isRecording = false;
+            }
+          }, 100);
+        }
+      };
+      return player;
+    });
+    let unmount: (() => void | Promise<void>) | undefined;
+    let note: VoicePlaybackTurn | undefined;
+    try {
+      const handle = await resolveVoicePlayback().load('https://signed.example/old-note.m4a', {});
+      await handle.play();
+      note = { stop: () => handle.pause() };
+      await takeVoicePlaybackTurn(note);
+      const hook = await renderHook(() => useVoiceRecorder());
+      unmount = hook.unmount;
+
+      await act(async () => {
+        await hook.result.current.start();
+      });
+      const recorder = mock.state.recorders[mock.state.recorders.length - 1];
+      expect(mock.state.players[0].playing).toBe(false);
+      expect(recorder.isRecording).toBe(true);
+      expect(hook.result.current.status).toBe('recording');
+
+      await act(async () => {
+        jest.advanceTimersByTime(150);
+      });
+      // Recording must survive the old player's pending native cleanup, not
+      // merely show a recording UI while the microphone has already stopped.
+      expect(recorder.isRecording).toBe(true);
+      expect(hook.result.current.status).toBe('recording');
+      await handle.unload();
+    } finally {
+      await unmount?.();
+      if (note) endVoicePlaybackTurn(note);
+      playerFactory.mockRestore();
+      jest.useRealTimers();
+    }
   });
 });
