@@ -6,11 +6,16 @@
  * with Back and the title, and the app's status band above it in the same forest with light icons; never a light
  * stack bar over a second "Voice note" title. The coach stack mounts the page with no bar of its own
  * (coachCommunityHeaders868.test.ts).
+ *
+ * Sol R3 #865 B7, Opus R3 #865 N6: the note is named the Studio way (GOAL B-09a, as the Hall's voice rows): a square
+ * identity tile (a member's leaf tile with a moss edge; the coach's deep tile with a gold serif initial), the name in
+ * the Hall's type, the Hall's Coach mark on a coach's note, the time beside the name, no mic glyph; and the player is
+ * told when the phone is offline, so Play is off rather than failing.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { forestPop } from '../../../theme/tokens';
 import { StatusBarBand, STATUS_BAR_BONE } from '../../../components/StatusBarBand';
@@ -27,6 +32,12 @@ jest.mock('@react-navigation/native', () => ({
 }));
 jest.mock('expo-status-bar', () => ({ StatusBar: ({ style }: { style: string }) =>
   require('react').createElement(require('react-native').Text, null, `icons-${style}`) }));
+// Line icons read as their names here, so a test can say which glyphs the page draws.
+jest.mock('@expo/vector-icons', () => ({
+  ...jest.requireActual('@expo/vector-icons'),
+  Ionicons: ({ name }: { name: string }) =>
+    require('react').createElement(require('react-native').Text, null, `icon-${name}`),
+}));
 jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: {} }) }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1' }) }));
 jest.mock('../../../components/community/SafetyMenu', () => () => null);
@@ -56,7 +67,7 @@ const note = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-type State = 'closed' | 'loading' | 'gone' | 'loaded';
+type State = 'closed' | 'loading' | 'gone' | 'loaded' | 'loaded-as-is';
 
 async function renderPage(state: State) {
   if (state === 'closed') flags.communityVoiceNotes = false; // the route's flag off: the "not available" page
@@ -76,12 +87,20 @@ async function renderPage(state: State) {
   if (state === 'closed') view.getByText('This voice note is not available right now.');
   if (state === 'loading') await view.findByTestId('community-voice-detail-loading');
   if (state === 'gone') await view.findByTestId('community-voice-detail-error');
-  if (state === 'loaded') await view.findByTestId('community-voice-detail-scroll');
+  if (state === 'loaded' || state === 'loaded-as-is') await view.findByTestId('community-voice-detail-scroll');
   const band = () => StyleSheet.flatten(view.getByTestId('status-bar-band').props.style).backgroundColor;
   return { ...view, band, leave: () => view.rerender(phone(false)) };
 }
 
+const netInfo = jest.requireMock('@react-native-community/netinfo') as {
+  __setState: (next: Record<string, unknown>) => void;
+  __reset: () => void;
+};
+const lastPlayer = () => mockPlayer.mock.calls.at(-1)?.[0] as { tone?: string; offline?: boolean } | undefined;
+const style = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) ?? {};
+
 afterEach(() => {
+  netInfo.__reset();
   flags.communityVoiceNotes = true;
   mockGoBack.mockClear();
   mockGetOne.mockReset();
@@ -112,5 +131,47 @@ describe('one header: the deep Studio bar with Back (Sol R3 #865 B7, Opus R3 #86
     await page.leave();
     expect(page.band()).toBe(STATUS_BAR_BONE);
     expect(page.queryByText('icons-light')).toBeNull();
+  });
+});
+
+describe('the note is named the Studio way (Sol R3 #865 B7, Opus R3 #865 N6)', () => {
+  it("a member's note: a leaf tile with a moss edge, the name and time in the Hall's type, no mic glyph", async () => {
+    const page = await renderPage('loaded');
+    const tile = page.getByTestId('community-voice-detail-tile');
+    expect(style(tile)).toMatchObject({ width: 32, height: 32, borderRadius: 10, backgroundColor: forestPop.leaf,
+      borderColor: forestPop.moss, borderWidth: 1 });
+    expect(style(page.getByText('R'))).toMatchObject({ color: forestPop.ink });
+    expect(style(page.getByText('Riley Chen'))).toMatchObject({ fontSize: 17, fontWeight: '600', color: forestPop.ink });
+    expect(style(page.getByText('just now'))).toMatchObject({ fontSize: 15, color: forestPop.n700 });
+    expect(page.queryByText('Coach')).toBeNull();
+    expect(page.queryByText('icon-mic-outline')).toBeNull();
+    expect(lastPlayer()?.tone).toBe('light');
+  });
+
+  it("a coach's note: the deep tile with a gold serif initial and the Hall's Coach mark, on the deep card", async () => {
+    mockGetOne.mockResolvedValue(note({ author_name: 'Sam Rivera', author_is_coach: true }));
+    const page = await renderPage('loaded-as-is');
+    expect(style(page.getByTestId('community-voice-detail-tile'))).toMatchObject({ backgroundColor: forestPop.deep });
+    expect(style(page.getByText('S'))).toMatchObject({ color: forestPop.gold, fontFamily: 'CormorantGaramond_500Medium' });
+    expect(style(page.getByText('Coach'))).toMatchObject({ backgroundColor: forestPop.deep, color: forestPop.gold });
+    expect(lastPlayer()?.tone).toBe('coach');
+  });
+
+  it('no name: the page says "Voice note" and draws no tile, never an invented letter', async () => {
+    mockGetOne.mockResolvedValue(note({ author_name: null }));
+    const page = await renderPage('loaded-as-is');
+    expect(page.queryByTestId('community-voice-detail-tile')).toBeNull();
+    expect(page.getAllByText('Voice note')).toHaveLength(2); // the bar's title and the name line
+  });
+
+  it('offline: the player is told, so Play is off (the grey disc of GOAL B-10a), not a load that fails', async () => {
+    netInfo.__setState({ isConnected: false, isInternetReachable: false });
+    await renderPage('loaded');
+    await waitFor(() => expect(lastPlayer()?.offline).toBe(true));
+  });
+
+  it('online: Play is on', async () => {
+    await renderPage('loaded');
+    await waitFor(() => expect(lastPlayer()?.offline).toBe(false));
   });
 });
