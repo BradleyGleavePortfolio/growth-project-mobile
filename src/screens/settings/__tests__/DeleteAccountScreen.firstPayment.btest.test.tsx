@@ -97,7 +97,8 @@ it('B-LS898R3-1: confirmed account deletion removes only the deleted coach marke
   await markFirstPaymentSeen('coach-deleted');
   await markFirstPaymentSeen('coach-other');
   await AsyncStorage.setItem('pending_invite_code', 'private');
-  expect(await AsyncStorage.getItem(key('coach-deleted'))).toBe('true');
+  // Baseline control uses the public gate interface, independent of its backend.
+  expect(await hasSeenFirstPayment('coach-deleted')).toBe(true);
 
   const loggedOut = jest.fn();
   authEvents.on('logout', loggedOut);
@@ -107,7 +108,7 @@ it('B-LS898R3-1: confirmed account deletion removes only the deleted coach marke
     await waitFor(() => expect(loggedOut).toHaveBeenCalledTimes(1));
     // Cleanup really ran; neither a mocked signOut nor an early assertion.
     expect(await AsyncStorage.getItem('pending_invite_code')).toBeNull();
-    expect(await AsyncStorage.getItem(key('coach-other'))).toBe('true');
+    expect(await hasSeenFirstPayment('coach-deleted')).toBe(false);
     expect(await AsyncStorage.getItem(key('coach-deleted'))).toBeNull();
   } finally {
     authEvents.off('logout', loggedOut);
