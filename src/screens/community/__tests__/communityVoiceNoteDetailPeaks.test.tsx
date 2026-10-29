@@ -18,6 +18,7 @@ jest.mock('../../../config/featureFlags', () => {
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }),
   useRoute: () => ({ params: { voiceNoteId: 'n1' } }),
+  useFocusEffect: () => undefined, // FR-865R4: the page's forest status band registers on focus
 }));
 jest.mock('../../../hooks/useFeatureFlags', () => ({
   useFeatureFlags: () => ({ flags: {} }),

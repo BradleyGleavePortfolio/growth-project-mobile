@@ -98,6 +98,7 @@ const netInfo = jest.requireMock('@react-native-community/netinfo') as {
 };
 const lastPlayer = () => mockPlayer.mock.calls.at(-1)?.[0] as { tone?: string; offline?: boolean } | undefined;
 const style = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) ?? {};
+const hidden = { includeHiddenElements: true };
 
 afterEach(() => {
   netInfo.__reset();
@@ -137,10 +138,12 @@ describe('one header: the deep Studio bar with Back (Sol R3 #865 B7, Opus R3 #86
 describe('the note is named the Studio way (Sol R3 #865 B7, Opus R3 #865 N6)', () => {
   it("a member's note: a leaf tile with a moss edge, the name and time in the Hall's type, no mic glyph", async () => {
     const page = await renderPage('loaded');
-    const tile = page.getByTestId('community-voice-detail-tile');
+    const tile = page.getByTestId('community-voice-detail-tile', hidden);
     expect(style(tile)).toMatchObject({ width: 32, height: 32, borderRadius: 10, backgroundColor: forestPop.leaf,
       borderColor: forestPop.moss, borderWidth: 1 });
-    expect(style(page.getByText('R'))).toMatchObject({ color: forestPop.ink });
+    expect(style(page.getByText('R', hidden))).toMatchObject({ color: forestPop.ink });
+    // The tile is decoration: a screen reader hears the name beside it, not the letter twice.
+    expect(page.queryByTestId('community-voice-detail-tile')).toBeNull();
     expect(style(page.getByText('Riley Chen'))).toMatchObject({ fontSize: 17, fontWeight: '600', color: forestPop.ink });
     expect(style(page.getByText('just now'))).toMatchObject({ fontSize: 15, color: forestPop.n700 });
     expect(page.queryByText('Coach')).toBeNull();
@@ -151,8 +154,8 @@ describe('the note is named the Studio way (Sol R3 #865 B7, Opus R3 #865 N6)', (
   it("a coach's note: the deep tile with a gold serif initial and the Hall's Coach mark, on the deep card", async () => {
     mockGetOne.mockResolvedValue(note({ author_name: 'Sam Rivera', author_is_coach: true }));
     const page = await renderPage('loaded-as-is');
-    expect(style(page.getByTestId('community-voice-detail-tile'))).toMatchObject({ backgroundColor: forestPop.deep });
-    expect(style(page.getByText('S'))).toMatchObject({ color: forestPop.gold, fontFamily: 'CormorantGaramond_500Medium' });
+    expect(style(page.getByTestId('community-voice-detail-tile', hidden))).toMatchObject({ backgroundColor: forestPop.deep });
+    expect(style(page.getByText('S', hidden))).toMatchObject({ color: forestPop.gold, fontFamily: 'CormorantGaramond_500Medium' });
     expect(style(page.getByText('Coach'))).toMatchObject({ backgroundColor: forestPop.deep, color: forestPop.gold });
     expect(lastPlayer()?.tone).toBe('coach');
   });
@@ -160,7 +163,7 @@ describe('the note is named the Studio way (Sol R3 #865 B7, Opus R3 #865 N6)', (
   it('no name: the page says "Voice note" and draws no tile, never an invented letter', async () => {
     mockGetOne.mockResolvedValue(note({ author_name: null }));
     const page = await renderPage('loaded-as-is');
-    expect(page.queryByTestId('community-voice-detail-tile')).toBeNull();
+    expect(page.queryByTestId('community-voice-detail-tile', hidden)).toBeNull();
     expect(page.getAllByText('Voice note')).toHaveLength(2); // the bar's title and the name line
   });
 
