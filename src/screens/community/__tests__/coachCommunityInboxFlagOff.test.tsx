@@ -139,8 +139,9 @@ describe('CoachCommunityInboxScreen — flag OFF invariance (Code F4)', () => {
   it('the row accessibility label is the plain v1-6 base (no ack/SLA routine)', async () => {
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     const row = getByTestId(`coach-community-inbox-row-${MID}`);
-    expect(row.props.accessibilityLabel).toBe(
-      'Dana Cruz in Spring block: Quick question about my plan',
+    // FIN-868R5 C3: the base also says when the message came.
+    expect(row.props.accessibilityLabel).toMatch(
+      /^Dana Cruz in Spring block, .+: Quick question about my plan$/,
     );
   });
 });

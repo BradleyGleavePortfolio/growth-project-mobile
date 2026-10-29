@@ -9,7 +9,7 @@
  * and the same idempotency contract, but their endpoint sets are disjoint.
  *
  * Backend contract source of truth (binding — do NOT drift):
- *   growth-project-backend/src/community/coach-inbox/community-coach-inbox.controller.ts
+ *   growth-project-backend/src/community/inbox/community-coach-inbox.controller.ts
  *   growth-project-backend/src/community/cohorts/community-cohort-write.controller.ts
  *   growth-project-backend/src/community/cohorts/community-cohort-members.controller.ts
  *   growth-project-backend/src/community/moderation/community-moderation.controller.ts
@@ -79,10 +79,9 @@ export type CoachSlaState = (typeof COACH_SLA_STATES)[number];
 // ─── Response schemas (mirror backend Zod DTOs) ──────────────────────────────
 
 /**
- * GET /community/coach/dashboard — composed coach landing envelope. The
- * backend aggregates the inbox unread count, the active cohort count, and the
- * count of moderation items flagged today so the home surface needs exactly
- * one round-trip on cold start.
+ * The coach landing counts. The server has no dashboard route: getDashboard()
+ * builds this from GET /community/cohorts, GET /community/me/coach-inbox and
+ * GET /community/moderation/flagged.
  */
 export const CoachDashboardSchema = z
   .object({
@@ -97,6 +96,13 @@ export type CoachDashboard = z.infer<typeof CoachDashboardSchema>;
 const InboxVoiceSchema = z
   .object({ note_id: z.string().uuid(), duration_ms: z.number().int().nonnegative() })
   .passthrough();
+
+/**
+ * Every inbox row kind the server sends: src/community/inbox/
+ * community-coach-inbox.dto.ts:48 kind enum on main 946d1cb0 (text, voice, photo;
+ * a client's space photo's preview is its caption, or "Photo").
+ */
+export const COACH_INBOX_ROW_KINDS = ['text', 'voice', 'photo'] as const;
 
 /** Per-row ack summary: community-coach-inbox.dto.ts:25-31. */
 export const InboxAckSummarySchema = z
@@ -123,7 +129,7 @@ export const CoachInboxItemSchema = z
     acknowledged: z.boolean(),
     /** Only message rows carry coach acks; a voice row's id is the note's id. */
     type: z.enum(['message', 'post']),
-    kind: z.enum(['text', 'voice']),
+    kind: z.enum(COACH_INBOX_ROW_KINDS),
     voice: InboxVoiceSchema.optional(),
     ack: InboxAckSummarySchema.optional(),
   })
@@ -146,14 +152,14 @@ export const CoachCohortSchema = z
     id: z.string().uuid(),
     name: z.string(),
     member_count: z.number().int().nonnegative(),
-    /** Count of unanswered inbox items routed from this cohort. */
+    /** Unread per space: the server sends none yet, so this is always 0. */
     unread_count: z.number().int().nonnegative(),
-    created_at: z.string(),
+    created_at: z.string().optional(),
   })
   .passthrough();
 export type CoachCohort = z.infer<typeof CoachCohortSchema>;
 
-/** GET /community/coach/cohorts — the coach's cohorts (tenant-scoped). */
+/** The coach's cohorts (tenant-scoped). */
 export const CoachCohortListSchema = z
   .object({ cohorts: z.array(CoachCohortSchema) })
   .passthrough();
@@ -167,12 +173,12 @@ export const CoachCohortMemberSchema = z
     email: z.string().nullable(),
     avatar_url: z.string().nullable(),
     role: z.enum(COACH_COHORT_MEMBER_ROLES),
-    joined_at: z.string(),
+    joined_at: z.string().nullable(),
   })
   .passthrough();
 export type CoachCohortMember = z.infer<typeof CoachCohortMemberSchema>;
 
-/** GET /community/coach/cohorts/:id — cohort header + full member list. */
+/** Cohort header + member list (GET /community/cohorts/:id + its members). */
 export const CoachCohortDetailSchema = z
   .object({
     cohort: CoachCohortSchema,
@@ -515,6 +521,111 @@ function idempotentHeaders(): { headers: Record<string, string> } {
   return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
 }
 
+// ─── Server wire shapes (growth-project-backend main 7359c3f9) ──────────────
+// The coach pages call the server's own community routes. These schemas copy
+// the fields the phone reads from the backend DTOs (file:line on each) and map
+// them onto the Coach* types the screens already use.
+
+/** GET /community/cohorts row: src/community/dto/community-cohort.dto.ts:16-28. */
+const CohortSummaryWireSchema = z
+  .object({
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    name: z.string(),
+    member_count: z.number().int().nonnegative(),
+  })
+  .passthrough();
+
+/** GET /community/cohorts: community-cohort.dto.ts:30-35. */
+const CohortListWireSchema = z
+  .object({ cohorts: z.array(CohortSummaryWireSchema) })
+  .passthrough();
+
+/** GET /community/cohorts/:id (flat, no envelope): community-cohort.dto.ts:41-64. */
+const CohortWireSchema = CohortSummaryWireSchema.extend({
+  created_at: z.string(),
+});
+
+/**
+ * POST /community/workspaces/:id/cohorts response `{ cohort }`:
+ * src/community/cohorts/community-cohort.dto.ts:124-143 and :149-151.
+ */
+const CohortAdminWireSchema = z
+  .object({
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    name: z.string(),
+    created_at: z.string(),
+  })
+  .passthrough();
+
+/** GET /community/me, the field used here: src/community/dto/community-me.dto.ts:27. */
+const MeWorkspaceWireSchema = z
+  .object({ workspace_id: z.string().uuid().nullable() })
+  .passthrough();
+
+/** Roster row: src/community/cohorts/community-cohort-members.dto.ts:60-81. */
+const MemberWireSchema = z
+  .object({
+    user_id: z.string().uuid(),
+    display_name: z.string(),
+    role: z.enum(['student', 'co_coach', 'coach']),
+    status: z.enum(['invited', 'active', 'muted', 'removed']).nullable(),
+    email: z.string().nullable(),
+    joined_at: z.string().nullable(),
+  })
+  .passthrough();
+type MemberWire = z.infer<typeof MemberWireSchema>;
+
+/** GET members: community-cohort-members.dto.ts:85-90. */
+const MemberListWireSchema = z
+  .object({
+    members: z.array(MemberWireSchema),
+    next_cursor: z.string().nullable(),
+  })
+  .passthrough();
+
+/** POST / DELETE member response `{ member }`: community-cohort-members.dto.ts:96-98. */
+const MemberResponseWireSchema = z
+  .object({ member: MemberWireSchema })
+  .passthrough();
+
+/** Server roster role -> the role words the detail screen already shows. */
+const MEMBER_ROLE: Record<MemberWire['role'], CoachCohortMemberRole> = {
+  student: 'client',
+  co_coach: 'coach',
+  coach: 'owner',
+};
+
+function toMember(m: MemberWire): CoachCohortMember {
+  const { display_name, role, ...rest } = m;
+  return {
+    ...rest,
+    name: display_name,
+    avatar_url: null,
+    role: MEMBER_ROLE[role],
+  };
+}
+
+function toCohort(c: {
+  id: string;
+  name: string;
+  member_count?: number;
+  created_at?: string;
+}): CoachCohort {
+  return { ...c, member_count: c.member_count ?? 0, unread_count: 0 };
+}
+
+/** Same calendar day on this phone. */
+function isToday(iso: string, now: Date): boolean {
+  const d = new Date(iso);
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
 // ─── Endpoint hooks ──────────────────────────────────────────────────────────
 
 // ─── Coach inbox wire shape (community-coach-inbox.dto.ts) ──────────────────
@@ -524,9 +635,12 @@ const PAGE_LIMIT = 100;
 
 /** Inbox row kinds this build can draw; any other kind is skipped. Read per call, not at import. */
 const inboxRowKinds = (): readonly string[] =>
-  featureFlags.communityVoiceNotes ? ['text', 'voice'] : ['text'];
+  featureFlags.communityVoiceNotes ? ['text', 'voice', 'photo'] : ['text', 'photo'];
 
-/** One inbox row: src/community/inbox/community-coach-inbox.dto.ts:34-52. */
+/** The approved row text for a photo with no caption (owner 10-26, UPDATE 2). */
+const PHOTO_PREVIEW = 'Photo';
+
+/** One inbox row: src/community/inbox/community-coach-inbox.dto.ts:34-54 (main 946d1cb0). */
 const InboxRowWireSchema = z
   .object({
     id: z.string().uuid(),
@@ -559,13 +673,17 @@ function toInboxItems(rows: unknown[]): CoachInboxItem[] {
     const rowKind = kind ?? 'text';
     if (!inboxRowKinds().includes(rowKind)) continue;
     if (rowKind === 'voice' && !rest.voice) continue;
+    const text = rowKind === 'photo' ? preview.trim() || PHOTO_PREVIEW : preview.trimEnd();
     out.push({
       ...rest,
       kind: rowKind as CoachInboxItem['kind'],
       client_user_id: author_user_id,
       client_name: author_display_name,
       avatar_url: null,
-      snippet: preview,
+      // A photo row shows its caption; with none it says "Photo", never blank.
+      // A message row ends with "..." (#179-11): it opens in space chat later.
+      // Its own closing dots fold in, so a row never shows four.
+      snippet: rest.type === 'message' ? `${text.replace(/[\s.…]+$/, '')}...` : text,
       // The server lists only unanswered items, so none are acknowledged.
       acknowledged: false,
     });
@@ -588,14 +706,24 @@ function isInboxNotCoach(err: unknown): boolean {
 
 export const coachCommunityApi = {
   /**
-   * GET /community/coach/dashboard — composed coach landing envelope (unread
-   * inbox, active cohort count, items flagged today). The acting coach is
-   * derived from the JWT; no coachId is sent.
+   * The coach landing counts, built on the phone (the server has no dashboard
+   * route): spaces from GET /community/cohorts, unanswered items from the
+   * first inbox page, and reports opened today from the flagged queue. The
+   * acting coach is derived from the JWT; no coachId is sent.
    */
-  getDashboard(): Promise<CoachDashboard> {
-    return call(CoachDashboardSchema, () =>
-      api.get<unknown>('/community/coach/dashboard'),
-    );
+  async getDashboard(): Promise<CoachDashboard> {
+    const [cohorts, inbox, flagged] = await Promise.all([
+      coachCommunityApi.getCohorts(),
+      coachCommunityApi.getInbox({ limit: PAGE_LIMIT }),
+      coachCommunityApi.getFlagged(),
+    ]);
+    const now = new Date();
+    return {
+      unread_inbox_count: inbox.items.length,
+      active_cohort_count: cohorts.length,
+      flagged_today_count: flagged.filter((f) => isToday(f.created_at, now))
+        .length,
+    };
   },
 
   /**
@@ -668,60 +796,106 @@ export const coachCommunityApi = {
     );
   },
 
-  /** GET /community/coach/cohorts — the coach's cohorts (tenant-scoped). */
-  getCohorts(): Promise<CoachCohort[]> {
-    return call(CoachCohortListSchema, () =>
-      api.get<unknown>('/community/coach/cohorts'),
-    ).then((r) => r.cohorts);
-  },
-
   /**
-   * POST /community/coach/cohorts — create a cohort. Idempotent (R19).
-   * Optimistic insert + rollback lives in the screen hook.
+   * GET /community/cohorts (community.controller.ts:71). A first-run coach has
+   * none until GET /community/me sets up the two default spaces, so read again.
    */
-  createCohort(input: { name: string }): Promise<CoachCohort> {
-    return call(
-      z.object({ cohort: CoachCohortSchema }).passthrough(),
-      () =>
-        api.post<unknown>('/community/coach/cohorts', input, idempotentHeaders()),
-    ).then((r) => r.cohort);
-  },
-
-  /** GET /community/coach/cohorts/:id — cohort header + member list. */
-  getCohortDetail(cohortId: string): Promise<CoachCohortDetail> {
-    return call(CoachCohortDetailSchema, () =>
-      api.get<unknown>(`/community/coach/cohorts/${cohortId}`),
-    );
+  async getCohorts(): Promise<CoachCohort[]> {
+    const list = () =>
+      call(CohortListWireSchema, () => api.get<unknown>('/community/cohorts'));
+    let r = await list();
+    if (r.cohorts.length === 0) {
+      await call(MeWorkspaceWireSchema, () => api.get<unknown>('/community/me'));
+      r = await list();
+    }
+    return r.cohorts.map(toCohort);
   },
 
   /**
-   * POST /community/coach/cohorts/:id/members — invite a client by email.
-   * Idempotent (R19). Returns the newly added member row.
+   * POST /community/workspaces/:workspaceId/cohorts — create a space
+   * (community-cohort-write.controller.ts:40). The workspace id comes from
+   * GET /community/me, which also sets up the coach's workspace on first use
+   * (community.service.ts:106). Idempotent (R19). Optimistic insert +
+   * rollback lives in the screen hook.
+   */
+  async createCohort(input: { name: string }): Promise<CoachCohort> {
+    const me = await call(MeWorkspaceWireSchema, () =>
+      api.get<unknown>('/community/me'),
+    );
+    const workspaceId = me.workspace_id;
+    if (workspaceId == null) {
+      throw new CoachCommunityApiError(
+        'contract',
+        200,
+        'coach community: no workspace for this coach',
+      );
+    }
+    return call(z.object({ cohort: CohortAdminWireSchema }).passthrough(), () =>
+      api.post<unknown>(
+        `/community/workspaces/${workspaceId}/cohorts`,
+        { name: input.name },
+        idempotentHeaders(),
+      ),
+    ).then((r) => toCohort(r.cohort));
+  },
+
+  /**
+   * GET /community/cohorts/:id (community.controller.ts:79) and GET
+   * /community/cohorts/:id/members (community-cohort-members.controller.ts:40)
+   * — the space header and its whole roster, page by page. Removed members
+   * are left out; the owning coach stays in, as in the server's member_count.
+   */
+  async getCohortDetail(cohortId: string): Promise<CoachCohortDetail> {
+    const rosterPage = (cursor: string | null) =>
+      call(MemberListWireSchema, () =>
+        api.get<unknown>(`/community/cohorts/${cohortId}/members`, {
+          params: { limit: String(PAGE_LIMIT), ...(cursor ? { cursor } : {}) },
+        }),
+      );
+    const [cohort, first] = await Promise.all([
+      call(CohortWireSchema, () =>
+        api.get<unknown>(`/community/cohorts/${cohortId}`),
+      ),
+      rosterPage(null),
+    ]);
+    const members = [...first.members];
+    for (let next = first.next_cursor; next; ) {
+      const page = await rosterPage(next);
+      members.push(...page.members);
+      next = page.next_cursor;
+    }
+    return {
+      cohort: toCohort(cohort),
+      members: members.filter((m) => m.status !== 'removed').map(toMember),
+    };
+  },
+
+  /**
+   * POST /community/cohorts/:id/members — add a client by email as a student
+   * (community-cohort-members.controller.ts:52; `role` is required,
+   * community-cohort-members.dto.ts:34-35). Idempotent (R19).
    */
   inviteMember(
     cohortId: string,
     input: { email: string },
   ): Promise<CoachCohortMember> {
-    return call(
-      z.object({ member: CoachCohortMemberSchema }).passthrough(),
-      () =>
-        api.post<unknown>(
-          `/community/coach/cohorts/${cohortId}/members`,
-          input,
-          idempotentHeaders(),
-        ),
-    ).then((r) => r.member);
+    return call(MemberResponseWireSchema, () =>
+      api.post<unknown>(
+        `/community/cohorts/${cohortId}/members`,
+        { email: input.email, role: 'student' },
+        idempotentHeaders(),
+      ),
+    ).then((r) => toMember(r.member));
   },
 
   /**
-   * DELETE /community/coach/cohorts/:id/members/:userId — remove a member.
-   * Always confirmed in the UI before this fires (hard gate §2.3).
+   * DELETE /community/cohorts/:id/members/:userId — remove a member
+   * (community-cohort-members.controller.ts:64). Always confirmed in the UI
+   * before this fires (hard gate §2.3).
    */
   removeMember(cohortId: string, userId: string): Promise<void> {
     return call(z.unknown(), () =>
-      api.delete<unknown>(
-        `/community/coach/cohorts/${cohortId}/members/${userId}`,
-      ),
+      api.delete<unknown>(`/community/cohorts/${cohortId}/members/${userId}`),
     ).then(() => undefined);
   },
 

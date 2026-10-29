@@ -31,7 +31,12 @@ import {
   type CommunityDmMessage,
   type CommunityReactionEmoji,
 } from '../api/communityApi';
-import { subscribeToCommunityUser } from '../api/communityRealtime';
+import {
+  COMMUNITY_BROADCAST_EVENTS,
+  subscribeToCommunityUser,
+  type CommunityPing,
+} from '../api/communityRealtime';
+import { refreshVoiceQueries } from './voiceQueryKeys';
 
 // ─── Query keys (stable, namespaced) ─────────────────────────────────────────
 
@@ -346,9 +351,18 @@ export function useCommunityBadge(
 
   useEffect(() => {
     if (!userId) return undefined;
-    const unsubscribe = subscribeToCommunityUser(userId, () => {
+    const unsubscribe = subscribeToCommunityUser(userId, (ping?: CommunityPing) => {
       // Untrusted ping → refetch authoritative unread counts over REST.
       qc.invalidateQueries({ queryKey: communityKeys.me() });
+      // A coach's removal arrives as message.updated (backend #1165): re-read the voice feeds, voice
+      // note pages and open voice-bearing Find searches too, so a removed note turns into its
+      // placeholder, or leaves Find, with no tap. Only the event name is read; a missing or unknown
+      // one re-reads them as well. Other known events re-read none of them.
+      const event: unknown = ping?.event;
+      const known: readonly unknown[] = Object.values(COMMUNITY_BROADCAST_EVENTS);
+      if (event === COMMUNITY_BROADCAST_EVENTS.messageUpdated || !known.includes(event)) {
+        void refreshVoiceQueries(qc);
+      }
     });
     return unsubscribe;
   }, [userId, qc]);

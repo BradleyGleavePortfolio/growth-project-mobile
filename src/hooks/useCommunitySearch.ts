@@ -9,9 +9,17 @@
  *
  * The communitySearchApi Zod-validates every page; a drifted shape throws a
  * `contract` CommunityApiError that React Query surfaces as the query error.
+ *
+ * Voice (LO-848R4 B5): a page that can carry voice-note transcript rows (all kinds, or voice only) is
+ * never saved to the phone (`meta.persist: false`, like the voice feed), so a restart cannot replay a
+ * transcript excerpt of a note that was deleted, reported or blocked since. A voice-bearing page an
+ * older build saved is refused: the hook drops it before it can render, online or offline.
  */
+import { useState } from 'react';
 import {
   useInfiniteQuery,
+  useQueryClient,
+  type QueryClient,
   type UseInfiniteQueryResult,
   type InfiniteData,
 } from '@tanstack/react-query';
@@ -55,6 +63,32 @@ export interface UseCommunitySearchOptions {
   enabled?: boolean;
 }
 
+/** All kinds, or voice only: the pages can carry voice-note transcript rows. */
+export function searchCarriesVoice(kind?: CommunitySearchKind): boolean {
+  return kind === undefined || kind === 'voice_note_transcript';
+}
+
+/**
+ * Drops every cached search page that can carry voice rows and is not marked unsaved. This hook marks
+ * each voice-bearing page `persist: false`, so only a restore from the phone can leave one here.
+ * Returns how many it dropped.
+ */
+export function purgeSavedVoiceSearches(qc: QueryClient): number {
+  const cache = qc.getQueryCache();
+  const saved = cache.findAll({ queryKey: communitySearchKeys.all }).filter((q) => {
+    if (q.meta?.persist === false) return false;
+    const kind = q.queryKey[communitySearchKeys.all.length + 2];
+    const pages = (q.state.data as InfiniteData<SearchResponse> | undefined)?.pages ?? [];
+    return (
+      kind === '∅' ||
+      kind === 'voice_note_transcript' ||
+      pages.some((p) => p?.results?.some((r) => r.kind === 'voice_note_transcript'))
+    );
+  });
+  saved.forEach((q) => cache.remove(q));
+  return saved.length;
+}
+
 /**
  * Paginated search results. `data.pages` is an array of SearchResponse; the
  * screen flattens `pages.flatMap(p => p.results)` and calls `fetchNextPage`
@@ -67,6 +101,9 @@ export function useCommunitySearch(
   const callerEnabled = opts.enabled ?? true;
   const enabled =
     callerEnabled && Boolean(opts.workspaceId) && trimmed.length > 0;
+  const qc = useQueryClient();
+  // Once per mount, before the query below is built: refuse voice pages a restore put back.
+  useState(() => purgeSavedVoiceSearches(qc));
 
   return useInfiniteQuery({
     queryKey: communitySearchKeys.query(
@@ -86,5 +123,6 @@ export function useCommunitySearch(
       }),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 30_000,
+    meta: searchCarriesVoice(opts.kind) ? { persist: false } : undefined,
   });
 }

@@ -19,17 +19,18 @@
  * label ("Play voice note, 0:12" / "Pause"). The bars are the seek control:
  * tap a point to jump there; a screen reader swipes it up or down 5 seconds.
  *
- * Style B (VOICE-M): a full-width card with a 64 pt play disc, the bars and
- * the time; `tone` picks the white member card, the deep coach card or no
- * card (the review sheet).
+ * Style B (VOICE-M): a full-width card: a row with the 52 pt play disc centred on the bars (GOAL
+ * .brow), then the time under the bars (GOAL .bfoot, 64 pt in); `tone` picks the white member card,
+ * the deep coach card or no card (the review sheet: 34 bars, 4 pt wide, 3 apart, left-aligned).
+ * `disabled` greys the disc while the viewer's own note is sending or waiting (GOAL B-03, B-10a).
  *
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
-import { forestPop as fp, neutral, radius, spacing, voiceShades } from '../../theme/tokens';
+import { forestPop as fp, neutral, radius, spacing, voiceFaces, voiceShades } from '../../theme/tokens';
 import { formatDuration } from './voiceFormat';
 import VoiceNoteWaveform from './VoiceNoteWaveform';
 import {
@@ -55,16 +56,24 @@ export interface VoiceNotePlayerProps {
   onPlaybackError?: () => void;
   /** Card style: member card, coach card, or none (review sheet). */
   tone?: 'light' | 'coach' | 'bare';
-  /** No connection: a remote note cannot load, so Play is off. */
+  /** No connection: a remote note cannot load, so Play is off (a clip already playing keeps Pause). */
   offline?: boolean;
   /** Drawn at the end of the time row (the outbox row's waiting mark). */
   trailing?: React.ReactNode;
   /** Drawn inside the card under the row (the Not sent row). */
   footer?: React.ReactNode;
+  /** The disc is grey and Play is off (the viewer's own note while it sends or waits). */
+  disabled?: boolean;
   testID?: string;
 }
 
 type PlayState = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
+
+/** GOAL B-02 review strip: 34 bars, 4 pt wide, 3 apart (34 x 4 + 33 x 3 = 235 pt). */
+const REVIEW_BARS = 34;
+const REVIEW_BAR_WIDTH = 4;
+const REVIEW_GAP = 3;
+const REVIEW_STRIP_WIDTH = REVIEW_BARS * REVIEW_BAR_WIDTH + (REVIEW_BARS - 1) * REVIEW_GAP;
 
 export default function VoiceNotePlayer({
   url,
@@ -76,6 +85,7 @@ export default function VoiceNotePlayer({
   offline = false,
   trailing = null,
   footer = null,
+  disabled: held = false,
   testID,
 }: VoiceNotePlayerProps): React.ReactElement {
   const port = playback ?? resolveVoicePlayback();
@@ -101,7 +111,8 @@ export default function VoiceNotePlayer({
   const seekRef = useRef(0);
   const barsWidth = useRef(0);
 
-  const disabled = url === null || !port.isAvailable || offline;
+  const unavailable = url === null || !port.isAvailable || offline;
+  const disabled = unavailable || held;
 
   const release = useCallback(() => {
     generationRef.current += 1;
@@ -218,19 +229,21 @@ export default function VoiceNotePlayer({
   const progress = total > 0 ? positionMs / total : 0;
   const playing = state === 'playing';
   const iconName = playing ? 'pause' : 'play';
+  // VUX-B1: a clip already playing keeps its Pause when the signal drops or the note is held; only a new Play is off.
+  const off = disabled && !playing;
 
-  const controlLabel = disabled
-    ? !port.isAvailable
-      ? 'Audio playback is not available on this build'
-      : 'Audio unavailable'
-    : playing
-      ? 'Pause voice note'
+  const controlLabel = playing
+    ? 'Pause voice note'
+    : unavailable
+      ? !port.isAvailable
+        ? 'Audio playback is not available on this build'
+        : 'Audio unavailable'
       : `Play voice note, ${formatDuration(durationMs)}`;
 
   const deep = tone === 'coach';
   const ink = deep ? fp.onDeep : fp.ink;
-  const discBg = disabled ? voiceShades.hairline : deep ? fp.onDeep : fp.deep;
-  const discFg = disabled ? voiceShades.track : deep ? fp.deep : fp.leaf;
+  const discBg = off ? voiceShades.hairline : deep ? fp.onDeep : fp.deep;
+  const discFg = off ? voiceShades.track : deep ? fp.deep : fp.leaf;
   const time =
     url === null || !port.isAvailable
       ? '—:—'
@@ -238,35 +251,42 @@ export default function VoiceNotePlayer({
         ? `${formatDuration(positionMs)} / ${formatDuration(durationMs)}`
         : formatDuration(durationMs);
 
+  const bare = tone === 'bare';
   return (
     <View
       style={[
-        styles.row,
-        tone === 'bare'
+        styles.box,
+        bare
           ? styles.bare
-          : { backgroundColor: deep ? fp.deep : neutral[0], borderColor: deep ? fp.deep : voiceShades.hairline },
+          : [styles.card, { backgroundColor: deep ? fp.deep : neutral[0], borderColor: deep ? fp.deep : voiceShades.hairline }],
       ]}
       testID={testID ?? 'voice-player'}
     >
-      <HapticPressable
-        intent="light"
-        onPress={onPress}
-        disabled={disabled || state === 'loading'}
-        accessibilityRole="button"
-        accessibilityLabel={controlLabel}
-        accessibilityState={{ disabled: disabled || state === 'loading', busy: state === 'loading' }}
-        testID="voice-player-toggle"
-        style={[styles.control, { backgroundColor: discBg }]}
-      >
-        <Ionicons name={iconName} size={24} color={discFg} />
-      </HapticPressable>
-
-      <View style={styles.middle}>
+      <View style={styles.brow}>
+        <HapticPressable
+          intent="light"
+          onPress={onPress}
+          disabled={off || state === 'loading'}
+          accessibilityRole="button"
+          accessibilityLabel={controlLabel}
+          accessibilityState={{ disabled: off || state === 'loading', busy: state === 'loading' }}
+          testID="voice-player-toggle"
+          style={[styles.control, { backgroundColor: discBg }]}
+        >
+          {state === 'loading' ? (
+            // The audio is on its way: a quiet spinner in the disc, not a play icon that does nothing.
+            <ActivityIndicator size="small" color={discFg} testID="voice-player-loading" />
+          ) : (
+            <Ionicons name={iconName} size={22} color={discFg} />
+          )}
+        </HapticPressable>
         <Pressable
           disabled={disabled}
           onLayout={(e) => { barsWidth.current = e.nativeEvent.layout.width; }}
           onPress={(e) => {
-            if (barsWidth.current > 0) seekTo((e.nativeEvent.locationX / barsWidth.current) * durationMs);
+            // The review strip is a fixed 235 pt from the left; a tap past its end is the end.
+            const width = bare ? Math.min(barsWidth.current, REVIEW_STRIP_WIDTH) : barsWidth.current;
+            if (width > 0) seekTo((Math.min(e.nativeEvent.locationX, width) / width) * durationMs);
           }}
           accessible={!disabled}
           accessibilityRole="adjustable"
@@ -277,9 +297,15 @@ export default function VoiceNotePlayer({
           style={styles.seek}
           testID="voice-player-seek"
         >
-          <VoiceNoteWaveform peaks={peaks} progress={progress} height={40} tone={deep ? 'deep' : 'light'} />
+          {/* GOAL: the card strip is 48 thin bars, 34 high, 2 apart; the review sheet 34 bars 4 wide, 44 high, 3 apart, with a playhead. */}
+          <VoiceNoteWaveform peaks={peaks} progress={progress} tone={deep ? 'deep' : 'light'}
+            {...(bare
+              ? { height: 44, barCount: REVIEW_BARS, barWidth: REVIEW_BAR_WIDTH, gap: REVIEW_GAP, playhead: true }
+              : { height: 34, barCount: 48, gap: 2 })} />
         </Pressable>
-        <View style={styles.meta}>
+      </View>
+      {bare ? null : (
+        <View style={styles.bfoot}>
           <Text
             style={[styles.duration, { color: ink }]}
             accessibilityElementsHidden
@@ -289,7 +315,7 @@ export default function VoiceNotePlayer({
           </Text>
           {trailing}
         </View>
-      </View>
+      )}
 
       {state === 'error' ? (
         <Text
@@ -306,31 +332,38 @@ export default function VoiceNotePlayer({
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
+  // GOAL .bcard: padding 10 10 8 12, a 1 pt hairline, radius 16.
+  box: {
+    paddingTop: 10,
+    paddingRight: 10,
+    paddingBottom: spacing.sm,
+    paddingLeft: spacing.md,
     borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
-  bare: { padding: 0, borderWidth: 0 },
+  // GOAL .bcard box-shadow 0 2px 8px rgba(26,26,24,.05)
+  card: { shadowColor: fp.ink, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, shadowOpacity: 0.05, elevation: 1 },
+  // Opus R5-B1: zero each edge `box` sets (a `padding: 0` shorthand does not undo the longhands above).
+  bare: { paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, borderWidth: 0 },
   control: {
-    width: 64,
-    height: 64,
+    width: 52,
+    height: 52,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  middle: { flex: 1, gap: spacing.xs },
-  seek: { minHeight: 44, flexDirection: 'row', alignItems: 'center', pointerEvents: 'box-only' },
-  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 },
-  duration: { fontSize: 17, lineHeight: 22, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  // GOAL .brow: the disc and the bars on one row, centred on each other, 12 apart.
+  brow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  seek: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', pointerEvents: 'box-only' },
+  // GOAL .bfoot: under the bars (64 = disc 52 + gap 12), 6 below the row.
+  bfoot: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+    marginTop: 6, paddingLeft: 64, minHeight: 20 },
+  duration: { fontFamily: voiceFaces.semibold, fontSize: 14, lineHeight: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
   retry: {
-    width: '100%',
-    fontSize: 15,
-    lineHeight: 20,
+    marginTop: spacing.sm,
+    fontFamily: voiceFaces.regular,
+    fontSize: 13,
+    lineHeight: 18,
   },
-  full: { width: '100%' },
+  full: { marginTop: spacing.md },
 });

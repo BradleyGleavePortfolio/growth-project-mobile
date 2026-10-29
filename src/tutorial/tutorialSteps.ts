@@ -132,6 +132,8 @@ export interface TutorialStepDef {
   doneLine?: Line;
   /** Shown, with Continue, when the step's data is not ready yet (66). */
   pendingLine?: Line;
+  /** FR-880R4: leaves at once, as Later, while the coaching chat is closed (either person's block; TutorialHomeSlot). */
+  needsOpenCoachChat?: boolean;
 }
 
 /** The requirements of a step as a list (none, one or several). */
@@ -293,6 +295,7 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     ordinal: 6,
     title: 'Message your coach',
     requires: 'coach',
+    needsOpenCoachChat: true,
     gates: [
       {
         kind: 'route',

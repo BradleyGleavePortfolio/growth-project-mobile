@@ -27,7 +27,9 @@ import { useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CommunityTermsGate from '../components/community/CommunityTermsGate';
 import { Colors } from '../theme';
+import { colors as tokenColors } from '../theme/tokens';
 import { featureFlags } from '../config/featureFlags';
+import { LightTheme } from '../theme/ThemeProvider';
 import CoachCommunityHomeScreen from '../screens/community/CoachCommunityHomeScreen';
 import CoachCommunityInboxScreen from '../screens/community/CoachCommunityInboxScreen';
 import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCohortsScreen';
@@ -41,6 +43,24 @@ import type { CoachCommunityStackParamList } from '../screens/community/coachCom
 
 const CoachCommunityStack =
   createNativeStackNavigator<CoachCommunityStackParamList>();
+
+/** The K2 pages are drawn light (bone, cream): their themed parts stay light on a dark phone. */
+const K2_ROUTES: ReadonlySet<string> = new Set([
+  'CoachCommunityHome',
+  'CoachCommunityInbox',
+  'CoachCommunityCohorts',
+  'CoachCommunityCohortDetail',
+]);
+
+export function coachCommunityScreenLayout({
+  route,
+  children,
+}: {
+  route: { name: string };
+  children: React.ReactElement;
+}): React.ReactElement {
+  return K2_ROUTES.has(route.name) ? <LightTheme>{children}</LightTheme> : children;
+}
 
 /**
  * Apple 1.2 (B-IOSREV-2): the whole stack sits behind the one-time community
@@ -58,6 +78,7 @@ export default function CoachCommunityNavigator(): React.ReactElement {
 function CoachCommunityNavigatorStack(): React.ReactElement {
   return (
     <CoachCommunityStack.Navigator
+      screenLayout={coachCommunityScreenLayout}
       screenOptions={{
         headerShown: true,
         headerTintColor: Colors.textPrimary,
@@ -70,6 +91,10 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
         component={CoachCommunityHomeScreen}
         options={({ navigation }) => ({
           title: 'Community',
+          // K2: the page draws its serif title; the bar keeps only the back control.
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
           // COACHTABS: with the six tabs Community opens from Messages, so its
           // first page has a Back (44 pt) to the tab the coach came from.
           ...(featureFlags.coachTabsV2 ? {
@@ -90,17 +115,35 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
       <CoachCommunityStack.Screen
         name="CoachCommunityInbox"
         component={CoachCommunityInboxScreen}
-        options={{ title: 'Inbox' }}
+        // K2: the page draws its serif title; the bar keeps only the back control.
+        options={{
+          title: 'Inbox',
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
+        }}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityCohorts"
         component={CoachCommunityCohortsScreen}
-        options={{ title: 'Cohorts' }}
+        // K2 (#172-10, as the inbox): the page draws its serif title.
+        options={{
+          title: 'Cohorts',
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
+        }}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityCohortDetail"
         component={CoachCommunityCohortDetailScreen}
-        options={{ title: 'Cohort' }}
+        // K2: the page draws the cohort's name as its serif title.
+        options={{
+          title: 'Cohort',
+          headerTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokenColors.bone },
+        }}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityPostDetail"

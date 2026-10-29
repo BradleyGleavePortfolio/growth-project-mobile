@@ -25,7 +25,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { forestPop as fp, spacing } from '../../theme/tokens';
+import { forestPop as fp, spacing, voiceFaces } from '../../theme/tokens';
 
 export type VoiceAudienceTarget =
   | { kind: 'dm'; recipientName?: string | null }
@@ -108,6 +108,7 @@ const styles = StyleSheet.create({
   lock: { marginTop: 1 },
   text: {
     flex: 1,
+    fontFamily: voiceFaces.regular,
     fontSize: 13,
     lineHeight: 18,
     color: fp.n700,
