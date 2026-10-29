@@ -29,8 +29,8 @@ export interface DraftAsk {
   /** `about` in pieces, for the K3 context chip: its package moves to the next line whole (KeepTail). */
   aboutParts?: LineParts;
   request: HomeWinDraft;
-  /** A server route that builds Roman's request itself (b#1130's plan-ended draft); the answer reads as invoke's. */
-  path?: string;
+  /** The client whose ended plan builds Roman's request on the server (b#1130); the answer reads as invoke's. */
+  churnedClientId?: string;
   /** That route answered 404 (b#1141: the pair is blocked, or the plan is no longer ended): the list re-reads without it. */
   onGone?: () => void;
   /** RENEWAL3 K3a/K3b: Roman's deep head (mark, "Roman", the title, the context chip) over the sheet. Plan-ended asks only. */
@@ -48,8 +48,10 @@ type Step =
 interface InvokeAnswer { enabled?: boolean; provider?: string; reply?: string; approval?: { required?: boolean; draft_id?: string | null } }
 
 /** Roman's written draft, or null when Roman is off or filed nothing: then nothing can be sent. */
-export async function askRomanToDraft(request: HomeWinDraft, path?: string): Promise<{ draftId: string; reply: string } | null> {
-  const res = await api.post<InvokeAnswer>(path ?? '/ai/gateway/invoke', path ? {} : request);
+export async function askRomanToDraft(request: HomeWinDraft, churnedClientId?: string): Promise<{ draftId: string; reply: string } | null> {
+  const res = churnedClientId
+    ? await api.post<InvokeAnswer>(`/v1/coach/churned-clients/${encodeURIComponent(churnedClientId)}/draft`, {})
+    : await api.post<InvokeAnswer>('/ai/gateway/invoke', request);
   const a = res.data ?? {};
   const draftId = a.approval?.draft_id;
   if (a.enabled === false || a.provider === 'stub' || a.approval?.required !== true || typeof draftId !== 'string' || !draftId) return null;
@@ -129,10 +131,10 @@ function DraftSteps({ ask, s, close: closeRef, onClose, onSent }: { ask: DraftAs
   const write = async () => {
     setStep({ kind: 'writing' });
     try {
-      const d = await askRomanToDraft(ask.request, ask.path);
+      const d = await askRomanToDraft(ask.request, ask.churnedClientId);
       setStep(d ? { kind: 'ready', ...d } : { kind: 'failed', words: "Roman can't write this right now. Nothing was sent." });
     } catch (err) {
-      if (ask.path && (err as { response?: { status?: number } })?.response?.status === 404) {
+      if (ask.churnedClientId && (err as { response?: { status?: number } })?.response?.status === 404) {
         setStep({ kind: 'failed', words: "Roman can't write this right now. Nothing was sent.", gone: true }); // no Try again: it won't work (LO C2)
         ask.onGone?.();
         return;
