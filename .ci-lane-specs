@@ -1,0 +1,8 @@
+src/components/messaging
+src/components/community
+src/screens/community
+src/screens/client
+src/screens/coach
+src/api
+src/hooks
+src/navigation
