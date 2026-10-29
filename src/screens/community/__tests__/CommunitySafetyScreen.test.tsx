@@ -130,24 +130,30 @@ describe('CommunitySafetyScreen', () => {
     expect(await findByText(APPROVED_COMMITMENT)).toBeTruthy();
   });
 
-  it('FR-877 B1: the block explanation never promises the person is not told, online or offline', async () => {
-    for (const served of [true, false]) {
-      if (served) {
-        mockGetInfo.mockResolvedValue({
-          contact_email: 'safety@example.com',
-          report_reasons: [],
-          guidelines: ['Be kind to each other'],
-          response_commitment: APPROVED_COMMITMENT,
-        });
-      } else {
-        mockGetInfo.mockRejectedValue(new Error('offline'));
-      }
-      mockListBlocks.mockResolvedValue([]);
-      const view = await renderScreen();
-      expect(await view.findByText(/stops direct messages both ways\. In a direct message they see that you blocked them; nobody else is told\.$/)).toBeTruthy();
-      expect(view.queryByText(/not told/)).toBeNull();
-      view.unmount();
-    }
+  // FR-877 B1: one render per test (an unmount inside a test leaves act() open and breaks the tests after it).
+  const B1_LINE = /stops direct messages both ways\. In a direct message they see that you blocked them; nobody else is told\.$/;
+
+  it('FR-877 B1: the block explanation never promises the person is not told (server copy loaded)', async () => {
+    mockGetInfo.mockResolvedValue({
+      contact_email: 'safety@example.com',
+      report_reasons: [],
+      guidelines: ['Be kind to each other'],
+      response_commitment: APPROVED_COMMITMENT,
+    });
+    mockListBlocks.mockResolvedValue([]);
+    const { findByText, queryByText } = await renderScreen();
+    expect(await findByText(B1_LINE)).toBeTruthy();
+    expect(await findByText(APPROVED_COMMITMENT)).toBeTruthy();
+    expect(queryByText(/not told/)).toBeNull();
+  });
+
+  it('FR-877 B1: the block explanation never promises the person is not told (offline fallback)', async () => {
+    mockGetInfo.mockRejectedValue(new Error('offline'));
+    mockListBlocks.mockResolvedValue([]);
+    const { findByText, queryByText } = await renderScreen();
+    expect(await findByText(B1_LINE)).toBeTruthy();
+    expect(await findByText(APPROVED_COMMITMENT)).toBeTruthy();
+    expect(queryByText(/not told/)).toBeNull();
   });
 
   it('unblocks a member after confirmation', async () => {
