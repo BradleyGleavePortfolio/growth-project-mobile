@@ -12,8 +12,10 @@
  *     backend is the source of truth (workout_reminder_push/_inapp); the
  *     server value is read on mount so the switch never shows a stale state.
  *     Hidden for coach and owner accounts (reminders go to clients only).
- *   - Plan renewal reminders (plan_renewal_push, RENEWAL-M): Day 0, 1, 7 after a plan ends; clients, once the server
- *     has it and the plan read carries `renewal` (the server flag is on).
+ *   - Plan renewal offers (STORE-B2, App Store 4.5.4): the person's yes to the Day 1 and Day 7 app notifications
+ *     after a plan ends. Off until the person turns it on (PATCH plan_renewal_offers; the server keeps the time of
+ *     the yes in plan_renewal_offers_opt_in_at, null = no). Clients, once the server has it and the plan read
+ *     carries `renewal` (the server flag is on). The Day 0 notice keeps plan_renewal_push and has no switch here.
  *
  * A failed save rolls the switch back and shows an inline notice chosen by
  * status (notificationPreferenceErrors.ts), never a generic alert.
@@ -77,7 +79,7 @@ const DEFAULT_PREFS: CategoryPrefs = {
   coach_direct: true,
   client_bot: true,
   workout_reminders: true,
-  plan_renewal: true,
+  plan_renewal: false, // STORE-B2: no yes to renewal offers until the person turns it on
   milestones: true,
   system: true,
 };
@@ -93,8 +95,9 @@ const BACKEND_FIELD_MAP: Record<NotifCategory, Record<string, boolean>> = {
   milestones: { milestone_push: true, milestone_inapp: true },
   system: { digest_email: true },
   workout_reminders: { workout_reminder_push: true, workout_reminder_inapp: true },
-  // RENEWAL-M (backend #1127): the plan renewal app notifications only; Home's pop-up and banner stay.
-  plan_renewal: { plan_renewal_push: true },
+  // STORE-B2: the yes or no to the Day 1 and Day 7 renewal offers only; the Day 0 notice, Home's pop-up and
+  // banner stay.
+  plan_renewal: { plan_renewal_offers: true },
 };
 
 // Read the server value of the workout reminder toggle. Returns null when the
@@ -105,12 +108,22 @@ export function workoutRemindersFromServer(data: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
+/** STORE-B2: the server's record of the yes to plan renewal offers. */
+const RENEWAL_OFFERS_READ_FIELD = 'plan_renewal_offers_opt_in_at';
+
 /**
  * B-312-2: the server value of any category, read from the first backend
  * field it maps to. Null when the response does not carry it.
  */
 export function serverValueOf(category: NotifCategory, data: unknown): boolean | null {
   if (typeof data !== 'object' || data === null) return null;
+  // STORE-B2: the server keeps the yes to renewal offers as a time (null = no); an older server lacks the field.
+  if (category === 'plan_renewal') {
+    if (!(RENEWAL_OFFERS_READ_FIELD in data)) return null;
+    const at = (data as Record<string, unknown>)[RENEWAL_OFFERS_READ_FIELD];
+    if (at === null) return false;
+    return typeof at === 'string' && at !== '' ? true : null;
+  }
   const field = Object.keys(BACKEND_FIELD_MAP[category])[0];
   const value = (data as Record<string, unknown>)[field];
   return typeof value === 'boolean' ? value : null;
@@ -153,9 +166,9 @@ const CATEGORIES: CategoryMeta[] = [
   },
   {
     id: 'plan_renewal',
-    noun: 'plan renewal reminder',
-    label: 'Plan renewal reminders',
-    description: 'A few reminders after your plan ends, so you can choose a new one.',
+    noun: 'plan renewal offers',
+    label: 'Plan renewal offers',
+    description: 'A note the day after your plan ends and a week later, with plans you can choose. Off until you turn it on.',
     icon: 'refresh-circle-outline',
   },
   {
@@ -201,7 +214,8 @@ export default function NotificationPreferencesScreen({
 }) {
   const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  // RENEWAL-M: the plan renewal row only once the server carries its setting (older servers reject the field)
+  // RENEWAL-M, STORE-B2: the plan renewal offers row only once the server carries its setting (older servers reject
+  // the field)
   // and renewal is switched on: the plan read carries `renewal` only then (B1, the one phone rollout gate).
   const [renewalOnServer, setRenewalOnServer] = useState(false);
   const renewalOn = useEntitlement().renewal !== undefined;
