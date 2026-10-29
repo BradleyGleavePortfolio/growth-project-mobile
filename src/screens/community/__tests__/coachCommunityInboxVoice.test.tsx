@@ -152,6 +152,22 @@ describe('CoachCommunityInboxScreen — voice rows (flag on)', () => {
     expect(time).toMatchObject({ paddingLeft: 64, fontSize: 14 });
   });
 
+  // FR-865R4 renders (web previews at 360 and 390): 48 flat bars need at least 190 pt, but the row's strip
+  // has 141 pt at 360 and 171 at 390, so the bars ran past the card. GOAL .wv: 3 pt bars, 2 pt apart, packed
+  // from the left in a strip that clips at its end (flex 1, min-width 0, overflow hidden).
+  it('keeps the bars inside the card: 3 pt bars 2 pt apart in a strip that clips (GOAL .wv)', async () => {
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    const hidden = { includeHiddenElements: true };
+    const strip = StyleSheet.flatten(getByTestId(`coach-community-inbox-voice-strip-${VOICE_ID}`, hidden).props.style);
+    expect(strip).toMatchObject({ flex: 1, minWidth: 0, overflow: 'hidden' });
+    const bars = getByTestId(`coach-community-inbox-voice-bars-${VOICE_ID}`, hidden);
+    expect(StyleSheet.flatten(bars.props.style)).toMatchObject({ gap: 2, justifyContent: 'flex-start' });
+    type Styled = { props: { style?: StyleProp<ViewStyle> } };
+    const widths = bars.children.map((b) => StyleSheet.flatten((b as unknown as Styled).props.style)?.width);
+    expect(widths.length).toBe(48);
+    expect(new Set(widths)).toEqual(new Set([3]));
+  });
+
   it('opens the voice note when the voice row is tapped', async () => {
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     await fireEvent.press(getByTestId(`coach-community-inbox-row-${VOICE_ID}`));
