@@ -20,7 +20,7 @@ import {
   type UseQueryResult,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { isEffectivelyOnline, useNetworkStatus } from './useNetworkStatus';
 import {
   coachCommunityApi,
@@ -142,6 +142,17 @@ export function useCoachCohorts(): UseQueryResult<CoachCohort[]> {
   });
   useRefetchOnReconnect(q.refetch);
   return q;
+}
+
+/**
+ * FIN-868R5 LS-6: ids of the spaces this coach owns, or null until known.
+ * GET /community/cohorts lists only those, and only a space's owner may
+ * acknowledge (ack.service.ts isWorkspaceCoach), so the inbox offers
+ * Acknowledge on those rows alone. Unknown keeps it; the server still decides.
+ */
+export function useCoachOwnedCohortIds(): ReadonlySet<string> | null {
+  const { data } = useCoachCohorts();
+  return useMemo(() => (data ? new Set(data.map((c) => c.id)) : null), [data]);
 }
 
 export function useCoachCohortDetail(
