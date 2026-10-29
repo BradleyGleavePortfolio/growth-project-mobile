@@ -203,6 +203,17 @@ describe('#169-5 CLOSED-LINE: who closed a one-to-one conversation (useClosedBy)
     expect(navigate).toHaveBeenCalledWith(tab, { screen: 'BlockedUsers', initial: false });
   });
 
+  it('FR-877 (LO C1): a line that wraps stays centred and shrinks inside the bar', async () => {
+    const { StyleSheet } = jest.requireActual('react-native');
+    for (const el of [
+      (await render(<ConversationClosedLine by="them" name="Alexandra Montgomery-Fitzgerald" />)).getByText(/has blocked you$/),
+      (await render(<ConversationClosedLine by="me" />)).getByText(/^You blocked them\./),
+      (await render(<ConversationClosedLine />)).getByText(CLOSED_LINE),
+    ]) {
+      expect(StyleSheet.flatten(el.props.style)).toEqual(expect.objectContaining({ textAlign: 'center', flexShrink: 1 }));
+    }
+  });
+
   it('with no blocked-people list in reach, BAM-2a is plain text (no dead link)', async () => {
     const view = await render(<ConversationClosedLine by="me" testID="closed" />);
     expect(view.getByTestId('closed').props.accessibilityRole).toBe('text');
