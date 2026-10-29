@@ -120,7 +120,7 @@ describe('useVoiceUpload — three-hop publish', () => {
     });
   });
 
-  it('threads an optional cohort target into create', async () => {
+  it('BPF-1: threads the same space into the upload URL request and create', async () => {
     const readBytes = jest.fn().mockResolvedValue(new ArrayBuffer(8));
     const { Wrapper } = makeWrapper();
     const { result } = await renderHook(() => useVoiceUpload(WS, { readBytes }), {
@@ -129,6 +129,12 @@ describe('useVoiceUpload — three-hop publish', () => {
     await act(async () => {
       await result.current.mutateAsync({ ...goodInput, cohortId: 'co-9' });
     });
+    expect(api.issueUploadUrl).toHaveBeenCalledWith(WS, {
+      duration_ms: 3000,
+      bytes: 50_000,
+      mime_type: 'audio/mp4',
+      cohort_id: 'co-9',
+    }, undefined);
     expect(api.create).toHaveBeenCalledWith(
       WS,
       expect.objectContaining({ cohortId: 'co-9' }),
