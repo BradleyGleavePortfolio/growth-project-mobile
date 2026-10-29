@@ -416,6 +416,21 @@ describe('plan ended: the line breaks where RENEWAL3 breaks it, the dot ending l
 describe('plan ended: the masthead scrolls away and each date heading sticks (FX5-859, LS B1)', () => {
   const st = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) as Record<string, unknown>;
   type Node = { type: string; props: Record<string, unknown>; children: (Node | string)[] };
+  it('keeps the RENEWAL3 masthead vertical spacing contract (LS-859R5B B1)', async () => {
+    const v = await renderHome();
+    await press(v, 'home-plan-ended');
+    const head = v.getByTestId('plan-ended-head');
+    const row = v.getByTestId('plan-ended-back').parent!;
+    const title = within(head).getByText('Plan ended last 7 days, 5');
+    // RENEWAL3 r2a.py .hdr: 48; r2b.py .lh: 0 top / 16 bottom; .h1: no top margin.
+    // These are content metrics below the separate native safe-area/status band.
+    expect({
+      paddingTop: st(head).paddingTop ?? 0,
+      rowMinHeight: st(row).minHeight,
+      titleMarginTop: st(title).marginTop ?? 0,
+      paddingBottom: st(head).paddingBottom,
+    }).toEqual({ paddingTop: 0, rowMinHeight: 48, titleMarginTop: 0, paddingBottom: 16 });
+  });
   it('scrolls the masthead with the rows, keeps only the status band still, and pins each heading on the page ground', async () => {
     const v = await renderHome();
     await press(v, 'home-plan-ended');
