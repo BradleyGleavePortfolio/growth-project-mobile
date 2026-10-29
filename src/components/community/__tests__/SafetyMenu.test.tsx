@@ -188,7 +188,8 @@ describe('SafetyMenu', () => {
     // Two-way block copy: both people stop seeing each other.
     expect(alertSpy).toHaveBeenCalledWith(
       'Block Sam?',
-      "You and Sam will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. They are not told. You can unblock them from Community safety.",
+      // FR-877 B1: no promise of silence; the RC-BLOCK sentence (SoT A6.0-170) says what the other person sees.
+      "You and Sam will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. In a direct message they see that you blocked them; nobody else is told. You can unblock them from Community safety.",
       expect.any(Array),
     );
     await act(async () => {
