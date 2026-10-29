@@ -14,6 +14,11 @@
  * account data) that no sign-out sweep matches. A second account on the same
  * phone has its own key, so it still gets its own celebration.
  *
+ * Only a confirmed account deletion removes the key: signOut with
+ * accountDeleted (services/authActions.ts deletedAccountKeys) removes that one
+ * coach's key, because the account and its first_payment row are gone
+ * (B-LS898R3-1).
+ *
  * Key shape (per builder brief):
  *   `roman.ed3.first-payment-seen.${coachId}`
  */

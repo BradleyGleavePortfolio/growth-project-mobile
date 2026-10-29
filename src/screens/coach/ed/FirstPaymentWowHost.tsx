@@ -10,7 +10,8 @@
  *      while it is unseen, formats the
  *      payload { amount, currency, clientId } into the celebration's display
  *      strings and overlays FirstPaymentWowScreen across the whole shell.
- *   4. On dismiss, writes the MMKV gate (markFirstPaymentSeen) BEFORE clearing
+ *   4. On dismiss, writes the gate's raw AsyncStorage key (markFirstPaymentSeen,
+ *      firstPaymentGate.ts) BEFORE clearing
  *      the overlay, so a re-render / re-subscribe can never re-trigger it
  *      (once-only contract). "Navigate back to coach home" = unmount the
  *      overlay; the coach is returned to whatever tab they were on.

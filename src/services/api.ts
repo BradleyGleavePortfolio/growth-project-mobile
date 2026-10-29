@@ -382,7 +382,8 @@ async function handleRefreshFailure(startGeneration: number): Promise<void> {
     const signOut = __testSignOut
       ? __testSignOut
       : (await import('./authActions')).signOut;
-    await signOut(undefined, { sessionFence: fence.pass });
+    // FR-898R3: a confirmed deletion also removes the account's kept marks.
+    await signOut(undefined, { sessionFence: fence.pass, accountDeleted: deletionComplete });
   } catch (err) {
     logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
@@ -607,7 +608,10 @@ type RefreshSessionFn = (args: { refresh_token: string }) => Promise<{
   error: unknown;
 }>;
 let __testRefreshSession: RefreshSessionFn | null = null;
-type SignOutFn = (userId?: string | null, opts?: { sessionFence?: SessionFencePass }) => Promise<void>;
+type SignOutFn = (
+  userId?: string | null,
+  opts?: { sessionFence?: SessionFencePass; accountDeleted?: boolean },
+) => Promise<void>;
 let __testSignOut: SignOutFn | null = null;
 
 export function __setRefreshSessionForTests(fn: RefreshSessionFn | null): void {

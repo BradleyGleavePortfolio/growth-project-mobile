@@ -223,6 +223,10 @@ describe('signOut', () => {
   // "shown" mark is kept across sign-out on purpose (firstPaymentGate.ts). The
   // server keeps the payment row, so a wiped mark celebrated the same payment
   // again after the next sign-in. Only that mark stays; the account's data goes.
+  // LO-898R3 N-1: this file mocks clearAllStorage (above), so this test guards
+  // the exact and prefix sweeps only. The real clearAllStorage sweep is proved
+  // by FirstPaymentWowHost.signOut/logout B-TESTs and the control test in
+  // DeleteAccountScreen.firstPayment.btest.test.tsx, which run it unmocked.
   it('keeps the first-payment shown mark across sign-out and still wipes the account keys', async () => {
     await markFirstPaymentSeen('user-A');
     await AsyncStorage.setItem('pending_invite_code:user-A', 'code-A');
@@ -232,6 +236,18 @@ describe('signOut', () => {
     expect(await hasSeenFirstPayment('user-A')).toBe(true);
     expect(await hasSeenFirstPayment('user-B')).toBe(false);
     expect(await AsyncStorage.getItem('pending_invite_code:user-A')).toBeNull();
+  });
+
+  // FR-898R3 (B-LS898R3-1): a confirmed account deletion removes only the
+  // deleted account's mark; another account's mark on this phone stays.
+  it('accountDeleted removes only the signing-out account first-payment mark', async () => {
+    await markFirstPaymentSeen('user-A');
+    await markFirstPaymentSeen('user-B');
+
+    await signOut(undefined, { accountDeleted: true });
+
+    expect(await hasSeenFirstPayment('user-A')).toBe(false);
+    expect(await hasSeenFirstPayment('user-B')).toBe(true);
   });
 
   // MWB-4 #237 R11 (P2) — the workout-builder autosave offline mirror is keyed

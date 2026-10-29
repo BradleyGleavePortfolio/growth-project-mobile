@@ -42,6 +42,7 @@ import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
 import { DAY1_ANSWERS_KEY_PREFIX } from '../screens/day-one/answers';
+import { firstPaymentSeenKey } from '../screens/coach/ed/firstPaymentGate';
 import { releaseAgeHolds } from '../lib/ageGate';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
@@ -409,6 +410,24 @@ export interface SignOutOptions {
    * out (a wait that never ends).
    */
   sessionFence?: SessionFencePass;
+  /**
+   * FR-898R3 (B-LS898R3-1): set only when the server has confirmed this
+   * account is deleted (the deletion screen's "deleted" state, or the deletion
+   * receipt after a failed refresh). Then the marks an ordinary sign-out keeps
+   * on purpose for a living account (deletedAccountKeys) are removed too.
+   * Never set for a scheduled or cancelled deletion, or any other sign-out.
+   */
+  accountDeleted?: boolean;
+}
+
+/**
+ * The signing-out account's keys that an ordinary sign-out keeps on purpose
+ * (the first-payment shown mark, firstPaymentGate) and that only a confirmed
+ * account deletion removes. Only that account's keys: another account on this
+ * phone keeps its own.
+ */
+function deletedAccountKeys(userId: string): string[] {
+  return [firstPaymentSeenKey(userId)];
 }
 
 export async function signOut(userId?: string | null, opts: SignOutOptions = {}): Promise<void> {
@@ -503,7 +522,10 @@ async function signOutWhileHealthRetires(
   releaseOutbox();
   const prefixedKeys = await collectPrefixedKeys();
   const perUserKeys = signingOutUserId
-    ? PER_USER_KEY_PREFIXES.map((p) => `${p}${signingOutUserId}`)
+    ? [
+        ...PER_USER_KEY_PREFIXES.map((p) => `${p}${signingOutUserId}`),
+        ...(opts.accountDeleted ? deletedAccountKeys(signingOutUserId) : []),
+      ]
     : [];
 
   // S6-P2 (S6-A-02): retire the identity persistence that is subscribed to the
