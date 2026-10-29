@@ -124,6 +124,7 @@ export async function publishVoiceNote(
     duration_ms: input.durationMs,
     bytes: input.bytes,
     mime_type: input.mimeType,
+    ...(input.cohortId ? { cohort_id: input.cohortId } : {}),
   }, binding);
   stillBound(binding, true);
 

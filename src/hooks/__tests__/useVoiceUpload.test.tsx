@@ -143,6 +143,50 @@ describe('useVoiceUpload — three-hop publish', () => {
   });
 });
 
+describe('BPF-1: upload targets and retries', () => {
+  it.each([
+    ['Hall', {}],
+    ['DM', { conversationId: 'dm-9' }],
+  ])('%s keeps the original upload request shape', async (_name, target) => {
+    await publishVoiceNote(WS, { ...goodInput, ...target });
+    expect(api.issueUploadUrl).toHaveBeenCalledWith(WS, {
+      duration_ms: 3000,
+      bytes: 50_000,
+      mime_type: 'audio/mp4',
+    }, undefined);
+    expect(api.create).toHaveBeenCalledWith(WS, expect.objectContaining(target), undefined);
+  });
+
+  it('a failed upload retry requests the same space again', async () => {
+    api.uploadBytes.mockRejectedValueOnce(new Error('network'));
+    const input = { ...goodInput, cohortId: 'co-9' };
+    await expect(publishVoiceNote(WS, input)).rejects.toThrow('network');
+    await publishVoiceNote(WS, input);
+    expect(api.issueUploadUrl).toHaveBeenCalledTimes(2);
+    for (const call of api.issueUploadUrl.mock.calls) {
+      expect(call).toEqual([WS, {
+        duration_ms: 3000,
+        bytes: 50_000,
+        mime_type: 'audio/mp4',
+        cohort_id: 'co-9',
+      }, undefined]);
+    }
+    expect(api.create).toHaveBeenCalledTimes(1);
+    expect(api.create).toHaveBeenCalledWith(WS, expect.objectContaining({ cohortId: 'co-9' }), undefined);
+  });
+
+  it('a kept space upload key retries create without requesting another upload', async () => {
+    const KEY = 'u/1700-note.m4a';
+    await publishVoiceNote(WS, { ...goodInput, cohortId: 'co-9' }, { uploadedKey: KEY });
+    expect(api.issueUploadUrl).not.toHaveBeenCalled();
+    expect(api.uploadBytes).not.toHaveBeenCalled();
+    expect(api.create).toHaveBeenCalledWith(WS, expect.objectContaining({
+      storage_key: KEY,
+      cohortId: 'co-9',
+    }), undefined);
+  });
+});
+
 describe('useVoiceUpload — validation + failure', () => {
   it('rejects an over-cap duration before any hop', async () => {
     const readBytes = jest.fn();
