@@ -1,23 +1,23 @@
 /**
- * firstPaymentGate — the ED.3 once-only MMKV gate.
+ * firstPaymentGate — the ED.3 once-only gate.
  *
  * The First Payment Wow Screen (spec §2.6, "THE moment") must fire EXACTLY
- * once per coach, ever. A second app open, a re-subscribe, or a duplicate
- * realtime INSERT must all be no-ops. The gate is persisted in the app's
- * existing MMKV abstraction (`prefsStorage`, src/storage/mmkv.ts) — the same
- * once-only-banner pattern already used across the coach app (e.g.
- * StripeSetupBanner). We use `prefsStorage` (not `secureStorage`) because the
- * flag is a non-sensitive UX gate, consistent with the other dismissal keys.
+ * once per coach, ever. A second app open, a re-subscribe, a duplicate row, or
+ * signing out and back in must all be no-ops.
+ *
+ * Kept across sign-out on purpose (like lib/romanJoinOffer's mark): sign-out's
+ * clearAllStorage() wipes the prefs, cache and secure namespaces, but the
+ * server keeps the coach's first_payment row, so a gate in prefsStorage was
+ * wiped and the same payment celebrated again after the next sign-in
+ * (B-LONOTIFY5-1, B-LSNOTIFY5-M898-1). The gate is therefore one raw
+ * AsyncStorage key per coach id holding "true" (no amount, client or other
+ * account data) that no sign-out sweep matches. A second account on the same
+ * phone has its own key, so it still gets its own celebration.
  *
  * Key shape (per builder brief):
  *   `roman.ed3.first-payment-seen.${coachId}`
- *
- * The storage abstraction is async-capable (the AsyncStorage shim used in Expo
- * Go / Jest cannot read synchronously), so the gate API is async throughout.
- * The MMKV-backed instance resolves these promises synchronously underneath,
- * so the once-only contract holds on a real device too.
  */
-import { prefsStorage } from '../../../storage/mmkv';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /** Build the per-coach gate key. */
 export function firstPaymentSeenKey(coachId: string): string {
@@ -30,7 +30,7 @@ export function firstPaymentSeenKey(coachId: string): string {
  */
 export async function hasSeenFirstPayment(coachId: string): Promise<boolean> {
   if (!coachId) return true; // no coach → treat as already-seen (never show)
-  const raw = await prefsStorage.getStringAsync(firstPaymentSeenKey(coachId));
+  const raw = await AsyncStorage.getItem(firstPaymentSeenKey(coachId));
   return raw === 'true';
 }
 
@@ -41,5 +41,5 @@ export async function hasSeenFirstPayment(coachId: string): Promise<boolean> {
  */
 export async function markFirstPaymentSeen(coachId: string): Promise<void> {
   if (!coachId) return;
-  await prefsStorage.set(firstPaymentSeenKey(coachId), 'true');
+  await AsyncStorage.setItem(firstPaymentSeenKey(coachId), 'true');
 }

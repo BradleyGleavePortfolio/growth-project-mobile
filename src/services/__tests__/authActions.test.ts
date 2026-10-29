@@ -15,6 +15,10 @@ import {
   IMPORT_OFFER_DECISION_KEY_PREFIX,
   importOfferDecisionKey,
 } from '../../storage/importOfferDecision';
+import {
+  hasSeenFirstPayment,
+  markFirstPaymentSeen,
+} from '../../screens/coach/ed/firstPaymentGate';
 
 jest.mock('../api', () => ({
   usersApi: { updatePushToken: jest.fn(async () => ({ data: {} })) },
@@ -213,6 +217,21 @@ describe('signOut', () => {
     expect(
       allKeys.some((k) => k.startsWith('pending_invite_code')),
     ).toBe(false);
+  });
+
+  // m#898 (B-LONOTIFY5-1, B-LSNOTIFY5-M898-1): the coach's first-payment
+  // "shown" mark is kept across sign-out on purpose (firstPaymentGate.ts). The
+  // server keeps the payment row, so a wiped mark celebrated the same payment
+  // again after the next sign-in. Only that mark stays; the account's data goes.
+  it('keeps the first-payment shown mark across sign-out and still wipes the account keys', async () => {
+    await markFirstPaymentSeen('user-A');
+    await AsyncStorage.setItem('pending_invite_code:user-A', 'code-A');
+
+    await signOut();
+
+    expect(await hasSeenFirstPayment('user-A')).toBe(true);
+    expect(await hasSeenFirstPayment('user-B')).toBe(false);
+    expect(await AsyncStorage.getItem('pending_invite_code:user-A')).toBeNull();
   });
 
   // MWB-4 #237 R11 (P2) — the workout-builder autosave offline mirror is keyed
