@@ -1,0 +1,13 @@
+src/__tests__/coachPlanEnded
+src/__tests__/coachHome
+src/__tests__/commandCenter
+src/__tests__/qaCoach
+src/screens/coach/__tests__
+src/navigation/__tests__
+src/__tests__/copyVoice
+src/__tests__/truthfulCopy
+src/__tests__/repoHygiene
+src/__tests__/quietLuxuryDoctrine
+src/__tests__/wave11Doctrine
+src/hooks/__tests__
+src/api/__tests__
