@@ -35,7 +35,17 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, colors, semantic, layout, radius } from '../../theme/tokens';
+import {
+  spacing,
+  colors,
+  semantic,
+  layout,
+  radius,
+  forestPop,
+  neutral,
+  voiceFaces,
+  voiceShades,
+} from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import {
@@ -67,6 +77,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { formatDuration } from '../../components/community/voiceFormat';
+import VoiceNoteWaveform from '../../components/community/VoiceNoteWaveform';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
@@ -666,17 +677,38 @@ export function openInboxVoiceNote(navigation: CoachCommunityNav, noteId: string
   navigation.navigate('CommunityVoiceNoteDetail', { voiceNoteId: noteId });
 }
 
-/** The mic glyph a voice row's line starts with, inline in its text. */
-function VoiceGlyph({ id }: { id: string }): React.ReactElement {
+/**
+ * Voice B Studio card on a voice row (GOAL B-05a, B-09a): the feed player's
+ * white card, hairline and geometry, the 52 pt deep disc with the leaf play
+ * mark, the bars, and the length under the bars. The inbox sends no loudness
+ * (no peaks), so the bars are the player's flat baseline, never invented.
+ * Decorative: the row is the one control and says "Voice note · 0:42"; the
+ * note plays on its own page.
+ */
+function VoiceRowCard({ id, durationMs }: { id: string; durationMs: number }): React.ReactElement {
   return (
-    <Text>
-      <Ionicons
-        name="mic-outline"
-        size={15}
-        color={colors.graphite}
-        testID={`coach-community-inbox-voice-${id}`}
-      />{' '}
-    </Text>
+    <View
+      style={styles.voiceCard}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      testID={`coach-community-inbox-voice-${id}`}
+    >
+      <View style={styles.voiceBrow}>
+        <View style={styles.voiceDisc} testID={`coach-community-inbox-voice-disc-${id}`}>
+          <Ionicons name="play" size={22} color={forestPop.leaf} />
+        </View>
+        <VoiceNoteWaveform
+          peaks={[]}
+          height={34}
+          barCount={48}
+          gap={2}
+          testID={`coach-community-inbox-voice-bars-${id}`}
+        />
+      </View>
+      <Text style={styles.voiceTime} testID={`coach-community-inbox-voice-time-${id}`}>
+        {formatDuration(durationMs)}
+      </Text>
+    </View>
   );
 }
 
@@ -725,10 +757,13 @@ function InboxRow({
         {/* A row that opens (a post or a voice note) clamps to two lines; a
             typed message row has nowhere to open yet, so it shows the whole
             text (at most 200). */}
-        <Text style={styles.rowSnippet} numberOfLines={onOpen ? 2 : undefined}>
-          {item.kind === 'voice' ? <VoiceGlyph id={item.id} /> : null}
-          {item.snippet}
-        </Text>
+        {item.kind === 'voice' && item.voice ? (
+          <VoiceRowCard id={item.id} durationMs={item.voice.duration_ms} />
+        ) : (
+          <Text style={styles.rowSnippet} numberOfLines={onOpen ? 2 : undefined}>
+            {item.snippet}
+          </Text>
+        )}
       </View>
     </>
   );
@@ -1025,6 +1060,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     color: colors.forest,
+  },
+  // The feed player's card (VoiceNotePlayer: GOAL .bcard, .brow, .bfoot), still.
+  voiceCard: {
+    marginTop: spacing.xs,
+    paddingTop: 10,
+    paddingRight: 10,
+    paddingBottom: spacing.sm,
+    paddingLeft: spacing.md,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: voiceShades.hairline,
+    backgroundColor: neutral[0],
+  },
+  voiceBrow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 52 },
+  voiceDisc: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.pill,
+    backgroundColor: forestPop.deep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceTime: {
+    marginTop: 6,
+    paddingLeft: 64,
+    fontFamily: voiceFaces.semibold,
+    fontSize: 14,
+    lineHeight: 17,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    color: forestPop.ink,
   },
   ackConflict: {
     flexBasis: '100%',
