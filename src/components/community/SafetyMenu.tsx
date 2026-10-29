@@ -209,7 +209,7 @@ export default function SafetyMenu({
     if (!authorUserId) return;
     afterClose(() => Alert.alert(
       `Block ${who}?`,
-      `You and ${who} will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. They are not told. You can unblock them from Community safety.`,
+      `You and ${who} will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. In a direct message they see that you blocked them; nobody else is told. You can unblock them from Community safety.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

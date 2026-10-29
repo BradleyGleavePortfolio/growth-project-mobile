@@ -231,7 +231,7 @@ export function ConversationClosedLine({
   const line = given ?? (by === 'me' ? BLOCKED_BY_ME_LINE : by === 'them' && who ? blockedYouLine(who) : CLOSED_LINE);
   const link = !given && by === 'me' ? openBlocked : null;
   const bar = [styles.bar, { backgroundColor: semanticColors.bgSurface, borderTopColor: semanticColors.border }, style];
-  const muted = [typography.bodySmall, { color: semanticColors.textMuted }];
+  const muted = [typography.bodySmall, styles.line, { color: semanticColors.textMuted }];
   const icon = <Ionicons name="lock-closed-outline" size={16} color={semanticColors.textMuted} />;
   if (link) {
     return (
@@ -263,5 +263,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  // FR-877 (LO C1): a line that wraps (360 wide, 130% text) stays centred and inside the bar on native.
+  line: { flexShrink: 1, textAlign: 'center' },
   link: { textDecorationLine: 'underline', fontWeight: '600' },
 });

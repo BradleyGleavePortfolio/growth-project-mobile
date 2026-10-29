@@ -69,10 +69,12 @@ export const COMMUNITY_REVIEW_WITHIN_24H =
   'Reports are reviewed within 24 hours, every day, by your coach and the TGP Fitness team.';
 
 /**
- * Public moderation commitment (owner-approved 2026-10-01 09:07 PDT). Mirrors
- * backend COMMUNITY_RESPONSE_COMMITMENT; the server copy wins when present.
+ * Public moderation commitment: RC-BLOCK, owner-approved 2026-10-23 10:57 PDT (SoT A6.0-170, A6.25; it replaced the
+ * 10-01 sentence ending "and they are not told."). Mirrors backend COMMUNITY_RESPONSE_COMMITMENT word for word; the
+ * server copy wins when present.
  */
-export const COMMUNITY_RESPONSE_COMMITMENT = `${COMMUNITY_REVIEW_WITHIN_24H} Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you, and they are not told.`;
+export const COMMUNITY_RESPONSE_COMMITMENT =
+  'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you. In a direct message they see that you blocked them; nobody else is told.';
 
 /** Report confirmation: the approved 24-hour and removal sentences. */
 export const COMMUNITY_REPORT_SENT_TITLE = 'Report sent';
