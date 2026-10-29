@@ -17,6 +17,7 @@ import {
   useQuery,
   useMutation,
   useQueryClient,
+  type InfiniteData,
   type QueryClient,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -38,10 +39,12 @@ import {
   type CommunityPing,
 } from '../api/communityRealtime';
 import {
+  isCoachRemoved,
   removedRowsApi,
   type RemovableComment,
   type RemovablePost,
 } from '../api/communityRemovedRows';
+import type { SearchResponse } from '../api/communitySearchApi';
 import { refreshVoiceQueries } from './voiceQueryKeys';
 import { communitySearchKeys } from './useCommunitySearch';
 
@@ -109,8 +112,9 @@ export function usePosts(
 ): UseQueryResult<RemovablePost[]> {
   return useQuery({
     queryKey: communityKeys.posts(workspaceId ?? '∅'),
-    queryFn: async () => {
+    queryFn: async ({ client: qc }) => {
       const res = await removedRowsApi.listPosts(workspaceId as string);
+      res.posts.forEach((row) => settleRemovedPost(qc, row));
       return res.posts;
     },
     enabled: !!workspaceId,
@@ -366,6 +370,27 @@ export function refreshPostQueries(qc: QueryClient): Promise<void> {
     predicate: (q) =>
       (q.queryKey[0] === 'community' && POST_QUERY_KINDS.includes(q.queryKey[1])) || isPostSearchKey(q.queryKey),
   });
+}
+
+/**
+ * FR-RBM3 (class-first): once one read that came back shows a post as removed by a coach, every
+ * other copy of it on the phone follows at once, even when its own re-read failed or is still out:
+ * a post list row and an open post page turn into the placeholder, and Today's pinned slot and Find
+ * let it go (the server leaves a removed post out of both). Copies that already match are left alone.
+ */
+export function settleRemovedPost(qc: QueryClient, post: RemovablePost): void {
+  if (!isCoachRemoved(post)) return;
+  const isStale = (row: { id: string }) => row.id === post.id && !isCoachRemoved(row);
+  qc.setQueriesData<RemovablePost[]>({ queryKey: [...communityKeys.all, 'posts'] }, (rows) =>
+    rows?.some(isStale) ? rows.map((row) => (isStale(row) ? post : row)) : undefined);
+  qc.setQueryData<RemovablePost>(communityKeys.post(post.id), (old) => (old && isStale(old) ? post : undefined));
+  qc.setQueryData<CommunityTodayResponse>(communityKeys.today(), (today) =>
+    today?.pinned_post?.id === post.id ? { ...today, pinned_post: null } : undefined);
+  const isHit = (r: SearchResponse['results'][number]) => r.kind === 'post' && r.targetId === post.id;
+  qc.setQueriesData<InfiniteData<SearchResponse>>({ predicate: (q) => isPostSearchKey(q.queryKey) }, (found) =>
+    found?.pages.some((page) => page.results.some(isHit))
+      ? { ...found, pages: found.pages.map((page) => ({ ...page, results: page.results.filter((r) => !isHit(r)) })) }
+      : undefined);
 }
 
 /**

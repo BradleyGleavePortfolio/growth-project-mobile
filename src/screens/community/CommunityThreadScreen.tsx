@@ -44,6 +44,7 @@ import {
   useDeletePost,
   useCommunityMe,
   isOptimisticId,
+  settleRemovedPost,
 } from '../../hooks/useCommunity';
 import type {
   CommunityReactionEmoji,
@@ -118,7 +119,11 @@ export default function CommunityThreadScreen(): React.ReactElement {
 
   const post = useQuery({
     queryKey: ['community', 'post', postId],
-    queryFn: () => removedRowsApi.getPost(postId),
+    queryFn: async ({ client: qc }) => {
+      const read = await removedRowsApi.getPost(postId);
+      settleRemovedPost(qc, read);
+      return read;
+    },
     enabled: !!postId,
   });
   const comments = usePostComments(postId);
@@ -142,6 +147,9 @@ export default function CommunityThreadScreen(): React.ReactElement {
   const isOwnPost = !!p && !!client?.id && p.author_user_id === client.id;
   const removedLine = p ? removedRowLine(p, 'post', client?.id) : null;
   const live = open && !removedLine;
+  // FR-RBM3 (LS-RBM3 B1): a post the server says was removed shows none of its replies, even ones
+  // still cached from before when the reply re-read failed or has not come back.
+  const fenced = closed || !!removedLine;
   const pendingTap =
     react.isPending && react.variables?.postId === postId ? react.variables : null;
   const reactions = withPendingTap(p?.reactions ?? react.data?.reactions ?? [], pendingTap);
@@ -238,13 +246,13 @@ export default function CommunityThreadScreen(): React.ReactElement {
 
         <FlatList
           testID="community-thread-replies"
-          data={closed ? [] : data}
+          data={fenced ? [] : data}
           keyExtractor={(c) => c.id}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
               tintColor={semanticColors.textMuted} colors={[semanticColors.accent]} />
           }
-          ListEmptyComponent={closed ? null : comments.isLoading || comments.isError ? (
+          ListEmptyComponent={fenced ? null : comments.isLoading || comments.isError ? (
             <View style={styles.center} accessibilityState={{ busy: comments.isLoading }}>
               <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>
                 {comments.isLoading ? 'Loading replies…' : 'Replies did not load. Check your connection, then try again.'}
