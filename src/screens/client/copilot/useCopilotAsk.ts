@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { openOrResumeSession, RomanApiError, RomanWireError, sendMessage, type RomanAssistantReply } from '../../../api/romanApi';
 import { parseReply, type CopilotReply } from '../../../api/copilotApi';
 import { romanChatsEvents } from '../../settings/romanChatsEvents';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 
 export interface CopilotTurn {
   id: string;
@@ -36,18 +37,22 @@ export function useCopilotAsk(deps = LIVE) {
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
   const [busy, setBusy] = useState(false);
   const [erased, setErased] = useState(0);
+  const live = useRef(true);
+  const drops = useRef(0);
 
   useEffect(() => {
+    live.current = true;
     const drop = (id: string | null) => {
       if (id !== null && id !== held.current) return;
       session.current = null;
       held.current = null;
+      drops.current += 1;
       setTurns([]);
       setErased((n) => n + 1);
     };
     const offGone = romanChatsEvents.onGone((e) => drop(e.id));
     const offErased = romanChatsEvents.onErased((e) => drop(e.id));
-    return () => { offGone(); offErased(); };
+    return () => { live.current = false; offGone(); offErased(); };
   }, []);
 
   const ask = useCallback(async (text: string, retryId?: string): Promise<AskOutcome> => {
@@ -59,6 +64,7 @@ export function useCopilotAsk(deps = LIVE) {
     const patch = (p: Partial<CopilotTurn>) => setTurns((all) => all.map((t) => (t.id === id ? { ...t, ...p } : t)));
     if (retryId) patch({ error: null });
     else setTurns((all) => [...all, { id, question, askedAt: new Date(), answer: null, error: null }]);
+    const drop = drops.current;
     try {
       const pending = (session.current ??= deps.open('client').then((s) => (held.current = s.id)));
       const sessionId = await pending.catch((err: unknown) => { session.current = null; throw err; });
@@ -68,6 +74,9 @@ export function useCopilotAsk(deps = LIVE) {
     } catch (err) {
       const stored = (err instanceof RomanApiError && err.turnStored) || err instanceof RomanWireError;
       patch({ error: err instanceof RomanApiError ? err : new RomanApiError('generic', 'Copilot turn failed', undefined, undefined, stored) });
+      // One error tap for an answer that failed (GOAL index section 3, Sol B-S4); none once the screen has closed or
+      // the chat was erased meanwhile (its turn is gone).
+      if (live.current && drop === drops.current) void HapticService.error();
       return stored ? 'stored' : err instanceof RomanApiError && HELD.has(err.kind) ? 'held' : 'failed';
     } finally {
       busyRef.current = false;
