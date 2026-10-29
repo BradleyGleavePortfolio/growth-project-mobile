@@ -1265,3 +1265,20 @@ describe('FR-871R7 (m#879 Sol B879-3): a text the server accepted, before the li
     await waitFor(() => expect(r.queryAllByLabelText(/^Dana Reyes, .*\. Accepted text$/)).toHaveLength(0));
   });
 });
+
+describe('LO-897 B1 (m#897 round 1, Claude Opus lens): Space info when the chat itself could not load', () => {
+  it('B-TEST: the chat read failed while online (500): the sheet does not show "Loading people" rows that never end', async () => {
+    const answer = mockApi.get.getMockImplementation() as (url: string) => Promise<unknown>;
+    mockApi.get.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/messages')) throw fail(500);
+      return answer(url);
+    });
+    const r = await open();
+    expect(await r.findByTestId('space-chat-error')).toBeTruthy(); // the page: could not load, Try again
+    await fireEvent.press(r.getByTestId('space-chat-info'));
+    expect(r.getByTestId('space-info-sheet')).toBeTruthy();
+    // Nothing asks for the people until the chat's own read succeeds, so nothing is loading: no endless loading rows.
+    expect(mockApi.get.mock.calls.filter(([u]) => String(u).endsWith('/members'))).toHaveLength(0);
+    expect(r.queryByTestId('space-info-people-loading')).toBeNull();
+  });
+});
