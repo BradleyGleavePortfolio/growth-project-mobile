@@ -83,7 +83,7 @@ import { signOut } from "../../../services/authActions";
 import { buildPackageShareUrl } from "../../../utils/packageShare";
 import { toAuthErrorDetail } from "../../../utils/authErrorDetail";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
-import { EVERY_PACKAGE_INCLUDES_COACHING } from "../../../config/purchaseSurfaces";
+import { EVERY_PACKAGE_INCLUDES_COACHING } from "../../../constants/packageCoachingCopy";
 import PackageDetailSurface, {
   type PackageDetailViewModel,
 } from "../../client/packageDetail/PackageDetailSurface";

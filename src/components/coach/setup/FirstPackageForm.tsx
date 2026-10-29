@@ -26,7 +26,7 @@ import {
   type PackageCreateInput,
 } from "../../../api/packagesApi";
 import { coachSetupApi } from "../../../api/coachSetupApi";
-import { EVERY_PACKAGE_INCLUDES_COACHING } from "../../../config/purchaseSurfaces";
+import { EVERY_PACKAGE_INCLUDES_COACHING } from "../../../constants/packageCoachingCopy";
 import {
   describeError,
   type FriendlyError,
