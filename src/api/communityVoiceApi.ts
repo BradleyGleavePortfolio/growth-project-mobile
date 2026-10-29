@@ -32,7 +32,8 @@
  */
 import { z } from 'zod';
 import axios from 'axios';
-import api from '../services/api';
+import api, { type BoundRequestConfig } from '../services/api';
+import { boundRequestSignal, type AccountBinding } from '../services/accountBinding';
 import { CommunityApiError } from './communityApi';
 
 // ─── Server limits (mirror backend community-voice.dto.ts) ───────────────────
@@ -165,6 +166,34 @@ export const VOICE_REQUEST_TIMEOUT_MS = 15_000;
 /** The raw byte upload can be larger/slower than a JSON call. */
 export const VOICE_UPLOAD_TIMEOUT_MS = 60_000;
 
+/**
+ * BF-2 (VF-848B): the signal of one publish hop. It always times out; a hop bound to a sign-in (every
+ * outbox send) also stops on the next sign-in change. Call `done()` when the hop settles.
+ */
+function hopSignal(ms: number, binding?: AccountBinding): { signal: AbortSignal; done: () => void } {
+  const timeout = AbortSignal.timeout(ms);
+  if (!binding) return { signal: timeout, done: () => undefined };
+  const bound = boundRequestSignal(binding);
+  const both = new AbortController();
+  const stop = () => both.abort();
+  if (bound.signal.aborted) stop();
+  timeout.addEventListener('abort', stop);
+  bound.signal.addEventListener('abort', stop);
+  return {
+    signal: both.signal,
+    done: () => {
+      bound.done();
+      timeout.removeEventListener('abort', stop);
+      bound.signal.removeEventListener('abort', stop);
+    },
+  };
+}
+
+/** BF-2: a bound hop names its sign-in; the API client sends it only with that sign-in's own credential. */
+function hopConfig(signal: AbortSignal, binding?: AccountBinding): BoundRequestConfig | { signal: AbortSignal } {
+  return binding ? { signal, accountBinding: binding } : { signal };
+}
+
 async function call<T>(
   schema: z.ZodType<T>,
   fn: () => Promise<{ data: unknown }>,
@@ -255,38 +284,48 @@ export const communityVoiceApi = {
    *
    * Validates duration/size/mime and mints a signed PUT target plus the opaque
    * `storage_key` (namespaced to the caller). No row is created yet.
+   * Bound (BF-2): sent only with that sign-in's credential, and stopped on the next sign-in change.
    */
-  issueUploadUrl(
+  async issueUploadUrl(
     workspaceId: string,
     input: IssueVoiceUploadInput,
+    binding?: AccountBinding,
   ): Promise<VoiceUploadTarget> {
-    return call(VoiceUploadTargetSchema, () =>
-      api.post<unknown>(
-        `/community/workspaces/${workspaceId}/voice-notes/upload-url`,
-        input,
-        { signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS) },
-      ),
-    );
+    const hop = hopSignal(VOICE_REQUEST_TIMEOUT_MS, binding);
+    try {
+      return await call(VoiceUploadTargetSchema, () =>
+        api.post<unknown>(
+          `/community/workspaces/${workspaceId}/voice-notes/upload-url`,
+          input,
+          hopConfig(hop.signal, binding),
+        ),
+      );
+    } finally {
+      hop.done();
+    }
   },
 
   /**
    * Direct binary PUT of the recorded audio to the signed upload URL. Returns
    * nothing on success; a transport failure is surfaced as a typed
    * CommunityApiError so the composer can offer a retry without losing the
-   * recording.
+   * recording. Bound (BF-2): a sign-in change stops it, so no more of the
+   * recording goes up after its account signs out.
    */
   async uploadBytes(
     uploadUrl: string,
     body: Blob | ArrayBuffer,
     mimeType: VoiceNoteMimeType,
     onProgress?: (fraction: number) => void,
+    binding?: AccountBinding,
   ): Promise<void> {
+    const hop = hopSignal(VOICE_UPLOAD_TIMEOUT_MS, binding);
     try {
       // The signed URL is an absolute storage endpoint, not an API route, so
       // we use a bare axios PUT (not the `api` instance with its auth/baseURL).
       await axios.put(uploadUrl, body, {
         headers: { 'Content-Type': mimeType },
-        signal: AbortSignal.timeout(VOICE_UPLOAD_TIMEOUT_MS),
+        signal: hop.signal,
         ...(onProgress
           ? { onUploadProgress: (e: { loaded: number; total?: number }) => { if (e.total) onProgress(e.loaded / e.total); } }
           : {}),
@@ -302,6 +341,8 @@ export const communityVoiceApi = {
         );
       }
       throw new CommunityApiError('unknown', -1, 'voice upload failed', err);
+    } finally {
+      hop.done();
     }
   },
 
@@ -310,10 +351,14 @@ export const communityVoiceApi = {
    *
    * Durably records the note after its bytes are uploaded. The server re-asserts
    * the limits and the `${userId}/` bucket binding on `storage_key`.
+   * Bound (BF-2): sent only with that sign-in's credential. Not stopped on a
+   * sign-in change: once it may have left the phone an abort would not undo
+   * it; publishVoiceNote drops an answer that comes after the change.
    */
   create(
     workspaceId: string,
     input: CreateVoiceNoteInput,
+    binding?: AccountBinding,
   ): Promise<VoiceNoteView> {
     const body: Record<string, unknown> = {
       storage_key: input.storage_key,
@@ -329,7 +374,7 @@ export const communityVoiceApi = {
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/voice-notes`,
         body,
-        { signal: AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS) },
+        hopConfig(AbortSignal.timeout(VOICE_REQUEST_TIMEOUT_MS), binding),
       ),
     ).then((r) => r.voice_note);
   },
