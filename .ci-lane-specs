@@ -1,0 +1,9 @@
+src/hooks
+src/components/community
+src/screens/community
+src/services
+src/api
+src/navigation
+copyVoice.guard.test.ts
+truthfulCopy.guard.test.ts
+src/config/__tests__/storeReviewPermissions.test.js
