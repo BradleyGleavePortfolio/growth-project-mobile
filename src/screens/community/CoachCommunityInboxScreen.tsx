@@ -682,6 +682,9 @@ export function openInboxVoiceNote(navigation: CoachCommunityNav, noteId: string
  * white card, hairline and geometry, the 52 pt deep disc with the leaf play
  * mark, the bars, and the length under the bars. The inbox sends no loudness
  * (no peaks), so the bars are the player's flat baseline, never invented.
+ * The bars follow GOAL .wv: 3 pt wide, 2 pt apart, packed from the left in a
+ * strip that clips at its end, so they stay inside the card at any width
+ * (the row's strip is 141 pt at 360 and 171 at 390).
  * Decorative: the row is the one control and says "Voice note · 0:42"; the
  * note plays on its own page.
  */
@@ -697,13 +700,16 @@ function VoiceRowCard({ id, durationMs }: { id: string; durationMs: number }): R
         <View style={styles.voiceDisc} testID={`coach-community-inbox-voice-disc-${id}`}>
           <Ionicons name="play" size={22} color={forestPop.leaf} />
         </View>
-        <VoiceNoteWaveform
-          peaks={[]}
-          height={34}
-          barCount={48}
-          gap={2}
-          testID={`coach-community-inbox-voice-bars-${id}`}
-        />
+        <View style={styles.voiceStrip} testID={`coach-community-inbox-voice-strip-${id}`}>
+          <VoiceNoteWaveform
+            peaks={[]}
+            height={34}
+            barCount={48}
+            barWidth={3}
+            gap={2}
+            testID={`coach-community-inbox-voice-bars-${id}`}
+          />
+        </View>
       </View>
       <Text style={styles.voiceTime} testID={`coach-community-inbox-voice-time-${id}`}>
         {formatDuration(durationMs)}
@@ -1074,6 +1080,8 @@ const styles = StyleSheet.create({
     backgroundColor: neutral[0],
   },
   voiceBrow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 52 },
+  // GOAL .wv: the strip takes the rest of the row and clips the bars at its end.
+  voiceStrip: { flex: 1, minWidth: 0, overflow: 'hidden' },
   voiceDisc: {
     width: 52,
     height: 52,
