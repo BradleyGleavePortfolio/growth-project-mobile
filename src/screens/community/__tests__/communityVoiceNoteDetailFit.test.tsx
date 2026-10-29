@@ -6,11 +6,12 @@
  * and only on a phone too narrow for that (320 pt) does the card keep the page's width.
  *
  * B2: the time beside the name is the note's clock in the phone's own 12/24-hour setting (expo-localization), with
- * midnight as 00:05 on a 24-hour phone, never 24:05.
+ * midnight as 00:05 on a 24-hour phone, never 24:05; and since a clock is longer than an age, the name, Coach mark and clock
+ * share a wrapping line, so the clock goes under the name instead of cutting it (found by the 320 pt and 130% renders).
  */
 import React from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { render, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('../../../theme/useTheme', () => ({
@@ -118,6 +119,21 @@ describe("B2: the note's clock in the phone's 12/24-hour setting (Sol R4 #865 B2
     try {
       expect(view.getByText(expected)).toBeTruthy();
       expect(view.queryByText(/^just now$|^\d+(?:m|h|d|w|mo)$/)).toBeNull(); // the relative age is gone
+    } finally {
+      await done();
+    }
+  });
+
+  it('a clock is longer than an age: the name, Coach mark and clock share a wrapping line, so the clock never cuts the name', async () => {
+    mockCalendars.mockImplementation(() => [{ uses24hourClock: false }]);
+    const { view, done } = await renderAt(320, { author_is_coach: true });
+    try {
+      let line = (view.getByText('Riley Chen') as unknown as Node).parent;
+      while (line && style(line).flexDirection !== 'row') line = line.parent;
+      expect(style(line!)).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap' });
+      expect(within(line as never).getByText('Coach')).toBeTruthy();
+      expect(within(line as never).getByText(/^9:20\s?a\.?m\.?$/i)).toBeTruthy();
+      expect(within(line as never).queryByTestId('community-voice-detail-tile')).toBeNull();
     } finally {
       await done();
     }
