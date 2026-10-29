@@ -35,6 +35,7 @@ loaded
   ─ scroll past 70% → loadingMore → loaded (appended)
   ─ tap row → markNotificationRead (optimistic) → navigate to actionScreen
   ─ tap "Mark all read" → markAllNotificationsRead (optimistic) → unreadCount=0
+  ─ a block or unblock (blocked-users store changes) → rows cleared → loadingFirst
   ↓ fetchNotifications rejects
 error (message shown in empty state)
 ```
@@ -43,6 +44,7 @@ error (message shown in empty state)
 
 - Infinite scroll, cursor-based, 25 items per page.
 - Pull-to-refresh resets cursor and replaces the list.
+- The screen stays mounted under Messages and ContactView, so a block or unblock clears the loaded rows at once and reads the list again; the server decides which rows a block hides (B-LSNOTIFY4-B1171-1).
 - Empty state: "No notifications."; failed loads show the notification-specific error instead.
 - Rows use theme hairlines without fills; unread is a small forest dot and medium Inter title. Titles/body remain fully visible; relative times are 13 pt.
 - Back, mark-all, and the notification-preferences text link have 44 pt minimum targets. Existing refresh, pagination and role-aware destinations are unchanged.
