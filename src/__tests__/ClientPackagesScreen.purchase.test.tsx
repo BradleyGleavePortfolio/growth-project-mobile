@@ -395,6 +395,26 @@ it('Your plans: a plan that already ended gets its own copy, never a generic err
 
 // STORE-1TO1 (owner #183-S1): every package includes 1:1 coaching with its coach. The plan page
 // lists it first under "What's included", also for a package with no features of its own.
+it('LS-1TO1: a failed coach-name read cannot sell a nameless Style C inclusion', async () => {
+  mockBillingV2 = true;
+  mockGet.mockImplementation(async (url: string) => {
+    if (url === '/v1/clients/me/coach') throw new Error('Connection lost');
+    if (url === '/v1/checkout/subscriptions') return { data: { plans: [] } };
+    throw new Error(`Unexpected read ${url}`);
+  });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  expect(r.getByTestId('client-plan-one-to-one').props.children).toBe(
+    '1:1 coaching with your coach',
+  );
+  // The approved W2 names the coach. A transient identity-read failure
+  // must offer a retry or recover that name before allowing payment.
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  expect(mockPost).not.toHaveBeenCalled();
+  expect(mockInitPaymentSheet).not.toHaveBeenCalled();
+});
+
 it('Style C lists 1:1 coaching with the coach first under What\'s included, with or without features', async () => {
   mockBillingV2 = true;
   const original = await defaultPackages?.();
