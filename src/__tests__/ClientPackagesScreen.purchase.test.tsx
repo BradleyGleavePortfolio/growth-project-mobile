@@ -419,3 +419,25 @@ it('Style C lists 1:1 coaching with the coach first under What\'s included, with
   expect(within(bare.getByTestId('client-plan-page')).getByText("What's included")).toBeTruthy();
   expect(bare.getByTestId('client-plan-one-to-one').props.children).toBe('1:1 coaching with Coach Lee');
 });
+
+// LO-1TO1 B1 (lens test, failing at m#907 e26541d8): every current build has clientBillingV2 off
+// (featureFlags default false; no eas.json profile sets it), so buyers see this list, not the Style C
+// plan page. Each package must list 1:1 coaching with its coach before its own lines, with or
+// without features.
+it('LO-1TO1 B1: the list buyers see today lists 1:1 coaching with the coach first on each package', async () => {
+  const original = await defaultPackages?.();
+  if (!original?.ok) throw new Error('Expected available plans');
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{ ...original.data[0], features: ['Weekly call'] }] });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
+  const page = pageOrder(r.getByTestId('client-packages-header').parent?.parent as unknown as PageNode);
+  const card = page.slice(page.indexOf('Monthly coaching'));
+  expect(card).toContain('1:1 coaching with Coach Lee');
+  expect(card.indexOf('1:1 coaching with Coach Lee')).toBeLessThan(card.indexOf('Weekly call'));
+  await r.unmount();
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{ ...original.data[0], features: [] }] });
+  const bare = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(bare.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
+  const barePage = pageOrder(bare.getByTestId('client-packages-header').parent?.parent as unknown as PageNode);
+  expect(barePage.slice(barePage.indexOf('Monthly coaching'))).toContain('1:1 coaching with Coach Lee');
+});
