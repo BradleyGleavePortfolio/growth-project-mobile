@@ -211,6 +211,48 @@ async function toP0(api: ConsultationApi) {
 
 describe('A-02 agreement before any upload', () => {
 
+  it('LS-E4 C1: ticking the one box alone sends nothing; Continue saves once', async () => {
+    const api = makeApi();
+    const r = await toP0(api);
+    expect(api.save).not.toHaveBeenCalled();
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await tick();
+    expect(api.save).not.toHaveBeenCalled();
+    expect(r.queryByTestId('consent-ai-checkbox')).toBeNull();
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    expect(api.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('LS-E4 C1: two synchronous Continue taps save the first P0 only once', async () => {
+    const api = makeApi();
+    const r = await toP0(api);
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    const button = r.getByTestId('consult-continue');
+    await act(async () => {
+      const first = button.props.onPress();
+      const second = button.props.onPress();
+      await Promise.all([first, second]);
+    });
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    expect(api.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('LS-E4 C1: completion with a one-box P0 does not depend on the Roman ledger', async () => {
+    const shown = oneBoxConsentScreenCopy(false);
+    const P0 = { agreed: true as const, copy_version: shown.version, text_sha256: shown.sha256, agreed_at: NOW.toISOString() };
+    await seedLocal(fullAnswers({ P0 }), 'SUM');
+    const api = makeApi({
+      getRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'unavailable', status: 503 })),
+    });
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+    expect(api.complete).toHaveBeenCalledTimes(1);
+    expect(api.withdrawRomanConsent).not.toHaveBeenCalled();
+  });
+
   it('audit probe: answers without a recorded agreement never reach the server', async () => {
     const a = answersBeforeSafety();
     delete a.P0;
@@ -294,6 +336,48 @@ describe('A-02 consent-first PUT (backend #607)', () => {
 describe('A-03 consent matches the displayed copy, fails closed', () => {
   const stale = { agreed: true, copy_version: 'obsolete-v0', agreed_at: '2025-01-01T00:00:00Z' } as never;
 
+  it('LS-E4 C1: a stale local P0 resumes unticked and is never uploaded', async () => {
+    await seedLocal(fullAnswers({ P0: stale }), 'SUM');
+    const api = makeApi();
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(r.queryByTestId('consult-screen-SUM')).toBeNull();
+    expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+    await tick();
+    expect(api.save).not.toHaveBeenCalled();
+  });
+
+  it('LS-E4 C1: a rejected one-box P0 fails closed with the update explanation', async () => {
+    const api = makeApi({ save: jest.fn(async () => { throw conflict('consent_missing'); }) });
+    const r = await toP0(api);
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consent-error'));
+    expect(r.getByTestId('consent-error').props.children).toMatch(/update the app/);
+    expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(api.save).toHaveBeenCalledTimes(1);
+    expect(api.complete).not.toHaveBeenCalled();
+  });
+
+  it('LS-E4 C1: a later save rejected for version returns unticked and stops uploads', async () => {
+    await seedLocal(fullAnswers(), 'G1');
+    const api = makeApi({ save: jest.fn(async () => { throw conflict('consent_version_mismatch'); }) });
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('option-get_stronger'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(r.getByTestId('consent-error').props.children).toMatch(/update the app/);
+    const count = (api.save as jest.Mock).mock.calls.length;
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await tick();
+    expect((api.save as jest.Mock).mock.calls.length).toBe(count);
+    expect(api.complete).not.toHaveBeenCalled();
+  });
 
   it('a server P0 of the earlier copy (consult-consent-v1) is not honoured', async () => {
     const api = makeApi({
