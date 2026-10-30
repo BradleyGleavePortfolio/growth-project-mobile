@@ -194,18 +194,21 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
     phase === 'confirmed_pending' ||
     purchase.state.priceChange !== null;
 
+  // FR-1TO1 (LS B2): with the package shown, the bar joins the C5 Style C deep-forest masthead below.
+  const onMast = !!pkg && !loading && !error;
+  const barInk = onMast ? semanticColors.textOnAccent : semanticColors.textPrimary;
   return (
     <Screen edges={MODAL_EDGES} scroll={false} contentStyle={styles.bare}>
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, onMast && { backgroundColor: semanticColors.surface.masthead }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
+          <Ionicons name="close" size={24} color={barInk} />
         </TouchableOpacity>
-        <Text style={styles.topTitle} testID="package-checkout-title">
+        <Text style={[styles.topTitle, { color: barInk }]} testID="package-checkout-title">
           {oneToOneCoachingLabel(pkg?.coach?.displayName)}
         </Text>
         <View style={styles.backBtn} />

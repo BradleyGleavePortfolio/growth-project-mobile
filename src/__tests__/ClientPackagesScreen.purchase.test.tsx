@@ -392,3 +392,105 @@ it('Your plans: a plan that already ended gets its own copy, never a generic err
   );
   alertSpy.mockRestore();
 });
+
+// STORE-1TO1 (owner #183-S1): every package includes 1:1 coaching with its coach. The plan page
+// lists it first under "What's included", also for a package with no features of its own.
+it('LS-1TO1: a failed coach-name read cannot sell a nameless Style C inclusion', async () => {
+  mockBillingV2 = true;
+  mockGet.mockImplementation(async (url: string) => {
+    if (url === '/v1/clients/me/coach') throw new Error('Connection lost');
+    if (url === '/v1/checkout/subscriptions') return { data: { plans: [] } };
+    throw new Error(`Unexpected read ${url}`);
+  });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  expect(r.getByTestId('client-plan-one-to-one').props.children).toBe(
+    '1:1 coaching with your coach',
+  );
+  // The approved W2 names the coach. A transient identity-read failure
+  // must offer a retry or recover that name before allowing payment.
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  expect(mockPost).not.toHaveBeenCalled();
+  expect(mockInitPaymentSheet).not.toHaveBeenCalled();
+});
+
+it('Style C lists 1:1 coaching with the coach first under What\'s included, with or without features', async () => {
+  mockBillingV2 = true;
+  const original = await defaultPackages?.();
+  if (!original?.ok) throw new Error('Expected available plans');
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{ ...original.data[0], features: ['Weekly call'] }] });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  const page = pageOrder(r.getByTestId('client-plan-page'));
+  const at = (text: string) => page.findIndex((entry) => entry === text);
+  expect(r.getByTestId('client-plan-one-to-one').props.children).toBe('1:1 coaching with Coach Lee');
+  const line = at('client-plan-one-to-one');
+  expect(page[line + 1]).toBe('1:1 coaching with Coach Lee');
+  expect(at("What's included")).toBeGreaterThan(-1);
+  expect(at("What's included")).toBeLessThan(line);
+  expect(line).toBeLessThan(at('Weekly call'));
+  await r.unmount();
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{ ...original.data[0], features: [] }] });
+  const bare = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(bare.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(bare.getByTestId('plan-offer-pkg-monthly-open'));
+  expect(within(bare.getByTestId('client-plan-page')).getByText("What's included")).toBeTruthy();
+  expect(bare.getByTestId('client-plan-one-to-one').props.children).toBe('1:1 coaching with Coach Lee');
+});
+
+// LO-1TO1 B1 (lens test, failing at m#907 e26541d8): every current build has clientBillingV2 off
+// (featureFlags default false; no eas.json profile sets it), so buyers see this list, not the Style C
+// plan page. Each package must list 1:1 coaching with its coach before its own lines, with or
+// without features.
+it('LO-1TO1 B1: the list buyers see today lists 1:1 coaching with the coach first on each package', async () => {
+  const original = await defaultPackages?.();
+  if (!original?.ok) throw new Error('Expected available plans');
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{ ...original.data[0], features: ['Weekly call'] }] });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
+  const page = pageOrder(r.getByTestId('client-packages-header').parent?.parent as unknown as PageNode);
+  const card = page.slice(page.indexOf('Monthly coaching'));
+  expect(card).toContain('1:1 coaching with Coach Lee');
+  expect(card.indexOf('1:1 coaching with Coach Lee')).toBeLessThan(card.indexOf('Weekly call'));
+  await r.unmount();
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [{ ...original.data[0], features: [] }] });
+  const bare = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(bare.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
+  const barePage = pageOrder(bare.getByTestId('client-packages-header').parent?.parent as unknown as PageNode);
+  expect(barePage.slice(barePage.indexOf('Monthly coaching'))).toContain('1:1 coaching with Coach Lee');
+});
+
+// FR-1TO1 (agent 185) class-first: no buy path sells while the coach's name is unknown, on the list
+// card (flag off) and on the Style C plan page (flag on); the retry recovers the name and the sale.
+it.each([
+  ['list card (flag off)', false],
+  ['Style C plan page (flag on)', true],
+])('FR-1TO1: %s blocks Buy until the coach name is read, then the retry recovers it', async (_path, v2) => {
+  mockBillingV2 = v2;
+  let fail = true;
+  mockGet.mockImplementation(async (url: string) => {
+    if (url === '/v1/clients/me/coach') {
+      if (fail) throw new Error('Connection lost');
+      return { data: { name: 'Coach Lee' } };
+    }
+    if (url === '/v1/checkout/subscriptions') return { data: { plans: [] } };
+    throw new Error(`Unexpected read ${url}`);
+  });
+  const r = await render(<ClientPackagesScreen />);
+  if (v2) {
+    await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  }
+  await waitFor(() => expect(r.getByTestId('plan-coach-retry-pkg-monthly')).toBeTruthy());
+  expect(r.getByText("Your coach's plans could not load. Check your connection, then tap to try again.")).toBeTruthy();
+  expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  expect(mockPost).not.toHaveBeenCalled();
+  fail = false;
+  await fireEvent.press(r.getByTestId('plan-coach-retry-pkg-monthly'));
+  await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.disabled).toBe(false));
+  expect(r.queryByTestId('plan-coach-retry-pkg-monthly')).toBeNull();
+  expect(r.getByTestId(v2 ? 'client-plan-one-to-one' : 'plan-one-to-one-pkg-monthly').props.children).toBe('1:1 coaching with Coach Lee');
+});

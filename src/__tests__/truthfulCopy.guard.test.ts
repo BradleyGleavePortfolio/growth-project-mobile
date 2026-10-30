@@ -43,7 +43,7 @@ jest.mock('../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../analytics/posthog.service', () => ({ track: jest.fn() }));
 jest.mock('../services/authActions', () => ({ signOut: jest.fn() }));
 jest.mock('../utils/haptics', () => ({ mediumTap: jest.fn(), successTap: jest.fn(), warningTap: jest.fn() }));
-jest.mock('../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => false }));
+jest.mock('../config/purchaseSurfaces', () => ({ ...jest.requireActual('../config/purchaseSurfaces'), nonP2PPurchasesHidden: () => false }));
 jest.mock('../config/featureFlags', () => ({ featureFlags: { deliverables: false, privateCommunityHub: true } }));
 jest.mock('../services/api', () => ({
   __esModule: true, default: { get: jest.fn(async (url: string) => ({ data: url.includes('consent') ? {

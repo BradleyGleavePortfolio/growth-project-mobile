@@ -83,6 +83,7 @@ import { signOut } from "../../../services/authActions";
 import { buildPackageShareUrl } from "../../../utils/packageShare";
 import { toAuthErrorDetail } from "../../../utils/authErrorDetail";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
+import { EVERY_PACKAGE_INCLUDES_COACHING } from "../../../constants/packageCoachingCopy";
 import PackageDetailSurface, {
   type PackageDetailViewModel,
 } from "../../client/packageDetail/PackageDetailSurface";
@@ -716,6 +717,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           multiline
           maxLength={1000}
         />
+        <Text style={styles.priceHelperText} testID="package-one-to-one-note">
+          {EVERY_PACKAGE_INCLUDES_COACHING}
+        </Text>
 
         <Label semanticColors={semanticColors} tokens={tokens}>
           Price ({(original?.currency ?? "usd").toUpperCase()})

@@ -466,3 +466,19 @@ describe("Home checklist and resume", () => {
     expect(resumeRoute(6)).toBe("CoachWizardStep5");
   });
 });
+
+// STORE-1TO1 (owner #183-S1): every package includes 1:1 coaching with its coach.
+describe("FirstPackageForm — STORE-1TO1 1:1 coaching line", () => {
+  it("says every package includes 1:1 coaching with the coach, under the name, paid or free", async () => {
+    const { getByTestId } = await render(
+      <FirstPackageForm defaultTitle="North coaching" chargesEnabled={false} onCreated={jest.fn()} />,
+    );
+    expect(getByTestId("first-package-one-to-one").props.children).toBe(
+      "Every package includes 1:1 coaching with you.",
+    );
+    await fireEvent.press(getByTestId("first-package-free"));
+    expect(getByTestId("first-package-one-to-one").props.children).toBe(
+      "Every package includes 1:1 coaching with you.",
+    );
+  });
+});

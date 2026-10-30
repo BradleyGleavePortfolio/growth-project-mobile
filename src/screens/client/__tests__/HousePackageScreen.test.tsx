@@ -48,7 +48,8 @@ beforeEach(async () => { jest.clearAllMocks(); mockSheet = null; mockCached = { 
 it('one-time: price, billing, length and what is included, in that order; no sheet and no request until the button', async () => {
   const s = await mount(ONE);
   const t = planTerms(ONE);
-  expect(s.getByText('1:1 coaching with Bradley Gleave')).toBeTruthy();
+  // Masthead eyebrow, and (FR-1TO1 LO C1) first under What's included.
+  expect(s.getAllByText('1:1 coaching with Bradley Gleave')).toHaveLength(2);
   expect(s.getByText('12-week strength block')).toBeTruthy();
   expect(s.getByTestId('house-package-price').props.children).toBe(t.price);
   expect(t.firstCharge).toBeTruthy();
@@ -60,6 +61,8 @@ it('one-time: price, billing, length and what is included, in that order; no she
   section(0, 'Billing', t.firstCharge as string);
   section(1, 'Length', '12 weeks from the day you pay');
   section(2, "What's included", 'Weekly check-ins and a training plan.');
+  const included = within(s.getByTestId('house-package-section-2'));
+  expect(included.getByText('1:1 coaching with Bradley Gleave')).toBeTruthy();
   expect(s.queryByText(/trial/i)).toBeNull();
   expect(s.queryByTestId('package-sheet')).toBeNull();
   expect(mockApi.get).not.toHaveBeenCalled();
@@ -75,18 +78,21 @@ it('renewing: the renewal line and no Length, even when the row has duration_per
   expect(s.getByText('Monthly calls.')).toBeTruthy();
 });
 
-it('no description and no quote: only what the server sent (no empty sections)', async () => {
+it('no description and no quote: only what the server sent plus 1:1 coaching (no empty sections)', async () => {
   const s = await mount(BARE);
   expect(BARE.description).toBeNull();
   expect(s.getByTestId('house-package-price').props.children).toBe(planTerms(BARE).price);
-  expect(s.queryByText("What's included")).toBeNull();
   expect(s.queryByText('Billing')).toBeNull();
-  expect(s.queryByTestId('house-package-section-0')).toBeNull();
+  // FR-1TO1 (LO C1): every package includes 1:1 coaching with its coach, so What's included always shows.
+  const only = within(s.getByTestId('house-package-section-0'));
+  expect(only.getByText("What's included")).toBeTruthy();
+  expect(only.getByText('1:1 coaching with Bradley Gleave')).toBeTruthy();
+  expect(s.queryByTestId('house-package-section-1')).toBeNull();
 });
 
 it('a server without full_name (before backend #1142): the first name, as before', async () => {
   const s = await mount(ONE, { id: 'house-1', firstName: 'Bradley' });
-  expect(s.getByText('1:1 coaching with Bradley')).toBeTruthy();
+  expect(s.getAllByText('1:1 coaching with Bradley')).toHaveLength(2);
   await fireEvent.press(s.getByTestId('house-package-select'));
   expect(mockSheet?.house).toEqual({ id: 'house-1', name: 'Bradley' });
 });

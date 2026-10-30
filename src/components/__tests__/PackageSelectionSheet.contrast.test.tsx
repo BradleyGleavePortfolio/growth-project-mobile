@@ -29,7 +29,7 @@ jest.mock('../../services/api', () => ({
   __esModule: true,
   default: {
     get: jest.fn(async () => ({
-      data: { packages: [{
+      data: { name: 'Avery Stone', packages: [{ // name: FR-1TO1R2, the coach read
         id: 'p-1', name: 'Synthetic recurring', amount_cents: 4900, currency: 'usd', billing_type: 'recurring', interval: 'month',
         quote: { due_today_cents: 4900, currency: 'usd', first_charge_at: '2026-11-14T12:00:00.000Z', trial_end: null },
       }] },

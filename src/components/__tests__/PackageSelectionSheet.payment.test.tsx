@@ -170,7 +170,9 @@ beforeEach(() => {
   installStripe();
   // A build key is present, as in an EAS build (main checked it before the POST).
   process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_build';
-  mockGet.mockResolvedValue({ data: { packages: PACKAGES } });
+  // FR-1TO1R2: the sheet sells once the coach is named.
+  mockGet.mockImplementation(async (url: string) =>
+    url === '/v1/clients/me/coach' ? { data: { id: 'coach-1', name: 'Avery Stone' } } : { data: { packages: PACKAGES } });
   mockPost.mockImplementation(async (url: string) => {
     if (url === '/v1/checkout/payment-intent') return { data: { ...SECRETS } };
     throw httpError(404, { error: 'Not Found', message: `Cannot POST ${url}` });
