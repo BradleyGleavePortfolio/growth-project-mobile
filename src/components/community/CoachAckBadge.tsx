@@ -52,7 +52,39 @@ import type {
   CoachAckState,
   CoachSlaState,
   AckStateDto,
+  InboxAckSummary,
 } from '../../api/coachCommunityApi';
+
+/**
+ * What the badge reads: the full per-message ack envelope, or just its state
+ * and SLA state. The inbox row passes the second shape when the per-message
+ * cache is still empty, so the row's own `ack` summary drives the badge.
+ */
+export type AckBadgeInput = Pick<AckStateDto, 'state'> & {
+  sla?: { sla_state?: CoachSlaState | null } | null;
+};
+
+// Both only move forward on the server: ack state by rank, SLA by time since sent.
+const ACK_ORDER: readonly CoachAckState[] = ['none', 'seen', 'acked', 'replied'];
+const SLA_ORDER: readonly CoachSlaState[] = ['within', 'warning', 'breached'];
+const later = <T,>(order: readonly T[], a: T | null | undefined, b: T): T =>
+  a != null && order.indexOf(a) > order.indexOf(b) ? a : b;
+
+/**
+ * The ack signal an inbox row shows: the per-message cache (kept all session)
+ * merged with the row's own `ack` summary (re-read each visit), later wins, so
+ * a warm cache never freezes the row. Undefined when neither is present.
+ */
+export function inboxRowAck(
+  cached: AckStateDto | null | undefined,
+  summary: InboxAckSummary | null | undefined,
+): AckBadgeInput | undefined {
+  if (summary == null) return cached ?? undefined;
+  return {
+    state: later(ACK_ORDER, cached?.state, summary.state),
+    sla: { sla_state: later(SLA_ORDER, cached?.sla?.sla_state, summary.sla_state) },
+  };
+}
 
 // ─── Ack-state presentation ──────────────────────────────────────────────────
 
@@ -79,7 +111,7 @@ const SLA_COPY: Record<CoachSlaState, { label: string; triad: keyof typeof seman
  * R1 visibility spec. Exposed so the inbox row can build its accessibility
  * label from the SAME rules (single source of truth, UX F4).
  */
-export function resolveAckBadgeVisibility(ack?: AckStateDto | null): {
+export function resolveAckBadgeVisibility(ack?: AckBadgeInput | null): {
   state: CoachAckState;
   /** The ack-state pill is rendered only when state !== 'none'. */
   showStatePill: boolean;
@@ -110,7 +142,7 @@ export interface CoachAckBadgeProps {
    * the badge treats the message as `none` — which, with the row default, means
    * the badge renders nothing.
    */
-  ack?: AckStateDto | null;
+  ack?: AckBadgeInput | null;
   /**
    * When true the PARENT row owns the accessibility summary (it appends the
    * ack/SLA state, Overdue-first), so the badge is hidden from the

@@ -14,6 +14,9 @@
  *     `onPlaybackError` lets the parent fetch a fresh signed URL.
  *   - The clip is keyed to its URL (B-314-5): a new URL releases the old clip
  *     and the next Play loads the new one; late loads are released.
+ *   - One note plays at a time (BF-1, the turn in voicePlaybackPort): Play
+ *     takes the turn, and the note that had it pauses first, its place kept;
+ *     one still loading never plays when its load lands.
  *
  * Accessibility: the play/pause control is a real button with a status-aware
  * label ("Play voice note, 0:12" / "Pause"). The bars are the seek control:
@@ -34,9 +37,13 @@ import { forestPop as fp, neutral, radius, spacing, voiceFaces, voiceShades } fr
 import { formatDuration } from './voiceFormat';
 import VoiceNoteWaveform from './VoiceNoteWaveform';
 import {
+  endVoicePlaybackTurn,
+  hasVoicePlaybackTurn,
   resolveVoicePlayback,
+  takeVoicePlaybackTurn,
   type VoicePlaybackPort,
   type VoicePlaybackHandle,
+  type VoicePlaybackTurn,
 } from './voicePlaybackPort';
 import { reportVoiceAudioCleanup } from '../../services/voiceAudio';
 
@@ -109,6 +116,8 @@ export default function VoiceNotePlayer({
   onPlaybackErrorRef.current = onPlaybackError;
   // A point picked on the bars before the clip is loaded; Play starts there.
   const seekRef = useRef(0);
+  // BF-1: the pause of the note that had the turn when this one last took it.
+  const handoffRef = useRef<Promise<void>>(Promise.resolve());
   const barsWidth = useRef(0);
 
   const unavailable = url === null || !port.isAvailable || offline;
@@ -121,31 +130,71 @@ export default function VoiceNotePlayer({
     if (loaded) void loaded.handle.unload().catch(reportVoiceAudioCleanup('player_unload'));
   }, []);
 
+  // BF-1: this note's turn. When another note starts, this one is stopped: a clip pauses with its
+  // place kept; a load still on its way never plays when it lands (start() checks the turn after
+  // each wait). A clip that will not pause is let go, so it cannot play over the other note.
+  const [turn] = useState<VoicePlaybackTurn>(() => {
+    const self: VoicePlaybackTurn = {
+      stop: async () => {
+        const generation = generationRef.current;
+        const loaded = loadedRef.current;
+        if (loaded) {
+          try {
+            await loaded.handle.pause();
+          } catch (err) {
+            reportVoiceAudioCleanup('turn_pause')(err);
+            if (generation === generationRef.current) {
+              release();
+              setState('idle');
+              setPositionMs(0);
+            }
+            return;
+          }
+        }
+        // Tapped again meanwhile, or gone: leave it be.
+        if (generation !== generationRef.current || hasVoicePlaybackTurn(self)) return;
+        setState((s) => (s === 'playing' ? 'paused' : s === 'loading' ? 'idle' : s));
+      },
+    };
+    return self;
+  });
+
   // A new URL releases the old clip and resets the control; the
   // next Play loads the new URL. Unmount releases it too, so a scrolled-away
-  // note never leaks a native player.
+  // note never leaks a native player. Either way the note gives its turn
+  // back, and nothing is handed on (BF-1: an unload never restarts a note).
   useEffect(() => {
     setState('idle');
     setPositionMs(0);
     seekRef.current = 0;
-    return release;
-  }, [url, release]);
+    return () => {
+      endVoicePlaybackTurn(turn);
+      release();
+    };
+  }, [url, release, turn]);
 
   const fail = useCallback(
     (generation: number) => {
       if (generation !== generationRef.current) return;
       // Drop the failed clip so Retry reloads (an expired signed URL is the
       // usual cause; the parent can fetch a fresh one).
+      endVoicePlaybackTurn(turn);
       release();
       setState('error');
       onPlaybackErrorRef.current?.();
     },
-    [release],
+    [release, turn],
   );
 
   const start = useCallback(async () => {
     if (disabled || url === null) return;
-    if (loadingRef.current !== null && loadingRef.current === generationRef.current) return;
+    // BF-1: take the turn first; the note that had it pauses before this one plays.
+    handoffRef.current = takeVoicePlaybackTurn(turn);
+    if (loadingRef.current !== null && loadingRef.current === generationRef.current) {
+      // B-314-8 single flight: the load already on its way plays when it lands, the turn back here.
+      setState('loading');
+      return;
+    }
     let generation = generationRef.current;
     let loadingGeneration: number | null = null;
     try {
@@ -162,6 +211,7 @@ export default function VoiceNotePlayer({
           },
           onEnd: () => {
             if (generation !== generationRef.current) return;
+            endVoicePlaybackTurn(turn);
             setState('paused');
             setPositionMs(0);
           },
@@ -180,10 +230,24 @@ export default function VoiceNotePlayer({
           void previous.handle.unload().catch(reportVoiceAudioCleanup('player_replaced_unload'));
         }
       }
-      if (seekRef.current > 0) await loaded.handle.seek(seekRef.current);
+      // BF-1: the note that had the turn pauses first. If another note started while this one
+      // loaded (or sought), the clip is kept for the next tap and does not play.
+      await handoffRef.current;
+      if (hasVoicePlaybackTurn(turn) && seekRef.current > 0) await loaded.handle.seek(seekRef.current);
+      if (!hasVoicePlaybackTurn(turn)) {
+        if (generation === generationRef.current) setState((s) => (s === 'loading' ? 'idle' : s));
+        return;
+      }
       seekRef.current = 0;
       await loaded.handle.play();
-      if (generation === generationRef.current) setState('playing');
+      if (generation !== generationRef.current) return;
+      if (!hasVoicePlaybackTurn(turn)) {
+        // Another note started while this one was starting: it ends paused, its place kept.
+        await loaded.handle.pause();
+        if (generation === generationRef.current) setState('paused');
+        return;
+      }
+      setState('playing');
     } catch {
       fail(generation);
     } finally {
@@ -191,11 +255,12 @@ export default function VoiceNotePlayer({
         loadingRef.current = null;
       }
     }
-  }, [disabled, fail, port, release, url]);
+  }, [disabled, fail, port, release, turn, url]);
 
   const pause = useCallback(async () => {
     const loaded = loadedRef.current;
     if (!loaded) return;
+    endVoicePlaybackTurn(turn);
     const generation = generationRef.current;
     try {
       await loaded.handle.pause();
@@ -203,7 +268,7 @@ export default function VoiceNotePlayer({
     } catch {
       fail(generation);
     }
-  }, [fail]);
+  }, [fail, turn]);
 
   const seekTo = useCallback(
     (ms: number) => {

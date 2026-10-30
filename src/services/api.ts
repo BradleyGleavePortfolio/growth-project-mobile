@@ -74,6 +74,7 @@ import { authEvents } from '../utils/authEvents';
 import { isStartupTimeout, withStartupTimeout } from '../lib/startupTimebox';
 import { secureStorage } from './secureStorage';
 import { refreshRealtimeAuth } from './realtime';
+import { noteDeletionState } from './deletionSchedule';
 import { env } from '../config/env';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
@@ -382,7 +383,8 @@ async function handleRefreshFailure(startGeneration: number): Promise<void> {
     const signOut = __testSignOut
       ? __testSignOut
       : (await import('./authActions')).signOut;
-    await signOut(undefined, { sessionFence: fence.pass });
+    // FR-898R3: a confirmed deletion also removes the account's kept marks.
+    await signOut(undefined, { sessionFence: fence.pass, accountDeleted: deletionComplete });
   } catch (err) {
     logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
@@ -607,7 +609,10 @@ type RefreshSessionFn = (args: { refresh_token: string }) => Promise<{
   error: unknown;
 }>;
 let __testRefreshSession: RefreshSessionFn | null = null;
-type SignOutFn = (userId?: string | null, opts?: { sessionFence?: SessionFencePass }) => Promise<void>;
+type SignOutFn = (
+  userId?: string | null,
+  opts?: { sessionFence?: SessionFencePass; accountDeleted?: boolean },
+) => Promise<void>;
 let __testSignOut: SignOutFn | null = null;
 
 export function __setRefreshSessionForTests(fn: RefreshSessionFn | null): void {
@@ -1406,13 +1411,22 @@ export const deletionApi = {
       '/me/delete-account',
       appleAuthorizationCode ? { apple_authorization_code: appleAuthorizationCode } : {},
       { headers: { [RECENT_AUTH_HEADER]: recentAuthToken } },
-    ),
+    ).then(noteDeletion),
 
   /** Get current deletion state (none | requested | confirmed | deleted). */
   getDeletionStatus: () =>
-    api.get<DeletionStatus>('/me/delete-account/status'),
+    api.get<DeletionStatus>('/me/delete-account/status').then(noteDeletion),
 
   /** Cancel a pending deletion within the grace period. */
   cancelDeletion: () =>
-    api.post<{ message: string }>('/me/delete-account/cancel'),
+    api.post<{ message: string }>('/me/delete-account/cancel').then((res) => {
+      noteDeletionState('none');
+      return res;
+    }),
 };
+
+/** JOINOFFER-DEL: remember for signOut whether this session's deletion is scheduled. */
+function noteDeletion<T extends { data?: { state?: string } | null }>(res: T): T {
+  noteDeletionState(res?.data?.state);
+  return res;
+}

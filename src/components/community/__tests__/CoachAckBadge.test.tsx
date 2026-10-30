@@ -31,6 +31,7 @@ import React from 'react';
 import { AccessibilityInfo, Animated, type EmitterSubscription } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
 import CoachAckBadge, {
+  inboxRowAck,
   resolveAckBadgeVisibility,
 } from '../CoachAckBadge';
 import type {
@@ -338,5 +339,38 @@ describe('CoachAckBadge — reduced motion', () => {
     );
     expect(toValues).toContain(1);
     expect(getByTestId(`${TEST_ID}-state-acked`)).toBeTruthy();
+  });
+});
+
+describe('inboxRowAck: a warm Ack entry never freezes the row (FIN-868R5 LS-2)', () => {
+  // The per-message entry lives all session (staleTime and gcTime Infinity);
+  // the inbox summary is re-read from the server every visit.
+  const warm = envelope('acked', 'within');
+
+  it('the fresher inbox summary moves the SLA chip on (Due soon, then Overdue)', () => {
+    expect(inboxRowAck(warm, { state: 'acked', sla_state: 'warning' })?.sla?.sla_state).toBe('warning');
+    const later = inboxRowAck(warm, { state: 'acked', sla_state: 'breached' });
+    expect(resolveAckBadgeVisibility(later)).toMatchObject({ slaState: 'breached', breached: true });
+  });
+
+  it('a later state from the server (replied elsewhere) wins over the warm acked', () => {
+    expect(inboxRowAck(warm, { state: 'replied', sla_state: 'within' })?.state).toBe('replied');
+  });
+
+  it('a summary read before the tap never lowers what the coach just did', () => {
+    expect(inboxRowAck(warm, { state: 'none', sla_state: 'within' })).toMatchObject({
+      state: 'acked',
+      sla: { sla_state: 'within' },
+    });
+    expect(inboxRowAck(envelope('seen', 'breached'), { state: 'none', sla_state: 'warning' })?.sla?.sla_state).toBe('breached');
+  });
+
+  it('either side alone is used as it is', () => {
+    expect(inboxRowAck(warm, undefined)).toBe(warm);
+    expect(inboxRowAck(undefined, { state: 'seen', sla_state: 'warning' })).toEqual({
+      state: 'seen',
+      sla: { sla_state: 'warning' },
+    });
+    expect(inboxRowAck(undefined, undefined)).toBeUndefined();
   });
 });

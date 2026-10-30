@@ -39,6 +39,7 @@ import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { brand, forestPop as fp, neutral, spacing, semantic, voiceFaces, voiceShades } from '../../theme/tokens';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { dropAuthorFromCoachInbox } from '../../hooks/useCoachCommunity';
 import {
   communitySafetyApi,
   COMMUNITY_REPORT_REASONS,
@@ -209,7 +210,7 @@ export default function SafetyMenu({
     if (!authorUserId) return;
     afterClose(() => Alert.alert(
       `Block ${who}?`,
-      `You and ${who} will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. They are not told. You can unblock them from Community safety.`,
+      `You and ${who} will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. In a direct message they see that you blocked them; nobody else is told. You can unblock them from Community safety.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -219,7 +220,8 @@ export default function SafetyMenu({
             try {
               await communitySafetyApi.block(authorUserId);
               // Refetch every community surface so the blocked person's content
-              // disappears everywhere at once.
+              // disappears everywhere at once (the coach inbox included).
+              dropAuthorFromCoachInbox(qc, authorUserId);
               await qc.invalidateQueries({ queryKey: ['community'] });
               onBlocked?.(authorUserId);
             } catch (err) {
