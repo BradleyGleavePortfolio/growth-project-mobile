@@ -19,10 +19,16 @@
  * (the line grows with the system text size, the 44 pt Close does not, so the name's top inset shrinks by half the growth,
  * and past 183% the Close drops instead); the scrim keeps the sighted tap but is hidden from VoiceOver and TalkBack, so
  * the sheet speaks one Close.
+ * FR-912R2 (agent 186; m#912 LO-912R2 B1): the inset follows the name's first line as the phone draws it (onTextLayout),
+ * not 24 x fontScale: from Android 14 large text grows non-linearly (at 130% a 24 pt line is drawn 26.4 pt, not 31.2), so
+ * the formula stays only as the first frame's guess, before the first layout.
  */
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import {
+  ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions,
+  type NativeSyntheticEvent, type TextLayoutEventData,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QuietOverline } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
@@ -59,8 +65,14 @@ export default function SpaceInfoSheet(p: SpaceInfoSheetProps): React.ReactEleme
   const insets = useSafeAreaInsets();
   const { height, fontScale } = useWindowDimensions();
   const purpose = p.description?.trim();
-  // The gap from the 44 pt Close's centre down to the centre of the name's first (scaled) line; negative past 183%.
-  const level = CLOSE / 2 - (TITLE_LINE * (fontScale || 1)) / 2;
+  // The name's first line as drawn (Android 14+ scales text non-linearly); until the first layout, the linear guess.
+  const [drawnLine, setDrawnLine] = React.useState<number | null>(null);
+  const onTitleLayout = (e: NativeSyntheticEvent<TextLayoutEventData>) => {
+    const h = e.nativeEvent.lines[0]?.height;
+    if (h && h > 0) setDrawnLine((was) => (was != null && Math.abs(was - h) < 0.5 ? was : h));
+  };
+  // The gap from the 44 pt Close's centre down to the centre of the name's first line; negative once that line passes 44 pt.
+  const level = CLOSE / 2 - (drawnLine ?? TITLE_LINE * (fontScale || 1)) / 2;
   return (
     <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={p.onClose}>
       <View style={s.scrim}>
@@ -76,7 +88,7 @@ export default function SpaceInfoSheet(p: SpaceInfoSheetProps): React.ReactEleme
             <View style={[s.headText, { paddingTop: Math.max(0, level) }]}>
               <View style={s.titleRow} accessible accessibilityRole="header">
                 <HashGlyph color={SMALL_GREY} />
-                <Text style={s.title} numberOfLines={2}>{p.name}</Text>
+                <Text style={s.title} numberOfLines={2} onTextLayout={onTitleLayout}>{p.name}</Text>
               </View>
               <Text style={s.sub}>{p.members}</Text>
             </View>
@@ -174,7 +186,8 @@ const s = StyleSheet.create({
   sheet: { backgroundColor: neutral[0], borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: 20, paddingTop: 8, gap: 2 },
   grab: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10, backgroundColor: fp.sageLine },
   // The Close leads the header (C6CHAT-S-V2): a 44 pt square, its X on the content edge; the name's first line is centred
-  // level with the X by the top inset worked out from the text size (`level`: 10 pt at 100%, 6.4 pt at 130%).
+  // level with the X by the top inset worked out from the drawn line (`level`: 10 pt at 100%; at 130%, 6.4 pt on iOS and
+  // 8.8 pt on Android 14+).
   head: { flexDirection: 'row', alignItems: 'flex-start' },
   close: { width: CLOSE, height: CLOSE, alignItems: 'flex-start', justifyContent: 'center' },
   headText: { flex: 1, minWidth: 0 },
