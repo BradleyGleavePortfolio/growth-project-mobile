@@ -1,0 +1,7 @@
+src/components/community
+src/screens/community
+src/hooks/__tests__/useSpace
+src/api/__tests__/community
+src/components/__tests__/HapticPressable.a11y.test.tsx
+src/services/__tests__/haptics.test.ts
+src/hooks/__tests__/useReducedMotion.test.ts
