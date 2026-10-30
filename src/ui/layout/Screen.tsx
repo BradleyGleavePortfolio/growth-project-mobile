@@ -47,6 +47,8 @@ export interface ScreenProps {
   refreshControl?: React.ReactElement<RefreshControlProps>;
   contentStyle?: StyleProp<ViewStyle>;
   style?: StyleProp<ViewStyle>;
+  /** The scroll area, for a screen that must bring one of its own items into view (scroll only). */
+  scrollRef?: React.Ref<ScrollView>;
   testID?: string;
 }
 
@@ -61,6 +63,7 @@ export function Screen({
   refreshControl,
   contentStyle,
   style,
+  scrollRef,
   testID,
 }: ScreenProps): React.ReactElement {
   const { semanticColors: sc } = useTheme();
@@ -74,6 +77,7 @@ export function Screen({
 
   const body = scroll ? (
     <ScrollView
+      ref={scrollRef}
       testID={testID ? `${testID}-scroll` : undefined}
       style={styles.fill}
       contentContainerStyle={content}

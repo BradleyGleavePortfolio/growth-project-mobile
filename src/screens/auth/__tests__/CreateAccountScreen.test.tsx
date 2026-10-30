@@ -50,13 +50,14 @@ jest.mock('../../../utils/googleAuth', () => ({
 }));
 
 jest.mock('../../../components/AppleSignInButton', () => {
-  const { TouchableOpacity, Text } = jest.requireActual('react-native');
+  const { Pressable, Text } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: ({ onPress }: { onPress: () => void }) => (
-      <TouchableOpacity testID="apple-button" onPress={onPress}>
+    // Pressable, like the native button: a disabled state is read out but does not block the press.
+    default: ({ onPress, accessibilityState }: { onPress: () => void; accessibilityState?: object }) => (
+      <Pressable testID="apple-button" onPress={onPress} accessibilityState={accessibilityState}>
         <Text>Apple</Text>
-      </TouchableOpacity>
+      </Pressable>
     ),
   };
 });
@@ -95,6 +96,7 @@ import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../../../lib/signupRoleNotice';
 import { COACH_SIGNUP_UNCONFIRMED_KEY, rememberUnconfirmedCoachSignup } from '../../../lib/coachSignupAttempt';
 import { colors, darkTokens, lightTokens } from '../../../theme/tokens';
+import { Spacing } from '../../../theme';
 
 function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };
@@ -644,6 +646,46 @@ describe('CreateAccountScreen', () => {
       // Roman is asked the first time the coach opens Roman, never here.
       expect(mockCoachGrant).not.toHaveBeenCalled();
       expect(mockMarkAsked).not.toHaveBeenCalled();
+    });
+
+    it('LO-E4 B2: a tap on a waiting sign-up button brings the unticked box into view and focuses it', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'google', 'apple'] } });
+      const { ScrollView: MockScrollView, AccessibilityInfo: MockA11y } = jest.requireActual<typeof import('react-native')>('react-native');
+      const scrollTo = (MockScrollView.prototype as unknown as { scrollTo: jest.Mock }).scrollTo;
+      const focus = jest.spyOn(MockA11y, 'sendAccessibilityEvent');
+      scrollTo.mockClear();
+      const utils = await renderScreen(undefined, 'coach', false);
+      await fireEvent(utils.getByTestId('create-account-coach-terms-place'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 900, width: 360, height: 80 } },
+      });
+      const google = utils.getByLabelText('Continue with Google');
+      // Each waiting button reads as disabled itself, not only through the row around it.
+      for (const button of [utils.getByTestId('create-account-submit'), utils.getByTestId('apple-button'), google]) {
+        expect(button.props.accessibilityState).toMatchObject({ disabled: true });
+      }
+      for (const id of ['create-account-submit', 'apple-button']) {
+        scrollTo.mockClear();
+        focus.mockClear();
+        await fireEvent.press(utils.getByTestId(id));
+        expect(scrollTo).toHaveBeenCalledWith({ y: 900 - Spacing.lg, animated: true });
+        expect(focus).toHaveBeenCalledWith(expect.anything(), 'focus');
+      }
+      scrollTo.mockClear();
+      await fireEvent.press(google);
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(mockSignInWithApple).not.toHaveBeenCalled();
+      expect(mockSignInWithGoogle).not.toHaveBeenCalled();
+      expect(mockRegister).not.toHaveBeenCalled();
+      // Ticked: the same buttons sign up and no longer read as disabled.
+      await fireEvent.press(utils.getByTestId('create-account-coach-terms'));
+      for (const button of [utils.getByTestId('apple-button'), utils.getByLabelText('Continue with Google')]) {
+        expect(button.props.accessibilityState).toMatchObject({ disabled: false });
+      }
+      scrollTo.mockClear();
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalled());
+      expect(scrollTo).not.toHaveBeenCalled();
+      focus.mockRestore();
     });
 
     it('STORE-E4: the client form has no coach box (the client agrees at Before we start)', async () => {

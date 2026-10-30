@@ -1,5 +1,8 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
+  AccessibilityInfo,
+  Pressable,
+  ScrollView,
   View,
   Text,
   TextInput,
@@ -13,6 +16,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing } from '../../theme';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
@@ -271,6 +275,19 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [coachTermsAgreed, setCoachTermsAgreed] = useState(false);
   // PERM-W4: a coach signs up (email, Apple or Google) only once the box is ticked.
   const coachTermsMissing = isCoachSignup && !coachTermsAgreed;
+  // LO-E4 B2 (operator ruling, option 1): a tap on a waiting sign-up button (the box unticked) brings the
+  // box into view and moves screen-reader focus to it, so the person learns what the button waits for.
+  const formScrollRef = useRef<ScrollView>(null);
+  const coachTermsRef = useRef<View>(null);
+  const coachTermsY = useRef(0);
+  const reduceMotion = useReducedMotion();
+  const showCoachTerms = useCallback(() => {
+    formScrollRef.current?.scrollTo({ y: Math.max(0, coachTermsY.current - Spacing.lg), animated: !reduceMotion });
+    // RNWeb has no native focus event; the web preview shows the scroll only.
+    if (Platform.OS !== 'web' && coachTermsRef.current) {
+      AccessibilityInfo.sendAccessibilityEvent(coachTermsRef.current, 'focus');
+    }
+  }, [reduceMotion]);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
   const [recheckLoading, setRecheckLoading] = useState(false);
@@ -1272,6 +1289,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         onPress={handleRegister}
         loading={loading}
         disabled={coachTermsMissing}
+        onDisabledPress={coachTermsMissing ? showCoachTerms : undefined}
         testID="create-account-submit"
       />
       {/* Apple 1.2 (B-IOSREV-2): covers email, Google and Apple sign-up. */}
@@ -1302,6 +1320,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   return (
     <Screen
       testID="create-account-register"
+      scrollRef={formScrollRef}
       header={v2 ? <RoundBack onBack={backFromRegister} testID="create-account-back" /> : <ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
       footer={<>{keyboardOpen ? null : footerContent}</>}
     >
@@ -1423,30 +1442,31 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         {showProviders ? (
           <View
             style={[styles.providers, coachTermsMissing && styles.providersOff]}
-            pointerEvents={coachTermsMissing ? 'none' : 'auto'}
-            accessibilityState={{ disabled: coachTermsMissing }}
             testID="create-account-providers"
           >
             {/* Apple Sign-In: required by App Store policy when any other
                 third-party sign-in is offered. Renders nothing on Android or
                 unsupported iOS configurations. */}
             <AppleSignInButton
-              onPress={handleAppleSignup}
+              onPress={coachTermsMissing ? showCoachTerms : handleAppleSignup}
+              accessibilityState={{ disabled: coachTermsMissing }}
               label="CONTINUE"
               cornerRadius={radius.button}
               style={v2 ? { height: layout.buttonHeight } : undefined}
               onAvailable={() => setAppleShown(true)}
             />
             {googleEnabled ? (
-              <TouchableOpacity
-                style={styles.googleButton}
-                onPress={handleGoogleSignup}
+              // Pressable, not TouchableOpacity: a disabled state there would also block the tap that shows the box.
+              <Pressable
+                style={({ pressed }) => [styles.googleButton, pressed && styles.googlePressed]}
+                onPress={coachTermsMissing ? showCoachTerms : handleGoogleSignup}
                 accessibilityRole="button"
                 accessibilityLabel="Continue with Google"
+                accessibilityState={{ disabled: coachTermsMissing }}
               >
                 <Text style={styles.googleG}>G</Text>
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
             {appleShown || googleEnabled ? (
               <View
@@ -1622,13 +1642,16 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
         {/* STORE-E4 (PERM-W4): the coach form's last item, right above Create account (owner mockup 1 place). */}
         {isCoachSignup ? (
-          <Checkbox
-            variant="tan"
-            checked={coachTermsAgreed}
-            onToggle={() => setCoachTermsAgreed((v) => !v)}
-            label={COACH_SIGNUP_AGREEMENT_LABEL}
-            testID="create-account-coach-terms"
-          />
+          <View onLayout={(e) => { coachTermsY.current = e.nativeEvent.layout.y; }} testID="create-account-coach-terms-place">
+            <Checkbox
+              variant="tan"
+              checked={coachTermsAgreed}
+              onToggle={() => setCoachTermsAgreed((v) => !v)}
+              label={COACH_SIGNUP_AGREEMENT_LABEL}
+              boxRef={coachTermsRef}
+              testID="create-account-coach-terms"
+            />
+          </View>
         ) : null}
 
         {keyboardOpen ? (
@@ -1718,6 +1741,7 @@ const makeStyles = (colors: SemanticTokens) =>
     borderColor: colors.textPrimary,
     borderRadius: radius.button,
   },
+  googlePressed: { opacity: 0.2 }, // TouchableOpacity's default press look, kept
   googleG: { ...typography.bodyMd, marginRight: Spacing.sm, color: colors.textPrimary },
   googleButtonText: { ...typography.bodyMd, color: colors.textPrimary },
   providers: { gap: Spacing.sm },

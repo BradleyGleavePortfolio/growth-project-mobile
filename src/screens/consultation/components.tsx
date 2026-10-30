@@ -395,6 +395,7 @@ export function Checkbox({
   hint,
   detail,
   variant = 'default',
+  boxRef,
 }: {
   checked: boolean;
   onToggle: () => void;
@@ -407,11 +408,14 @@ export function Checkbox({
   detail?: string;
   /** Owner-approved warm fill for the coach sign-up card; selection is unchanged. */
   variant?: 'default' | 'tan';
+  /** The row itself, for a screen that moves screen-reader focus to it (coach Create account, LO-E4 B2). */
+  boxRef?: React.Ref<View>;
 }) {
   const { s, palette } = useConsultationStyles();
   const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null]}>{label}</Text>;
   return (
     <Pressable
+      ref={boxRef}
       onPress={disabled ? undefined : onToggle}
       disabled={disabled}
       accessibilityRole="checkbox"
