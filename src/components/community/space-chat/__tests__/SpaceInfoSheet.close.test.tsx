@@ -81,6 +81,54 @@ function readingOrder(root: TestInstance): TestInstance[] {
 }
 
 describe('SpaceInfoSheet Close (W897-CLOSE)', () => {
+  it.each(CASES)('B-TEST LS-912 B2: Android exposes only the visible Close ($name)', async (c) => {
+    await open(c);
+    // accessibilityViewIsModal is iOS-only. RNTL applies its sibling hiding on every platform,
+    // so the default query below would incorrectly hide the scrim for TalkBack as well.
+    // https://reactnative.dev/docs/0.79/accessibility#accessibilityviewismodal-ios
+    const androidClose = screen.getAllByRole('button', { name: 'Close', includeHiddenElements: true })
+      .filter((node) => {
+        if (node.props.accessible === false || node.props.importantForAccessibility === 'no') return false;
+        for (let ancestor: TestInstance | null = node; ancestor; ancestor = ancestor.parent) {
+          if (ancestor.props.importantForAccessibility === 'no-hide-descendants'
+            || ancestor.props['aria-hidden'] === true
+            || StyleSheet.flatten(ancestor.props.style)?.display === 'none') return false;
+        }
+        return true;
+      });
+    expect(androidClose.map((node) => node.props.testID)).toEqual(['space-info-close']);
+  });
+
+  it.each(CASES.flatMap((c) => [1, 1.3].map((fontScale) => ({ c, caseName: c.name, fontScale }))))(
+    'B-TEST LS-912 B1: Close stays level with the first title line at $fontScale text scale ($caseName)', async ({ c, fontScale }) => {
+    // C6CHAT-S-V2 v1: the leading X is level with the title at both text sizes.
+    // A single-line title has a scaled line box; the fixed-size icon must remain centred on that line.
+    // This is a layout projection, not a claim of native-device pixel rendering.
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+      width: 320, height: 568, scale: 2, fontScale,
+    });
+    try {
+      const { sheet, close } = await open(c);
+      const title = within(sheet).getByText('Everyone');
+      const titleStyle = StyleSheet.flatten(title.props.style);
+      const header = within(sheet).getAllByRole('header')[0];
+      let ancestor = header.parent;
+      let paddingTop = 0;
+      while (ancestor && ancestor !== sheet) {
+        const style = StyleSheet.flatten(ancestor.props.style);
+        if (style?.paddingTop != null) { paddingTop = style.paddingTop; break; }
+        ancestor = ancestor.parent;
+      }
+      const closeStyle = StyleSheet.flatten(close.props.style);
+      const titleCentre = paddingTop + titleStyle.lineHeight * fontScale / 2;
+      const closeCentre = (closeStyle.marginTop ?? 0) + closeStyle.height / 2;
+      // One point allows font rasterisation/rounding; 3.6 points is the scaling drift, not rasterisation.
+      expect(Math.abs(titleCentre - closeCentre)).toBeLessThanOrEqual(1);
+    } finally {
+      dimensions.mockRestore();
+    }
+    });
+
   it.each(CASES)('$name: the header leads with one visible Close, first for VoiceOver', async (c) => {
     const { sheet, close } = await open(c);
     expect(close.props.accessibilityRole).toBe('button');
