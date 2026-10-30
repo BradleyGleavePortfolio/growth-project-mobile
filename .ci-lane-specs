@@ -1,0 +1,3 @@
+src/screens/community/__tests__/CommunitySpaceChatScreen.test.tsx
+src/components/community/space-chat/__tests__/SpaceInfoSheet.close.test.tsx
+src/components/community/space-chat/__tests__/SpaceInfoSheet.LS912R2.probe.test.tsx
