@@ -245,19 +245,18 @@ export default function NotificationPreferencesScreen() {
     setIsLoading(true);
     // A plan read that answers re-runs this effect (offersEligible), which then reads the offers answer too.
     rereadIfFailed()
-      .then(() => {
-        if (!live) return [undefined, null] as const;
-        return Promise.all([
+      .then(() => live
+        ? Promise.all([
           fetchNotificationPreferences(),
           offersEligible
             ? notificationsApi.getPreferences().then((res) => planRenewalOffersFromServer(res?.data))
             : Promise.resolve(null),
-        ]);
-      })
-      .then(([loaded, offers]) => {
+        ])
+        : null)
+      .then((loaded) => {
         if (live && loaded) {
-          setPrefs(loaded);
-          setRenewalOffers(offers);
+          setPrefs(loaded[0]);
+          setRenewalOffers(loaded[1]);
         }
       })
       .catch(() => {
