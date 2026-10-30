@@ -620,16 +620,23 @@ describe('CreateAccountScreen', () => {
       expect(utils.nav.replace).not.toHaveBeenCalled();
     });
 
-    it('STORE-E4 (PERM-W4): the coach form ends with one required, unticked box; sign-up waits for it', async () => {
+    it('STORE-E4 (PERM-W4): the coach form has one required, unticked box; sign-up waits for it', async () => {
       mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
       mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'c1', role: 'coach' } });
       const utils = await renderScreen(undefined, 'coach', false);
       const box = utils.getByTestId('create-account-coach-terms');
       expect(box.props.accessibilityState).toMatchObject({ checked: false });
       expect(StyleSheet.flatten(box.props.style).backgroundColor).toBe(colors.cream);
-      // In the form (its last item), never in the pinned footer that holds Create account.
+      // In the form, never in the pinned footer that holds Create account.
       expect(within(utils.getByTestId('create-account-register-scroll')).getByTestId('create-account-coach-terms')).toBeTruthy();
       expect(within(utils.getByTestId('create-account-register-footer')).queryByTestId('create-account-coach-terms')).toBeNull();
+      // Owner #186-P3 op 1: just above Apple and Google (the next item is the row that holds them), above every field.
+      const form = JSON.stringify(utils.toJSON());
+      const at = (id: string) => form.indexOf(`"testID":"${id}"`);
+      expect(at('create-account-coach-terms-place')).toBeGreaterThan(-1);
+      expect(at('create-account-coach-terms-place')).toBeLessThan(at('create-account-providers'));
+      expect(at('create-account-providers')).toBeLessThan(at('apple-button'));
+      expect(at('apple-button')).toBeLessThan(form.indexOf('"accessibilityLabel":"Email"'));
       expect(
         utils.getByText(
           'I agree to the Terms of Service and Privacy Policy, and TGP Fitness may send me service and plan notices.',

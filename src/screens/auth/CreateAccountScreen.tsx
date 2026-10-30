@@ -284,7 +284,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const showCoachTerms = useCallback(() => {
     formScrollRef.current?.scrollTo({ y: Math.max(0, coachTermsY.current - Spacing.lg), animated: !reduceMotion });
     // RNWeb has no native focus event; the web preview shows the scroll only.
-    if (Platform.OS !== 'web' && coachTermsRef.current) {
+    if (typeof AccessibilityInfo.sendAccessibilityEvent === 'function' && coachTermsRef.current) {
       AccessibilityInfo.sendAccessibilityEvent(coachTermsRef.current, 'focus');
     }
   }, [reduceMotion]);
@@ -1319,6 +1319,9 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
   return (
     <Screen
+      // Its own key: the role step's Screen would otherwise be reused, and a reused scroll area never
+      // hands its node to scrollRef (RNWeb attaches a forwarded ref once, at mount).
+      key="register"
       testID="create-account-register"
       scrollRef={formScrollRef}
       header={v2 ? <RoundBack onBack={backFromRegister} testID="create-account-back" /> : <ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
@@ -1436,6 +1439,21 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
                 Contact support
               </Text>
             ) : null}
+          </View>
+        ) : null}
+
+        {/* STORE-E4 (PERM-W4); owner #186-P3 op 1: the box sits just above Apple and Google, so it is on
+            screen whenever the buttons it turns on are. */}
+        {isCoachSignup ? (
+          <View onLayout={(e) => { coachTermsY.current = e.nativeEvent.layout.y; }} testID="create-account-coach-terms-place">
+            <Checkbox
+              variant="tan"
+              checked={coachTermsAgreed}
+              onToggle={() => setCoachTermsAgreed((v) => !v)}
+              label={COACH_SIGNUP_AGREEMENT_LABEL}
+              boxRef={coachTermsRef}
+              testID="create-account-coach-terms"
+            />
           </View>
         ) : null}
 
@@ -1639,20 +1657,6 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             textContentType="telephoneNumber"
           />
         </View>
-
-        {/* STORE-E4 (PERM-W4): the coach form's last item, right above Create account (owner mockup 1 place). */}
-        {isCoachSignup ? (
-          <View onLayout={(e) => { coachTermsY.current = e.nativeEvent.layout.y; }} testID="create-account-coach-terms-place">
-            <Checkbox
-              variant="tan"
-              checked={coachTermsAgreed}
-              onToggle={() => setCoachTermsAgreed((v) => !v)}
-              label={COACH_SIGNUP_AGREEMENT_LABEL}
-              boxRef={coachTermsRef}
-              testID="create-account-coach-terms"
-            />
-          </View>
-        ) : null}
 
         {keyboardOpen ? (
           <View style={styles.inlineFooter} testID="create-account-inline-footer">{footerContent}</View>
