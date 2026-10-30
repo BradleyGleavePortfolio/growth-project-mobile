@@ -79,6 +79,24 @@ describe('AiRefusalNotice — client consent_required', () => {
     resetAiLedgerWritesForTests();
   });
 
+  it('LS-E4 B2: a first Roman ask reached through the refusal fallback opens with PERM-W3', async () => {
+    const api = fakeApi({ kind: 'ok', status: status() });
+    const r = await render(
+      <AiRefusalNotice
+        refusal={{ kind: 'consent_required' }}
+        audience="client"
+        surface="roman"
+        consentApi={api}
+        consentSessionUserId={sessionUserId}
+        testID="first-roman-fallback"
+      />,
+    );
+    await fireEvent.press(r.getByTestId('first-roman-fallback-allow'));
+    await waitFor(() => r.getByTestId('first-roman-fallback-consent-sheet-paragraph'));
+    expect(api.grantRoman).not.toHaveBeenCalled();
+    expect(r.getByText(AI_CONSENT_SHEET_COPY.beforeAnswerLead)).toBeTruthy();
+  });
+
   it('Allow AI help -> server copy -> grant with version, sha256 and platform -> retries the request', async () => {
     const api = fakeApi({ kind: 'ok', status: status() });
     const onRetry = jest.fn();
