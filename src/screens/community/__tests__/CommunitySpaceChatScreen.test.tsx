@@ -752,7 +752,7 @@ describe('FR-871R6 (m#871): member Space info, the hint, the server answer on th
     expect(within(sheet).getByText('Everyone')).toBeTruthy();
     expect(within(sheet).getByTestId('space-chat-hash', { includeHiddenElements: true })).toBeTruthy();
     expect(within(sheet).getByText('1,000 members')).toBeTruthy();
-    expect(within(sheet).queryAllByRole('button')).toHaveLength(0); // read only: nothing to change
+    expect(within(sheet).getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual(['Close']); // read only: nothing to change but the visible Close (181-W2 op 1)
     expect(mockNavigate).not.toHaveBeenCalled();
     // The scrim (the drawer's "Close"; screen readers use the escape gesture or Back, the sheet being modal for them).
     await fireEvent.press(r.getByTestId('space-info-scrim', { includeHiddenElements: true }));
@@ -1080,7 +1080,7 @@ describe('FR-871R7 (m#871 Sol B871-1 / Opus B1): a member\'s Space info: what th
     // The coach on the space chat's coach tile: deep, with a gold initial.
     const coachTile = within(people).getByTestId('space-info-person-coach-1').children[0] as unknown as { props: { style: unknown } };
     expect(StyleSheet.flatten(coachTile.props.style)).toMatchObject({ backgroundColor: fp.deep, borderRadius: 12 });
-    expect(within(sheet).queryAllByRole('button')).toHaveLength(0); // no coach controls, nothing to change
+    expect(within(sheet).getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual(['Close']); // no coach controls, nothing to change but the visible Close (181-W2 op 1)
     expect(within(sheet).queryByTestId('space-info-alone')).toBeNull();
     expect(StyleSheet.flatten(sheet.props.style)).toMatchObject({ borderTopLeftRadius: 24, borderTopRightRadius: 24 });
   });
