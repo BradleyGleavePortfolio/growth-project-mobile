@@ -183,6 +183,8 @@ export interface FrameProps {
   pauseLabel?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** LS-913R3 B1 (C7 Style B consent): the title fixed in the bar beside Back, outside the scroll. */
+  title?: string;
   testID?: string;
 }
 
@@ -224,7 +226,7 @@ export function useConsultInsets() {
  * body because src/ui Screen cannot yet carry the analytics marker on the
  * scroll view or `automaticallyAdjustKeyboardInsets` (Opus C-6).
  */
-export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, testID }: FrameProps) {
+export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, title, testID }: FrameProps) {
   const { s } = useConsultationStyles();
   const insets = useConsultInsets();
   return (
@@ -236,6 +238,7 @@ export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, f
       <ScreenTopBar
         onBack={onBack ?? undefined}
         testID="consult"
+        title={title ? <Text accessibilityRole="header" maxFontSizeMultiplier={1.4} style={s.titleCentered}>{title}</Text> : undefined}
         trailing={
           onFinishLater ? (
             <TextLink
@@ -288,7 +291,7 @@ export function QuestionHeader({
   question: string;
   long?: boolean;
   why?: string;
-  /** LS-E4R2 B1 (C7 Style B consent): the title centred in the sans face, same words. */
+  /** C7 Style B consent: the eyebrow centred; the title is in Frame's fixed bar (LS-913R3 B1), so none here. */
   centered?: boolean;
 }) {
   const { s } = useConsultationStyles();
@@ -300,9 +303,7 @@ export function QuestionHeader({
       </View>
       {sub ? <Text style={s.sub}>{sub}</Text> : null}
       {roman ? <RomanLine text={roman} /> : null}
-      {centered ? (
-        <Text accessibilityRole="header" maxFontSizeMultiplier={1.4} style={[s.question, s.titleCentered]}>{question}</Text>
-      ) : (
+      {centered ? null : (
         <Headline level={long ? 'h2' : 'h1'} style={s.question}>
           {question}
         </Headline>

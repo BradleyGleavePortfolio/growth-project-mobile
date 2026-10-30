@@ -347,6 +347,7 @@ function BodyFrame({ props, header, children, footer }: { props: QuestionScreenP
       onFinishLater={props.onFinishLater}
       pauseLabel={props.screen.pause}
       footer={footer}
+      title={props.screen.template === 'consent' ? fillCopy(props.screen.question, props.ctx) : undefined}
       testID={`consult-screen-${props.screen.id}`}
     >
       {header}

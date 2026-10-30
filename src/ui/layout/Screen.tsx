@@ -128,11 +128,13 @@ export interface ScreenTopBarProps {
   backLabel?: string;
   /** Right-hand slot, e.g. <TextLink label="Finish later" size="small" />. */
   trailing?: React.ReactNode;
+  /** A fixed title between Back and the trailing slot; it never scrolls (LS-913R3 B1, C7 consent). */
+  title?: React.ReactNode;
   testID?: string;
 }
 
 /** Back chevron (44 pt) and an optional trailing text action, on the page gutter. */
-export function ScreenTopBar({ onBack, backLabel = 'Back', trailing, testID }: ScreenTopBarProps): React.ReactElement {
+export function ScreenTopBar({ onBack, backLabel = 'Back', trailing, title, testID }: ScreenTopBarProps): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={styles.topBar} testID={testID}>
@@ -150,7 +152,8 @@ export function ScreenTopBar({ onBack, backLabel = 'Back', trailing, testID }: S
       ) : (
         <View style={styles.back} />
       )}
-      {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
+      {title ? <View style={styles.title}>{title}</View> : null}
+      {trailing ? <View style={styles.trailing}>{trailing}</View> : title ? <View style={styles.back} /> : null}
     </View>
   );
 }
@@ -175,5 +178,6 @@ const styles = StyleSheet.create({
   // The chevron glyph sits about 2 pt inside its box, so 16 + 6 + 2 lands on the 24 pt gutter.
   back: { width: layout.touchMin, height: layout.touchMin, justifyContent: 'center', paddingLeft: 6 },
   trailing: { flexShrink: 1, alignItems: 'flex-end', paddingRight: 8 },
+  title: { flex: 1, alignItems: 'center' },
   pressed: { opacity: 0.6 },
 });
