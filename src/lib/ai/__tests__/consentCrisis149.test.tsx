@@ -296,11 +296,11 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
       for (const t of [ROMAN_CHATS_COPY.confirmAllBody, "Allow or withdraw Roman and your coach's AI tools using your information", `${trustCoachLine({ kind: 'unread' })}`]) {
         expect(withSafetyException(t, true)).toBe(t);
       }
-      // Ledger readers: the three that show its text ask by the flag; the gate and the join offer read only liveness
-      // (a live v8 / v9 grant reads its own copies under any ask) and open the sheet; the drain only withdraws.
+      // Ledger readers: the three that show its text ask by the flag; the gate reads only liveness (a live v8 / v9
+      // grant reads its own copies under any ask) and opens the sheet; the drain only withdraws. STORE-E4 retired
+      // the after-join offer (RomanJoinOfferHost).
       expect(filesWith(/api\/aiConsentApi'/)).toEqual([
         'components/ai/AiConsentSheet.tsx',
-        'components/ai/RomanJoinOfferHost.tsx',
         'components/roman/RomanConsentGate.tsx',
         'hooks/useAiWithdrawalDrain.ts',
         'lib/consultation/aiConsent.ts',
@@ -308,7 +308,7 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
         'screens/consultation/QuestionScreen.tsx',
         'screens/settings/RomanAiConsentScreen.tsx',
       ]);
-      for (const host of ['components/ai/RomanJoinOfferHost.tsx', 'components/roman/RomanConsentGate.tsx']) {
+      for (const host of ['components/roman/RomanConsentGate.tsx']) {
         expect(source(host)).toMatch(/isLiveRomanGrant\(out\.status\)[\s\S]*<AiConsentSheet/);
       }
     },

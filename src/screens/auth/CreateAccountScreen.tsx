@@ -94,9 +94,6 @@ import { authStyleB, RoundBack, styleBFieldStyles } from './AuthStyleB';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar, TextLink } from '../../ui';
 import { Checkbox } from '../consultation/components';
-import { coachAiConsentApi, markCoachAskedAtSignUp } from '../../api/coachAiConsentApi';
-import { COACH_AI_CONSENT_COPY } from '../../lib/ai/coachAiConsentCopy';
-import { logger } from '../../utils/logger';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -136,6 +133,13 @@ interface SignupAttempt {
   method: CoachSignupMethod;
   coach: boolean;
 }
+
+/**
+ * STORE-E4 (agent 185; owner #184-E5 / #184-E6 op 1, PERM-W4, copied exactly): the coach's required box,
+ * in place of the optional Roman box. Create account (and Apple / Google) stay off until it is ticked.
+ */
+export const COACH_SIGNUP_AGREEMENT_LABEL =
+  'I agree to the Terms of Service and Privacy Policy, and TGP Fitness may send me service and plan notices.';
 
 function firstStep(arrivedWithCode: boolean, roleChoice: boolean | null): Step {
   if (arrivedWithCode) return 'register';
@@ -262,8 +266,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   // repeats it.
   const [coachRequestNotApplied, setCoachRequestNotApplied] = useState(false);
   const [loading, setLoading] = useState(false);
-  // COACH-AI-CONSENT (owner op 2 item 1): the optional Roman box, unticked by default.
-  const [romanOn, setRomanOn] = useState(false);
+  // STORE-E4 (owner #184-E5 / #184-E6 op 1, PERM-W4): the coach's required box, unticked by default; it
+  // replaces the optional Roman box (a coach is asked about Roman the first time Roman opens).
+  const [coachTermsAgreed, setCoachTermsAgreed] = useState(false);
+  // PERM-W4: a coach signs up (email, Apple or Google) only once the box is ticked.
+  const coachTermsMissing = isCoachSignup && !coachTermsAgreed;
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
   const [recheckLoading, setRecheckLoading] = useState(false);
@@ -506,7 +513,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleRegister = async () => {
-    if (step === 'coach-unavailable' || attemptRef.current) return;
+    if (step === 'coach-unavailable' || attemptRef.current || coachTermsMissing) return;
     // Surrounding spaces (keyboard autocomplete) are never part of the
     // address. Case is left to the server, which stores the canonical form
     // and returns it (#597); see `accountEmail` below.
@@ -718,16 +725,6 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       await purgePersistedQueryCacheForAllUsers();
       await clearRoleSelectionPending();
       await clearSignupRoleNotice();
-      // COACH-AI-CONSENT: ticked grants now the account exists; empty records nothing. Either way
-      // this run never opens the one-time sheet (the box was the ask).
-      if (coachAttempt) {
-        markCoachAskedAtSignUp(userIdOf(user as { id?: unknown } | null | undefined));
-        if (romanOn) {
-          void coachAiConsentApi.grant().then((out) => {
-            if (out.kind !== 'ok') logger.warn('CreateAccount.coachAiGrant', out.kind);
-          });
-        }
-      }
       authEvents.emit();
       return 'success';
     }
@@ -793,7 +790,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleAppleSignup = async () => {
-    if (step === 'coach-unavailable' || attemptRef.current) return;
+    if (step === 'coach-unavailable' || attemptRef.current || coachTermsMissing) return;
     // A coach signup never carries a client invite code.
     const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
     if (requireInviteCode && !isCoachSignup && !trimmedCode) {
@@ -875,7 +872,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleGoogleSignup = async () => {
-    if (step === 'coach-unavailable' || attemptRef.current) return;
+    if (step === 'coach-unavailable' || attemptRef.current || coachTermsMissing) return;
     // A coach signup never carries a client invite code.
     const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
     if (requireInviteCode && !isCoachSignup && !trimmedCode) {
@@ -1274,6 +1271,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         label="Create account"
         onPress={handleRegister}
         loading={loading}
+        disabled={coachTermsMissing}
         testID="create-account-submit"
       />
       {/* Apple 1.2 (B-IOSREV-2): covers email, Google and Apple sign-up. */}
@@ -1423,7 +1421,12 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         ) : null}
 
         {showProviders ? (
-          <View style={styles.providers} testID="create-account-providers">
+          <View
+            style={[styles.providers, coachTermsMissing && styles.providersOff]}
+            pointerEvents={coachTermsMissing ? 'none' : 'auto'}
+            accessibilityState={{ disabled: coachTermsMissing }}
+            testID="create-account-providers"
+          >
             {/* Apple Sign-In: required by App Store policy when any other
                 third-party sign-in is offered. Renders nothing on Android or
                 unsupported iOS configurations. */}
@@ -1617,15 +1620,14 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           />
         </View>
 
-        {/* COACH-AI-CONSENT: the coach form's last item, right above Create account (owner mockup 1). */}
+        {/* STORE-E4 (PERM-W4): the coach form's last item, right above Create account (owner mockup 1 place). */}
         {isCoachSignup ? (
           <Checkbox
             variant="tan"
-            checked={romanOn}
-            onToggle={() => setRomanOn((v) => !v)}
-            label={COACH_AI_CONSENT_COPY.title}
-            detail={COACH_AI_CONSENT_COPY.paragraph}
-            testID="create-account-roman"
+            checked={coachTermsAgreed}
+            onToggle={() => setCoachTermsAgreed((v) => !v)}
+            label={COACH_SIGNUP_AGREEMENT_LABEL}
+            testID="create-account-coach-terms"
           />
         ) : null}
 
@@ -1719,6 +1721,7 @@ const makeStyles = (colors: SemanticTokens) =>
   googleG: { ...typography.bodyMd, marginRight: Spacing.sm, color: colors.textPrimary },
   googleButtonText: { ...typography.bodyMd, color: colors.textPrimary },
   providers: { gap: Spacing.sm },
+  providersOff: { opacity: 0.4 },
   passwordRow: { flexDirection: 'row', alignItems: 'center' },
   passwordInput: { flex: 1 },
   eyeBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },

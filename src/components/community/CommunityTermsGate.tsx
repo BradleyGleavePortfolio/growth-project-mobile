@@ -14,6 +14,10 @@
  * `community_terms_agreed:v1:<userId>`, so a second account on the same phone
  * is asked on its own. "Read the Terms of Service" opens the public /terms
  * page (TERMS_URL).
+ *
+ * STORE-E4 (owner #184-E5 / #184-E6 op 1): a client whose "Before we start" box included the community
+ * guidelines (consult-consent-v19 / v18-coach-free, the server's record) is not asked again; coaches and
+ * clients who agreed to an older screen keep this gate.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -27,6 +31,8 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { COMMUNITY_GUIDELINES } from '../../api/communitySafetyApi';
 import { openTermsOfService } from '../../lib/legalLinks';
 import { logger } from '../../utils/logger';
+import { consultationApi, type OnboardingStateResponse } from '../../api/consultationApi';
+import { agreedToCommunityInConsultation } from '../../lib/consultation/communityAgreement';
 
 export const COMMUNITY_TERMS_KEY_PREFIX = 'community_terms_agreed:v1:';
 export const communityTermsKey = (userId: string): string =>
@@ -47,14 +53,18 @@ type GateState = 'loading' | 'needed' | 'agreed';
 export default function CommunityTermsGate({
   children,
   onBack,
+  readOnboarding = consultationApi.getState,
 }: {
   children: React.ReactNode;
   /** COACHTABS: coaches open Community from Messages; Back leaves without agreeing. */
   onBack?: () => void;
+  /** GET /me/onboarding (injected in tests). */
+  readOnboarding?: () => Promise<OnboardingStateResponse | null>;
 }): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const user = useCurrentUser();
   const userId = user?.id ?? null;
+  const isClient = user?.role === 'student' || user?.role === 'client';
   const [state, setState] = useState<GateState>('loading');
 
   useEffect(() => {
@@ -66,8 +76,21 @@ export default function CommunityTermsGate({
     setState('loading');
     prefsStorage
       .getStringAsync(communityTermsKey(userId))
-      .then((value) => {
-        if (mounted) setState(value ? 'agreed' : 'needed');
+      .then(async (value) => {
+        if (value) {
+          if (mounted) setState('agreed');
+          return;
+        }
+        // STORE-E4: the client's one-box agreement already covers the guidelines. An unreadable record asks.
+        const covered =
+          isClient && agreedToCommunityInConsultation(await readOnboarding().catch(() => null));
+        if (!mounted) return;
+        setState(covered ? 'agreed' : 'needed');
+        if (covered) {
+          prefsStorage.set(communityTermsKey(userId), new Date().toISOString()).catch((err: unknown) => {
+            logger.warn('CommunityTermsGate', 'agreement save failed', err);
+          });
+        }
       })
       .catch((err: unknown) => {
         // Unreadable storage: ask again rather than skip the agreement.
@@ -77,7 +100,7 @@ export default function CommunityTermsGate({
     return () => {
       mounted = false;
     };
-  }, [userId]);
+  }, [userId, isClient, readOnboarding]);
 
   const agree = useCallback(() => {
     if (!userId) return;

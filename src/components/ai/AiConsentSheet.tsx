@@ -96,7 +96,7 @@ export interface AiConsentSheetProps {
    * first answer. Same ledger, same server wording; the title, the paired
    * same-size actions and the Privacy Policy link follow the prototype.
    */
-  variant?: 'default' | 'beforeAnswer' | 'afterJoin';
+  variant?: 'default' | 'beforeAnswer';
   testID?: string;
 }
 
@@ -128,9 +128,13 @@ type Phase =
 export const AI_CONSENT_SHEET_COPY = {
   title: 'Allow AI help',
   beforeAnswerTitle: 'Before Roman answers',
-  /** Owner 62y2: the one-time offer right after a client with no coach joins a coach. */
-  afterJoinTitle: 'Roman and AI',
-  afterJoinAllow: 'Allow',
+  /**
+   * STORE-E4 (owner #184-E5 / #184-E6 op 1, PERM-W3, copied exactly): the first line of "Before Roman
+   * answers". Shown above the server's paragraph and box label; the ledger's sha256 covers only those
+   * (status.copy), so no client-ai version changes.
+   */
+  beforeAnswerLead:
+    "Roman's AI runs on Anthropic, an outside AI company. Allow it to use your information to answer you? You can turn it off at any time in Settings > Privacy.",
   allowAndContinue: 'Allow and continue',
   privacyPolicy: 'Privacy Policy',
   coachNote:
@@ -181,7 +185,6 @@ export default function AiConsentSheet({
   testID = 'ai-consent-sheet',
 }: AiConsentSheetProps): React.ReactElement {
   const beforeAnswer = variant === 'beforeAnswer';
-  const afterJoin = variant === 'afterJoin';
   // The coach note is true only when a coach is attached (B-592-SOL-B-1). Read from
   // the signed-in user's cache (patched by CoachCodeSheet after a join), not a hook.
   const cachedUser = readUserCacheSync();
@@ -371,6 +374,11 @@ export default function AiConsentSheet({
         return (
           <>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+              {beforeAnswer ? (
+                <Text style={styles.paragraph} testID={`${testID}-lead`}>
+                  {AI_CONSENT_SHEET_COPY.beforeAnswerLead}
+                </Text>
+              ) : null}
               {phase.reconsent ? (
                 <Text style={styles.note} testID={`${testID}-reconsent`}>
                   {AI_CONSENT_SHEET_COPY.reconsent}
@@ -390,11 +398,7 @@ export default function AiConsentSheet({
             <View style={beforeAnswer ? styles.pair : null} testID={`${testID}-actions`}>
               <PrimaryButton
                 label={
-                  beforeAnswer
-                    ? AI_CONSENT_SHEET_COPY.allowAndContinue
-                    : afterJoin
-                      ? AI_CONSENT_SHEET_COPY.afterJoinAllow
-                      : AI_CONSENT_SHEET_COPY.allow
+                  beforeAnswer ? AI_CONSENT_SHEET_COPY.allowAndContinue : AI_CONSENT_SHEET_COPY.allow
                 }
                 onPress={() => void allow()}
                 loading={saving}
@@ -518,11 +522,7 @@ export default function AiConsentSheet({
           accessibilityViewIsModal
         >
           <Headline level="h2" style={styles.title}>
-            {beforeAnswer
-              ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle
-              : afterJoin
-                ? AI_CONSENT_SHEET_COPY.afterJoinTitle
-                : AI_CONSENT_SHEET_COPY.title}
+            {beforeAnswer ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle : AI_CONSENT_SHEET_COPY.title}
           </Headline>
           {renderBody()}
         </View>

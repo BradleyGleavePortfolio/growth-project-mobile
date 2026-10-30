@@ -172,7 +172,6 @@ import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
 import JoinPackageHost from '../components/join/JoinPackageHost';
-import RomanJoinOfferHost from '../components/ai/RomanJoinOfferHost';
 import type { WinType } from '../services/firstWinApi';
 
 interface Day1SaveProps {
@@ -899,7 +898,6 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
       )}
     </Tab.Navigator>
     <JoinPackageHost />
-    <RomanJoinOfferHost />
     </TutorialHost>
   );
 }

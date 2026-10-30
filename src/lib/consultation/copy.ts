@@ -39,6 +39,8 @@ import {
   CONSULT_CONSENT_HEALTH_CRISIS_COPY_VERSION,
   CONSULT_CONSENT_HEALTH_CRISIS_MEMORY_COPY_VERSION,
   CONSULT_CONSENT_HEALTH_MEMORY_COPY_VERSION,
+  CONSULT_CONSENT_ONE_BOX_COACH_FREE_COPY_VERSION,
+  CONSULT_CONSENT_ONE_BOX_COPY_VERSION,
 } from './consentVersion';
 
 export {
@@ -267,6 +269,52 @@ function consentScreenBase(coachFree: boolean, crisis: boolean) {
         memoryVersion: crisis ? CONSULT_CONSENT_CRISIS_MEMORY_COPY_VERSION : CONSULT_CONSENT_MEMORY_COPY_VERSION,
         memorySha256: crisis ? CONSENT_CRISIS_MEMORY_COPY_SHA256 : CONSENT_MEMORY_COPY_SHA256,
       };
+}
+
+/**
+ * STORE-E4 (agent 185; owner #184-E5 / #184-E6 op 1): the one-box "Before we start" this build shows.
+ * Paragraphs 1-3 stay; the one box is PERM-W1 (with no coach: PERM-W1 with " and my coach" removed, the
+ * derived row) and the footer is PERM-W2, both copied exactly. It replaces box 1, box 2, paragraph 4, the
+ * footer and the coach-free "Before you join a coach" block; Roman's AI is asked the first time the client
+ * opens Roman ("Before Roman answers", PERM-W3). The screens above stay pinned: stored agreements to them
+ * still count.
+ */
+export const ONE_BOX_CHECKBOX_LABEL =
+  'I agree to the Terms of Service, Privacy Policy, Consumer Health Data Privacy Policy, community guidelines and training waiver. TGP Fitness and my coach may collect and use what I share, including health data I connect, to coach me. Photos I post in Community are checked for safety by OpenAI. TGP Fitness may send me plan renewal offers, which I can turn off in Settings.';
+export const ONE_BOX_CHECKBOX_LABEL_COACH_FREE =
+  'I agree to the Terms of Service, Privacy Policy, Consumer Health Data Privacy Policy, community guidelines and training waiver. TGP Fitness may collect and use what I share, including health data I connect, to coach me. Photos I post in Community are checked for safety by OpenAI. TGP Fitness may send me plan renewal offers, which I can turn off in Settings.';
+export const ONE_BOX_FOOTER =
+  "Nothing is sent until you continue. Roman's AI is a separate choice the first time you open Roman.";
+
+/** The exact one-box screen text the record's sha256 covers: title, paragraphs 1-3, the box, the footer. */
+export function oneBoxConsentCopyText(coachFree = false): string {
+  return [
+    CONSENT_TITLE,
+    ...(coachFree ? CONSENT_PARAGRAPHS_COACH_FREE : CONSENT_PARAGRAPHS),
+    coachFree ? ONE_BOX_CHECKBOX_LABEL_COACH_FREE : ONE_BOX_CHECKBOX_LABEL,
+    ONE_BOX_FOOTER,
+  ].join('\n\n');
+}
+
+/** Pinned sha256 of oneBoxConsentCopyText(); equal to backend CONSULT_CONSENT_V19 / V18_COACH_FREE (b#1188). */
+export const CONSENT_COPY_SHA256_V19 = '0959f38db47448d99d943c995b0a857454d181f3ec803e96967882b3d575ccea';
+export const CONSENT_COPY_SHA256_V18_COACH_FREE = '9350dfbed5f332e0e99ea4e554731d0e8876ea5581873d6c984be3d23a149e99';
+
+/** What "Before we start" shows and records in this build, coached or with no coach. */
+export function oneBoxConsentScreenCopy(coachFree: boolean): {
+  paragraphs: readonly string[];
+  boxLabel: string;
+  footer: string;
+  version: string;
+  sha256: string;
+} {
+  return {
+    paragraphs: coachFree ? CONSENT_PARAGRAPHS_COACH_FREE : CONSENT_PARAGRAPHS,
+    boxLabel: coachFree ? ONE_BOX_CHECKBOX_LABEL_COACH_FREE : ONE_BOX_CHECKBOX_LABEL,
+    footer: ONE_BOX_FOOTER,
+    version: coachFree ? CONSULT_CONSENT_ONE_BOX_COACH_FREE_COPY_VERSION : CONSULT_CONSENT_ONE_BOX_COPY_VERSION,
+    sha256: coachFree ? CONSENT_COPY_SHA256_V18_COACH_FREE : CONSENT_COPY_SHA256_V19,
+  };
 }
 
 /** P8: general guidance and a safe next step, then the physician line. */
