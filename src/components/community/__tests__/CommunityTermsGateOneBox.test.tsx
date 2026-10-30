@@ -4,12 +4,14 @@
  *
  *  - A client whose server record is a current one-box agreement (consult-consent-v19 or
  *    consult-consent-v18-coach-free) opens Community straight away, and the phone remembers it.
- *  - A client who agreed to an older screen, a client with no record, an unreadable record and a coach
- *    all still see the Community gate.
+ *  - A client who agreed to an older screen, a client with no current agreement and a coach all still
+ *    see the Community gate.
+ *  - FR-E4M (LS-E4 R1_B1): a record that could not be read shows the app's "did not load" line with
+ *    Try again — neither Community nor a second agreement.
  */
 import React from 'react';
 import { Text } from 'react-native';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockStore = new Map<string, string>();
 const mockSet = jest.fn(async (key: string, value: string) => {
@@ -130,14 +132,10 @@ describe('CommunityTermsGate after the one-box Before we start (STORE-E4)', () =
     expect(mockSet).not.toHaveBeenCalled();
   });
 
-  it('no current agreement on file, no record, or an unreadable record: the gate shows', async () => {
+  it('no current agreement on file or no P0 answer: the gate shows', async () => {
     for (const read of [
       async () => stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION, false),
       async () => stateWith(null),
-      async () => null,
-      async () => {
-        throw new Error('offline');
-      },
     ]) {
       mockStore.clear();
       const screen = await renderGate(read);
@@ -146,6 +144,57 @@ describe('CommunityTermsGate after the one-box Before we start (STORE-E4)', () =
       await screen.unmount();
     }
     expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('FR-E4M: an unreadable record shows the did-not-load line, and Try again reads again and opens', async () => {
+    let calls = 0;
+    const read = jest.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('offline');
+      return stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION);
+    });
+    const screen = await renderGate(read);
+    expect(await screen.findByTestId('community-terms-unknown')).toBeTruthy();
+    expect(screen.getByText('Your community did not load. Check your connection, then try again.')).toBeTruthy();
+    expect(screen.queryByTestId('community-terms-gate')).toBeNull();
+    expect(screen.queryByTestId('community-content')).toBeNull();
+    expect(mockSet).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId('community-terms-retry'));
+    expect(await screen.findByTestId('community-content')).toBeTruthy();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(mockSet).toHaveBeenCalledWith(communityTermsKey('u-me'), expect.any(String));
+  });
+
+  it('FR-E4M: Try again after a read that still fails stays on the did-not-load line; a real no-agreement read asks', async () => {
+    const answers: Array<() => Promise<OnboardingStateResponse | null>> = [
+      async () => null,
+      async () => {
+        throw new Error('500');
+      },
+      async () => stateWith(CONSULT_CONSENT_COPY_VERSION),
+    ];
+    const read = jest.fn(async () => answers.shift()!());
+    const screen = await renderGate(read);
+    expect(await screen.findByTestId('community-terms-unknown')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('community-terms-retry'));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(await screen.findByTestId('community-terms-unknown')).toBeTruthy();
+    expect(screen.queryByTestId('community-terms-agree')).toBeNull();
+    await fireEvent.press(screen.getByTestId('community-terms-retry'));
+    expect(await screen.findByTestId('community-terms-gate')).toBeTruthy();
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  it('FR-E4M: the did-not-load view keeps the coach-style Back when the stack gives one', async () => {
+    const onBack = jest.fn();
+    const screen = await render(
+      <CommunityTermsGate readOnboarding={async () => null} onBack={onBack}>
+        <Text testID="community-content">Community feed</Text>
+      </CommunityTermsGate>,
+    );
+    expect(await screen.findByTestId('community-terms-unknown')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('community-terms-back'));
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   it('a coach keeps the gate and the record is not read', async () => {

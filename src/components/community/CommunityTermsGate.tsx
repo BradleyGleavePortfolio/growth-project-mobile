@@ -18,12 +18,17 @@
  * STORE-E4 (owner #184-E5 / #184-E6 op 1): a client whose "Before we start" box included the community
  * guidelines (consult-consent-v19 / v18-coach-free, the server's record) is not asked again; coaches and
  * clients who agreed to an older screen keep this gate.
+ *
+ * FR-E4M (LS-E4 R1_B1): for a client with no mark on this phone, a record that could not be read (offline,
+ * a server error, or no record endpoint) is not evidence that another agreement is needed. Community stays
+ * closed and the person sees the app's own "did not load" line with Try again, never the agreement.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import HapticPressable from '../HapticPressable';
+import { PrimaryButton } from '../../ui/buttons/PrimaryButton';
 import { useTheme } from '../../theme/useTheme';
 import { radius, spacing } from '../../theme/tokens';
 import { prefsStorage } from '../../storage/mmkv';
@@ -46,9 +51,13 @@ export const COMMUNITY_TERMS_COPY = {
     'There is no tolerance for objectionable content or abusive users. Content that breaks these guidelines is removed, and the account that posted it can be removed.',
   agree: 'Agree and continue',
   readTerms: 'Read the Terms of Service',
+  /** Reused, not new: CommunityHomeScreen's own failed-load line and button (C6-M1S). */
+  unknown: 'Your community did not load. Check your connection, then try again.',
+  retry: 'Try again',
 } as const;
 
-type GateState = 'loading' | 'needed' | 'agreed';
+/** 'unknown': a client's record could not be read, so neither Community nor a second ask is shown. */
+type GateState = 'loading' | 'needed' | 'agreed' | 'unknown';
 
 export default function CommunityTermsGate({
   children,
@@ -66,6 +75,7 @@ export default function CommunityTermsGate({
   const userId = user?.id ?? null;
   const isClient = user?.role === 'student' || user?.role === 'client';
   const [state, setState] = useState<GateState>('loading');
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -74,33 +84,37 @@ export default function CommunityTermsGate({
       return undefined;
     }
     setState('loading');
-    prefsStorage
-      .getStringAsync(communityTermsKey(userId))
-      .then(async (value) => {
-        if (value) {
-          if (mounted) setState('agreed');
-          return;
-        }
-        // STORE-E4: the client's one-box agreement already covers the guidelines. An unreadable record asks.
-        const covered =
-          isClient && agreedToCommunityInConsultation(await readOnboarding().catch(() => null));
-        if (!mounted) return;
-        setState(covered ? 'agreed' : 'needed');
-        if (covered) {
-          prefsStorage.set(communityTermsKey(userId), new Date().toISOString()).catch((err: unknown) => {
-            logger.warn('CommunityTermsGate', 'agreement save failed', err);
-          });
-        }
-      })
-      .catch((err: unknown) => {
-        // Unreadable storage: ask again rather than skip the agreement.
+    const decide = async (): Promise<GateState> => {
+      const mark = await prefsStorage.getStringAsync(communityTermsKey(userId)).catch((err: unknown) => {
+        // Unreadable storage is no mark: a coach is asked, a client's record decides.
         logger.warn('CommunityTermsGate', 'agreement read failed', err);
-        if (mounted) setState('needed');
+        return undefined;
       });
+      if (mark) return 'agreed';
+      if (!isClient) return 'needed';
+      // STORE-E4: the client's one-box agreement already covers the guidelines. GET /me/onboarding
+      // always answers a signed-in client with a record, so null (no endpoint) or a throw is unknown.
+      let record: OnboardingStateResponse | null;
+      try {
+        record = await readOnboarding();
+      } catch (err: unknown) {
+        logger.warn('CommunityTermsGate', 'onboarding read failed', err);
+        return 'unknown';
+      }
+      if (!record) return 'unknown';
+      if (!agreedToCommunityInConsultation(record)) return 'needed';
+      prefsStorage.set(communityTermsKey(userId), new Date().toISOString()).catch((err: unknown) => {
+        logger.warn('CommunityTermsGate', 'agreement save failed', err);
+      });
+      return 'agreed';
+    };
+    void decide().then((next) => {
+      if (mounted) setState(next);
+    });
     return () => {
       mounted = false;
     };
-  }, [userId, isClient, readOnboarding]);
+  }, [userId, isClient, readOnboarding, attempt]);
 
   const agree = useCallback(() => {
     if (!userId) return;
@@ -121,6 +135,42 @@ export default function CommunityTermsGate({
       >
         <ActivityIndicator color={sc.accent} />
       </View>
+    );
+  }
+
+  if (state === 'unknown') {
+    return (
+      <SafeAreaView
+        style={[styles.safe, { backgroundColor: sc.bgPrimary }]}
+        edges={['top']}
+        testID="community-terms-unknown"
+      >
+        {onBack ? (
+          <Pressable
+            onPress={onBack}
+            style={styles.back}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            testID="community-terms-back"
+          >
+            <Ionicons name="arrow-back" size={24} color={sc.textPrimary} />
+          </Pressable>
+        ) : null}
+        <View style={styles.unknown}>
+          <View style={[styles.unknownTile, { backgroundColor: sc.bgSurface }]}>
+            <Ionicons name="cloud-offline-outline" size={30} color={sc.accent} />
+          </View>
+          <Text style={[styles.body, styles.unknownText, { color: sc.textPrimary }]}>
+            {COMMUNITY_TERMS_COPY.unknown}
+          </Text>
+          <PrimaryButton
+            label={COMMUNITY_TERMS_COPY.retry}
+            onPress={() => setAttempt((n) => n + 1)}
+            style={styles.retry}
+            testID="community-terms-retry"
+          />
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -206,6 +256,10 @@ const styles = StyleSheet.create({
   back: { width: 44, height: 44, justifyContent: 'center', marginLeft: spacing.md },
   safe: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  unknown: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: 64, gap: spacing.md },
+  unknownTile: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  unknownText: { textAlign: 'center' },
+  retry: { alignSelf: 'stretch' },
   content: { padding: spacing.lg, gap: spacing.md },
   title: { fontSize: 24, fontWeight: '600' },
   body: { fontSize: 15, lineHeight: 22 },
