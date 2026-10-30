@@ -90,7 +90,7 @@ describe('LS-FOOD B3: online retry after an acknowledgement is lost', () => {
     const pressLog = async () => {
       await fireEvent.press(path === 'plan'
         ? screen.getByText('Ate it as planned')
-        : screen.getByTestId(path === 'manual' ? 'manual-log-food' : 'quantity-log-food'));
+        : screen.getByRole('button', { name: 'Log food' }));
     };
     await pressLog();
     await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
