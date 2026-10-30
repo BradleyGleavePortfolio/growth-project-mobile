@@ -29,7 +29,7 @@ import {
   CONSULT_CONSENT_ONE_BOX_COPY_VERSION,
   CONSULT_CONSENT_ONE_BOX_COPY_VERSIONS,
 } from '../consentVersion';
-import { CURRENT_CONSENT_VERSIONS } from '../engine';
+import { isConsentAnswerCurrent } from '../engine';
 
 const ROOT = path.join(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -71,8 +71,10 @@ describe('one-box Before we start (STORE-E4)', () => {
   });
 
   it('both one-box versions are current, and the older screens still count', () => {
-    for (const v of CONSULT_CONSENT_ONE_BOX_COPY_VERSIONS) expect(CURRENT_CONSENT_VERSIONS).toContain(v);
-    expect(CURRENT_CONSENT_VERSIONS).toContain(CONSULT_CONSENT_COPY_VERSION);
+    const p0 = (copy_version: string) => ({ agreed: true, agreed_at: '2026-10-30T03:00:00.000Z', copy_version });
+    for (const v of CONSULT_CONSENT_ONE_BOX_COPY_VERSIONS) expect(isConsentAnswerCurrent(p0(v))).toBe(true);
+    expect(isConsentAnswerCurrent(p0(CONSULT_CONSENT_COPY_VERSION))).toBe(true);
+    expect(isConsentAnswerCurrent(p0('consult-consent-v20'))).toBe(false);
     expect(consentScreenCopy(false).version).toBe(CONSULT_CONSENT_COPY_VERSION);
   });
 

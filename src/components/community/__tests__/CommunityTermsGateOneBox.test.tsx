@@ -72,8 +72,8 @@ function stateWith(copyVersion: string | null, recorded = true): OnboardingState
   };
 }
 
-function renderGate(read: () => Promise<OnboardingStateResponse | null>) {
-  return render(
+async function renderGate(read: () => Promise<OnboardingStateResponse | null>) {
+  return await render(
     <CommunityTermsGate readOnboarding={read}>
       <Text testID="community-content">Community feed</Text>
     </CommunityTermsGate>,
@@ -92,7 +92,7 @@ describe('CommunityTermsGate after the one-box Before we start (STORE-E4)', () =
     'a client who agreed to %s opens Community straight away and the phone remembers it',
     async (version) => {
       const read = jest.fn(async () => stateWith(version));
-      const screen = renderGate(read);
+      const screen = await renderGate(read);
       expect(await screen.findByTestId('community-content')).toBeTruthy();
       expect(screen.queryByTestId('community-terms-gate')).toBeNull();
       expect(read).toHaveBeenCalledTimes(1);
@@ -101,7 +101,7 @@ describe('CommunityTermsGate after the one-box Before we start (STORE-E4)', () =
   );
 
   it('a client who agreed to the older screen still sees the gate', async () => {
-    const screen = renderGate(async () => stateWith(CONSULT_CONSENT_COPY_VERSION));
+    const screen = await renderGate(async () => stateWith(CONSULT_CONSENT_COPY_VERSION));
     expect(await screen.findByTestId('community-terms-gate')).toBeTruthy();
     expect(screen.queryByTestId('community-content')).toBeNull();
     expect(mockSet).not.toHaveBeenCalled();
@@ -117,10 +117,10 @@ describe('CommunityTermsGate after the one-box Before we start (STORE-E4)', () =
       },
     ]) {
       mockStore.clear();
-      const screen = renderGate(read);
+      const screen = await renderGate(read);
       expect(await screen.findByTestId('community-terms-gate')).toBeTruthy();
       expect(screen.queryByTestId('community-content')).toBeNull();
-      screen.unmount();
+      await screen.unmount();
     }
     expect(mockSet).not.toHaveBeenCalled();
   });
@@ -128,7 +128,7 @@ describe('CommunityTermsGate after the one-box Before we start (STORE-E4)', () =
   it('a coach keeps the gate and the record is not read', async () => {
     mockRole = 'coach';
     const read = jest.fn(async () => stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION));
-    const screen = renderGate(read);
+    const screen = await renderGate(read);
     expect(await screen.findByTestId('community-terms-gate')).toBeTruthy();
     expect(read).not.toHaveBeenCalled();
   });
@@ -136,7 +136,7 @@ describe('CommunityTermsGate after the one-box Before we start (STORE-E4)', () =
   it('a stored agreement opens Community without reading the record', async () => {
     mockStore.set(communityTermsKey('u-me'), '2026-10-01T00:00:00.000Z');
     const read = jest.fn(async () => null);
-    const screen = renderGate(read);
+    const screen = await renderGate(read);
     expect(await screen.findByTestId('community-content')).toBeTruthy();
     expect(read).not.toHaveBeenCalled();
   });

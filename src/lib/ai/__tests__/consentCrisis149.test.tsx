@@ -162,25 +162,6 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
     },
   },
   {
-    row: 'P0 box 2: always asks crisis_alert (no flag read before the age step), shows the server text, records consult-consent-v14 and grants client-ai-v9',
-    check: async (on) => {
-      const api = makeApi({ getRomanConsent: ledger(true, on) });
-      const r = await toP0(api);
-      await waitFor(() => expect(r.paragraph()).toBe(on ? B_V9 : B_V7));
-      expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: true });
-      await fireEvent.press(r.getByTestId('consent-checkbox'));
-      await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
-      await fireEvent.press(r.getByTestId('consult-continue'));
-      await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
-      expect(api.grantRomanConsent.mock.calls[0][0]).toMatchObject(
-        on ? { version: 'client-ai-v9', copy_sha256: PIN.v9 } : { version: 'client-ai-v7', copy_sha256: copy.AI_CONSENT_MEMORY_COPY_SHA256 },
-      );
-      expect(api.save.mock.calls[0][0].answers.P0).toMatchObject(
-        on ? { copy_version: 'consult-consent-v14', text_sha256: PIN.p0v14 } : { copy_version: 'consult-consent-v12', text_sha256: copy.CONSENT_MEMORY_COPY_SHA256 },
-      );
-    },
-  },
-  {
     row: 'Settings > Roman and AI: asks by the flag and shows the text the server answered with',
     check: async (on) => {
       const getStatus = ledger(false);

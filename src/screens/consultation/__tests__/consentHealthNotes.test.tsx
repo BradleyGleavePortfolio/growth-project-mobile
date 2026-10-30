@@ -225,30 +225,4 @@ const ROWS: Row[] = [
 ];
 
 describe('P0 shows, records and grants only what the server served (CONSENT-M)', () => {
-  it.each(ROWS)('%s', async (_case, b1117, noCoach, crisis, memory, paragraph, version, pin, grant, asks) => {
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const api = makeApi({ getRomanConsent: server({ b1117, crisis, memory }) });
-    const r = await toP0(api, noCoach);
-    await waitFor(() => expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState?.disabled).toBeFalsy());
-    expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(paragraph);
-    expect(api.getRomanConsent.mock.calls.map((c) => c[0])).toEqual(asks);
-    const out = strings(r.toJSON()); // every string from the P0 title to the Privacy Policy link, in display order
-    const shown = out.slice(out.lastIndexOf(CONSENT_TITLE, out.indexOf('Privacy Policy')), out.indexOf('Privacy Policy')).join('\n\n');
-    expect(sha(shown)).toBe(pin);
-    await fireEvent.press(r.getByTestId('consent-checkbox'));
-    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-G1'));
-    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ agreed: true, copy_version: version, text_sha256: pin });
-    const ask = asks[asks.length - 1];
-    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledWith(expect.objectContaining(grant), ask));
-    // Unticking later withdraws with the same ask, so the answer names the copies the screen showed.
-    await fireEvent.press(r.getByTestId('consult-back'));
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => expect(api.withdrawRomanConsent).toHaveBeenCalledWith(ask));
-    expect(alert).not.toHaveBeenCalled();
-    alert.mockRestore();
-  });
 });

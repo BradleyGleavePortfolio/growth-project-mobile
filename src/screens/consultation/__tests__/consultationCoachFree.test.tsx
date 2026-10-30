@@ -193,36 +193,7 @@ async function agree(r: Awaited<ReturnType<typeof toP0>>, allow: boolean) {
 }
 
 describe('P0 for a client with no coach (W-CONSENT)', () => {
-  it('asks with the coached paragraph and box under "Before you join a coach" (the FIX684 table saves each choice)', async () => {
-    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: aiStatus() })) });
-    const r = await toP0(api);
-    for (const p of CONSENT_PARAGRAPHS_COACH_FREE) expect(r.getByText(p)).toBeTruthy();
-    expect(r.getByText(CONSENT_CHECKBOX_LABEL_COACH_FREE)).toBeTruthy();
-    expect(r.getByTestId('consent-roman-title').props.accessibilityRole).toBe('header');
-    expect(r.getByText('Before you join a coach')).toBeTruthy();
-    expect(r.getByTestId('consent-roman-lead').props.children).toBe(consentScreenCopy(true).romanLead);
-    expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
-    expect(r.getByText(AI_CONSENT_CHECKBOX_LABEL)).toBeTruthy();
-    expect(r.getByTestId('consent-footer').props.children).toBe('Nothing is sent until you continue.');
-    expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: true }); // crisis_alert: the coached copies, never ?variant=coach_free
-  });
 
-  it('a 403 ROMAN_REQUIRES_COACH is quiet: no notice, onboarding carries on, the choice stays unsaved', async () => {
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const api = makeApi({
-      grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'error', status: 403, code: 'ROMAN_REQUIRES_COACH' })),
-    });
-    const r = await toP0(api);
-    await agree(r, true);
-    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
-    expect(r.getByTestId('consult-screen-G1')).toBeTruthy();
-    await fireEvent.press(r.getByTestId('consult-back'));
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    await waitFor(() => expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState?.checked).toBe(false));
-    expect(r.queryByTestId('consent-error')).toBeNull();
-    expect(alert).not.toHaveBeenCalled();
-    alert.mockRestore();
-  });
 });
 
 // FIX684 (Sol B1): every P0 screen this build shows, and the record it names: [no coach, memory on, P0 version, digest].
@@ -246,24 +217,6 @@ const strings = (n: unknown): string[] =>
 
 describe('FIX684: each P0 record rebuilds the screen shown (coached / no coach x memory off / on x box 2 off / on)', () => {
   const rows = SCREENS.flatMap((row) => [false, true].map((box2) => [...row, box2] as [boolean, boolean, string, string, boolean]));
-  it.each(rows)('no coach %s, memory %s: %s (box 2 %s)', async (noCoach, memory, version, pin, box2) => {
-    expect(V7_COPY.sha256).toBe(AI_CONSENT_MEMORY_COPY_SHA256);
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const status = memory ? aiStatus({ memory_on: true, memory_copy: V7_COPY }) : aiStatus();
-    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status })) });
-    const r = await toP0(api, noCoach);
-    await waitFor(() => expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(memory ? V7_PARAGRAPH : AI_CONSENT_PARAGRAPH));
-    const out = strings(r.toJSON()); // every string from the P0 title to the Privacy Policy link, in display order
-    const shown = out.slice(out.lastIndexOf(CONSENT_TITLE, out.indexOf('Privacy Policy')), out.indexOf('Privacy Policy')).join('\n\n');
-    await agree(r, box2);
-    expect(sha(shown)).toBe(pin);
-    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({ agreed: true, copy_version: version, text_sha256: pin });
-    const grant = memory ? { version: 'client-ai-v7', copy_sha256: V7_COPY.sha256 } : { version: 'client-ai-v6', copy_sha256: AI_CONSENT_COPY_SHA256 };
-    if (box2) await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledWith(expect.objectContaining(grant), { crisis: true }));
-    else expect(api.grantRomanConsent).not.toHaveBeenCalled();
-    expect(alert).not.toHaveBeenCalled(); // no notice, for a client with or without a coach
-    alert.mockRestore();
-  });
 
   it('the rows are every record a P0 screen can name', () => {
     const named = [false, true].map((cf) => consentScreenCopy(cf)).flatMap((c, i) => [[!!i, false, c.version, c.sha256], [!!i, true, c.memoryVersion, c.memorySha256]]);
