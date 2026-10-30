@@ -174,6 +174,9 @@ function DunningBanner({
   );
 }
 
+/** U-5 plain words (approved); also the coach-name retry (FR-1TO1). */
+const PLANS_LOAD_ERROR = "Your coach's plans could not load. Check your connection, then tap to try again.";
+
 export default function ClientPackagesScreen() {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
@@ -182,19 +185,32 @@ export default function ClientPackagesScreen() {
 
   // Launch: plans are 1:1 person-to-person coaching (Guideline
   // 3.1.3(d)), so the screen names the individual coach.
+  // FR-1TO1 (LS B1): the approved inclusion names the coach, so nothing is sold until the name is
+  // read; a failed read shows the plans error with a retry instead of a nameless Buy.
   const [coachName, setCoachName] = useState<string | null>(null);
-  useEffect(() => {
-    let mounted = true;
+  const [coachNameFailed, setCoachNameFailed] = useState(false);
+  const mountedRef = React.useRef(true);
+  const readCoachName = useCallback(() => {
+    setCoachNameFailed(false);
     api
       .get<{ name?: string }>('/v1/clients/me/coach')
       .then((res) => {
-        if (mounted && typeof res?.data?.name === 'string') setCoachName(res.data.name);
+        const name = typeof res?.data?.name === 'string' ? res.data.name.trim() : '';
+        if (!mountedRef.current) return;
+        if (name) setCoachName(name);
+        else setCoachNameFailed(true);
       })
-      .catch(() => undefined);
-    return () => {
-      mounted = false;
-    };
+      .catch(() => {
+        if (mountedRef.current) setCoachNameFailed(true);
+      });
   }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    readCoachName();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [readCoachName]);
 
   const [packages, setPackages] = useState<PaymentsResult<ClientCoachPackage[]> | null>(null);
   const [status, setStatus] = useState<PaymentsResult<ClientPaymentStatus> | null>(null);
@@ -509,22 +525,24 @@ export default function ClientPackagesScreen() {
                 onSeeUnlocks={seeUnlocks}
               />
             ) : null;
+            // FR-1TO1 (LS B1): no sale while the coach's name is unknown.
+            const blocked = current || anyBusy || !sellable || !coachName;
             const action = !sellable && !current ? null : active && (purchase.state.phase === 'success' ||
               purchase.state.phase === 'confirm_slow' ||
               purchase.state.phase === 'confirmed_pending' ||
               purchase.state.priceChange) ? null : (
               <TouchableOpacity
-                style={[styles.buyBtn, (current || anyBusy || !sellable) && styles.buyBtnDisabled]}
-                onPress={() => handleBuy(pkg)}
-                disabled={current || anyBusy || !sellable}
+                style={[styles.buyBtn, blocked && styles.buyBtnDisabled]}
+                onPress={() => (blocked ? undefined : handleBuy(pkg))}
+                disabled={blocked}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: current || anyBusy || !sellable, busy }}
+                accessibilityState={{ disabled: blocked, busy }}
                 accessibilityLabel={current ? 'Current plan' : sellable
                   ? `${planTerms(sellable).cta}, ${pkg.name}` : `${pkg.name} is not available to buy in the app`}
                 testID={`buy-plan-${pkg.id}`}
               >
                 {busy ? <ActivityIndicator color={semanticColors.textOnDisabled} /> : (
-                  <Text style={[styles.buyBtnText, (current || anyBusy || !sellable) && styles.buyBtnTextDisabled]}>
+                  <Text style={[styles.buyBtnText, blocked && styles.buyBtnTextDisabled]}>
                     {current ? 'Current plan' : sellable ? planTerms(sellable).cta : ''}
                   </Text>
                 )}
@@ -536,6 +554,13 @@ export default function ClientPackagesScreen() {
                 <Text style={styles.pkgDesc} testID={`plan-second-${pkg.id}`}>{secondPlanNotice(renewingName)}</Text>
               ) : null}
               {outcome}
+              {sellable && !current && coachNameFailed ? (
+                <TouchableOpacity onPress={readCoachName} style={styles.errorBanner} accessibilityRole="button"
+                  testID={`plan-coach-retry-${pkg.id}`}>
+                  <Ionicons name="alert-circle-outline" size={18} color={semanticColors.textPrimary} />
+                  <Text style={styles.errorBannerText}>{PLANS_LOAD_ERROR}</Text>
+                </TouchableOpacity>
+              ) : null}
               {!sellable && !current ? (
                 <Text style={styles.pkgDesc} testID={`plan-unsellable-${pkg.id}`}>
                   Your coach sets this plan up directly. Message your coach to join it.
@@ -586,16 +611,15 @@ export default function ClientPackagesScreen() {
                 {pkg.description ? (
                   <Text style={styles.pkgDesc}>{pkg.description}</Text>
                 ) : null}
-                {(pkg.features?.length ?? 0) > 0 ? (
-                  <View style={styles.pkgFeatures}>
-                    {(pkg.features ?? []).map((feat, i) => (
-                      <View key={i} style={styles.pkgFeatureRow}>
-                        <Ionicons name="checkmark" size={14} color={semanticColors.accent} />
-                        <Text style={styles.pkgFeatureText}>{feat}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
+                {/* FR-1TO1 (LO B1): every package includes 1:1 coaching with its coach, listed first. */}
+                <View style={styles.pkgFeatures}>
+                  {[oneToOneCoachingLabel(coachName), ...(pkg.features ?? [])].map((feat, i) => (
+                    <View key={i} style={styles.pkgFeatureRow}>
+                      <Ionicons name="checkmark" size={14} color={semanticColors.accent} />
+                      <Text style={styles.pkgFeatureText} testID={i === 0 ? `plan-one-to-one-${pkg.id}` : undefined}>{feat}</Text>
+                    </View>
+                  ))}
+                </View>
                 {details(feedback)}
                 {action}
               </View>
@@ -611,9 +635,7 @@ export default function ClientPackagesScreen() {
         >
           <Ionicons name="alert-circle-outline" size={18} color={semanticColors.textPrimary} />
           {/* U-5: plain words; the transport text stays in the logs. */}
-          <Text style={styles.errorBannerText}>
-            Your coach&apos;s plans could not load. Check your connection, then tap to try again.
-          </Text>
+          <Text style={styles.errorBannerText}>{PLANS_LOAD_ERROR}</Text>
         </TouchableOpacity>
       ) : null}
 

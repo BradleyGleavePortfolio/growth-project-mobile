@@ -32,7 +32,8 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { formatCurrencyCents } from '../../../utils/currency';
 import type { PackageBillingInterval } from '../../../api/packagesApi';
-import { oneToOneCoachingLabel } from '../../../config/purchaseSurfaces';
+import { QuietOverline } from '../../../ui';
+import { CLIENT_PLAN_COPY, CoachNote, PlanIncluded, PlanMasthead } from './ClientPlanPresentation';
 
 export type PackageDetailMode = 'buyer' | 'coachPreview';
 
@@ -112,8 +113,15 @@ export default function PackageDetailSurface({
     (!isPreview && payLabelOverride) ||
     (pkg.trialDays ? 'Start free trial' : `Pay ${formatCurrencyCents(pkg.priceCents, pkg.currency)}`);
 
+  // FR-1TO1 (LS B2): C5 Style C, the same masthead, coach note and included list as the in-app plan
+  // page (ClientPlanPresentation), so the buyer page and the coach's preview match the GOAL.
+  const price = formatCurrencyCents(pkg.priceCents, pkg.currency);
   return (
     <ScrollView style={{ backgroundColor: semanticColors.bgPrimary }} contentContainerStyle={styles.content}>
+      <View style={[styles.mast, { backgroundColor: semanticColors.surface.masthead }]}>
+        <PlanMasthead title={pkg.title} price={price} coach={pkg.coach.displayName} />
+      </View>
+      <View style={styles.body}>
       {isPreview ? (
         <View style={styles.previewBanner} accessibilityRole="text">
           <Ionicons name="eye-outline" size={16} color={semanticColors.textPrimary} />
@@ -123,47 +131,18 @@ export default function PackageDetailSurface({
         </View>
       ) : null}
 
-      <View style={styles.coachCard}>
-        <View style={styles.avatarPlaceholder}>
-          <Ionicons name="person-outline" size={22} color={semanticColors.textMuted} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.coachLabel}>Coached by</Text>
-          <Text style={styles.coachName}>{pkg.coach.displayName}</Text>
-          {pkg.coach.bio ? (
-            <Text style={styles.coachBio} numberOfLines={3}>
-              {pkg.coach.bio}
-            </Text>
-          ) : null}
-        </View>
-      </View>
+      <CoachNote description={pkg.description} coach={pkg.coach.displayName} />
+      {pkg.coach.bio ? <Text style={styles.coachBio} numberOfLines={3}>{pkg.coach.bio}</Text> : null}
 
-      <Text style={styles.title}>{pkg.title}</Text>
-      {pkg.description ? <Text style={styles.description}>{pkg.description}</Text> : null}
+      <PlanIncluded coach={pkg.coach.displayName} features={pkg.features} testID="package-detail-one-to-one" />
 
       <View style={styles.priceCard}>
-        <Text style={styles.featuresTitle}>How it works</Text>
-        <Text style={styles.priceValue}>{formatCurrencyCents(pkg.priceCents, pkg.currency)}</Text>
+        <QuietOverline style={styles.featuresTitle} accessibilityRole="header">{CLIENT_PLAN_COPY.billing}</QuietOverline>
+        <Text style={styles.priceValue} testID="package-detail-price">{price}</Text>
         <Text style={styles.priceMeta}>{intervalCopy(pkg)}</Text>
         {pkg.trialDays ? (
           <Text style={styles.trialMeta}>Includes a {pkg.trialDays}-day free trial.</Text>
         ) : null}
-      </View>
-
-      {/* STORE-1TO1: every package includes 1:1 coaching with its coach, so this list always shows. */}
-      <View style={styles.featuresList}>
-        <Text style={styles.featuresTitle}>What's included</Text>
-        {[oneToOneCoachingLabel(pkg.coach.displayName), ...pkg.features].map((f, i) => (
-          <View key={i} style={styles.featureRow}>
-            <Ionicons
-              name="checkmark"
-              size={18}
-              color={semanticColors.accent}
-              style={{ marginTop: 2 }}
-            />
-            <Text style={styles.featureText} testID={i === 0 ? 'package-detail-one-to-one' : undefined}>{f}</Text>
-          </View>
-        ))}
       </View>
 
       {!isPreview ? purchaseSlot : null}
@@ -200,13 +179,16 @@ export default function PackageDetailSurface({
           app or TGP Fitness servers.
         </Text>
       )}
+      </View>
     </ScrollView>
   );
 }
 
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    content: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40 },
+    content: { paddingBottom: 40 },
+    mast: { paddingHorizontal: 24, paddingTop: 12 },
+    body: { paddingHorizontal: 24, paddingTop: 12 },
     previewBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -224,55 +206,8 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       color: semanticColors.textPrimary,
       lineHeight: 18,
     },
-    coachCard: {
-      flexDirection: 'row',
-      gap: 12,
-      paddingVertical: 20,
-      marginBottom: 24,
-      alignItems: 'flex-start',
-    },
-    avatarPlaceholder: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: semanticColors.bgPrimary,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    coachLabel: {
-      fontFamily: tokens.typography.eyebrow.fontFamily,
-      fontSize: 11,
-      color: semanticColors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 2,
-    },
-    coachName: {
-      fontFamily: tokens.typography.bodyMd.fontFamily,
-      fontSize: 16,
-      fontWeight: '500',
-      color: semanticColors.textPrimary,
-    },
     coachBio: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 4, lineHeight: 18 },
-    title: {
-      fontFamily: tokens.typography.h1.fontFamily,
-      fontSize: 28,
-      color: semanticColors.textPrimary,
-      marginBottom: 8,
-    },
-    description: {
-      fontFamily: tokens.typography.body.fontFamily,
-      fontSize: 15,
-      color: semanticColors.textMuted,
-      lineHeight: 22,
-      marginBottom: 18,
-    },
-    priceCard: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: semanticColors.border,
-      paddingVertical: 24,
-      marginBottom: 8,
-    },
+    priceCard: { paddingBottom: 16, marginBottom: 8 },
     priceValue: {
       fontFamily: tokens.typography.h2.fontFamily,
       fontSize: 32,
@@ -281,17 +216,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     },
     priceMeta: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 2 },
     trialMeta: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 6 },
-    featuresList: { marginBottom: 24 },
-    featuresTitle: {
-      fontFamily: tokens.typography.eyebrow.fontFamily,
-      fontSize: 11,
-      color: semanticColors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 10,
-    },
-    featureRow: { flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'flex-start' },
-    featureText: { ...tokens.typography.bodySmall, flex: 1, fontSize: 14, color: semanticColors.textPrimary, lineHeight: 20 },
+    featuresTitle: { ...tokens.typography.eyebrow, marginBottom: 12 },
     payBtn: {
       flexDirection: 'row',
       alignItems: 'center',

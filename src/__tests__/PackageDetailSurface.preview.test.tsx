@@ -76,8 +76,9 @@ const VM: PackageDetailViewModel = {
 describe('PackageDetailSurface — shared presentation (no forked visuals)', () => {
   it('uses open sections, tabular prices and readable detail without hiding inclusions', async () => {
     const r = await render(<PackageDetailSurface package={VM} mode="buyer" onPay={jest.fn()} />);
-    expect(r.getByText('How it works')).toBeTruthy();
-    const price = StyleSheet.flatten(r.getByText('$199.00').props.style);
+    // FR-1TO1 (LS B2): C5 Style C names the price section Billing, as the in-app plan page does.
+    expect(r.getByText('Billing')).toBeTruthy();
+    const price = StyleSheet.flatten(r.getByTestId('package-detail-price').props.style);
     expect(price.fontVariant).toEqual(['tabular-nums']);
     expect(StyleSheet.flatten(r.getByText('Weekly check-ins').props.style).fontFamily).toMatch(/^Inter/);
     expect(StyleSheet.flatten(r.getByLabelText('Continue to payment').props.style).minHeight).toBe(44);
@@ -88,7 +89,7 @@ describe('PackageDetailSurface — shared presentation (no forked visuals)', () 
       <PackageDetailSurface package={VM} mode="buyer" onPay={jest.fn()} />,
     );
     expect(getByText('12-week transformation')).toBeTruthy();
-    expect(getByText('Jordan Coach')).toBeTruthy();
+    expect(getByText('From Jordan Coach')).toBeTruthy();
     expect(getByText('Weekly check-ins')).toBeTruthy();
     expect(getByText('Custom workout plan')).toBeTruthy();
     // Price string is rendered (currency formatting); the amount appears in
@@ -101,7 +102,7 @@ describe('PackageDetailSurface — shared presentation (no forked visuals)', () 
       <PackageDetailSurface package={VM} mode="coachPreview" />,
     );
     expect(getByText('12-week transformation')).toBeTruthy();
-    expect(getByText('Jordan Coach')).toBeTruthy();
+    expect(getByText('From Jordan Coach')).toBeTruthy();
     expect(getByText('Weekly check-ins')).toBeTruthy();
     expect(getAllByText(/199/).length).toBeGreaterThan(0);
   });
@@ -206,5 +207,26 @@ describe('PackageDetailSurface — STORE-1TO1 1:1 coaching line', () => {
     expect(r.getByTestId('package-detail-one-to-one').props.children).toBe('1:1 coaching with Jordan Coach');
     const texts = r.getAllByText(/1:1 coaching with Jordan Coach|Weekly check-ins/).map((n) => n.props.children);
     expect(texts).toEqual(['1:1 coaching with Jordan Coach', 'Weekly check-ins']);
+  });
+});
+
+// FR-1TO1 (agent 185) class-first: the buyer page and the coach preview (one surface, C5 Style C)
+// list 1:1 coaching with the coach first under What's included, with or without a note or features.
+describe('FR-1TO1: 1:1 coaching with the coach is first on both modes, every package shape', () => {
+  it.each([
+    ['buyer', 'no features, no note', [], null],
+    ['buyer', 'features and a note', ['Weekly check-ins'], 'A note.'],
+    ['preview', 'no features, no note', [], null],
+    ['preview', 'features and a note', ['Weekly check-ins'], 'A note.'],
+  ] as const)('%s, %s', async (mode, _shape, features, description) => {
+    const onPay = jest.fn();
+    const r = await render(
+      <PackageDetailSurface package={{ ...VM, features: [...features], description }} mode={mode} onPay={onPay} />,
+    );
+    expect(r.getByText("What's included")).toBeTruthy();
+    const items = r.getAllByText(/^1:1 coaching with Jordan Coach$|^Weekly check-ins$/).map((n) => n.props.children);
+    expect(items).toEqual(['1:1 coaching with Jordan Coach', ...features]);
+    expect(r.getByTestId('package-detail-one-to-one').props.children).toBe('1:1 coaching with Jordan Coach');
+    if (mode === 'preview') expect(r.getByText('Buyer preview — checkout is disabled for coaches.')).toBeTruthy();
   });
 });

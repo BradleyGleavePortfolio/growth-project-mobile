@@ -461,3 +461,36 @@ it('LO-1TO1 B1: the list buyers see today lists 1:1 coaching with the coach firs
   const barePage = pageOrder(bare.getByTestId('client-packages-header').parent?.parent as unknown as PageNode);
   expect(barePage.slice(barePage.indexOf('Monthly coaching'))).toContain('1:1 coaching with Coach Lee');
 });
+
+// FR-1TO1 (agent 185) class-first: no buy path sells while the coach's name is unknown, on the list
+// card (flag off) and on the Style C plan page (flag on); the retry recovers the name and the sale.
+it.each([
+  ['list card (flag off)', false],
+  ['Style C plan page (flag on)', true],
+])('FR-1TO1: %s blocks Buy until the coach name is read, then the retry recovers it', async (_path, v2) => {
+  mockBillingV2 = v2;
+  let fail = true;
+  mockGet.mockImplementation(async (url: string) => {
+    if (url === '/v1/clients/me/coach') {
+      if (fail) throw new Error('Connection lost');
+      return { data: { name: 'Coach Lee' } };
+    }
+    if (url === '/v1/checkout/subscriptions') return { data: { plans: [] } };
+    throw new Error(`Unexpected read ${url}`);
+  });
+  const r = await render(<ClientPackagesScreen />);
+  if (v2) {
+    await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  }
+  await waitFor(() => expect(r.getByTestId('plan-coach-retry-pkg-monthly')).toBeTruthy());
+  expect(r.getByText("Your coach's plans could not load. Check your connection, then tap to try again.")).toBeTruthy();
+  expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  expect(mockPost).not.toHaveBeenCalled();
+  fail = false;
+  await fireEvent.press(r.getByTestId('plan-coach-retry-pkg-monthly'));
+  await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.disabled).toBe(false));
+  expect(r.queryByTestId('plan-coach-retry-pkg-monthly')).toBeNull();
+  expect(r.getByTestId(v2 ? 'client-plan-one-to-one' : 'plan-one-to-one-pkg-monthly').props.children).toBe('1:1 coaching with Coach Lee');
+});
