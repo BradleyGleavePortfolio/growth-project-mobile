@@ -166,6 +166,48 @@ describe('B-343-3 finished replays (backend #661)', () => {
 });
 
 describe('B-343-1 (Opus) an unclear one-time result is never "Payment received"', () => {
+  it('LS-PAYFAIL B7: an older paid purchase does not confirm a new failed or unknown payment of the same package', async () => {
+    mockPresent.mockResolvedValueOnce({ error: { code: 'Timeout' } });
+    mockPurchases.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'synthetic-current-attempt',
+          package_id: A.id,
+          status: 'payment_failed',
+          entitlement_active: false,
+          access_expires_at: null,
+          created_at: '2026-10-30T12:00:00.000Z',
+        },
+        {
+          id: 'synthetic-current-other-plan',
+          package_id: B.id,
+          status: 'paid',
+          entitlement_active: true,
+          access_expires_at: null,
+          created_at: '2026-10-15T12:00:00.000Z',
+        },
+        {
+          id: 'synthetic-older-purchase',
+          package_id: A.id,
+          status: 'paid',
+          entitlement_active: true,
+          access_expires_at: null,
+          created_at: '2026-10-01T12:00:00.000Z',
+        },
+      ],
+    });
+    const h = await mount();
+
+    await act(async () => { await h.result.current.start(A); });
+
+    expect(mockPresent).toHaveBeenCalledTimes(1);
+    expect(mockPurchases).toHaveBeenCalledTimes(1);
+    expect(h.result.current.state.success).toBeNull();
+    expect(h.result.current.state.notice?.checkAgain).toBe(true);
+    expect(h.onEntitled).not.toHaveBeenCalled();
+  });
+
   it('reading the purchase after a lost answer is flagged as checking', async () => {
     const held = deferred<{ ok: boolean; data: unknown[] }>();
     mockPresent.mockRejectedValueOnce(lostAnswer());
