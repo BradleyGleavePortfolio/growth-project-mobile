@@ -1445,7 +1445,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         {/* STORE-E4 (PERM-W4); owner #186-P3 op 1: the box sits just above Apple and Google, so it is on
             screen whenever the buttons it turns on are. */}
         {isCoachSignup ? (
-          <View onLayout={(e) => { coachTermsY.current = e.nativeEvent.layout.y; }} testID="create-account-coach-terms-place">
+          <View
+            style={styles.coachTermsPlace}
+            onLayout={(e) => { coachTermsY.current = e.nativeEvent.layout.y; }}
+            testID="create-account-coach-terms-place"
+          >
             <Checkbox
               variant="tan"
               checked={coachTermsAgreed}
@@ -1749,6 +1753,7 @@ const makeStyles = (colors: SemanticTokens) =>
   googleG: { ...typography.bodyMd, marginRight: Spacing.sm, color: colors.textPrimary },
   googleButtonText: { ...typography.bodyMd, color: colors.textPrimary },
   providers: { gap: Spacing.sm },
+  coachTermsPlace: { marginBottom: Spacing.lg },
   providersOff: { opacity: 0.4 },
   passwordRow: { flexDirection: 'row', alignItems: 'center' },
   passwordInput: { flex: 1 },
