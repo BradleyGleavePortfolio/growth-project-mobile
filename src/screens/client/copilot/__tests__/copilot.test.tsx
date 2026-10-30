@@ -21,7 +21,8 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../../components/StatusBarBand', () => ({ ForestStatusBar: () => null }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { success: jest.fn(), error: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
 jest.mock('../../../../api/romanApi', () => ({ ROMAN_MESSAGE_MAX_LENGTH: 4000, RomanApiError: class extends Error {}, RomanWireError: class extends Error {}, openOrResumeSession: jest.fn(), sendMessage: jest.fn() }));
-jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off'), AI_REFUSAL_ACTIONS: { contactSupport: 'Contact support' } }));
+jest.mock('../../../../components/ai/AiRefusalNotice', () => ({ __esModule: true, default: () => mockText('AI help is off'), AI_REFUSAL_ACTIONS: { contactSupport: 'Contact support' },
+  consentSheetVariantFor: jest.requireActual('../../../../components/ai/AiRefusalNotice').consentSheetVariantFor }));
 const mockText = (t: string) => <Text>{t}</Text>;
 let mockNeedsCoach = false;
 jest.mock('../../../../components/coachless/JoinCoachState', () => ({ __esModule: true, ROMAN_LOCK_TITLE: 'Roman works with a coach',
