@@ -195,6 +195,11 @@ function dateCopy(iso: string | null | undefined): string | null {
 }
 
 /** B-343-2: the attempt identity a key belongs to (package + sale kind). */
+/** A purchase row is in force: paid (or active) and its access granted. */
+function ownRowInForce(row: { status: string; entitlement_active?: boolean | null }): boolean {
+  return row.entitlement_active === true && (row.status === "paid" || row.status === "active");
+}
+
 function attemptId(pkg: PurchasablePackage): string {
   return `${pkg.id}:${saleKindOf(pkg)}`;
 }
@@ -747,10 +752,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           if (!mountedRef.current || oneTimeUnknownRef.current !== u) return;
           const mine = res.ok ? attemptPurchase(res.data, u.pkg.id, u.purchaseId) : null;
           if (mine) u.purchaseId = mine.id;
-          if (
-            mine?.entitlement_active === true &&
-            (mine.status === "paid" || mine.status === "active")
-          ) {
+          if (mine && ownRowInForce(mine)) {
             finishSuccess(
               {
                 kind: "one_time",
@@ -773,20 +775,29 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     [entitlementPollDelaysMs, finishSuccess, set, showOutcomeUnknown],
   );
 
-  const waitForEntitlement = useCallback(
-    async (live: () => boolean): Promise<boolean> => {
+  /**
+   * LS-914R2 B3 / LO-914R2 B1: after a clear one-time sheet, only this
+   * purchase's own row (this package, newest attempt, pinned once seen) says
+   * it is in force; another plan's account-wide access never does. Returns
+   * that row's id, or null when the bounded wait ends without it.
+   */
+  const waitForOwnRow = useCallback(
+    async (packageId: string, live: () => boolean): Promise<string | null> => {
+      let pinned: string | null = null;
       for (const delay of entitlementPollDelaysMs) {
         if (delay > 0) await wait(delay);
-        if (!live()) return false;
+        if (!live()) return null;
         try {
-          const res = await clientPaymentsApi.getEntitlement();
-          if (!live()) return false;
-          if (res.ok && res.data?.active === true) return true;
+          const res = await clientPaymentsApi.getPurchases();
+          if (!live()) return null;
+          const mine = res.ok ? attemptPurchase(res.data, packageId, pinned) : null;
+          if (mine) pinned = mine.id;
+          if (mine && ownRowInForce(mine)) return mine.id;
         } catch {
           // keep polling; the payment itself is already confirmed
         }
       }
-      return false;
+      return null;
     },
     [entitlementPollDelaysMs],
   );
@@ -870,13 +881,13 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       }
       retireAttempt(pkg);
       set({ phase: "confirming", checking: false });
-      const active = await waitForEntitlement(live);
+      const ownId = await waitForOwnRow(pkg.id, live);
       if (!live()) return;
-      if (active) {
+      if (ownId) {
         finishSuccess({
           kind: "one_time",
           packageId: pkg.id,
-          purchaseId: null,
+          purchaseId: ownId,
           title: PACKAGE_PAYMENT_COPY.successTitle,
           body: PACKAGE_PAYMENT_COPY.successBody(pkg.name, null),
         });
@@ -899,7 +910,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       settleOneTimeUnknown,
       showNotice,
       surface,
-      waitForEntitlement,
+      waitForOwnRow,
     ],
   );
 
