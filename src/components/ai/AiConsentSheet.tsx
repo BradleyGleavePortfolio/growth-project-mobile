@@ -74,6 +74,7 @@ import { useCrisisAlertNow } from '../../hooks/useFeatureFlags';
 import { openPrivacyPolicyPage } from '../../lib/legalLinks';
 import { diagnosticReference, shortReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
+import RomanAvatar from '../roman/RomanAvatar';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
 import { layout, radius } from '../../theme/tokens';
 import { footerBottomPadding, Headline, PrimaryButton, TextLink, useScreenInsets } from '../../ui';
@@ -384,9 +385,12 @@ export default function AiConsentSheet({
                   {AI_CONSENT_SHEET_COPY.reconsent}
                 </Text>
               ) : null}
-              <Text style={styles.paragraph} testID={`${testID}-paragraph`}>
-                {phase.paragraph}
-              </Text>
+              {/* LS-E4R2 B2 (C3 Style B): the server disclosure in a cream radius-16 card on the white sheet. */}
+              <View style={styles.discloseCard}>
+                <Text style={[styles.paragraph, styles.inCard]} testID={`${testID}-paragraph`}>
+                  {phase.paragraph}
+                </Text>
+              </View>
               <Text style={styles.label} testID={`${testID}-label`}>
                 {phase.label}
               </Text>
@@ -411,9 +415,8 @@ export default function AiConsentSheet({
                 onPress={onClose}
                 disabled={saving}
                 tone={beforeAnswer ? 'ink' : 'muted'}
-                underline={!beforeAnswer}
-                // Prototype 68: Not now matches Allow in size (a framed TextLink, never a second fill).
-                style={beforeAnswer ? [styles.pairItem, styles.pairOutline, { borderColor: colors.textPrimary }] : styles.secondary}
+                // LS-E4R2 B2 (C3 Style B): Not now is a centred underlined link under Allow, never a second fill.
+                style={styles.secondary}
                 testID={`${testID}-not-now`}
               />
             </View>
@@ -522,9 +525,13 @@ export default function AiConsentSheet({
           testID={testID}
           accessibilityViewIsModal
         >
-          <Headline level="h2" style={styles.title}>
-            {beforeAnswer ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle : AI_CONSENT_SHEET_COPY.title}
-          </Headline>
+          {/* LS-E4R2 B2 (C3 Style B): Roman's portrait beside the title. */}
+          <View style={styles.titleRow}>
+            <RomanAvatar crop="neutral" size={44} />
+            <Headline level="h2" style={styles.titleText}>
+              {beforeAnswer ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle : AI_CONSENT_SHEET_COPY.title}
+            </Headline>
+          </View>
           {renderBody()}
         </View>
       </View>
@@ -545,6 +552,10 @@ export function makeStyles(colors: ThemeColors) {
       maxHeight: '85%',
     },
     title: { marginBottom: 12 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+    titleText: { flex: 1 },
+    discloseCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 12 },
+    inCard: { marginBottom: 0 },
     center: { paddingVertical: 32, alignItems: 'center' },
     scroll: { flexGrow: 0 },
     scrollContent: { paddingBottom: 8 },
@@ -558,12 +569,5 @@ export function makeStyles(colors: ThemeColors) {
     // Stacked, both full width and 54 pt: the same size, and "Allow and continue" never truncates.
     pair: { alignSelf: 'stretch' },
     pairItem: { alignSelf: 'stretch' },
-    pairOutline: {
-      marginTop: 8,
-      minHeight: layout.buttonHeight,
-      borderWidth: 1,
-      borderRadius: radius.button,
-      justifyContent: 'center',
-    },
   });
 }
