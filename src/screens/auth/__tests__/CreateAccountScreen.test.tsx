@@ -110,9 +110,17 @@ const ROLE_CHOICE_POLICY = {
 };
 
 // Prototype ROLE (01): a row tap selects, Continue commits.
+// STORE-E4: whether chooseRole ticks the coach form's required box (the box test opts out).
+let mockTickCoachTerms = true;
+
 async function chooseRole(utils: { findByTestId: (id: string) => Promise<unknown>; getByTestId: (id: string) => unknown }, role: 'client' | 'coach') {
   await fireEvent.press((await utils.findByTestId(`role-choice-${role}`)) as never);
   await fireEvent.press(utils.getByTestId('role-choice-continue') as never);
+  // STORE-E4 (PERM-W4): the coach form's required box is ticked before signing up.
+  {
+    const coachTerms = (utils as unknown as { queryByTestId: (id: string) => unknown }).queryByTestId('create-account-coach-terms');
+    if (coachTerms && mockTickCoachTerms) await fireEvent.press(coachTerms as never);
+  }
 }
 
 async function renderScreen(
@@ -120,6 +128,7 @@ async function renderScreen(
   role: 'client' | 'coach' | null = 'client',
   tickCoachTerms = true,
 ) {
+  mockTickCoachTerms = tickCoachTerms;
   const nav = makeNav();
   const utils = await render(
     <CreateAccountScreen navigation={nav as never} route={params ? { params } : undefined} />,
@@ -132,9 +141,6 @@ async function renderScreen(
   if (!params?.invite_code && role && utils.queryByTestId('role-choice')) {
     await chooseRole(utils, role);
   }
-  // STORE-E4 (PERM-W4): a coach signs up only once the required box is ticked; the box tests opt out.
-  const coachTerms = utils.queryByTestId('create-account-coach-terms');
-  if (tickCoachTerms && coachTerms) await fireEvent.press(coachTerms);
   return { nav, ...utils };
 }
 
