@@ -58,11 +58,18 @@ const initialClientState = {
 // sign-out (resetUserScopedStores) and starts a new one, so a reply, refresh or
 // rollback started by the previous account never writes into the next one.
 let session = 0;
+// LS-914R2 B1: one generation per selected day. A day change (or reset) starts
+// a new one, so a water answer for the day it was sent on never lands on
+// another day the client has opened since.
+let view = 0;
 
 export const useClientStore = create<ClientStore>((set, get) => ({
   ...initialClientState,
 
-  setSelectedDate: (date: string) => set((state) => state.selectedDate === date ? {} : {
+  setSelectedDate: (date: string) => set((state) => {
+    if (state.selectedDate === date) return {};
+    view += 1;
+    return {
     selectedDate: date,
     foodLogs: [],
     dailyTotals: { ...initialClientState.dailyTotals },
@@ -70,10 +77,12 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     waterEntries: [],
     hasLoadedDay: false,
     loadError: null,
+    };
   }),
 
   reset: () => {
     session += 1;
+    view += 1;
     set({ ...initialClientState, selectedDate: getTodayString() });
   },
 
@@ -195,6 +204,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
 
   logFood: async (data) => {
     const mine = session;
+    const shown = view;
     try {
       await logApi.logFood({
         date: data.date,
@@ -203,7 +213,12 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         quantity_multiplier: data.quantityMultiplier || 1.0,
         notes: data.notes,
       });
-      if (mine === session) await get().loadDayData(data.userId, data.date);
+      // LS-914R2 B1: a day opened while this was saving stays open; the
+      // logged day is read again only if no other day was opened since, or
+      // the client is back on it.
+      if (mine === session && (shown === view || get().selectedDate === data.date)) {
+        await get().loadDayData(data.userId, data.date);
+      }
     } catch (err) {
       throw err;
     }
@@ -225,17 +240,29 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       };
     }),
 
-  logWater: async (_userId: string, _coachId: string, amountOz: number) => {
-    // Optimistic update — add immediately, sync to backend
+  logWater: async (userId: string, _coachId: string, amountOz: number) => {
+    // Optimistic update — add immediately, sync to backend. LS-914R2 B1: the
+    // answer belongs to the day it was sent on; it is applied only while that
+    // same day view is still open (same account, no day change in between).
     const mine = session;
+    const shown = view;
+    const date = get().selectedDate;
+    const ours = () => mine === session && shown === view;
+    // Another day opened meanwhile: drop the answer; if the client is back on
+    // the sent day (A -> B -> A), read that day again so it shows the truth.
+    const settleElsewhere = () => {
+      if (mine === session && get().selectedDate === date) void get().loadDayData(userId, date);
+    };
     set((state) => ({ waterOz: state.waterOz + amountOz }));
     try {
       const amountMl = Math.round(amountOz * 29.5735);
-      const date = get().selectedDate;
       const response = await waterApi.log({ amount_ml: amountMl, date });
-      if (mine !== session) return;
-      if (response.data.id) {
-        set((state) => ({ waterEntries: [...state.waterEntries, response.data] }));
+      if (!ours()) return settleElsewhere();
+      const saved = response.data;
+      if (saved.id) {
+        set((state) => state.waterEntries.some((e) => e.id === saved.id)
+          ? {}
+          : { waterEntries: [...state.waterEntries, saved] });
       }
       set((state) => state.loadError?.endsWith(' oz of water was not saved. Check the connection, then add it again.')
         ? { loadError: null }
@@ -244,7 +271,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // Revert the optimistic bump and say so: a number that silently goes
       // back down reads as a glitch, not as "this was not saved".
       logger.error('ClientStore', 'logWater failed', err);
-      if (mine !== session) return;
+      if (!ours()) return settleElsewhere();
       set((state) => ({
         waterOz: Math.max(0, state.waterOz - amountOz),
         loadError: `${Math.round(amountOz)} oz of water was not saved. Check the connection, then add it again.`,
