@@ -48,7 +48,7 @@ import {
 import { preferenceSaveFailureOf } from '../settings/notificationPreferenceErrors';
 import { notificationsApi } from '../../services/api';
 import { readUserCacheSync } from '../../lib/userCache';
-import { useEntitlement } from '../../entitlements/EntitlementProvider';
+import { usePlanRenewalGate } from '../settings/usePlanRenewalGate';
 import {
   PLAN_RENEWAL_OFFERS_COPY,
   PLAN_RENEWAL_OFFERS_WRITE_FIELD,
@@ -210,6 +210,9 @@ export const QUIET_HOURS_COPY = {
     'Your time. Notifications that arrive overnight wait until 8:00 AM. A reminder for a session that starts within the hour still comes through.',
 };
 
+const READ_FAILED_COPY =
+  'Notification preferences could not be loaded. Check your connection, then try again.';
+
 export const MUTE_ALL_COPY =
   'Turns off all push, in-app and email notifications, session reminders included.';
 
@@ -229,8 +232,10 @@ export default function NotificationPreferencesScreen() {
 
   // FR-B2 B1: the server's yes (true) or no (false) to plan renewal offers;
   // null hides the switch (not a client, flag off, or an older server).
-  const renewalOn = useEntitlement().renewal !== undefined;
-  const offersEligible = renewalOn && planRenewalOffersForRole(readUserCacheSync()?.role);
+  // LO-908R2 B1: a failed plan read is read again on open and on Try again.
+  const roleEligible = planRenewalOffersForRole(readUserCacheSync()?.role);
+  const { renewalOn, gateFailed, rereadIfFailed } = usePlanRenewalGate(roleEligible);
+  const offersEligible = renewalOn && roleEligible;
   const [renewalOffers, setRenewalOffers] = useState<boolean | null>(null);
   const [renewalFailure, setRenewalFailure] = useState<string | null>(null);
 
@@ -238,14 +243,19 @@ export default function NotificationPreferencesScreen() {
   useEffect(() => {
     let live = true;
     setIsLoading(true);
-    Promise.all([
-      fetchNotificationPreferences(),
-      offersEligible
-        ? notificationsApi.getPreferences().then((res) => planRenewalOffersFromServer(res?.data))
-        : Promise.resolve(null),
-    ])
+    // A plan read that answers re-runs this effect (offersEligible), which then reads the offers answer too.
+    rereadIfFailed()
+      .then(() => {
+        if (!live) return [undefined, null] as const;
+        return Promise.all([
+          fetchNotificationPreferences(),
+          offersEligible
+            ? notificationsApi.getPreferences().then((res) => planRenewalOffersFromServer(res?.data))
+            : Promise.resolve(null),
+        ]);
+      })
       .then(([loaded, offers]) => {
-        if (live) {
+        if (live && loaded) {
           setPrefs(loaded);
           setRenewalOffers(offers);
         }
@@ -262,7 +272,7 @@ export default function NotificationPreferencesScreen() {
     return () => {
       live = false;
     };
-  }, [loadAttempt, offersEligible]);
+  }, [loadAttempt, offersEligible, rereadIfFailed]);
 
   // `next` is shown at once; only `patch` (what changed) is sent. One save at
   // a time (B-341-1): `previous` is then the only other state there is.
@@ -365,7 +375,7 @@ export default function NotificationPreferencesScreen() {
         <Ionicons name="arrow-back-outline" size={24} color={colors.textPrimary} />
       </TouchableOpacity>
       <View style={[styles.centered, { flex: 1 }]}>
-        <Text style={styles.notice}>Notification preferences could not be loaded. Check your connection, then try again.</Text>
+        <Text style={styles.notice}>{READ_FAILED_COPY}</Text>
         <HapticPressable style={[styles.backTarget, { backgroundColor: colors.primary, paddingHorizontal: 20, marginTop: 16 }]} onPress={() => setLoadAttempt((n) => n + 1)} accessibilityRole="button" accessibilityLabel="Try again">
           <Text style={[styles.kindLabel, { color: colors.textOnPrimary }]}>Try again</Text>
         </HapticPressable>
@@ -512,6 +522,23 @@ export default function NotificationPreferencesScreen() {
             {renewalFailure}
           </Text>
         ) : null}
+        {/* LO-908R2 B1: the plan read still fails, so whether the switch belongs here is not known: say so, with Try
+            again (it reads the plan again first). */}
+        {gateFailed ? (
+          <View testID="plan-renewal-offers-read-failed" accessibilityLiveRegion="polite">
+            <Text selectable style={[styles.notice, { color: colors.textSecondary }]}>{READ_FAILED_COPY}</Text>
+            <HapticPressable
+              style={styles.gateRetry}
+              onPress={() => setLoadAttempt((n) => n + 1)}
+              disabled={isSaving}
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
+              accessibilityState={{ disabled: isSaving }}
+            >
+              <Text style={[styles.kindLabel, { color: colors.primary }]}>Try again</Text>
+            </HapticPressable>
+          </View>
+        ) : null}
 
         <View style={styles.footerSpacer} />
       </ScrollView>
@@ -581,6 +608,7 @@ const makeStyles = (colors: ReturnType<typeof usePreferenceColors>) =>
       borderBottomColor: colors.border,
       padding: 14,
     },
+    gateRetry: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 20 },
     offerBlock: {
       flexDirection: 'row',
       alignItems: 'center',

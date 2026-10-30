@@ -53,12 +53,14 @@ import { AnalyticsEvents } from '../../analytics/events';
 import type { NotificationPreferenceChangedProps } from '../../analytics/events';
 import { mediumTap } from '../../utils/haptics';
 import { readUserCacheSync } from '../../lib/userCache';
-import { useEntitlement } from '../../entitlements/EntitlementProvider';
+import { NOTIF_CATEGORY_PREFS_KEY } from '../../storage/notificationCategoryPrefs';
+import { usePlanRenewalGate } from './usePlanRenewalGate';
 import { preferenceSaveFailureOf, PreferenceSaveFailure } from './notificationPreferenceErrors';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 import {
   PLAN_RENEWAL_OFFERS_COPY,
   PLAN_RENEWAL_OFFERS_WRITE_FIELD,
+  planRenewalOffersForRole,
   planRenewalOffersFromServer,
 } from './planRenewalOffers';
 
@@ -94,7 +96,8 @@ const DEFAULT_PREFS: CategoryPrefs = {
   system: true,
 };
 
-const STORAGE_KEY = 'gp_notif_category_prefs';
+// Removed by signOut() with the other session keys (LS-908R2 B-R2-1).
+const STORAGE_KEY = NOTIF_CATEGORY_PREFS_KEY;
 
 // Map from category ID to backend notification preference fields.
 // Each category maps to one or more backend fields that are sent as a
@@ -218,7 +221,8 @@ export default function NotificationPreferencesScreen({
   // the field)
   // and renewal is switched on: the plan read carries `renewal` only then (B1, the one phone rollout gate).
   const [renewalOnServer, setRenewalOnServer] = useState(false);
-  const renewalOn = useEntitlement().renewal !== undefined;
+  // LO-908R2 B1: a failed plan read is read again on open and on Try again, and told while it still fails.
+  const { renewalOn, gateFailed, rereadIfFailed } = usePlanRenewalGate(planRenewalOffersForRole(role()));
   const categories = useMemo(
     () => categoriesForRole(role()).filter((c) => c.id !== 'plan_renewal' || (renewalOn && renewalOnServer)),
     [role, renewalOn, renewalOnServer],
@@ -236,6 +240,8 @@ export default function NotificationPreferencesScreen({
   // FR-B2 B2: the last read of the server failed (offline or no answer), told with Try again.
   const [readFailed, setReadFailed] = useState(false);
   const readingRef = useRef(false);
+  // LO-908R2 C1: Try again shows that it is reading.
+  const [retrying, setRetrying] = useState(false);
   const [saveFailure, setSaveFailure] = useState<
     (PreferenceSaveFailure & { category: NotifCategory; attempted: boolean }) | null
   >(null);
@@ -263,6 +269,7 @@ export default function NotificationPreferencesScreen({
     if (readingRef.current) return;
     readingRef.current = true;
     try {
+      await rereadIfFailed();
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       let next: CategoryPrefs = raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
       try {
@@ -287,7 +294,7 @@ export default function NotificationPreferencesScreen({
       readingRef.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [rereadIfFailed]);
 
   useEffect(() => {
     loadPrefs();
@@ -376,7 +383,7 @@ export default function NotificationPreferencesScreen({
           Choose which alerts to receive.
         </Text>
 
-        {readFailed ? (
+        {readFailed || gateFailed || retrying ? (
           <View style={styles.notice} accessibilityLiveRegion="polite" testID="notif-pref-read-error">
             <Ionicons name="cloud-offline-outline" size={18} color={colors.textPrimary} style={styles.noticeIcon} />
             <View style={styles.noticeBody}>
@@ -386,21 +393,28 @@ export default function NotificationPreferencesScreen({
               <View style={styles.noticeActions}>
                 <HapticPressable
                   onPress={() => {
-                    void loadPrefs();
+                    setRetrying(true);
+                    void loadPrefs().finally(() => setRetrying(false));
                   }}
+                  disabled={retrying}
                   accessibilityRole="button"
                   accessibilityLabel="Try again"
+                  accessibilityState={{ disabled: retrying, busy: retrying }}
                   testID="notif-pref-read-error-retry"
                   style={styles.noticeAction}
                 >
-                  <Text style={styles.noticeActionText}>Try again</Text>
+                  {retrying ? (
+                    <ActivityIndicator color={colors.primary} accessibilityLabel="Loading preferences" />
+                  ) : (
+                    <Text style={styles.noticeActionText}>Try again</Text>
+                  )}
                 </HapticPressable>
               </View>
             </View>
           </View>
         ) : null}
 
-        <Text style={[styles.overline, readFailed && styles.overlineAfterNotice]}>Categories</Text>
+        <Text style={[styles.overline, (readFailed || gateFailed || retrying) && styles.overlineAfterNotice]}>Categories</Text>
         <View style={styles.card}>
           {categories.map((cat, idx) => (
             <View
