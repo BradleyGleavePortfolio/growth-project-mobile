@@ -25,7 +25,7 @@ const mockEntitlement = jest.fn();
 jest.mock('../../api/clientPaymentsApi', () => ({
   clientPaymentsApi: {
     getPurchases: () => mockPurchases(),
-    getEntitlement: () => mockEntitlement(),
+    getEntitlement: (...args: unknown[]) => mockEntitlement(...args),
   },
 }));
 const mockInitSheet = jest.fn();
@@ -301,7 +301,11 @@ describe('LS-914R2 B3: clear one-time confirmation also belongs to the purchased
     // The native sheet succeeded: payment is known, but new-package access
     // has not arrived yet. The global entitlement is for the older other plan.
     mockPresent.mockResolvedValueOnce({});
-    mockEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
+    // Model the existing backend's optional package filter as well: a fix
+    // may use that filter instead of reading the purchase row.
+    mockEntitlement.mockImplementation(async (packageId?: string) => ({
+      ok: true, data: { active: !packageId || packageId === B.id },
+    }));
     mockPurchases.mockResolvedValue({ ok: true, data: [
       { id: 'synthetic-new-A', package_id: A.id, status: 'pending', entitlement_active: false,
         access_expires_at: null, created_at: '2026-10-30T12:00:00Z' },
