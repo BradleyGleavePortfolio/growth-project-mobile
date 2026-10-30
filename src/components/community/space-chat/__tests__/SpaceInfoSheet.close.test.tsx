@@ -81,6 +81,36 @@ function readingOrder(root: TestInstance): TestInstance[] {
 }
 
 describe('SpaceInfoSheet Close (W897-CLOSE)', () => {
+  it.each(CASES.flatMap((c) => [1, 1.3].map((fontScale) => ({ c, caseName: c.name, fontScale }))))(
+    'B-TEST LS-912 B1: Close stays level with the first title line at $fontScale text scale ($caseName)', async ({ c, fontScale }) => {
+    // C6CHAT-S-V2 v1: the leading X is level with the title at both text sizes.
+    // A single-line title has a scaled line box; the fixed-size icon must remain centred on that line.
+    // This is a layout projection, not a claim of native-device pixel rendering.
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+      width: 320, height: 568, scale: 2, fontScale,
+    });
+    try {
+      const { sheet, close } = await open(c);
+      const title = within(sheet).getByText('Everyone');
+      const titleStyle = StyleSheet.flatten(title.props.style);
+      const header = within(sheet).getAllByRole('header')[0];
+      let ancestor = header.parent;
+      let paddingTop = 0;
+      while (ancestor && ancestor !== sheet) {
+        const style = StyleSheet.flatten(ancestor.props.style);
+        if (style?.paddingTop != null) { paddingTop = style.paddingTop; break; }
+        ancestor = ancestor.parent;
+      }
+      const closeStyle = StyleSheet.flatten(close.props.style);
+      const titleCentre = paddingTop + titleStyle.lineHeight * fontScale / 2;
+      const closeCentre = (closeStyle.marginTop ?? 0) + closeStyle.height / 2;
+      // One point allows font rasterisation/rounding; 3.6 points is the scaling drift, not rasterisation.
+      expect(Math.abs(titleCentre - closeCentre)).toBeLessThanOrEqual(1);
+    } finally {
+      dimensions.mockRestore();
+    }
+    });
+
   it.each(CASES)('$name: the header leads with one visible Close, first for VoiceOver', async (c) => {
     const { sheet, close } = await open(c);
     expect(close.props.accessibilityRole).toBe('button');
