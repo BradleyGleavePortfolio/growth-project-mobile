@@ -1818,4 +1818,34 @@ describe('LS-909 B-TEST quote access and reply recovery', () => {
     if (copy) await fireEvent.press(copy);
     expect(Clipboard.setStringAsync).not.toHaveBeenCalled();
   });
+
+  it('LS909-B1e: a refused space read retires the open sheet and its Copy action', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent(r.getByTestId('space-chat-row-m3'), 'longPress');
+    const answer = mockApi.get.getMockImplementation()!;
+    mockApi.get.mockImplementation(async (url: string, ...rest: unknown[]) => {
+      if (url.endsWith('/messages')) throw fail(403);
+      return answer(url, ...rest);
+    });
+    await refresh();
+    await r.findByTestId('space-chat-no-access');
+    expect(r.queryByTestId('space-chat-sheet-copy')).toBeNull();
+    expect(r.queryByTestId('space-chat-sheet')).toBeNull();
+  });
+
+  it('LS909-B1f: a successful block hides the author in other people\'s cached quotes without waiting for the network', async () => {
+    page = [msg('reply1', '2026-10-22T10:10:00.000Z', COACH, {
+      body: 'Other member reply', parent_message_id: 'm3', parent: q('m3', JO.name, 'Blocked original'),
+    }), ...page];
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    const answer = mockApi.get.getMockImplementation()!;
+    mockApi.get.mockImplementation((url: string, ...rest: unknown[]) => url.endsWith('/messages')
+      ? new Promise(() => undefined) : answer(url, ...rest));
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3'));
+    expect(r.queryByTestId('space-chat-row-m3')).toBeNull();
+    expect(within(r.getByTestId('space-chat-quote-reply1', { includeHiddenElements: true }))
+      .queryByText('Blocked original', { includeHiddenElements: true })).toBeNull();
+  });
 });
